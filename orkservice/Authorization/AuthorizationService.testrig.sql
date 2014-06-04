@@ -1,0 +1,27 @@
+TRUNCATE TABLE orkdev_authorization;
+TRUNCATE TABLE orkdev_event;
+TRUNCATE TABLE orkdev_kingdom;
+TRUNCATE TABLE orkdev_mundane;
+TRUNCATE TABLE orkdev_park;
+TRUNCATE TABLE orkdev_unit;
+INSERT INTO `orkdev_authorization` VALUES (1, 1, 0, 0, 0, 0, 'admin', '2012-03-09 14:59:27');
+INSERT INTO `orkdev_authorization` VALUES (2, 2, 0, 1, 0, 0, 'create', '2012-03-10 04:33:41');
+INSERT INTO `orkdev_authorization` VALUES (3, 3, 2, 0, 0, 0, 'create', '2012-03-10 05:13:59');
+INSERT INTO `orkdev_authorization` VALUES (4, 4, 0, 0, 0, 1, 'create', '2012-03-10 05:13:59');
+INSERT INTO `orkdev_authorization` VALUES (5, 4, 0, 0, 4, 0, 'edit', '2012-03-10 08:32:20');
+INSERT INTO `orkdev_event` VALUES (1, 1, 0, 'kingdom one event', '2012-03-09 15:17:32');
+INSERT INTO `orkdev_event` VALUES (2, 1, 2, 'park two event', '2012-03-10 05:16:39');
+INSERT INTO `orkdev_event` VALUES (3, 2, 3, 'park event three', '2012-03-10 05:16:30');
+INSERT INTO `orkdev_event` VALUES (4, 0, 0, 'Personal Event Four', '2012-03-10 08:32:03');
+INSERT INTO `orkdev_kingdom` VALUES (1, 'kingdom one', '2012-03-09 14:54:54');
+INSERT INTO `orkdev_kingdom` VALUES (2, 'kingdom two', '2012-03-09 14:54:54');
+INSERT INTO `orkdev_mundane` VALUES (1, 'admin', 'admin', '', 'admin', 'admin', 'admin@amtgard.com', 'a4fd8e6fa9fbf9a6f2c99e7b70aa9ef2 ', 0, 0, '0f034edb3eb522fe50ef18fa7e56e696', '2012-03-10 08:36:15', 0, 0, '2012-03-13 08:36:15', 'd31d47cb7791da37cb602fd141fc35da');
+INSERT INTO `orkdev_mundane` VALUES (2, 'kpm', 'one', '', 'kpmone', 'kpmone', 'kpm@kingdomone.com', 'a4fd8e6fa9fbf9a6f2c99e7b70aa9ef2', 1, 1, 'e74058153ed5ae6c24d160c76469fcff', '2012-03-10 08:36:15', 0, 0, '2012-03-13 08:36:15', '');
+INSERT INTO `orkdev_mundane` VALUES (3, 'lpm', 'two', '', 'lpmtwo', 'lpmtwo', 'lpmone@kingdomone.com', 'a4fd8e6fa9fbf9a6f2c99e7b70aa9ef2', 2, 1, '5478292542034f5d3953e3f366ff6a63', '2012-03-10 08:36:15', 0, 0, '2012-03-13 08:36:15', '');
+INSERT INTO `orkdev_mundane` VALUES (4, 'mundane three', 'three', '', 'mundanethree', 'mundanethree', 'mundanethree@kingdomtwo.com', 'a4fd8e6fa9fbf9a6f2c99e7b70aa9ef2', 3, 2, '21ca9eb046a6ea1793134481fd50c965', '2012-03-10 08:36:15', 0, 1, '2012-03-13 08:36:15', '');
+INSERT INTO `orkdev_park` VALUES (1, 1, 'park one', '2012-03-09 14:55:15');
+INSERT INTO `orkdev_park` VALUES (2, 1, 'park two', '2012-03-09 14:55:15');
+INSERT INTO `orkdev_park` VALUES (3, 2, 'park three', '2012-03-09 14:55:27');
+INSERT INTO `orkdev_park` VALUES (4, 2, 'park four', '2012-03-09 14:55:27');
+INSERT INTO `orkdev_unit` VALUES (1, 4, 'company one', '2012-03-09 15:20:10');
+        

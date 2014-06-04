@@ -1,0 +1,186 @@
+ORK 3 Interfaces
+
+•	Administrative
+	-Login
+	-ORK Admin
+		-Download dataset
+		-Create Kingdom
+		-Ban IP Address
+		-Ban Player
+		-Restrict Player (cannot have privileges)
+		-Edit Kingdom
+•	Name
+•	Abbreviation
+•	Retired
+•	Active member definition
+•	Contributing member definition
+•	Park Titles
+		-Awards
+		-Source Code
+		-Download dataset
+		-Events
+		-Add new player
+		-Move player
+		-Merge player
+	-Kingdom Admin
+		-Create a Park
+		-Set Park Monarch
+		-Set Park PM
+		-Set Kingdom PM
+		-Set Kingdom Monarch
+		-Edit Park
+•	Name
+•	Abbreviation
+•	Title
+•	Retired
+		-Awards and Titles
+		-Download Kingdom dataset
+		-Kingdom Heraldry
+		-Events
+		-Kingdom Treasury
+		-Add new player
+		-Move player
+		-Merge player
+	-Park Admin
+		-Download Park dataset
+		-Enter attendance
+		-Add new player
+		-Claim player
+		-Events
+		-Park Treasury
+		-Park Heraldry
+	-Event Admin
+		-Dates
+		-Location
+		-Price
+		-Details
+		-Hosted by
+		-Autocrat
+		-Feastocrat
+	-Unit (Company and Household) Admin
+		-Name
+		-Heraldry
+		-Type: Company or Household
+		-Owned By
+		-Membership
+	-Tournament
+		-Type: Single, Double, Swiss, Round-Robin, Ironman, Other
+		-Hosted By
+		-Dates
+		-Match Record
+		-Winners
+•	Dashboards
+	-Front Page
+		-Kingdom List
+		-Amtgard Reports
+•	Active Players
+•	Dues Paid Players
+•	Waivered Players
+•	Active, Dues Paid Players
+•	Knights and Masters
+•	Guilds
+•	Attendance (week, month, 3 mos)
+•	List of Units
+•	List of Upcoming Tournaments
+•	List of Upcoming Events
+		-Search for Player
+		-Search for Park
+		-ORK Admin
+		-Submit a bug
+		-Submit an issue
+		-Calendar
+•	Interkingdom Events and Tournaments
+•	Kingdom Events and Tournaments
+•	Park Events and Tournaments
+•	All Events and Tournaments
+	-Kingdom
+		-Park List
+		-Kingdom Reports
+•	Player Roster
+•	Active Players
+•	Dues Paid Players
+•	Waivered Players
+•	Active, Dues Paid Players
+•	Kingdom-level Awards
+•	Knights and Masters
+•	Kingdom Heraldry
+•	Kingdom Guilds
+•	Attendance (week, month, 3 mos, 6 mos, 12 mos, all)
+•	Treasury Report
+•	Local Units
+•	List of Upcoming Tournaments
+•	List of Upcoming Events
+		-Search for Players
+		-Kingdom Administration
+		-Submit an issue
+		-Kingdom Heraldry, Parks
+		-Kingdom Heraldry, Players
+		-Calendar
+•	Kingdom Events and Tournaments
+•	Park Events and Tournaments
+•	All Events and Tournaments
+	-Park
+		-Park Reports
+•	Player Roster
+•	Active Players
+•	Dues Paid Players
+•	Waivered Players
+•	Active, Dues Paid Players
+•	Park Guilds
+•	Player Awards
+•	Player Class Credits
+•	Attendance (week, month, 3 mos, 6 mos, 12 mos, all)
+•	Treasury Report
+•	Local Units
+•	List of Upcoming Tournaments
+•	List of Upcoming Events
+		-Search for Players
+		-Park Heraldry, Players
+		-Submit and issue
+		-Park Administration
+		-Calendar
+•	Park Events and Tournaments
+	-Player
+		-Edit Player
+•	Last Name
+•	First Name
+•	Persona Name
+•	Waivered (upload)
+•	Username
+•	Dues Paid Date
+•	Dues periods
+•	Password, Verify Password
+•	Player heraldry
+•	Personal image
+•	Restricted display
+		-Player Info
+•	Home Park
+•	Dues expiration
+•	Dues Verified
+•	Masterhood
+•	Knighthood
+•	Activity, contributing status
+•	Company
+•	Households
+		-Awards and Titles
+		-Attendance
+		-Class Credits and Levels
+•	Display Pages
+	-Event
+		-Dates
+		-Location
+		-Price
+		-Details
+		-Hosted by
+		-Autocrat
+		-Feastocrat
+	-Unit
+		-Name
+		-Heraldry
+		-Type: Company or Household
+		-Owned By
+		-Membership
+	-Tournament
+		-List of Recent Tournaments and Winners
+		-Upcoming Tournaments
+
