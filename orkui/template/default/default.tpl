@@ -130,7 +130,7 @@
 			</tr>
 		</thead>
 		<tbody>
-<?php foreach ($Tournaments['Tournaments'] as $k => $tournament) : ?>
+<?php foreach ((array)$Tournaments['Tournaments'] as $k => $tournament) : ?>
 			<tr onClick='javascript:window.location.href="<?=UIR ?>Tournament/create&<?=valid_id($tournament['EventCalendarDetailId'])?('EventCalendarDetailId='.$tournament['EventCalendarDetailId']):(valid_id($tournament['ParkId'])?'ParkId='.$tournament['ParkId']:('KingdomId='.$tournament['KingdomId'])) ?>"'>
 				<td><?=$tournament['Name'] ?></td>
 				<td><?=$tournament['KingdomName'] ?></a></td>
