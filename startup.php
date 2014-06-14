@@ -1,6 +1,6 @@
 <?php
 
-include_once('/home/amtgard/amtgard.com/orkstage/config.php');
+include_once(dirname(__FILE__) . '/config.php');
 
 // System Setup
 
