@@ -1213,6 +1213,8 @@ class Controller_Admin extends Controller {
 		$this->data['Kingdom_config'] = $kingdom_info['KingdomConfiguration'];
 		$this->data['Kingdom_parktitles'] = $kingdom_info['ParkTitles'];
 		$this->data['Kingdom_awards'] = $kingdom_info['Awards']['Awards'];
+		$this->load_model('Award');
+		$this->data['Canonical_awards'] = $this->Award->GetAwardList(array());
 		$this->data['Kingdom_heraldryurl'] = $kingdom_info['Heraldry'];
 	}
 	
