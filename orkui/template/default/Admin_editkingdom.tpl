@@ -175,7 +175,7 @@
 					<td>
 						<select name='AwardId'>
 							<option value='0'>  - None -  </option>
-<?php foreach($Kingdom_awards as $key => $award) : ?>
+<?php foreach($Canonical_awards['Awards'] as $key => $award) : ?>
 							<option value='<?=$award['AwardId'] ?>'><?=$award['AwardName'] ?></option>
 <?php endforeach; ?>
 						</select>
@@ -193,3 +193,7 @@
 		</table>
 	</form>
 </div>
+
+<!--
+<?php print_r($Canonical_awards); ?>
+-->

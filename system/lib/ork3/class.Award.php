@@ -50,7 +50,7 @@ class Award  extends Ork3 {
 					'KingdomAwardName' => $this->award->name,
 					'ReignLimit' => 0,
 					'MonthLimit' => 0,
-					'AwardName' => $this->award->award_name,
+					'AwardName' => $this->award->name,
 					'AwardId' => $this->award->award_id,
 					'IsLadder' => $this->award->is_ladder,
 					'IsTitle' => $this->award->is_title,

@@ -122,7 +122,7 @@ class SearchService extends Ork3 {
 	
 	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null) {
         $limit = min($limit, 50);
-		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name
+		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
@@ -157,7 +157,8 @@ class SearchService extends Ork3 {
 						'ParkName' => $d->park_name,
 						'Persona' => $d->persona,
 						'UnitName' => $d->unit_name,
-						'NextDate' => $d->event_start
+						'NextDate' => $d->event_start,
+						'ShortDescription' => $d->short_description
 					);
 				if (!is_null($limit)) {
     				$limit--;
@@ -205,14 +206,14 @@ class SearchService extends Ork3 {
 				$r[$i++] = array(
 						'ParkId' => $park->park_id,
 						'KingdomId' => $park->kingdom_id,
-						'Name' => $park->name
+						'Name' => $park->name,
+						'Active' => $park->active
 					);
 				if (is_numeric($limit)) {
 					if ($limit == 0) break;
 					$limit--;
 				}
 			} while ($park->next());
-			$r[] = "$name, $kingdom_id = null, $limit = null";
 			return $r;
 		} else {
 			return array();
