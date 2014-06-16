@@ -25,6 +25,9 @@ $Settings = new Settings();
 $Session = new Session();
 $Request = new Request();
 
+if (empty($_REQUEST['Route'])) {
+	$_REQUEST['Route'] = '';
+}
 $route = explode('/',$_REQUEST["Route"]);
 logtrace('Index: Route', $route);
 Ork3::$Lib->session->times['Route'] = time();
