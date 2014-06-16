@@ -288,7 +288,12 @@
 	<h3>Player Operations for <?=$Player['Persona'] ?></h3>
 	<ul>
 		<li><a href='<?=UIR ?>Unit/create/<?=$Player['MundaneId'] ?>'>Create Company, Household, or Event Group</a></li>
-		<li><a href='<?=UIR ?>Admin/manageevent&MundaneId=<?=$Player['MundaneId'] ?>'>Manage Your Events</a></li>
+		<li>Events
+			<ul>
+				<li><a href='<?=UIR ?>Admin/createevent&MundaneId=<?=$Player['MundaneId'] ?>'>Create Event</a></li>
+				<li><a href='<?=UIR ?>Admin/manageevent&MundaneId=<?=$Player['MundaneId'] ?>'>Event Templates</a></li>
+			</ul>
+		</li>
 	</ul>
 </div>
 

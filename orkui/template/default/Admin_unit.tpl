@@ -221,6 +221,11 @@
 <div class='info-container'>
 	<h3>Unit Operations for <?=$Unit['Details']['Unit']['Name'] ?></h3>
 	<ul>
-		<li><a href='<?=UIR ?>Admin/manageevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Manage Company Events</a></li>
+		<li>Events
+			<ul>
+				<li><a href='<?=UIR ?>Admin/createevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Create Event</a></li>
+				<li><a href='<?=UIR ?>Admin/manageevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Event Templates</a></li>
+			</ul>
+		</li>
 	</ul>
 </div>

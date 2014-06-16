@@ -44,9 +44,7 @@
 				<th>Date</th>
 				<th>Website</th>
 				<th>Location</th>
-			<?php if (trimlen($detail['MapUrlName']) > 0) : ?>
 				<th>Map</th>
-			<?php endif ; ?>
 				<th>Active</th>
 				<th>Attendance</th>
 			</tr>
@@ -66,9 +64,11 @@
 					?>
 					<a target='_new' href='http://maps.google.com/maps?z=14&t=m&q=loc:<?=$location->lat . "+" . $location->lng ?>'><?=$address['results'][0]['formatted_address']; ?></a>
 				</td>
+				<td>
 			<?php if (trimlen($detail['MapUrlName']) > 0) : ?>
-				<td><?=$detail['MapUrlName'] ?> <a href='<?=$detail['MapUrl'] ?>'>[ Link ]</a></td>
+				<?=$detail['MapUrlName'] ?> <a href='<?=$detail['MapUrl'] ?>'>[ Link ]</a>
 			<?php endif; ?>
+				</td>
 				<td><?php if ($detail['Current'] == 1) : ?>Yes<?php else : ?>No<?php endif ?></td>
 				<td><a href='<?=UIR ?>Attendance/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/<?=$detail['EventCalendarDetailId'] ?>'>Attendance</a></td>
 			</tr>

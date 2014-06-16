@@ -2,7 +2,7 @@
 
 	function SetEvents( request, response ) {
 <?php if (!valid_id($CreateUnitId) && !valid_id($CreateMundaneId)) : ?>
-		park_id = $('#ParkId').val();
+		park_id = $('#ParkId').val() > 0 ? $('#ParkId').val() : 0;
 		kingdom_id = $('#KingdomId').val();
 <?php endif; ?>
 <?php if (valid_id($CreateMundaneId)) : ?>
@@ -26,12 +26,12 @@
 				unit_id: unit_id,
 <?php endif; ?>
 				name: (request!=null?request.term:''),
-				limit: 10
+				limit: 24
 			},
 			success: function( data ) {
 				$('#EventListTable tbody').html('');
 				$.each(data, function(i, val) {
-					$('#EventListTable tbody').append("<tr onclick='javascript:window.location.href=\"<?=UIR ?>Event/index/" + val.EventId + "\"'><td>" + (val.KingdomName!=null?val.KingdomName:"") + "</td><td>" + (val.ParkName!=null?val.ParkName:"") + "</td><td>" + (val.UnitName!=null?val.UnitName:"") + "</td><td>" + (val.Persona!=null?val.Persona:"") + "</td><td>" + val.Name + "</td></tr>");
+					$('#EventListTable tbody').append("<tr onclick='javascript:window.location.href=\"<?=UIR ?>Admin/event/" + val.EventId + "\"'><td>" + (val.KingdomName!=null?val.KingdomName:"") + "</td><td>" + (val.ParkName!=null?val.ParkName:"") + "</td><td>" + (val.UnitName!=null?val.UnitName:"") + "</td><td>" + (val.Persona!=null?val.Persona:"") + "</td><td>" + val.Name + "</td></tr>");
 				});
 				if (response != null) {
 					var suggestions = [];
@@ -350,7 +350,7 @@
 </style>
 
 <div class='info-container'>
-	<h3>Create Event</h3>
+	<h3>Create Event Template</h3>
 <?php if (strlen($Error) > 0 || true) : ?>
 	<div class='error-message'>
 	    <?=$Error ?>
@@ -412,7 +412,7 @@
 </div>
 
 <div class='info-container'>
-	<h3>Find Event</h3>
+	<h3>Find Existing Template</h3>
 	<div class='form-container'>
 <?php if (!isset($this->__session->kingdom_id)) : ?>
 		<div>

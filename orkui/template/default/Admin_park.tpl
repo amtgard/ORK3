@@ -12,7 +12,12 @@
 		<li><a href='<?=UIR ?>Admin/createplayer/park/<?=$ParkInfo['ParkId'] ?>'>Create Player</a></li>
 		<li><a href='<?=UIR ?>Admin/claimplayer/park/<?=$ParkInfo['ParkId'] ?>'>Move Player</a></li>
 		<li><a href='<?=UIR ?>Admin/mergeplayer/park/<?=$ParkInfo['ParkId'] ?>'>Merge Players</a></li>
-		<li><a href='<?=UIR ?>Admin/manageevent'>Events</a></li>
+		<li>Events
+			<ul>
+				<li><a href='<?=UIR ?>Admin/createevent'>Create Event</a></li>
+				<li><a href='<?=UIR ?>Admin/manageevent'>Event Templates</a></li>
+			</ul>
+		</li>
 		<li><a href='<?=UIR ?>Tournament/create&ParkId=<?=$ParkInfo['ParkId'] ?>' class='unimplemented'>Create Tournament</a></li>
 	</ul>
 </div>

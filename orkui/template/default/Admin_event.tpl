@@ -242,7 +242,7 @@
 </div>
 
 <div class='info-container' id='event-editor'>
-	<h3>Add New Event Date</h3>
+	<h3>Update or Create Event Date Details</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/new'>
 		<div>
 			<span>Start:</span>
@@ -363,7 +363,7 @@
 </div>
 
 <div class='info-container'>
-	<h3><?=$EventDetails['Name'] ?></h3>
+	<h3>Edit Past <?=$EventDetails['Name'] ?></h3>
 	<table class='information-table action-table' id='EventListTable'>
 		<thead>
 			<tr>

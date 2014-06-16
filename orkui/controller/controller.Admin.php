@@ -556,6 +556,25 @@ class Controller_Admin extends Controller {
 		}
 	}	
 	
+	public function createevent($post=null) {
+		$this->load_model('Event');
+		if (valid_id($this->request->UnitId) || valid_id($this->request->Admin_manageevent->CreateUnitId)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('UnitId' => valid_id($this->request->Admin_manageevent->UnitId)?$this->request->Admin_manageevent->UnitId:$this->request->UnitId, 'LimitTo' => true));
+			$this->data['EventIdSelector'] = 'UnitId';
+		} else if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_manageevent->CreateMundaneId)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('MundaneId' => valid_id($this->request->Admin_manageevent->MundaneId)?$this->request->Admin_manageevent->MundaneId:$this->request->MundaneId, 'LimitTo' => true));
+			$this->data['EventIdSelector'] = 'MundaneId';
+		} else if (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('ParkId' => $this->session->park_id, 'LimitTo' => false));
+			$this->data['EventIdSelector'] = 'ParkId';
+		} else if (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('KingdomId' => $this->session->kingdom_id, 'LimitTo' => true));
+			$this->data['EventIdSelector'] = 'KingdomId';
+		} else {
+			$this->data['Events_list'] = array();
+		}
+	}
+	
 	public function authorization($post=null) {
 		$this->load_model('Authorization');
 		$this->load_model('Reports');

@@ -64,6 +64,37 @@ class Event  extends Ork3 {
 		return Success($this->event->event_id);
 	}
 	
+	public function GetEvents($request) {
+		$this->event->clear();
+		if (isset($request['LimitTo']) && $request['LimitTo'] === true) {
+			$this->event->kingdom_id = 0;
+			$this->event->park_id = 0;
+			$this->event->unit_id = 0;
+			$this->event->mundane_id = 0;
+		}
+		
+		if (valid_id($request['KingdomId']))
+			$this->event->kingdom_id = $request['KingdomId'];
+		if (valid_id($request['ParkId']))
+			$this->event->park_id = $request['ParkId'];
+		if (valid_id($request['UnitId']))
+			$this->event->unit_id = $request['UnitId'];
+		if (valid_id($request['MundaneId']))
+			$this->event->mundane_id = $request['MundaneId'];
+		$events = array();
+		if ($this->event->find()) do {
+			$events[] = array(
+				'EventId' => $this->event->event_id,
+				'KingdomId' => $this->event->kingdom_id,
+				'ParkId' => $this->event->park_id,
+				'UnitId' => $this->event->unit_id,
+				'MundaneId' => $this->event->mundane_id,
+				'Name' => $this->event->name
+			);
+		} while ($this->event->next());
+		return $events;
+	}
+	
 	public function GetEvent($request) {
 		$this->event->clear();
 		$this->event->event_id = $request['EventId'];

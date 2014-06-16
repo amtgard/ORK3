@@ -131,9 +131,9 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
 	
-		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' " ;
+		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' and (cd.current = 1 or cd.current is null) " ;
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
-		if (valid_id($park_id)) $sql .= " and e.park_id = $park_id ";
+		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";
 		if (valid_id($unit_id)) $sql .= " and e.unit_id = $unit_id ";
 		if (valid_id($event_id)) $sql .= " and e.event_id = $event_id ";
@@ -145,6 +145,7 @@ class SearchService extends Ork3 {
 		} else {
 			$sql .= " order by kingdom_name, park_name, e.name";
 		}
+//		die($sql);
 		$d = $this->db->query($sql);
 		$i = 0;
 		$r = array();
