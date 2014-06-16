@@ -850,7 +850,7 @@ class Report  extends Ork3 {
 		if (true == $request['UnWaivered']) $restrict_clause[] = ' m.waivered = 0';
 		if (true == $request['Banned']) $restrict_clause[] = ' m.penalty_box = 1';
 		if (true == $request['DuesPaid'] && (AUTH_PARK == $request['Type'] || AUTH_KINGDOM == $request['Type'])) {
-			$duespaid_clause = 'left join 
+			$duespaid_clause = 'INNER JOIN 
 									(select case split_id when null then 0 else 1 end as split_id, src_mundane_id 
 										from ' . DB_PREFIX . 'split s 
 										left join ' . DB_PREFIX . 'account a on s.account_id = a.account_id 
@@ -870,15 +870,17 @@ class Report  extends Ork3 {
 		} else {
 			$restricted_access = false;
 		}
-		$sql = 'select ' . implode(',',$select_list) . " 
-					from " . DB_PREFIX . "mundane m 
-						left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
-						left join " . DB_PREFIX . "park p on m.park_id = p.park_id
+		$sql = 'SELECT ' . implode(',',$select_list) . " 
+					FROM " . DB_PREFIX . "mundane m 
+						LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
+						LEFT JOIN " . DB_PREFIX . "park p on m.park_id = p.park_id
 						$duespaid_clause
 						$join_clause
 					".(count($restrict_clause)?"where":"")."
 						".implode(' and ', $restrict_clause)." 
-					order by $order_by, m.surname, m.given_name, m.persona";
+					GROUP BY m.mundane_id 
+					ORDER BY $order_by, m.persona, m.surname, m.given_name
+		";
 		logtrace('GetPlayerRoster()', array($sql, $restrict_clause));
 		$r = $this->db->query($sql);
 
