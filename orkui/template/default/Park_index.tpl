@@ -17,7 +17,7 @@
 		<li><a href='<?=UIR ?>Unit/unitlist&ParkId=<?=$park_id ?>'>Companies and Households</a></li>
 		<li><a href='<?=UIR ?>Treasury/park/<?=$park_info['ParkInfo']['ParkId'] ?>'>Treasury</a></li>
 		<li><?php $location = json_decode(stripslashes($park_info['ParkInfo']['Location'])); $location = ((isset($location->location))?$location->location:$location->bounds->northeast);  ?>
-			<a href='http://maps.google.com/maps?z=14&t=m&q=loc:<?=$location->lat . "+" . $location->lng ?>'>Park Map</a>
+			<a href="http://maps.google.com/maps?q=@<?= $location->lat . ',' . $location->lng ?>">Park Map</a>
 		</li>
 	</ul>
 </div>
