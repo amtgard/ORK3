@@ -11,11 +11,11 @@ error_reporting(0);
 // HTTP
 define('ORK_DIST_NAME', 'ork');
 
-define('HTTP_SERVICE', "http://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkservice/'); 
-define('HTTP_UI', "http://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkui/'); 
-define('HTTP_UI_REMOTE', "http://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkui/'); 
+define('HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkservice/'); 
+define('HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
+define('HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
 define('HTTP_TEMPLATE', HTTP_UI.'template/'); 
-define('HTTP_ASSETS', "http://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/assets/');
+define('HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST']. '/' . ORK_DIST_NAME . '/assets/');
 define('HTTP_WAIVERS', HTTP_ASSETS . 'waivers/');
 define('HTTP_HERALDRY', HTTP_ASSETS . 'heraldry/');
 define('HTTP_PLAYER_IMAGE', HTTP_ASSETS . 'players/');
@@ -36,7 +36,7 @@ define('HTTPS_SERVICE', "https://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkserv
 define('HTTPS_UI', "https://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkui/'); 
 
 // DIR
-define('DIR_BASENAME', "/home/amtgard/amtgard.com/".ORK_DIST_NAME.'/'); 
+define('DIR_BASENAME', dirname(__FILE__) . '/'); 
 define('DIR_SERVICE',DIR_BASENAME."orkservice/");
 define('DIR_UI',DIR_BASENAME."orkui/");
 define('DIR_SYSTEM', DIR_BASENAME."system/");
