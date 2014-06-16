@@ -62,7 +62,7 @@
 					$location = ((isset($location->location))?$location->location:$location->bounds->northeast);
 					$address = json_decode($detail['Geocode'], true);
 					?>
-					<a target='_new' href='http://maps.google.com/maps?z=14&t=m&q=loc:<?=$location->lat . "+" . $location->lng ?>'><?=$address['results'][0]['formatted_address']; ?></a>
+					<a target='_new' href="http://maps.google.com/maps?q=@<?= $location->lat . ',' . $location->lng ?>"><?=$address['results'][0]['formatted_address']; ?></a>
 				</td>
 				<td>
 			<?php if (trimlen($detail['MapUrlName']) > 0) : ?>
