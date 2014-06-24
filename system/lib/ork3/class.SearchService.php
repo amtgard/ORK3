@@ -120,7 +120,7 @@ class SearchService extends Ork3 {
 		}
 	}
 	
-	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null) {
+	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1) {
         $limit = min($limit, 50);
 		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
@@ -131,7 +131,7 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
 	
-		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' and (cd.current = 1 or cd.current is null) " ;
+		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' " . ($current == 1 ? " and (cd.current = 1 or cd.current is null) " : " ");
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
 		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";

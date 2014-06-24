@@ -46,7 +46,8 @@ $server->Register(
 						array( 'limit','request',true,'int',true ),
 						array( 'event','request',true,'int',true ),
 						array( 'date_order','request',true,'int',true ),
-						array( 'date_start','request',true,'string',true )
+						array( 'date_start','request',true,'string',true ),
+						array( 'current','request',true,'int',true )
 					)
 			)
 	);
