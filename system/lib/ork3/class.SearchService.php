@@ -131,6 +131,7 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
 	
+	
 		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' " . (is_null($current) || $current != 0 ? " and (cd.current = 1 or cd.current is null) " : " ");
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
 		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";
