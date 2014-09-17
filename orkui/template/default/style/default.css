@@ -113,6 +113,22 @@ a:hover {
 .info-container>ul {
 	margin-right: 25px;
 }
+.info-container h3 {
+	cursor: pointer;
+}
+.info-container h3:after {
+	content: '\25b2';
+	/* 25bc */
+	float: right;
+	padding-left: 30px;
+	color: #666;
+}
+.info-container h3:hover:after {
+	color: black;
+}
+.up-container h3:after {
+	content: '\25bc';
+}
 .information-table {
 	border: 1px solid #bbb;
 	border-collapse: collapse;

@@ -108,6 +108,25 @@
 			</tbody>
 		</table>
 	</form>
+	<script type='text/javascript'>
+		$(document).ready(function() {
+			$('#Classes tbody tr').each(function(k, trow) {
+				var credits = Number($(trow).find('td:nth-child(2)').html());
+				var level = 1;
+				if (credits >= 53)
+					level = 6;
+				else if (credits >= 34)
+					level = 5;
+				else if (credits >= 21)
+					level = 4;
+				else if (credits >= 12)
+					level = 3;
+				else if (credits >= 5)
+					level = 2;
+				$(trow).find('td:nth-child(3)').html(level);
+			});
+		});
+	</script>
 </div>
 
 <div class='info-container'>
