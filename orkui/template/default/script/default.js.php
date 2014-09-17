@@ -64,7 +64,82 @@ function isNumber(n) {
     return !isNaN(parseFloat(n)) && isFinite(n);
 }
 
+function hasExpandMode(url) {
+	if (localStorage.getItem(url) === null) {
+		localStorage.setItem(url, JSON.stringify({ 0: "open", 1: "open" }));
+		return false;
+	}
+	return true;
+}
+
+function setExpandMode(container, url, nth, mode) {
+	
+	hasExpandMode(url);
+	
+	var expand = JSON.parse(localStorage.getItem(url));
+	expand[nth] = mode;
+	localStorage.setItem(url, JSON.stringify(expand));
+	
+	if (mode == "closed") {
+		$(container).children(':not(h3)').each(function(l, noth3) {
+			$(noth3).hide();
+		});
+		$(container).addClass('up-container');	
+	} else {
+		$(container).children(':not(h3)').each(function(l, noth3) {
+			$(noth3).show();
+		});
+		$(container).removeClass('up-container');	
+	}
+}
+
+function getExpandMode(container, url, nth) {
+	hasExpandMode(url);
+	var expand = JSON.parse(localStorage.getItem(url));
+	if (nth in expand) {
+		return expand[nth];
+	} else {
+		setExpandMode(container, url, nth, "closed");
+		return getExpandMode(container, url, nth);
+	}
+}
+
+function getQueryVar(varName){
+    // Grab and unescape the query string - appending an '&' keeps the RegExp simple
+    // for the sake of this example.
+    var queryStr = unescape(window.location.search) + '&';
+
+    // Dynamic replacement RegExp
+    var regex = new RegExp('.*?[&\\?]' + varName + '=(.*?)&.*');
+
+    // Apply RegExp to the query string
+    val = queryStr.replace(regex, "$1");
+
+    // If the string is the same, we didn't find a match - return false
+    return val == queryStr ? false : val;
+}
+
+function expandUrl() {
+	var ROUTE = getQueryVar("Route");
+	if (ROUTE !== false) {
+		var route = ROUTE.split("/");
+		if (route.length > 1)
+			return route.splice(0,2).join("/");
+		else if (route.length == 1 && route[0].length > 0)
+			return route[0];
+		else
+			return document.URL;
+	} else
+		return document.URL;
+}
+
 $(function() {
+	$('.info-container').each(function(k, container) {
+		setExpandMode(container, expandUrl(), k, getExpandMode(container, expandUrl(), k));
+	});
+	$('body').on('click', '.info-container>h3', function() {
+		setExpandMode($(this).parent(), expandUrl(), $(this).parent().index(), $(this).parent().hasClass('up-container')?"open":"closed");
+	});
 	$( '.hasDatePicker' ).datetimepicker({ dateFormat: "yy-mm-dd", showMinute: false });
 	$( '.restricted-image-type' ).change(function() {
 		if (!extension_check( $( this ), ['gif','png','jpg','jpeg'])) {
