@@ -59,7 +59,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_KINGDOM_HERALDRY . sprintf("%05d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+						<img src="<?=HTTP_KINGDOM_HERALDRY . sprintf("%04d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
 					</div>
 					<?=$prinz['Name'] ?>
 				</td>
