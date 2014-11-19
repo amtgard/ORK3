@@ -112,7 +112,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/event/000000.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
 					</div>
 					<?=$event['Name'] ?>
 				</td>
