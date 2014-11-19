@@ -15,7 +15,7 @@
 				$('#event-editor input[name="UrlName"]').val(data['UrlName']);
 				$('#event-editor input[name="Address"]').val(data['Address']);
 				$('#event-editor input[name="City"]').val(data['City']);
-				$('#event-editor select[name="State"]').val(data['Province']);
+				$('#event-editor input[name="State"]').val(data['Province']);
 				$('#event-editor input[name="Zip"]').val(data['PostalCode']);
 				$('#event-editor input[name="MapUrl"]').val(data['MapUrl']);
 				$('#event-editor input[name="MapUrlName"]').val(data['MapUrlName']);
@@ -35,6 +35,7 @@
 			style: "<?=HTTP_TEMPLATE;?>default/script/js/SCEditor/jquery.sceditor.default.css"
 		});
 		*/
+		EditEvent($('.current-calendar-event').attr('calendar_event_id'));
 		$('#CancelButton').hide();
 		$('#CancelButton').click(function() {
 			$('#event-editor input[name="StartDate"]').val('');
@@ -44,7 +45,7 @@
 			$('#event-editor input[name="UrlName"]').val('');
 			$('#event-editor input[name="Address"]').val('');
 			$('#event-editor input[name="City"]').val('');
-			$('#event-editor select[name="State"]').val('');
+			$('#event-editor input[name="State"]').val('');
 			$('#event-editor input[name="Zip"]').val('');
 			$('#event-editor input[name="MapUrl"]').val('');
 			$('#event-editor input[name="MapUrlName"]').val('');
@@ -191,6 +192,13 @@
 		margin: 3px 0px 3px 10px;
 		float: right;
 	}
+	.past-calendar-event td {
+		background-color: #ddd;
+		color: #888;
+	}
+	.past-calendar-event td a {
+		color: #666;
+	}
 </style>
 
 <div class='info-container'>
@@ -274,61 +282,7 @@
 		</div>
 		<div>
 			<span>State:</span>
-			<span>
-				<select name="State">
-					<option value="AL">Alabama</option>
-					<option value="AK">Alaska</option>
-					<option value="AZ">Arizona</option>
-					<option value="AR">Arkansas</option>
-					<option value="CA">California</option>
-					<option value="CO">Colorado</option>
-					<option value="CT">Connecticut</option>
-					<option value="DE">Delaware</option>
-					<option value="DC">District of Columbia</option>
-					<option value="FL">Florida</option>
-					<option value="GA">Georgia</option>
-					<option value="HI">Hawaii</option>
-					<option value="ID">Idaho</option>
-					<option value="IL">Illinois</option>
-					<option value="IN">Indiana</option>
-					<option value="IA">Iowa</option>
-					<option value="KS">Kansas</option>
-					<option value="KY">Kentucky</option>
-					<option value="LA">Louisiana</option>
-					<option value="ME">Maine</option>
-					<option value="MD">Maryland</option>
-					<option value="MA">Massachusetts</option>
-					<option value="MI">Michigan</option>
-					<option value="MN">Minnesota</option>
-					<option value="MS">Mississippi</option>
-					<option value="MO">Missouri</option>
-					<option value="MT">Montana</option>
-					<option value="NE">Nebraska</option>
-					<option value="NV">Nevada</option>
-					<option value="NH">New Hampshire</option>
-					<option value="NJ">New Jersey</option>
-					<option value="NM">New Mexico</option>
-					<option value="NY">New York</option>
-					<option value="NC">North Carolina</option>
-					<option value="ND">North Dakota</option>
-					<option value="OH">Ohio</option>
-					<option value="OK">Oklahoma</option>
-					<option value="OR">Oregon</option>
-					<option value="PA">Pennsylvania</option>
-					<option value="RI">Rhode Island</option>
-					<option value="SC">South Carolina</option>
-					<option value="SD">South Dakota</option>
-					<option value="TN">Tennessee</option>
-					<option value="TX">Texas</option>
-					<option value="UT">Utah</option>
-					<option value="VT">Vermont</option>
-					<option value="VA">Virginia</option>
-					<option value="WA">Washington</option>
-					<option value="WV">West Virginia</option>
-					<option value="WI">Wisconsin</option>
-					<option value="WY">Wyoming</option>
-				</select>			
-			</span>
+			<span><input type='text' name="State" /></span>
 		</div>
 		<div>
 			<span>Zip:</span>
@@ -374,7 +328,7 @@
 			<?php if (trimlen($detail['MapUrlName']) > 0) : ?>
 				<th>Map</th>
 			<?php endif ; ?>
-				<th>Active</th>
+				<th>Current</th>
 				<th>Tournaments</th>
 				<th>Attendance</th>
 				<th class='deletion'>&times;</th>
@@ -383,7 +337,7 @@
 		<tbody>
 <?php if (!is_array($EventDetails['CalendarEventDetails'])) $EventDetails['CalendarEventDetails'] = array(); ?>
 <?php foreach ($EventDetails['CalendarEventDetails'] as $key => $detail) : ?>
-			<tr onClick='javascript:EditEvent(<?=$detail['EventCalendarDetailId'] ?>)'>
+			<tr onClick='javascript:EditEvent(<?=$detail['EventCalendarDetailId'] ?>)' class='<?=$detail['Current']=='1'?'current-calendar-event':'past-calendar-event' ?>' calendar_event_id='<?=$detail['EventCalendarDetailId'] ?>'>
 				<td><?=$detail['Price'] ?></td>
 				<td><?=date('Y-m-d, g A', strtotime($detail['EventStart'])) . '<br>' . date('Y-m-d, g A', strtotime($detail['EventEnd'])) ?></td>
 				<td><?=$detail['UrlName'] ?> <a href='<?=$detail['Url'] ?>'>[ Link ]</a></td>

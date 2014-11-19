@@ -210,10 +210,10 @@ class Event  extends Ork3 {
 			$this->detail->description = Common::make_safe_html($request['Description']);
 			$this->detail->url = $request['Url'];
 			$this->detail->url_name = $request['UrlName'];
-			$this->detail->address = isset($details['Address'])?isset($details['Address']):$request['Address'];
-			$this->detail->province = isset($details['Province'])?isset($details['Province']):$request['Province'];
-			$this->detail->postal_code = isset($details['PostalCode'])?isset($details['PostalCode']):$request['PostalCode'];
-			$this->detail->city = isset($details['City'])?isset($details['City']):$request['City'];
+			$this->detail->address = isset($details['Address'])?$details['Address']:$request['Address'];
+			$this->detail->province = isset($details['Province'])?$details['Province']:$request['Province'];
+			$this->detail->postal_code = isset($details['PostalCode'])?$details['PostalCode']:$request['PostalCode'];
+			$this->detail->city = isset($details['City'])?$details['City']:$request['City'];
 			$this->detail->country = $request['Country'];
 			$this->detail->map_url = $request['MapUrl'];
 			$this->detail->map_url_name = $request['MapUrlName'];
@@ -302,10 +302,10 @@ class Event  extends Ork3 {
 				$this->detail->description = Common::make_safe_html($request['Description']);
 				$this->detail->url = $request['Url'];
 				$this->detail->url_name = $request['UrlName'];
-				$this->detail->address = isset($details['Address'])?isset($details['Address']):$request['Address'];
-				$this->detail->province = isset($details['Province'])?isset($details['Province']):$request['Province'];
-				$this->detail->postal_code = isset($details['PostalCode'])?isset($details['PostalCode']):$request['PostalCode'];
-				$this->detail->city = isset($details['City'])?isset($details['City']):$request['City'];
+				$this->detail->address = isset($details['Address'])?$details['Address']:$request['Address'];
+				$this->detail->province = isset($details['Province'])?$details['Province']:$request['Province'];
+				$this->detail->postal_code = isset($details['PostalCode'])?$details['PostalCode']:$request['PostalCode'];
+				$this->detail->city = isset($details['City'])?$details['City']:$request['City'];
 				$this->detail->country = $request['Country'];
 				$this->detail->map_url = $request['MapUrl'];
 				$this->detail->map_url_name = $request['MapUrlName'];
@@ -320,7 +320,7 @@ class Event  extends Ork3 {
 				}
 				logtrace('SetEventDetails', $request);
 			} else {
-				return InvalidParameter();
+				return InvalidParameter('');
 			}
 		} else {
 			return NoAuthorization();

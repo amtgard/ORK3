@@ -25,7 +25,12 @@
 <?php foreach ($park_summary['KingdomParkAveragesSummary'] as $k => $park): ?>
     <?php $att += $park['AttendanceCount']; ?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
-				<td><?=$park['ParkName'] ?></td>
+				<td>
+					<div class='tiny-heraldry'>
+						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/park/<?=sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+					</div>
+					<?=$park['ParkName'] ?>
+				</td>
 				<td class='data-column'><?=sprintf("%0.02f",($park['AttendanceCount']/26)); ?></td>
 				<td class='data-column'><?=$park['AttendanceCount']; ?></td>
 			</tr>
@@ -52,7 +57,12 @@
 <?php if (!is_array($principalities['Principalities'])) $principalities['Principalities'] = array(); ?>
 <?php foreach ($principalities['Principalities'] as $k => $prinz): ?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
-				<td><?=$prinz['Name'] ?></td>
+				<td>
+					<div class='tiny-heraldry'>
+						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/kingdom/<?=sprintf("%05d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+					</div>
+					<?=$prinz['Name'] ?>
+				</td>
 			</tr>
 <?php endforeach; ?>
 		</tbody>
@@ -121,7 +131,12 @@
 <?php foreach ($event_summary as $k => $event): ?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
 				<td><?=$event['ParkName'] ?></td>
-				<td><?=$event['Name'] ?></td>
+				<td>
+					<div class='tiny-heraldry'>
+						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/event/<?=sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+					</div>
+					<?=$event['Name'] ?>
+				</td>
 				<td><?=0 == $event['NextDate']?"":date("M. j, Y", strtotime($event['NextDate'])) ?></td>
 			</tr>
 <?php endforeach; ?>

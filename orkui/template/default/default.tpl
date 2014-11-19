@@ -110,7 +110,12 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
 				<td><?=$event['KingdomName'] ?></td>
 				<td><?=$event['ParkName'] ?></td>
-				<td><?=$event['Name'] ?></td>
+				<td>
+					<div class='tiny-heraldry'>
+						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/event/<?=sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+					</div>
+					<?=$event['Name'] ?>
+				</td>
 				<td><?=0 == $event['NextDate']?"":date("M. j, Y", strtotime($event['NextDate'])) ?></td>
 			</tr>
 <?php endforeach; ?>

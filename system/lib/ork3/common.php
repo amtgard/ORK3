@@ -116,8 +116,10 @@ class Common {
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		curl_close($ch);
 		$details = array();
+		logtrace("Geocode: Processing.", null);
 		if ($httpCode == 200) {
 			$geocode = json_decode($result);
+			logtrace("Geocode: Processing.", $geocode);
 			$lat = $geocode->results[0]->geometry->location->lat;
 			$lng = $geocode->results[0]->geometry->location->lng; 
 			$formatted_address = $geocode->results[0]->formatted_address;
@@ -143,8 +145,10 @@ class Common {
 					}
 				}
 			}
+			logtrace("Geocode: Details.", $details);
 			return $details;
 		} else {
+			logtrace("Geocode: failed.", array());
 			return false;
 		}
 	}
