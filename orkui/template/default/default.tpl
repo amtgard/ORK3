@@ -112,7 +112,7 @@
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/event/<?=sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
 					</div>
 					<?=$event['Name'] ?>
 				</td>
