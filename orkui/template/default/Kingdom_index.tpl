@@ -27,7 +27,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/park/<?=sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+						<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
 					</div>
 					<?=$park['ParkName'] ?>
 				</td>
@@ -59,7 +59,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/kingdom/<?=sprintf("%05d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+						<img src="<?=HTTP_KINGDOM_HERALDRY . sprintf("%04d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
 					</div>
 					<?=$prinz['Name'] ?>
 				</td>
@@ -133,7 +133,7 @@
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="//www.esdraelon.amtgard.com/ork/assets/heraldry/event/<?=sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
+						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='//www.esdraelon.amtgard.com/ork/assets/heraldry/player/000000.jpg'">
 					</div>
 					<?=$event['Name'] ?>
 				</td>
