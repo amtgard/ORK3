@@ -127,7 +127,7 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = e.mundane_id
-						left join " . DB_PREFIX . "event_calendardetail cd on e.event_id = cd.event_id
+						left join " . DB_PREFIX . "event_calendardetail cd on e.event_id = cd.event_id and cd.current = 1
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
 	
@@ -146,7 +146,7 @@ class SearchService extends Ork3 {
 		} else {
 			$sql .= " order by kingdom_name, park_name, e.name";
 		}
-//		die($sql);
+		//echo $sql;
 		$d = $this->db->query($sql);
 		$i = 0;
 		$r = array();

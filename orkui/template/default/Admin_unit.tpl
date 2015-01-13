@@ -223,7 +223,7 @@
 	<ul>
 		<li>Events
 			<ul>
-				<li><a href='<?=UIR ?>Admin/createevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Create Event</a></li>
+				<li><a href='<?=UIR ?>Admin/createevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Schedule an Event</a></li>
 				<li><a href='<?=UIR ?>Admin/manageevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Event Templates</a></li>
 			</ul>
 		</li>

@@ -250,7 +250,7 @@
 </div>
 
 <div class='info-container' id='event-editor'>
-	<h3>Update or Create Event Date Details</h3>
+	<h3>Update or Schedule Event Date Details</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/new'>
 		<div>
 			<span>Start:</span>

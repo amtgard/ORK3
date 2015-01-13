@@ -20,7 +20,7 @@
 		<li><a href='<?=UIR ?>Admin/transferpark/<?=$KingdomInfo['KingdomId'] ?>'>Claim Park</a></li>
 		<li>Events
 			<ul>
-				<li><a href='<?=UIR ?>Admin/createevent'>Create Event</a></li>
+				<li><a href='<?=UIR ?>Admin/createevent'>Schedule an Event</a></li>
 				<li><a href='<?=UIR ?>Admin/manageevent'>Event Templates</a></li>
 			</ul>
 		</li>
