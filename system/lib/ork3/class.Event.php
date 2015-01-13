@@ -289,9 +289,14 @@ class Event  extends Ork3 {
 		logtrace("SetEventDetails()",$request);
 		
 		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+		
 			$this->detail->clear();
+			$this->detail->event_id = $request['EventId'];
 			$this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
 			if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
+				if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
+					return InvalidParameter('The scheduled event for this template cannot be updated because it has already been used (attendance has been entered!).  Please try scheduling a new event for this template.');
+			
 				$details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['Postal_code']);
 			
 				$this->detail->event_id = $request['EventId'];

@@ -101,6 +101,7 @@ class Model_Kingdom extends Model {
 	
 	function get_kingdom_events($kingdom_id) {
 		$t = array();
+		//$name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1
 		$s = $this->Search->Search_Event(null, $kingdom_id, 0, null, null, 12, null, true);
 		foreach ($s as $k => $e) $t[$e['EventId']] = $e;
 		$r = $this->Search->Search_Event(null, $kingdom_id, null, null, null, 8, null, true);

@@ -138,6 +138,21 @@ class Attendance  extends Ork3 {
 		return Success($this->attendance->attendance_id);
 	}
 	
+	public function HasAttendance($request) {
+		$sql = "select count(*) > 0 as has_attendance from " . DB_PREFIX . "attendance where ";
+		switch ($request['Filter']) {
+			case 'Event':
+					if (!is_numeric($request['Value']))
+						return InvalidParameter('An event_calendardetail_id must be selected for this event test.');
+					$sql .= " event_calendardetail_id = " . $request['Value'];
+				break;
+			default:
+				return InvalidParameter('No valid Filter selected.');
+		}
+		$r = $this->db->query($sql);
+		return $r->has_attendance;
+	}
+	
 	public function AttendanceAuthority($request) {
 		logtrace("Attendance->AttendanceAuthority()", $request);
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
