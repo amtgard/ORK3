@@ -38,19 +38,35 @@ if (file_exists(DIR_CONTROLLER.'controller.'.trim($route[0]).'.php')) {
 	$action = trim($route[2]);
 	if (count($route) == 1) {
 		logtrace("Index: Route(1): $class(index)", null);
+
+		$classMethod = new ReflectionMethod($class, "index");
+		if (count($classMethod->getParameters()) > 0) {
+			header("Location: " . UIR);
+			return;
+		}
+
 		$C = new $class("index");
 		$C->index();
 	} else if (count($route) == 2) {
 		logtrace("Index: Route(2): $class($call)", null);
+
+		$classMethod = new ReflectionMethod($class, $call);
+		if (count($classMethod->getParameters()) > 0) {
+			header("Location: " . UIR);
+			return;
+		}
+
 		$C = new $class($call);
 		$C->$call();
 	} else if (count($route) == 3) {
 		logtrace("Index: Route(3): $class($call,$action)", null);
+
 		$C = new $class($call,$action);
 		$C->$call($action);
 	} else if (count($route) > 3) {
 		$action = implode('/',array_slice($route,2));
 		logtrace("Index: Route(3+): $class($call,$action)", null);
+
 		$C = new $class($call,$action);
 		$C->$call($action);
 	}
