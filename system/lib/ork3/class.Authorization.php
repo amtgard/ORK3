@@ -130,8 +130,8 @@ class Authorization  extends Ork3 {
 			$m = new Mail();
 			$m->setTo($this->mundane->email);
 			$m->setFrom('ork3@amtgardrecords.com');
-			$m->setSubject('Reset ORK Password');
-			$m->setHtml("Your password has been set to: " . $password);
+			$m->setSubject('Reset ORK Password (Expires in 24 hours)');
+			$m->setHtml("THIS PASSWORD WILL EXPIRE IN 24 HOURS.\n\nYour password has been set to: " . $password);
 			$m->setSender('ork3@amtgardrecords.com');
 			$m->send();
 			$response = Success();
