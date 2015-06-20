@@ -39,8 +39,7 @@ if (file_exists(DIR_CONTROLLER.'controller.'.trim($route[0]).'.php')) {
 	if (count($route) == 1) {
 		logtrace("Index: Route(1): $class(index)", null);
 
-		$classMethod = new ReflectionMethod($class, "index");
-		if (count($classMethod->getParameters()) > 0) {
+		if (required_parameter_count($class, 'index') > 0) {
 			header("Location: " . UIR);
 			return;
 		}
@@ -50,8 +49,7 @@ if (file_exists(DIR_CONTROLLER.'controller.'.trim($route[0]).'.php')) {
 	} else if (count($route) == 2) {
 		logtrace("Index: Route(2): $class($call)", null);
 
-		$classMethod = new ReflectionMethod($class, $call);
-		if (count($classMethod->getParameters()) > 0) {
+		if (required_parameter_count($class, $call) > 0) {
 			header("Location: " . UIR);
 			return;
 		}
@@ -87,5 +85,15 @@ logtrace("Timing Information", Ork3::$Lib->session->times);
 if (DUMPTRACE) {
 	logtrace('Session',$_SESSION);
 	dumplogtrace();
+}
+
+function required_parameter_count($class, $call) {
+	$classMethod = new ReflectionMethod($class, $call);
+	$required = 0;
+	foreach ($classMethod->getParameters() as $param) {
+		if (!$param->isOptional())
+			$required++;
+	}
+	return $required;
 }
 ?>

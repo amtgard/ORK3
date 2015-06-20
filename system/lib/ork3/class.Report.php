@@ -523,7 +523,7 @@ class Report  extends Ork3 {
 	                $group_period = 'year(a.date), week(a.date, 3)';
 	            break;
 		    case 'month':
-		            $by_period = 'year(ssa.date), month(ssa.date, 3)'; 
+		            $by_period = 'year(ssa.date), month(ssa.date)'; 
 	                $group_period = 'year(a.date), week(a.date, 3)';
 		        break;
 		    case 'date':
@@ -576,7 +576,7 @@ class Report  extends Ork3 {
 					);
 			} while ($r->next());
 		} else {
-			$response['Status'] = InvalidParameter();
+			$response['Status'] = InvalidParameter('A parameter was set incorrectly: ' . $sql . "\n" . print_r($request, true));
 		}
 		logtrace("Report->AttendanceSummary()", array($this->db->lastSql, $request));
 		return $response;

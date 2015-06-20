@@ -360,7 +360,7 @@ class Player extends Ork3 {
 				$this->mundane->password_salt = md5(rand().microtime());
 				$this->mundane->save();
 				
-				Authorization::SaltPassword($this->mundane->password_salt, $this->mundane->username . trim($request['Password']), $this->mundane->password_expires);
+				Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
 
 				if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
 					$waiver = @imagecreatefromstring(base64_decode($request['Waiver'])); 
@@ -549,11 +549,11 @@ class Player extends Ork3 {
 				$this->mundane->email = is_null($request['Email'])?$this->mundane->email:$request['Email'];
 				if (trimlen($request['Password']) > 0) {
 					logtrace("Update password", $request['Password']);
-					$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
+					$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365 * 2);
 					$salt = md5(rand().microtime().$this->mundane->email);
 					$this->mundane->password_salt = $salt;
 					
-					Authorization::SaltPassword($salt, $this->mundane->username . trim($request['Password']), $this->mundane->password_expires);
+					Authorization::SaltPassword($salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
 				} else {
 					logtrace("No password update", $request['Password']);
 				}

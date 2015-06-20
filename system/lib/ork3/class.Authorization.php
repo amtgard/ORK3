@@ -54,7 +54,7 @@ class Authorization  extends Ork3 {
 			$this->app->app_salt = md5(microtime() . $mundane_id . $request['Name'] . rand());
 			$this->app->appid_expires = time() + 60 * 60 * 24 * 365;
 			$this->app->save();
-			$Authorization::SaltPassword($this->app->app_salt, $request['AppSecret'], $this->app->appid_expires);
+			$Authorization::SaltPassword($this->app->app_salt, $this->app->appid . trim($request['AppSecret']), $this->app->appid_expires);
 			return Success($this->app->appid);
 		} else {
 			return InvalidParameter();
@@ -124,7 +124,7 @@ class Authorization  extends Ork3 {
 				mt_srand(microtime() . microtime());
 				$this->mundane->password_salt = md5(mt_rand().microtime());
 			}
-			Authorization::SaltPassword($this->mundane->password_salt, $password, $this->mundane->password_expires, 1);
+			Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($password), $this->mundane->password_expires, 1);
 			
 			$this->mundane->save();
 			$m = new Mail();
@@ -225,7 +225,7 @@ class Authorization  extends Ork3 {
 		$this->app->clear();
 		$this->app->appid = $request['AppId'];
 		if ($this->app->find()) {
-			if (Authorization::KeyExists($this->app->app_salt, $request['AppId'] . $request['AppSecret'])) {
+			if (Authorization::KeyExists($this->app->app_salt, trim($request['AppId']) . trim($request['AppSecret']))) {
 				return $this->app->application_id;
 			}
 		}
@@ -305,10 +305,11 @@ class Authorization  extends Ork3 {
 			$this->mundane->username = $request['UserName'];
 			$this->mundane->username_term = 'like';
 			if ($this->mundane->find()) {
-				if (Authorization::KeyExists($this->mundane->password_salt, $request['UserName'] . $request['Password'])) {
-					Authorization::SaltPassword($this->mundane->password_salt, $request['Password'], $this->mundane->password_expires);
+				// Harmonizes old password style with new password style
+				if (Authorization::KeyExists($this->mundane->password_salt, trim($request['Password']))) {
+					Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']), $this->mundane->password_expires);
 				}
-				if (Authorization::KeyExists($this->mundane->password_salt, $request['Password'])) {
+				if (Authorization::KeyExists($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']))) {
 					if ($this->mundane->penalty_box == 1) {
 						$response['Status'] = NoAuthorization();
 					} else {
@@ -358,7 +359,7 @@ class Authorization  extends Ork3 {
 		$DB->query("delete from " . DB_PREFIX . "credential where expiration <= now()");
 		$credential = new yapo($DB, DB_PREFIX . 'credential');
 		$credential->clear();
-		$key = Authorization::CryptStrip512(trim($salt) . trim($password), $salt);
+		$key = Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt);
 		$credential->key = $key;
 		//echo "<!-- $key -->";
 		if ($credential->find()) {
@@ -380,7 +381,7 @@ class Authorization  extends Ork3 {
 			$timestamp = strtotime($timestamp);
 		}
 		if ($timestamp + 20 < time() + 60 * 60 * 24 * 365 || $timestamp - 20 > time() + 60 * 60 * 24 * 365) {
-			$timestamp = time() + rand(-20 * 60 * 60 * 24, 20 * 60 * 60 * 24) + 60 * 60 * 24 * 365;
+			$timestamp = time() + rand(-20 * 60 * 60 * 24, 20 * 60 * 60 * 24) + 60 * 60 * 24 * 365 * 2;
 		}
 		
 		if ($resetrequest == 1)
