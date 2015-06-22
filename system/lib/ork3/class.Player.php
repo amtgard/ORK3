@@ -251,7 +251,11 @@ class Player extends Ork3 {
 					"group by year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id"
 					to
 					group by ssa.class_id, year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id
-					
+			
+
+			-- 2015-06-22
+				Now it really does prevent double-counting, by using a subquery to gather the "first" entry on each date rather
+				than relying on the innodb code to randomly group by date into whatever class (over-counting some classes, under-counting others)
 		ONE PER WEEK
 			
 		$sql = "select c.class_id, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
@@ -270,10 +274,12 @@ class Player extends Ork3 {
 					from " . DB_PREFIX . "class c
 						left join 
 							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, week(ssa.date, 6) as week 
-								from " . DB_PREFIX . "attendance ssa
+								from 
+								(select min(killdupe.attendance_id) as attendance_id from " . DB_PREFIX . "attendance killdupe where killdupe.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' group by killdupe.date) kd
+								left join " . DB_PREFIX . "attendance ssa on ssa.attendance_id = kd.attendance_id
 								where
 									ssa.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
-								group by ssa.date) a on a.class_id = c.class_id
+								group by ssa.class_id, ssa.date) a on a.class_id = c.class_id
 						left join " . DB_PREFIX . "class_reconciliation cr on cr.class_id = c.class_id and cr.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
                     where c.active = 1
 					group by c.class_id
