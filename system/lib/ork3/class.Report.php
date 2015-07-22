@@ -973,7 +973,8 @@ class Report  extends Ork3 {
 		if (strlen($request['KingdomAverageWeeks']) == 0) $request['KingdomAverageWeeks'] = 26;
 		if (strlen($request['ParkAttendanceWithin']) == 0) $request['ParkAttendanceWithin'] = 4;
 		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
-		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(activeparks.parkcount,0) active_parks FROM `" . DB_PREFIX . "kingdom` k 
+		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(activeparks.parkcount,0) active_parks 
+					FROM `" . DB_PREFIX . "kingdom` k 
 					left join 
 						(select count(*) as park_count, pcnt.kingdom_id from `" . DB_PREFIX . "park` pcnt where pcnt.active = 'Active' group by pcnt.kingdom_id) pcount on pcount.kingdom_id = k.kingdom_id
 					left join 
@@ -985,6 +986,15 @@ class Report  extends Ork3 {
 									from " . DB_PREFIX . "attendance 
 									where date > adddate(curdate(), interval - " . mysql_real_escape_string($request['KingdomAverageWeeks']) . " week) group by week(date,3), mundane_id) 
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
+					left join 
+						(select 
+								count(mundanesbymonth.mundane_id) monthly_attendance_count, mundanesbymonth.kingdom_id 
+							from 
+								(select 
+										mundane_id, month(date) as month, kingdom_id 
+									from " . DB_PREFIX . "attendance 
+									where date > adddate(curdate(), interval - 12 month) group by month(date), mundane_id) 
+									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select 
 								count(*) parkcount, kingdom_id 
@@ -1004,7 +1014,9 @@ class Report  extends Ork3 {
 		$r = $this->db->query($sql);
 		$report = array();
 		do {
-			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id, 'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id, 'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Participation' => $r->active_parks );
+			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id, 
+									'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id, 
+									'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'Participation' => $r->active_parks );
 		} while ($r->next());
 		$response = array(
 			'Status' => Success(),

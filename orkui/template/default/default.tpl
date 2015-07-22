@@ -9,16 +9,17 @@
 				<th>Kingdom</th>
 				<th>Parks</th>
 				<th>Part.</th>
-				<th>Ave.</th>
+				<th>Weekly</th>
+				<th>Monthly</th>
 				<th>Total</th>
 			</tr>
 		</thead>
 		<tbody>
 <?php if (is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'])): ?>
-    <?php $parks = 0; $part = 0; $total = 0; ?>
+    <?php $parks = 0; $part = 0; $total = 0; $month_total = 0; ?>
 	<?php foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $k => $report) : ?>
 		<?php if ($report['ParentKingdomId'] == 0) : ?>
-            <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance']; ?>
+            <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance'];  $month_total += $report['Monthly'];?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$report['KingdomId']; ?>&kingdom_name=<?=$report['KingdomName']; ?>";'>
 				<td>
 				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>' onerror="this.src='<?=HTTP_PLAYER_HERALDRY ?>000000.jpg'" /></div>
@@ -26,7 +27,8 @@
 				</td>
 				<td class='data-column'><?=$report['ParkCount']; ?></td>
 				<td class='data-column'><?=$report['Participation']; ?>/<?=$report['ParkCount']; ?></td>
-				<td class='data-column' style='text-align: right;'><?=sprintf("%0.02f",($report['Attendance']/26.0)); ?></td>
+				<td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",($report['Attendance']/26.0)); ?></td>
+				<td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",($report['Monthly']/12.0)); ?></td>
 				<td class='data-column' style='text-align: right;'><?=$report['Attendance']; ?></td>
 			</tr>
 		<?php endif; ?>
@@ -35,7 +37,8 @@
                 <td></td>
                 <td class='data-column'><?=$parks; ?></td>
                 <td class='data-column'><?=$part; ?>/<?=$parks ?></td>
-                <td class='data-column' style='text-align: right;'><?=sprintf("%0.02f",$total/26.0); ?></td>
+                <td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",$total/26.0); ?></td>
+                <td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",$month_total/12.0); ?></td>
                 <td class='data-column' style='text-align: right;'><?=$total; ?></td>
             </tr>
 <?php endif; ?>
@@ -50,16 +53,17 @@
 				<th>Principality</th>
 				<th>Parks</th>
 				<th>Part.</th>
-				<th>Ave.</th>
+				<th>Weekly</th>
+				<th>Monthly</th>
 				<th>Total</th>
 			</tr>
 		</thead>
 		<tbody>
 <?php if (is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'])): ?>
-    <?php $parks = 0; $part = 0; $total = 0; ?>
+    <?php $parks = 0; $part = 0; $total = 0; $month_total = 0; ?>
 	<?php foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $k => $report) : ?>
 		<?php if ($report['ParentKingdomId'] > 0) : ?>
-            <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance']; ?>
+            <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance'];  $month_total += $report['Monthly'];?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$report['KingdomId']; ?>";'>
 				<td>
 				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>' onerror="this.src='<?=HTTP_PLAYER_HERALDRY ?>000000.jpg'" /></div>
@@ -67,7 +71,8 @@
 				</td>
 				<td class='data-column'><?=$report['ParkCount']; ?></td>
 				<td class='data-column'><?=$report['Participation']; ?>/<?=$report['ParkCount']; ?></td>
-				<td class='data-column'><?=sprintf("%0.02f",($report['Attendance']/26.0)); ?></td>
+				<td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",($report['Attendance']/26.0)); ?></td>
+				<td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",($report['Monthly']/12.0)); ?></td>
 				<td class='data-column'><?=$report['Attendance']; ?></td>
 			</tr>
 		<?php endif; ?>
@@ -76,7 +81,8 @@
                 <td></td>
                 <td class='data-column'><?=$parks; ?></td>
                 <td class='data-column'><?=$part; ?>/<?=$parks ?></td>
-                <td class='data-column' style='text-align: right;'><?=sprintf("%0.02f",$total/26.0); ?></td>
+                <td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",$total/26.0); ?></td>
+                <td class='data-column' style='text-align: right;'><?=sprintf("%0.01f",$month_total/12.0); ?></td>
                 <td class='data-column' style='text-align: right;'><?=$total; ?></td>
             </tr>
 <?php endif; ?>
