@@ -305,6 +305,7 @@ class Controller_Admin extends Controller {
 					$request[] = array(
 							'ParkId' => $park_id,
 							'ParkTitleId' => $title_id,
+							'Abbreviation' => trim($this->request->Admin_editparks->Abbreviation[$park_id]),
 							'Active' => trimlen($this->request->Admin_editparks->Active[$park_id])>0?'Active':'Retired'
 						);
 				}

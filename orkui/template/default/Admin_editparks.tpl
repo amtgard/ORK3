@@ -12,6 +12,7 @@
 				<tr>
 					<th>Park</th>
 					<th>Title</th>
+					<th>Abbreviation</th>
 					<th>Active</th>
 				</tr>
 			</thead>
@@ -26,11 +27,12 @@
 <?php endforeach; ?>
 						</select>
 					</td>
+					<td><input type='text' name='Abbreviation[<?=$park['ParkId'] ?>]' class='narrow-field' maxlength='3' value='<?=$park['Abbreviation'] ?>' ></td>
 					<td><input type='checkbox' name='Active[<?=$park['ParkId'] ?>]' value='YES' <?=$park['Active']=='Active'?'CHECKED':''; ?> ></td>
 				</tr>
 <?php endforeach; ?>
 				<tr>
-					<td colspan='3'><input type='submit' value='Update' /></td>
+					<td colspan='4'><input type='submit' value='Update' /></td>
 				</tr>
 			</tbody>
 		</table>

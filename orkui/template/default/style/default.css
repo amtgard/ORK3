@@ -308,6 +308,9 @@ tr.table-data-break:last-child td {
 	text-align: right;
 	float: right;
 }
+.narrow-field {
+	width: 3em;
+}
 .remove-float {
 	float: none;
 }
