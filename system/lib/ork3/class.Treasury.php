@@ -24,13 +24,13 @@ class Treasury extends Ork3 {
 	
 	}
 	
-	public function dues_through($mundane_id, $park_id, $startdate) {
+	public function dues_through($mundane_id, $kingdom_id, $startdate) {
 		$sql = "
 			SELECT split.dues_through
 				FROM 
 					`" . DB_PREFIX . "split` split 
 						left join " . DB_PREFIX . "account account on split.account_id = account.account_id
-				where park_id = '" . mysql_real_escape_string($park_id) . "' and src_mundane_id = '" . mysql_real_escape_string($mundane_id) . "' and is_dues = 1
+				where kingdom_id = '" . mysql_real_escape_string($kingdom_id) . "' and src_mundane_id = '" . mysql_real_escape_string($mundane_id) . "' and is_dues = 1
 				order by dues_through desc 
 				limit 1
 		";

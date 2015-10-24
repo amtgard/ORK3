@@ -121,7 +121,7 @@ class Player extends Ork3 {
 					'Waivered' => $this->mundane->waivered,
 					'Waiver' => $fetchprivate?"":(HTTP_WAIVERS . sprintf('%06d.' . $this->mundane->waiver_ext, $this->mundane->mundane_id)),
 					'WaiverExt' => $this->mundane->waiver_ext,
-					'DuesThrough' => Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->park_id, 0),
+					'DuesThrough' => Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->kingdom_id, 0),
 					'HasHeraldry' => $this->mundane->has_heraldry,
 					'Heraldry' => $heraldry['Url'],
 					'HasImage' => $this->mundane->has_image,

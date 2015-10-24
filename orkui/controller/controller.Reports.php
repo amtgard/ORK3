@@ -198,7 +198,7 @@ class Controller_Reports extends Controller {
 	public function duespaid($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_duespaid'] = 1;
-		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1);
+		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1, 0, 2);
 	}
 	
 }
