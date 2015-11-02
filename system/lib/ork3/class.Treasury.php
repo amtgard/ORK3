@@ -24,13 +24,13 @@ class Treasury extends Ork3 {
 	
 	}
 	
-	public function dues_through($mundane_id, $kingdom_id, $startdate) {
+	public function dues_through($mundane_id, $kingdom_id, $park_id, $startdate) {
 		$sql = "
 			SELECT split.dues_through
 				FROM 
 					`" . DB_PREFIX . "split` split 
 						left join " . DB_PREFIX . "account account on split.account_id = account.account_id
-				where kingdom_id = '" . mysql_real_escape_string($kingdom_id) . "' and src_mundane_id = '" . mysql_real_escape_string($mundane_id) . "' and is_dues = 1
+				where (kingdom_id = '" . mysql_real_escape_string($kingdom_id) . "' or park_id = '" . mysql_real_escape_string($park_id) . "') and src_mundane_id = '" . mysql_real_escape_string($mundane_id) . "' and is_dues = 1
 				order by dues_through desc 
 				limit 1
 		";
@@ -86,7 +86,7 @@ class Treasury extends Ork3 {
 				
 			if (false !== ($pointers = $this->fetch_account_pointers(AUTH_PARK, $player['ParkId']))) {
                 logtrace('record_transaction is free to enter dues', null);
-				$duestart = $this->dues_through($request['MundaneId'], $player['ParkId'], $request['TransactionDate']);
+				$duestart = $this->dues_through($request['MundaneId'], $player['KingdomId'], $player['ParkId'], $request['TransactionDate']);
 				$throughdate = date("Y-m-d H:i:s", strtotime('+' . (6 * ceil($request['Semesters'])) . ' months', strtotime($duestart)));
 				$r = $this->record_transaction(
 					array(
