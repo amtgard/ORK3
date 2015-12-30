@@ -15,7 +15,6 @@
 	
 	require_once(DIR_SERVICE.'Common.definitions.php');
 		
-
 	$J = new JsonServer(array(
 		'Administration',
 		'Attendance',

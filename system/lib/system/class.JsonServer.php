@@ -196,7 +196,7 @@ class JsonServer {
     }
     
     public static function Encode($data) {
-        return json_encode($data, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE | JsonServer::$PRETTY);
+        return json_encode($data, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE | JsonServer::$PRETTY | JSON_PARTIAL_OUTPUT_ON_ERROR);
     }
     
     public static function Result($result, $status = true, $code = Errors::SUCCESS, $message ) {
