@@ -198,8 +198,8 @@ class Park extends Ork3
 					'UnitName'        => $r->unit_name,
 					'Restricted'      => $r->restricted,
 					'UserName'        => $r->username,
-					'GivenName'       => $restricted_access || $r->restricted == 0 ? $r->given_name : "",
-					'Surname'         => $restricted_access || $r->restricted == 0 ? $r->surname : "",
+					'GivenName'       => $r->restricted == 0 ? $r->given_name : '',
+					'Surname'         => $r->restricted == 0 ? $r->surname : '',
 					'Persona'         => $r->persona,
 					'OfficerId'       => $r->officer_id,
 					'OfficerRole'     => $r->officer_role,
@@ -298,7 +298,7 @@ class Park extends Ork3
 						return date( "Y-m-d", strtotime( "fifth $week_day of " . date( "F Y", $from_date ), $from_date ) );
 				}
 			case 'monthly':
-				return date( "Y-m-d", strtotime( date( "F $month_day, $Y", $from_date ), $from_date ) );
+				return date( "Y-m-d", strtotime( date( "F $month_day, Y", $from_date ), $from_date ) );
 		}
 	}
 
