@@ -22,7 +22,7 @@
             <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance'];  $month_total += $report['Monthly'];?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$report['KingdomId']; ?>&kingdom_name=<?=$report['KingdomName']; ?>";'>
 				<td>
-				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>' onerror="this.src='<?=HTTP_PLAYER_HERALDRY ?>000000.jpg'" /></div>
+				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>'></div>
 				    <?=stripslashes($report['KingdomName']); ?>
 				</td>
 				<td class='data-column'><?=$report['ParkCount']; ?></td>
@@ -66,7 +66,7 @@
             <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance'];  $month_total += $report['Monthly'];?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$report['KingdomId']; ?>";'>
 				<td>
-				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>' onerror="this.src='<?=HTTP_PLAYER_HERALDRY ?>000000.jpg'" /></div>
+				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>'></div>
 				    <?=stripslashes($report['KingdomName']); ?>
 				</td>
 				<td class='data-column'><?=$report['ParkCount']; ?></td>
@@ -94,7 +94,7 @@
     <ul>
         <li>
             <a href='<?=UIR ?>Atlas'>
-                <img style='display: block; padding: 4px; margin: 6px 0; border-radius: 4px; border: 1px solid #ccc;' src='/ork/orkui/template/default/img/map.jpg' />
+                <img style='display: block; padding: 4px; margin: 6px 0; border-radius: 4px; border: 1px solid #ccc;' src='/orkui/template/default/img/map.jpg' />
                 Amtgard Atlas Map 
             </a>
         </li>
@@ -118,7 +118,7 @@
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_ASSETS ?>heraldry/player/000000.jpg'">
+						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg">
 					</div>
 					<?=$event['Name'] ?>
 				</td>

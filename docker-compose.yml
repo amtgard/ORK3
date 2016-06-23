@@ -1,0 +1,15 @@
+web:
+  build: .
+  ports:
+    - "8080:80"
+  volumes:
+    - .:/srv/www
+  links:
+    - mysql
+mysql:
+  image: mysql:5.6
+  environment:
+    MYSQL_ROOT_PASSWORD: secret
+    MYSQL_DATABASE: ork
+    MYSQL_USER: ork
+    MYSQL_PASSWORD: secret
