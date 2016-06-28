@@ -1,9 +1,0 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
-<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="ORK3.Properties" GeneratedClassName="Settings">
-  <Profiles />
-  <Settings>
-    <Setting Name="ORK3_AuthorizationService_AuthorizationService" Type="(Web Service URL)" Scope="Application">
-      <Value Profile="(Default)">http://www.amtgard-wl.com/ork3/dev/orkservice/Authorization/AuthorizationService.php</Value>
-    </Setting>
-  </Settings>
-</SettingsFile>

@@ -18,3 +18,5 @@ assets/tmp/*
 !assets/tmp/.gitkeep
 assets/waivers/*
 !assets/waivers/.gitkeep
+.idea
+vendor
