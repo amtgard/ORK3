@@ -100,7 +100,7 @@ class yapo {
 	
 	private function htmldec($string) {
 		//if (!is_string($string)) return '';
-		if (is_array($string))
+		if (is_array($string) || is_object($string))
 			return json_encode($string);
 
 		return htmlspecialchars_decode($string, ENT_QUOTES);

@@ -986,7 +986,7 @@ class Report  extends Ork3 {
 	
 	public function GetActiveKingdomsSummary($request=null) {
 		$key = Ork3::$Lib->ghettocache->key($request); 
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
 		
 		if (strlen($request['KingdomAverageWeeks']) == 0) $request['KingdomAverageWeeks'] = 26;
