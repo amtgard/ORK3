@@ -453,9 +453,10 @@ class Player extends Ork3 {
 						" . DB_PREFIX . "attendance 
 					WHERE 
 						mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "' 
-						AND date in (SELECT date FROM " . DB_PREFIX . "attendance
+						AND date in (SELECT date FROM 
+									(select distinct date from " . DB_PREFIX . "attendance
 										WHERE 
-											mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "'";
+											mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "') as d)";
 			$this->db->query($sql);
 			$sql = "update " . DB_PREFIX ."attendance set mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' where mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);

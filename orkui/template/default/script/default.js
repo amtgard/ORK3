@@ -1,5 +1,3 @@
-<?php require_once('../../../../config.php'); ?>
-
 function urldecode(url) {
   var d = decodeURIComponent((url+'').replace(/\+/g, '%20').replace(/\+/g, '%2B'));
   return d;
@@ -222,7 +220,7 @@ $(function() {
 	$( "#PlayerSearch" ).autocomplete({
 		source: function( request, response ) {
 			$.getJSON(
-				"<?=HTTP_SERVICE ?>Search/SearchService.php",
+				"/orkservice/Search/SearchService.php",
 				{
 					Action: 'Search/Player',
 					type: 'all',
@@ -283,7 +281,7 @@ $(function() {
 	$( "#ParkSearch" ).autocomplete({
 		source: function( request, response ) {
 			$.getJSON(
-				"<?=HTTP_SERVICE ?>Search/SearchService.php",
+				"/orkservice/Search/SearchService.php",
 				{
 					Action: 'Search/Park',
 					name: request.term,
