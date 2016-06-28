@@ -220,7 +220,7 @@ $(function() {
 	$( "#PlayerSearch" ).autocomplete({
 		source: function( request, response ) {
 			$.getJSON(
-				"/orkservice/Search/SearchService.php",
+				"../orkservice/Search/SearchService.php",
 				{
 					Action: 'Search/Player',
 					type: 'all',
@@ -281,7 +281,7 @@ $(function() {
 	$( "#ParkSearch" ).autocomplete({
 		source: function( request, response ) {
 			$.getJSON(
-				"/orkservice/Search/SearchService.php",
+				"../orkservice/Search/SearchService.php",
 				{
 					Action: 'Search/Park',
 					name: request.term,

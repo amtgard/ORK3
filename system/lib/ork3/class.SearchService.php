@@ -8,7 +8,11 @@ class SearchService extends Ork3 {
 	}
 	
 	public function Unit($name, $limit=15) {
-        $limit = min($limit, 50);
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $limit)); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
+			return $cache;
+		
+    $limit = min($limit, 50);
 		$unit = new yapo($this->db, DB_PREFIX . 'unit');
 		$unit->clear();
 		$unit->name = "%$name%";
@@ -24,7 +28,7 @@ class SearchService extends Ork3 {
 						'Url' => $unit->url
 					);
 			} while ($unit->next() && $limit --> 0);
-			return $r;
+			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 		}
 		return array();
 	}
@@ -39,6 +43,10 @@ class SearchService extends Ork3 {
 	}
 	
 	public function Location($name, $date) {
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $date)); 
+		if (strlen($name) <= 3 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
+			return $cache;
+		
 		$limit = max(0, min($limit, 20));
 		$sql = "(select 
 						k.name as kingdom_name, e.kingdom_id, 
@@ -89,10 +97,14 @@ class SearchService extends Ork3 {
 		} else {
 			return null;
 		}
-		return $r;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 	}
 	
 	public function CalendarDetail($event_calendardetail_id) {
+		$key = Ork3::$Lib->ghettocache->key(func_get_args()); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
+			return $cache;
+		
 		$eventdetail = new yapo($this->db, DB_PREFIX . "event_calendardetail");
 		$eventdetail->clear();
 		$eventdetail->event_calendardetail_id = $event_calendardetail_id;
@@ -114,14 +126,21 @@ class SearchService extends Ork3 {
 					'MapUrl' => $eventdetail->map_url,
 					'MapUrlName' => $eventdetail->map_url_name
 				);
-            return $detail;
+			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $detail);
 		} else {
 			return null;
 		}
 	}
 	
 	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1) {
-        $limit = min($limit, 50);
+		$keys = func_get_args();
+		if (count($keys) > 0)
+			$keys[0] = substr($keys[0], 0, 4);
+		$key = Ork3::$Lib->ghettocache->key($keys); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
+			return $cache;
+		
+    $limit = min($limit, 50);
 		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
@@ -168,10 +187,15 @@ class SearchService extends Ork3 {
 				}
 			} while ($d->next());
 		}
-		return $r;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 	}
 	
 	public function Kingdom($name, $limit = null) {
+		
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $kingdom_id, $limit)); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+			return $cache;
+		
 		$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
 		$kingdom->clear();
 		$kingdom->name = "%$name%";
@@ -189,13 +213,18 @@ class SearchService extends Ork3 {
 					$limit--;
 				}
 			} while ($kingdom->next());
-			return $r;
+			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 		} else {
 			return array();
 		}
 	}
 	
 	public function Park($name, $kingdom_id = null, $limit = null) {
+		
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $kingdom_id, $limit)); 
+		if (strlen($name) == 3 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+			return $cache;
+		
 		$park = new yapo($this->db, DB_PREFIX . 'park');
 		$park->clear();
 		$park->name = "%$name%";
@@ -216,7 +245,7 @@ class SearchService extends Ork3 {
 					$limit--;
 				}
 			} while ($park->next());
-			return $r;
+			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 		} else {
 			return array();
 		}

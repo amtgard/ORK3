@@ -12,12 +12,6 @@
     	<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/highcharts.js"></script>
     	<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.data.js"></script>
     	<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.exporting.js"></script>
-<?php if (false) : ?>
-		<link rel="stylesheet" href="<?=HTTP_TEMPLATE;?>default/script/js/SCEditor/jquery.sceditor.css" type="text/css" media="all" />
-		<link rel="stylesheet" href="<?=HTTP_TEMPLATE;?>default/script/js/SCEditor/jquery.sceditor.default.css" type="text/css" media="all" />
-		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/SCEditor/jquery.sceditor.js"></script>
-		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/SCEditor/jquery.sceditor.bbcode.js"></script>
-<?php endif; ?>
 	</head>
 	<body>
 		<!-- Product edit warning -->
@@ -52,17 +46,5 @@
 				<li><span>Parks:</span><input id='ParkSearch' /></li>
 			</ul>
 		</div>
-<script type="text/javascript">
-var clicky_site_ids = clicky_site_ids || [];
-clicky_site_ids.push(100638026);
-(function() {
-  var s = document.createElement('script');
-  s.type = 'text/javascript';
-  s.async = true;
-  s.src = '//static.getclicky.com/js';
-  ( document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0] ).appendChild( s );
-})();
-</script>
-<noscript><p><img alt="Clicky" width="1" height="1" src="//in.getclicky.com/100638026ns.gif" /></p></noscript>
 	</body>
 </html>

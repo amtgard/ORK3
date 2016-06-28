@@ -289,6 +289,11 @@ class Report  extends Ork3 {
 	}
 	
 	public function TournamentReport($request) {
+		
+		$key = Ork3::$Lib->ghettocache->key($request); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false)
+			return $cache;
+		
 		if (valid_id($request['KingdomId'])) $where .= " and t.kingdom_id = $request[KingdomId] or e.kingdom_id = $request[KingdomId]";
 		if (valid_id($request['ParkId'])) $where .= " and t.park_id = $request[ParkId] or e.park_id = $request[ParkId]";
 		if (valid_id($request['EventId'])) $where .= " and e.event_id = $request[EventId]";
@@ -313,7 +318,7 @@ class Report  extends Ork3 {
 			$where .= " and p.alias like '" . mysql_real_escape_string($request['Alias']) . "'";
 		}
 		
-		if (valid_id($request['Limit'])) $limit = " limit '" . mysql_real_escape_string($request['Limit']) . "'";
+		if (valid_id($request['Limit'])) $limit = " limit " . mysql_real_escape_string($request['Limit']);
 		
 		$sql = "select t.*, k.name as kingdom_name, k.parent_kingdom_id, park.name as park_name, e.name as event_name, d.event_start
 					from " . DB_PREFIX . "tournament t
@@ -352,12 +357,18 @@ class Report  extends Ork3 {
 			}
 			$response['Status'] = Success();
 		} else {
+      logtrace("Tournaments", $sql);
 			$response['Status'] = InvalidParameter();
 		}
-		return $response;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 	
 	public function PlayerAwards($request) {
+		
+		$key = Ork3::$Lib->ghettocache->key($request); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+		
 		if (valid_id($request['KingdomId'])) {
 			$location_clause = " and m.kingdom_id = $request[KingdomId]";
 		} else {
@@ -415,7 +426,7 @@ class Report  extends Ork3 {
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
-		return $response;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 	
 	public function Guilds($request) {
@@ -919,6 +930,10 @@ class Report  extends Ork3 {
 	}
 	
 	public function GetKingdomParkAverages($request) {
+		$key = Ork3::$Lib->ghettocache->key($request); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+			return $cache;
+		
 		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
 		if (strlen($request['AverageWeeks']) == 0 && strlen($request['AverageMonths']) == 0) $request['AverageWeeks'] = 26;
 		if (strlen($request['KingdomId']) == 0) $request['KingdomId'] = '0';
@@ -966,10 +981,14 @@ class Report  extends Ork3 {
 			} while ($r->next());
 			$response['KingdomParkAveragesSummary'] = $report;
 		}
-		return $response;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 	
 	public function GetActiveKingdomsSummary($request=null) {
+		$key = Ork3::$Lib->ghettocache->key($request); 
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
+		
 		if (strlen($request['KingdomAverageWeeks']) == 0) $request['KingdomAverageWeeks'] = 26;
 		if (strlen($request['ParkAttendanceWithin']) == 0) $request['ParkAttendanceWithin'] = 4;
 		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
@@ -1022,7 +1041,7 @@ class Report  extends Ork3 {
 			'Status' => Success(),
 			'ActiveKingdomsSummaryList' => $report
 		);
-		return $response;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 	
 	public function GetActivePlayers($request) {

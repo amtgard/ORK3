@@ -217,6 +217,22 @@ class Attendance  extends Ork3 {
 			return InvalidParameter();
 		}
 		
+		$attendance = new stdClass();
+		$attendance->attendance_id = $this->attendance->attendance_id;
+		$attendance->mundane_id = $this->attendance->mundane_id;
+		$attendance->class_id = $this->attendance->class_id;
+		$attendance->date = $this->attendance->date;
+		$attendance->park_id = $this->attendance->park_id;
+		$attendance->kingdom_id = $this->attendance->kingdom_id;
+		$attendance->event_id = $this->attendance->event_id;
+		$attendance->event_calendardetail_id = $this->attendance->event_calendardetail_id;
+		$attendance->credits = $this->attendance->credits;
+		$attendance->persona = $this->attendance->persona;
+		$attendance->flavor = $this->attendance->flavor;
+		$attendance->note = $this->attendance->note;
+				
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Attendance', $request['AttendanceId'], $attendance);
+		
 		$this->attendance->delete();
 		
 		return Success($this->attendance->attendance_id);

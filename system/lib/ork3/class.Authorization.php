@@ -154,6 +154,9 @@ class Authorization  extends Ork3 {
 	}
 	
 	public function Authorize($request) {
+		if (isset($_SESSION['is_authorized_mundane_id']))
+			unset($_SESSION['is_authorized_mundane_id']);
+		
 		$response = array();
 		if ($this->IsLocalCall() || true) {
 			$response = $this->Authorize_h($request);
@@ -580,6 +583,8 @@ class Authorization  extends Ork3 {
 	}
 	
 	public function IsAuthorized_h($token) {
+		if (isset($_SESSION['is_authorized_mundane_id']))
+			return $_SESSION['is_authorized_mundane_id'];
 		logtrace("IsAuthorized_h($token)", null);
 		if (strlen($token) != 32) return 0;
 		$this->mundane->clear();
@@ -587,8 +592,11 @@ class Authorization  extends Ork3 {
 		if ($this->mundane->find()) {
 			if ($this->mundane->penalty_box == 1) return 0;
 			logtrace("IsAuthorized(): authorized", null);
+			$_SESSION['is_authorized_mundane_id'] = $this->mundane->mundane_id;
 			return $this->mundane->mundane_id;
 		}
+		if (isset($_SESSION['is_authorized_mundane_id']))
+			unset($_SESSION['is_authorized_mundane_id']);
 		return 0;
 	}
 	

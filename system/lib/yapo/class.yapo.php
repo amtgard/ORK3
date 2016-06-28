@@ -100,10 +100,15 @@ class yapo {
 	
 	private function htmldec($string) {
 		//if (!is_string($string)) return '';
+		if (is_array($string))
+			return json_encode($string);
+
 		return htmlspecialchars_decode($string, ENT_QUOTES);
 	}
 	
 	function s_prep($string) {
+		if (is_array($string))
+			return json_encode($string);
 		return mysql_real_escape_string($string);
 	}
 	

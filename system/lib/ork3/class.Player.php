@@ -48,6 +48,8 @@ class Player extends Ork3 {
     }
     
     public function RemoveNote($request) {
+				$note = new stdClass();
+			
         logtrace("RemoveNote", $request);
         if (valid_id($request['NotesId'])) {
             $this->notes->clear();
@@ -59,6 +61,17 @@ class Player extends Ork3 {
                 if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
         				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
                             || $mundane_id == $request['MundaneId'])) {
+									
+										$note->mundane_note_id = $this->notes->mundane_note_id;
+										$note->mundane_id = $this->notes->mundane_id;
+										$note->note = $this->notes->note;
+										$note->description = $this->notes->description;
+										$note->given_by = $this->notes->given_by;
+										$note->date = $this->notes->date;
+										$note->date_complete = $this->notes->date_complete;
+				
+										Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['NotesId'], $note);
+									
                     $this->notes->delete();
                     return Success();
                 }
@@ -449,6 +462,15 @@ class Player extends Ork3 {
 					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $toMundane['KingdomId'], AUTH_EDIT))
 				|| (($toMundane['ParkId'] == $fromMundane['ParkId']) 
 					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $toMundane['ParkId'], AUTH_EDIT))) {
+			
+			$from_player = $this->GetPlayer(array('MundaneId' => $request['FromMundaneId']));
+			$to_player = $this->GetPlayer(array('MundaneId' => $request['ToMundaneId']));
+			
+			if ($from_player['Status']['Status'] != 0 || $to_player['Status']['Status'] != 0)
+				return InvalidParameter("One of the players could not be found.");
+				
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['FromMundaneId'], $from_player['Player'], $to_player['Player']);
+			
 			$sql = "DELETE FROM 
 						" . DB_PREFIX . "attendance 
 					WHERE 
@@ -490,6 +512,9 @@ class Player extends Ork3 {
 	}
 	
 	public function MovePlayer($request) {
+		
+		$player = $this->GetPlayer($request['MundaneId']);
+		
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $request['MundaneId'];
 		$park = new yapo($this->db, DB_PREFIX . 'park');
@@ -502,6 +527,9 @@ class Player extends Ork3 {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)		// New Kingdom
 					|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT))) { // Current Kingdom
+				
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
+				
 			$this->mundane->park_id = $request['ParkId'];
 			$this->mundane->kingdom_id = $park->kingdom_id;
 			$this->mundane->waivered = $request['Waivered']?1:0;
@@ -517,6 +545,8 @@ class Player extends Ork3 {
 		logtrace("UpdatePlayer()", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		
+		$player = $this->GetPlayer($request['MundaneId']);
 		
 		if (trimlen($request['UserName']) > 0) {
 			$this->mundane->clear();
@@ -541,6 +571,9 @@ class Player extends Ork3 {
 			$this->mundane->mundane_id = $request['MundaneId'];
 			if ($this->mundane->find()) {
 				logtrace('Updating player', $request);
+				
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
+				
 				$this->mundane->modified = date('Y-m-d H:i:s', time());
 				$this->mundane->given_name = is_null($request['GivenName'])?$this->mundane->given_name:$request['GivenName'];
 				$this->mundane->surname = is_null($request['Surname'])?$this->mundane->surname:$request['Surname'];
@@ -824,6 +857,9 @@ class Player extends Ork3 {
     			$awards->kingdom_id = valid_id($given_by['Player']['KingdomId'])?$given_by['Player']['KingdomId']:0;
             }
 			// Events are awesome.
+
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
+				
 			$awards->save();
 			return Success('');
 		} else {
@@ -857,6 +893,9 @@ class Player extends Ork3 {
 				// Events are awesome.
 				$awards->event_id = valid_id($request['EventId'])?$request['EventId']:0;
 				$awards->save();
+
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
+				
 				return Success($awards->awards_id);
 			} else {
 				return InvalidParamter();
@@ -864,6 +903,26 @@ class Player extends Ork3 {
 		} else {
 			return NoAuthorization();
 		}
+	}
+	
+	private function get_award(& $awards) {
+		$award = new stdClass();
+		$award->awards_id = $awards->kingdomaward_id;
+		$award->kingdomaward_id = $awards->kingdomaward_id;
+		$award->mundane_id = $awards->mundane_id;
+		$award->unit_id = $awards->unit_id;
+		$award->park_id = $awards->park_id;
+		$award->kingdom_id = $awards->kingdom_id;
+		$award->team_id = $awards->team_id;
+		$award->rank = $awards->rank;
+		$award->date = $awards->date;
+		$award->given_by_id = $awards->given_by_id;
+		$award->note = $awards->note;
+		$award->at_park_id = $awards->at_park_id;
+		$award->at_kingdom_id = $awards->at_kingdom_id;
+		$award->at_event_id = $awards->at_event_id;
+		$award->custom_name = $awards->custom_name;
+		$award->award_id = $awards->award_id;
 	}
 	
 	public function RemoveAward($request) {
@@ -876,6 +935,9 @@ class Player extends Ork3 {
 			$mundane = $this->player_info($awards->mundane_id);
 			if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+
+					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
+				
 					$awards->delete();
 			} else {
 				return NoAuthorization();
