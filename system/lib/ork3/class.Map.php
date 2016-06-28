@@ -8,6 +8,10 @@ class Map extends Ork3 {
 	}
 	
 	public function GetParkLocations($request) {
+				$key = Ork3::$Lib->ghettocache->key($request); 
+				if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+					return $cache;
+		
         $this->park->clear();
         $this->park->active = 'Active';
         $locations = array();
@@ -28,7 +32,7 @@ class Map extends Ork3 {
                     'KingdomColor' => $kingdoms['Kingdoms'][$this->park->kingdom_id]['KingdomColor']
                 );
         } while ($this->park->next());
-        return array('Parks'=>$locations);
+				return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, array('Parks'=>$locations));
 	}
 }
 

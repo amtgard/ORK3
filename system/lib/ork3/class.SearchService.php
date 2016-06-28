@@ -221,8 +221,8 @@ class SearchService extends Ork3 {
 	
 	public function Park($name, $kingdom_id = null, $limit = null) {
 		
-		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $kingdom_id, $limit)); 
-		if (strlen($name) == 3 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 2), $kingdom_id, $limit)); 
+		if (strlen($name) == 2 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
 		
 		$park = new yapo($this->db, DB_PREFIX . 'park');

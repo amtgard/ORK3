@@ -18,7 +18,10 @@ class Ghettocache {
 	}
 	
 	function cache($call, $key, $content) {
-		file_put_contents(DIR_CACHE . "$call.$key.cache", json_encode($content), LOCK_EX);
+		$cache = json_encode(utf8_encode_recursive($content), !JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
+		if (json_last_error() != JSON_ERROR_NONE)
+			die(json_last_error_msg());
+		file_put_contents(DIR_CACHE . "$call.$key.cache", $cache, LOCK_EX);
 		logtrace("put ghettocache: " . DIR_CACHE . "$call.$key.cache", $content);
 		return $content;
 	}
@@ -30,4 +33,26 @@ class Ghettocache {
 		return implode(".", $request);
 	}
 	
+
+}
+
+function utf8_encode_recursive ($array)
+{
+		$result = array();
+		foreach ($array as $key => $value)
+		{
+				if (is_array($value))
+				{
+						$result[$key] = utf8_encode_recursive($value);
+				}
+				else if (is_string($value))
+				{
+						$result[$key] = utf8_encode($value);
+				}
+				else
+				{
+						$result[$key] = $value;
+				}
+		}
+		return $result;
 }
