@@ -502,7 +502,7 @@ class Player extends Ork3 {
 			$this->db->query($sql);
 			$sql = "update " . DB_PREFIX ."unit_mundane set mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' where mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
-    		$sql = "update " . DB_PREFIX ."mundane_note set mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' where mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+    	$sql = "update " . DB_PREFIX ."mundane_note set mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' where mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
 			return Success();
 		} else {

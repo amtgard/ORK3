@@ -9,10 +9,10 @@ class Controller_Atlas extends Controller {
 	}
 	
 	public function index() {
-    	$this->data['Parks'] = $this->Map->GetParkLocations(array('KingdomId' => $kingdom_id));
+  	$this->data['Parks'] = $this->Map->GetParkLocations(array('KingdomId' => $kingdom_id));
 	}
     
-    public function map($kingdom_id = null) {
+  public function map($kingdom_id = null) {
 		$this->data['Parks'] = $this->Map->GetParkLocations(array('KingdomId' => $kingdom_id));
 	}
 
