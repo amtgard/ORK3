@@ -632,6 +632,7 @@ class Controller_Admin extends Controller {
 	}
 	
 	public function player($id) {
+		logtrace("player call", $_REQUEST);
 		$this->load_model('Player');
 		$this->load_model('Award');
 		$this->load_model('Unit');

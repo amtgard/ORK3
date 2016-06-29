@@ -255,6 +255,7 @@ class yapo {
 		if (!is_null($limit)) {
 			$sql .= " limit $limit";
 		}
+		$this->__last_sql = $sql;
  		if (!($this->__result_set = $this->__database->query($sql))) {
 			echo 'ERROR IN SQL:'.$sql."\n\n".mysql_error();
 			return false;

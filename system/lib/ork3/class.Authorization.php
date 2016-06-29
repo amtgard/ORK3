@@ -325,7 +325,7 @@ class Authorization  extends Ork3 {
 						$response['Timeout'] = $this->mundane->token_expires;
 					}
 				} else {
-					$response['Status'] = InvalidParameter(null, "Login and username could not be found.");
+					$response['Status'] = InvalidParameter(null, "Login could not be found.");
 				}
 			} else {
 				$response['Status'] = InvalidParameter(null, "Login and username could not be found.");
@@ -388,9 +388,11 @@ class Authorization  extends Ork3 {
 		}
 		
 		if ($resetrequest == 1)
-			$DB->query("insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", time() + 24 * 60 * 60)). "', $resetrequest)");
+			$sql = "insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", time() + 24 * 60 * 60)). "', $resetrequest)";
 		else
-			$DB->query("insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", $timestamp)). "', $resetrequest)");
+			$sql = "insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", $timestamp)). "', $resetrequest)";
+		$DB->query($sql);
+		
 		//$DB->query("insert into " . DB_PREFIX . "credential (`key`, `expiration`) values ('" .Authorization::CryptStrip512(rand().microtime(), $salt). "', '" .(date("Y-m-d H:i:s", $timestamp + rand(-60 * 60 * 24 * 182.5, 0))). "')");
 		/*
 		for ($i = 0; $i < 3; $i++) {
