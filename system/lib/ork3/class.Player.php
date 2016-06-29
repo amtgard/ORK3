@@ -923,6 +923,7 @@ class Player extends Ork3 {
 		$award->at_event_id = $awards->at_event_id;
 		$award->custom_name = $awards->custom_name;
 		$award->award_id = $awards->award_id;
+		return $award;
 	}
 	
 	public function RemoveAward($request) {
