@@ -513,7 +513,7 @@ class Player extends Ork3 {
 	
 	public function MovePlayer($request) {
 		
-		$player = $this->GetPlayer($request['MundaneId']);
+		$player = $this->GetPlayer(array('MundaneId' => $request['MundaneId']));
 		
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $request['MundaneId'];
@@ -546,8 +546,6 @@ class Player extends Ork3 {
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		
-		$player = $this->GetPlayer($request['MundaneId']);
-		
 		if (trimlen($request['UserName']) > 0) {
 			$this->mundane->clear();
 			$this->mundane->username = $request['UserName'];
@@ -567,6 +565,8 @@ class Player extends Ork3 {
                 die("You have attempted an illegal operation.  Your attempt has been logged.");
             }
         
+			$player = $this->GetPlayer(array('MundaneId' => $request['MundaneId']));
+		
 			$this->mundane->clear();
 			$this->mundane->mundane_id = $request['MundaneId'];
 			if ($this->mundane->find()) {
