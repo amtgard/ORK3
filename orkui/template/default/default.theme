@@ -25,26 +25,30 @@
 ?>
 
 		</div>
-<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
-		<div id='menu'>
-			<ul>
-<?php foreach ($menu as $k => $item) : ?>
-				<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a></li>
-<?php endforeach; ?>
-			</ul>
-		</div>
-<?php endif; ?>
-		<div id='controls'>
-			<ul>
-<?php if ($this->__session->token == null) : ?>
-				<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
-<?php else : ?>
-				<li><a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
-				<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"' >Logout</button></li>
-<?php endif; ?>
-				<li><span>Players:</span><input id='PlayerSearch' /></li>
-				<li><span>Parks:</span><input id='ParkSearch' /></li>
-			</ul>
-		</div>
+
+	<div id='newmenu'>
+	<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
+			<div id='navmenu'>
+				<ul>
+	<?php foreach ($menu as $k => $item) : ?>
+					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a></li>
+	<?php endforeach; ?>
+				</ul>
+			</div>
+	<?php endif; ?>
+			<div id='controls'>
+				<ul>
+	<?php if ($this->__session->token == null) : ?>
+					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
+	<?php else : ?>
+					<li><a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
+					<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"' >Logout</button></li>
+	<?php endif; ?>
+					<li><input id='PlayerSearch' placeholder="Players" /></li>
+					<li><input id='ParkSearch' placeholder="Parks" /></li>
+				</ul>
+			</div>
+	</div>
+	
 	</body>
 </html>
