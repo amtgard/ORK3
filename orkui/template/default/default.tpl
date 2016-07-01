@@ -1,7 +1,29 @@
 <?php
 
 ?>
-<div class='info-container'>
+<style type='text/css'>
+	@media (max-width: 425px) {
+		.kingdom-summary td:nth-child(n+3), .kingdom-summary th:nth-child(n+3) {
+			display: none;
+		}
+		#events td:nth-child(2n), #events th:nth-child(2n) {
+			display: none;	
+		}
+		#tournaments td {
+			white-space: normal;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		#tournaments td:nth-child(n+2), #tournaments th:nth-child(n+2) {
+			display: none;	
+		}
+		#tournaments td:last-child, #tournaments th:last-child {
+			display: table-cell;
+			white-space: nowrap;
+		}
+	}
+</style>
+<div class='info-container kingdom-summary'>
 	<h3>Kingdoms</h3>
 	<table class='information-table action-table'>
 		<thead>
@@ -45,7 +67,7 @@
 		</tbody>
 	</table>
 </div>
-<div class='info-container'>
+<div class='info-container kingdom-summary'>
 	<h3>Principalities</h3>
 	<table class='information-table action-table'>
 		<thead>
@@ -100,7 +122,7 @@
         </li>
     </ul>
 </div>
-<div class='info-container'>
+<div class='info-container' id='events'>
 	<h3>Events</h3>
 	<table class='information-table action-table'>
 		<thead>
@@ -128,7 +150,7 @@
 		</tbody>
 	</table>
 </div>
-<div class='info-container'>
+<div class='info-container' id='tournaments'>
 	<h3>Tournaments</h3>
 	<table class='information-table action-table'>
 		<thead>

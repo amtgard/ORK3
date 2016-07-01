@@ -350,30 +350,65 @@ a.unimplemented, .unimplemented h3, .unimplemented .form-container input, .unimp
 
 
 @media (max-width: 425px) {
-	#theme_container {
-		margin: 50px 0px;
+	#simple-menu {
+		display: inline-block;
+		position: fixed;
+		right: 8px;
+		top: 0px;
+		line-height: 30px;
 	}
-	#controls {
-		float: none;
+	#newmenu {
+		display: none;	
 	}
-	#controls li {
-		padding-left: 0px;
-		padding-right: 8px;
+  #sidr input {
+		border-width: 0 0 1px 0;
+		border-color: #eee;
+		margin-left: 4px;
+		background-color: transparent;
+		color: #ffcc00;
+		font-weight: bold;
+		font-size: 15px;
+		margin: 0 15px;
 	}
 	body {
 		margin: 0;	
 	}
 	#theme_container {
 		width: 100%;
-		margin: 60px 0px;
+		margin: 30px 0px;
 		padding: 0px;
 	}
 	#contents {
 		margin: 0;	
 	}
 	.info-container {
-		padding: 3px;
-		margin: 2px;
+		padding: 0px;
+		margin: 4px 0px;
+		border-width: 0 0 1px 0;
+		border-radius: 0px;
+		width: 100%;
+	}
+	.info-container .information-table {
+		table-layout: fixed;
+		float: initial;
+		min-width: 100%;
+		max-width: 100%;
+		border: 0;
+	}
+	.info-container .information-table th {
+		border-top: 0;	
+	}
+	.info-container .information-table tr {
+		overflow: hidden;
+	}
+	.info-container .information-table td:first-child {
+		white-space: nowrap;
+		overflow: visible;
+	}
+	.info-container h3 {
+		border-radius: 0px;	
+		border-width: 1px 0;
+		margin-bottom: 0px;
 	}
 }
 
