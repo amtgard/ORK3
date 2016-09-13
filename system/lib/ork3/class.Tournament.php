@@ -107,9 +107,13 @@ class Tournament extends Ork3 {
 		if (!$this->check_auth($request)) return NoAuthorization();
 		
 		if (valid_id($request['ParticipantId'])) {
+			die('getInsertId() may not be supported on database drivers in Yapo2');
+			$this->db->Clear();
+			$this->db->bracket_id = $request['BracketId'];
+			$this->db->participant_id = $request['ParticipantId'];
 			$sql = "insert into " . DB_PREFIX . "participant (tournament_id, bracket_id, alias, mundane_id, unit_id, park_id, kingdom_id, team_id) 
-						select tournament_id, " . mysql_real_escape_string($request['BracketId']) . ", alias, mundane_id, unit_id, park_id, kingdom_id, team_id from " . DB_PREFIX . "participant where participant_id = '" . mysql_real_escape_string($request['ParticipantId']) . "'";
-			$this->db->query($sql);
+						select tournament_id, :bracket_id, alias, mundane_id, unit_id, park_id, kingdom_id, team_id from " . DB_PREFIX . "participant where participant_id = :participant_id";
+			$this->db->Query($sql);
 			return Success($this->db->getInsertId());
 		} else {
 			$this->Participant->clear();

@@ -1,16 +1,18 @@
 <?php
 
-include_once('class.YapoDb.php');
+include_once(Yapo::$DIR_DRIVER . '/core.Mysql.php');
+include_once(Yapo::$DIR . '/class.YapoDb.php');
 
 class YapoMysql extends YapoDb {
 
-	private $DBH;
+	function __construct($host, $dbname, $user, $password, $err_mode = PDO::ERRMODE_SILENT) {
+		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password, array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES 'utf8'", PDO::MYSQL_ATTR_LOCAL_INFILE => true));
+		$this->DBH->setAttribute(PDO::ATTR_ERRMODE, $err_mode);
+	}
 	
-	private $Data;
-	
-	function __construct($host, $dbname, $user, $password) {
-		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname", $user, $password);
-		$this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+	public function TableExists($table) {
+		$table = $this->DataSet("show tables like '$table'");
+		return $table->Size() == 1;
 	}
 	
 	function TableDescription($table) {
@@ -45,58 +47,19 @@ class YapoMysql extends YapoDb {
 		return array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
 	}	
 	
-	function GetLastInsertId() {
-		return $this->DBH->lastInsertId();
-	}
-	
 	function GetCore($table) {
 		return new YapoCoreMysql($this, $table);
 	}
-	
-	function Execute($sql) {
-		if ($this->Debug) {
-			echo $sql;
-			print_r($this->Data);
-		}
-		$cnt = 3;
-		do {
-			$Query = $this->DBH->prepare($sql);
-			if (count($this->Data) > 0)
-				$Query->execute($this->Data);
-			else
-				$Query->execute();
-			$failed = $this->handle_errors($cnt--, $Query);
-		} while (!$failed);
+		
+	function SetAliasedField($field, $alias, $value) {
+		$this->Data[":$alias"] = $value;
 	}
 	
-	function DataSet($sql) {
-		if ($this->Debug) {
-			echo $sql;
-			print_r($this->Data);
-		}
-		$cnt = 3;
-		do {
-			$Query = $this->DBH->prepare($sql);
-			if (count($this->Data) > 0)
-				$Query->execute($this->Data);
-			else
-				$Query->execute();
-			$failed = $this->handle_errors($cnt--, $Query);
-		} while (!$failed);
-		return new YapoResultSet($Query, $sql);
-	}
-	
-	function Clear() {
+	function SetAliasedData($Data) {
 		$this->Data = array();
-	}
-	
-	function __set($field, $value) {
-		if (is_object($value)) die("you cannot insert an object.");
-		$this->Data[":$field"] = $value;
-	}
-	
-	function SetData($Data) {
-		$this->Data = $Data;
+		foreach ($Data as $d => $fieldinfo) {
+			$this->SetAliasedField($fieldinfo->field, $fieldinfo->alias, $fieldinfo->value);
+		}
 	}
 	
 	function ValidateField($field_def, $value) {
@@ -118,6 +81,16 @@ class YapoMysql extends YapoDb {
 		} else if (stristr($field_def['MajorType'], 'text')) {
 			// incomplete
 		}
+	}
+	
+	function GetStructureDriver($structure, $factory, $values) {
+		if (!file_exists(Yapo::$DIR_DRIVER . '/structure.Mysql.' . $structure . '.php')) {
+			throw new Exception("Required driver $structure does not exist.");
+		}
+		include_once(Yapo::$DIR_DRIVER . '/structure.Mysql.' . $structure . '.php');
+		$driver_class = 'Mysql' . $structure;
+		$params = array_merge((array)$driver_class, $values);
+		return call_user_func_array($factory, $params);
 	}
 
 }

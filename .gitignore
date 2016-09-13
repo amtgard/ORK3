@@ -21,3 +21,4 @@ assets/waivers/*
 cache
 .idea
 vendor
+.svn

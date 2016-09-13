@@ -96,14 +96,16 @@ class Kingdom  extends Ork3 {
 		} else if ($request['IsTitle'] == 'NonTitle') {
 			$ladder_clause = " and is_title = 0";
 		}
+		$this->db->Clear();
+		$this->db->kingdom_id = $request["KingdomId"];
 		$sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
 						a.award_id, a.is_ladder, ifnull(a.is_title, ka.is_title) as is_title, ifnull(a.title_class, ka.title_class) as title_class
 					from " . DB_PREFIX . "kingdomaward ka
-						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = :kingdom_id
 					where 1
 						$ladder_clause
 						$title_clause
-						and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+						and ka.kingdom_id = :kingdom_id
 					order by is_ladder, ka.is_title, ka.title_class desc, ka.name, a.name";
 		$r = $this->db->query($sql);
 		
@@ -186,8 +188,10 @@ class Kingdom  extends Ork3 {
 	}
 		
 	public function create_kingdom_awards($kingdom_id) {
-		$sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name) select " . mysql_real_escape_string($kingdom_id) .", award_id, name from " . DB_PREFIX . "award";
-		$this->db->query($sql);
+		$this->db->Clear();
+		$this->db->kingdom_id = $kingdom_id;
+		$sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name) select :kingdom_id, award_id, name from " . DB_PREFIX . "award";
+		$this->db->Query($sql);
 	}
 	
 	public function GetKingdomParkTitles($request) {
@@ -249,8 +253,10 @@ class Kingdom  extends Ork3 {
 	}
 	
 	public function GetKingdomAuthorizations($request) {
-		$sql = "select authorization_id, username, a.mundane_id, role from ".DB_PREFIX."authorization a left join ".DB_PREFIX."mundane m on a.mundane_id = m.mundane_id where a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
-		$r = $this->db->query($sql);
+		$this->db->Clear();
+		$this->db->kingdom_id = $request['KingdomId'];
+		$sql = "select authorization_id, username, a.mundane_id, role from ".DB_PREFIX."authorization a left join ".DB_PREFIX."mundane m on a.mundane_id = m.mundane_id where a.kingdom_id = :kingdom_id";
+		$r = $this->db->Query($sql);
 		$response = array();
 		$response['Authorizations'] = array();
 		if ($r !== false && $r->size() > 0) {
@@ -340,10 +346,12 @@ class Kingdom  extends Ork3 {
 	}
 	
 	public function GetParks($request) {
+		$this->db->Clear();
+		$this->db->kingdom_id = $request['KingdomId'];
 		$sql = "select * 
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "parktitle pt on p.parktitle_id = pt.parktitle_id
-					where p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+					where p.kingdom_id = :kingdom_id
 					order by pt.class desc, p.name asc";
 		$r = $this->db->query($sql);
 		if ($r !== false && $r->size() > 0) {
@@ -473,6 +481,8 @@ class Kingdom  extends Ork3 {
 	}
 
 	public function GetOfficers($request) {
+		$this->db->Clear();
+		$this->db->kingdom_id = $request['KingdomId'];
 		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
@@ -481,12 +491,12 @@ class Kingdom  extends Ork3 {
 							left join ".DB_PREFIX."kingdom k on a.kingdom_id = k.kingdom_id
 							left join ".DB_PREFIX."event e on a.event_id = e.event_id
 							left join ".DB_PREFIX."unit u on a.unit_id = u.unit_id
-				where o.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "' and o.park_id = 0
+				where o.kingdom_id = :kingdom_id and o.park_id = 0
 			";
-		$r = $this->db->query($sql);
+		$r = $this->db->Query($sql);
 		$response = array();
 		$response['Officers'] = array();
-		if ($r !== false && $r->size() > 0) {
+		if ($r !== false && $r->Size() > 0) {
 			$response['Status'] = Success();
 			do {
 				$response['Officers'][] = array(
@@ -572,7 +582,9 @@ class Kingdom  extends Ork3 {
             $response['Kingdoms'][$this->kingdom->kingdom_id] = array(
                     'KingdomId' => $this->kingdom->kingdom_id,
                     'KingdomName' => $this->kingdom->name,
-                    'KingdomColor' => $config['AtlasColor']['Value']
+                    'KingdomColor' => $config['AtlasColor']['Value'],
+										'ParentKingdomId' => $this->kingdom->parent_kingdom_id,
+										'Active' => $this->kingdom->active
                 );
         } while ($this->kingdom->next());
         return $response;

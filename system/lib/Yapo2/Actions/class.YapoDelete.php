@@ -1,6 +1,6 @@
 <?php
 
-include_once(__DIR__ . '/class.YapoAction.php');
+include_once(Yapo::$DIR_ACTIONS . '/class.YapoAction.php');
 
 class YapoDelete extends YapoAction {
 	function __construct(& $Core, & $Where) {

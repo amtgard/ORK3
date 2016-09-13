@@ -48,6 +48,9 @@ class SearchService extends Ork3 {
 			return $cache;
 		
 		$limit = max(0, min($limit, 20));
+		$this->db->Clear();
+		$this->db->name = $name;
+		$this->db->date = date("Y-m-d", strtotime($date));
 		$sql = "(select 
 						k.name as kingdom_name, e.kingdom_id, 
 						p.name as park_name, e.park_id, 
@@ -58,7 +61,7 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = e.mundane_id
 						left join " . DB_PREFIX . "event_calendardetail cd on e.event_id = cd.event_id
-					where e.name like '%" . mysql_real_escape_string($name) . "%' and date(cd.event_start) <= date('" . mysql_real_escape_string($date) . "') and date(cd.event_end) >= date('" . mysql_real_escape_string($date) . "') limit 4)
+					where e.name like '%:name%' and date(cd.event_start) <= date(:date) and date(cd.event_end) >= date(:date) limit 4)
 				union
 				(select 
 						k.name as kingdom_name, k.kingdom_id, 
@@ -66,7 +69,7 @@ class SearchService extends Ork3 {
 						'' as event_name, 0 as event_id,
 						0 as event_calendardetail_id
 					from " . DB_PREFIX . "kingdom k
-					where k.name like '%" . mysql_real_escape_string($name) . "%' limit 4)
+					where k.name like '%:name%' limit 4)
 				union
 				(select 
 						k.name as kingdom_name, p.kingdom_id, 
@@ -75,10 +78,10 @@ class SearchService extends Ork3 {
 						0 as event_calendardetail_id
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "kingdom k on p.kingdom_id = k.kingdom_id
-					where p.name like '%" . mysql_real_escape_string($name) . "%' limit 4)
+					where p.name like '%:name%' limit 4)
 				";
-		$d = $this->db->query($sql);
-		if ($d !== false && !$d->isEmpty()) {
+		$d = $this->db->Query($sql);
+		if ($d !== false && $d->Size() > 0) {
 			$r = array();
 			do {
 				$r[] = array(
@@ -141,6 +144,7 @@ class SearchService extends Ork3 {
 			return $cache;
 		
     $limit = min($limit, 50);
+		$this->db->Clear();
 		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
@@ -150,8 +154,8 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
 	
-	
-		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' " . (is_null($current) || $current != 0 ? " and (cd.current = 1 or cd.current is null) " : " ");
+		$this->db->name = $name;
+		$sql .= " e.name like '%:name%' " . (is_null($current) || $current != 0 ? " and (cd.current = 1 or cd.current is null) " : " ");
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
 		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";
@@ -166,10 +170,10 @@ class SearchService extends Ork3 {
 			$sql .= " order by kingdom_name, park_name, e.name";
 		}
 		//echo $sql;
-		$d = $this->db->query($sql);
+		$d = $this->db->Query($sql);
 		$i = 0;
 		$r = array();
-		if ($d !== false && !$d->isEmpty()) {
+		if ($d !== false && $d->Size() > 0) {
 			do {
 				$r[$i++] = array(
 						'EventId' => $d->event_id,
@@ -255,41 +259,45 @@ class SearchService extends Ork3 {
 		$searchtokens = preg_split("/[\s,-]+/", $search);
     	$opt = array("1");
         $limit = min(valid_id($limit)?$limit:15, 50);
+		$this->db->Clear();
 		switch (strtoupper($type)) {
 			case 'PERSONA': 
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "`persona` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) { return "`persona` like '%$t%'"; }, $searchtokens));
 			    	$order = "order by persona,surname,given_name";
                     $opt[] = "length(`persona`) > 0";
 				break;
 			case 'MUNDANE':
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) { return "`given_name` like '%$t%' or `surname` like '$t%'"; }, $searchtokens));
 				    $order = "order by surname,given_name";
                     $opt[] = "(length(`surname`) > 0 or length(`given_name`) > 0)";
 				break;
 			case 'USER':
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "`username` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) { return "`username` like '%$t%'"; }, $searchtokens));
 			    	$order = "order by username,surname,given_name";
                     $opt[] = "length(`username`) > 0";
 				break;
 			default:
 				$zztop = implode('* ', $searchtokens) . '*';
-				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)";
+				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('$zztop' in boolean mode)";
 			break;
 		}
         if ($persona_required === true) {
             $opt[] = "length(`persona`) > 0";
         }
 		if (is_numeric($kingdom_id) && $kingdom_id > 0) {
-			$opt[] = "m.kingdom_id =" . mysql_real_escape_string($kingdom_id);
+			$opt[] = "m.kingdom_id = :kingdom_id";
+			$this->db->kingdom_id = $kingdom_id;
 		}
 		if (is_numeric($park_id) && $park_id > 0) {
-			$opt[] = "m.park_id =" . mysql_real_escape_string($park_id);
+			$opt[] = "m.park_id = :park_id";
+			$this->db->park_id = $park_id;
 		}
 		if (is_numeric($waivered) && $waivered > 0) {
-			$opt[] = "waivered =".($waivered?1:0);
+			$opt[] = "waivered = :waivered";
+			$this->db->waivered = ($waivered?1:0);
 		}
 		$sql = "select 
 						$parameters
@@ -301,8 +309,8 @@ class SearchService extends Ork3 {
 					where ($s) and (".implode(' and ', $opt).") $order
 					limit $limit";
 		$i = 0;
-		$q = $this->db->query($sql);
-		if ($q !== false && $q->size() > 0) {
+		$q = $this->db-Qquery($sql);
+		if ($q !== false && $q->Size() > 0) {
 			$r = array();
 			do {
 				$r[$i++] = array(

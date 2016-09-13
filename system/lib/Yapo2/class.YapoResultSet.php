@@ -2,12 +2,14 @@
 
 class YapoResultSet {
 	private $STH;
-	private $fieldset;
+	var $fieldset;
 	var $__ERROR;
+	var $__SQL_STATEMENT;
 
 	function __construct($StatementHandle, $sql) {
 		$this->STH = $StatementHandle;
 		$this->__ERROR[] = array($sql, $this->STH->errorCode(), $this->STH->errorInfo());
+		$this->__SQL_STATEMENT = $sql;
 	}
 	
 	function Size() {

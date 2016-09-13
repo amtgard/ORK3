@@ -1,108 +1,189 @@
 <?php
 
 
-$dir = dir(__DIR__);
-$files = array();
-while (false !== ($entry = $dir->read())) {
-   $files[] = $entry;
-}
-$dir->close();
+Yapo::$DIR = __DIR__;
+Yapo::$DIR_DRIVER = __DIR__ . '/Driver';
+Yapo::$DIR_STRUCTURE = __DIR__ . '/Structures';
+Yapo::$DIR_ACTIONS = __DIR__ . '/Actions';
+Yapo::LoadFiles(Yapo::$DIR);
+Yapo::LoadFiles(Yapo::$DIR_ACTIONS);
+Yapo::LoadFiles(Yapo::$DIR_DRIVER, "/^database\..*\.php$/");
+Yapo::LoadFiles(Yapo::$DIR_STRUCTURE);
 
-$classfiles = preg_grep("/^class\.(Yapo.+)\.php$/", $files);
-
-foreach ($classfiles as $index => $classfile) {
-	include_once(__DIR__ . '/' . $classfile);
-}
-
-foreach ($classfiles as $index => $classfile) {
-	preg_match("/^class\.(Yapo.+)\.php$/", $classfile, $matches);
-	if (class_exists('Yapo' . $matches[1])) {
-		$class = 'Yapo' . $matches[1];
-		Lib::$Lib->$class = new $class();
+class YapoFieldAlias {
+	var $field;
+	var $alias;
+	var $value;
+	var $field_name;
+	
+	function __construct($field, $alias, $value) {
+		$this->field = $field;
+		$this->alias = $alias;
+		$this->value = $value;
+		
+		$field_name = explode('.', $field);
+		if (count($field_name) > 0) {
+			$this->field_name = str_replace('"', "", $field_name[count($field_name)-1]);
+		}
 	}
 }
-
 
 class Yapo {
 
-	var $__Core;
-	var $__Save;
-	var $__Find;
-	var $__Delete;
-	var $__Where;
-	var $__LastSql;
-	var $__ERRORS = array();
+	const EQUALS = 'eq';
+	const SET = 'set';
+	const LIKE = 'like';
+	const GREATER = 'gt';
+	const LESS = 'lt';
+	const GREATER_EQ = 'gte';
+	const LESS_EQ = 'lte';
+	const IN = 'in';
+	const MATCH = 'match';
+	const NOT_EQ = 'neq';
+	const NOT_LIKE = 'nlike';
+	const NOT_IN = 'nin';
+	const ASC = 'ASC';
+	const DESC = 'DESC';
+	const INTEGRITY_VIOLATION = 23000;
+
+	protected $__Driver;
+	protected $__TableName;
+	protected $__Database;
+	
+	public static $DIR;
+	public static $DIR_DRIVER;
+	public static $DIR_STRUCTURE;
+	public static $DIR_ACTIONS;
+	
+	public static function LoadFiles($DIR, $pattern = "/^class\.(Yapo.+)\.php$/") {
+		$dir = dir($DIR);
+		$files = array();
+		while (false !== ($entry = $dir->read())) {
+		   $files[] = $entry;
+		}
+		$dir->close();
+
+		$classfiles = preg_grep($pattern, $files);
+
+		foreach ($classfiles as $index => $classfile) {
+			include_once($DIR . '/' . $classfile);
+		}
+
+		foreach ($classfiles as $index => $classfile) {
+			preg_match($pattern, $classfile, $matches);
+			if (count($matches) > 1 && class_exists('Yapo' . $matches[1])) {
+				$class = 'Yapo' . $matches[1];
+				Lib::$Lib->$class = new $class();
+			}
+		}
+	}
+	
+	public static function TableExists(& $database, $table) {
+		return $database->TableExists($table);
+	}
 	
 	function __construct(& $database, $table) {
-		$this->__Core = $database->GetCore($table);
-		$this->__Core->init();
+		$this->__TableName = $table;
+		$this->__Database = $database;
+		$this->__load_driver('Yapo', function($classname, & $database, $table) {
+			return new $classname($database, $table);
+		}, array(& $database, $table));
+	}
+	
+	public function lastSql() {
+		return $this->__Driver->lastSql();
+	}
+	
+	public function lastData() {
+		return $this->__Driver->lastData();
 	}
 
+	public function errors() {
+		return $this->__Driver->errors();
+	}
+	
+	protected function bind() {
+		return $this->__Driver->bind();
+	}
+	
 	public function clear() {
-		$this->__Core->Clear();
+		return $this->__Driver->clear();
+	}
+	
+	public function clearpk() {
+		return $this->__Driver->clearpk();
 	}
 	
 	public function save($all = false) {
-		list($sql, $Data) = $this->__Core->__Save->GenerateSql(array('all'=>$all));
-		$this->__LastSql = $sql;
-		
-		$this->__Core->SetData($Data);
-		$this->__Core->DataSet($sql);
-		
-		$last_insert_id = $this->__Core->GetLastInsertId();
-		
-		if ("insert" == $this->__Core->__Save->Mode) {
-			$this->Clear();
-			$primary_key = $this->__Core->GetPrimaryKeyField();
-			$this->$primary_key = $last_insert_id;
-			$this->Find();
-			$this->Next();
-		}
-		
-		return $last_insert_id;
+		return $this->__Driver->save($all);
 	}
 	
-	const ASC = 'ASC';
-	const DESC = 'DESC';
+	public function insertInto($target, $to_fields, $from_fields, $further_selects = array()) {
+		return $this->__Driver->insertInto($target, $to_fields, $from_fields, $further_selects);
+	}
 	
 	public function primarykey() {
-		return $this->__Core->GetPrimaryKeyField();
+		return $this->__Driver->primaryKey();
 	}
 	
 	public function order($field, $ordering) {
-		$this->__Core->Order($field, $ordering);
+		return $this->__Driver->order($field, $ordering);
 	}
 	
 	public function debug($debug) {
-		$this->__Core->Debug($debug);
+		return $this->__Driver->debug($debug);
 	}
 	
 	public function size() {
-		return $this->__Core->Size();
+		return $this->__Driver->size();
 	}
 
-	public function find() {
-		list($sql, $Data) = $this->__Core->__Find->GenerateSql(array());
-		$this->__LastSql = $sql;
-		
-		$this->__Core->SetData($Data);
-		$this->__Core->DataSet($sql);
-		
-		$this->__Core->Next();
-		
-		return $this->__Core->Size();
+	public function __toString() {
+		return "" . $this->__Driver;
+	}
+	
+	public function _find($advance_recordset = true, $params = array(), $lock = false) {
+		return $this->__Driver->_find($advance_recordset, $params, $lock);
+	}
+
+	public function find($advance_recordset = true, $params = array()) {
+		return $this->__Driver->find($advance_recordset, $params);
+	}
+	
+	public function search($advance_recordset = true) {
+		return $this->__Driver->search($advance_recordset);
+	}
+	
+	public function findLock($advance_recordset = true, $params = array()) {
+		return $this->__Driver->findLock($advance_recordset, $params);
+	}
+	
+	public function finish() {
+		return $this->__Driver->finish();	
+	}
+	
+	public function count($as_field = "count") {
+		return $this->__Driver->count($as_field);
+	}
+	
+	public function aggregate($aggregate, $field, $as_field) {
+		return $this->__Driver->aggregate($aggregate, $field, $as_field);
+	}
+	
+	public function distinct($advance_recordset = true) {
+		return $this->__Driver->distinct($advance_recordset);
 	}
 	
 	public function delete() {
-		list($sql, $Data) = $this->__Core->__Delete->GenerateSql(array());
-		$this->__LastSql = $sql;
-		
-		$this->__Core->SetData($Data);
-		$this->__Core->DataSet($sql);
+		return $this->__Driver->delete();
 	}
 	
-	public function query($sql, $Data) {
-		$this->__Core->Query($sql, $Data);
+	public function query($sql, $data, $advance_recordset = true) {
+		return $this->__Driver->query($sql, $data, $advance_recordset);
+	}
+	
+	public function execute($sql, $data) {
+		return $this->__Driver->execute($sql, $data);
 	}
 		
 	/***************************************************************************
@@ -122,130 +203,156 @@ class Yapo {
 	
 	***************************************************************************/
 	
-	const EQUALS = 'eq';
-	const SET = 'set';
-	const LIKE = 'like';
-	const GREATER = 'gt';
-	const LESS = 'lt';
-	const GREATER_EQ = 'gte';
-	const LESS_EQ = 'lte';
-	const IN = 'in';
-	const MATCH = 'match';
-	const NOT_EQ = 'neq';
-	const NOT_LIKE = 'nlike';
-	const NOT_IN = 'nin';
-	
 	function equals($field, $value) {
-		$this->comparator($field, Yapo::EQUALS, $value);
+		return $this->__Driver->equals($field, $value);
 	}
 	
 	function not_equals($field, $value) {
-		$this->comparator($field, Yapo::NOT_EQ, $value);
+		return $this->__Driver->not_equals($field, $value);
 	}
 	
 	function set($field, $value) {
-		$this->comparator($field, Yapo::SET, $value);
+		return $this->__Driver->set($field, $value);
 	}
 	
 	function like($field, $value) {
-		$this->comparator($field, Yapo::LIKE, $value);
+		return $this->__Driver->like($field, $value);
 	}
 	
 	function not_like($field, $value) {
-		$this->comparator($field, Yapo::NOT_LIKE, $value);
+		return $this->__Driver->not_like($field, $value);
 	}
 	
 	function greater($field, $value) {
-		$this->comparator($field, Yapo::GREATER, $value);
+		return $this->__Driver->greater($field, $value);
 	}
 	
 	function less($field, $value) {
-		$this->comparator($field, Yapo::LESS, $value);
+		return $this->__Driver->less($field, $value);
 	}
 	
 	function greaterEq($field, $value) {
-		$this->comparator($field, Yapo::GREATER_EQ, $value);
+		return $this->__Driver->greaterEq($field, $value);
 	}
 	
 	function lessEq($field, $value) {
-		$this->comparator($field, Yapo::LESS_EQ, $value);
+		return $this->__Driver->lessEq($field, $value);
+	}
+	
+	function select($select_fields) {
+		return $this->__Driver->select($select_fields);
 	}
 	
 	function not_in($field, $value) {
-		$this->comparator($field, Yapo::NOT_IN, $value);
+		return $this->__Driver->not_in($field, $value);
 	}
 	
 	function in($field, $value) {
-	    if (is_object($value) && class_name($value) == 'Yapo') {
-	        $this->__Core->Subselect(Yapo::IN, $field, $value);   
-	    } else {
-    		$this->comparator($field, Yapo::IN, $value);
-	    }
+		return $this->__Driver->in($field, $value);
 	}
 	
 	function from($subselect) {
-	    if (is_object($subselect) && class_name($subselect) == 'Yapo') {
-	        $this->__Core->Subselect(Yapo::FROM, 0, $subselect);   
-	    } 
+		return $this->__Driver->from($subselect);
 	}
 	
 	function many($other) {
-	    if (is_object($other) && class_name($other) == 'Yapo') {
-	        $this->__Core->Join(Yapo::ONE2MANY, $other, $local_key, $other_key);   
-	    } 
+		return $this->__Driver->many($other);
     }
 	
 	function match($field, $value, $booleans = null) {
-		$this->comparator($field, Yapo::MATCH, array($value, $booleans));
+		return $this->__Driver->match($field, $value, $booleans);
 	}
 	
 	function comparator($field, $comparator, $value) {
-		$this->__Core->Comparator($field, $comparator, $value);
+		return $this->__Driver->comparator($field, $comparator, $value);
+	}
+	
+	function saveState() {
+		return $this->__Driver->saveState();
+	}
+	
+	function restoreState($state) {
+		return $this->__Driver->restoreState($state);
 	}
 	
     function limit($pagination = 20, $page = 0) {
-        $this->__Core->Limit($pagination, $page);
+		return $this->__Driver->limit($pagination, $page);
     }
     
 	public function next() {
-		return $this->__Core->Next();
+		return $this->__Driver->next();
 	}
 	
-	public function join($other_table, $on_this, $on_that, $cascade = false) {
-		$this->__Core->__left_joins[$other_table->table] = array(
-				'Table' => $other_table,
-				'OnThis' => $on_this,
-				'OnThat' => $on_that,
-				'Cascade' => $cascade
-			);
+	public function table() {
+		return $this->__Driver->table();
+	}
+	
+	public function join_relationship($this_field, $comparator, $that_field) {
+		return $this->__Driver->join_relationship($this_field, $comparator, $that_field);
+	}
+	
+	public function join($yapo_table, $relationships) {
+		return $this->__Driver->join($yapo_table, $relationships);
+	}
+	
+	function beginTransaction() {
+		return $this->__Driver->beginTransaction();
+	}
+	
+	function commit() {
+		return $this->__Driver->commit();
+	}
+	
+	function rollBack() {
+		return $this->__Driver->rollBack();
 	}
 	
 	public function fields($raw = true) {
-		return $this->__Core->GetRawFields();
+		return $this->__Driver->fields($raw);
 	}
 	
 	public function alias($field, $alias) {
-		$this->__Core->field_alias[$alias] = $field;
+		return $this->__Driver->alias($field, $alias);
 	}
 	
 	function __set($field, $value) {
-		if (is_object($value)) {
-			debug_print_backtrace (); die();
-		}
-		$this->__Core->__field_values[$field] = $value;
-		$this->Equals($field, $value);
-		$this->Set($field, $value);
+		if (property_exists($this, $field))
+			throw new Exception("You may not access protected members of Yapo: " . __FILE__ . ":" . __LINE__ . ": $field <- $value" . "\n\n" . print_r(debug_backtrace(!DEBUG_BACKTRACE_PROVIDE_OBJECT), true));
+		return $this->__Driver->$field = $value;
 	}
 	
 	function __get($field) {
-		return $this->__Core->$field;
+		if (property_exists($this, $field))
+			throw new Exception("You may not access protected members of Yapo: " . __FILE__ . ":" . __LINE__ . ": $field" . "\n\n" . print_r(debug_backtrace(!DEBUG_BACKTRACE_PROVIDE_OBJECT), true));
+		return $this->__Driver->$field;
 	}
 	
-	protected function pkvalue($value = null) {
-		$pk = $this->primarykey();
-		if (!is_null($value))
-			$this->$pk = $value;
-		return $this->$pk;
+	function anyvalue($field) {
+		return $this->__Driver->anyvalue($field);
+	}
+	
+	function activerecord() {
+		return $this->__Driver->activerecord();
+	}
+	
+	public function pkvalue($value = null) {
+		return $this->__Driver->pkvalue($value);
+	}
+
+	protected function starts_with($needle, $haystack) {
+		return $this->__Driver->starts_with($needle, $haystack);
+	}
+	
+	public function core() {
+		return $this->__Driver->core();
+	}
+	
+	public function fixPrimarySequence() {
+		return $this->__Driver->fixPrimarySequence();
+	}
+	
+	function __load_driver($structure, $factory, $values) {
+		$this->__Driver = $this->__Database->GetStructureDriver($structure, $factory, $values);
 	}
 }
 
