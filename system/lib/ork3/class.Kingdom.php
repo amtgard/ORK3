@@ -572,7 +572,9 @@ class Kingdom  extends Ork3 {
             $response['Kingdoms'][$this->kingdom->kingdom_id] = array(
                     'KingdomId' => $this->kingdom->kingdom_id,
                     'KingdomName' => $this->kingdom->name,
-                    'KingdomColor' => $config['AtlasColor']['Value']
+                    'KingdomColor' => $config['AtlasColor']['Value'],
+										'ParentKingdomId' => $this->kingdom->parent_kingdom_id,
+										'Active' => $this->kingdom->active
                 );
         } while ($this->kingdom->next());
         return $response;
