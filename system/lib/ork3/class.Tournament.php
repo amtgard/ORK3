@@ -22,12 +22,14 @@ class Tournament extends Ork3 {
 		$this->Tournament->kingdom_id = $request['KingdomId'];
 		$this->Tournament->park_id = $request['ParkId'];
 		$this->Tournament->event_calendardetail_id = $request['EventCalendarDetailId'];
-		$detail = new yapo($this->db, DB_PREFIX . 'event_calendardetail');
-		$detail->event_calendardetail_id = $request['EventCalendarDetailId'];
-		if ($detail->find()) {
-			$this->Tournament->event_id = $detail->event_id;
-		} else if (valid_id($request['EventCalendarDetailId'])) {
-			return InvalidParameter();
+		if (valid_id($request['EventCalendarDetailId'])) {
+			$detail = new yapo($this->db, DB_PREFIX . 'event_calendardetail');
+			$detail->event_calendardetail_id = $request['EventCalendarDetailId'];
+			if ($detail->find()) {
+				$this->Tournament->event_id = $detail->event_id;
+			} else if (valid_id($request['EventCalendarDetailId'])) {
+				return InvalidParameter();
+			}
 		}
 		$this->Tournament->name = $request['Name'];
 		$this->Tournament->description = strip_tags($request['Description'], "<p><br><ul><li><b><i>");

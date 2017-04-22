@@ -79,6 +79,8 @@ class Attendance  extends Ork3 {
 		$this->attendance->credits = $request['Credits'];
         $this->attendance->note = $request['Note'];
     	$this->attendance->flavor = $request['Flavor'];
+		$this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$this->attendance->entered_at = date("Y-m-d H:i:s");
 		
 		switch ($type) {
 			case AUTH_PARK:
@@ -130,6 +132,8 @@ class Attendance  extends Ork3 {
 		$this->attendance->class_id = $request['ClassId'];
 		$this->attendance->date = $request['Date'];
 		$this->attendance->credits = $request['Credits'];
+		$this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$this->attendance->entered_at = date("Y-m-d H:i:s");
 		
 		$this->attendance->save();
 		
