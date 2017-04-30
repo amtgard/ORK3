@@ -1,21 +1,19 @@
 <?php
 
-//die("The ORK is down for transfer.");
-
 // Server is West Coast
 date_default_timezone_set('America/Anchorage');
 define('CONFIG', true);
 
-error_reporting(0);
+//error_reporting(E_ERROR | E_PARSE);
 
 // HTTP
 define('ORK_DIST_NAME', 'ork');
 
-define('HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkservice/'); 
-define('HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
-define('HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
+define('HTTP_SERVICE', "//{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkservice/'); 
+define('HTTP_UI', "//{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkui/'); 
+define('HTTP_UI_REMOTE', "//{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkui/'); 
 define('HTTP_TEMPLATE', HTTP_UI.'template/'); 
-define('HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST']. '/' . ORK_DIST_NAME . '/assets/');
+define('HTTP_ASSETS', "//{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/assets/');
 define('HTTP_WAIVERS', HTTP_ASSETS . 'waivers/');
 define('HTTP_HERALDRY', HTTP_ASSETS . 'heraldry/');
 define('HTTP_PLAYER_IMAGE', HTTP_ASSETS . 'players/');
@@ -36,7 +34,7 @@ define('HTTPS_SERVICE', "https://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkserv
 define('HTTPS_UI', "https://{$_SERVER[HTTP_HOST]}/".ORK_DIST_NAME.'/orkui/'); 
 
 // DIR
-define('DIR_BASENAME', dirname(__FILE__) . '/'); 
+define('DIR_BASENAME', "/home/user/amtgard.com/".ORK_DIST_NAME.'/'); 
 define('DIR_SERVICE',DIR_BASENAME."orkservice/");
 define('DIR_UI',DIR_BASENAME."orkui/");
 define('DIR_SYSTEM', DIR_BASENAME."system/");
@@ -50,6 +48,7 @@ define('DIR_PARK_HERALDRY', DIR_HERALDRY."park/");
 define('DIR_KINGDOM_HERALDRY', DIR_HERALDRY."kingdom/");
 define('DIR_EVENT_HERALDRY', DIR_HERALDRY."event/");
 define('DIR_UNIT_HERALDRY', DIR_HERALDRY."unit/");
+define('DIR_CACHE', DIR_BASENAME.'cache/'); 
 
 // System
 define('DIR_LIB', DIR_SYSTEM.'lib/'); 
@@ -70,10 +69,10 @@ define('CUSTOM_CSS', HTTP_TEMPLATE.'default/style/custom.css');
 
 // DB
 define('DB_DRIVER', 'mysql');
-define('DB_HOSTNAME', 'mysql.amtgard.com');
-define('DB_USERNAME', 'DB_USERNAME');
-define('DB_PASSWORD', 'DB_PASSWORD');
-define('DB_DATABASE', 'DB_DATABASE');
+define('DB_HOSTNAME', 'mysql.db.com');
+define('DB_USERNAME', 'username');
+define('DB_PASSWORD', 'password');
+define('DB_DATABASE', 'db');
 define('DB_PREFIX', 'ork_');
 
 // System Config
@@ -86,22 +85,20 @@ define('SETUP_ADMIN_EMAIL', 'amtgardinc@gmail.com');
 define('DO_SETUP', false);
 
 
-//define('TRACE', true);
-//define('DUMPTRACE', true);
-
-define('TRACE', false);
-define('DUMPTRACE', false);
+define('TRACE', true);
+define('DUMPTRACE', true);
 
 define('GOOGLE_MAPS_API_KEY', '');
 
 // INCLUDE
 require_once(DIR_LIB.'mail.php');
+/*
 require_once(DIR_LIB.'yapo/class.yapo_mysql.php');
 require_once(DIR_LIB.'yapo/class.yapo.php');
 require_once(DIR_LIB.'yapo/class.yapo_result.php');
-
+*/
 require_once(DIR_SYSTEMLIB.'class.Log.php');
 
-//require_once(DIR_LIB.'Yapo2/class.Yapo.php');
+require_once(DIR_LIB.'Yapo2/class.Yapo.php');
 
 ?>
