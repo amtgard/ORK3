@@ -1,6 +1,6 @@
 <?php
 
-require_once(DIR_LIB.'nusoap/nusoap.php');
+//require_once(DIR_LIB.'nusoap/nusoap.php');
 
 class APIModel {
 	
@@ -12,7 +12,7 @@ class APIModel {
 	
 	function __construct($APISource) {
 		$this->APISource = $APISource;
-		require_once(DIR_SERVICE.$APISource.'/'.$APISource.'Service.php');
+//		require_once(DIR_SERVICE.$APISource.'/'.$APISource.'Service.php');
 		if ('REMOTE' == UI_LOCALITY) {
 			$this->namespace = ORK3_SERVICE_URL.$APISource.'/'.$APISource.'Service.php?wsdl';
 			$this->endpoint = ORK3_SERVICE_URL.$APISource.'/'.$APISource.'Service.php?wsdl';

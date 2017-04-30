@@ -106,7 +106,7 @@ class Report  extends Ork3 {
 		if ($r !== false) {
 			$response['Tournaments'] = array();
 			if ($r->size() > 0) {
-				do {
+				while ($r->next()) {
 					$response['Tournaments'][] = array(
 							'TournamentId' => $r->tournament_id,
 							'KingdomId' => $r->kingdom_id,
@@ -121,7 +121,7 @@ class Report  extends Ork3 {
 							'Url' => $r->url,
 							'DateTime' => $r->date_time
 						);
-				} while ($r->next());
+				}
 			}
 			$response['Status'] = Success();
 		} else {
@@ -176,7 +176,7 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
-			do {
+			while ($r->next()) {
 				$response['Awards'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
@@ -189,7 +189,7 @@ class Report  extends Ork3 {
 						'Rank' => $r->rank,
 						'AwardName' => $r->award_name
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -226,7 +226,7 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->Size() > 0) {
 			$response['Guilds'] = array();
-			do {
+			while ($r->next()) {
 				$response['Guilds'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
@@ -239,7 +239,7 @@ class Report  extends Ork3 {
 						'ParentKingdomId' => $r->parent_kingodm_id,
 						'KingdomName' => $r->kingdom_name
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -271,7 +271,7 @@ class Report  extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter();
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Units'][] = array(
 					'UnitId' => $r->unit_id,
 					'Type' => $r->type,
@@ -279,7 +279,7 @@ class Report  extends Ork3 {
 					'Persona' => $r->persona,
 					'MemberCount' => $r->member_count
 				);
-			} while ($r->next());
+			}
 		}
 		return $response;
 	}
@@ -362,7 +362,7 @@ class Report  extends Ork3 {
 		$r = $this->db->Query($sql);
 		if ($r !== false && $r->Size() > 0) {
 			$response = array( 'Status' => Success(), 'Dates' => array());
-			do {
+			while ($r->next()) {
 				$response['Dates'][] = array(
 						'Date' => $r->date,
 						'Year' => $r->year,
@@ -379,7 +379,7 @@ class Report  extends Ork3 {
 						'EventEnd' => $r->event_end,
 						'EventName' => $r->event_name
 					);
-			} while ($r->next());
+			}
 		} else {
 			$response['Status'] = InvalidParameter('A parameter was set incorrectly: ' . $sql . "\n" . print_r($request, true));
 		}
@@ -413,19 +413,19 @@ class Report  extends Ork3 {
 		}
 		if (valid_id($request['ParkId'])) {
 			$sql .= " and a.park_id = :park_id";
-			$this->db->kingdom_id = $request["ParkId"];
+			$this->db->park_id = $request["ParkId"];
 		}
 		if (valid_id($request['UnitId'])) {
 			$sql .= " and a.unit_id = :unit_id";
-			$this->db->kingdom_id = $request["UnitId"];
+			$this->db->unit_id = $request["UnitId"];
 		}
 		if (valid_id($request['MundandeId'])) {
 			$sql .= " and a.mundane_id = :mundane_id";
-			$this->db->kingdom_id = $request["MundandeId"];
+			$this->db->mundane_id = $request["MundandeId"];
 		}
 		if (valid_id($request['ClassId'])) {
 			$sql .= " and a.class_id = :class_id";
-			$this->db->kingdom_id = $request["ClassId"];
+			$this->db->class_id = $request["ClassId"];
 		}
 		
 		logtrace('AttendanceForEvent',array($request, $sql));
@@ -435,7 +435,7 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->Size() > 0) {
 			$response['Attendance'] = array();
-			do {
+			while ($r->next()) {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
 						'MundaneId' => $r->mundane_id,
@@ -453,7 +453,7 @@ class Report  extends Ork3 {
 						'Persona' => $r->persona,
 						'ClassName' => $r->class_name,
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -468,9 +468,9 @@ class Report  extends Ork3 {
 							";
 			$unit_phrase = "u.name as unit_name, ";
 		}
-	
+
 		$this->db->Clear();
-		$this->db->date = $date("Y-m-d", strtotime(request['Date']));
+		$this->db->date = date("Y-m-d", strtotime($request['Date']));
 		$sql = "select a.*, a.persona as attendance_persona, 
 					k.name as kingdom_name, k.parent_kingdom_id, mk.name as from_kingdom_name, mk.parent_kingdom_id as from_parent_kingdom_id,
 					p.name as park_name, p.park_id as park_id, mp.name as from_park_name, mp.park_id as from_park_id,
@@ -494,31 +494,31 @@ class Report  extends Ork3 {
 		}
 		if (valid_id($request['ParkId'])) {
 			$sql .= " and a.park_id = :park_id";
-			$this->db->kingdom_id = $request["ParkId"];
+			$this->db->park_id = $request["ParkId"];
 		}
 		if (valid_id($request['UnitId'])) {
 			$sql .= " and a.unit_id = :unit_id";
-			$this->db->kingdom_id = $request["UnitId"];
+			$this->db->unit_id = $request["UnitId"];
 		}
 		if (valid_id($request['MundandeId'])) {
 			$sql .= " and a.mundane_id = :mundane_id";
-			$this->db->kingdom_id = $request["MundandeId"];
+			$this->db->mundane_id = $request["MundandeId"];
 		}
 		if (valid_id($request['ClassId'])) {
 			$sql .= " and a.class_id = :class_id";
-			$this->db->kingdom_id = $request["ClassId"];
+			$this->db->class_id = $request["ClassId"];
 		}
 		
 		logtrace('AttendanceForDate',array($request, $sql));
 		
 		$sql .= " order by kingdom_name, park_name, m.persona";
-
-        $r = $this->db->Query($sql);
+		
+    $r = $this->db->Query($sql);
 		
 		$response = array();
 		if ($r !== false && $r->Size() > 0) {
 			$response['Attendance'] = array();
-			do {
+			while ($r->next()) {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
 						'MundaneId' => $r->mundane_id,
@@ -547,7 +547,7 @@ class Report  extends Ork3 {
             			'Note' => $r->note,
             			'Flavor' => $r->class_id==6?$r->flavor:'',
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success($sql);
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -628,7 +628,7 @@ class Report  extends Ork3 {
 			$response['Status'] = Success();
 			$response['Authorizations'] = array();
 			if ($r->size() > 0) {
-				do {
+				while ($r->next()) {
 					$response['Authorizations'][] = array(
 								'AuthorizationId' => $r->authorization_id,
 								'MundaneId' => $r->mundane_id,
@@ -650,7 +650,7 @@ class Report  extends Ork3 {
 								'OfficerId' => $r->officer_id,
 								'OfficerRole' => $r->officer_role
 							);
-				} while ($r->next());
+				}
 			}
 		} else {
 			$response['Status'] = InvalidParameter('Problem processing request.');
@@ -738,7 +738,7 @@ class Report  extends Ork3 {
 			$response['Status'] = Success();
 			$response['Roster'] = array();
 			if ($r->Size() > 0) {
-				do {
+				while ($r->next()) {
 					$response['Roster'][] = array(
 								'MundaneId' => $r->mundane_id,
 								'GivenName' => $restricted_access&&$r->restricted==0?$r->given_name:"",
@@ -759,7 +759,7 @@ class Report  extends Ork3 {
 								'PenaltyBox' => $r->penalty_box,
 								'Displayable' => $restricted_access||$r->restricted==0
 							);
-				} while ($r->next());
+				}
 			}
 		} else {
 			$response['Status'] = InvalidParameter('Problem with request.');
@@ -781,7 +781,7 @@ class Report  extends Ork3 {
 		
 		$this->db->Clear();
 		
-		$this->db->per_period = strlen($request['AverageWeeks']) > 0 ? ($request['AverageWeeks'] . ' week') : ($request['AverageMonths'] . ' month');
+		$per_period = strlen($request['AverageWeeks']) > 0 ? ($request['AverageWeeks'] . ' week') : ($request['AverageMonths'] . ' month');
 		$this->db->kingdom_id = $request['KingdomId'];
 		
 		$sql = "select 
@@ -796,7 +796,7 @@ class Report  extends Ork3 {
 									where 
 										$native_populace
 										$waivered_peeps
-										date > adddate(curdate(), interval -:per_period) 
+										`date` > adddate(curdate(), interval -$per_period) 
 										and a.kingdom_id = :kingdom_id 
 										and a.mundane_id > 0
 									group by year(date), week(date,3), mundane_id) mundanesbyweek
@@ -814,9 +814,9 @@ class Report  extends Ork3 {
 			$response['Status'] = InvalidParameter();
 		} else {
 			$report = array();
-			do {
+			while ($r->next()) {
 				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id );
-			} while ($r->next());
+			}
 			$response['KingdomParkAveragesSummary'] = $report;
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
@@ -873,11 +873,11 @@ class Report  extends Ork3 {
 		logtrace('Report: GetActiveKingdomsSummary', array($request, $sql));
 		$r = $this->db->Query($sql);
 		$report = array();
-		do {
+		while ($r->next()) {
 			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id, 
 									'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id, 
 									'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'Participation' => $r->active_parks );
-		} while ($r->next());
+		}
 		$response = array(
 			'Status' => Success(),
 			'ActiveKingdomsSummaryList' => $report
@@ -1026,7 +1026,7 @@ class Report  extends Ork3 {
 		logtrace('Report: GetActivePlayers', array($request,$sql));
 		$r = $this->db->Query($sql);
 		$report = array();
-		if ($r !== false && $r->Size() > 0) do {
+		if ($r !== false && $r->Size() > 0) while ($r->next()) {
 			$report[] = array( 
 					'KingdomName' => $r->kingdom_name, 
 					'KingdomId' => $r->kingdom_id,  
@@ -1045,7 +1045,7 @@ class Report  extends Ork3 {
 					'DuesPaid' => $r->duespaid,
 					'Waivered' => $r->waivered
 				);
-		} while ($r->next());
+		}
 		
 		$response = array(
 			'Status' => Success(),

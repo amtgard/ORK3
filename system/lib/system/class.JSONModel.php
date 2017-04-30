@@ -1,6 +1,6 @@
 <?php
 
-require_once(DIR_LIB.'nusoap/nusoap.php');
+//require_once(DIR_LIB.'nusoap/nusoap.php');
 
 class JSONModel {
 	

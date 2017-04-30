@@ -25,6 +25,12 @@ define( 'CFG_ADD', 'Add' );
 define( 'CFG_REMOVE', 'Remove' );
 define( 'CFG_EDIT', 'Edit' );
 
+if (! function_exists('mysql_real_escape_string')) {
+	function mysql_real_escape_string($str) {
+		return htmlspecialchars( strip_tags($str) );
+	}
+}
+
 function html_encode( $string )
 {
 	return htmlentities( $string, ENT_QUOTES | ENT_HTML5, "ISO-8859-1", false );

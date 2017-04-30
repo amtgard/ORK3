@@ -38,7 +38,7 @@ class Calendar extends Ork3 {
 	private function _make_calendar_set($sql) {
 		$response = array();
 		$events = $this->db->Query($sql);
-		if ($events !== false && $events->Size() > 0) do {
+		if ($events !== false && $events->Size() > 0) while ($events->next()) {
 			$response[] = array(
 					'DateStart' => $events->event_start,
 					'DateEnd' => $events->event_end,
@@ -47,7 +47,7 @@ class Calendar extends Ork3 {
 					'Url' => HTTP_UI . 'Event/index/' . $events->event_id,
 					'Description' => $events->description
 				);
-		} while ($events->next());
+		}
 		return $response;
 	}
 	
@@ -67,7 +67,7 @@ class Calendar extends Ork3 {
 			case 'month': $final_date = strtotime("+1 month", $start_date); break;
 			case 'year': $final_date = strtotime("+1 year", $start_date); break;
 		}
-		if ($parkdays !== false && $parkdays->size() > 0) do {
+		if ($parkdays !== false && $parkdays->size() > 0) while ($parkdays->next()) {
 			$currdate = $start_date;
 			$moredates = true;
 			$counter = 0;
@@ -95,7 +95,7 @@ class Calendar extends Ork3 {
 							'Description' => $parkdays->description
 						);
 			}
-		} while ($parkdays->next());
+		}
 		return $dates;
 	}
 }

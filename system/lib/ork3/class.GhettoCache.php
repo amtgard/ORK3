@@ -7,6 +7,7 @@ class Ghettocache {
 	}
 	
 	function get($call, $key, $lifetime) {
+		return false;
 		$stat = @stat(DIR_CACHE . "$call.$key.cache");
 		if ($stat === false)
 			return false;

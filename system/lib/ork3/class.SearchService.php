@@ -15,8 +15,7 @@ class SearchService extends Ork3 {
     $limit = min($limit, 50);
 		$unit = new yapo($this->db, DB_PREFIX . 'unit');
 		$unit->clear();
-		$unit->name = "%$name%";
-		$unit->name_term = "like";
+		$unit->like('name', "%$name%");
 		if ($unit->find()) {
 			$r = array();
 			do {
@@ -49,7 +48,7 @@ class SearchService extends Ork3 {
 		
 		$limit = max(0, min($limit, 20));
 		$this->db->Clear();
-		$this->db->name = $name;
+		$this->db->name = $name . '%';
 		$this->db->date = date("Y-m-d", strtotime($date));
 		$sql = "(select 
 						k.name as kingdom_name, e.kingdom_id, 
@@ -61,7 +60,7 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = e.mundane_id
 						left join " . DB_PREFIX . "event_calendardetail cd on e.event_id = cd.event_id
-					where e.name like '%:name%' and date(cd.event_start) <= date(:date) and date(cd.event_end) >= date(:date) limit 4)
+					where e.name like :name and date(cd.event_start) <= date(:date) and date(cd.event_end) >= date(:date) limit 4)
 				union
 				(select 
 						k.name as kingdom_name, k.kingdom_id, 
@@ -69,7 +68,7 @@ class SearchService extends Ork3 {
 						'' as event_name, 0 as event_id,
 						0 as event_calendardetail_id
 					from " . DB_PREFIX . "kingdom k
-					where k.name like '%:name%' limit 4)
+					where k.name like :name limit 4)
 				union
 				(select 
 						k.name as kingdom_name, p.kingdom_id, 
@@ -78,12 +77,12 @@ class SearchService extends Ork3 {
 						0 as event_calendardetail_id
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "kingdom k on p.kingdom_id = k.kingdom_id
-					where p.name like '%:name%' limit 4)
+					where p.name like :name limit 4)
 				";
 		$d = $this->db->Query($sql);
 		if ($d !== false && $d->Size() > 0) {
 			$r = array();
-			do {
+			while ($d->next()) {
 				$r[] = array(
 						'KingdomId' => $d->kingdom_id,
 						'KingdomName' => $d->kingdom_name,
@@ -96,7 +95,7 @@ class SearchService extends Ork3 {
 						'ShortName' => ($d->event_id > 0?$d->event_name:($d->park_id > 0?$d->park_name:$d->kingdom_name)),
 						'Type' => ($d->event_id > 0?"Event":($d->park_id > 0?"Park":"Kingdom"))
 					);
-			} while ($d->next());
+			}
 		} else {
 			return null;
 		}
@@ -154,8 +153,8 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
 	
-		$this->db->name = $name;
-		$sql .= " e.name like '%:name%' " . (is_null($current) || $current != 0 ? " and (cd.current = 1 or cd.current is null) " : " ");
+		$this->db->name = $name . '%';
+		$sql .= " e.name like :name " . (is_null($current) || $current != 0 ? " and (cd.current = 1 or cd.current is null) " : " ");
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
 		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";
@@ -169,12 +168,12 @@ class SearchService extends Ork3 {
 		} else {
 			$sql .= " order by kingdom_name, park_name, e.name";
 		}
-		//echo $sql;
+//		echo $sql;
 		$d = $this->db->Query($sql);
 		$i = 0;
 		$r = array();
 		if ($d !== false && $d->Size() > 0) {
-			do {
+			while ($d->next()) {
 				$r[$i++] = array(
 						'EventId' => $d->event_id,
 						'Name' => $d->name,
@@ -189,7 +188,7 @@ class SearchService extends Ork3 {
     				$limit--;
 					if ($limit == 0) break;
 				}
-			} while ($d->next());
+			}
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 	}
@@ -202,8 +201,7 @@ class SearchService extends Ork3 {
 		
 		$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
 		$kingdom->clear();
-		$kingdom->name = "%$name%";
-		$kingdom->name_term = 'like';
+		$kingdom->like('name', "%$name%");
 		$i = 0;
 		if ($kingdom->find(array('name'))) {
 			$r = array();
@@ -231,8 +229,7 @@ class SearchService extends Ork3 {
 		
 		$park = new yapo($this->db, DB_PREFIX . 'park');
 		$park->clear();
-		$park->name = "%$name%";
-		$park->name_term = 'like';
+		$park->like('name', "%$name%");
 		if(is_numeric($kingdom_id)) $park->kingdom_id = $kingdom_id;
 		$i = 0;
 		if ($park->find(array('name'))) {
@@ -309,10 +306,10 @@ class SearchService extends Ork3 {
 					where ($s) and (".implode(' and ', $opt).") $order
 					limit $limit";
 		$i = 0;
-		$q = $this->db-Qquery($sql);
+		$q = $this->db->Query($sql);
 		if ($q !== false && $q->Size() > 0) {
 			$r = array();
-			do {
+			while ($q->next()) {
 				$r[$i++] = array(
 						'MundaneId' => $q->mundane_id,
 						'GivenName' => '',//$q->restricted==1?"Restricted":$q->given_name,
@@ -334,7 +331,7 @@ class SearchService extends Ork3 {
 					if ($limit == 0) break;
 					$limit--;
 				}
-			} while ($q->next());
+			}
 			return $r;
 		} else {
 			return array();

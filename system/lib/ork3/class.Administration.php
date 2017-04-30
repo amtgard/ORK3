@@ -26,7 +26,7 @@ class Administration {
 			$date = date("Y-m-d H:i:s", time() - 60);
 			$continue = true;
 			$total = 0;
-			do {
+			while ($continue) {
 				set_time_limit(60);
 				$sql = "select count(log_id) as hits from " . DB_PREFIX . "log where action_time < '$date' order by log_id asc limit 50";
 				$find = $this->db->query($sql);
@@ -37,7 +37,7 @@ class Administration {
 				$total += $find->hits;
 				$sql = "delete from " . DB_PREFIX . "log where action_time < '$date' order by log_id asc limit 50";
 				$this->db->query($sql);
-			} while ($continue);
+			}
 			return Success($total);
 		}
 		return NoAuthorization();
@@ -51,11 +51,11 @@ class Administration {
 				$tables = $this->db->query('show tables');
 				
 				$t = 'Tables_in_' . DB_DATABASE;
-				do {
+				while ($tables->next()) {
 					set_time_limit(60 * 60);
 					$this->db->query('optimize table "' . $tables->$t . '"');
 					$total++;
-				} while ($tables->next());
+				}
 			} else if (is_array($Table) && count($Table > 0)) {
 				foreach ($Table as $k => $t) {
 					set_time_limit(60 * 60);

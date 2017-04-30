@@ -143,7 +143,7 @@ class Park extends Ork3
 		$r = $this->db->query( $sql );
 		if ( $r !== false && $r->size() > 0 ) {
 			$response = [ 'Status' => Success(), 'Parks' => [ ] ];
-			do {
+			while ( $r->next() ) {
 				$response[ 'Parks' ][] = [
 					'ParkId'       => $r->park_id,
 					'KingdomId'    => $r->kingdom_id,
@@ -159,7 +159,7 @@ class Park extends Ork3
 					'Class'        => $r->class,
 					'ParentOf'     => ( $r->is_principality == 1 && !array_search( $r->park_id, $request[ 'Stack' ] ) ) ? $this->GetParks( [ 'ParkId' => $r->park_id, 'Stack' => push_stack( $request[ 'Stack' ], $r->park_id ) ] ) : null,
 				];
-			} while ( $r->next() );
+			}
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
 		}
@@ -183,7 +183,7 @@ class Park extends Ork3
 		$response[ 'Officers' ] = [ ];
 		if ( $r !== false && $r->size() > 0 ) {
 			$response[ 'Status' ] = Success();
-			do {
+			while ( $r->next() ) {
 				$response[ 'Officers' ][] = [
 					'AuthorizationId' => $r->authorization_id,
 					'MundaneId'       => $r->mundane_id,
@@ -204,7 +204,7 @@ class Park extends Ork3
 					'OfficerId'       => $r->officer_id,
 					'OfficerRole'     => $r->officer_role,
 				];
-			} while ( $r->next() );
+			}
 			$response[ 'Status' ] = Success();
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
@@ -343,14 +343,14 @@ class Park extends Ork3
 		$response[ 'Authorizations' ] = [ ];
 		if ( $r !== false && $r->size() > 0 ) {
 			$response[ 'Status' ] = Success();
-			do {
+			while ( $r->next() ) {
 				$response[ 'Authorizations' ][] = [
 					'AuthorizationId' => $r->authorization_id,
 					'UserName'        => $r->username,
 					'MundaneId'       => $r->mundane_id,
 					'Role'            => $r->role,
 				];
-			} while ( $r->next() );
+			}
 		} else {
 			$response[ 'Status' ] = InvalidParameter( NULL, 'Problem processing request.' );
 		}

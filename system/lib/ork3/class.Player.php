@@ -173,7 +173,7 @@ class Player extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing request.');
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attenance_id,
 						'MundaneId' => $r->mundane_id,
@@ -194,7 +194,7 @@ class Player extends Ork3 {
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
@@ -224,7 +224,7 @@ class Player extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing request.');
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Awards'][] = array(
 						'AwardsId' => $r->awards_id,
 						'AwardId' => $r->award_id,
@@ -247,7 +247,7 @@ class Player extends Ork3 {
 						'EventName' => $r->event_name,
 						'GivenBy' => $r->persona,
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
@@ -304,7 +304,7 @@ class Player extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter();
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Classes'][$r->class_id] = array(
 						'ClassReconciliationId' => $r->class_reconciliation_id,
 						'Reconciled' => $r->reconciled,
@@ -314,7 +314,7 @@ class Player extends Ork3 {
 						'Attendances' => $r->attendances,
 						'Credits' => $r->credits
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
@@ -322,26 +322,26 @@ class Player extends Ork3 {
 		return $response;
 	}
 	
-    public function unique_username($username, $calls = 0) {
+	public function unique_username($username, $calls = 0) {
 		if ($calls == 0)
 			return false;
-        $srcname = $username;
-        $found = false;
-        do {
-    		$this->mundane->clear();
-    		$this->mundane->username = $username;
-    		if ($this->mundane->find()) {
-                echo " username exists ... ";
-                $username = $srcname . '-' . substr(md5(microtime()), 0, 5);
-                echo " trying altered name instead ... ";
-    		} else {
-        	    $found = true;   
-    		}
+		$srcname = $username;
+		$found = false;
+		do {
+			$this->mundane->clear();
+			$this->mundane->username = $username;
+			if ($this->mundane->find()) {
+				echo " username exists ... ";
+				$username = $srcname . '-' . substr(md5(microtime()), 0, 5);
+				echo " trying altered name instead ... ";
+			} else {
+				$found = true;   
+			}
 			$calls--;
-        } while (!$found && $calls > 0);
-        echo " username is available ... ";
-        return $username;
-    }
+		} while (!$found && $calls > 0);
+		echo " username is available ... ";
+		return $username;
+	}
     
 	public function CreatePlayer($request) {
 		if (strlen($request['UserName']) < 4)
