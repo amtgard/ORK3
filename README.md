@@ -6,37 +6,17 @@ This is the third major release of the [Amtgard Online Record Keeper](http://amt
 
 ## Development
 
-To get started with development, you will need Docker. Once that's installed, just run `docker-compose up` to bootstrap your environment.
+### Envirionment
 
-After that, you'll need to do two things:
+Git, PHP 5.6, MySQL 5.5 and Apache.
 
-### Initial Database Migration
+### Basic Setup
 
-To do this, enter your web container:
+To set up you will need a copy of the codebase, a recent copy of the database, and an LAMP or WAMP installation.
 
-```
-docker exec -it containername bash
-```
+Clone the code to a a reasonable place in your web root.
 
-The exact value of `containername` may be different for you, but will generally be something like `projectname_web_1`.
-
-The following two commands are run from inside your container.
-
-You will need mysql-client (which is not installed by default in the container, for production deployment reasons):
-
-```
-apt-get install -y mysql-client
-```
-
-Finally, run the migration:
-
-```
-mysql -u root -h mysql -p -D ork < ork.sql
-```
-
-You'll need to enter the MySQL root password, which for this development instance is `secret`.
-
-This migration contains no data. If you need test data, ask a project admin for a database dump from production.
+Rehydrate the database from https://amtgard.com/ork/assets/backups
 
 ### Set Up the Config File
 
@@ -44,4 +24,4 @@ Copy `config.dev.php` to `config.php`. Make sure to change the admin email to yo
 
 ### View the Site
 
-You can now view the site at http://localhost:8080/orkui/.
+You can now view the site at http://servername/ork/orkui/.
