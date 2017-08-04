@@ -275,7 +275,7 @@ class Authorization  extends Ork3 {
 				$this->mundane->clear();
 				$this->mundane->mundane_id = $this->app_auth->mundane_id;
 				if ($this->mundane->find()) {
-					if ($this->mundane->penalty_box == 1) {
+					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization();
 					} else if (strtotime($this->mundane->token_expires) > time()) {
 						$this->app_auth->token = md5($request['Password'] . microtime());

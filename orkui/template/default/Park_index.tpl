@@ -76,7 +76,8 @@
 				<li><a href='<?=UIR ?>Reports/duespaid/Park&id=<?=$park_id ?>'>Dues Paid Players</a></li>
 				<li><a href='<?=UIR ?>Reports/waivered/Park&id=<?=$park_id ?>'>Waivered Players</a></li>
 				<li><a href='<?=UIR ?>Reports/unwaivered/Park&id=<?=$park_id ?>'>Unwaivered Players</a></li>
-    			<li><a href='<?=UIR ?>Reports/active_duespaid/Park&id=<?=$park_id ?>'>Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/suspended/Park&id=<?=$park_id ?>'>Suspended Players</a></li>
+   			<li><a href='<?=UIR ?>Reports/active_duespaid/Park&id=<?=$park_id ?>'>Player Attendance</a></li>
 				<li><a href='<?=UIR ?>Reports/active_waivered_duespaid/Park&id=<?=$park_id ?>'>Waivered Player Attendance</a></li>
 			</ul>
 		</li>

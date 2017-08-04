@@ -15,6 +15,7 @@
 				<li><a href='<?=UIR ?>Admin/createplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Create Player</a></li>
 				<li><a href='<?=UIR ?>Admin/claimplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Move Player</a></li>
 				<li><a href='<?=UIR ?>Admin/mergeplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Merge Players</a></li>
+				<li><a href='<?=UIR ?>Admin/suspendplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Suspensions</a></li>
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Admin/transferpark/<?=$KingdomInfo['KingdomId'] ?>'>Claim Park</a></li>

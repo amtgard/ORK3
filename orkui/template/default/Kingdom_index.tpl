@@ -82,7 +82,8 @@
 				<li><a href='<?=UIR ?>Reports/duespaid/Kingdom&id=<?=$kingdom_id ?>'>Dues Paid Players</a></li>
 				<li><a href='<?=UIR ?>Reports/waivered/Kingdom&id=<?=$kingdom_id ?>'>Waivered Players</a></li>
 				<li><a href='<?=UIR ?>Reports/unwaivered/Kingdom&id=<?=$kingdom_id ?>'>Unwaivered Players</a></li>
-        		<li><a href='<?=UIR ?>Reports/active_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/suspended/Kingdom&id=<?=$kingdom_id ?>'>Suspended Players</a></li>
+        <li><a href='<?=UIR ?>Reports/active_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Player Attendance</a></li>
 				<li><a href='<?=UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Waivered Player Attendance</a></li>
 			</ul>
 		</li>

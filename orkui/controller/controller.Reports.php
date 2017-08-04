@@ -201,6 +201,12 @@ class Controller_Reports extends Controller {
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1, 0, 2);
 	}
 	
+	public function suspended($type=null) {
+		$this->template = 'Reports_roster.tpl';
+		$this->data['show_suspension'] = 1;
+		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, null, null, 2, 1);
+	}
+	
 }
 
 ?>

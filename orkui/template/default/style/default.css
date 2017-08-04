@@ -104,11 +104,21 @@ a:hover {
 	vertical-align: top;
 	background-color: white;
 }
+.suspended-player {
+	border: 1px solid #fcc;
+	background-color: #fee;
+}
 .info-container>ul {
 	margin-right: 25px;
 }
 .info-container h3 {
 	cursor: pointer;
+}
+.suspended-player h3 {
+	border: 1px solid #daa;
+	background-color: #ecc;
+	color: #822;
+	text-shadow: 0 2px 3px #d99;
 }
 .info-container h3:after {
 	content: '\25b2';
@@ -148,7 +158,11 @@ a:hover {
 	cursor: pointer;
 }
 .information-table tr.penalty-box {
-	background-color: #fed;
+	background-color: #fcc;
+	color: #966;
+}
+.information-table tr.penalty-box a {
+	color: #966;
 }
 .action-table {
 	float: right;

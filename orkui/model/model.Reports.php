@@ -118,7 +118,7 @@ class Model_Reports extends Model {
 		return $r['ActivePlayerSummary'];
 	}
 	
-	function player_roster($type, $id, $waivered, $duespaid = 0, $banned = 0, $active = 1) {
+	function player_roster($type, $id, $waivered, $duespaid = 0, $banned = 0, $active = 1, $suspended = 0) {
 		$request = array(
 				'Type' => $type,
 				'Id' => $id,
@@ -128,9 +128,10 @@ class Model_Reports extends Model {
 				'UnWaivered' => !is_null($waivered)&&0==$waivered?1:0,
 				'Token' => $this->session->token,
 				'DuesPaid' => $duespaid,
-				'Banned' => $banned==1?true:false
+				'Banned' => $banned==1?true:false,
+				'Suspended' => $suspended
 			);
-			
+
 		$r = $this->Report->GetPlayerRoster($request);
 		
 		return $r['Roster'];
