@@ -160,10 +160,10 @@ class Authorization  extends Ork3 {
 		$response = array();
 		if ($this->IsLocalCall() || true) {
 			$response = $this->Authorize_h($request);
-			$response['Status']['Detail'] = "Local Authorization Attempt"; // . print_r($this->trace, true);
+			$response['Status']['Detail'] = "Local Authorization Attempt: " . $response['Status']['Detail']; // . print_r($this->trace, true);
 		} else {
 			$response = $this->Authorize_app($request);
-			$response['Status']['Detail'] = "Remote Authorization Attempt"; // . print_r($this->trace, true);
+			$response['Status']['Detail'] = "Remote Authorization Attempt: " . $response['Status']['Detail']; // . print_r($this->trace, true);
 		}
 		return $response;
 	}
@@ -247,8 +247,8 @@ class Authorization  extends Ork3 {
 					$this->mundane->clear();
 					$this->mundane->mundane_id = $this->app_auth->mundane_id;
 					if ($this->mundane->find()) {
-						if ($this->mundane->penalty_box == 1) {
-							$response['Status'] = NoAuthorization();
+						if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+							$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 						} else {
 							$this->app_auth->token = md5($request['Password'] . microtime());
 							$this->app_auth->token_expires = date('c', time() + LOGIN_TIMEOUT);
@@ -276,7 +276,7 @@ class Authorization  extends Ork3 {
 				$this->mundane->mundane_id = $this->app_auth->mundane_id;
 				if ($this->mundane->find()) {
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
-						$response['Status'] = NoAuthorization();
+						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else if (strtotime($this->mundane->token_expires) > time()) {
 						$this->app_auth->token = md5($request['Password'] . microtime());
 						$this->app_auth->token_expires = date('c', time() + LOGIN_TIMEOUT);
@@ -313,8 +313,8 @@ class Authorization  extends Ork3 {
 					Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']), $this->mundane->password_expires);
 				}
 				if (Authorization::KeyExists($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']))) {
-					if ($this->mundane->penalty_box == 1) {
-						$response['Status'] = NoAuthorization();
+					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
 						$this->mundane->token = md5($request['Password'] . microtime());
 						$this->mundane->token_expires = date('c', time() + LOGIN_TIMEOUT);
@@ -334,8 +334,8 @@ class Authorization  extends Ork3 {
 			$this->mundane->clear();
 			$this->mundane->token = $request['Token'];
 			if ($this->mundane->find()) {
-				if ($this->mundane->penalty_box == 1) {
-					$response['Status'] = NoAuthorization();
+				if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 				} else if (strtotime($this->mundane->token_expires) > time()) {
 					$this->mundane->token = md5($this->mundane->token . microtime());
 					$this->mundane->token_expires = date('c', time() + LOGIN_TIMEOUT);
