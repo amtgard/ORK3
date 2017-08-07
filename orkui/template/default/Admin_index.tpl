@@ -29,7 +29,6 @@
 		<li><a href='<?=UIR ?>Reports/suspended'>Suspended Players</a></li>
 		<li><a href='<?=UIR ?>Reports/waivered'>Waivered Players</a></li>
 		<li><a href='<?=UIR ?>Reports/unwaivered'>Unwaivered Players</a></li>
-		<li><a href='<?=UIR ?>Reports/suspended'>Suspended Players</a></li>
 		<li><a href='<?=UIR ?>Reports/knights_and_masters'>Knights and Masters</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8'>Kingdom-level Awards</a></li>
 		<li><a href='<?=UIR ?>Reports/guilds'>Guilds</a></li>
