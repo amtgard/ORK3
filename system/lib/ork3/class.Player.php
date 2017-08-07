@@ -546,7 +546,8 @@ class Player extends Ork3 {
 	}
 	
 	public function _ClearSuspensions() {
-		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate()";
+		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null";
+		$this->db->query($sql);
 	}
 	
 	public function SetPlayerSuspension($request) {
@@ -555,6 +556,8 @@ class Player extends Ork3 {
 		if (!$this->mundane->find()) {
 			return InvalidParameter();
 		}
+	
+		$this->_ClearSuspensions();
 		
 		if ($request['MundaneId'] == 1) {
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);

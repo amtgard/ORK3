@@ -67,7 +67,7 @@
 						Action: 'Search/Player',
 						type: 'all',
 						search: request.term,
-						kingdom_id: 1 /* <?=$kingdom_id ?> */
+						kingdom_id: <?=$this->__session->kingdom_id ?>
 					},
 					function( data ) {
 						var suggestions = [];
