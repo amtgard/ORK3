@@ -129,7 +129,7 @@
 			<tr>
 				<td><a href='<?=UIR ?>Unit/index/<?=$unit['UnitId'] ?>'><?=$unit['Name'] ?></td>
 				<td><?=ucfirst($unit['Type']) ?></td>
-				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/quitunit/<?=$unit['UnitId'] ?>'>&times;</a></td>
+				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/quitunit/<?=$unit['UnitMundaneId'] ?>'>&times;</a></td>
 			</tr>
 <?php endforeach ?>
 		</tbody>
