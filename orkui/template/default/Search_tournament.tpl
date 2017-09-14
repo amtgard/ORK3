@@ -32,7 +32,7 @@
 			source: function( request, response ) {
 				UnitList( request, response );
 			},
-			delay: 50,
+			delay: 500,
 			change: function (e, ui) {
 				if (ui.item == null) {
 					UnitList(null,null);

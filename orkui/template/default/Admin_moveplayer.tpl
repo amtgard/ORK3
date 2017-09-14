@@ -20,7 +20,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#SrcParkName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#SrcParkName', ui);
 				$('#SrcParkId').val(ui.item.value);
@@ -49,7 +49,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#ParkName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ParkName', ui);
 				$('#ParkId').val(ui.item.value);
@@ -79,7 +79,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#PlayerName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#PlayerName', ui);
 				$('#MundaneId').val(ui.item.value);
