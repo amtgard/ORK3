@@ -1,28 +1,16 @@
 <?php
 
-include_once('class.YapoResultSet.php');
+include_once('class.YapoDb.php');
 
-class YapoDb {
+class YapoMysql extends YapoDb {
 
 	private $DBH;
 	
 	private $Data;
 	
-	protected $Debug = false;
-	
-	var $__ERRORS = array();
-	
-	var $__SetupParameters = array();
-	
 	function __construct($host, $dbname, $user, $password) {
-		$this->__SetupParameters = array("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password);
-		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password);
-		$this->DBH->exec('set names utf8');
+		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname", $user, $password);
 		$this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
-	}
-	
-	function SetDebug($debug) {
-		$this->Debug = $debug;
 	}
 	
 	function TableDescription($table) {
@@ -33,7 +21,7 @@ class YapoDb {
 		$keys = array();
 		
 		while ($Keys->Next()) {
-			if (!is_array($keys[$Keys->Key_name]))
+			if (!isset($keys[$Keys->Key_name]) || !is_array($keys[$Keys->Key_name]))
 				$keys[$Keys->Key_name] = array('Unique'=>!$Keys->Non_unique,'Columns'=>array());
 			$keys[$Keys->Key_name]['Columns'][] = $Keys->Column_name;
 		}
@@ -44,8 +32,8 @@ class YapoDb {
 		while ($Fields->Next()) {
 			preg_match("/(.+)\((.+)\)/", $Fields->Type, $matches);
 			$fields[$Fields->Field] = array(
-					'MajorType' => $matches[1],
-					'MinorType' => $matches[2],
+					'MajorType' => count($matches) < 3 ? $Fields->Type : $matches[1],
+					'MinorType' => count($matches) < 3 ? $Fields->Type : $matches[2],
 					'Type' => $Fields->Type,
 					'Null' => $Fields->Null=="NO"?false:true,
 					'Key' => $Fields->Key,
@@ -62,13 +50,7 @@ class YapoDb {
 	}
 	
 	function GetCore($table) {
-		return new YapoCore($this, $table);
-	}
-	
-	function Query($sql, $DataSet = null) {
-		if (is_array($DataSet))
-			$this->SetData($DataSet);
-		return $this->DataSet($sql);
+		return new YapoCoreMysql($this, $table);
 	}
 	
 	function Execute($sql) {
@@ -104,24 +86,12 @@ class YapoDb {
 		return new YapoResultSet($Query, $sql);
 	}
 	
-	function handle_errors($cnt, $Query) {
-		if ($cnt==0) return true;
-		switch ($Query->errorCode()) {
-			case '00000': return true;
-			case 'HY200':
-					$this->DBH = new PDO($this->__SetupParameters[0], $this->__SetupParameters[1], $this->__SetupParameters[2]);
-					$this->DBH->exec('set names utf8');
-					$this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
-				return false;
-			default: return true;
-		}
-	}
-
 	function Clear() {
 		$this->Data = array();
 	}
 	
 	function __set($field, $value) {
+		if (is_object($value)) die("you cannot insert an object.");
 		$this->Data[":$field"] = $value;
 	}
 	

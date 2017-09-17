@@ -362,7 +362,7 @@ class Authorization  extends Ork3 {
 		$DB->query("delete from " . DB_PREFIX . "credential where expiration <= now()");
 		$credential = new yapo($DB, DB_PREFIX . 'credential');
 		$credential->clear();
-		$key = Authorization::CryptStrip512(trim($salt) . trim($password), $salt);
+		$key = Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt);
 		$credential->key = $key;
 		//echo "<!-- $key -->";
 		if ($credential->find()) {
@@ -387,12 +387,18 @@ class Authorization  extends Ork3 {
 			$timestamp = time() + rand(-20 * 60 * 60 * 24, 20 * 60 * 60 * 24) + 60 * 60 * 24 * 365 * 2;
 		}
 		
-		$DB->Clear();
-		$DB->key = Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt);
-		$DB->expiration = $resetrequest == 1 ? (date("Y-m-d H:i:s", $timestamp)) : (date("Y-m-d H:i:s", time() + 24 * 60 * 60));
-		$DB->resetrequest = $resetrequest;
+		if ($resetrequest == 1)
+			$sql = "insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", time() + 24 * 60 * 60)). "', $resetrequest)";
+		else
+			$sql = "insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", $timestamp)). "', $resetrequest)";
+		$DB->query($sql);
 		
-		$DB->Query($sql);
+		//$DB->query("insert into " . DB_PREFIX . "credential (`key`, `expiration`) values ('" .Authorization::CryptStrip512(rand().microtime(), $salt). "', '" .(date("Y-m-d H:i:s", $timestamp + rand(-60 * 60 * 24 * 182.5, 0))). "')");
+		/*
+		for ($i = 0; $i < 3; $i++) {
+			$DB->query("insert into " . DB_PREFIX . "credential (`key`, `expiration`) values ('" .Authorization::CryptStrip512(rand().microtime(), $salt). "', '" .(date("Y-m-d H:i:s", $timestamp + rand(-60 * 60 * 24 * 182.5, 60 * 60 * 24 * 182.5))). "')");
+		}
+		*/
 	}
 	
 	public static function CryptStrip512($string, $salt) {

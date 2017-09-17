@@ -13,40 +13,19 @@ class Unit extends Ork3 {
 			&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['FromUnitId'], AUTH_CREATE)
             && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['ToUnitId'], AUTH_CREATE)) {
                 
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-    		$sql = "update " . DB_PREFIX ."unit_mundane set unit_id = :to_unit_id where unit_id = :from_unit_id";
-			$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-        	$sql = "update " . DB_PREFIX ."authorization set unit_id = :to_unit_id where unit_id = :from_unit_id";
-			$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-            $sql = "update " . DB_PREFIX ."awards set unit_id = :to_unit_id where unit_id = :from_unit_id";
-			$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-            $sql = "update " . DB_PREFIX ."event set unit_id = :to_unit_id where unit_id = :from_unit_id";
-    		$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-            $sql = "update " . DB_PREFIX ."participant set unit_id = :to_unit_id where unit_id = :from_unit_id";
-        	$this->db->Query($sql);
+    		$sql = "update " . DB_PREFIX ."unit_mundane set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
+        	$sql = "update " . DB_PREFIX ."authorization set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
+            $sql = "update " . DB_PREFIX ."awards set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = $request'" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
+            $sql = "update " . DB_PREFIX ."event set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = $request'" . mysql_real_escape_string($request['FromUnitId']) . "'";
+    		$this->db->query($sql);
+            $sql = "update " . DB_PREFIX ."participant set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+        	$this->db->query($sql);
             
-			$this->db->Clear();
-			$this->db->from_unit_id = $request['FromUnitId'];
-    		$sql = "delete from " . DB_PREFIX ."unit where unit_id = :from_unit_id";
-			$this->db->Query($sql);
+    		$sql = "delete from " . DB_PREFIX ."unit where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
         }
     }
     
