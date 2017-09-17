@@ -23,7 +23,7 @@
 			focus: function( event, ui ) {
 				return showLabel($(this), ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel("#ManageMembers #PlayerName", ui);
 				$("#MemberMundaneId").val(ui.item.value);
@@ -63,7 +63,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#ManagerForm #PlayerName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ManagerForm #PlayerName', ui);
 				$('#ManagerMundaneId').val(ui.item.value);

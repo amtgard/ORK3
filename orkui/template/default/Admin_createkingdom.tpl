@@ -35,7 +35,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#ParentKingdomName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ParentKingdomName', ui);
 				$('#ParentKingdomId').val(ui.item.value);

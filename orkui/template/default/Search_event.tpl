@@ -38,7 +38,7 @@
 			source: function( request, response ) {
 				EventList( request, response );
 			},
-			delay: 50,
+			delay: 500,
 			change: function (e, ui) {
 				if (ui.item == null) {
 					EventList(null,null);
