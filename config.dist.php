@@ -50,6 +50,7 @@ define('DIR_PARK_HERALDRY', DIR_HERALDRY."park/");
 define('DIR_KINGDOM_HERALDRY', DIR_HERALDRY."kingdom/");
 define('DIR_EVENT_HERALDRY', DIR_HERALDRY."event/");
 define('DIR_UNIT_HERALDRY', DIR_HERALDRY."unit/");
+define('DIR_CACHE', DIR_BASENAME.'cache/'); 
 
 // System
 define('DIR_LIB', DIR_SYSTEM.'lib/'); 

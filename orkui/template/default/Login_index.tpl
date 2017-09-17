@@ -9,7 +9,7 @@
 		<a href='<?=UIR?>Login/forgotpassword'>I forgot my password.</a>
 		<?php
 			if (strlen($error) > 0) {
-				echo "<div class='error-message'>$error<div class='error-detail'>$detail</div></div>";
+				echo "<div class='error-message'>$error<div class='error-detail' style='line-height: 2em; font-weight: bold;'>$detail</div></div>";
 			}
 		?>
 	</div>

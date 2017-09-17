@@ -913,6 +913,43 @@ class Controller_Admin extends Controller {
 		$this->template = 'Admin_moveplayer.tpl';
 	}
 	
+	public function suspendplayer($post=null) {
+		$this->load_model('Player');
+		if (strlen($post) > 0) {
+			$this->request->save('Admin_suspendplayer', true);
+			if (!isset($this->session->user_id)) {
+				header( 'Location: '.UIR.'Login/login/Admin/suspendplayer' );
+			} else if (isset($this->request->Admin_suspendplayer->MundaneId)) {
+				$suspended = isset($this->request->Admin_suspendplayer->Suspended) ? false : true;
+				$r = $this->Player->suspend_player(array(
+						'Token' => $this->session->token,
+						'MundaneId' => $this->request->Admin_suspendplayer->MundaneId,
+						'Suspended' => $suspended,
+						'SuspendedById' => $this->request->Admin_suspendplayer->SuspendatorId,
+						'SuspendedAt' => $this->request->Admin_suspendplayer->SuspendedAt,
+						'SuspendedUntil' => $this->request->Admin_suspendplayer->SuspendedUntil,
+						'Suspension' => $this->request->Admin_suspendplayer->Suspension,
+					));
+				if ($r['Status'] == 0) {
+					$this->data['Message'] = "Player has been <b><a href='" . UIR . "Reports/suspended/Kingdom&id=" . $this->session->kingdom_id . "'>" . 
+						($suspended ? 
+						 "suspended" :
+						 "UNsuspended") . "</a></b>";
+					$this->request->clear('Admin_suspendplayer');
+				} else if($r['Status'] == 5) {
+					header( 'Location: '.UIR.'Login' );
+				} else {
+					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+				}
+			} else {
+				$this->request->clear('Admin_suspendplayer');
+			}
+		}
+		if ($this->request->exists('Admin_suspendplayer')) {
+			$this->data['Admin_suspendplayer'] = $this->request->Admin_suspendplayer->Request;
+		}
+	}
+	
 	public function moveplayer($post=null) {
 		$this->load_model('Player');
 		if (strlen($post) > 0) {

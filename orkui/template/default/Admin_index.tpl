@@ -26,6 +26,7 @@
 	<h3>Reports</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Reports/roster'>Player Roster</a></li>
+		<li><a href='<?=UIR ?>Reports/suspended'>Suspended Players</a></li>
 		<li><a href='<?=UIR ?>Reports/waivered'>Waivered Players</a></li>
 		<li><a href='<?=UIR ?>Reports/unwaivered'>Unwaivered Players</a></li>
 		<li><a href='<?=UIR ?>Reports/knights_and_masters'>Knights and Masters</a></li>

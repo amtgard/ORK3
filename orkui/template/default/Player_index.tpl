@@ -1,4 +1,4 @@
-<div class='info-container' id='player-editor'>
+<div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
 		<div>
@@ -22,7 +22,7 @@
 		</div>
 	</form>
 </div>
-<div class='info-container' id='player-editor'>
+<div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 	<h3>Player Details</h3>
 	<form class='form-container' >
 		<div>
@@ -50,12 +50,26 @@
 			<span class='form-informational-field'><?=$Player['Company'] ?></span>
 		</div>
 		<div>
-			<span>Penalty Box:</span>
-			<span><input type='checkbox' value='Penalty' <?=(($Player['PenaltyBox'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
+			<span>Suspended:</span>
+			<span><input type='checkbox' value='Suspended' <?=(($Player['Suspended'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
+		</div>
+	<?php if ($Player['Suspended']==1) : ?>
+		<div>
+			<span>Suspended At:</span>
+			<span class='form-informational-field'><?=$Player['SuspendedAt'] ?></span>
 		</div>
 		<div>
+			<span>Suspended At:</span>
+			<span class='form-informational-field'><?=$Player['SuspendedUntil'] ?></span>
+		</div>
+		<div>
+			<span>Suspended At:</span>
+			<span class='form-informational-field'><?=$Player['Suspension'] ?></span>
+		</div>
+	<?php endif; ?>
+		<div>
 			<span>Active:</span>
-			<span><input type='checkbox' value='Active' <?=($Player['Active'])==1?"CHECKED":"" ?> DISABLED name='Active' id='Active' /></span>
+			<span><input type='checkbox' value='Active' <?=(($Player['Active'])==1 && ($Player['Suspended'])==0)?"CHECKED":"" ?> DISABLED name='Active' id='Active' /></span>
 		</div>
 		<div>
 			<span>Dues Paid:</span>

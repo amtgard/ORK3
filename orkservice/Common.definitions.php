@@ -98,7 +98,7 @@ abstract class ServiceErrorMessages
 	const SecureTokenFailure = "The secure token cannot be verified.";
 	const ProcessingError = "There was an error processing your request with the parameters provided.";
 	const InvalidParameter = "You have set a parameter incorrectly.";
-	const NoAuthorization = "You do not privileges to perform this action.";
+	const NoAuthorization = "You do not have privileges to perform this action.";
 	const Deprecated = "This method is no longer valid.";
 }
 

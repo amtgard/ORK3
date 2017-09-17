@@ -1,6 +1,13 @@
 <?php
 
-error_reporting( E_ALL ^ E_STRICT ^ E_NOTICE ^ E_WARNING );
+if(empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] == "off"){
+    $redirect = 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+    header('HTTP/1.1 301 Moved Permanently');
+    header('Location: ' . $redirect);
+    exit();
+}
+
+error_reporting( 0 );
 
 include_once( "../startup.php" );
 define( 'UIR', HTTP_UI_REMOTE . 'index.php?Route=' );

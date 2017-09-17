@@ -1,0 +1,8 @@
+ALTER TABLE `ork_awards` ADD `revoked` BOOLEAN NOT NULL DEFAULT FALSE AFTER `entered_at`, ADD `revoked_at` DATE NULL AFTER `revoked`, ADD `revocation` VARCHAR(50) NOT NULL AFTER `revoked_at`;
+ALTER TABLE `ork_awards` ADD `revoked_by_id` INT(11) NOT NULL AFTER `revocation`;
+ALTER TABLE `ork_mundane` ADD `suspended` BOOLEAN NOT NULL DEFAULT FALSE AFTER `active`, ADD `suspended_by_id` INT(11) NULL AFTER `suspended`, ADD `suspended_at` DATE NULL AFTER `suspended_by_id`, ADD `suspended_until` DATE NULL AFTER `suspended_at`, ADD `suspension` VARCHAR(100) NULL AFTER `suspended_until`;
+ALTER TABLE `ork_mundane` ADD `reeve_qualified` BOOLEAN NOT NULL DEFAULT FALSE AFTER `suspension`, ADD `reeve_qualified_until` DATE NOT NULL AFTER `reeve_qualified`;
+ALTER TABLE `ork_mundane` ADD INDEX( `suspended`);
+ALTER TABLE `ork_mundane` ADD INDEX( `reeve_qualified`);
+ALTER TABLE `ork_mundane` ADD INDEX( `reeve_qualified_until`);
+ALTER TABLE `ork_mundane` ADD INDEX( `suspended_until`);

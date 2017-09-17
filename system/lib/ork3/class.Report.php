@@ -219,6 +219,7 @@ class Report  extends Ork3 {
 								left join " . DB_PREFIX . "park p on m.park_id = p.park_id
 					where
 						a.date > adddate(:report_from_date, interval -$per_period) $where
+						m.suspended = 0 and a.date > adddate('" . mysql_real_escape_string($request['ReportFromDate']) . "', interval -$per_period) $where
 					group by a.mundane_id, a.class_id
 						having count(a.attendance_id) >= :minimum_attendance_requirement
 					order by m.kingdom_id, c.class_id, m.park_id, m.persona";
@@ -693,12 +694,17 @@ class Report  extends Ork3 {
 				$this->db->id = $request['Id'];
 				break;
 		}
-		$select_list = array_merge($select_list, array('m.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name','p.name as park_name','k.name as kingdom_name','m.penalty_box'));
+		$select_list = array_merge($select_list, 
+			array(
+				'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name', 
+				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'suspended_by.persona suspendator',
+				'p.name as park_name','k.name as kingdom_name','m.penalty_box'));
 		if (true == $request['Active']) $restrict_clause[] = ' m.active = 1 ';
 		if (true == $request['InActive']) $restrict_clause[] = ' m.active = 0 ';
 		if (true == $request['Waivered']) $restrict_clause[] = ' m.waivered = 1';
 		if (true == $request['UnWaivered']) $restrict_clause[] = ' m.waivered = 0';
 		if (true == $request['Banned']) $restrict_clause[] = ' m.penalty_box = 1';
+		if (true == $request['Suspended']) $restrict_clause[] = ' m.suspended = 1';
 		if (true == $request['DuesPaid'] && (AUTH_PARK == $request['Type'] || AUTH_KINGDOM == $request['Type'])) {
 			$duespaid_clause = 'INNER JOIN 
 									(select case split_id when null then 0 else 1 end as split_id, src_mundane_id 
@@ -724,6 +730,7 @@ class Report  extends Ork3 {
 					FROM " . DB_PREFIX . "mundane m 
 						LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 						LEFT JOIN " . DB_PREFIX . "park p on m.park_id = p.park_id
+						left join " . DB_PREFIX . "mundane suspended_by on m.suspended_by_id = suspended_by.mundane_id
 						$duespaid_clause
 						$join_clause
 					".(count($restrict_clause)?"where":"")."
@@ -745,9 +752,14 @@ class Report  extends Ork3 {
 								'Surname' => $restricted_access&&$r->restricted==0?$r->surname:"",
 								'OtherName' => $restricted_access&&$r->restricted==0?$r->other_name:"",
 								'Persona' => $r->persona,
+								'Suspended' => $r->suspended,
+								'SuspendedAt' => $r->suspended_at,
+								'SuspendedUntil' => $r->suspended_until,
+								'Suspendator' => $r->suspendator,
+								'Suspension' => $r->suspension,
 								'ParkId' => $r->park_id,
 								'KingdomId' => $r->kingdom_id,
-								'ParentKingdomId' => $r->parent_kingodm_id,
+								'ParentKingdomId' => $r->parent_kingdom_id,
 								'ParkName' => $r->park_name,
 								'KingdomName' => $r->kingdom_name,
 								'Restricted' => $r->restricted,
@@ -982,7 +994,7 @@ class Report  extends Ork3 {
         							from " . DB_PREFIX . "attendance a
         								left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
         							where 
-                                        date > adddate(curdate(), interval -$per_period) $park_comparator $location $waiver_clause
+												m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $park_comparator $location $waiver_clause
         							group by week(date,3), year(date), mundane_id) attendance_summary 
         					left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
         						left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
@@ -1004,7 +1016,7 @@ class Report  extends Ork3 {
             							from ork_attendance a
             								left join ork_mundane m on a.mundane_id = m.mundane_id
             							where 
-                                            date > adddate(curdate(), interval -$per_period) $location $waiver_clause
+														m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
             							group by month(date), year(date), mundane_id) monthly_list
                                 group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
                         left join
@@ -1017,7 +1029,7 @@ class Report  extends Ork3 {
                     							from ork_attendance a
                     								left join ork_mundane m on a.mundane_id = m.mundane_id
                     							where 
-                                                    date > adddate(curdate(), interval -$per_period) $location $waiver_clause
+																		m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
                     							group by dayofyear(date), year(date), mundane_id) credit_list_source
                 					    group by mundane_id, month(`date`)) credit_list
                                 group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id

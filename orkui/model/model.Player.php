@@ -69,6 +69,11 @@ class Model_Player extends Model {
 		return $r;
 	}
 	
+	function suspend_player($request) {
+		$r = $this->Player->SetPlayerSuspension($request);
+		return $r;
+	}
+	
 	function merge_player($request) {
 		$r = $this->Player->MergePlayer($request);
 		return $r;

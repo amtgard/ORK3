@@ -127,6 +127,10 @@ class Player extends Ork3 {
 					'OtherName' => $fetchprivate?"":$this->mundane->other_name,
 					'UserName' => $this->mundane->username,
 					'Persona' => $this->mundane->persona,
+					'Suspended' => $this->mundane->suspended,
+					'SuspendedAt' => $this->mundane->suspended_at,
+					'SuspendedUntil' => $this->mundane->suspended_until,
+					'Suspension' => $this->mundane->suspension,
 					'Email' => $fetchprivate?"":$this->mundane->email,
 					'ParkId' => $this->mundane->park_id,
 					'KingdomId' => $this->mundane->kingdom_id,
@@ -540,6 +544,50 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
+	
+	public function _ClearSuspensions() {
+		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null";
+		$this->db->query($sql);
+	}
+	
+	public function SetPlayerSuspension($request) {
+		$this->mundane->clear();
+		$this->mundane->mundane_id = $request['MundaneId'];
+		if (!$this->mundane->find()) {
+			return InvalidParameter();
+		}
+	
+		$this->_ClearSuspensions();
+		
+		if ($request['MundaneId'] == 1) {
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
+			return InvalidParameter('No thanks. This has been logged.');
+		}
+		
+		if (!isset($request['Suspended'])) {
+			return InvalidParameter('You must choose a suspension state: ' . print_r($request, 1));
+		}
+	
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT))) {
+			$this->mundane->suspended = $request['Suspended'];
+			if (!$request['Suspended']) {
+				$this->mundane->suspended_by_id = 0;
+				$this->mundane->suspended_at = "0000-00-00";
+				$this->mundane->suspended_until = "0000-00-00";
+				$this->mundane->suspension= "";
+			} else {
+				$this->mundane->suspended_by_id = $request['SuspendedById'];
+				$this->mundane->suspended_at = $request['SuspendedAt'];
+				if (isset($request['SuspendedUntil'])) $this->mundane->suspended_until = $request['SuspendedUntil'];
+				if (isset($request['Suspension'])) $this->mundane->suspension= $request['Suspension'];
+			}
+			$this->mundane->save();
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
+		} else {
+			return NoAuthorization();	
+		}
+	}
 
 	public function UpdatePlayer($request) {
 		logtrace("UpdatePlayer()", $request);
@@ -580,6 +628,10 @@ class Player extends Ork3 {
 				$this->mundane->other_name = is_null($request['OtherName'])?$this->mundane->other_name:$request['OtherName'];
 				$this->mundane->username = is_null($request['UserName'])?$this->mundane->username:$request['UserName'];
 				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:$request['Persona'];
+				
+				$this->mundane->reeve_qualified = is_null($request['ReeveQualified'])?$this->mundane->reeve_qualified:$request['ReeveQualified'];
+				$this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil'])?$this->mundane->reeve_qualified_until:$request['ReeveQualifiedUntil'];
+				
 				$this->mundane->save();
 				$this->set_waiver($request);
 				$this->mundane->save();
@@ -850,6 +902,8 @@ class Player extends Ork3 {
 			$awards->at_kingdom_id = valid_id($request['KingdomId'])?$request['KingdomId']:0;
 			$awards->at_event_id = valid_id($request['EventId'])?$request['EventId']:0;
 			$awards->note = $request['Note'];
+			$awards->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+			$awards->entered_at = date("Y-m-d H:i:s");
 			// If no event, then go Park!
             if (valid_id($request['GivenById'])) {
     			$awards->park_id = valid_id($given_by['Player']['ParkId'])?$given_by['Player']['ParkId']:0;
