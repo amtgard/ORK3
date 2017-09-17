@@ -21,7 +21,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#FromUnit', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#FromUnit', ui);
 				$('#FromUnitId').val(ui.item.value);
@@ -49,7 +49,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#ToUnit', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ToUnit', ui);
 				$('#ToUnitId').val(ui.item.value);

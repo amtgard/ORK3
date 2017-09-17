@@ -21,4 +21,7 @@ assets/waivers/*
 cache
 .idea
 vendor
+.svn
 ork_history.sql
+Google Maps API Key
+.gitignore-back

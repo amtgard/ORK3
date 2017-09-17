@@ -22,7 +22,7 @@
 			focus: function( event, ui ) {
 				return showLabel($(this), ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel($(this), ui);
 				thisid = '#' + $(this).attr('name') + 'Id';

@@ -23,7 +23,7 @@
 				ui.item.label = ui.item.label.split(" (")[0];
 				return showLabel('#UserName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				ui.item.label = ui.item.label.split(" (")[0];
 				showLabel('#UserName', ui);
@@ -66,7 +66,7 @@
 				ui.item.label = ui.item.label;
 				return showLabel('#AuthAsset', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				ui.item.label = ui.item.label;
 				showLabel('#AuthAsset', ui);
