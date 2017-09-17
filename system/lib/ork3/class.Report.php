@@ -15,15 +15,15 @@ class Report  extends Ork3 {
 	public function __construct() {
 		parent::__construct();
 	}
-	
+
 	public function HeraldryReport($request) {
 		// WithMissingHeraldries [No, Yes, Only]
 		$response = array();
 		$table = strtolower($request['Type']);
 		$$table = new yapo($this->db, DB_PREFIX . $table);
-		if ($request['WithMissingHeraldries'] == 'No') 
+		if ($request['WithMissingHeraldries'] == 'No')
 			$$table->has_heraldry = 1;
-		if ($request['WithMissingHeraldries'] == 'Only') 
+		if ($request['WithMissingHeraldries'] == 'Only')
 			$$table->has_heraldry = 0;
 		if (valid_id($request['KingdomId'])) {
 			$$table->kingdom_id = $request['KingdomId'];
@@ -44,13 +44,13 @@ class Report  extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function TournamentReport($request) {
-		
-		$key = Ork3::$Lib->ghettocache->key($request); 
+
+		$key = Ork3::$Lib->ghettocache->key($request);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1800)) !== false)
 			return $cache;
-		
+
 		if (valid_id($request['KingdomId'])) $where .= " and t.kingdom_id = $request[KingdomId] or e.kingdom_id = $request[KingdomId]";
 		if (valid_id($request['ParkId'])) $where .= " and t.park_id = $request[ParkId] or e.park_id = $request[ParkId]";
 		if (valid_id($request['EventId'])) $where .= " and e.event_id = $request[EventId]";
@@ -74,9 +74,9 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParticipantAlias'])) {
 			$where .= " and p.alias like '" . mysql_real_escape_string($request['Alias']) . "'";
 		}
-		
+
 		if (valid_id($request['Limit'])) $limit = " limit " . mysql_real_escape_string($request['Limit']);
-		
+
 		$sql = "select t.*, k.name as kingdom_name, k.parent_kingdom_id, park.name as park_name, e.name as event_name, d.event_start
 					from " . DB_PREFIX . "tournament t
 						left join " . DB_PREFIX . "event_calendardetail d on d.event_calendardetail_id = t.event_calendardetail_id
@@ -119,13 +119,13 @@ class Report  extends Ork3 {
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
-	
+
 	public function PlayerAwards($request) {
-		
-		$key = Ork3::$Lib->ghettocache->key($request); 
+
+		$key = Ork3::$Lib->ghettocache->key($request);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
 			return $cache;
-		
+
 		if (valid_id($request['KingdomId'])) {
 			$location_clause = " and m.kingdom_id = $request[KingdomId]";
 		} else {
@@ -185,7 +185,7 @@ class Report  extends Ork3 {
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
-	
+
 	public function Guilds($request) {
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
@@ -194,7 +194,7 @@ class Report  extends Ork3 {
 			$per_period = mysql_real_escape_string($request['Periods']) . " week";
 		if ($request['PerMonths'] == 1)
 			$per_period = mysql_real_escape_string($request['Periods']) . " month";
-		
+
 		$sql = "select c.class_id, c.name as class_name, count(a.attendance_id) as attendance_count, m.persona, m.mundane_id, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
 					from " . DB_PREFIX . "class c
 						left join " . DB_PREFIX . "attendance a on a.class_id = c.class_id
@@ -230,7 +230,7 @@ class Report  extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function UnitSummary($request) {
 		if (valid_id($request['KingdomId'])) $kingdom = " and m.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $park = " and m.park_id = '$request[ParkId]'";
@@ -240,8 +240,8 @@ class Report  extends Ork3 {
 		if (valid_id($request['IncludeHouseHolds'])) $households = " or u.type = 'Household' ";
 		if (valid_id($request['IncludeEvents'])) $events = " or u.type = 'Event' ";
 		if (valid_id($request['ActiveOnly'])) $active_only = " and um.active = 'Active' ";
-		
-		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count
+
+		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count, um.unit_mundane_id
 					from " . DB_PREFIX . "unit u
 						left join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id
 							left join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id
@@ -261,7 +261,8 @@ class Report  extends Ork3 {
 					'Type' => $r->type,
 					'Name' => $r->name,
 					'Persona' => $r->persona,
-					'MemberCount' => $r->member_count
+					'MemberCount' => $r->member_count,
+					'UnitMundaneId' => $r->unit_mundane_id
 				);
 			} while ($r->next());
 		}
@@ -287,32 +288,32 @@ class Report  extends Ork3 {
 			$per_period = mysql_real_escape_string($request['Periods']) . " month";
 		switch($request['ByPeriod']) {
 		    case 'week':
-	                $by_period = 'year(ssa.date), week(ssa.date, 3)'; 
+	                $by_period = 'year(ssa.date), week(ssa.date, 3)';
 	                $group_period = 'year(a.date), week(a.date, 3)';
 	            break;
 		    case 'month':
-		            $by_period = 'year(ssa.date), month(ssa.date)'; 
+		            $by_period = 'year(ssa.date), month(ssa.date)';
 	                $group_period = 'year(a.date), week(a.date, 3)';
 		        break;
 		    case 'date':
 		    default:
-    		        $by_period = 'ssa.date'; 
+    		        $by_period = 'ssa.date';
                     $group_period = 'a.date';
                 break;
         }
-		    
-		
-		$sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name, 
-					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week, 
+
+
+		$sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
+					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
-					from 
+					from
 						(select max(ssa.date) as `date`, ssa.mundane_id, ssd.event_start, ssd.event_end, ssa.park_id, ssd.event_calendardetail_id, ssd.event_id
-							from " . DB_PREFIX . "attendance ssa 
+							from " . DB_PREFIX . "attendance ssa
 								left join " . DB_PREFIX . "event_calendardetail ssd on ssa.event_calendardetail_id = ssd.event_calendardetail_id
 								left join " . DB_PREFIX . "park p on ssa.park_id = p.park_id
 								left join " . DB_PREFIX . "mundane m on ssa.mundane_id = m.mundane_id
 							$where
-							group by ssa.park_id, $by_period, ssd.event_start, ssd.event_end, mundane_id) a 
+							group by ssa.park_id, $by_period, ssd.event_start, ssd.event_end, mundane_id) a
 						left join " . DB_PREFIX . "park p on a.park_id = p.park_id
 							left join " . DB_PREFIX . "kingdom k on p.kingdom_id = k.kingdom_id
 						left join " . DB_PREFIX . "event e on a.event_id = e.event_id
@@ -349,7 +350,7 @@ class Report  extends Ork3 {
 		logtrace("Report->AttendanceSummary()", array($this->db->lastSql, $request));
 		return $response;
 	}
-	
+
 	public function AttendanceForEvent($request) {
 		if (valid_id($request['UnitId'])) {
 			$unit_clause = 	"LEFT JOIN " . DB_PREFIX . "unit_mundane um on um.mundane_id = a.mundane_id
@@ -357,7 +358,7 @@ class Report  extends Ork3 {
 							";
 			$unit_phrase = "u.name as unit_name, ";
 		}
-	
+
 		$sql = "select a.*, k.name as kingdom_name, p.name as park_name, k.parent_kingdom_id, m.persona, $unit_phrase c.name as class_name
 					from " . DB_PREFIX . "attendance a
 						LEFT JOIN " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
@@ -365,18 +366,18 @@ class Report  extends Ork3 {
 							LEFT JOIN " . DB_PREFIX . "park p on m.park_id = p.park_id
 						LEFT JOIN " . DB_PREFIX . "class c on a.class_id = c.class_id
 						$unit_clause
-					where a.event_id = '" . mysql_real_escape_string($request['EventId']) . "' and a.event_calendardetail_id = '" . mysql_real_escape_string($request['EventCalendarDetailId']) . "' 
+					where a.event_id = '" . mysql_real_escape_string($request['EventId']) . "' and a.event_calendardetail_id = '" . mysql_real_escape_string($request['EventCalendarDetailId']) . "'
 				";
 		if (valid_id($request['KingdomId'])) $sql .= " and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
 		if (valid_id($request['ParkId'])) $sql .= " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 		if (valid_id($request['UnitId'])) $sql .= " and a.unit_id = '" . mysql_real_escape_string($request['UnitId']) . "'";
 		if (valid_id($request['MundandeId'])) $sql .= " and a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'";
 		if (valid_id($request['ClassId'])) $sql .= " and a.class_id = '" . mysql_real_escape_string($request['ClassId']) . "'";
-		
+
 		logtrace('AttendanceForEvent',array($request, $sql));
-		
+
 		$r = $this->db->query($sql);
-		
+
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Attendance'] = array();
@@ -405,7 +406,7 @@ class Report  extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function AttendanceForDate($request) {
 		if (valid_id($request['UnitId'])) {
 			$unit_clause = 	"LEFT JOIN " . DB_PREFIX . "unit_mundane um on um.mundane_id = a.mundane_id
@@ -413,11 +414,11 @@ class Report  extends Ork3 {
 							";
 			$unit_phrase = "u.name as unit_name, ";
 		}
-	
-		$sql = "select a.*, a.persona as attendance_persona, 
+
+		$sql = "select a.*, a.persona as attendance_persona,
 					k.name as kingdom_name, k.parent_kingdom_id, mk.name as from_kingdom_name, mk.parent_kingdom_id as from_parent_kingdom_id,
 					p.name as park_name, p.park_id as park_id, mp.name as from_park_name, mp.park_id as from_park_id,
-					m.persona, 
+					m.persona,
 					$unit_phrase c.name as class_name, e.event_id, d.event_calendardetail_id, e.name as event_name, d.event_start, d.event_end
 					from " . DB_PREFIX . "attendance a
 						LEFT JOIN " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
@@ -436,13 +437,13 @@ class Report  extends Ork3 {
 		if (valid_id($request['UnitId'])) $sql .= " and a.unit_id = $request[UnitId]";
 		if (valid_id($request['MundandeId'])) $sql .= " and a.mundane_id = $request[MundaneId]";
 		if (valid_id($request['ClassId'])) $sql .= " and a.class_id = $request[ClassId]";
-		
+
 		logtrace('AttendanceForDate',array($request, $sql));
-		
+
 		$sql .= " order by kingdom_name, park_name, m.persona";
 
         $r = $this->db->query($sql);
-		
+
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Attendance'] = array();
@@ -482,11 +483,11 @@ class Report  extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function GeneralLedger($request) {
-	
+
 	}
-	
+
 	public function GetAuthorizations($request) {
         logtrace("GetAuthorizations", $request);
 		$restrict_clause = array();
@@ -524,7 +525,7 @@ class Report  extends Ork3 {
 				break;
 		}
 		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, k.parent_kingdom_id, e.name as event_name, u.name as unit_name, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
-					from ".DB_PREFIX."authorization a 
+					from ".DB_PREFIX."authorization a
 						left join ".DB_PREFIX."officer o on o.authorization_id = a.authorization_id
 						left join ".DB_PREFIX."mundane m on a.mundane_id = m.mundane_id
 						left join ".DB_PREFIX."park p on a.park_id = p.park_id
@@ -533,7 +534,7 @@ class Report  extends Ork3 {
 						left join ".DB_PREFIX."unit u on a.unit_id = u.unit_id
 					".(count($restrict_clause)>0?"where":"")." ".implode(' AND ', $restrict_clause)."
 					order by ".implode(',',$order_by);
-		
+
 		logtrace('GetAuthorizations()', $sql);
 		$r = $this->db->query($sql);
 
@@ -578,11 +579,11 @@ class Report  extends Ork3 {
 		} else {
 			$response['Status'] = InvalidParameter('Problem processing request.');
 		}
-		
+
 		return $response;
 
 	}
-	
+
 	public function GetPlayerRoster($request) {
 		$select_list = array();
 		$order_by = "k.name, p.name";
@@ -611,9 +612,9 @@ class Report  extends Ork3 {
 				$restrict_clause[] = " um.unit_id = '" . mysql_real_escape_string($request['Id']) . "' and " . (valid_id($request['IncludeRetiredUnitMembers'])?"":"um.active = 'Active'");
 				break;
 		}
-		$select_list = array_merge($select_list, 
+		$select_list = array_merge($select_list,
 			array(
-				'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name', 
+				'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name',
 				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'suspended_by.persona suspendator',
 				'p.name as park_name','k.name as kingdom_name','m.penalty_box'));
 		if (true == $request['Active']) $restrict_clause[] = ' m.active = 1 ';
@@ -623,10 +624,10 @@ class Report  extends Ork3 {
 		if (true == $request['Banned']) $restrict_clause[] = ' m.penalty_box = 1';
 		if (true == $request['Suspended']) $restrict_clause[] = ' m.suspended = 1';
 		if (true == $request['DuesPaid'] && (AUTH_PARK == $request['Type'] || AUTH_KINGDOM == $request['Type'])) {
-			$duespaid_clause = 'INNER JOIN 
-									(select case split_id when null then 0 else 1 end as split_id, src_mundane_id 
-										from ' . DB_PREFIX . 'split s 
-										left join ' . DB_PREFIX . 'account a on s.account_id = a.account_id 
+			$duespaid_clause = 'INNER JOIN
+									(select case split_id when null then 0 else 1 end as split_id, src_mundane_id
+										from ' . DB_PREFIX . 'split s
+										left join ' . DB_PREFIX . 'account a on s.account_id = a.account_id
 											'.$dues_restrict_clause.'
 											and s.is_dues = 1
 										where s.dues_through > curdate())
@@ -643,16 +644,16 @@ class Report  extends Ork3 {
 		} else {
 			$restricted_access = false;
 		}
-		$sql = 'SELECT ' . implode(',',$select_list) . " 
-					FROM " . DB_PREFIX . "mundane m 
+		$sql = 'SELECT ' . implode(',',$select_list) . "
+					FROM " . DB_PREFIX . "mundane m
 						LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 						LEFT JOIN " . DB_PREFIX . "park p on m.park_id = p.park_id
 						left join " . DB_PREFIX . "mundane suspended_by on m.suspended_by_id = suspended_by.mundane_id
 						$duespaid_clause
 						$join_clause
 					".(count($restrict_clause)?"where":"")."
-						".implode(' and ', $restrict_clause)." 
-					GROUP BY m.mundane_id 
+						".implode(' and ', $restrict_clause)."
+					GROUP BY m.mundane_id
 					ORDER BY $order_by, m.persona, m.surname, m.given_name
 		";
 		logtrace('GetPlayerRoster()', array($sql, $restrict_clause));
@@ -693,41 +694,41 @@ class Report  extends Ork3 {
 		} else {
 			$response['Status'] = InvalidParameter('Problem with request.');
 		}
-		
+
 		return $response;
 	}
-	
+
 	public function GetKingdomParkAverages($request) {
-		$key = Ork3::$Lib->ghettocache->key($request); 
+		$key = Ork3::$Lib->ghettocache->key($request);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
-		
+
 		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
 		if (strlen($request['AverageWeeks']) == 0 && strlen($request['AverageMonths']) == 0) $request['AverageWeeks'] = 26;
 		if (strlen($request['KingdomId']) == 0) $request['KingdomId'] = '0';
 		if ($request['NativePopulace']) $native_populace .= "m.park_id = a.park_id and";
 		if ($request['Waivered']) $waivered_peeps = "m.waivered = 1 and";
-		
+
 		if (strlen($request['AverageWeeks']) > 0) {
 			$per_period = mysql_real_escape_string($request['AverageWeeks']) . ' week';
 		} else {
 			$per_period = mysql_real_escape_string($request['AverageMonths']) . ' month';
 		}
-		
-		$sql = "select 
+
+		$sql = "select
 						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name
-					from 
+					from
 						" . DB_PREFIX . "park p
 							left join
-								(select 
+								(select
 										a.mundane_id, week(a.date,3) as week, a.park_id
 									from " . DB_PREFIX . "attendance a
 										left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
-									where 
+									where
 										$native_populace
 										$waivered_peeps
-										date > adddate(curdate(), interval -$per_period) 
-										and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "' 
+										date > adddate(curdate(), interval -$per_period)
+										and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
 										and a.mundane_id > 0
 									group by year(date), week(date,3), mundane_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
@@ -751,49 +752,49 @@ class Report  extends Ork3 {
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
-	
+
 	public function GetActiveKingdomsSummary($request=null) {
-		$key = Ork3::$Lib->ghettocache->key($request); 
+		$key = Ork3::$Lib->ghettocache->key($request);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
-		
+
 		if (strlen($request['KingdomAverageWeeks']) == 0) $request['KingdomAverageWeeks'] = 26;
 		if (strlen($request['ParkAttendanceWithin']) == 0) $request['ParkAttendanceWithin'] = 4;
 		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
-		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(activeparks.parkcount,0) active_parks 
-					FROM `" . DB_PREFIX . "kingdom` k 
-					left join 
+		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(activeparks.parkcount,0) active_parks
+					FROM `" . DB_PREFIX . "kingdom` k
+					left join
 						(select count(*) as park_count, pcnt.kingdom_id from `" . DB_PREFIX . "park` pcnt where pcnt.active = 'Active' group by pcnt.kingdom_id) pcount on pcount.kingdom_id = k.kingdom_id
-					left join 
-						(select 
-								count(mundanesbyweek.mundane_id) attendance_count, mundanesbyweek.kingdom_id 
-							from 
-								(select 
-										mundane_id, week(date,3) as week, kingdom_id 
-									from " . DB_PREFIX . "attendance 
-									where date > adddate(curdate(), interval - " . mysql_real_escape_string($request['KingdomAverageWeeks']) . " week) group by week(date,3), mundane_id) 
+					left join
+						(select
+								count(mundanesbyweek.mundane_id) attendance_count, mundanesbyweek.kingdom_id
+							from
+								(select
+										mundane_id, week(date,3) as week, kingdom_id
+									from " . DB_PREFIX . "attendance
+									where date > adddate(curdate(), interval - " . mysql_real_escape_string($request['KingdomAverageWeeks']) . " week) group by week(date,3), mundane_id)
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
-					left join 
-						(select 
-								count(mundanesbymonth.mundane_id) monthly_attendance_count, mundanesbymonth.kingdom_id 
-							from 
-								(select 
-										mundane_id, month(date) as month, kingdom_id 
-									from " . DB_PREFIX . "attendance 
-									where date > adddate(curdate(), interval - 12 month) group by month(date), mundane_id) 
+					left join
+						(select
+								count(mundanesbymonth.mundane_id) monthly_attendance_count, mundanesbymonth.kingdom_id
+							from
+								(select
+										mundane_id, month(date) as month, kingdom_id
+									from " . DB_PREFIX . "attendance
+									where date > adddate(curdate(), interval - 12 month) group by month(date), mundane_id)
 									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
 					left join
-						(select 
-								count(*) parkcount, kingdom_id 
-							from 
-								(select 
+						(select
+								count(*) parkcount, kingdom_id
+							from
+								(select
 										mundanesbyweek.kingdom_id
-									from 
-										(select 
-												kingdom_id, park_id 
-											from " . DB_PREFIX . "attendance 
-											where date > adddate(curdate(), interval - " . mysql_real_escape_string($request['ParkAttendanceWithin']) . " week) group by week(date,3), mundane_id) mundanesbyweek 
-									group by kingdom_id, park_id) parkcount 
+									from
+										(select
+												kingdom_id, park_id
+											from " . DB_PREFIX . "attendance
+											where date > adddate(curdate(), interval - " . mysql_real_escape_string($request['ParkAttendanceWithin']) . " week) group by week(date,3), mundane_id) mundanesbyweek
+									group by kingdom_id, park_id) parkcount
 							group by kingdom_id) activeparks on activeparks.kingdom_id = k.kingdom_id
 					where active = 'Active'
                     order by k.name";
@@ -801,8 +802,8 @@ class Report  extends Ork3 {
 		$r = $this->db->query($sql);
 		$report = array();
 		do {
-			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id, 
-									'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id, 
+			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id,
+									'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id,
 									'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'Participation' => $r->active_parks );
 		} while ($r->next());
 		$response = array(
@@ -811,7 +812,7 @@ class Report  extends Ork3 {
 		);
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
-	
+
 	public function GetActivePlayers($request) {
 		if (strlen($request['MinimumWeeklyAttendance']) == 0) $request['MinimumWeeklyAttendance'] = 0;
     	if (strlen($request['MinimumDailyAttendance']) == 0) $request['MinimumDailyAttendance'] = 6;
@@ -819,20 +820,20 @@ class Report  extends Ork3 {
 		if (strlen($request['MinimumCredits']) == 0) $request['MinimumCredits'] = 9;
 		if (strlen($request['PerWeeks']) == 0 && strlen($request['PerMonths']) == 0) $request['PerMonths'] = 6;
 		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
-		
+
 		if (strlen($request['PerWeeks']) > 0) {
 			$per_period = mysql_real_escape_string($request['PerWeeks']) . ' week';
 		} else {
 			$per_period = mysql_real_escape_string($request['PerMonths']) . ' month';
 		}
-		
+
 		if (valid_id($request['ParkId'])) {
 			$location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 			$duesclause = "a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
     		if (valid_id($request['ByLocalPark'])) {
-    		    $park_comparator = " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "' ";   
+    		    $park_comparator = " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "' ";
     		}
-		} else if (strlen($request['KingdomId']) > 0 && $request['KingdomId'] > 0) { 
+		} else if (strlen($request['KingdomId']) > 0 && $request['KingdomId'] > 0) {
 			$location = " and m.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
 			$duesclause = "a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
     		if (valid_id($request['ByKingdom'])) {
@@ -840,7 +841,7 @@ class Report  extends Ork3 {
     		    $parks = array();
     		    foreach ($park_list['Parks'] as $p => $park)
     		        $parks[] = $p['ParkId'];
-    		    $park_comparator = " and a.park_id in (" . implode($parks) . ") ";   
+    		    $park_comparator = " and a.park_id in (" . implode($parks) . ") ";
     		}
 		} else {
 		    $park_comparator = "";
@@ -849,10 +850,10 @@ class Report  extends Ork3 {
             if ($request['DuesPaid'])
                 $has_dues = "and s.is_dues = 1";
 			$duespaid_clause = "
-					left join 
-						(select distinct case split_id when null then 0 else 1 end as split_id, src_mundane_id 
-							from " . DB_PREFIX . "split s 
-							left join " . DB_PREFIX . "account a on s.account_id = a.account_id 
+					left join
+						(select distinct case split_id when null then 0 else 1 end as split_id, src_mundane_id
+							from " . DB_PREFIX . "split s
+							left join " . DB_PREFIX . "account a on s.account_id = a.account_id
 								and $duesclause
 								$has_dues
 							where s.dues_through > curdate()) dues on attendance_summary.mundane_id = dues.src_mundane_id
@@ -864,7 +865,7 @@ class Report  extends Ork3 {
         if (trimlen($request['Peerage']) > 0) {
             $peerage = "
                     left join
-                        (select distinct awards.mundane_id, award.peerage 
+                        (select distinct awards.mundane_id, award.peerage
                             from " . DB_PREFIX . "awards awards
                                 left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = awards.kingdomaward_id
                                     left join " . DB_PREFIX . "award award on ka.award_id = award.award_id
@@ -884,18 +885,18 @@ class Report  extends Ork3 {
 		$sql = "
                 select main_summary.*, total_monthly_credits, credit_counts.daily_credits, credit_counts.rop_limited_credits
                     from
-                        (select 
-        						$peer_field count(week) as weeks_attended, sum(weekly_attendance) as park_days_attended, sum(daily_attendance) as days_attended, sum(credits_earned) total_credits, attendance_summary.mundane_id, 
+                        (select
+        						$peer_field count(week) as weeks_attended, sum(weekly_attendance) as park_days_attended, sum(daily_attendance) as days_attended, sum(credits_earned) total_credits, attendance_summary.mundane_id,
         							mundane.persona, kingdom.kingdom_id, park.park_id, kingdom.name kingdom_name, kingdom.parent_kingdom_id, park.name park_name, attendance_summary.waivered $duespaid_field
         					from
-        						(select 
-        								a.park_id > 0 as weekly_attendance, count(a.park_id > 0) as daily_attendance, a.mundane_id, 
-                                        week(a.date,3) as week, year(a.date) as year, a.kingdom_id, a.park_id, max(credits) as credits_earned, m.waivered 
+        						(select
+        								a.park_id > 0 as weekly_attendance, count(a.park_id > 0) as daily_attendance, a.mundane_id,
+                                        week(a.date,3) as week, year(a.date) as year, a.kingdom_id, a.park_id, max(credits) as credits_earned, m.waivered
         							from " . DB_PREFIX . "attendance a
         								left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
-        							where 
+        							where
 												m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $park_comparator $location $waiver_clause
-        							group by week(date,3), year(date), mundane_id) attendance_summary 
+        							group by week(date,3), year(date), mundane_id) attendance_summary
         					left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
         						left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
         						left join " . DB_PREFIX . "park park on park.park_id = mundane.park_id
@@ -911,24 +912,24 @@ class Report  extends Ork3 {
                         left join
                             (select mundane_id, sum(monthly_credits) as total_monthly_credits
                                 from
-                                    (select 
+                                    (select
                 							least(sum(credits), " . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ") as monthly_credits, a.mundane_id
             							from ork_attendance a
             								left join ork_mundane m on a.mundane_id = m.mundane_id
-            							where 
+            							where
 														m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
             							group by month(date), year(date), mundane_id) monthly_list
                                 group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
                         left join
                             (select mundane_id, sum(daily_credits) as daily_credits, sum(rop_limited_credits) as rop_limited_credits
-                                from 
+                                from
                                     (select least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(daily_credits)) as daily_credits, least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(rop_credits)) rop_limited_credits, mundane_id
                                         from
-                                            (select 
+                                            (select
                         							max(credits) as daily_credits, 1 as rop_credits, a.mundane_id, a.date
                     							from ork_attendance a
                     								left join ork_mundane m on a.mundane_id = m.mundane_id
-                    							where 
+                    							where
 																		m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
                     							group by dayofyear(date), year(date), mundane_id) credit_list_source
                 					    group by mundane_id, month(`date`)) credit_list
@@ -939,12 +940,12 @@ class Report  extends Ork3 {
 		$r = $this->db->query($sql);
 		$report = array();
 		if ($r !== false && $r->size() > 0) do {
-			$report[] = array( 
-					'KingdomName' => $r->kingdom_name, 
-					'KingdomId' => $r->kingdom_id,  
+			$report[] = array(
+					'KingdomName' => $r->kingdom_name,
+					'KingdomId' => $r->kingdom_id,
 					'ParentKingdomId' => $r->parent_kingodm_id,
-					'ParkName' => $r->park_name, 
-					'ParkId' => $r->park_id,  
+					'ParkName' => $r->park_name,
+					'ParkId' => $r->park_id,
 					'Persona' => $r->persona,
 					'MundaneId' => $r->mundane_id,
 					'TotalCredits' => $r->total_credits,
@@ -958,12 +959,12 @@ class Report  extends Ork3 {
 					'Waivered' => $r->waivered
 				);
 		} while ($r->next());
-		
+
 		$response = array(
 			'Status' => Success(),
 			'ActivePlayerSummary' => $report
 		);
-		
+
 		return $response;
 	}
 }

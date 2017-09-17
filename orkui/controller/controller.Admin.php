@@ -646,7 +646,6 @@ class Controller_Admin extends Controller {
 
 
 		$thePlayerDetails = $this->Player->fetch_player_details($id);
-
 		if (strlen($action) > 0) {
 			$this->request->save('Admin_player', true);
 			$r = array('Status'=>0);
@@ -795,7 +794,7 @@ class Controller_Admin extends Controller {
 							));
 						break;
 					case 'quitunit':
-						$r = $this->Unit->retire_unit_member( array ('UnitId' => $roastbeef, 'MundaneId' => $id ) );
+						$r = $this->Unit->retire_unit_member( array ('UnitId' => $id, 'UnitMundaneId' => $roastbeef, 'Token' => $this->session->token) );
 						break;
     				case 'deletenote':
 						$r = $this->Player->remove_note( array ('NotesId' => $roastbeef, 'MundaneId' => $id, 'Token' => $this->session->token ) );
