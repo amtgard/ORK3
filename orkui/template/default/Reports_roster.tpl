@@ -14,6 +14,7 @@
 				<th>Waivered</th>
 <?php if (isset($show_duespaid)) : ?>
 				<th>Dues Paid</th>
+				<th>Dues Through</th>
 <?php endif; ?>
 				<th>Suspended Until</th>
 <?php if (isset($show_suspension)) : ?>
@@ -38,6 +39,7 @@
 				<td><?=($player['Waivered']==1?"Waiver":"") ?></td>
 <?php if (isset($show_duespaid)) : ?>
 				<td><?=($player['DuesPaid']?"Paid":"") ?></td>
+				<td><?=($player['DuesThrough']?$player['DuesThrough']:"") ?></td>
 <?php endif; ?>
 				<td><?=$player['SuspendedUntil'] ?></td>
 <?php if (isset($show_suspension)) : ?>
