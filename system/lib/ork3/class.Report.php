@@ -120,6 +120,74 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
+	public function ClassMasters($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+		if (valid_id($request['KingdomId'])) {
+			$location_clause = " and m.kingdom_id = $request[KingdomId]";
+		} else {
+			$order = "k.name, ";
+		}
+
+		if (valid_id($request['ParkId'])) {
+			$location_clause = " and m.park_id = $request[ParkId]";
+		}
+
+		$masters_clause = "or a.name IN (
+		      'Master Anti-Paladin',
+		      'Master Archer',
+		      'Master Assassin',
+		      'Master Barbarian',
+		      'Master Bard',
+		      'Master Druid',
+		      'Master Healer',
+		      'Master Monk',
+		      'Master Monster',
+		      'Master Paladin',
+		      'Master Peasant',
+		      'Master Raider',
+		      'Master Scout',
+		      'Master Warrior',
+		      'Master Wizard'
+		)";
+		$sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank
+					from " . DB_PREFIX . "awards ma
+						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
+							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+								left join " . DB_PREFIX . "mundane m on m.mundane_id = ma.mundane_id
+									left join " . DB_PREFIX . "park p on p.park_id = m.park_id
+									left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
+					where (0 $masters_clause) $location_clause
+					order by $order a.peerage, a.name, m.persona
+			";
+      logtrace("ClassMasters", $sql);
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['Awards'] = array();
+			do {
+				$response['Awards'][] = array(
+						'MundaneId' => $r->mundane_id,
+						'Persona' => $r->persona,
+						'Date' => $r->date,
+						'ParkId' => $r->park_id,
+						'KingdomId' => $r->kingdom_id,
+						'ParentKingdomId' => $r->parent_kingodm_id,
+						'ParkName' => $r->park_name,
+						'KingdomName' => $r->kingdom_name,
+						'Rank' => $r->rank,
+						'AwardName' => $r->award_name
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
 	public function PlayerAwards($request) {
 
 		$key = Ork3::$Lib->ghettocache->key($request);
