@@ -154,6 +154,7 @@
 			<span>Class:</span>
 			<span>
 				<select name='ClassId' id='ClassId' class='required-field'>
+					<option value=''>-select one-</option>
 <? foreach ($Classes['Classes'] as $k => $class) : ?>
 					<option value='<?=$class['ClassId'] ?>'><?=$class['Name'] ?></option>
 <? endforeach ?>
