@@ -134,24 +134,8 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) {
 			$location_clause = " and m.park_id = $request[ParkId]";
 		}
+                $masters_clause = "or a.award_id IN (select aw.award_id from " . DB_PREFIX . "award aw where aw.peerage = 'Paragon')";
 
-		$masters_clause = "or a.name IN (
-		      'Master Anti-Paladin',
-		      'Master Archer',
-		      'Master Assassin',
-		      'Master Barbarian',
-		      'Master Bard',
-		      'Master Druid',
-		      'Master Healer',
-		      'Master Monk',
-		      'Master Monster',
-		      'Master Paladin',
-		      'Master Peasant',
-		      'Master Raider',
-		      'Master Scout',
-		      'Master Warrior',
-		      'Master Wizard'
-		)";
 		$sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
