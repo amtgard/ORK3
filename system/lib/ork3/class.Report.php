@@ -625,7 +625,7 @@ class Report  extends Ork3 {
 		if (true == $request['Suspended']) $restrict_clause[] = ' m.suspended = 1';
 		if (true == $request['DuesPaid'] && (AUTH_PARK == $request['Type'] || AUTH_KINGDOM == $request['Type'])) {
 			$duespaid_clause = 'INNER JOIN
-									(select case split_id when null then 0 else 1 end as split_id, src_mundane_id
+									(select dues_through, case split_id when null then 0 else 1 end as split_id, src_mundane_id
 										from ' . DB_PREFIX . 'split s
 										left join ' . DB_PREFIX . 'account a on s.account_id = a.account_id
 											'.$dues_restrict_clause.'
@@ -633,6 +633,7 @@ class Report  extends Ork3 {
 										where s.dues_through > curdate())
 									dues on m.mundane_id = dues.src_mundane_id';
 			$select_list[] = 'split_id as duespaid';
+			$select_list[] = 'dues_through as duesthrough';
 			$order_by = 'duespaid desc,'.$order_by;
 		}
 		$select_list[] = 'k.parent_kingdom_id';
@@ -683,6 +684,7 @@ class Report  extends Ork3 {
 								'Restricted' => $r->restricted,
 								'Waivered' => $r->waivered,
 								'DuesPaid' => $r->duespaid,
+								'DuesThrough' => $r->duesthrough,
 								'UnitMundaneId' => $r->unit_mundane_id,
 								'UnitRole' => $r->unit_role,
 								'UnitTitle' => $r->unit_title,
