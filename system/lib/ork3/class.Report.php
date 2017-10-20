@@ -969,4 +969,160 @@ class Report  extends Ork3 {
 	}
 }
 
+	public function Custom($request) {
+		if (strlen($request['MinimumWeeklyAttendance']) == 0) $request['MinimumWeeklyAttendance'] = 0;
+    	if (strlen($request['MinimumDailyAttendance']) == 0) $request['MinimumDailyAttendance'] = 6;
+        if (strlen($request['MonthlyCreditMaximum']) == 0) $request['MonthlyCreditMaximum'] = 6;
+		if (strlen($request['MinimumCredits']) == 0) $request['MinimumCredits'] = 9;
+		if (strlen($request['PerWeeks']) == 0 && strlen($request['PerMonths']) == 0) $request['PerMonths'] = 6;
+		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
+
+		if (strlen($request['PerWeeks']) > 0) {
+			$per_period = mysql_real_escape_string($request['PerWeeks']) . ' week';
+		} else {
+			$per_period = mysql_real_escape_string($request['PerMonths']) . ' month';
+		}
+
+		if (valid_id($request['ParkId'])) {
+			$location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
+			$duesclause = "a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
+    		if (valid_id($request['ByLocalPark'])) {
+    		    $park_comparator = " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "' ";
+    		}
+		} else if (strlen($request['KingdomId']) > 0 && $request['KingdomId'] > 0) {
+			$location = " and m.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+			$duesclause = "a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+    		if (valid_id($request['ByKingdom'])) {
+    		    $park_list = Ork3::$Lib->Kingdom->GetParks($request);
+    		    $parks = array();
+    		    foreach ($park_list['Parks'] as $p => $park)
+    		        $parks[] = $p['ParkId'];
+    		    $park_comparator = " and a.park_id in (" . implode($parks) . ") ";
+    		}
+		} else {
+		    $park_comparator = "";
+		}
+		if ($request['KingdomId'] > 0 || $request['ParkId'] > 0) {
+            if ($request['DuesPaid'])
+                $has_dues = "and s.is_dues = 1";
+			$duespaid_clause = "
+					left join
+						(select distinct case split_id when null then 0 else 1 end as split_id, src_mundane_id
+							from " . DB_PREFIX . "split s
+							left join " . DB_PREFIX . "account a on s.account_id = a.account_id
+								and $duesclause
+								$has_dues
+							where s.dues_through > curdate()) dues on attendance_summary.mundane_id = dues.src_mundane_id
+			";
+			$duespaid_field = ',
+							ifnull(split_id,0) as duespaid';
+			$duespaid_order = 'duespaid desc, ';
+		}
+        if (trimlen($request['Peerage']) > 0) {
+            $peerage = "
+                    left join
+                        (select distinct awards.mundane_id, award.peerage
+                            from " . DB_PREFIX . "awards awards
+                                left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = awards.kingdomaward_id
+                                    left join " . DB_PREFIX . "award award on ka.award_id = award.award_id
+                                left join " . DB_PREFIX . "mundane m on awards.mundane_id = m.mundane_id
+                            where award.peerage = '" . mysql_real_escape_string($request['Peerage']) . "' and awards.mundane_id > 0 $location
+                            group by awards.mundane_id
+                        ) peers on attendance_summary.mundane_id = peers.mundane_id
+            ";
+            $peerage_clause = "and peers.peerage = '" . mysql_real_escape_string($request['Peerage']) . "'";
+            $peer_field = 'peers.peerage, ';
+        }
+		if ($request['Waivered']) {
+			$waiver_clause = ' and m.waivered = 1';
+		} else if ($request['UnWaivered']) {
+			$waiver_clause = ' and m.waivered = 0';
+		}
+		$sql = "
+                select main_summary.*, total_monthly_credits, credit_counts.daily_credits, credit_counts.rop_limited_credits
+                    from
+                        (select
+        						$peer_field count(week) as weeks_attended, sum(weekly_attendance) as park_days_attended, sum(daily_attendance) as days_attended, sum(credits_earned) total_credits, attendance_summary.mundane_id,
+        							mundane.persona, kingdom.kingdom_id, park.park_id, kingdom.name kingdom_name, kingdom.parent_kingdom_id, park.name park_name, attendance_summary.waivered $duespaid_field
+        					from
+        						(select
+        								a.park_id > 0 as weekly_attendance, count(a.park_id > 0) as daily_attendance, a.mundane_id,
+                                        week(a.date,3) as week, year(a.date) as year, a.kingdom_id, a.park_id, max(credits) as credits_earned, m.waivered
+        							from " . DB_PREFIX . "attendance a
+        								left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+        							where
+												m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $park_comparator $location $waiver_clause
+        							group by week(date,3), year(date), mundane_id) attendance_summary
+        					left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
+        						left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
+        						left join " . DB_PREFIX . "park park on park.park_id = mundane.park_id
+        					$duespaid_clause
+                            $peerage
+        					group by mundane_id
+        					having
+        						weeks_attended >= '" . mysql_real_escape_string($request['MinimumWeeklyAttendance']) . "'
+                                and days_attended >= '" . mysql_real_escape_string($request['MinimumDailyAttendance']) . "'
+                                and total_credits >= '" . mysql_real_escape_string($request['MinimumCredits']) . "'
+                                $peerage_clause
+        					order by $duespaid_order kingdom_name, park_name, persona) main_summary
+                        left join
+                            (select mundane_id, sum(monthly_credits) as total_monthly_credits
+                                from
+                                    (select
+                							least(sum(credits), " . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ") as monthly_credits, a.mundane_id
+            							from ork_attendance a
+            								left join ork_mundane m on a.mundane_id = m.mundane_id
+            							where
+														m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
+            							group by month(date), year(date), mundane_id) monthly_list
+                                group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
+                        left join
+                            (select mundane_id, sum(daily_credits) as daily_credits, sum(rop_limited_credits) as rop_limited_credits
+                                from
+                                    (select least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(daily_credits)) as daily_credits, least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(rop_credits)) rop_limited_credits, mundane_id
+                                        from
+                                            (select
+                        							max(credits) as daily_credits, 1 as rop_credits, a.mundane_id, a.date
+                    							from ork_attendance a
+                    								left join ork_mundane m on a.mundane_id = m.mundane_id
+                    							where
+																		m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
+                    							group by dayofyear(date), year(date), mundane_id) credit_list_source
+                					    group by mundane_id, month(`date`)) credit_list
+                                group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id
+					";
+					// For last join, need to limit monthly credits to monthly credit maximum per kingdom config
+		logtrace('Report: GetActivePlayers', array($request,$sql));
+		$r = $this->db->query($sql);
+		$report = array();
+		if ($r !== false && $r->size() > 0) do {
+			$report[] = array(
+					'KingdomName' => $r->kingdom_name,
+					'KingdomId' => $r->kingdom_id,
+					'ParentKingdomId' => $r->parent_kingodm_id,
+					'ParkName' => $r->park_name,
+					'ParkId' => $r->park_id,
+					'Persona' => $r->persona,
+					'MundaneId' => $r->mundane_id,
+					'TotalCredits' => $r->total_credits,
+    				'TotalMonthlyCredits' => $r->total_monthly_credits,
+					'WeeksAttended' => $r->weeks_attended,
+    				'ParkDaysAttended' => $r->park_days_attended,
+        			'DaysAttended' => $r->days_attended,
+        			'DailyCredits' => $r->daily_credits,
+        			'RopLimitedCredits' => $r->rop_limited_credits,
+					'DuesPaid' => $r->duespaid,
+					'Waivered' => $r->waivered
+				);
+		} while ($r->next());
+
+		$response = array(
+			'Status' => Success(),
+			'ActivePlayerSummary' => $report
+		);
+
+		return $response;
+	}
+}
+
 ?>

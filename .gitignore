@@ -25,3 +25,4 @@ vendor
 ork_history.sql
 Google Maps API Key
 .gitignore-back
+*.sw*

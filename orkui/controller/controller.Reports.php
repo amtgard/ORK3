@@ -7,11 +7,11 @@ class Controller_Reports extends Controller {
 		parent::__construct($call, $method);
 		$this->data['menu']['reports'] = array( 'url' => UIR.'Reports', 'display' => 'Reports' );
 	}
-	
+
 	public function index() {
-	
+
 	}
-	
+
 	function parkheraldry($kingdom_id=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_PARK_DEFAULT;
@@ -19,16 +19,16 @@ class Controller_Reports extends Controller {
 										'Type' => 'Park',
 										'KingdomId' => $kingdom_id
 									));
-	}	
-	
+	}
+
 	function kingdomheraldry($request=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_KINGDOM_DEFAULT;
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Kingdom'
 									));
-	}	
-	
+	}
+
 	function playerheraldry($kingdom_id=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_PLAYER_DEFAULT;
@@ -37,16 +37,16 @@ class Controller_Reports extends Controller {
 										'KingdomId' => $kingdom_id,
 										'ParkId' => $this->request->ParkId
 									));
-	}	
-	
+	}
+
 	function unitheraldry($request=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_UNIT_DEFAULT;
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Unit'
 									));
-	}	
-	
+	}
+
 	function eventheraldry($kingdom_id=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_EVENT_DEFAULT;
@@ -54,8 +54,8 @@ class Controller_Reports extends Controller {
 										'Type' => 'Event',
 										'KingdomId' => $kingdom_id
 									));
-	}	
-	
+	}
+
 	public function guilds($param=null) {
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
@@ -67,7 +67,7 @@ class Controller_Reports extends Controller {
 		}
 		$this->data['Guilds'] = $this->Reports->guilds(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'ReportFromDate'=>date('Y-m-d'), 'PerMonths'=>1, 'Periods'=>6, 'MinimumAttendanceRequirement'=>1));
 	}
-	
+
 	public function player_awards($params=null) {
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
@@ -82,7 +82,7 @@ class Controller_Reports extends Controller {
 		$this->template = 'Reports_playerawards.tpl';
 		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
 	}
-	
+
 	public function knights_and_masters($params=null) {
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
@@ -95,7 +95,7 @@ class Controller_Reports extends Controller {
 		$this->template = 'Reports_kam.tpl';
 		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1));
 	}
-	
+
 	public function attendance($params) {
 		$params = explode('/',$params);
 		$type = 'Park';
@@ -133,14 +133,36 @@ class Controller_Reports extends Controller {
 	public function active($type=null) {
         $kingdom_config = $this->kingdom_config($type);
         $this->data['active_players'] = $this->Reports->active_players(
-                $type, 
-                $this->request->id, 
-                null, 
-                null, 
-                $kingdom_config['KingdomConfiguration']['AttendanceMinimum']['Value'], 
+                $type,
+                $this->request->id,
+                null,
+                null,
+                $kingdom_config['KingdomConfiguration']['AttendanceMinimum']['Value'],
                 $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value']);
 	}
-	
+
+	public function custom($type=null) {
+	    die(json_encode($this->request->Request)); exit;
+        $kingdom_config = $this->kingdom_config($type);
+	$allowed_filters = array(
+	    'excludeBanned',
+	    'isWaivered',
+	    'isDuesPaid',
+	    'numCredits',
+	    'StartDate',
+	    'EndDate',
+	    'attn_morethan',
+	    'attn_lessthan',
+	);
+	foreach ($allowed_filters as $filter) {
+	    if (!empty($this->request->Request->{$filter})) {
+		$filters[] = $this->request->Request->{$filter};
+	    }
+	}
+        $this->data['active_players'] = $this->Reports->custom($type, $filters);
+	//$this->template= 'Reports_custom.tpl';
+	}
+
 	public function active_waivered_duespaid($type=null) {
         $this->_peerage_waivered_duespaid(null, $type);
 	}
@@ -164,15 +186,15 @@ class Controller_Reports extends Controller {
     	$this->data['activewaivereduespaid'] = true;
 		$this->template = 'Reports_active.tpl';
 		$this->data['active_players'] = $this->Reports->active_players(
-            $type, 
-            $this->request->id, 
-            null, 
-            null, 
-            $kingdom_config['KingdomConfiguration']['AttendanceWeeklyMinimum']['Value'], 
-            $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value'], 
-            $dues, 
+            $type,
+            $this->request->id,
+            null,
+            null,
+            $kingdom_config['KingdomConfiguration']['AttendanceWeeklyMinimum']['Value'],
+            $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value'],
+            $dues,
             $waivered,
-            $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value'], 
+            $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value'],
             $kingdom_config['KingdomConfiguration']['MonthlyCreditMaximum']['Value'],
             $peerage);
     }
@@ -189,24 +211,24 @@ class Controller_Reports extends Controller {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 1);
 	}
-	
+
 	public function unwaivered($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 0);
 	}
-	
+
 	public function duespaid($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_duespaid'] = 1;
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1, 0, 2);
 	}
-	
+
 	public function suspended($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_suspension'] = 1;
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, null, null, 2, 1);
 	}
-	
+
 }
 
 ?>
