@@ -1,5 +1,5 @@
 <div class='info-container'>
-	<h3>Class Masters</h3>
+	<h3>Class Masters/Paragons</h3>
 	<table class='information-table'>
 		<thead>
 			<tr>
@@ -11,6 +11,7 @@
 <?php endif; ?>
 				<th>Persona</th>
 				<th>Award</th>
+				<th>Last Attended</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -25,6 +26,7 @@
 <?php 		endif; ?>
 				<td><a href='<?=UIR.'Player/index/'.$award['MundaneId'] ?>'><?=$award['Persona'] ?></a></td>
 				<td><?=$award['AwardName'] ?></td>
+				<td><?=$award['LastAttended'] ?></td>
 			</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
