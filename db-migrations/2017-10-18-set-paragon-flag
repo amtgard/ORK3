@@ -1,0 +1,1 @@
+update `ork_award` set peerage = 'Paragon' WHERE award_id between 37 and 50

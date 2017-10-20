@@ -203,7 +203,6 @@
 					<td>
 						<select name='Role' id="Role">
 							<option value='member'>Member</option>
-							<option value='member'>Data Entry</option>
 							<option value='lord'>Lord</option>
 							<option value='captain'>Captain</option>
 							<option value='organizer'>Organizer</option>

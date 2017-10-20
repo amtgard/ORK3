@@ -1,5 +1,5 @@
 <div class='info-container'>
-	<h3>Kingdom Awards</h3>
+	<h3>Class Masters</h3>
 	<table class='information-table'>
 		<thead>
 			<tr>
@@ -11,8 +11,6 @@
 <?php endif; ?>
 				<th>Persona</th>
 				<th>Award</th>
-				<th>Rank</th>
-				<th>Date</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -27,11 +25,10 @@
 <?php 		endif; ?>
 				<td><a href='<?=UIR.'Player/index/'.$award['MundaneId'] ?>'><?=$award['Persona'] ?></a></td>
 				<td><?=$award['AwardName'] ?></td>
-				<td><?=valid_id($award['Rank'])?$award['Rank']:'' ?></td>
-				<td><?=$award['Date'] ?></td>
 			</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
 		</tbody>
 	</table>
 </div>
+
