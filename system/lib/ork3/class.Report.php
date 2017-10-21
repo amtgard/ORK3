@@ -135,8 +135,9 @@ class Report  extends Ork3 {
 			$location_clause = " and m.park_id = $request[ParkId]";
 		}
                 $masters_clause = "or a.award_id IN (select aw.award_id from " . DB_PREFIX . "award aw where aw.peerage = 'Paragon')";
+		$attendance = "(SELECT max(att.date) FROM " . DB_PREFIX . "attendance att WHERE att.mundane_id = m.mundane_id) as last_attended";
 
-		$sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank
+		$sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, $attendance
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
@@ -162,7 +163,8 @@ class Report  extends Ork3 {
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
 						'Rank' => $r->rank,
-						'AwardName' => $r->award_name
+						'AwardName' => $r->award_name,
+						'LastAttended' => $r->last_attended
 					);
 			} while ($r->next());
 			$response['Status'] = Success();

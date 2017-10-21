@@ -83,7 +83,7 @@
 		</li>
 		<li><a href='<?=UIR ?>Reports/guilds&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Park Guilds</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Player Awards</a></li>
-		<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Class Masters</a></li>
+		<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Class Masters/Paragons</a></li>
 		<li>
 			Attendance
 			<ul>
