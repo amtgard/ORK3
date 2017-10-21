@@ -52,7 +52,7 @@
 			<ul>
 				<li><a href='<?=UIR ?>Reports/knights_and_masters&PrincipalityId=<?=$principality_id ?>'>Knights and Masters</a></li>
 				<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8&PrincipalityId=<?=$principality_id ?>'>Principality-level Awards</a></li>
-				<li><a href='<?=UIR ?>Reports/class_masters&&PrincipalityId=<?=$principality_id ?>'>Class Masters</a></li>
+				<li><a href='<?=UIR ?>Reports/class_masters&&PrincipalityId=<?=$principality_id ?>'>Class Masters/Paragons</a></li>
 				<li><a href='<?=UIR ?>Reports/guilds&PrincipalityId=<?=$principality_id ?>'>Principality Guilds</a></li>
 			</ul>
 		</li>

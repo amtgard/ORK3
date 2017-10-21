@@ -31,7 +31,7 @@
 		<li><a href='<?=UIR ?>Reports/unwaivered'>Unwaivered Players</a></li>
 		<li><a href='<?=UIR ?>Reports/knights_and_masters'>Knights and Masters</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8'>Kingdom-level Awards</a></li>
-		<li><a href='<?=UIR ?>Reports/class_masters'>Class Masters</a></li>
+		<li><a href='<?=UIR ?>Reports/class_masters'>Class Masters/Paragons</a></li>
 		<li><a href='<?=UIR ?>Reports/guilds'>Guilds</a></li>
 		<li>
 			Attendance
