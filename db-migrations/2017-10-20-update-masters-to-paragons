@@ -1,0 +1,1 @@
+update `ork_award` set name = replace(name, 'Master', 'Paragon') WHERE peerage = 'Paragon'
