@@ -1,0 +1,1 @@
+update `ork_awards` awards left join ork_award a on a.award_id = awards.award_id set awards.custom_name = replace(awards.custom_name, 'Master', 'Paragon') where a.peerage = 'Paragon' and awards.date >= '2015-01-01'
