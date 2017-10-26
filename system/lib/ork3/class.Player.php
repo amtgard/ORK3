@@ -921,6 +921,40 @@ class Player extends Ork3 {
 		}
 	}
 	
+	private function revoke_award(& $awards) {
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
+
+			$awards->mundane_id = 0;
+			$awards->revoked = 1;
+			$awards->revoked_at = date("Y-m-d H:i:s");
+			$awards->revocation = $request["Revocation"];
+			$awards->revoked_by_id = $mundane_id;
+
+			$awards->save();
+	}
+	
+	public function RevokeAllAwards($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$awards = new yapo($this->db, DB_PREFIX . 'awards');
+		$awards->clear();
+		$awards->mundane_id = $request['MundaneId'];
+		if (valid_id($request['MundaneId']) && $awards->find() && $mundane_id > 0) {
+			if (valid_id($mundane_id)
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+				
+				while ($awards->next()) {
+					$this->revoke_award($awards);
+				}
+				
+				return Success($awards->awards_id);
+			} else {
+				return InvalidParamter();
+			}
+		} else {
+			return NoAuthorization();
+		}
+	}
+	
 	public function RevokeAward($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$awards = new yapo($this->db, DB_PREFIX . 'awards');
@@ -930,15 +964,7 @@ class Player extends Ork3 {
 			if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 				
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
-
-				$awards->mundane_id = 0;
-				$awards->revoked = 1;
-				$awards->revoked_at = date("Y-m-d H:i:s");
-				$awards->revocation = $request["Revocation"];
-				$awards->revoked_by_id = $mundane_id;
-				
-				$awards->save();
+				$this->revoke_award($awards);
 				
 				return Success($awards->awards_id);
 			} else {
