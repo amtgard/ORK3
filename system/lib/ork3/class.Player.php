@@ -70,7 +70,7 @@ class Player extends Ork3 {
 										$note->date = $this->notes->date;
 										$note->date_complete = $this->notes->date_complete;
 				
-										Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['NotesId'], $note);
+										Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $note->mundane_id, $note);
 									
                     $this->notes->delete();
                     return Success();
