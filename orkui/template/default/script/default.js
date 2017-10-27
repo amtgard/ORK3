@@ -74,7 +74,6 @@ function setExpandMode(container, url, nth, mode) {
 	
 	if ($(container).hasClass('skip-fold'))
 		return;
-
 	
 	hasExpandMode(url);
 	
@@ -96,6 +95,9 @@ function setExpandMode(container, url, nth, mode) {
 }
 
 function getExpandMode(container, url, nth) {
+	if ($(container).hasClass('skip-fold'))
+		return;
+	
 	hasExpandMode(url);
 	var expand = JSON.parse(localStorage.getItem(url));
 	if (nth in expand) {
