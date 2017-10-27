@@ -70,7 +70,7 @@ class Player extends Ork3 {
 										$note->date = $this->notes->date;
 										$note->date_complete = $this->notes->date_complete;
 				
-										Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['NotesId'], $note);
+										Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $note->mundane_id, $note);
 									
                     $this->notes->delete();
                     return Success();
@@ -993,6 +993,9 @@ class Player extends Ork3 {
 					if ($info['Status']['Status'] != 0)
 						return InvalidParameter();
 				}
+				
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
+				
 				$awards->rank = $request['Rank'];
 				$awards->date = $request['Date'];
 				$awards->given_by_id = $request['GivenById'];
@@ -1004,8 +1007,6 @@ class Player extends Ork3 {
 				// Events are awesome.
 				$awards->event_id = valid_id($request['EventId'])?$request['EventId']:0;
 				$awards->save();
-
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
 				
 				return Success($awards->awards_id);
 			} else {
@@ -1048,7 +1049,7 @@ class Player extends Ork3 {
 			if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 
-					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
+					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 				
 					$awards->delete();
 			} else {
