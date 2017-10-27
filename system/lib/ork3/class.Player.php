@@ -921,14 +921,15 @@ class Player extends Ork3 {
 		}
 	}
 	
-	private function revoke_award(& $awards) {
+	private function revoke_award(& $awards, $revocation, $revoker_id) {
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 
+			$awards->stripped_from = $awards->mundane_id;
 			$awards->mundane_id = 0;
 			$awards->revoked = 1;
 			$awards->revoked_at = date("Y-m-d H:i:s");
-			$awards->revocation = $request["Revocation"];
-			$awards->revoked_by_id = $mundane_id;
+			$awards->revocation = $revocation;
+			$awards->revoked_by_id = $revoker_id;
 
 			$awards->save();
 	}
@@ -938,20 +939,21 @@ class Player extends Ork3 {
 		$awards = new yapo($this->db, DB_PREFIX . 'awards');
 		$awards->clear();
 		$awards->mundane_id = $request['MundaneId'];
-		if (valid_id($request['MundaneId']) && $awards->find() && $mundane_id > 0) {
-			if (valid_id($mundane_id)
+		if ($awards->find() && valid_id($mundane_id)) {
+			$mundane = $this->player_info($awards->mundane_id);
+			if (valid_id($request['MundaneId'])
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 				
-				while ($awards->next()) {
-					$this->revoke_award($awards);
-				}
+				do  {
+					$this->revoke_award($awards, $request["Revocation"], $mundane_id);
+				} while ($awards->next());
 				
 				return Success($awards->awards_id);
 			} else {
-				return InvalidParamter();
+				return NoAuthorization();
 			}
 		} else {
-			return NoAuthorization();
+			return InvalidParameter();
 		}
 	}
 	
@@ -961,17 +963,18 @@ class Player extends Ork3 {
 		$awards->clear();
 		$awards->awards_id = $request['AwardsId'];
 		if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
+			$mundane = $this->player_info($awards->mundane_id);
 			if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 				
-				$this->revoke_award($awards);
+				$this->revoke_award($awards, $request["Revocation"], $mundane_id);
 				
 				return Success($awards->awards_id);
 			} else {
-				return InvalidParamter();
+				return NoAuthorization();
 			}
 		} else {
-			return NoAuthorization();
+			return InvalidParameter();
 		}
 	}
 	
@@ -1016,7 +1019,7 @@ class Player extends Ork3 {
 	
 	private function get_award(& $awards) {
 		$award = new stdClass();
-		$award->awards_id = $awards->kingdomaward_id;
+		$award->awards_id = $awards->awards_id;
 		$award->kingdomaward_id = $awards->kingdomaward_id;
 		$award->mundane_id = $awards->mundane_id;
 		$award->unit_id = $awards->unit_id;
