@@ -643,6 +643,8 @@ class Controller_Admin extends Controller {
 			$action = $params[1];
 		if (count($params) > 2)
 			$roastbeef = $params[2];
+		if (count($params) > 3)
+			$detail_param = $params[3];
 
 
 		$thePlayerDetails = $this->Player->fetch_player_details($id);
@@ -776,6 +778,20 @@ class Controller_Admin extends Controller {
 						$r = $this->Player->delete_player_award(array(
 								'Token' => $this->session->token,
 								'AwardsId' => $roastbeef
+							));
+						break;
+					case 'revokeaward':
+						$r = $this->Player->revoke_player_award(array(
+								'Token' => $this->session->token,
+								'AwardsId' => $roastbeef,
+								'Revocation' => $detail_param
+							));
+						break;
+					case 'revokeallawards':
+						$r = $this->Player->revoke_all_awards(array(
+								'Token' => $this->session->token,
+								'MundaneId' => $id,
+								'Revocation' => $roastbeef
 							));
 						break;
 					case 'updateaward':

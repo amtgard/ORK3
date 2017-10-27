@@ -398,6 +398,12 @@
 			else
 				$( '#AwardNameField' ).hide();
 		})
+		$('a.revocation').on('click', function() {
+			$(this).attr('href', $(this).attr('href') + $('input[name=revocation]').val());
+		});
+		$('#burn-it-all').on('submit', function() {
+			$('#burn-it-all').attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' + $('input[name=revocation]').val());
+		});
 	});
 	
 	function Reset() {
@@ -446,6 +452,19 @@
 
 <div class='info-container'>
 	<h3>Awards &amp; Titles</h3>
+	<div class='info-container skip-fold'>
+		<div style='padding: 16px 0'>Strip all or choose from below. Details will be recorded for posterity.</div>
+		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
+			<div>
+				<span>Strip Award Details</span>
+				<input type="text" name="revocation">
+			</div>
+			<div>
+				<span></span>
+				<input type="submit" name="strip-all" value="Strip All Awards">
+			</div>
+		</form>
+	</div>
 	<table class='information-table' id='Awards'>
 		<thead>
 			<tr>
@@ -456,6 +475,7 @@
 				<th>Given At</th>
 				<th>Note</th>
 				<th class='deletion'>&times;</th>
+				<th>Strip</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -469,6 +489,7 @@
 				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td class='award-note'><?=$detail['Note'] ?></td>
 				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='revocation'>Strip</a></td>
 			</tr>
 <?php endforeach ?>
 		</tbody>
