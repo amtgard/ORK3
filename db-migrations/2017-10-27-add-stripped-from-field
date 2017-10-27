@@ -1,0 +1,1 @@
+ALTER TABLE `ork_awards` ADD `stripped_from` INT(11) NOT NULL AFTER `mundane_id`;
