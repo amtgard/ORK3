@@ -362,6 +362,10 @@ a.unimplemented, .unimplemented h3, .unimplemented .form-container input, .unimp
     max-width: 32px;
 }
 
+#simple-menu {
+	display: none;
+}
+
 
 @media (max-width: 425px) {
 	#simple-menu {
