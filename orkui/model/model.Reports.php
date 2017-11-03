@@ -121,7 +121,7 @@ class Model_Reports extends Model {
 	function custom($id, $filters) {
 		$request = array(
 			'id' => $id,
-			'filters' => array(),
+			'filters' => (array)$filters,
 		);
 		$r = $this->Report->Custom($request);
 

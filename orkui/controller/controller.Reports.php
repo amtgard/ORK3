@@ -141,10 +141,19 @@ class Controller_Reports extends Controller {
                 $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value']);
 	}
 
-	public function custom($type=null) {
-	    die(json_encode($this->request->Request)); exit;
+	public function custom() {
+	    //die(json_encode($this->request->Request['isDuesPaid'])); exit;
+		if (isset($this->request->KingdomId)) {
+			$type = 'Kingdom';
+			$id = $this->request->KingdomId;
+		}
+		if (isset($this->request->ParkId)) {
+			$type = 'Park';
+			$id = $this->request->ParkId;
+		}
         $kingdom_config = $this->kingdom_config($type);
 	$allowed_filters = array(
+	    'KingdomId',
 	    'excludeBanned',
 	    'isWaivered',
 	    'isDuesPaid',
@@ -155,11 +164,17 @@ class Controller_Reports extends Controller {
 	    'attn_lessthan',
 	);
 	foreach ($allowed_filters as $filter) {
-	    if (!empty($this->request->Request->{$filter})) {
-		$filters[] = $this->request->Request->{$filter};
+	    if (!empty($this->request->Request[$filter])) {
+	    //die($filter . ' ' . $this->request->Request[$filter]);
+		$filters[$filter] = $this->request->Request[$filter];
 	    }
 	}
-        $this->data['active_players'] = $this->Reports->custom($type, $filters);
+        $this->data['active_players'] = $this->Reports->custom($type, (array)$filters);
+	$this->data['filters'] = (array)$filters;
+
+	// Populate kingdoms dropdown
+	$kingdoms = $this->Kingdom->GetKingdoms($this->request);
+	$this->data['kingdoms'] = $kingdoms['Kingdoms'];
 	//$this->template= 'Reports_custom.tpl';
 	}
 
