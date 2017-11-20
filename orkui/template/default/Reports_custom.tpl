@@ -1,6 +1,12 @@
 <?php
     $total = 0;
 ?>
+<script type='text/javascript'>
+    $(document).ready(function() {
+        $( '#StartDate' ).datepicker({dateFormat: 'yy-mm-dd'});
+        $( '#EndDate' ).datepicker({dateFormat: 'yy-mm-dd'});
+    });
+</script>
 <div class='info-container' id='custom-filters'>
     <h3>Filters</h3>
     <form class='form-container' method='post' action='<?=UIR ?>Reports/custom/<?=$this->__session->kingdom_id ?>'>
@@ -36,13 +42,46 @@
                 </select>
                 <input type='text' class='numeric-field' value='' name='numCredits' />
                 credits gained
+                <div>
+                    <span>Minimum Weeks Attended</span>
+                    <span>
+                        <input type='text' class='numeric-field' value='' name='MinimumWeeklyAttendance' />
+                    </span>
+                </div>
+                <div>
+                    <span>Minimum Daily Attendance</span>
+                    <span>
+                        <input type='text' class='numeric-field' value='' name='MinimumDailyAttendance' />
+                    </span>
+                </div>
+                <div>
+                    <span>Monthly Credit Maximum</span>
+                    <span>
+                        <input type='text' class='numeric-field' value='' name='MonthlyCreditMaximum' />
+                    </span>
+                </div>
             </span>
         </div>
         <div>
-            <span>Date Range:</span>
+            <span>Period</span>
             <span>
-                <input type='text' class='' value='' name='StartDate' />
-                <input type='text' class='' value='' name='EndDate' />
+                <span>Date Range:</span>
+                <span>
+                    <input type='text' class='' value='' name='StartDate' id='StartDate' />
+                    <input type='text' class='' value='' name='EndDate' id='EndDate' />
+                </span>
+                <div>
+                    <span>Months</span>
+                    <span>
+                        <input type='text' class='numeric-field' value='' name='PerMonths' />
+                    </span>
+                </div>
+                <div>
+                    <span>Weeks</span>
+                    <span>
+                        <input type='text' class='numeric-field' value='' name='PerWeeks' />
+                    </span>
+                </div>
             </span>
         </div>
         <div>
@@ -66,6 +105,7 @@
                 <th>Persona</th>
                 <th>Attendance</th>
                 <th>Credits</th>
+                <th>Weeks Attended</th
             </tr>
         </thead>
         <tbody>
@@ -81,6 +121,7 @@
                     <td><?=$player['Persona'] ?></td>
                     <td class='data-column'><?=$player['WeeksAttended'] ?></td>
                     <td class='data-column'><?=$player['TotalCredits'] ?></td>
+                    <td class='data-column'><?=$player['WeeksAttended'] ?></td>
                 </tr>
             <?php endforeach; ?>
             <tr>

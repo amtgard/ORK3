@@ -972,17 +972,28 @@ class Report  extends Ork3 {
         public function Custom($request) {
           // die(json_encode($request));
             if (empty($filters = $request['filters'])) { return array(); }
-            if (strlen($request['MinimumWeeklyAttendance']) == 0) $request['MinimumWeeklyAttendance'] = 0;
-            if (strlen($request['MinimumDailyAttendance']) == 0) $request['MinimumDailyAttendance'] = 6;
-            if (strlen($request['MonthlyCreditMaximum']) == 0) $request['MonthlyCreditMaximum'] = 6;
-            if (strlen($request['MinimumCredits']) == 0) $request['MinimumCredits'] = 9;
-            if (strlen($request['PerWeeks']) == 0 && strlen($request['PerMonths']) == 0) $request['PerMonths'] = 6;
+            if (empty($filters['MinimumWeeklyAttendance'])) $filters['MinimumWeeklyAttendance'] = 0;
+            if (empty($filters['MinimumDailyAttendance'])) $filters['MinimumDailyAttendance'] = 0;
+            if (empty($filters['MonthlyCreditMaximum'])) $filters['MonthlyCreditMaximum'] = 0;
+            if (empty($filters['MinimumCredits']) == 0) $filters['MinimumCredits'] = 0;
+            if (strlen($filters['PerWeeks']) == 0 && strlen($filters['PerMonths']) == 0) $filters['PerMonths'] = 6;
             if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
-            if (strlen($request['PerWeeks']) > 0) {
-                    $per_period = mysql_real_escape_string($request['PerWeeks']) . ' week';
-            } else {
-                    $per_period = mysql_real_escape_string($request['PerMonths']) . ' month';
+
+            $date_range = '';
+            if (!empty($filters['StartDate']) && !empty($filters['EndDate'])) {
+                  $date_range = "and date BETWEEN '" . mysql_real_escape_string($filters['StartDate']) . "' AND '" . mysql_real_escape_string($filters['EndDate']) . "'";
+            } elseif (!empty($filters['StartDate'])) {
+                  $date_range = "and date BETWEEN '" . mysql_real_escape_string($filters['StartDate']) . "' AND curdate()";
+            } elseif(!empty($filters['EndDate'])) {
+                  $date_range = "and date BETWEEN curdate() AND '" . mysql_real_escape_string($filters['EndDate']) . "'";
+
             }
+            if (strlen($filters['PerWeeks']) > 0) {
+                    $per_period = mysql_real_escape_string($filters['PerWeeks']) . ' week';
+            } else {
+                    $per_period = mysql_real_escape_string($filters['PerMonths']) . ' month';
+            }
+            // Todo build filter for StratDate/EndDate
 
             if (valid_id($request['ParkId'])) {
                 $location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
@@ -1040,62 +1051,111 @@ class Report  extends Ork3 {
             } else if ($request['UnWaivered']) {
                     $waiver_clause = ' and m.waivered = 0';
             }
-                $sql = "
-                select main_summary.*, total_monthly_credits, credit_counts.daily_credits, credit_counts.rop_limited_credits
-                    from
+            $sql = "
+            select
+                  main_summary.*,
+                  total_monthly_credits,
+                  credit_counts.daily_credits,
+                  credit_counts.rop_limited_credits
+            from
+                  (select
+                        $peer_field
+                        count(week) as weeks_attended,
+                        sum(weekly_attendance) as park_days_attended,
+                        sum(daily_attendance) as days_attended,
+                        sum(credits_earned) total_credits,
+                        attendance_summary.mundane_id,
+                        mundane.persona,
+                        kingdom.kingdom_id,
+                        park.park_id,
+                        kingdom.name kingdom_name,
+                        kingdom.parent_kingdom_id,
+                        park.name park_name,
+                        attendance_summary.waivered
+                        $duespaid_field
+                  from
                         (select
-                                                        $peer_field count(week) as weeks_attended, sum(weekly_attendance) as park_days_attended, sum(daily_attendance) as days_attended, sum(credits_earned) total_credits, attendance_summary.mundane_id,
-                                                                mundane.persona, kingdom.kingdom_id, park.park_id, kingdom.name kingdom_name, kingdom.parent_kingdom_id, park.name park_name, attendance_summary.waivered $duespaid_field
-                                                from
-                                                        (select
-                                                                        a.park_id > 0 as weekly_attendance, count(a.park_id > 0) as daily_attendance, a.mundane_id,
-                                        week(a.date,3) as week, year(a.date) as year, a.kingdom_id, a.park_id, max(credits) as credits_earned, m.waivered
-                                                                from " . DB_PREFIX . "attendance a
-                                                                        left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
-                                                                where
-                                                                                                m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $park_comparator $location $waiver_clause
-                                                                group by week(date,3), year(date), mundane_id) attendance_summary
-                                                left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
-                                                        left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
-                                                        left join " . DB_PREFIX . "park park on park.park_id = mundane.park_id
-                                                $duespaid_clause
-                            $peerage
-                                                group by mundane_id
-                                                having
-                                                        weeks_attended >= '" . mysql_real_escape_string($request['MinimumWeeklyAttendance']) . "'
-                                and days_attended >= '" . mysql_real_escape_string($request['MinimumDailyAttendance']) . "'
-                                and total_credits >= '" . mysql_real_escape_string($request['MinimumCredits']) . "'
-                                $peerage_clause
-                                                order by $duespaid_order kingdom_name, park_name, persona) main_summary
+                              a.park_id > 0 as weekly_attendance,
+                              count(a.park_id > 0) as daily_attendance,
+                              a.mundane_id,
+                              week(a.date,3) as week,
+                              year(a.date) as year,
+                              a.kingdom_id,
+                              a.park_id,
+                              max(credits) as credits_earned,
+                              m.waivered
+                        from " . DB_PREFIX . "attendance a
+                        left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+                        where
+                              m.suspended = 0
+                              " /*and date > adddate(curdate(), interval -$per_period)*/ . "
+                              $date_range
+                              $park_comparator
+                              $location
+                              $waiver_clause
+                        group by week(date,3), year(date), mundane_id) attendance_summary
+                        left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
+                        left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
+                        left join " . DB_PREFIX . "park park on park.park_id = mundane.park_id
+                        $duespaid_clause
+                        $peerage
+                        group by mundane_id
+                        having
+                              weeks_attended >= '" . mysql_real_escape_string($filters['MinimumWeeklyAttendance']) . "'
+                              and days_attended >= '" . mysql_real_escape_string($filters['MinimumDailyAttendance']) . "'
+                              and total_credits >= '" . mysql_real_escape_string($filters['MinimumCredits']) . "'
+                              $peerage_clause
+                        order by $duespaid_order kingdom_name, park_name, persona) main_summary
                         left join
-                            (select mundane_id, sum(monthly_credits) as total_monthly_credits
-                                from
+                              (select mundane_id, sum(monthly_credits) as total_monthly_credits
+                              from
                                     (select
-                                                                        least(sum(credits), " . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ") as monthly_credits, a.mundane_id
-                                                                from ork_attendance a
-                                                                        left join ork_mundane m on a.mundane_id = m.mundane_id
-                                                                where
-                                                                                                                m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
-                                                                group by month(date), year(date), mundane_id) monthly_list
-                                group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
-                        left join
-                            (select mundane_id, sum(daily_credits) as daily_credits, sum(rop_limited_credits) as rop_limited_credits
-                                from
-                                    (select least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(daily_credits)) as daily_credits, least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(rop_credits)) rop_limited_credits, mundane_id
-                                        from
-                                            (select
-                                                                                max(credits) as daily_credits, 1 as rop_credits, a.mundane_id, a.date
-                                                                        from ork_attendance a
-                                                                                left join ork_mundane m on a.mundane_id = m.mundane_id
-                                                                        where
-                                                                                                                                                m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
-                                                                        group by dayofyear(date), year(date), mundane_id) credit_list_source
-                                                            group by mundane_id, month(`date`)) credit_list
-                                group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id
-                                        ";
+                                          least(sum(credits),
+                                          " . mysql_real_escape_string($filters['MonthlyCreditMaximum']) . ") as monthly_credits,
+                                          a.mundane_id
+                                    from ork_attendance a
+                                    left join ork_mundane m on a.mundane_id = m.mundane_id
+                                    where
+                                          m.suspended = 0
+                                          " /*and date > adddate(curdate(), interval -$per_period)*/ . "
+                                          $date_range
+                                          $location
+                                          $waiver_clause
+                                    group by month(date), year(date), mundane_id) monthly_list
+                                    group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
+                                    left join
+                                    (select
+                                          mundane_id,
+                                          sum(daily_credits) as daily_credits,
+                                          sum(rop_limited_credits) as rop_limited_credits
+                                    from
+                                          (select
+                                                least(" . mysql_real_escape_string($filters['MonthlyCreditMaximum']) . ",
+                                                sum(daily_credits)) as daily_credits,
+                                                least(" . mysql_real_escape_string($filters['MonthlyCreditMaximum']) . ",
+                                                sum(rop_credits)) rop_limited_credits,
+                                                mundane_id
+                                          from
+                                                (select
+                                                      max(credits) as daily_credits,
+                                                      1 as rop_credits,
+                                                      a.mundane_id,
+                                                      a.date
+                                                from ork_attendance a
+                                                left join ork_mundane m on a.mundane_id = m.mundane_id
+                                          where
+                                                m.suspended = 0
+                                                " /*and date > adddate(curdate(), interval -$per_period)*/ . "
+                                                $date_range
+                                                $location
+                                                $waiver_clause
+                                          group by dayofyear(date), year(date), mundane_id) credit_list_source
+                                          group by mundane_id, month(`date`)) credit_list
+                                          group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id
+            ";
                                         // For last join, need to limit monthly credits to monthly credit maximum per kingdom config
                 logtrace('Report: Custom', array($request,$sql));
-                die($sql);
+                //die($sql);
                 $r = $this->db->query($sql);
                 $report = array();
                 if ($r !== false && $r->size() > 0) do {

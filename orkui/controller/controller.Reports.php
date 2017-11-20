@@ -162,6 +162,11 @@ class Controller_Reports extends Controller {
 	    'EndDate',
 	    'attn_morethan',
 	    'attn_lessthan',
+	    'MinimumWeeklyAttendance',
+	    'MinimumDailyAttendance',
+	    'MonthlyCreditMaximum',
+	    'PerMonths',
+	    'PerWeeks',
 	);
 	foreach ($allowed_filters as $filter) {
 	    if (!empty($this->request->Request[$filter])) {
