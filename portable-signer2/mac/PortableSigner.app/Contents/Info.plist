@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleAllowMixedLocalizations</key>
+	<string>true</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>JavaApplicationStub</string>
+	<key>CFBundleGetInfoString</key>
+	<string>PortableSigner 2.0</string>
+	<key>CFBundleIconFile</key>
+	<string>PortableSigner.icns</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>PortableSigner</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>2.0</string>
+	<key>Java</key>
+	<dict>		
+		<key>JVMVersion</key>
+		<string>1.6*</string>
+		<key>MainClass</key>
+		<string>net.pflaeging.PortableSigner.Main</string>
+		<key>ClassPath</key>
+		<array>
+			<string>$JAVAROOT/PortableSigner.jar</string>
+			<string>$JAVAROOT/AbsoluteLayout.jar</string>
+			<string>$JAVAROOT/bcprov-ext-jdk16-146.jar</string>
+			<string>$JAVAROOT/commons-cli-1.2.jar</string>
+			<string>$JAVAROOT/itextpdf-5.1.3.jar</string>
+			<string>$JAVAROOT/swing-layout-1.0.4.jar</string>
+			<string>$JAVAROOT/quaqua.jar</string>
+			<string>$JAVAROOT/</string>
+		</array>
+		<key>Properties</key>
+		<dict>
+			<key>apple.laf.useScreenMenuBar</key>
+			<string>true</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
