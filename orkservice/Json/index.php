@@ -39,6 +39,7 @@
 		'Principality',
 		'Report',
 		'SearchService',
+		'Tools',
 		'Tournament',
 		'Treasury',
 		'Unit'

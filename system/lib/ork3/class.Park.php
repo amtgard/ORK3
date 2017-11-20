@@ -405,31 +405,36 @@ class Park extends Ork3
 		return $name;
 	}
 
+	public function _CreatePark($request) {
+		$this->log->Write( 'Park', $mundane_id, LOG_ADD, $request );
+		$request[ 'Name' ] = $this->unique_username( trim( $request[ 'Name' ] ) );
+		$this->park->clear();
+		$this->park->kingdom_id = $request[ 'KingdomId' ];
+		$this->park->name = $request[ 'Name' ];
+		$this->park->abbreviation = $request[ 'Abbreviation' ];
+		$this->park->active = 'Active';
+		$this->park->modified = date( "Y-m-d H:i:s", time() );
+		$this->park->parktitle_id = $request[ 'ParkTitleId' ];
+		$this->park->save();
+		$t = new Treasury();
+		$t->create_accounts( $mundane_id, 'park', $this->park->park_id, $this->park->kingdom_id );
+		$c = new Common();
+		// Auths for a pricipality's officers travel with the mundane record, so we have to handle that @ the SetOfficer level
+		$c->create_officers( $this->park->kingdom_id, $this->park->park_id, 0 );
+		$c->create_events( $this->park->kingdom_id, $this->park->park_id );
+		if ( strlen( $request[ 'Heraldry' ] ) ) {
+			Ork3::$Lib->heraldry->SetParkHeraldry( $request );
+		}
+		$response = Success( $this->park->park_id );
+		return $response;
+	}
+	
 	public function CreatePark( $request )
 	{
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_ADMIN, $request[ 'KingdomId' ], AUTH_CREATE )
 		) {
-			$this->log->Write( 'Park', $mundane_id, LOG_ADD, $request );
-			$request[ 'Name' ] = $this->unique_username( trim( $request[ 'Name' ] ) );
-			$this->park->clear();
-			$this->park->kingdom_id = $request[ 'KingdomId' ];
-			$this->park->name = $request[ 'Name' ];
-			$this->park->abbreviation = $request[ 'Abbreviation' ];
-			$this->park->active = 'Active';
-			$this->park->modified = date( "Y-m-d H:i:s", time() );
-			$this->park->parktitle_id = $request[ 'ParkTitleId' ];
-			$this->park->save();
-			$t = new Treasury();
-			$t->create_accounts( $mundane_id, 'park', $this->park->park_id, $this->park->kingdom_id );
-			$c = new Common();
-			// Auths for a pricipality's officers travel with the mundane record, so we have to handle that @ the SetOfficer level
-			$c->create_officers( $this->park->kingdom_id, $this->park->park_id, 0 );
-			$c->create_events( $this->park->kingdom_id, $this->park->park_id );
-			if ( strlen( $request[ 'Heraldry' ] ) ) {
-				Ork3::$Lib->heraldry->SetParkHeraldry( $request );
-			}
-			$response = Success( $this->park->park_id );
+			return $this->_CreatePark($request);
 		} else {
 			$response = NoAuthorization();
 		}

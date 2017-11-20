@@ -198,6 +198,17 @@ class Unit extends Ork3 {
 		return NoAuthorization();
 	}
 
+	public function IsMember($request) {
+		$this->members->clear();
+		$this->members->mundane_id = $request['MundaneId'];
+		if (valid_id($request['UnitId']))
+			$this->members->unit_id = $request['UnitId'];
+		else
+			$this->members->name = $request['Name'];
+		$this->members->find();
+		return Success(array('IsMember' => $this->members->size()));
+	}
+	
 	public function RemoveMember($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)) {
