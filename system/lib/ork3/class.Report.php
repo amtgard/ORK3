@@ -644,8 +644,14 @@ class Report  extends Ork3 {
 		$restrict_clause = array();
 		switch ($request['Type']) {
 			case AUTH_PARK:
+				    $kdid  = Ork3::$Lib->park->GetParkKingdomId($request['Id']);
 				$restrict_clause[] = "m.park_id = '" . mysql_real_escape_string($request['Id']) . "'";
-				$dues_restrict_clause = "and (a.kingdom_id = '" . mysql_real_escape_string($request['Id']) . "' or a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
+				    if (!empty($kdid)) {
+					  $restrict_clause[] = "m.kingdom_id = '" . mysql_real_escape_string($kdid) . "'";
+					    $dues_restrict_clause = "and (a.kingdom_id = '" . mysql_real_escape_string($kdid) . "' AND a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
+				    } else {
+					    $dues_restrict_clause = "and (a.kingdom_id = '" . mysql_real_escape_string($request['Id']) . "' OR a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
+				    }
 				$order_by = "p.name";
 				break;
 			case AUTH_KINGDOM:
@@ -681,7 +687,7 @@ class Report  extends Ork3 {
 			$duespaid_clause = 'INNER JOIN
 									(select dues_through, case split_id when null then 0 else 1 end as split_id, src_mundane_id
 										from ' . DB_PREFIX . 'split s
-										left join ' . DB_PREFIX . 'account a on s.account_id = a.account_id
+										INNER join ' . DB_PREFIX . 'account a on s.account_id = a.account_id
 											'.$dues_restrict_clause.'
 											and s.is_dues = 1
 										where s.dues_through > curdate())
