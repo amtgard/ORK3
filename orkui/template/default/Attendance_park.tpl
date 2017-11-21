@@ -190,6 +190,7 @@
 				<th>Player</th>
 				<th>Class</th>
 				<th>Credits</th>
+				<th>Entered By</th>
 				<th class='deletion'>&times;</th>
 			</tr>
 		</thead>
@@ -206,6 +207,7 @@
     <?php endif ; ?>
 				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>
+				<td class='data-column'><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 				<td class='deletion'><a href='<?=UIR ?>Attendance/park/<?=$Id ?>/delete/<?=$detail['AttendanceId'] ?>&AttendanceDate=<?=$AttendanceDate ?>'>&times;</a></td>
 			</tr>
 <?php endforeach ?>

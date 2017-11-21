@@ -1,13 +1,13 @@
 <?php
 
 class Player extends Ork3 {
-	
+
 	public function __construct() {
 		parent::__construct();
 		$this->mundane = new yapo($this->db, DB_PREFIX . 'mundane');
     	$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
 	}
-	
+
     public function GetNotes($request) {
         if (valid_id($request['MundaneId'])) {
             $this->notes->clear();
@@ -26,10 +26,10 @@ class Player extends Ork3 {
         }
         return $notes;
     }
-    
+
     public function AddNote($request) {
     	$thePlayer = $this->player_info($request['MundaneId']);
-		
+
     	if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
                     || $mundane_id == $request['MundaneId'])) {
@@ -43,13 +43,13 @@ class Player extends Ork3 {
             $this->notes->save();
             return Success($this->notes->mundane_note_id);
 		} else {
-    	    return NoAuthorization();   
+    	    return NoAuthorization();
 		}
     }
-    
+
     public function RemoveNote($request) {
 				$note = new stdClass();
-			
+
         logtrace("RemoveNote", $request);
         if (valid_id($request['NotesId'])) {
             $this->notes->clear();
@@ -57,11 +57,11 @@ class Player extends Ork3 {
             $this->notes->mundane_id = $request['MundaneId'];
             if ($this->notes->find()) {
                 $thePlayer = $this->player_info($this->notes->mundane_id);
-                
+
                 if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
         				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
                             || $mundane_id == $request['MundaneId'])) {
-									
+
 										$note->mundane_note_id = $this->notes->mundane_note_id;
 										$note->mundane_id = $this->notes->mundane_id;
 										$note->note = $this->notes->note;
@@ -69,9 +69,9 @@ class Player extends Ork3 {
 										$note->given_by = $this->notes->given_by;
 										$note->date = $this->notes->date;
 										$note->date_complete = $this->notes->date_complete;
-				
+
 										Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $note->mundane_id, $note);
-									
+
                     $this->notes->delete();
                     return Success();
                 }
@@ -81,11 +81,11 @@ class Player extends Ork3 {
         }
         return InvalidParameter('A note must be selected.');
     }
-    
+
 	public function SetPlayerReconciledCredits($request) {
-		
+
 		$thePlayer = $this->player_info($request['MundaneId']);
-		
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
 			$reconciled = new yapo($this->db, DB_PREFIX . 'class_reconciliation');
@@ -106,7 +106,7 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function GetPlayer($request) {
 		$fetchprivate = true;
 		$this->mundane->clear();
@@ -158,7 +158,7 @@ class Player extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function AttendanceForPlayer($request) {
 		$sql = "select a.*, c.name as class_name, p.name as park_name, k.name as kingdom_name, e.name as event_name, e.park_id as event_park_id, e.kingdom_id as event_kingdom_id, ep.name as event_park_name, ek.name as event_kingdom_name
 					from " . DB_PREFIX . "attendance a
@@ -205,19 +205,20 @@ class Player extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function AwardsForPlayer($request) {
 		if (valid_id($request['AwardsId'])) {
 			$player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
 		}
-		$sql = "select distinct awards.*, a.*, ka.name as kingdom_awardname, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona
+		$sql = "select distinct awards.*, a.*, ka.name as kingdom_awardname, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona, bwm.persona as entered_by_persona, bwm.mundane_id as entered_by_id
 					from " . DB_PREFIX . "awards awards
 						left join " . DB_PREFIX . "kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
-							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id 
-						left join " . DB_PREFIX . "park p on p.park_id = awards.at_park_id 
-						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = awards.at_kingdom_id 
-						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id 
-						left join " . DB_PREFIX . "mundane m on m.mundane_id = awards.given_by_id 
+							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+						left join " . DB_PREFIX . "park p on p.park_id = awards.at_park_id
+						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = awards.at_kingdom_id
+						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id
+						left join " . DB_PREFIX . "mundane m on m.mundane_id = awards.given_by_id
+						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
 					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
 					order by
 						a.is_ladder, a.is_title, a.title_class, a.name, awards.rank, awards.date";
@@ -250,6 +251,8 @@ class Player extends Ork3 {
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name,
 						'GivenBy' => $r->persona,
+						'EnteredById' => $r->entered_by_id,
+						'EnteredBy' => $r->entered_by_persona,
 					);
 			} while ($r->next());
 			$response['Status'] = Success();
@@ -258,27 +261,27 @@ class Player extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function GetPlayerClasses($request) {
 		/*
 			This does not prevent double-counting for someone who signs as different classes in the same week
-			
+
 			-- It does now, which is going to piss some people off
-			-- Class double-counting can be added back in by changing 
+			-- Class double-counting can be added back in by changing
 					"group by year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id"
 					to
 					group by ssa.class_id, year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id
-			
+
 
 			-- 2015-06-22
 				Now it really does prevent double-counting, by using a subquery to gather the "first" entry on each date rather
 				than relying on the innodb code to randomly group by date into whatever class (over-counting some classes, under-counting others)
 		ONE PER WEEK
-			
+
 		$sql = "select c.class_id, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
 					from " . DB_PREFIX . "class c
-						left join 
-							(select ssa.class_id, count(ssa.attendance_id) as attendances, max(ssa.credits) as credits, week(ssa.date, 6) as week 
+						left join
+							(select ssa.class_id, count(ssa.attendance_id) as attendances, max(ssa.credits) as credits, week(ssa.date, 6) as week
 								from " . DB_PREFIX . "attendance ssa
 								where
 									ssa.mundane_id = $request[MundaneId]
@@ -289,9 +292,9 @@ class Player extends Ork3 {
 		*/
 		$sql = "select c.class_id, c.active, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
 					from " . DB_PREFIX . "class c
-						left join 
-							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, week(ssa.date, 6) as week 
-								from 
+						left join
+							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, week(ssa.date, 6) as week
+								from
 								(select min(killdupe.attendance_id) as attendance_id from " . DB_PREFIX . "attendance killdupe where killdupe.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' group by killdupe.date) kd
 								left join " . DB_PREFIX . "attendance ssa on ssa.attendance_id = kd.attendance_id
 								where
@@ -325,7 +328,7 @@ class Player extends Ork3 {
 		}
 		return $response;
 	}
-	
+
     public function unique_username($username, $calls = 0) {
 		if ($calls == 0)
 			return false;
@@ -339,18 +342,18 @@ class Player extends Ork3 {
                 $username = $srcname . '-' . substr(md5(microtime()), 0, 5);
                 echo " trying altered name instead ... ";
     		} else {
-        	    $found = true;   
+        	    $found = true;
     		}
 			$calls--;
         } while (!$found && $calls > 0);
         echo " username is available ... ";
         return $username;
     }
-    
+
 	public function CreatePlayer($request) {
 		if (strlen($request['UserName']) < 4)
 			return InvalidParameter('UserNames must be at least 4 characters long.');
-	
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
 			$park = new yapo($this->db, DB_PREFIX . 'park');
@@ -382,14 +385,14 @@ class Player extends Ork3 {
 				$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
 				$this->mundane->password_salt = md5(rand().microtime());
 				$this->mundane->save();
-				
+
 				Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
 
 				if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
-					$waiver = @imagecreatefromstring(base64_decode($request['Waiver'])); 
-					if($waiver !== false) 
-					{ 
-						imagejpeg($waiver, DIR_WAIVERS.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg'); 
+					$waiver = @imagecreatefromstring(base64_decode($request['Waiver']));
+					if($waiver !== false)
+					{
+						imagejpeg($waiver, DIR_WAIVERS.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg');
 						$this->mundane->waivered = 1;
 						$this->mundane->waiver_ext = 'jpg';
 					} else {
@@ -406,10 +409,10 @@ class Player extends Ork3 {
 					$this->mundane->waivered = 0;
 				}
 				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
-					$playerimage = @imagecreatefromstring(base64_decode($request['Image'])); 
-					if($playerimage !== false) 
-					{ 
-						imagejpeg($playerimage, DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg'); 
+					$playerimage = @imagecreatefromstring(base64_decode($request['Image']));
+					if($playerimage !== false)
+					{
+						imagejpeg($playerimage, DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg');
 						$this->mundane->has_image = 1;
 					} else {
 						$this->mundane->has_image = 0;
@@ -430,7 +433,7 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function player_info($id) {
 	    if (strlen($id) == 32)
 	        $id = Ork3::$Lib->authorization->IsAuthorized($id);
@@ -439,49 +442,49 @@ class Player extends Ork3 {
 		if (!$this->mundane->find()) {
 			return false;
 		} else {
-			return array ( 
+			return array (
 				'id' => $this->mundane->mundane_id, 'park_id' => $this->mundane->park_id, 'kingdom_id' => $this->mundane->kingdom_id,
 				'MundaneId' => $this->mundane->mundane_id, 'ParkId' => $this->mundane->park_id, 'KingdomId' => $this->mundane->kingdom_id,
 				'Surname' => $this->mundane->surname, 'GivenName' => $this->mundane->given_name
 				);
 		}
 	}
-	
+
 	public function MergePlayer($request) {
-	
-		if ((($fromMundane = $this->player_info($request['FromMundaneId'])) === false) 
+
+		if ((($fromMundane = $this->player_info($request['FromMundaneId'])) === false)
 				|| (($toMundane = $this->player_info($request['ToMundaneId'])) === false)
 				|| $request['FromMundaneId'] == $request['ToMundaneId']) {
 			return InvalidParameter();
 		}
-		
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
 			return NoAuthorization();
 		}
-	
+
 		if (
-				(($toMundane['KingdomId'] != $fromMundane['KingdomId']) 
-					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) 
-				|| (($toMundane['ParkId'] != $fromMundane['ParkId'] && $toMundane['KingdomId'] == $fromMundane['KingdomId']) 
+				(($toMundane['KingdomId'] != $fromMundane['KingdomId'])
+					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT))
+				|| (($toMundane['ParkId'] != $fromMundane['ParkId'] && $toMundane['KingdomId'] == $fromMundane['KingdomId'])
 					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $toMundane['KingdomId'], AUTH_EDIT))
-				|| (($toMundane['ParkId'] == $fromMundane['ParkId']) 
+				|| (($toMundane['ParkId'] == $fromMundane['ParkId'])
 					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $toMundane['ParkId'], AUTH_EDIT))) {
-			
+
 			$from_player = $this->GetPlayer(array('MundaneId' => $request['FromMundaneId']));
 			$to_player = $this->GetPlayer(array('MundaneId' => $request['ToMundaneId']));
-			
+
 			if ($from_player['Status']['Status'] != 0 || $to_player['Status']['Status'] != 0)
 				return InvalidParameter("One of the players could not be found.");
-				
+
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['FromMundaneId'], $from_player['Player'], $to_player['Player']);
-			
-			$sql = "DELETE FROM 
-						" . DB_PREFIX . "attendance 
-					WHERE 
-						mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "' 
-						AND date in (SELECT date FROM 
+
+			$sql = "DELETE FROM
+						" . DB_PREFIX . "attendance
+					WHERE
+						mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'
+						AND date in (SELECT date FROM
 									(select distinct date from " . DB_PREFIX . "attendance
-										WHERE 
+										WHERE
 											mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "') as d)";
 			$this->db->query($sql);
 			$sql = "update " . DB_PREFIX ."attendance set mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' where mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
@@ -512,13 +515,13 @@ class Player extends Ork3 {
 		} else {
 			return NoAuthorization();
 		}
-	
+
 	}
-	
+
 	public function MovePlayer($request) {
-		
+
 		$player = $this->GetPlayer(array('MundaneId' => $request['MundaneId']));
-		
+
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $request['MundaneId'];
 		$park = new yapo($this->db, DB_PREFIX . 'park');
@@ -527,13 +530,13 @@ class Player extends Ork3 {
 		if (!$this->mundane->find() || !$park->find()) {
 			return InvalidParameter();
 		}
-	
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)		// New Kingdom
 					|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT))) { // Current Kingdom
-				
+
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
-				
+
 			$this->mundane->park_id = $request['ParkId'];
 			$this->mundane->kingdom_id = $park->kingdom_id;
 			$this->mundane->waivered = $request['Waivered']?1:0;
@@ -544,30 +547,30 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function _ClearSuspensions() {
 		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null";
 		$this->db->query($sql);
 	}
-	
+
 	public function SetPlayerSuspension($request) {
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $request['MundaneId'];
 		if (!$this->mundane->find()) {
 			return InvalidParameter();
 		}
-	
+
 		$this->_ClearSuspensions();
-		
+
 		if ($request['MundaneId'] == 1) {
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 			return InvalidParameter('No thanks. This has been logged.');
 		}
-		
+
 		if (!isset($request['Suspended'])) {
 			return InvalidParameter('You must choose a suspension state: ' . print_r($request, 1));
 		}
-	
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT))) {
 			$this->mundane->suspended = $request['Suspended'];
@@ -585,7 +588,7 @@ class Player extends Ork3 {
 			$this->mundane->save();
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 		} else {
-			return NoAuthorization();	
+			return NoAuthorization();
 		}
 	}
 
@@ -593,7 +596,7 @@ class Player extends Ork3 {
 		logtrace("UpdatePlayer()", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		
+
 		if (trimlen($request['UserName']) > 0) {
 			$this->mundane->clear();
 			$this->mundane->username = $request['UserName'];
@@ -603,35 +606,35 @@ class Player extends Ork3 {
 				}
 			}
 		}
-        
+
 		$notices = '';
 		if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)
 			|| $requester_id == $request['MundaneId']) {
-                
+
             if (Ork3::$Lib->authorization->HasAuthority($request['MundaneId'], AUTH_ADMIN, 0, AUTH_EDIT)
                 && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
                 die("You have attempted an illegal operation.  Your attempt has been logged.");
             }
-        
+
 			$player = $this->GetPlayer(array('MundaneId' => $request['MundaneId']));
-		
+
 			$this->mundane->clear();
 			$this->mundane->mundane_id = $request['MundaneId'];
 			if ($this->mundane->find()) {
 				logtrace('Updating player', $request);
-				
+
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
-				
+
 				$this->mundane->modified = date('Y-m-d H:i:s', time());
 				$this->mundane->given_name = is_null($request['GivenName'])?$this->mundane->given_name:$request['GivenName'];
 				$this->mundane->surname = is_null($request['Surname'])?$this->mundane->surname:$request['Surname'];
 				$this->mundane->other_name = is_null($request['OtherName'])?$this->mundane->other_name:$request['OtherName'];
 				$this->mundane->username = is_null($request['UserName'])?$this->mundane->username:$request['UserName'];
 				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:$request['Persona'];
-				
+
 				$this->mundane->reeve_qualified = is_null($request['ReeveQualified'])?$this->mundane->reeve_qualified:$request['ReeveQualified'];
 				$this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil'])?$this->mundane->reeve_qualified_until:$request['ReeveQualifiedUntil'];
-				
+
 				$this->mundane->save();
 				$this->set_waiver($request);
 				$this->mundane->save();
@@ -644,14 +647,14 @@ class Player extends Ork3 {
 					$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365 * 2);
 					$salt = md5(rand().microtime().$this->mundane->email);
 					$this->mundane->password_salt = $salt;
-					
+
 					Authorization::SaltPassword($salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
 				} else {
 					logtrace("No password update", $request['Password']);
 				}
 				logtrace("Mundane DB 2", $this->mundane);
 				$this->mundane->restricted = is_null($request['Restricted'])?$this->mundane->restricted:$request['Restricted']?1:0;
-				
+
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
     				$this->mundane->active = is_null($request['Active'])?$this->mundane->restricted:$request['Active']?1:0;
 				}
@@ -670,12 +673,12 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function SetHeraldry($request) {
 	    logtrace("SetHeraldry", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-	
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
 			    || $requester_id == $request['MundaneId']) {
@@ -710,12 +713,12 @@ class Player extends Ork3 {
         logtrace("set_image", $request);
         $request = $this->media_fetch('Image', $request);
 		if (strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
-			$playerimage = imagecreatefromstring(base64_decode($request['Image'])); 
-			if($playerimage !== false) 
+			$playerimage = imagecreatefromstring(base64_decode($request['Image']));
+			if($playerimage !== false)
 			{
-    			if (file_exists( DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg' )) 
+    			if (file_exists( DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg' ))
                     unlink( DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg' );
-				imagejpeg($playerimage, DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg'); 
+				imagejpeg($playerimage, DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg');
 				$this->mundane->has_image = 1;
 			} else {
 				$notices .= "Image could not be decoded.";
@@ -726,23 +729,23 @@ class Player extends Ork3 {
 		logtrace("set_image() complete", array($request, $notices));
 		return Success($notices);
 	}
-	
+
 	public function set_waiver($request) {
     	logtrace("set_waiver()", $request);
 		$mundane = $this->player_info($request['MundaneId']);
-		
+
 		$notices = '';
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
     			&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
             $request = $this->media_fetch('Waiver', $request);
     		if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
 				logtrace("set_waiver() - image", $request);
-    			$waiver = @imagecreatefromstring(base64_decode($request['Waiver'])); 
-    			if($waiver !== false) 
-    			{ 
-            		if (file_exists( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg' )) 
+    			$waiver = @imagecreatefromstring(base64_decode($request['Waiver']));
+    			if($waiver !== false)
+    			{
+            		if (file_exists( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg' ))
                         unlink( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg' );
-    				imagejpeg($waiver, DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg'); 
+    				imagejpeg($waiver, DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg');
     				$this->mundane->waivered = 1;
     				$this->mundane->waiver_ext = 'jpg';
     			} else {
@@ -753,7 +756,7 @@ class Player extends Ork3 {
 				logtrace("set_waiver() - pdf", $request);
     			$waiver = @base64_decode($request['Waiver']);
     			if ($waiver !== false) {
-                	if (file_exists( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.pdf' )) 
+                	if (file_exists( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.pdf' ))
                         unlink( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.pdf' );
     				file_put_contents(DIR_WAIVERS.(sprintf("%06d",$this->mundane->mundane_id)).'.pdf', $waiver, LOCK_EX);
     				$this->mundane->waivered = 1;
@@ -771,15 +774,15 @@ class Player extends Ork3 {
                 $this->mundane->waivered = 0;
     		}
 		} else {
-    	    logtrace("set_waiver no auth;", 0);   
+    	    logtrace("set_waiver no auth;", 0);
 			return NoAuthorization($notices);
 		}
 		return Success($notices);
 	}
-	
+
 	public function SetRestriction($request) {
 		$mundane = $this->player_info($request['MundaneId']);
-	
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 			$this->mundane->clear();
@@ -795,12 +798,12 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function SetImage($request) {
 	    logtrace("SetImage", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-	
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
 			    || $requester_id == $request['MundaneId']) {
@@ -817,12 +820,12 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function SetWaiver($request) {
 	    logtrace("SetWaiver", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-	
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 			$this->mundane->clear();
@@ -838,7 +841,7 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function SetBan($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
@@ -855,7 +858,7 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function AddAward($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
 			return NoAuthorization();
@@ -868,7 +871,7 @@ class Player extends Ork3 {
 			return InvalidParameter();
 		}
 		$recipient = array ( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
-        
+
         if (valid_id($request['AwardId'])) {
             $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } else if (valid_id($request['KingdomAwardId'])) {
@@ -876,7 +879,7 @@ class Player extends Ork3 {
         } else {
             return InvalidParameter();
         }
-        
+
 		if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_EDIT)) {
 			if (valid_id($request['ParkId'])) {
@@ -887,7 +890,7 @@ class Player extends Ork3 {
 			}
             if (valid_id($request['GivenById']))
     			$given_by = $this->GetPlayer(array('MundaneId' => $request['GivenById']));
-                
+
             logtrace("GivenBy", $given_by);
 			$awards = new yapo($this->db, DB_PREFIX . 'awards');
 			$awards->clear();
@@ -913,14 +916,14 @@ class Player extends Ork3 {
 			// Events are awesome.
 
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
-				
+
 			$awards->save();
 			return Success('');
 		} else {
 			return NoAuthorization();
 		}
 	}
-	
+
 	private function revoke_award(& $awards, $revocation, $revoker_id) {
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 
@@ -933,7 +936,7 @@ class Player extends Ork3 {
 
 			$awards->save();
 	}
-	
+
 	public function RevokeAllAwards($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$awards = new yapo($this->db, DB_PREFIX . 'awards');
@@ -943,11 +946,11 @@ class Player extends Ork3 {
 			$mundane = $this->player_info($awards->mundane_id);
 			if (valid_id($request['MundaneId'])
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
-				
+
 				do  {
 					$this->revoke_award($awards, $request["Revocation"], $mundane_id);
 				} while ($awards->next());
-				
+
 				return Success($awards->awards_id);
 			} else {
 				return NoAuthorization();
@@ -956,7 +959,7 @@ class Player extends Ork3 {
 			return InvalidParameter();
 		}
 	}
-	
+
 	public function RevokeAward($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$awards = new yapo($this->db, DB_PREFIX . 'awards');
@@ -966,9 +969,9 @@ class Player extends Ork3 {
 			$mundane = $this->player_info($awards->mundane_id);
 			if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
-				
+
 				$this->revoke_award($awards, $request["Revocation"], $mundane_id);
-				
+
 				return Success($awards->awards_id);
 			} else {
 				return NoAuthorization();
@@ -977,7 +980,7 @@ class Player extends Ork3 {
 			return InvalidParameter();
 		}
 	}
-	
+
 	public function UpdateAward($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$awards = new yapo($this->db, DB_PREFIX . 'awards');
@@ -993,9 +996,9 @@ class Player extends Ork3 {
 					if ($info['Status']['Status'] != 0)
 						return InvalidParameter();
 				}
-				
+
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
-				
+
 				$awards->rank = $request['Rank'];
 				$awards->date = $request['Date'];
 				$awards->given_by_id = $request['GivenById'];
@@ -1007,7 +1010,7 @@ class Player extends Ork3 {
 				// Events are awesome.
 				$awards->event_id = valid_id($request['EventId'])?$request['EventId']:0;
 				$awards->save();
-				
+
 				return Success($awards->awards_id);
 			} else {
 				return InvalidParamter();
@@ -1016,7 +1019,7 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
-	
+
 	private function get_award(& $awards) {
 		$award = new stdClass();
 		$award->awards_id = $awards->awards_id;
@@ -1037,7 +1040,7 @@ class Player extends Ork3 {
 		$award->award_id = $awards->award_id;
 		return $award;
 	}
-	
+
 	public function RemoveAward($request) {
 		logtrace("RemoveAward()", $request);
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -1050,7 +1053,7 @@ class Player extends Ork3 {
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 
 					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
-				
+
 					$awards->delete();
 			} else {
 				return NoAuthorization();
