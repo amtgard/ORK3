@@ -176,6 +176,7 @@
 				<th>Given By</th>
 				<th>Given At</th>
 				<th>Note</th>
+				<th>Entered By</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -188,6 +189,7 @@
 				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
 				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td><?=$detail['Note'] ?></td>
+				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 			</tr>
 <?php endforeach ?>
 		</tbody>
