@@ -66,8 +66,12 @@ class Controller_Tools extends Controller {
 		}
   }
   
-  public function addchapter($params=null) {
+  public function submitchapter($params=null) {
+		
 	}
 
+	public function digitalsignature($params=null) {
+		
+	}
   
 }

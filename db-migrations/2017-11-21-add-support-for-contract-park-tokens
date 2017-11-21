@@ -1,0 +1,3 @@
+ALTER TABLE `ork_park` ADD `access_key` VARCHAR(32) NULL AFTER `modified`;
+UPDATE `ork_kingdom` SET `name` = 'Uncharted Wastelands', `abbreviation` = 'UW', `parent_kingdom_id` = '0' WHERE `ork_kingdom`.`kingdom_id` = 26;
+ALTER TABLE `ork_park` CHANGE `access_key` `access_key` VARCHAR(32) CHARACTER SET utf8 COLLATE utf8_bin NULL DEFAULT NULL;

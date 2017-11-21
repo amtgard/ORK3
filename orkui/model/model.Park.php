@@ -11,9 +11,9 @@ class Model_Park extends Model {
 		$this->Search = new JSONModel('Search');
 	}
 	
-    function mergeparks($request) {
-        return $this->Park->MergeParks($request);
-    }
+	function mergeparks($request) {
+			return $this->Park->MergeParks($request);
+	}
     
 	function add_park_day($request) {
 		return $this->Park->AddParkDay($request);
