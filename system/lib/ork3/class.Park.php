@@ -135,7 +135,7 @@ class Park extends Ork3
 
 	public function GetParks( $request )
 	{
-		$sql = "select * 
+		$sql = "select *
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "parktitle pt on pt.parktitle_id = p.parktitle_id
 					where p.park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "' and p.parent_park_id > 0
@@ -212,6 +212,16 @@ class Park extends Ork3
 		return $response;
 	}
 
+	public function GetParkKingdomId( $pid )
+	{
+		$this->park->clear();
+		$this->park->park_id = $pid;
+		if ( $this->park->find() ) {
+			return $this->park->kingdom_id;
+		}
+
+		return false;
+	}
 	public function GetParkShortInfo( $request )
 	{
 		$this->park->clear();

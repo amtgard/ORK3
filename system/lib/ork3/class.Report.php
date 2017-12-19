@@ -203,11 +203,12 @@ class Report  extends Ork3 {
 		if (is_array($request['Awards'])) {
 			$awards_clause = 'and in (' . implode(',',$request['Awards']) . ')';
 		}
-		$sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank
+		$sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
 								left join " . DB_PREFIX . "mundane m on m.mundane_id = ma.mundane_id
+								left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = ma.by_whom_id
 									left join " . DB_PREFIX . "park p on p.park_id = m.park_id
 									left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 					where (0 $knights_clause $masters_clause $ladder_clause $title_clause) $location_clause $awards_clause
@@ -230,7 +231,9 @@ class Report  extends Ork3 {
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
 						'Rank' => $r->rank,
-						'AwardName' => $r->award_name
+						'AwardName' => $r->award_name,
+						'EnteredBy' => $r->by_whom_persona,
+						'EnteredById' => $r->by_whom_id
 					);
 			} while ($r->next());
 			$response['Status'] = Success();
@@ -472,10 +475,11 @@ class Report  extends Ork3 {
 		$sql = "select a.*, a.persona as attendance_persona,
 					k.name as kingdom_name, k.parent_kingdom_id, mk.name as from_kingdom_name, mk.parent_kingdom_id as from_parent_kingdom_id,
 					p.name as park_name, p.park_id as park_id, mp.name as from_park_name, mp.park_id as from_park_id,
-					m.persona,
+					m.persona, bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
 					$unit_phrase c.name as class_name, e.event_id, d.event_calendardetail_id, e.name as event_name, d.event_start, d.event_end
 					from " . DB_PREFIX . "attendance a
 						LEFT JOIN " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+						LEFT JOIN " . DB_PREFIX . "mundane bwm on a.by_whom_id = bwm.mundane_id
 							LEFT JOIN " . DB_PREFIX . "kingdom mk on m.kingdom_id = mk.kingdom_id
 							LEFT JOIN " . DB_PREFIX . "park mp on m.park_id = mp.park_id
 						LEFT JOIN " . DB_PREFIX . "kingdom k on a.kingdom_id = k.kingdom_id
@@ -524,6 +528,8 @@ class Report  extends Ork3 {
 						'FromKingdomName' => $r->from_kingdom_name,
 						'FromParkName' => $r->from_park_name,
 						'UnitName' => $r->unit_name,
+						'EnteredBy' => $r->by_whom_persona,
+						'EnteredById' => $r->by_whom_id,
 						'Persona' => $r->persona,
 						'ClassName' => $r->class_name,
         				'AttendancePersona' => $r->attendance_persona,
@@ -644,8 +650,14 @@ class Report  extends Ork3 {
 		$restrict_clause = array();
 		switch ($request['Type']) {
 			case AUTH_PARK:
+				    $kdid  = Ork3::$Lib->park->GetParkKingdomId($request['Id']);
 				$restrict_clause[] = "m.park_id = '" . mysql_real_escape_string($request['Id']) . "'";
-				$dues_restrict_clause = "and (a.kingdom_id = '" . mysql_real_escape_string($request['Id']) . "' or a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
+				    if (!empty($kdid)) {
+					  $restrict_clause[] = "m.kingdom_id = '" . mysql_real_escape_string($kdid) . "'";
+					    $dues_restrict_clause = "and (a.kingdom_id = '" . mysql_real_escape_string($kdid) . "' AND a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
+				    } else {
+					    $dues_restrict_clause = "and (a.kingdom_id = '" . mysql_real_escape_string($request['Id']) . "' OR a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
+				    }
 				$order_by = "p.name";
 				break;
 			case AUTH_KINGDOM:
@@ -681,7 +693,7 @@ class Report  extends Ork3 {
 			$duespaid_clause = 'INNER JOIN
 									(select dues_through, case split_id when null then 0 else 1 end as split_id, src_mundane_id
 										from ' . DB_PREFIX . 'split s
-										left join ' . DB_PREFIX . 'account a on s.account_id = a.account_id
+										INNER join ' . DB_PREFIX . 'account a on s.account_id = a.account_id
 											'.$dues_restrict_clause.'
 											and s.is_dues = 1
 										where s.dues_through > curdate())
