@@ -298,7 +298,7 @@ class Report  extends Ork3 {
 		if (valid_id($request['IncludeEvents'])) $events = " or u.type = 'Event' ";
 		if (valid_id($request['ActiveOnly'])) $active_only = " and um.active = 'Active' ";
 
-		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count, um.unit_mundane_id
+		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count, um.unit_mundane_id, um.mundane_id
 					from " . DB_PREFIX . "unit u
 						left join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id
 							left join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id
@@ -319,7 +319,7 @@ class Report  extends Ork3 {
 					'Name' => $r->name,
 					'Persona' => $r->persona,
 					'MemberCount' => $r->member_count,
-					'UnitMundaneId' => $r->unit_mundane_id
+					'UnitMundaneId' => $r->mundane_id
 				);
 			} while ($r->next());
 		}
