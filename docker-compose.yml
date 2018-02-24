@@ -1,0 +1,31 @@
+version: '2'
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: php.Dockerfile
+    ports:
+     - 80:80
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www/html
+    env_file: .dev.env
+    container_name: ork-app
+    networks:
+      - orknet
+  mysql:
+    image: mariadb
+    ports:
+     - 3306:3306
+    env_file: .dev.env
+    volumes:
+     - data-db:/var/lib/mysql
+    container_name: mysql
+    networks:
+      - orknet
+
+volumes:
+  data-db: {}
+
+networks:
+  orknet:
