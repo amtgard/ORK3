@@ -1,8 +1,11 @@
 <?php
 
-include_once('config.php');
-header("HTTP/1.1 302 Moved Temporarily"); 
-header("Location: https:" . HTTP_UI); 
-
+if (getenv('ENVIRONMENT') == 'DEV') {
+	include_once('config.dev.php');
+} else {
+	include_once('config.php');
+	header("HTTP/1.1 302 Moved Temporarily");
+	header("Location: https:" . HTTP_UI);
+}
 
 ?>

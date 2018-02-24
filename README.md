@@ -25,3 +25,13 @@ Copy `config.dev.php` to `config.php`. Make sure to change the admin email to yo
 ### View the Site
 
 You can now view the site at http://servername/ork/orkui/.
+
+### Using Docker
+A docker-compose file is setup for quickly getting the environment running locally. With an up to date version of docker you can run
+```
+docker-compose up
+```
+
+You will still need to hydrate the database from a backup. If you have other environments using port 80 you may need to change the exposed port in the docker-compose file to keep from conflicting. Same goes for 3306 for the database. Out of the box and without port conflicts you should be able to run the command above, import the DB to the 'ork' database, and begin work. You may want to adjust the error reporting in config.dev.php as the codebase is old and uses deprecated methods and throws notices/deprecation messages
+
+A .dev.env is setup to set the database credentials. Currently this is set to what is currently in the default config.dev.php file.

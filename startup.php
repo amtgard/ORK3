@@ -1,6 +1,10 @@
 <?php
 
-include_once( dirname( __FILE__ ) . '/config.php' );
+if (getenv('ENVIRONMENT') == 'DEV') {
+	include_once( dirname( __FILE__ ) . '/config.dev.php');
+} else {
+	include_once( dirname( __FILE__ ) . '/config.php' );
+}
 
 // System Setup
 
