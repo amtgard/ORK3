@@ -128,7 +128,7 @@
 			<span><input type='text' value='<?=$Admin_suspendplayer['Suspension'] ?>' name='Suspension' /></span>
 		</div>
 		<div>
-			<span style='vertical-align: middle'><b>Free Willy?</b></span>
+			<span style='vertical-align: middle'><b>Restore (Unsuspend)?</b></span>
 			<span style='height: 3em;'><input style='transform: scale(3); position: relative; top: 1em; left: 1em;' type='checkbox' value='<?=$Admin_suspendplayer['Suspended'] ?>' name='Suspended' CHECKED /></span>
 		</div>
 		<div>

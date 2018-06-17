@@ -83,7 +83,7 @@
 			<span>Waivered:</span>
 			<span>
 				<input type='radio' value='Waivered' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"CHECKED":"" ?> name='Waivered' id='Waivered' /><label for='Waivered'>Waivered</label>
-				<input type='radio' value='Lawsuit Bait' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"":"CHECKED" ?> name='Waivered' id='NonWaivered' /><label for='NonWaivered'>Lawsuit Bait</label>
+				<input type='radio' value='Lawsuit Bait' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"":"CHECKED" ?> name='Waivered' id='NonWaivered' /><label for='NonWaivered'>No Waiver</label>
 			</span>
 		</div>
 		<div>

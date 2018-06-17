@@ -68,7 +68,7 @@
 		</div>
 	<?php endif; ?>
 		<div>
-			<span>Active:</span>
+			<span>Enabled:</span>
 			<span><input type='checkbox' value='Active' <?=(($Player['Active'])==1 && ($Player['Suspended'])==0)?"CHECKED":"" ?> DISABLED name='Active' id='Active' /></span>
 		</div>
 		<div>
