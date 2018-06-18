@@ -178,7 +178,7 @@ class Report  extends Ork3 {
 		$key = Ork3::$Lib->ghettocache->key(array('KingdomId' => $kingdom_id));
     if (!valid_id($kingdom_id))
       return false;
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false && false)
 			return $cache;
 
     $sql = "select m.mundane_id, m.persona, ducal_terms.ducal_points, kingdom_terms.kingdom_points from
@@ -214,14 +214,18 @@ class Report  extends Ork3 {
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
 			do {
+        $name = array();
+        if ($r->kingdom_points > 0)
+          $name[] = $r->kingdom_points . ' Kingdom Points';
+        if ($r->ducal_points > 0)
+          $name[] = $r->ducal_points . ' Ducal Points';
 				$response['Awards'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
 						'KingdomId' => $kingdom_id,
             'DucalPoints' => $r->ducal_points,
             'KingdomPoints' => $r->kingdom_points,
-						'Rank' => max($r->ducal_points, $r->kingdom_points),
-						'AwardName' => max($r->ducal_points, $r->kingdom_points) . " " . ($r->kingdom_points > 0 ? "Kingdom Points" : "Ducal Points" )
+						'AwardName' => implode(', ', $name)
 					);
 			} while ($r->next());
 			$response['Status'] = Success();
