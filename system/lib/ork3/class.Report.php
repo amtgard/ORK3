@@ -175,7 +175,7 @@ class Report  extends Ork3 {
 	}
 
   public function CrownQualed($kingdom_id) {
-		$key = Ork3::$Lib->ghettocache->key($kingdom_id);
+		$key = Ork3::$Lib->ghettocache->key(array('KingdomId' => $kingdom_id));
     if (!valid_id($kingdom_id))
       return false;
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
