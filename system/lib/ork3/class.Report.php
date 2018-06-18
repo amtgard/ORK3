@@ -178,7 +178,7 @@ class Report  extends Ork3 {
 		$key = Ork3::$Lib->ghettocache->key(array('KingdomId' => $kingdom_id));
     if (!valid_id($kingdom_id))
       return false;
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false && false)
 			return $cache;
 
     $sql = "select m.mundane_id, m.persona, ducal_terms.ducal_points, kingdom_terms.kingdom_points from
@@ -214,7 +214,7 @@ class Report  extends Ork3 {
                   group by mundane_id, peerage) kingdom_terms
                 on m.mundane_id = kingdom_terms.mundane_id
               where m.kingdom_id = $kingdom_id and (ducal_terms.mundane_id is not null or kingdom_terms.mundane_id is not null)
-                and (kingdom_points >= 4 or ducal_points >= 6)
+                and (kingdom_points >= 4 or (kingdom_points + ducal_points) >= 6)
                 order by m.mundane_id";
     logtrace("CrownQualedPlayerAwards", $sql);
 		$r = $this->db->query($sql);
@@ -225,8 +225,8 @@ class Report  extends Ork3 {
         $name = array();
         if ($r->kingdom_points > 0)
           $name[] = $r->kingdom_points . ' Kingdom Points';
-        if ($r->ducal_points > 0)
-          $name[] = $r->ducal_points . ' Ducal Points';
+        if ($r->ducal_points > 0 || $r->kingdom_points)
+          $name[] = ($r->ducal_points + $r->kingdom_points) . ' Ducal Points';
 				$response['Awards'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
