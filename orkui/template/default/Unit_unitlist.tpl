@@ -8,7 +8,6 @@
 			<tr>
 				<th>Type</th>
 				<th>Name</th>
-				<th>Owner</th>
 				<th>Members</th>
 			</tr>
 		</thead>
@@ -18,7 +17,6 @@
 			<tr onclick='javascript:window.location.href="<?=UIR ?>Unit/index/<?=$unit['UnitId']; ?>";'>
 				<td><?=$unit['Type']; ?></td>
 				<td><a href='<?=UIR ?>Unit/index/<?=$unit['UnitId'] ?>'><?=$unit['Name']; ?></a></td>
-				<td><a href='<?=UIR ?>Player/index/<?=$unit['UnitMundaneId'] ?>'><?=$unit['Persona']; ?></a></td>
 				<td class='data-column'><?=$unit['MemberCount'] ?></td>
 			</tr>
 	<?php endforeach; ?>

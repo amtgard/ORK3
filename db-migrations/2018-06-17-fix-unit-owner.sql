@@ -1,0 +1,1 @@
+ALTER TABLE `ork_unit_mundane` CHANGE `role` `role` ENUM('captain','lord','member','owner') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL;
