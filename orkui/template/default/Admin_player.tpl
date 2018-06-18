@@ -424,6 +424,7 @@
 	}
 
 	function EditAward(id) {
+    return;
         Reset();
 		$( '#award-editor h3' ).text('Update Award');
 		$( '#award-editor form' ).attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/updateaward/' + id.toString() );
