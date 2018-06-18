@@ -178,14 +178,18 @@ class Report  extends Ork3 {
 		$key = Ork3::$Lib->ghettocache->key(array('KingdomId' => $kingdom_id));
     if (!valid_id($kingdom_id))
       return false;
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false && false)
 			return $cache;
 
     $sql = "select m.mundane_id, m.persona, ducal_terms.ducal_points, kingdom_terms.kingdom_points from
               ork_mundane m
               left join 
-                (select mundane_id, sum(terms) * crown_points as ducal_points from
-                  (SELECT m.mundane_id, if(crown_limit > 0, least(count(*), crown_limit), count(*)) terms, count(*) tours, crown_points, crown_limit, peerage 
+                (select mundane_id, sum(tour_points) as ducal_points from
+                  (SELECT 
+                      m.mundane_id, 
+                        if(crown_limit > 0, least(count(*), crown_limit), count(*)) terms, count(*) tours, 
+                        crown_points, crown_limit, peerage,
+                        if(crown_limit > 0, least(count(*), crown_limit), count(*)) * crown_points tour_points
                     FROM `ork_awards` awards
                       left join ork_kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
                       left join ork_mundane m on awards.mundane_id = m.mundane_id
@@ -195,8 +199,12 @@ class Report  extends Ork3 {
                   group by mundane_id, peerage) ducal_terms
                 on m.mundane_id = ducal_terms.mundane_id
               left join
-                (select mundane_id, sum(terms) * crown_points as kingdom_points from
-                  (SELECT m.mundane_id, if(crown_limit > 0, least(count(*), crown_limit), count(*)) terms, count(*) tours, crown_points, crown_limit, peerage 
+                (select mundane_id, sum(tour_points) as kingdom_points from
+                  (SELECT  
+                      m.mundane_id, 
+                        if(crown_limit > 0, least(count(*), crown_limit), count(*)) terms, count(*) tours, 
+                        crown_points, crown_limit, peerage,
+                        if(crown_limit > 0, least(count(*), crown_limit), count(*)) * crown_points tour_points 
                     FROM `ork_awards` awards
                       left join ork_kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
                       left join ork_mundane m on awards.mundane_id = m.mundane_id
