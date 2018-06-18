@@ -96,7 +96,7 @@ class Controller_Reports extends Controller {
 		$this->data['Awards'] = $this->Reports->class_masters(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0));
 	}
 
-	public function knights_and_masters($params=null) {
+  public function _kam($params, $template, $knights, $masters) {
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;
@@ -105,8 +105,24 @@ class Controller_Reports extends Controller {
 			$type = 'Park';
 			$id = $this->request->ParkId;
 		}
-		$this->template = 'Reports_kam.tpl';
-		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1));
+		$this->template = $template;
+		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => $knights, 'IncludeMasters' => $masters));
+    if ($type == 'Kingdom' && valid_id($id) && $masters) {
+      $cqual = $this->Reports->crown_qualed(array('KingdomId'=>$id));
+      $this->data['Awards'] = array_merge($cqual, $this->data['Awards']);
+    }
+  }
+  
+	public function masters_list($params=null) {
+    $this->_kam($params, 'Reports_kam.tpl', 0, 1);
+	}
+
+	public function knights_list($params=null) {
+    $this->_kam($params, 'Reports_kam.tpl', 1, 0);
+	}
+
+	public function knights_and_masters($params=null) {
+    $this->_kam($params, 'Reports_kam.tpl', 1, 1);
 	}
 
 	public function attendance($params) {

@@ -174,6 +174,63 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
+  public function CrownQualed($kingdom_id) {
+		$key = Ork3::$Lib->ghettocache->key($kingdom_id);
+    if (!valid_id($kingdom_id))
+      return false;
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+    $sql = "select m.mundane_id, m.persona, ducal_terms.ducal_points, kingdom_terms.kingdom_points from
+              ork_mundane m
+              left join 
+                (select mundane_id, sum(terms) * crown_points as ducal_points from
+                  (SELECT m.mundane_id, if(crown_limit > 0, least(count(*), crown_limit), count(*)) terms, count(*) tours, crown_points, crown_limit, peerage 
+                    FROM `ork_awards` awards
+                      left join ork_kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
+                      left join ork_mundane m on awards.mundane_id = m.mundane_id
+                      left join ork_award a on ka.award_id = a.award_id
+                    where crown_points > 0 and m.kingdom_id = $kingdom_id and peerage = 'None'
+                    group by m.mundane_id, a.award_id) dterms
+                  group by mundane_id, peerage) ducal_terms
+                on m.mundane_id = ducal_terms.mundane_id
+              left join
+                (select mundane_id, sum(terms) * crown_points as kingdom_points from
+                  (SELECT m.mundane_id, if(crown_limit > 0, least(count(*), crown_limit), count(*)) terms, count(*) tours, crown_points, crown_limit, peerage 
+                    FROM `ork_awards` awards
+                      left join ork_kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
+                      left join ork_mundane m on awards.mundane_id = m.mundane_id
+                      left join ork_award a on ka.award_id = a.award_id
+                    where crown_points > 0 and m.kingdom_id = $kingdom_id and peerage = 'Kingdom-Level-Award'
+                    group by m.mundane_id, a.award_id) kterms
+                  group by mundane_id, peerage) kingdom_terms
+                on m.mundane_id = kingdom_terms.mundane_id
+              where m.kingdom_id = $kingdom_id and (ducal_terms.mundane_id is not null or kingdom_terms.mundane_id is not null)
+                and (kingdom_points >= 4 or ducal_points >= 6)
+                order by m.mundane_id";
+    logtrace("CrownQualedPlayerAwards", $sql);
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['Awards'] = array();
+			do {
+				$response['Awards'][] = array(
+						'MundaneId' => $r->mundane_id,
+						'Persona' => $r->persona,
+						'KingdomId' => $kingdom_id,
+            'DucalPoints' => $r->ducal_points,
+            'KingdomPoints' => $r->kingdom_points,
+						'Rank' => max($r->ducal_points, $r->kingdom_points),
+						'AwardName' => max($r->ducal_points, $r->kingdom_points) . " " . ($r->kingdom_points > 0 ? "Kingdom Points" : "Ducal Points" )
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+  }
+  
 	public function PlayerAwards($request) {
 
 		$key = Ork3::$Lib->ghettocache->key($request);
