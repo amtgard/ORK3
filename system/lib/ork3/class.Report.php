@@ -214,7 +214,7 @@ class Report  extends Ork3 {
                   group by mundane_id, peerage) kingdom_terms
                 on m.mundane_id = kingdom_terms.mundane_id
               where m.kingdom_id = $kingdom_id and (ducal_terms.mundane_id is not null or kingdom_terms.mundane_id is not null)
-                and (kingdom_points >= 4 or (kingdom_points + ducal_points) >= 6)
+                and (kingdom_points >= 4 or (kingdom_points + ducal_points) >= 6 or ducal_points >= 6)
                 order by m.mundane_id";
     logtrace("CrownQualedPlayerAwards", $sql);
 		$r = $this->db->query($sql);

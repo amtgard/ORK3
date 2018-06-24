@@ -1,0 +1,1 @@
+UPDATE `ork_award` SET `crown_points` = '1' WHERE `ork_award`.`award_id` = 73; UPDATE `ork_award` SET `crown_points` = '1' WHERE `ork_award`.`award_id` = 74;
