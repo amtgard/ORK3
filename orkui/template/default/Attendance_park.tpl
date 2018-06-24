@@ -149,11 +149,11 @@
 		</div>
 		<div>
 			<span>Player's Park:</span>
-			<span><input type='text' class='required-field' value='<?=trimlen($Attendance_index['ParkName'])?$Attendance_index['ParkName']:$DefaultParkName ?>' name='ParkName' id='ParkName' /></span>
+			<span><input type='text' class='required-field' value="<?=html_encode(trimlen($Attendance_index['ParkName'])?$Attendance_index['ParkName']:$DefaultParkName) ?>" name='ParkName' id='ParkName' /></span>
 		</div>
 		<div>
 			<span>Player:</span>
-			<span><input type='text' class='required-field' value='<?=$Attendance_index['PlayerName'] ?>' name='PlayerName' id='PlayerName' /></span>
+			<span><input type='text' class='required-field' value="<?=html_encode($Attendance_index['PlayerName']) ?>" name='PlayerName' id='PlayerName' /></span>
 		</div>
 		<div>
 			<span>Class:</span>
