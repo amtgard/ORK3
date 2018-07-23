@@ -16,14 +16,6 @@
 			</span>
 		</div>
 		<div>
-			<span>Waiver:</span>
-			<span>
-				<img class='heraldry-img' src='<?=$Player['Waivered']>0?(($Player['WaiverExt']=='pdf')?HTTP_WAIVERS.'pdf.gif':$Player['Waiver']):HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
-				<div class='form-informational-field'><?=$Player['Waivered']>0?"<a href='$Player[Waiver]'>Waiver</a>":"No Waiver" ?></div>
-				<input type='file' class='restricted-document-type' name='Waiver' id='Waiver' />
-			</span>
-		</div>
-		<div>
 			<span></span>
 			<span><input type='submit' value='Update Media' name='Update' /></span>
 		</div>
@@ -74,17 +66,6 @@
 		<div>
 			<span>Company:</span>
 			<span class='form-informational-field'><?=isset($Admin_player)?$Admin_player['Company']:$Player['Company'] ?></span>
-		</div>
-		<div>
-			<span>Penalty Box:</span>
-			<span><input type='checkbox' value='Penalty' <?=((isset($Admin_player)?$Admin_player['PenaltyBox']:$Player['PenaltyBox'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
-		</div>
-    	<div>
-			<span>Waivered:</span>
-			<span>
-				<input type='radio' value='Waivered' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"CHECKED":"" ?> name='Waivered' id='Waivered' /><label for='Waivered'>Waivered</label>
-				<input type='radio' value='Lawsuit Bait' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"":"CHECKED" ?> name='Waivered' id='NonWaivered' /><label for='NonWaivered'>No Waiver</label>
-			</span>
 		</div>
 		<div>
 			<span>Retired:</span>

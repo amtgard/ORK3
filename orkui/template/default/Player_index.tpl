@@ -13,13 +13,6 @@
 				<img class='heraldry-img' src='<?=$Player['HasImage']>0?HTTP_PLAYER_IMAGE . sprintf('%06d', $Player['MundaneId']) . '.jpg':HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
 			</span>
 		</div>
-		<div>
-			<span>Waiver:</span>
-			<span>
-				<img class='heraldry-img' src='<?=$Player['Waivered']>0?(($Player['WaiverExt']=='pdf')?HTTP_WAIVERS.'pdf.gif':$Player['Waiver']):HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
-				<div class='form-informational-field'><?=$Player['Waivered']>0?"<a href='$Player[Waiver]'>Waiver</a>":"No Waiver" ?></div>
-			</span>
-		</div>
 	</form>
 </div>
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
@@ -43,7 +36,7 @@
 		</div>
 		<div>
 			<span>Restricted:</span>
-			<span><input type='checkbox' value='Penalty' <?=($Player['Restricted'])==1?"Checked":"" ?> DISABLED name='Restricted' id='Restricted' /></span>
+			<span><input type='checkbox' value='Restricted' <?=($Player['Restricted'])==1?"Checked":"" ?> DISABLED name='Restricted' id='Restricted' /></span>
 		</div>
 		<div>
 			<span>Company:</span>
