@@ -43,6 +43,10 @@
 			<span class='form-informational-field'><?=$Player['Company'] ?></span>
 		</div>
 		<div>
+			<span>Waivered:</span>
+			<span><input type='checkbox' value='Waivered' <?=($Player['Waivered'])==1?"Checked":"" ?> DISABLED name='Waivered' id='Waivered' /></span>
+		</div>
+		<div>
 			<span>Suspended:</span>
 			<span><input type='checkbox' value='Suspended' <?=(($Player['Suspended'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
 		</div>

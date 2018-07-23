@@ -67,6 +67,19 @@
 			<span>Company:</span>
 			<span class='form-informational-field'><?=isset($Admin_player)?$Admin_player['Company']:$Player['Company'] ?></span>
 		</div>
+    <!--
+		<div>
+			<span>Penalty Box:</span>
+			<span><input type='checkbox' value='Penalty' <?=((isset($Admin_player)?$Admin_player['PenaltyBox']:$Player['PenaltyBox'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
+		</div>
+    -->
+  	<div>
+			<span>Waivered:</span>
+			<span>
+				<input type='radio' value='Waivered' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"CHECKED":"" ?> name='Waivered' id='Waivered' /><label for='Waivered'>Waivered</label>
+				<input type='radio' value='Lawsuit Bait' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"":"CHECKED" ?> name='Waivered' id='NonWaivered' /><label for='NonWaivered'>No Waiver</label>
+			</span>
+		</div>
 		<div>
 			<span>Retired:</span>
 			<span>
