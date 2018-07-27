@@ -116,7 +116,7 @@
     <ul>
         <li>
             <a href='<?=UIR ?>Atlas'>
-                <img style='display: block; padding: 4px; margin: 6px 0; border-radius: 4px; border: 1px solid #ccc;' src='/ork/orkui/template/default/img/map.jpg' />
+                <img style='display: block; padding: 4px; margin: 6px 0; border-radius: 4px; border: 1px solid #ccc;' src='<?=HTTP_UI . '/template/default/img/map.jpg' ?>' />
                 Amtgard Atlas Map 
             </a>
         </li>
