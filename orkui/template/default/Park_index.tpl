@@ -24,12 +24,26 @@
 <div class='info-container'>
 	<h3>Park Days</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/editpark/<?=$ParkId ?>&Action=config'>
+    <style>
+      .address-row {
+        max-width: 10vw;
+      }
+      @media only screen and (max-width: 800px) {
+        .address-row {
+          max-width: 30vw;
+        }
+        .park-day-type {
+          display: none;
+        }
+      }
+    </style>
 		<table class='information-table'>
 			<thead>
 				<tr>
 					<th>When</th>
 					<th>Time</th>
-					<th>Purpose</th>
+					<th class='park-day-type'>Purpose</th>
+					<th>Map</th>
 					<th>Location</th>
 				</tr>
 			</thead>
@@ -46,7 +60,7 @@
 ?>
 				</td>
 				<td><?=date('g:i A', strtotime($day['Time'])) ?></td>
-				<td>
+				<td class='park-day-type'>
 <?php 
 	switch($day['Purpose']) { 
 		case 'park-day': echo 'Regular Park Day'; break; 
@@ -71,7 +85,9 @@
     $mapname = "Regular Park";
   }
 ?>
-          <a target='_new' href='<?=$mapurl ?>'><?=$mapname ?></a></td>
+          <a target='_new' href='<?=$mapurl ?>'><?=$mapname ?></a>
+        </td>
+				<td class='address-row'><?=$day['Address'] ?></td>
 			</tr>
 <?php endforeach; ?>
 			</tbody>
