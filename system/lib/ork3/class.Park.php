@@ -91,12 +91,16 @@ class Park extends Ork3
 			$this->parkday->alternate_location = $request[ 'AlternateLocation' ];
 
 			if ( $request[ 'AlternateLocation' ] > 0 ) {
+     		logtrace( 'AddParkDay.AlternateLocation', null );
 				$this->parkday->address = $request[ 'Address' ];
 				$this->parkday->city = $request[ 'City' ];
 				$this->parkday->province = $request[ 'Province' ];
 				$this->parkday->postal_code = $request[ 'PostalCode' ];
 				$this->parkday->map_url = $request[ 'MapUrl' ];
+     		logtrace( 'AddParkDay', array( $this->parkday, $request ) );
+        $this->park_geocode_h(null, $this->parkday);
 			} else {
+     		logtrace( 'AddParkDay.NormalLocation', null );
 				$this->park->clear();
 				$this->park->park_id = $request[ 'ParkId' ];
 				$this->park->find();
@@ -104,6 +108,10 @@ class Park extends Ork3
 				$this->parkday->city = $this->park->city;
 				$this->parkday->province = $this->park->province;
 				$this->parkday->postal_code = $this->park->postal_code;
+				$this->parkday->latitude = $this->park->latitude;
+				$this->parkday->longitude = $this->park->longitude;
+				$this->parkday->google_geocode = $this->park->google_geocode;
+				$this->parkday->location = $this->park->location;
 				$this->parkday->map_url = $this->park->map_url;
 			}
 			$this->parkday->location_url = $request[ 'LocationUrl' ];
@@ -335,6 +343,8 @@ class Park extends Ork3
 					'City'              => $parkday->city,
 					'Province'          => $parkday->province,
 					'PostalCode'        => $parkday->postal_code,
+					'GoogleGeocode'     => $parkday->google_geocode,
+					'Location'          => $parkday->location,
 					'MapUrl'            => $parkday->map_url,
 					'LocationUrl'       => $parkday->location_url,
 				];
@@ -367,36 +377,40 @@ class Park extends Ork3
 		return $response;
 	}
 
-	public function park_geocode_h( $geocode = null )
+	public function park_geocode_h( $geocode = null, & $parkobject = null )
 	{
+    $parkobject = is_null($parkobject) ? $this->park : $parkobject;
+ 		logtrace( 'park_geocode_h', $parkobject );
+
 		if ( trimlen( $geocode ) > 0 ) {
 			$details = Common::Geocode( null, null, null, null, $geocode );
 		} else {
-			$details = Common::Geocode( $this->park->address, $this->park->city, $this->park->province, $this->park->postal_code );
+			$details = Common::Geocode( $parkobject->address, $parkobject->city, $parkobject->province, $parkobject->postal_code );
 		}
 		if ( $details[ 'status' ] == 'OVER_QUERY_LIMIT' )
 			return;
 		$geocode = json_decode( $details[ 'Geocode' ] );
-		logtrace( 'park_geocode_h', $details );
-		$this->park->latitude = $geocode->results[ 0 ]->geometry->location->lat;
-		$this->park->longitude = $geocode->results[ 0 ]->geometry->location->lng;
-		$this->park->google_geocode = $details[ 'Geocode' ];
-		$this->park->location = $details[ 'Location' ];
-		$this->park->address = $details[ 'Address' ];
-		if ( isset( $details[ 'City' ] ) ) $this->park->city = $details[ 'City' ];
-		if ( isset( $details[ 'Province' ] ) ) $this->park->province = $details[ 'Province' ];
-		if ( isset( $details[ 'PostalCode' ] ) ) $this->park->postal_code = $details[ 'PostalCode' ];
+		$parkobject->latitude = $geocode->results[ 0 ]->geometry->location->lat;
+		$parkobject->longitude = $geocode->results[ 0 ]->geometry->location->lng;
+		$parkobject->google_geocode = $details[ 'Geocode' ];
+		$parkobject->location = $details[ 'Location' ];
+		$parkobject->address = $details[ 'Address' ];
+		if ( isset( $details[ 'City' ] ) ) $parkobject->city = $details[ 'City' ];
+		if ( isset( $details[ 'Province' ] ) ) $parkobject->province = $details[ 'Province' ];
+		if ( isset( $details[ 'PostalCode' ] ) ) $parkobject->postal_code = $details[ 'PostalCode' ];
 	}
 
 	public function ParkGeocode( $park_id )
 	{
-		$this->park->clear();
-		$this->park->park_id = $park_id;
-		if ( $this->park->find() && $this->park->park_id == $park_id ) {
-			if ( $this->park_geocode_h() ) {
-				$this->park->save();
+    $parkobject = is_null($parkobject) ? $this->park : $parkobject;
+    
+		$parkobject->clear();
+		$parkobject->park_id = $park_id;
+		if ( $parkobject->find()) do {
+			if ( $parkobject->park_id == $park_id && $this->park_geocode_h(null, $parkobject) ) {
+				$parkobject->save();
 			}
-		}
+		} while ($parkobject->next());
 	}
 
 	public function unique_username( $name )

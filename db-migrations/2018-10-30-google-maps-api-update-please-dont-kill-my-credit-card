@@ -1,0 +1,1 @@
+ALTER TABLE `ork_parkday` ADD `google_geocode` MEDIUMTEXT NOT NULL AFTER `postal_code`, ADD `latitude` DOUBLE NOT NULL AFTER `google_geocode`, ADD `longitude` DOUBLE NOT NULL AFTER `latitude`, ADD `location` MEDIUMTEXT NOT NULL AFTER `longitude`;

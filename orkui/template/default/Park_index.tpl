@@ -56,7 +56,22 @@
 	} 
 ?>
 				</td>
-				<td><a target='_new' href='<?=trimlen($day['MapUrl'])>0?$day['MapUrl']:"http://maps.google.com/maps?z=14&t=m&q=loc:{$location->lat}+{$location->lng}" ?>'><?=trimlen($day['MapUrl'])>0?(substr($day['MapUrl'],0,25) . (strlen($day['MapUrl'])>25?"...":"")):"Regular Park" ?></a></td>
+				<td>
+<?php
+  if (trimlen($day['Location']) > 0) {
+    $daylocation = json_decode(stripslashes($day['Location'])); 
+    $daylocation = ((isset($daylocation->location)) ? $daylocation->location : $daylocation->bounds->northeast);
+    $mapurl = "http://maps.google.com/maps?z=14&t=m&q=loc:{$daylocation->lat}+{$daylocation->lng}";
+    $mapname = "Alternate Park";
+  } else if (trimlen($day['MapUrl']) > 0) {
+    $mapurl = $day['MapUrl'];
+    $mapname = "Alternate Park";
+  } else {
+    $mapurl = "http://maps.google.com/maps?z=14&t=m&q=loc:{$location->lat}+{$location->lng}";
+    $mapname = "Regular Park";
+  }
+?>
+          <a target='_new' href='<?=$mapurl ?>'><?=$mapname ?></a></td>
 			</tr>
 <?php endforeach; ?>
 			</tbody>

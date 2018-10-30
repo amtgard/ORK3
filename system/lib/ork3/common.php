@@ -113,18 +113,20 @@ class Common
 		logtrace( "Geocode", [ $address, $city, $state, $postal_code, $geocode ] );
 		if ( strlen( $geocode ) > 0 ) {
 			$latlng = urlencode( str_replace( ' ', '', $geocode ) );
-			$geocodeURL = signUrl( "http://maps.googleapis.com/maps/api/geocode/json?latlng=$latlng&sensor=false", GOOGLE_MAPS_API_KEY );
+			$geocodeURL = signUrl( "https://maps.googleapis.com/maps/api/geocode/json?latlng=$latlng&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY );
 		} else {
 			$address = urlencode( $address . ', ' . $city . ', ' . $state . ', ' . $postal_code );
-			$geocodeURL = signUrl( "http://maps.googleapis.com/maps/api/geocode/json?address=$address&sensor=false", GOOGLE_MAPS_API_KEY );
+			$geocodeURL = signUrl( "https://maps.googleapis.com/maps/api/geocode/json?address=$address&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY );
 		}
 		$ch = curl_init( $geocodeURL );
+    curl_setopt($ch, CURLOPT_REFERER, 'https://amtgard.com/ork');
+    curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
 		$result = curl_exec( $ch );
 		$httpCode = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
 		curl_close( $ch );
 		$details = [ ];
-		logtrace( "Geocode: Processing.", null );
+		logtrace( "Geocode: Processing.", array( $httpCode, $result ));
 		if ( $httpCode == 200 ) {
 			$geocode = json_decode( $result );
 			logtrace( "Geocode: Processing.", $geocode );

@@ -259,6 +259,7 @@
 				<th>Time</th>
 				<th>Type</th>
 				<th>Description</th>
+				<th>Location Url</th>
 				<th>Location</th>
 				<th>Map Url</th>
 				<th class='deletion'>&times;</th>
@@ -289,8 +290,9 @@
 ?>
 				</td>
 				<td><?=$day['Description'] ?></td>
-				<td><?=$day['LocationUrl'] ?></td>
-				<td><?=$day['MapUrl'] ?></td>
+				<td><a href='<?=$day['LocationUrl'] ?>' target='_new'><?=trimlen($day['LocationUrl'])>0?'Location Url':'' ?></a></td>
+				<td><?=$day['Location'] ?></td>
+				<td><a href='<?=$day['MapUrl'] ?>' target='_new'><?=trimlen($day['MapUrl'])>0?'Map Url':'' ?></a></td>
 				<td class='deletion'><a href='<?=UIR . 'Admin/editpark/' . $ParkId . '&Action=delete&ParkDayId=' . $day['ParkDayId'] ?>'>&times;</td>
 			</tr>
 <?php endforeach; ?>
