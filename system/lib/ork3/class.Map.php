@@ -7,6 +7,17 @@ class Map extends Ork3 {
         $this->park = new yapo($this->db, DB_PREFIX . 'park');
 	}
 	
+  public function Geocode($request) {
+    return $this->_geocode_thunk(Common::Geocode( $request['address'], $request['$city'], $request['$state'], $request['$postal_code'] ));
+    
+  }
+  
+  private function _geocode_thunk($geocode) {
+ 		$geocode[ 'Geocode' ] = json_decode( $geocode[ 'Geocode' ] );
+    $geocode[ 'Location' ] = json_decode( $geocode[ 'Location' ] );
+    return $geocode;
+  }
+  
 	public function GetParkLocations($request) {
 				$key = Ork3::$Lib->ghettocache->key($request); 
 				if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
