@@ -100,7 +100,7 @@ class Report  extends Ork3 {
 							'TournamentId' => $r->tournament_id,
 							'KingdomId' => $r->kingdom_id,
 							'KingdomName' => $r->kingdom_name,
-							'ParentKingdomId' => $r->parent_kingodm_id,
+							'ParentKingdomId' => $r->parent_kingdom_id,
 							'ParkId' => $r->park_id,
 							'ParkName' => $r->park_name,
 							'EventCalendarDetailId' => $r->event_calendardetail_id,

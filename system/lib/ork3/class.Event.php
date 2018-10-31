@@ -200,6 +200,7 @@ class Event  extends Ork3 {
 			}
 			
 			$details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
+  		$geocode = json_decode( $details[ 'Geocode' ] );
 			
 			$this->detail->clear();
 			$this->detail->event_id = $request['EventId'];
@@ -220,6 +221,8 @@ class Event  extends Ork3 {
 			$this->detail->modified = date('Y-m-d H:i:s');
 			$this->detail->google_geocode = $details['Geocode'];
 			$this->detail->location = $details['Location'];
+      $this->detail->latitude = $geocode->results[ 0 ]->geometry->location->lat;
+      $this->detail->longitude = $geocode->results[ 0 ]->geometry->location->lng;
 			$this->detail->save();
 			return Success($this->detail->event_calendardetail_id);
 		} else {
@@ -283,6 +286,68 @@ class Event  extends Ork3 {
 		}
 	}
 	
+  public function PlayAmtgard($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+    $latitude = $request['latitude'];
+    $longitude = $request['longitude'];
+    $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
+    $end = date("Y-m-d", strtotime($request['end']));
+    $distance = isset($request['distance']) ? $request['distance'] : 25;
+    
+    $sql = "SELECT 
+              k.kingdom_id, p.park_id, k.name kingdom_name, p.name park_name, cd.event_id, cd.event_calendardetail_id,
+              cd.description, cd.url, cd.url_name, cd.address, cd.province, cd.postal_code, cd.map_url, cd.map_url_name, cd.google_geocode, cd.location, cd.latitude, cd.longitude,
+              cd.event_start, cd.event_end,
+              ( 3959 * acos( cos( radians($latitude) ) * cos( radians( cd.latitude ) ) * cos( radians( cd.longitude ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(cd.latitude)) ) ) AS distance 
+            FROM 
+              ork_event_calendardetail cd
+                left join ork_event e on e.event_id = cd.event_id
+                  left join ork_kingdom k on e.kingdom_id = k.kingdom_id
+                  left join ork_park p on e.park_id = p.park_id
+            WHERE
+              event_start between '$start' and '$end' and current = 1 
+            HAVING distance < $distance
+            ORDER BY distance LIMIT 0 , 20";
+    
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['ParkDays'] = array();
+			do {
+				$response['ParkDays'][] = array(
+						'EventId' => $r->event_id,
+						'DetailId' => $r->event_calendardetail_id,
+						'KingdomId' => $r->kingdom_id,
+						'ParkId' => $r->park_id,
+						'ParkName' => $r->park_name,
+						'KingdomName' => $r->kingdom_name,
+						'Description' => $r->description,
+						'Url' => $r->Url,
+						'UrlName' => $r->url_name,
+						'Address' => $r->address,
+						'Province' => $r->province,
+						'PostalCode' => $r->postal_code,
+						'MapUrl' => $r->map_url,
+						'MapUrlName' => $r->map_url_name,
+						'GoogleGeocode' => $r->google_geocode,
+						'Location' => $r->location,
+						'Latitude' => $r->latitude,
+						'Longitude' => $r->longitude,
+						'Start' => $r->event_start,
+						'End' => $r->event_end,
+            'Distance' => $r->distance
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+  }
+  
 	public function SetEventDetails($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
@@ -298,6 +363,7 @@ class Event  extends Ork3 {
 					return InvalidParameter('The scheduled event for this template cannot be updated because it has already been used (attendance has been entered!).  Please try scheduling a new event for this template.');
 			
 				$details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['Postal_code']);
+    		$geocode = json_decode( $details[ 'Geocode' ] );
 			
 				$this->detail->event_id = $request['EventId'];
 				$this->detail->current = $request['Current'];
@@ -317,6 +383,8 @@ class Event  extends Ork3 {
 				$this->detail->modified = date('Y-m-d H:i:s');
 				$this->detail->google_geocode = $details['Geocode'];
 				$this->detail->location = $details['Location'];
+        $this->detail->latitude = $geocode->results[ 0 ]->geometry->location->lat;
+        $this->detail->longitude = $geocode->results[ 0 ]->geometry->location->lng;
 				Ork3::$Lib->heraldry->SetEventHeraldry($request);
 				$this->detail->save();
 				if (valid_id($request['Current'])) {

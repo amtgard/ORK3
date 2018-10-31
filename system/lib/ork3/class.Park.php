@@ -355,6 +355,70 @@ class Park extends Ork3
 		return $response;
 	}
 
+  public function PlayAmtgard($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (false && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+    $latitude = $request['latitude'];
+    $longitude = $request['longitude'];
+    $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
+    $end = date("Y-m-d", strtotime($request['end']));
+    $distance = isset($request['distance']) ? $request['distance'] : 25;
+    
+    $sql = "select * 
+              from (
+                SELECT 
+                  d.*, p.kingdom_id, p.name park_name, k.name kingdom_name,
+                  '$start' + INTERVAL 6 - c.day day next_day, 
+                  ( 3959 * acos( cos( radians($latitude) ) * cos( radians( d.latitude ) ) * cos( radians( d.longitude ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(d.latitude)) ) ) AS distance 
+                from ork_parkday d 
+                  left join ork_day_convert c on d.week_day = c.dayname 
+                  left join ork_park p on d.park_id = p.park_id
+                    left join ork_kingdom k on p.kingdom_id = k.kingdom_id
+                having
+                  next_day < '$end' and distance < $distance
+                order by distance asc, next_day asc limit 20) date_src";
+
+    $r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['ParkDays'] = array();
+			do {
+				$response['ParkDays'][] = array(
+						'ParkdayId' => $r->parkday_id,
+						'KingdomId' => $r->kingdom_id,
+						'ParkId' => $r->park_id,
+						'ParkName' => $r->park_name,
+						'KingdomName' => $r->kingdom_name,
+						'Recurrence' => $r->recurrence,
+						'WeekOfMonth' => $r->week_of_month,
+						'WeekDay' => $r->week_day,
+						'MonthDay' => $r->month_day,
+						'Time' => $r->time,
+						'Purpose' => $r->purpose,
+						'Description' => $r->description,
+						'AlternateLocation' => $r->alternate_location,
+						'Address' => $r->address,
+						'City' => $r->city,
+						'Province' => $r->province,
+						'PostalCode' => $r->postal_code,
+						'GoogleGeocode' => $r->google_geocode,
+						'Latitude' => $r->latitude,
+						'Longitude' => $r->longitude,
+						'Location' => $r->location,
+						'MapUrl' => $r->map_url,
+						'LocationUrl' => $r->location_url,
+            'Distance' => $r->distance
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+  }
+  
 	public function GetParkAuthorizations( $request )
 	{
 		$sql = "select authorization_id, username, a.mundane_id, role from " . DB_PREFIX . "authorization a left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id where a.park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "' and system=0";
