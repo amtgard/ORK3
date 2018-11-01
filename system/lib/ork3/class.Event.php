@@ -288,7 +288,7 @@ class Event  extends Ork3 {
 	
   public function PlayAmtgard($request) {
 		$key = Ork3::$Lib->ghettocache->key($request);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+		if (false && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
 			return $cache;
 
     $latitude = $request['latitude'];
@@ -304,6 +304,7 @@ class Event  extends Ork3 {
               cd.event_start, cd.event_end,
               e.name as event_name,
               u.unit_id, u.name as unit_name,
+              concat(year(cd.event_start), '-', lpad(week(cd.event_start), 2, '0')) starts_about,
               ( 3959 * acos( cos( radians($latitude) ) * cos( radians( cd.latitude ) ) * cos( radians( cd.longitude ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(cd.latitude)) ) ) AS distance 
             FROM 
               ork_event_calendardetail cd
@@ -314,9 +315,9 @@ class Event  extends Ork3 {
             WHERE
               event_start between '$start' and '$end' and current = 1 
             HAVING distance < $distance
-            ORDER BY distance LIMIT $limit";
+            ORDER BY starts_about asc, distance asc LIMIT $limit";
     
-		$r = $this->db->query($sql);
+    $r = $this->db->query($sql);
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['ParkDays'] = array();
@@ -345,7 +346,8 @@ class Event  extends Ork3 {
 						'Longitude' => $r->longitude,
 						'Start' => $r->event_start,
 						'End' => $r->event_end,
-            'Distance' => $r->distance
+            'Distance' => $r->distance,
+            'StartsAbout' => $r->starts_about
 					);
 			} while ($r->next());
 			$response['Status'] = Success();
