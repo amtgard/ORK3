@@ -371,8 +371,13 @@ class Park extends Ork3
                 SELECT 
                   d.*, p.kingdom_id, p.name park_name, k.name kingdom_name,
                   '$start' + interval mod(((c.day - weekday('$start')) + 7), 7) day next_day,
-                  ( 3959 * acos( cos( radians($latitude) ) * cos( radians( d.latitude ) ) * cos( radians( d.longitude ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(d.latitude)) ) ) AS distance 
-                from ork_parkday d 
+                  ( 3959 * acos( cos( radians($latitude) ) * cos( radians( d.latitude_d ) ) * cos( radians( d.longitude_d ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(d.latitude_d)) ) ) AS distance 
+                from 
+                  ( select 
+                      case sd.latitude when 0 then sp.latitude else sd.latitude end latitude_d,
+                      case sd.longitude when 0 then sp.longitude else sd.longitude end longitude_d,
+                      sd.*
+                    from ork_parkday sd left join ork_park sp on sd.park_id = sp.park_id ) d
                   left join ork_day_convert c on d.week_day = c.dayname 
                   left join ork_park p on d.park_id = p.park_id
                     left join ork_kingdom k on p.kingdom_id = k.kingdom_id
@@ -404,8 +409,8 @@ class Park extends Ork3
 						'Province' => $r->province,
 						'PostalCode' => $r->postal_code,
 						'GoogleGeocode' => $r->google_geocode,
-						'Latitude' => $r->latitude,
-						'Longitude' => $r->longitude,
+						'Latitude' => $r->latitude_d,
+						'Longitude' => $r->longitude_d,
 						'Location' => $r->location,
 						'MapUrl' => $r->map_url,
 						'LocationUrl' => $r->location_url,
