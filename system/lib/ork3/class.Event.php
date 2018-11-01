@@ -296,6 +296,7 @@ class Event  extends Ork3 {
     $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
     $end = date("Y-m-d", strtotime($request['end']));
     $distance = isset($request['distance']) ? $request['distance'] : 25;
+    $limit = isset($request['limit']) ? $request['limit'] : 12;
     
     $sql = "SELECT 
               k.kingdom_id, p.park_id, k.name kingdom_name, p.name park_name, cd.event_id, cd.event_calendardetail_id,
@@ -313,7 +314,7 @@ class Event  extends Ork3 {
             WHERE
               event_start between '$start' and '$end' and current = 1 
             HAVING distance < $distance
-            ORDER BY distance LIMIT 0 , 20";
+            ORDER BY distance LIMIT $limit";
     
 		$r = $this->db->query($sql);
 		$response = array();

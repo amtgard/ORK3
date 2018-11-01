@@ -365,6 +365,7 @@ class Park extends Ork3
     $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
     $end = date("Y-m-d", strtotime($request['end']));
     $distance = isset($request['distance']) ? $request['distance'] : 25;
+    $limit = isset($request['limit']) ? $request['limit'] : 12;
     
     $sql = "select * 
               from (
@@ -381,9 +382,11 @@ class Park extends Ork3
                   left join ork_day_convert c on d.week_day = c.dayname 
                   left join ork_park p on d.park_id = p.park_id
                     left join ork_kingdom k on p.kingdom_id = k.kingdom_id
+                where
+                  p.active = 'Active'
                 having
                   next_day < '$end' and distance < $distance
-                order by next_day asc, distance asc limit 20) date_src";
+                order by next_day asc, distance asc limit $limit) date_src";
 
     $r = $this->db->query($sql);
 		$response = array();
