@@ -288,7 +288,7 @@ class Event  extends Ork3 {
 	
   public function PlayAmtgard($request) {
 		$key = Ork3::$Lib->ghettocache->key($request);
-		if (false && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
 			return $cache;
 
     $latitude = $request['latitude'];
