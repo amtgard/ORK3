@@ -370,7 +370,7 @@ class Park extends Ork3
               from (
                 SELECT 
                   d.*, p.kingdom_id, p.name park_name, k.name kingdom_name,
-                  '$start' + INTERVAL 6 - c.day day next_day, 
+                  '$start' + interval mod(((c.day - weekday('$start')) + 7), 7) day next_day,
                   ( 3959 * acos( cos( radians($latitude) ) * cos( radians( d.latitude ) ) * cos( radians( d.longitude ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(d.latitude)) ) ) AS distance 
                 from ork_parkday d 
                   left join ork_day_convert c on d.week_day = c.dayname 
@@ -378,7 +378,7 @@ class Park extends Ork3
                     left join ork_kingdom k on p.kingdom_id = k.kingdom_id
                 having
                   next_day < '$end' and distance < $distance
-                order by distance asc, next_day asc limit 20) date_src";
+                order by next_day asc, distance asc limit 20) date_src";
 
     $r = $this->db->query($sql);
 		$response = array();
@@ -409,7 +409,8 @@ class Park extends Ork3
 						'Location' => $r->location,
 						'MapUrl' => $r->map_url,
 						'LocationUrl' => $r->location_url,
-            'Distance' => $r->distance
+            'Distance' => $r->distance,
+            'NextDay' => $r->next_day
 					);
 			} while ($r->next());
 			$response['Status'] = Success();

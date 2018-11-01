@@ -301,12 +301,15 @@ class Event  extends Ork3 {
               k.kingdom_id, p.park_id, k.name kingdom_name, p.name park_name, cd.event_id, cd.event_calendardetail_id,
               cd.description, cd.url, cd.url_name, cd.address, cd.province, cd.postal_code, cd.map_url, cd.map_url_name, cd.google_geocode, cd.location, cd.latitude, cd.longitude,
               cd.event_start, cd.event_end,
+              e.name as event_name,
+              u.unit_id, u.name as unit_name,
               ( 3959 * acos( cos( radians($latitude) ) * cos( radians( cd.latitude ) ) * cos( radians( cd.longitude ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(cd.latitude)) ) ) AS distance 
             FROM 
               ork_event_calendardetail cd
                 left join ork_event e on e.event_id = cd.event_id
                   left join ork_kingdom k on e.kingdom_id = k.kingdom_id
                   left join ork_park p on e.park_id = p.park_id
+                  left join ork_unit u on e.unit_id = u.unit_id
             WHERE
               event_start between '$start' and '$end' and current = 1 
             HAVING distance < $distance
@@ -322,9 +325,12 @@ class Event  extends Ork3 {
 						'DetailId' => $r->event_calendardetail_id,
 						'KingdomId' => $r->kingdom_id,
 						'ParkId' => $r->park_id,
+						'UnitId' => $r->unit_id,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
+						'UnitName' => $r->unit_name,
 						'Description' => $r->description,
+						'EventName' => $r->event_name,
 						'Url' => $r->Url,
 						'UrlName' => $r->url_name,
 						'Address' => $r->address,
