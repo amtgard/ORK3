@@ -96,13 +96,20 @@ class Kingdom  extends Ork3 {
 		} else if ($request['IsTitle'] == 'NonTitle') {
 			$ladder_clause = " and is_title = 0";
 		}
+    if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards') {
+      $officer_role_clause = " and officer_role = 'none'"; 
+    } else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers') {
+      $officer_role_clause = " and officer_role != 'none'"; 
+    } 
 		$sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
-						a.award_id, a.is_ladder, ifnull(a.is_title, ka.is_title) as is_title, ifnull(a.title_class, ka.title_class) as title_class
+						a.award_id, a.is_ladder, ifnull(a.is_title, ka.is_title) as is_title, ifnull(a.title_class, ka.title_class) as title_class,
+            a.officer_role
 					from " . DB_PREFIX . "kingdomaward ka
 						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
 					where 1
 						$ladder_clause
 						$title_clause
+            $officer_role_clause
 						and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
 					order by is_ladder, ka.is_title, ka.title_class desc, ka.name, a.name";
 		$r = $this->db->query($sql);
@@ -120,7 +127,8 @@ class Kingdom  extends Ork3 {
 					'AwardId' => $r->award_id,
 					'IsLadder' => $r->is_ladder,
 					'IsTitle' => $r->is_title,
-					'TitleClass' => $r->title_class
+					'TitleClass' => $r->title_class,
+					'OfficerRole' => $r->officer_role
 				);
 			} while ($r->next());
 			$response['Status'] = Success();

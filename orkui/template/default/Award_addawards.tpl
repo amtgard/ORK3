@@ -1,6 +1,18 @@
 <script type='text/javascript'>
 
+  var awardoptions = "<option value=''></option><?=$AwardOptions ?>";
+
+  var officeroptions = "<option value=''></option><?=$OfficerOptions ?>";
+
 	$(document).ready(function() {
+    $( '[name="awardtype"]' ).on('click', function() {
+      var awards = awardoptions;
+      if ($(this).val() == 'officers') {
+        awards = officeroptions;
+      }
+      $('#AwardId').html(awards);
+    });
+  
 		$( '#Cancel' ).hide();
 		$( '#Date' ).datepicker({dateFormat: 'yy-mm-dd'});
 		$( '#Rank' ).blur(function() {
@@ -79,7 +91,7 @@
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
 						});
 						response(suggestions);
 					}
@@ -164,6 +176,10 @@
 	<div class='success-message'><?=$Message ?></div>
 <?php endif; ?>	
 	<form class='form-container' method='post' action='<?=UIR ?>Award/<?=$Call ?>/<?=$Id ?>/addaward'>
+		<div id='AwardType'>
+			<span>Type:</span>
+			<span><input type='radio' name='awardtype' value='awards' checked>Awards <input type='radio' name='awardtype' value='officers'>Officers</span>
+		</div>
 		<div>
 			<span>Award:</span>
 			<span>

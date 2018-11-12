@@ -88,7 +88,8 @@ class Controller_Award extends Controller {
 		if ($this->request->exists('Award_addawards')) {
 			$this->data['Award_addawards'] = $this->request->Award_addawards->Request;
 		}
-		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id);
+		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Id'] = $id;
 	}
 	
@@ -150,7 +151,8 @@ class Controller_Award extends Controller {
 		if ($this->request->exists('Award_addawards')) {
 			$this->data['Award_addawards'] = $this->request->Award_addawards->Request;
 		}
-		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id);
+		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Id'] = $id;
 	}
 }

@@ -833,7 +833,8 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_player'] = $this->request->Admin_player->Request;
 		}
 		$this->data['KingdomId'] = $this->session->kingdom_id;
-		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id);
+		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);

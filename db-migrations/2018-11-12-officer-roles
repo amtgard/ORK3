@@ -1,0 +1,61 @@
+ALTER TABLE `ork_award` ADD `officer_role` ENUM('kingdom','park','principality','bod','other-officer','none') NOT NULL DEFAULT 'none' AFTER `crown_limit`;
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 70; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 71; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 72; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 73; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 74; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 75; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 76; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 77; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 78; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 79; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 80; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 81; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 82; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 83; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 84; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 85; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 86; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 87; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 88; 
+UPDATE `ork_award` SET `officer_role` = 'park' WHERE `ork_award`.`award_id` = 206;
+
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 234; 
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 235; 
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 236; 
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 237;
+
+UPDATE `ork_award` SET `officer_role` = 'kingdom' WHERE `ork_award`.`award_id` = 89; 
+UPDATE `ork_award` SET `officer_role` = 'kingdom' WHERE `ork_award`.`award_id` = 90; 
+UPDATE `ork_award` SET `officer_role` = 'kingdom' WHERE `ork_award`.`award_id` = 91; 
+UPDATE `ork_award` SET `officer_role` = 'kingdom' WHERE `ork_award`.`award_id` = 92;
+
+UPDATE `ork_award` SET `officer_role` = 'bod' WHERE `ork_award`.`award_id` = 93;
+
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 202; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 201; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 200; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 199; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 198; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 197; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 196; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 195; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 194; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 193; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 192; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 191; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 190; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 189; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 188; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 210; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 211; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 212; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 213; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 214; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 215; 
+UPDATE `ork_award` SET `officer_role` = 'other-officer' WHERE `ork_award`.`award_id` = 225;
+
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 205; 
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 206; 
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 227; 
+UPDATE `ork_award` SET `officer_role` = 'principality' WHERE `ork_award`.`award_id` = 228;

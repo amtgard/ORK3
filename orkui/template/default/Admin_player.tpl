@@ -260,7 +260,7 @@
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
 						});
 						response(suggestions);
 					}
@@ -336,6 +336,10 @@
 <div class='info-container' id='award-editor'>
 	<h3>Add Award</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/addaward'>
+		<div id='AwardType'>
+			<span>Type:</span>
+			<span><input type='radio' name='awardtype' value='awards' checked>Awards <input type='radio' name='awardtype' value='officers'>Officers</span>
+		</div>
 		<div>
 			<span>Award:</span>
 			<span>
@@ -382,7 +386,19 @@
 
 <script type='text/javascript'>
 
+  var awardoptions = "<option value=''></option><?=$AwardOptions ?>";
+
+  var officeroptions = "<option value=''></option><?=$OfficerOptions ?>";
+
 	$(document).ready(function() {
+    $( '[name="awardtype"]' ).on('click', function() {
+      var awards = awardoptions;
+      if ($(this).val() == 'officers') {
+        awards = officeroptions;
+      }
+      $('#AwardId').html(awards);
+    });
+  
 		$( '#Cancel' ).click(function() { Reset(); });
 		$( '.deletion a' ).click(function() { Reset(); });
 		$( '#AwardNameField' ).hide();

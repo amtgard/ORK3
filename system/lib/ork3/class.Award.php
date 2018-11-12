@@ -29,34 +29,47 @@ class Award  extends Ork3 {
     }
 
 	public function GetAwardList($request) {
-		$this->award->clear();
 		if ($request['IsLadder'] == 'Ladder') {
-			$this->award->is_ladder = 1;
+			$ladder_clause = " and ka.is_ladder = 1";
 		} else if ($request['IsLadder'] == 'NonLadder') {
-			$this->award->is_ladder = 0;
+			$ladder_clause = " and ka.is_ladder = 0";
 		}
 		if ($request['IsTitle'] == 'Title') {
-			$this->award->is_title = 1;
+			$ladder_clause = " and is_title = 1";
 		} else if ($request['IsTitle'] == 'NonTitle') {
-			$this->award->is_title = 0;
+			$ladder_clause = " and is_title = 0";
 		}
+    if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards') {
+      $officer_role_clause = " and officer_role = 'none'"; 
+    } else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers') {
+      $officer_role_clause = " and officer_role != 'none'"; 
+    } 
+		$sql = "select award_id, name, a.award_id, a.is_ladder, is_title, title_class, a.officer_role
+					from " . DB_PREFIX . "award a'
+					where 1
+						$ladder_clause
+						$title_clause
+            $officer_role_clause
+					order by is_ladder, a.is_title, a.title_class desc, a.name";
+		$r = $this->db->query($sql);
 
 		$response = array();
 		$response['Awards'] = array();
-		if ($this->award->find()) {
+		if ($r !== false && $r->size() > 0) {
 			do {
 				$response['Awards'][] = array(
-					'KingdomAwardId' => $this->award->award_id,
-					'KingdomAwardName' => $this->award->name,
+					'KingdomAwardId' => $r->award_id,
+					'KingdomAwardName' => $r->name,
 					'ReignLimit' => 0,
 					'MonthLimit' => 0,
-					'AwardName' => $this->award->name,
-					'AwardId' => $this->award->award_id,
-					'IsLadder' => $this->award->is_ladder,
-					'IsTitle' => $this->award->is_title,
-					'TitleClass' => $this->award->title_class
+					'AwardName' => $r->name,
+					'AwardId' => $r->award_id,
+					'IsLadder' => $r->is_ladder,
+					'IsTitle' => $r->is_title,
+					'TitleClass' => $r->title_class,
+          'OfficerRole' => $r->officer_role
 				);
-			} while ($this->award->next());
+			} while ($r->next());
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing your request.');
@@ -74,6 +87,7 @@ class Award  extends Ork3 {
 			$this->award->is_title = $request['IsTitle'];
 			$this->award->title_class = $request['TitleClass'];
 			$this->award->peerage = $request['Peerage'];
+			$this->award->officer_role = $request['OfficerRole'];
 			$this->award->save();
 		} else {
 			return NoAuthorization();
@@ -92,6 +106,7 @@ class Award  extends Ork3 {
 				$this->award->is_title = $request['IsTitle'];
 				$this->award->title_class = $request['TitleClass'];
 				$this->award->peerage = $request['Peerage'];
+  			$this->award->officer_role = $request['OfficerRole'];
 				$this->award->award->save();
 
 			} else {
@@ -226,13 +241,14 @@ class Award  extends Ork3 {
 		$this->create_award('Custom Award',  0, 0, 0);
 	}
 
-	public function create_award($name, $is_ladder, $is_title, $title_class, $peerage = 'None') {
+	public function create_award($name, $is_ladder, $is_title, $title_class, $peerage = 'None', $officer_role = 'none') {
 		$this->award->clear();
 		$this->award->name = $name;
 		$this->award->is_ladder = $is_ladder;
 		$this->award->is_title = $is_title;
 		$this->award->title_class = $title_class;
 		$this->award->peerage = $peerage;
+		$this->award->officer_role = $officer_role;
 		$this->award->save();
 	}
 }

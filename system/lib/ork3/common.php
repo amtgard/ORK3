@@ -109,10 +109,10 @@ class Common
       $this->config = new yapo( $this->db, DB_PREFIX . 'configuration' );
       $this->officer = new yapo( $this->db, DB_PREFIX . 'officer' );
       $this->authorization = new yapo( $this->db, DB_PREFIX . 'authorization' );
-    if (Common::$init != 'init') {
-      Common::$rate_limit = new yapo( $this->db, DB_PREFIX . 'rate_limit' );
-      Common::$init = 'init';
-    }
+      if (Common::$init != 'init') {
+        Common::$rate_limit = new yapo( $this->db, DB_PREFIX . 'rate_limit' );
+        Common::$init = 'init';
+      }
 	}
 
   public static function RateLimit($service, $limit = 20, $per = "+1 week") {
@@ -377,6 +377,17 @@ class Common
 		$this->parktitle->save();
 	}
 
+  public function find_matching_officer_award( $kingdom_id, $park_id, $role ) {
+    $monarch = array( 92, 70, 71, 72, 73, 74, 75, 76, 227, 234 );
+    $regent = array( 90, 77, 78, 79, 80, 228, 235 );
+    $prime_minister = array( 91, 81, 82, 83, 84, 205, 237 );
+    $champion = array( 89, 85, 86, 87, 88, 236 );
+    
+    $sql = "select ka.award_id, ka.kingdom_award_id, a.name as award_name, ka.name as kingdom_award_name
+              from " . DB_PREFIX . "award a left join " . DB_PREFIX . "kingdomaward ka on ka.award_id = a.award_id
+            where ka.award_id in ";
+  }
+  
 	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0 )
 	{
 		$this->officer->clear();
