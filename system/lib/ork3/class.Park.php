@@ -32,7 +32,6 @@ class Park extends Ork3
       /*
 			$sql = "delete from " . DB_PREFIX . "park where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
-      */
 			$sql = "update " . DB_PREFIX . "attendance set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
 			$sql = "update " . DB_PREFIX . "authorization set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
@@ -45,12 +44,15 @@ class Park extends Ork3
 			$this->db->query( $sql );
 			$sql = "update " . DB_PREFIX . "glicko2 set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      */
 			$sql = "update " . DB_PREFIX . "mundane set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      /*
 			$sql = "update " . DB_PREFIX . "parkday set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
 			$sql = "update " . DB_PREFIX . "tournament set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      */
 			logtrace( "Parks Merged", null );
 			return Success();
 		}
