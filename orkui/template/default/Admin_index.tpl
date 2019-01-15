@@ -14,7 +14,7 @@
         <li>Parks
             <ul>
             	<li><a href='<?=UIR ?>Admin/transferpark'>Move Park</a></li>
-            	<li><a href='<?=UIR ?>Admin/mergepark'>Merge Parks</a></li>
+            	<li><a href='<?=UIR ?>Admin/mergepark'>Migrate Park Members</a></li>
             </ul>
         </li>
     	<li><a href='<?=UIR ?>Admin/mergeunit'>Merge Units</a></li>

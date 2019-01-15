@@ -60,7 +60,9 @@
 </script>
 
 <div class='info-container'>
-	<h3>Merge Parks</h3>
+	<h3>Migrate Park Members</h3>
+  This moves all of the members of the sending park to the recipient park, and closes out the permissions of the sending park.
+  <p>
 <?php if (strlen($Error) > 0) : ?>
 	<div class='error-message'><?=$Error ?></div>
 <?php endif; ?>

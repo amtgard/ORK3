@@ -17,17 +17,22 @@ class Park extends Ork3
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_ADMIN, $request[ 'FromParkId' ], AUTH_CREATE )
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_ADMIN, $request[ 'ToParkId' ], AUTH_CREATE )
 		) {
-
+/*
 			$sql = "delete from " . DB_PREFIX . "account where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "configuration where id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "' and type = 'Park'";
 			$this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "event where id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "' and type = 'Park'";
 			$this->db->query( $sql );
+      */
+      $sql = "delete from `" . DB_PREFIX . "authorization` where authorization_id in (select authorization_id from `" . DB_PREFIX . "officer` where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "')";
+      $this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "officer where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      /*
 			$sql = "delete from " . DB_PREFIX . "park where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      */
 			$sql = "update " . DB_PREFIX . "attendance set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
 			$sql = "update " . DB_PREFIX . "authorization set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
