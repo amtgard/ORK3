@@ -163,7 +163,7 @@
 </div>
 
 <div class='info-container'>
-	<h3>Awards &amp; Titles</h3>
+	<h3>Awards</h3>
 	<table class='information-table form-container' id='Awards'>
 		<thead>
 			<tr>
@@ -179,6 +179,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] === 'none') : ?>
     		<tr>
 				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -188,6 +189,40 @@
 				<td><?=$detail['Note'] ?></td>
 				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 			</tr>
+<?php endif ?>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+
+<div class='info-container'>
+	<h3>Titles</h3>
+	<table class='information-table form-container' id='Awards'>
+		<thead>
+			<tr>
+				<th>Award</th>
+				<th>Rank</th>
+				<th>Date</th>
+				<th>Given By</th>
+				<th>Given At</th>
+				<th>Note</th>
+				<th>Entered By</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
+<?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] !== 'none') : ?>
+    		<tr>
+				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
+				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
+				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
+				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
+				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
+				<td><?=$detail['Note'] ?></td>
+				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
+			</tr>
+<?php endif ?>
 <?php endforeach ?>
 		</tbody>
 	</table>

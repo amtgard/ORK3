@@ -462,9 +462,9 @@
 </script>
 
 <div class='info-container'>
-	<h3>Awards &amp; Titles</h3>
+	<h3>Awards</h3>
 	<div class='info-container skip-fold'>
-		<div style='padding: 16px 0'>Strip all or choose from below. Details will be recorded for posterity.</div>
+		<div style='padding: 16px 0'>Strip <b>all Awards &amp; Titles</b> or choose from below. Details will be recorded for posterity.</div>
 		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
 			<div>
 				<span>Strip Award Details</span>
@@ -492,6 +492,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] === 'none') : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
 				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -502,6 +503,55 @@
 				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='revocation'>Strip</a></td>
 			</tr>
+<?php endif ?>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+
+<div class='info-container'>
+	<h3>Titles</h3>
+	<div class='info-container skip-fold'>
+		<div style='padding: 16px 0'>Strip <b>all Awards &amp; Titles</b> or choose from below. Details will be recorded for posterity.</div>
+		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
+			<div>
+				<span>Strip Award Details</span>
+				<input type="text" name="revocation">
+			</div>
+			<div>
+				<span></span>
+				<input type="submit" name="strip-all" value="Strip All Awards">
+			</div>
+		</form>
+	</div>
+	<table class='information-table' id='Awards'>
+		<thead>
+			<tr>
+				<th>Award</th>
+				<th>Rank</th>
+				<th>Date</th>
+				<th>Given By</th>
+				<th>Given At</th>
+				<th>Note</th>
+				<th class='deletion'>&times;</th>
+				<th>Strip</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
+<?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] !== 'none') : ?>
+			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
+				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
+				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
+				<td class='award-date'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
+				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
+				<td class='award-note'><?=$detail['Note'] ?></td>
+				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='revocation'>Strip</a></td>
+			</tr>
+<?php endif ?>
 <?php endforeach ?>
 		</tbody>
 	</table>

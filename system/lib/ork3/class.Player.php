@@ -252,6 +252,7 @@ class Player extends Ork3 {
 						'IsLadder' => $r->is_ladder,
 						'IsTitle' => $r->is_title,
 						'TitleClass' => $r->title_class,
+            'OfficerRole' => $r->officer_role,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name,
