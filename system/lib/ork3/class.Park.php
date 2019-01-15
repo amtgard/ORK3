@@ -17,6 +17,8 @@ class Park extends Ork3
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_ADMIN, $request[ 'FromParkId' ], AUTH_CREATE )
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_ADMIN, $request[ 'ToParkId' ], AUTH_CREATE )
 		) {
+      
+      $to_kingdom_id = $this->GetParkKingdomId( $request[ 'ToParkId' ] );
 /*
 			$sql = "delete from " . DB_PREFIX . "account where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
@@ -45,7 +47,7 @@ class Park extends Ork3
 			$sql = "update " . DB_PREFIX . "glicko2 set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
       */
-			$sql = "update " . DB_PREFIX . "mundane set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
+			$sql = "update " . DB_PREFIX . "mundane set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "', kingdom_id = $to_kingdom_id where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
       /*
 			$sql = "update " . DB_PREFIX . "parkday set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
