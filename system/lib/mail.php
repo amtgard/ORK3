@@ -86,7 +86,7 @@ final class Mail {
 			$to = $this->to;
 		}
 	
-		$boundary = '----=_NextPart_' . md5(time()); 
+		$boundary = 'Boundary' . md5(time()); 
 		
 		if (strtoupper(substr(PHP_OS, 0, 3) == 'WIN')) {
 			$eol = "\r\n";
@@ -106,9 +106,9 @@ final class Mail {
 		$header .= 'From: ' . $this->sender . '<' . $this->from . '>' . $eol;
 		$header .= 'Reply-To: ' . $this->sender . '<' . $this->from . '>' . $eol;   
 		$header .= 'Return-Path: ' . $this->from . $eol;
-		$header .= 'X-Mailer: PHP/' . phpversion() . $eol; 
-		$header .= 'MIME-Version: 1.0' . $eol;
-		$header .= 'Content-Type: multipart/mixed; boundary="' . $boundary . '"' . $eol; 
+		//$header .= 'X-Mailer: PHP/' . phpversion() . $eol; 
+		//$header .= 'MIME-Version: 1.0' . $eol;
+//		$header .= 'Content-Type: multipart/mixed; boundary="' . $boundary . '"' . $eol; 
 	
 		if (!$this->html) {
 			$message  = '--' . $boundary . $eol; 
@@ -116,23 +116,25 @@ final class Mail {
 			$message .= 'Content-Transfer-Encoding: 8bit' . $eol . $eol;
 			$message .= $this->text . $eol;
 		} else {
-			$message  = '--' . $boundary . $eol;
-			$message .= 'Content-Type: multipart/alternative; boundary="' . $boundary . '_alt"' . $eol . $eol;
-			$message .= '--' . $boundary . '_alt' . $eol;
-			$message .= 'Content-Type: text/plain; charset="utf-8"' . $eol;
-			$message .= 'Content-Transfer-Encoding: 8bit' . $eol;
+			//$message  = '--' . $boundary . $eol;
+			//$message .= 'Content-Type: multipart/alternative; boundary="' . $boundary . '_alt"' . $eol . $eol;
+			//$message .= '--' . $boundary . '_alt' . $eol;
+			//$message .= 'Content-Type: text/plain; charset="utf-8"' . $eol;
+			//$message .= 'Content-Transfer-Encoding: 8bit' . $eol;
 		
 			if ($this->text) {
 				$message .= $this->text . $eol;
 			} else {
-				$message .= 'This is a HTML email and your email client software does not support HTML email!' . $eol;
+				//$message .= 'This is a HTML email and your email client software does not support HTML email!' . $eol;
 			}   
 		
-			$message .= '--' . $boundary . '_alt' . $eol;
-			$message .= 'Content-Type: text/html; charset="utf-8"' . $eol;
-			$message .= 'Content-Transfer-Encoding: 8bit' . $eol . $eol;
-			$message .= $this->html . $eol;
-			$message .= '--' . $boundary . '_alt--' . $eol;      
+			//$message .= '--' . $boundary . '_alt' . $eol;
+			//$message .= '--' . $boundary . $eol;
+			$message .= 'Content-Type: text/html; charset="utf-8"' . $eol . $eol;
+			//$message .= 'Content-Transfer-Encoding: 8bit' . $eol . $eol;
+			$message .= "<html><body>" . $this->html . "</body></html>" . $eol . $eol . '--' . $eol . $eol;
+			//$message .= '--' . $boundary . '--' . $eol;
+			//$message .= '--' . $boundary . '_alt--' . $eol;      
 		}
 	
 		foreach ($this->attachments as $attachment) { 
@@ -158,7 +160,7 @@ final class Mail {
 			$handle = fsockopen($this->hostname, $this->port, $errno, $errstr, $this->timeout);   
 	
 			if (!$handle) {
-				error_log('Error: ' . $errstr . ' (' . $errno . ')');
+				echo_error('Error: ' . $errstr . ' (' . $errno . ')');
 			} else {
 				if (substr(PHP_OS, 0, 3) != 'WIN') {
 					socket_set_timeout($handle, $this->timeout, 0);
@@ -182,7 +184,7 @@ final class Mail {
 					}
 		
 					if (substr($reply, 0, 3) != 220) {
-						error_log('Error: STARTTLS not accepted from server!');
+						echo_error('Error: STARTTLS not accepted from server! ' . $reply . ' ' . __LINE__);
 					}               
 				}
 		
@@ -200,7 +202,7 @@ final class Mail {
 					}
 		
 					if (substr($reply, 0, 3) != 250) {
-						error_log('Error: EHLO not accepted from server!');
+						echo_error('Error: EHLO not accepted from server! ' . $reply . ' ' . __LINE__);
 					}
 		
 					fputs($handle, 'AUTH LOGIN' . $eol);
@@ -216,7 +218,7 @@ final class Mail {
 					}
 		
 					if (substr($reply, 0, 3) != 334) {
-						error_log('Error: AUTH LOGIN not accepted from server!');
+						echo_error('Error: AUTH LOGIN not accepted from server! ' . $reply . ' ' . __LINE__);
 					}
 		
 					fputs($handle, base64_encode($this->username) . $eol);
@@ -232,7 +234,7 @@ final class Mail {
 					}
 		
 					if (substr($reply, 0, 3) != 334) {
-						error_log('Error: Username not accepted from server!');
+						echo_error('Error: Username not accepted from server! ' . $reply . ' ' . __LINE__);
 					}            
 		
 					fputs($handle, base64_encode($this->password) . $eol);
@@ -248,7 +250,7 @@ final class Mail {
 					}
 		
 					if (substr($reply, 0, 3) != 235) {
-						error_log('Error: Password not accepted from server!');               
+						echo_error('Error: Password not accepted from server! ' . $reply . ' ' . __LINE__);               
 					}   
 				} else {
 					fputs($handle, 'HELO ' . getenv('SERVER_NAME') . $eol);
@@ -264,11 +266,11 @@ final class Mail {
 					}
 		
 					if (substr($reply, 0, 3) != 250) {
-						error_log('Error: HELO not accepted from server!');
+						echo_error('Error: HELO not accepted from server! ' . $reply . ' ' . __LINE__);
 					}            
 				}
 		
-				fputs($handle, 'MAIL FROM: <' . $this->from . '>XVERP' . $eol);
+				fputs($handle, 'MAIL FROM: <' . $this->from . '>' . $eol);
 		
 				$reply = '';
 				
@@ -281,7 +283,7 @@ final class Mail {
 				}
 		
 				if (substr($reply, 0, 3) != 250) {
-					error_log('Error: MAIL FROM not accepted from server!');
+					echo_error('Error: MAIL FROM not accepted from server! ' . $reply . ' ' . __LINE__);
 				}
 		
 				if (!is_array($this->to)) {
@@ -298,7 +300,7 @@ final class Mail {
 					}
 		
 					if ((substr($reply, 0, 3) != 250) && (substr($reply, 0, 3) != 251)) {
-						error_log('Error: RCPT TO not accepted from server!');
+						echo_error('Error: RCPT TO not accepted from server! ' . $reply . ' ' . __LINE__);
 					}         
 				} else {
 					foreach ($this->to as $recipient) {
@@ -315,7 +317,7 @@ final class Mail {
 						}
 		
 						if ((substr($reply, 0, 3) != 250) && (substr($reply, 0, 3) != 251)) {
-							error_log('Error: RCPT TO not accepted from server!');
+							echo_error('Error: RCPT TO not accepted from server! ' . $reply . ' ' . __LINE__);
 						}                  
 					}
 				}
@@ -333,7 +335,7 @@ final class Mail {
 				}
 			
 				if (substr($reply, 0, 3) != 354) {
-					error_log('Error: DATA not accepted from server!');
+					echo_error('Error: DATA not accepted from server! ' . $reply . ' ' . __LINE__);
 				}
 			
 				fputs($handle, $header . $message . $eol);
@@ -350,7 +352,7 @@ final class Mail {
 				}
 			
 				if (substr($reply, 0, 3) != 250) {
-					error_log('Error: DATA not accepted from server!');
+					echo_error('Error: DATA not accepted from server! ' . $reply . ' ' . __LINE__);
 				}
 			
 				fputs($handle, 'QUIT' . $eol);
@@ -366,7 +368,7 @@ final class Mail {
 				}
 			
 				if (substr($reply, 0, 3) != 221) {
-					error_log('Error: QUIT not accepted from server!');
+					echo_error('Error: QUIT not accepted from server! ' . $reply . ' ' . __LINE__);
 				}         
 			
 				fclose($handle);
@@ -374,4 +376,9 @@ final class Mail {
 		}
 	}
 }
+
+function echo_error($str) {
+  echo $str . "<br>\n\n";
+}
+
 ?>
