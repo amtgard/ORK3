@@ -379,7 +379,6 @@ class Player extends Ork3 {
 				$this->mundane->username = trim($request['UserName']);
 				$this->mundane->persona = $request['Persona'];
 				$this->mundane->email = $request['Email'];
-//				$this->mundane->password = md5($request['Password']);
 				$this->mundane->park_id = $request['ParkId'];
 				$this->mundane->kingdom_id = $park->kingdom_id;
 				$this->mundane->modified = date('Y-m-d H:i:s', time());

@@ -251,7 +251,7 @@ class Authorization  extends Ork3 {
 						if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 							$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 						} else {
-							$this->app_auth->token = md5($request['Password'] . microtime());
+							$this->app_auth->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 							$this->app_auth->token_expires = date('c', time() + LOGIN_TIMEOUT);
 							$this->app_auth->save();
 							$response['Status'] = Success();
@@ -279,7 +279,7 @@ class Authorization  extends Ork3 {
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else if (strtotime($this->mundane->token_expires) > time()) {
-						$this->app_auth->token = md5($request['Password'] . microtime());
+						$this->app_auth->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 						$this->app_auth->token_expires = date('c', time() + LOGIN_TIMEOUT);
 						$this->app_auth->save();
 						$response['Status'] = Success();
@@ -317,7 +317,7 @@ class Authorization  extends Ork3 {
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
-						$this->mundane->token = md5($request['Password'] . microtime());
+						$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 						$this->mundane->token_expires = date('c', time() + LOGIN_TIMEOUT);
 						$this->mundane->save();
 						$response['Status'] = Success();
