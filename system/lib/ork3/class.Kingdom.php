@@ -8,6 +8,18 @@ class Kingdom  extends Ork3 {
 		$this->kingdomaward = new yapo($this->db, DB_PREFIX . 'kingdomaward');
 	}
 	
+  public function GetKingdomByAbbreviation($request) {
+    if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3)
+      return null;
+    
+    $this->kingdom->clear();
+    $this->kingdom->abbreviation = strtoupper(trim($request['Abbreviation']));
+    if ($this->kingdom->find()) {
+      return $this->kingdom->kingdom_id; 
+    }
+    return null;
+  }
+  
 	public function GetKingdomShortInfo($request) {
 		$this->kingdom->clear();
 		$this->kingdom->kingdom_id = $request['KingdomId'];

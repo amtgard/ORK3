@@ -10,6 +10,18 @@ class Park extends Ork3
 		$this->parkday = new yapo( $this->db, DB_PREFIX . 'parkday' );
 	}
 
+  public function GetParkByAbbreviation($request) {
+    if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3)
+      return null;
+    
+    $this->park->clear();
+    $this->park->abbreviation = strtoupper(trim($request['Abbreviation']));
+    if ($this->park->find()) {
+      return $this->park->park_id; 
+    }
+    return null;
+  }
+  
 	public function MergeParks( $request )
 	{
 		logtrace( "MergeParks", $request );
