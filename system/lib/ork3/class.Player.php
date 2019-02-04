@@ -143,7 +143,6 @@ class Player extends Ork3 {
 					'Heraldry' => $heraldry['Url'],
 					'HasImage' => $this->mundane->has_image,
 					'Image' => HTTP_PLAYER_IMAGE . sprintf('%06d.jpg', $this->mundane->mundane_id),
-					'CompanyId' => $this->mundane->company_id,
 					'PenaltyBox' => $this->mundane->penalty_box,
 					'Active' => $this->mundane->active
 				);

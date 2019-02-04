@@ -39,10 +39,6 @@
 			<span><input type='checkbox' value='Restricted' <?=($Player['Restricted'])==1?"Checked":"" ?> DISABLED name='Restricted' id='Restricted' /></span>
 		</div>
 		<div>
-			<span>Company:</span>
-			<span class='form-informational-field'><?=$Player['Company'] ?></span>
-		</div>
-		<div>
 			<span>Waivered:</span>
 			<span><input type='checkbox' value='Waivered' <?=($Player['Waivered'])==1?"Checked":"" ?> DISABLED name='Waivered' id='Waivered' /></span>
 		</div>
