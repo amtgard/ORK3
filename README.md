@@ -33,18 +33,18 @@ docker-compose up
 ```
 Once this completes and MySql is waiting on a socket there are some setup tasks required. In another window issue the following commands:
 ```
-mysql -P 3306 --protocol=tcp -h localhost -u ork  -p ork < ork.sql
+mysql -P 3306 --protocol=tcp -h localhost -u ork  -psecret < ork.sql
 ```
 This will setup the database.  The default password for the user 'ork' is 'secret'.
 
 Download and extract a recent Ork backup from https://amtgard.com/ork/assets/backups/
 
 ```
-mysql -P 3306 --protocol=tcp -h localhost -u ork  -p ork < ~/Downloads/2019.02.28.02.00.amtgard_ork3production.sql
+mysql -P 3306 --protocol=tcp -h localhost -u ork  -psecret < ~/Downloads/2019.02.28.02.00.amtgard_ork3production.sql
 ```
 This will take a while but will hydrate the database with the backup that was downloaded and extracted above.
 ```
-mysql -P 3306 --protocol=tcp -h localhost -u root  -p ork 
+mysql -P 3306 --protocol=tcp -h localhost -u root  -proot 
 ```
 Use the root password of root. Once the SQL prompt appears enter:
 ```
