@@ -4,14 +4,15 @@ date_default_timezone_set( 'America/Chicago' );
 define( 'CONFIG', true );
 
 error_reporting( E_ALL );
-ini_set( 'display_errors', 'true' );
+ini_set( 'display_errors', 'false' );
 
 // HTTP
-define( 'HTTP_SERVICE', 'http://' . $_SERVER[ 'HTTP_HOST' ] . '/orkservice/' );
-define( 'HTTP_UI', 'http://' . $_SERVER[ 'HTTP_HOST' ] . '/orkui/' );
-define( 'HTTP_UI_REMOTE', 'http://' . $_SERVER[ 'HTTP_HOST' ] . '/orkui/' );
+define( 'ORK_DIST_NAME', 'ork');
+define( 'HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkservice/'); 
+define( 'HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
+define( 'HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
 define( 'HTTP_TEMPLATE', HTTP_UI . 'template/' );
-define( 'HTTP_ASSETS', 'http://' . $_SERVER[ 'HTTP_HOST' ] . '/assets/' );
+define( 'HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST']. '/' . ORK_DIST_NAME . '/assets/');
 define( 'HTTP_WAIVERS', 'http://amtgard.com/ork/assets/waivers/' );
 define( 'HTTP_HERALDRY', 'http://amtgard.com/ork/assets/heraldry/' );
 define( 'HTTP_PLAYER_IMAGE', 'http://amtgard.com/ork/assets/players/' );
