@@ -174,7 +174,8 @@ class Player extends Ork3 {
 							left join " . DB_PREFIX . "kingdom ek on e.kingdom_id = ek.kingdom_id
 					where a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
 					order by a.date desc
-		";
+    ";
+    $limit = $request['limit'];
 		$r = $this->db->query($sql);
 		$response = array();
 		$response['Attendance'] = array();
@@ -202,7 +203,11 @@ class Player extends Ork3 {
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name
 					);
-			} while ($r->next());
+          if (is_numeric($limit)) {
+            $limit--;
+            if ($limit == 0) break;
+          }
+      } while ($r->next());
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
