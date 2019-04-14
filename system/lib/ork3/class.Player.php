@@ -172,9 +172,13 @@ class Player extends Ork3 {
 						left join " . DB_PREFIX . "event e on a.event_id = e.event_id
 							left join " . DB_PREFIX . "park ep on e.park_id = ep.park_id
 							left join " . DB_PREFIX . "kingdom ek on e.kingdom_id = ek.kingdom_id
-					where a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
-					order by a.date desc
-    ";
+          where a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'";
+    $date_start = $request['date_start'];
+    if (!is_null($date_start) && strtotime($date_start)) {
+      $when = date("Y-m-d", strtotime($date_start));
+      $sql .= " and a.date > '$when' ";
+    }
+    $sql .= " order by a.date desc";
     $limit = $request['limit'];
 		$r = $this->db->query($sql);
 		$response = array();
