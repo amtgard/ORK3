@@ -176,7 +176,7 @@ class Player extends Ork3 {
     $date_start = $request['date_start'];
     if (!is_null($date_start) && strtotime($date_start)) {
       $when = date("Y-m-d", strtotime($date_start));
-      $sql .= " and a.date > '$when' ";
+      $sql .= " and a.date >= '$when' ";
     }
     $sql .= " order by a.date desc";
     $limit = $request['limit'];
