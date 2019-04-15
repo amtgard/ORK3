@@ -160,7 +160,7 @@ class SearchService extends Ork3 {
 		if ($date_order != null) {
 			$when = "date_add(now(), interval - 7 day)";
 			if (!is_null($date_start) && strtotime($date_start))
-				$when = date("Y-m-d", strtotime($date_start));
+        $when = "'".date("Y-m-d", strtotime($date_start))."'";
 			$sql .= " and cd.event_start is not null and cd.event_start > $when order by cd.event_start, kingdom_name, park_name, e.name";
 		} else {
 			$sql .= " order by kingdom_name, park_name, e.name";
