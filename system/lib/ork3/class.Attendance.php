@@ -58,7 +58,7 @@ class Attendance  extends Ork3 {
 	
 	public function AddAttendance($request) {
 		logtrace("Attendance->AddAttendance()", $request);
-		
+
 		if (($type = $this->AttendanceAuthority($request)) === false) {
             logtrace("Attendance->AddAttendance: No Authority", $request);
 			return NoAuthorization('Type is not specified.');
@@ -175,7 +175,7 @@ class Attendance  extends Ork3 {
 	
 	public function AttendanceAuthority($request) {
 		logtrace("Attendance->AttendanceAuthority()", $request);
-		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+    $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		if (!valid_id($mundane_id)) {
 			logtrace("Attendance->AttendanceAuthority() - No mundane_id", null);
 			return false;
@@ -194,12 +194,12 @@ class Attendance  extends Ork3 {
 	}
 	
 	private function attendance_authority_h($request) {
-		logtrace("Attendance->attendance_authority_h()", $request);
+    logtrace("Attendance->attendance_authority_h()", $request);
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		if (valid_id($request['ParkId'])) {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
 				return AUTH_PARK;
-			}
+      }
 		} else if (valid_id($request['KingdomId'])) {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
 				return AUTH_KINGDOM;
@@ -220,7 +220,8 @@ class Attendance  extends Ork3 {
 		} else {
 			logtrace('attendance_authority_h() - no matches');
 			return false;
-		}
+    }
+    return false;
 	}
 	
 	public function RemoveAttendance($request) {
@@ -229,9 +230,9 @@ class Attendance  extends Ork3 {
 		
 		if ($this->AttendanceAuthority($request) === false) {
 			return NoAuthorization();
-		}
-		
-		$this->attendance->clear();
+    }
+
+    $this->attendance->clear();
 		$this->attendance->attendance_id = $request['AttendanceId'];
 		if (!valid_id($request['AttendanceId']) || !$this->attendance->find()) {
 			return InvalidParameter();
