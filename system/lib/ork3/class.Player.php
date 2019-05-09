@@ -605,10 +605,27 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function load_model( $name )
+	{
+		if ( file_exists( DIR_MODEL . 'model.' . $name . '.php' ) ) {
+			require_once( DIR_MODEL . 'model.' . $name . '.php' );
+			$model_name = 'Model_' . $name;
+			$this->$name = new $model_name();
+		}
+	}
+
 	public function UpdatePlayer($request) {
 		logtrace("UpdatePlayer()", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+
+		if ($request['RemoveDues'] === "Revoke Dues") {
+			$this->load_model('Treasury');
+			return $this->Treasury->RemoveLastDuesPaid(array(
+							'MundaneId' => $request['MundaneId'],
+							'Token' => $request['Token']
+			));
+		}
 
 		if (trimlen($request['UserName']) > 0) {
 			$this->mundane->clear();
