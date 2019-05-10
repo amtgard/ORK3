@@ -807,7 +807,7 @@ class Player extends Ork3 {
     				$notices .= 'There was an error decoding your image.<br />';
 					return InvalidParameter($notices);
     			}
-    		} else if ($request['Waivered'] === true) {
+    		} else if ($request['Waivered']) {
 				logtrace("set_waiver() - force waivered", $request);
                 $this->mundane->waivered = 1;
     			$notices .= 'Waivers must be jpeg, gifs, pngs, or pdfs, and may be no larger than 340KB.<br />';
