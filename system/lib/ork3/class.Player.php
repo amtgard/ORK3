@@ -691,6 +691,18 @@ class Player extends Ork3 {
 				if (strlen($request['Heraldry'])) {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
 				}
+				if ($request['DuesDate']) {
+					$this->load_model('Treasury');
+					$duespaid = $this->Treasury->DuesPaidToPark(array(
+						'MundaneId' => $request['MundaneId'],
+						'Token' => $request['Token'],
+						'TransactionDate' => $request['DuesDate'],
+						'Semesters' => $request['DuesSemesters']
+					));
+					if ($duespaid['Status'] > 0) {
+						return InvalidParameter();
+					}
+				}
 				logtrace("Player Updated", array($request, $this->mundane->lastSql()));
    				$this->mundane->save();
 				return Success($notices);
