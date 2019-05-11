@@ -418,8 +418,6 @@ class Player extends Ork3 {
 						$this->mundane->waivered = 1;
 						$this->mundane->waiver_ext = 'pdf';
 					}
-				} else {
-					$this->mundane->waivered = 0;
 				}
 				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 					$playerimage = @imagecreatefromstring(base64_decode($request['Image']));
