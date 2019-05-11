@@ -605,10 +605,27 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function load_model( $name )
+	{
+		if ( file_exists( DIR_MODEL . 'model.' . $name . '.php' ) ) {
+			require_once( DIR_MODEL . 'model.' . $name . '.php' );
+			$model_name = 'Model_' . $name;
+			$this->$name = new $model_name();
+		}
+	}
+
 	public function UpdatePlayer($request) {
 		logtrace("UpdatePlayer()", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+
+		if ($request['RemoveDues'] === "Revoke Dues") {
+			$this->load_model('Treasury');
+			return $this->Treasury->RemoveLastDuesPaid(array(
+							'MundaneId' => $request['MundaneId'],
+							'Token' => $request['Token']
+			));
+		}
 
 		if (trimlen($request['UserName']) > 0) {
 			$this->mundane->clear();
@@ -673,6 +690,18 @@ class Player extends Ork3 {
 				}
 				if (strlen($request['Heraldry'])) {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+				}
+				if ($request['DuesDate']) {
+					$this->load_model('Treasury');
+					$duespaid = $this->Treasury->DuesPaidToPark(array(
+						'MundaneId' => $request['MundaneId'],
+						'Token' => $request['Token'],
+						'TransactionDate' => $request['DuesDate'],
+						'Semesters' => $request['DuesSemesters']
+					));
+					if ($duespaid['Status'] > 0) {
+						return InvalidParameter();
+					}
 				}
 				logtrace("Player Updated", array($request, $this->mundane->lastSql()));
    				$this->mundane->save();
@@ -778,7 +807,7 @@ class Player extends Ork3 {
     				$notices .= 'There was an error decoding your image.<br />';
 					return InvalidParameter($notices);
     			}
-    		} else if ($request['Waivered'] === true) {
+    		} else if ($request['Waivered']) {
 				logtrace("set_waiver() - force waivered", $request);
                 $this->mundane->waivered = 1;
     			$notices .= 'Waivers must be jpeg, gifs, pngs, or pdfs, and may be no larger than 340KB.<br />';
