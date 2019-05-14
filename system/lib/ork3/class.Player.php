@@ -172,9 +172,14 @@ class Player extends Ork3 {
 						left join " . DB_PREFIX . "event e on a.event_id = e.event_id
 							left join " . DB_PREFIX . "park ep on e.park_id = ep.park_id
 							left join " . DB_PREFIX . "kingdom ek on e.kingdom_id = ek.kingdom_id
-					where a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
-					order by a.date desc
-		";
+          where a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'";
+    $date_start = $request['date_start'];
+    if (!is_null($date_start) && strtotime($date_start)) {
+      $when = date("Y-m-d", strtotime($date_start));
+      $sql .= " and a.date >= '$when' ";
+    }
+    $sql .= " order by a.date desc";
+    $limit = $request['limit'];
 		$r = $this->db->query($sql);
 		$response = array();
 		$response['Attendance'] = array();
@@ -202,7 +207,11 @@ class Player extends Ork3 {
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name
 					);
-			} while ($r->next());
+          if (is_numeric($limit)) {
+            $limit--;
+            if ($limit == 0) break;
+          }
+      } while ($r->next());
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
@@ -409,8 +418,6 @@ class Player extends Ork3 {
 						$this->mundane->waivered = 1;
 						$this->mundane->waiver_ext = 'pdf';
 					}
-				} else {
-					$this->mundane->waivered = 0;
 				}
 				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 					$playerimage = @imagecreatefromstring(base64_decode($request['Image']));
@@ -596,10 +603,27 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function load_model( $name )
+	{
+		if ( file_exists( DIR_MODEL . 'model.' . $name . '.php' ) ) {
+			require_once( DIR_MODEL . 'model.' . $name . '.php' );
+			$model_name = 'Model_' . $name;
+			$this->$name = new $model_name();
+		}
+	}
+
 	public function UpdatePlayer($request) {
 		logtrace("UpdatePlayer()", $request);
 		$mundane = $this->player_info($request['MundaneId']);
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+
+		if ($request['RemoveDues'] === "Revoke Dues") {
+			$this->load_model('Treasury');
+			return $this->Treasury->RemoveLastDuesPaid(array(
+							'MundaneId' => $request['MundaneId'],
+							'Token' => $request['Token']
+			));
+		}
 
 		if (trimlen($request['UserName']) > 0) {
 			$this->mundane->clear();
@@ -664,6 +688,18 @@ class Player extends Ork3 {
 				}
 				if (strlen($request['Heraldry'])) {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+				}
+				if ($request['DuesDate']) {
+					$this->load_model('Treasury');
+					$duespaid = $this->Treasury->DuesPaidToPark(array(
+						'MundaneId' => $request['MundaneId'],
+						'Token' => $request['Token'],
+						'TransactionDate' => $request['DuesDate'],
+						'Semesters' => $request['DuesSemesters']
+					));
+					if ($duespaid['Status'] > 0) {
+						return InvalidParameter();
+					}
 				}
 				logtrace("Player Updated", array($request, $this->mundane->lastSql()));
    				$this->mundane->save();
@@ -769,7 +805,7 @@ class Player extends Ork3 {
     				$notices .= 'There was an error decoding your image.<br />';
 					return InvalidParameter($notices);
     			}
-    		} else if ($request['Waivered'] === true) {
+    		} else if ($request['Waivered']) {
 				logtrace("set_waiver() - force waivered", $request);
                 $this->mundane->waivered = 1;
     			$notices .= 'Waivers must be jpeg, gifs, pngs, or pdfs, and may be no larger than 340KB.<br />';
