@@ -126,6 +126,7 @@ class Kingdom  extends Ork3 {
 					order by is_ladder, ka.is_title, ka.title_class desc, ka.name, a.name";
 		$r = $this->db->query($sql);
 		
+  	logtrace('GetAwardList', array($sql, $request));
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
