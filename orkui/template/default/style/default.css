@@ -38,6 +38,11 @@ p {
 #contents {
 	margin: 0px 0px 0px 12px;
 }
+
+#newmenu>#controls>ul>li.search-switch-off {
+  display: none; 
+}
+
 @media (min-width: 0px) {
 	#newmenu {
 		display: block;
@@ -46,11 +51,11 @@ p {
 		left: 0;
 		position: fixed;
 		background-color: #444;
-		color: #eee;
-		padding: 4px;
+		color: #fff;
+		padding: 0px;
 	}
 	#newmenu a {
-		color: #eee;	
+		color: #fff;	
 	}
 	#newmenu div {
 		display: table;
@@ -63,10 +68,12 @@ p {
 	}
 	#newmenu div ul li {
 		display: table-cell;	
+    vertical-align: middle;
 	}
 	#navmenu {
 		clear: none;
 		float: left;
+    margin: 4px 0 4px 4px;
 	}
 	#navmenu li {
 		padding-right: 8px;
@@ -74,7 +81,8 @@ p {
 	#controls {
 		float: right;
 		width: auto;
-		padding-right: 8px;
+		padding: 4px 8px 4px 0;
+    background-color: #509dbf;
 	}
 	#controls li {
 		padding-left: 8px;
@@ -82,11 +90,17 @@ p {
 	#controls input {
 		border-width: 0 0 1px 0;
 		border-color: #eee;
-		background-color: #444;
+		background-color: #509dbf;
 		margin-left: 4px;
-		color: #ffcc00;
+		color: #fff;
 		font-weight: bold;
 	}
+  #controls input::placeholder {
+    color: #ddd; 
+  }
+}
+.sidr li button {
+  margin-left: 15px; 
 }
 a {
 	text-decoration: none;

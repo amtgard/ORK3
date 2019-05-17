@@ -196,7 +196,7 @@ class Controller_Admin extends Controller {
 		}
 		$this->data['Unit_heraldryurl'] = $this->Unit->get_heraldry($unit_id);
 		$this->data['Unit'] = $this->Unit->get_unit_details($unit_id);
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['unit'] = array( 'url' => UIR."Unit/index/$unit_id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
 	}
 
@@ -507,7 +507,7 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_event'] = $this->request->Admin_event->Request;
 		}
 		$this->data['menu']['event'] = array( 'url' => UIR.'Event/index/'.$event_id, 'display' => $this->data['EventDetails']['Name'] );
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$event_id, 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$event_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 	}
 
 	public function manageevent($post=null) {
@@ -540,7 +540,7 @@ class Controller_Admin extends Controller {
 			if (valid_id($this->data['CreateUnitId'])) {
 				$unit = $this->Unit->get_unit($this->data['CreateUnitId']);
 				$this->data['menu']['player'] = array( 'url' => UIR."Unit/index/{$this->data[CreateUnitId]}", 'display' => $unit['Unit']['Name'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data[CreateUnitId]}", 'display' => 'Admin' );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data[CreateUnitId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_manageevent->CreateMundaneId)) {
@@ -549,7 +549,7 @@ class Controller_Admin extends Controller {
 			if (valid_id($this->data['CreateMundaneId'])) {
 				$player = $this->Player->fetch_player($this->data['CreateMundaneId']);
 				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data[CreateMundaneId]}", 'display' => $player['Persona'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data[CreateMundaneId]}", 'display' => 'Admin' );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data[CreateMundaneId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if ($this->request->exists('Admin_manageevent')) {
@@ -839,7 +839,7 @@ class Controller_Admin extends Controller {
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
 
 	}
@@ -848,7 +848,7 @@ class Controller_Admin extends Controller {
 		$this->load_model('Player');
 		$this->data['Player'] = $this->Player->fetch_player($mundane_id);
 		$this->data['MundaneId'] = $mundane_id;
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$mundane_id", 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$mundane_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$mundane_id", 'display' => $this->data['Player']['Persona'] );
 	}
 
@@ -1380,7 +1380,7 @@ class Controller_Admin extends Controller {
 
 		unset($this->session->park_id);
 		unset($this->session->park_name);
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 	}
 
@@ -1403,7 +1403,7 @@ class Controller_Admin extends Controller {
 		}
 		$this->data['park_name'] = $this->session->park_name;
 
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 		$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
 	}

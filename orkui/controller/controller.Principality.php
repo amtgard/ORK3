@@ -26,7 +26,7 @@ class Controller_Principality extends Controller {
 		unset($this->session->park_id);
 		unset($this->session->park_name);
 		$this->data['principality_name'] = $this->session->principality_name;
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 		$this->data['menu']['principality'] = array( 'url' => UIR.'Principality/index/'.$this->session->principality_id, 'display' => $this->session->principality_name );
 		$this->data['menulist']['admin'] = array(

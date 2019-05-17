@@ -5,7 +5,7 @@ class Controller_Search extends Controller {
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
 		
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 	}
 	
 	public function index($id=null) {
