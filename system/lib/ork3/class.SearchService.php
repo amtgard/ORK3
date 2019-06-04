@@ -308,7 +308,7 @@ class SearchService extends Ork3 {
 		$sql = "select 
 						$parameters
 						`mundane_id`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
-						`restricted`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
+						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
 					from " . DB_PREFIX . "mundane m
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = m.park_id
@@ -334,7 +334,10 @@ class SearchService extends Ork3 {
 						'Waivered' => $q->waivered,
 						'PenaltyBox' => $q->penalty_box,
 						'KAbbr' => $q->k_abbr,
-						'PAbbr' => $q->p_abbr
+            'PAbbr' => $q->p_abbr,
+            'Suspended' => $q->suspended,
+            'SuspendedAt' => $q->suspended_at,
+            'SuspendedUntil' => $q->suspended_until
 					);
 				if (is_numeric($limit)) {
 					if ($limit == 0) break;
