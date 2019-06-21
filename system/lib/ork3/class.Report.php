@@ -272,7 +272,13 @@ class Report  extends Ork3 {
 		if (is_array($request['Awards'])) {
 			$awards_clause = 'and in (' . implode(',',$request['Awards']) . ')';
 		}
-		$sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona
+		$sql = "select 
+              distinct p.park_id, p.name as park_name, 
+              k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, 
+              a.peerage, ifnull(ka.name, a.name) as award_name, 
+              m.persona, ma.date, m.mundane_id, ma.rank, 
+              bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
+              ma.awards_id
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
