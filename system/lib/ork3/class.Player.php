@@ -850,6 +850,8 @@ class Player extends Ork3 {
 			$awards->at_kingdom_id = valid_id($request['KingdomId'])?$request['KingdomId']:0;
 			$awards->at_event_id = valid_id($request['EventId'])?$request['EventId']:0;
 			$awards->note = $request['Note'];
+			$awards->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+			$awards->entered_at = date("Y-m-d H:i:s");
 			// If no event, then go Park!
             if (valid_id($request['GivenById'])) {
     			$awards->park_id = valid_id($given_by['Player']['ParkId'])?$given_by['Player']['ParkId']:0;

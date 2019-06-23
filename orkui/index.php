@@ -1,6 +1,6 @@
 <?php
 
-error_reporting( E_ALL ^ E_STRICT ^ E_NOTICE ^ E_WARNING );
+error_reporting( 0 );
 
 include_once( "../startup.php" );
 define( 'UIR', HTTP_UI_REMOTE . 'index.php?Route=' );
