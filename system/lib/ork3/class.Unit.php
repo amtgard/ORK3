@@ -7,49 +7,28 @@ class Unit extends Ork3 {
 		$this->unit = new yapo($this->db, DB_PREFIX . 'unit');
 		$this->members = new yapo($this->db, DB_PREFIX . 'unit_mundane');
 	}
-	
+
     public function MergeUnits($request) {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 			&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['FromUnitId'], AUTH_CREATE)
             && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['ToUnitId'], AUTH_CREATE)) {
-                
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-    		$sql = "update " . DB_PREFIX ."unit_mundane set unit_id = :to_unit_id where unit_id = :from_unit_id";
-			$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-        	$sql = "update " . DB_PREFIX ."authorization set unit_id = :to_unit_id where unit_id = :from_unit_id";
-			$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-            $sql = "update " . DB_PREFIX ."awards set unit_id = :to_unit_id where unit_id = :from_unit_id";
-			$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-            $sql = "update " . DB_PREFIX ."event set unit_id = :to_unit_id where unit_id = :from_unit_id";
-    		$this->db->Query($sql);
-			
-			$this->db->Clear();
-			$this->db->to_unit_id = $request['ToUnitId'];
-			$this->db->from_unit_id = $request['FromUnitId'];
-            $sql = "update " . DB_PREFIX ."participant set unit_id = :to_unit_id where unit_id = :from_unit_id";
-        	$this->db->Query($sql);
-            
-			$this->db->Clear();
-			$this->db->from_unit_id = $request['FromUnitId'];
-    		$sql = "delete from " . DB_PREFIX ."unit where unit_id = :from_unit_id";
-			$this->db->Query($sql);
+
+    		$sql = "update " . DB_PREFIX ."unit_mundane set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
+        	$sql = "update " . DB_PREFIX ."authorization set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
+            $sql = "update " . DB_PREFIX ."awards set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = $request'" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
+            $sql = "update " . DB_PREFIX ."event set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = $request'" . mysql_real_escape_string($request['FromUnitId']) . "'";
+    		$this->db->query($sql);
+            $sql = "update " . DB_PREFIX ."participant set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+        	$this->db->query($sql);
+
+    		$sql = "delete from " . DB_PREFIX ."unit where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
+			$this->db->query($sql);
         }
     }
-    
+
     public function ConvertToHousehold($request) {
         logtrace('ConvertToHousehold', $request);
 		$mundane = Ork3::$Lib->player->player_info($request['Token']);
@@ -70,11 +49,11 @@ class Unit extends Ork3 {
         }
         return NoAuthorization();
     }
-    
+
     public function AddAward($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
 			return NoAuthorization();
-            
+
         $mundane = new yapo($this->db, DB_PREFIX . 'mundane');
 		$mundane->clear();
 		$mundane->mundane_id = $mundane_id;
@@ -82,7 +61,7 @@ class Unit extends Ork3 {
 			return InvalidParameter();
 		}
 		$authorizer = array ( 'KingdomId' => $mundane->kingdom_id, 'ParkId' => $mundane->park_id );
-        
+
         if (valid_id($request['AwardId'])) {
             $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } else if (valid_id($request['KingdomAwardId'])) {
@@ -127,7 +106,7 @@ class Unit extends Ork3 {
 			return NoAuthorization('No Authorization');
 		}
 	}
-    
+
     public function GetUnit($request) {
 		$this->unit->clear();
 		$this->unit->unit_id = $request['UnitId'];
@@ -148,7 +127,7 @@ class Unit extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function AddMember($request) {
 		if (!valid_id($request['MundaneId'])) {
 			InvalidParameter();
@@ -160,7 +139,7 @@ class Unit extends Ork3 {
 		}
 		return NoAuthorization();
 	}
-	
+
 	public function SetMember($request) {
 		$this->members->clear();
 		$this->members->unit_mundane_id = $request['UnitMundaneId'];
@@ -177,11 +156,11 @@ class Unit extends Ork3 {
 				$this->members->save();
 				return Success();
 			}
-			return NoAuthorization();	
+			return NoAuthorization();
 		}
 		return InvalidParameter();
 	}
-	
+
 	public function _translate_unitmundane($unit_mundane_id) {
 	    $this->members->clear();
 	    $this->members->unit_mundane_id = $unit_mundane_id;
@@ -190,7 +169,7 @@ class Unit extends Ork3 {
 	    }
 	    return array(0,0);
 	}
-	
+
 	public function RetireMember($request) {
 	    logtrace("RetireMember", $request);
 	    list($member_id, $unit_id) = $this->_translate_unitmundane($request['UnitMundaneId']);
@@ -216,9 +195,9 @@ class Unit extends Ork3 {
 			}
 			return Success();
 		}
-		return NoAuthorization();	
+		return NoAuthorization();
 	}
-	
+
 	public function RemoveMember($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)) {
@@ -239,11 +218,11 @@ class Unit extends Ork3 {
 		}
 		return NoAuthorization();
 	}
-	
+
 	public function CreateUnit($request) {
 		logtrace("CreateUnit()", $request);
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0) {
-		
+
 			$this->unit->clear();
 			$this->unit->name = $request['Name'];
 			$this->unit->type = $request['Type'];
@@ -253,12 +232,12 @@ class Unit extends Ork3 {
 			$this->unit->modified = date("Y-m-d H:i:s");
 			$this->unit->save();
     		$request['UnitId'] = $this->unit->unit_id;
-			
+
     		if (strlen($request['Heraldry']) > 0) {
 				logtrace("CreateUnit() :2", $request);
 				Ork3::$Lib->heraldry->SetUnitHeraldry($request);
 			}
-                
+
             if ($request['Anonymous']
                     && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
         		return Success($request['UnitId']);
@@ -272,7 +251,7 @@ class Unit extends Ork3 {
 			}
 
 			Ork3::$Lib->authorization->add_auth_h(array('MundaneId'=>$mundane_id, 'Type'=>AUTH_UNIT, 'Id' => $this->unit->unit_id, 'Role' => AUTH_EDIT));
-			
+
 			$request['MundaneId'] = $mundane_id;
 			switch ($this->unit->type) {
     			case 'Company': $request['Role'] = 'captain'; break;
@@ -282,14 +261,14 @@ class Unit extends Ork3 {
 			$request['Title'] = 'Founder';
 			$request['Active'] = 1;
 			$this->add_member_h($request);
-            
+
     		return Success($request['UnitId']);
-			
+
 		} else {
 			return NoAuthorization();
 		}
 	}
-	
+
 	public function SetUnit($request) {
 		logtrace("SetUnit()", $request);
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -311,20 +290,19 @@ class Unit extends Ork3 {
 		}
 		return NoAuthorization();
 	}
-	
+
 	public function add_member_h($request) {
 		logtrace("add_member_h", $request);
 		$this->unit->clear();
-		$this->unit->type = 'Company';
 		$this->unit->unit_id = $request['UnitId'];
-		
+
 		if ($this->unit->find()) {
 			$this->members->clear();
 			$this->members->unit_id = $request['UnitId'];
 			$this->members->mundane_id = $request['MundaneId'];
 			$this->members->active = 'Active';
 			if ($this->members->find()) {
-				return InvalidParameter('Player is already an active member of this company.');
+				return InvalidParameter('Player is already an active member of this ' . $this->unit->type . '.');
 			}
 			$this->members->clear();
 			$this->members->mundane_id = $request['MundaneId'];
@@ -336,7 +314,7 @@ class Unit extends Ork3 {
 				return Success($this->members->unit_mundane_id);
 			}
 		}
-			
+
 		$this->members->clear();
 		$this->members->unit_id = $request['UnitId'];
 		$this->members->mundane_id = $request['MundaneId'];
@@ -346,7 +324,7 @@ class Unit extends Ork3 {
 		$this->members->save();
 		return Success($this->members->unit_mundane_id);
 	}
-	
+
 }
 
 ?>

@@ -1,4 +1,4 @@
-<div class='info-container' id='player-editor'>
+<div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
 		<div>
@@ -13,16 +13,9 @@
 				<img class='heraldry-img' src='<?=$Player['HasImage']>0?HTTP_PLAYER_IMAGE . sprintf('%06d', $Player['MundaneId']) . '.jpg':HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
 			</span>
 		</div>
-		<div>
-			<span>Waiver:</span>
-			<span>
-				<img class='heraldry-img' src='<?=$Player['Waivered']>0?(($Player['WaiverExt']=='pdf')?HTTP_WAIVERS.'pdf.gif':$Player['Waiver']):HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
-				<div class='form-informational-field'><?=$Player['Waivered']>0?"<a href='$Player[Waiver]'>Waiver</a>":"No Waiver" ?></div>
-			</span>
-		</div>
 	</form>
 </div>
-<div class='info-container' id='player-editor'>
+<div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 	<h3>Player Details</h3>
 	<form class='form-container' >
 		<div>
@@ -43,19 +36,33 @@
 		</div>
 		<div>
 			<span>Restricted:</span>
-			<span><input type='checkbox' value='Penalty' <?=($Player['Restricted'])==1?"Checked":"" ?> DISABLED name='Restricted' id='Restricted' /></span>
+			<span><input type='checkbox' value='Restricted' <?=($Player['Restricted'])==1?"Checked":"" ?> DISABLED name='Restricted' id='Restricted' /></span>
 		</div>
 		<div>
-			<span>Company:</span>
-			<span class='form-informational-field'><?=$Player['Company'] ?></span>
+			<span>Waivered:</span>
+			<span><input type='checkbox' value='Waivered' <?=($Player['Waivered'])==1?"Checked":"" ?> DISABLED name='Waivered' id='Waivered' /></span>
 		</div>
 		<div>
-			<span>Penalty Box:</span>
-			<span><input type='checkbox' value='Penalty' <?=(($Player['PenaltyBox'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
+			<span>Suspended:</span>
+			<span><input type='checkbox' value='Suspended' <?=(($Player['Suspended'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
+		</div>
+	<?php if ($Player['Suspended']==1) : ?>
+		<div>
+			<span>Suspended At:</span>
+			<span class='form-informational-field'><?=$Player['SuspendedAt'] ?></span>
 		</div>
 		<div>
-			<span>Active:</span>
-			<span><input type='checkbox' value='Active' <?=($Player['Active'])==1?"CHECKED":"" ?> DISABLED name='Active' id='Active' /></span>
+			<span>Suspended At:</span>
+			<span class='form-informational-field'><?=$Player['SuspendedUntil'] ?></span>
+		</div>
+		<div>
+			<span>Suspended At:</span>
+			<span class='form-informational-field'><?=$Player['Suspension'] ?></span>
+		</div>
+	<?php endif; ?>
+		<div>
+			<span>Enabled:</span>
+			<span><input type='checkbox' value='Active' <?=(($Player['Active'])==1 && ($Player['Suspended'])==0)?"CHECKED":"" ?> DISABLED name='Active' id='Active' /></span>
 		</div>
 		<div>
 			<span>Dues Paid:</span>
@@ -152,7 +159,7 @@
 </div>
 
 <div class='info-container'>
-	<h3>Awards &amp; Titles</h3>
+	<h3>Awards</h3>
 	<table class='information-table form-container' id='Awards'>
 		<thead>
 			<tr>
@@ -162,11 +169,13 @@
 				<th>Given By</th>
 				<th>Given At</th>
 				<th>Note</th>
+				<th>Entered By</th>
 			</tr>
 		</thead>
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] === 'none') : ?>
     		<tr>
 				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -174,7 +183,42 @@
 				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
 				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td><?=$detail['Note'] ?></td>
+				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 			</tr>
+<?php endif ?>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+
+<div class='info-container'>
+	<h3>Titles</h3>
+	<table class='information-table form-container' id='Awards'>
+		<thead>
+			<tr>
+				<th>Award</th>
+				<th>Rank</th>
+				<th>Date</th>
+				<th>Given By</th>
+				<th>Given At</th>
+				<th>Note</th>
+				<th>Entered By</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
+<?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] !== 'none') : ?>
+    		<tr>
+				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
+				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
+				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
+				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
+				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
+				<td><?=$detail['Note'] ?></td>
+				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
+			</tr>
+<?php endif ?>
 <?php endforeach ?>
 		</tbody>
 	</table>

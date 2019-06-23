@@ -58,7 +58,7 @@ class Attendance  extends Ork3 {
 	
 	public function AddAttendance($request) {
 		logtrace("Attendance->AddAttendance()", $request);
-		
+
 		if (($type = $this->AttendanceAuthority($request)) === false) {
             logtrace("Attendance->AddAttendance: No Authority", $request);
 			return NoAuthorization('Type is not specified.');
@@ -128,6 +128,22 @@ class Attendance  extends Ork3 {
 			return InvalidParameter();
 		}
 		
+		$attendance = new stdClass();
+		$attendance->attendance_id = $this->attendance->attendance_id;
+		$attendance->mundane_id = $this->attendance->mundane_id;
+		$attendance->class_id = $this->attendance->class_id;
+		$attendance->date = $this->attendance->date;
+		$attendance->park_id = $this->attendance->park_id;
+		$attendance->kingdom_id = $this->attendance->kingdom_id;
+		$attendance->event_id = $this->attendance->event_id;
+		$attendance->event_calendardetail_id = $this->attendance->event_calendardetail_id;
+		$attendance->credits = $this->attendance->credits;
+		$attendance->persona = $this->attendance->persona;
+		$attendance->flavor = $this->attendance->flavor;
+		$attendance->note = $this->attendance->note;
+				
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $attendance->mundane_id, $attendance);
+		
 		$this->attendance->mundane_id = $request['MundaneId'];
 		$this->attendance->class_id = $request['ClassId'];
 		$this->attendance->date = $request['Date'];
@@ -159,7 +175,7 @@ class Attendance  extends Ork3 {
 	
 	public function AttendanceAuthority($request) {
 		logtrace("Attendance->AttendanceAuthority()", $request);
-		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+    $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		if (!valid_id($mundane_id)) {
 			logtrace("Attendance->AttendanceAuthority() - No mundane_id", null);
 			return false;
@@ -178,12 +194,12 @@ class Attendance  extends Ork3 {
 	}
 	
 	private function attendance_authority_h($request) {
-		logtrace("Attendance->attendance_authority_h()", $request);
+    logtrace("Attendance->attendance_authority_h()", $request);
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		if (valid_id($request['ParkId'])) {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
 				return AUTH_PARK;
-			}
+      }
 		} else if (valid_id($request['KingdomId'])) {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
 				return AUTH_KINGDOM;
@@ -204,7 +220,8 @@ class Attendance  extends Ork3 {
 		} else {
 			logtrace('attendance_authority_h() - no matches');
 			return false;
-		}
+    }
+    return false;
 	}
 	
 	public function RemoveAttendance($request) {
@@ -213,9 +230,9 @@ class Attendance  extends Ork3 {
 		
 		if ($this->AttendanceAuthority($request) === false) {
 			return NoAuthorization();
-		}
-		
-		$this->attendance->clear();
+    }
+
+    $this->attendance->clear();
 		$this->attendance->attendance_id = $request['AttendanceId'];
 		if (!valid_id($request['AttendanceId']) || !$this->attendance->find()) {
 			return InvalidParameter();
@@ -235,7 +252,7 @@ class Attendance  extends Ork3 {
 		$attendance->flavor = $this->attendance->flavor;
 		$attendance->note = $this->attendance->note;
 				
-		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Attendance', $request['AttendanceId'], $attendance);
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $attendance->mundane_id, $attendance);
 		
 		$this->attendance->delete();
 		

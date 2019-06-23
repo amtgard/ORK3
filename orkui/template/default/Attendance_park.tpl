@@ -149,16 +149,17 @@
 		</div>
 		<div>
 			<span>Player's Park:</span>
-			<span><input type='text' class='required-field' value='<?=trimlen($Attendance_index['ParkName'])?$Attendance_index['ParkName']:$DefaultParkName ?>' name='ParkName' id='ParkName' /></span>
+			<span><input type='text' class='required-field' value="<?=html_encode(trimlen($Attendance_index['ParkName'])?$Attendance_index['ParkName']:$DefaultParkName) ?>" name='ParkName' id='ParkName' /></span>
 		</div>
 		<div>
 			<span>Player:</span>
-			<span><input type='text' class='required-field' value='<?=$Attendance_index['PlayerName'] ?>' name='PlayerName' id='PlayerName' /></span>
+			<span><input type='text' class='required-field' value="<?=html_encode($Attendance_index['PlayerName']) ?>" name='PlayerName' id='PlayerName' /></span>
 		</div>
 		<div>
 			<span>Class:</span>
 			<span>
 				<select name='ClassId' id='ClassId' class='required-field'>
+					<option value=''>-select one-</option>
 <? foreach ($Classes['Classes'] as $k => $class) : ?>
 					<option value='<?=$class['ClassId'] ?>'><?=$class['Name'] ?></option>
 <? endforeach ?>
@@ -189,6 +190,7 @@
 				<th>Player</th>
 				<th>Class</th>
 				<th>Credits</th>
+				<th>Entered By</th>
 				<th class='deletion'>&times;</th>
 			</tr>
 		</thead>
@@ -205,6 +207,7 @@
     <?php endif ; ?>
 				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>
+				<td class='data-column'><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 				<td class='deletion'><a href='<?=UIR ?>Attendance/park/<?=$Id ?>/delete/<?=$detail['AttendanceId'] ?>&AttendanceDate=<?=$AttendanceDate ?>'>&times;</a></td>
 			</tr>
 <?php endforeach ?>

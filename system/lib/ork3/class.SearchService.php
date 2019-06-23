@@ -79,8 +79,8 @@ class SearchService extends Ork3 {
 						left join " . DB_PREFIX . "kingdom k on p.kingdom_id = k.kingdom_id
 					where p.name like :name limit 4)
 				";
-		$d = $this->db->Query($sql);
-		if ($d !== false && $d->Size() > 0) {
+		$d = $this->db->query($sql);
+		if ($d !== false && !$d->isEmpty()) {
 			$r = array();
 			while ($d->next()) {
 				$r[] = array(
@@ -143,7 +143,6 @@ class SearchService extends Ork3 {
 			return $cache;
 		
     $limit = min($limit, 50);
-		$this->db->Clear();
 		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
@@ -163,12 +162,11 @@ class SearchService extends Ork3 {
 		if ($date_order != null) {
 			$when = "date_add(now(), interval - 7 day)";
 			if (!is_null($date_start) && strtotime($date_start))
-				$when = date("Y-m-d", strtotime($date_start));
+        $when = "'".date("Y-m-d", strtotime($date_start))."'";
 			$sql .= " and cd.event_start is not null and cd.event_start > $when order by cd.event_start, kingdom_name, park_name, e.name";
 		} else {
 			$sql .= " order by kingdom_name, park_name, e.name";
 		}
-//		echo $sql;
 		$d = $this->db->Query($sql);
 		$i = 0;
 		$r = array();
@@ -252,54 +250,64 @@ class SearchService extends Ork3 {
 		}
 	}
 	
+  public function magic_search($term, $kingdom_id, $park_id) {
+    preg_match('/([a-z]{2,3}):([a-z]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
+    
+    $k_id = Ork3::$Lib->kingdom->GetKingdomByAbbreviation(array('Abbreviation'=>$matches[1]));
+    $p_id = Ork3::$Lib->park->GetParkByAbbreviation(array('Abbreviation'=>$matches[2]));
+    
+    return array( 
+      (trimlen($matches[3])==0?$term:$matches[3]), 
+      (is_null($k_id)?$kingdom_id:$k_id), 
+      (is_null($p_id)?$park_id:$p_id) );
+  }
+  
 	public function Player($type, $search, $limit=15, $kingdom_id = null, $park_id = null, $waivered = null, $persona_required = true) {
+    list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
+    
 		$searchtokens = preg_split("/[\s,-]+/", $search);
     	$opt = array("1");
         $limit = min(valid_id($limit)?$limit:15, 50);
-		$this->db->Clear();
 		switch (strtoupper($type)) {
 			case 'PERSONA': 
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "`persona` like '%$t%'"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) { return "`persona` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
 			    	$order = "order by persona,surname,given_name";
                     $opt[] = "length(`persona`) > 0";
 				break;
 			case 'MUNDANE':
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "`given_name` like '%$t%' or `surname` like '$t%'"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) { return "`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
 				    $order = "order by surname,given_name";
                     $opt[] = "(length(`surname`) > 0 or length(`given_name`) > 0)";
 				break;
 			case 'USER':
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "`username` like '%$t%'"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) { return "`username` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
 			    	$order = "order by username,surname,given_name";
                     $opt[] = "length(`username`) > 0";
 				break;
 			default:
 				$zztop = implode('* ', $searchtokens) . '*';
-				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('$zztop' in boolean mode)";
+				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)";
 			break;
 		}
         if ($persona_required === true) {
             $opt[] = "length(`persona`) > 0";
         }
 		if (is_numeric($kingdom_id) && $kingdom_id > 0) {
-			$opt[] = "m.kingdom_id = :kingdom_id";
-			$this->db->kingdom_id = $kingdom_id;
+			$opt[] = "m.kingdom_id =" . mysql_real_escape_string($kingdom_id);
 		}
 		if (is_numeric($park_id) && $park_id > 0) {
-			$opt[] = "m.park_id = :park_id";
-			$this->db->park_id = $park_id;
+			$opt[] = "m.park_id =" . mysql_real_escape_string($park_id);
 		}
 		if (is_numeric($waivered) && $waivered > 0) {
-			$opt[] = "waivered = :waivered";
-			$this->db->waivered = ($waivered?1:0);
+			$opt[] = "waivered =".($waivered?1:0);
 		}
 		$sql = "select 
 						$parameters
 						`mundane_id`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
-						`restricted`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
+						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
 					from " . DB_PREFIX . "mundane m
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = m.park_id
@@ -325,7 +333,10 @@ class SearchService extends Ork3 {
 						'Waivered' => $q->waivered,
 						'PenaltyBox' => $q->penalty_box,
 						'KAbbr' => $q->k_abbr,
-						'PAbbr' => $q->p_abbr
+            'PAbbr' => $q->p_abbr,
+            'Suspended' => $q->suspended,
+            'SuspendedAt' => $q->suspended_at,
+            'SuspendedUntil' => $q->suspended_until
 					);
 				if (is_numeric($limit)) {
 					if ($limit == 0) break;

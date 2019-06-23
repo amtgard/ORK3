@@ -2,6 +2,7 @@
 <html>
 	<head>
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
+		<link rel="shortcut icon" href="/<?=ORK_DIST_NAME ?>/favicon.ico">
 		<meta name=viewport content="user-scalable=no,width=device-width,minimum-scale=1" />
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/css/ui-lightness/jquery-ui-1.8.18.custom.css" rel="stylesheet" />
 		<link rel=StyleSheet href="<?=HTTP_TEMPLATE;?>default/style/default.css" type="text/css" media=screen>
@@ -12,6 +13,7 @@
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/highcharts.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.data.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.exporting.js"></script>
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.2/css/all.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous">
 		
 		<script src="//cdn.jsdelivr.net/jquery.sidr/2.2.1/jquery.sidr.min.js"></script>
 		<link rel="stylesheet" href="//cdn.jsdelivr.net/jquery.sidr/2.2.1/stylesheets/jquery.sidr.dark.min.css">
@@ -36,7 +38,7 @@
 			<div id='navmenu'>
 				<ul>
 	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a></li>
+					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
 	<?php endforeach; ?>
 				</ul>
 			</div>
@@ -46,11 +48,12 @@
 	<?php if ($this->__session->token == null) : ?>
 					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
 	<?php else : ?>
-					<li><a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
+					<li>Logged in as <a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
 					<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"' >Logout</button></li>
 	<?php endif; ?>
-					<li><input id='PlayerSearch' placeholder="Players" /></li>
-					<li><input id='ParkSearch' placeholder="Parks" /></li>
+          <li class='search-switch search-switch-on'><a onclick="$('.search-switch').toggle('slow').css('display', 'table-cell');">Search</a></li>
+					<li class='search-switch search-switch-off'><input id='PlayerSearch' placeholder="Players" /></li>
+					<li class='search-switch search-switch-off'><input id='ParkSearch' placeholder="Parks" /></li>
 				</ul>
 			</div>
 	</div>
@@ -59,6 +62,7 @@
 		<!-- Your content -->
 		<ul>
 				<ul>
+          <li><a href='https://www.facebook.com/mORKmobile/posts/2275859462673190'>Get the ORK Mobile!</a></li>
 	<?php foreach ($menu as $k => $item) : ?>
 					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a></li>
 	<?php endforeach; ?>

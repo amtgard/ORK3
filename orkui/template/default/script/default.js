@@ -72,6 +72,9 @@ function hasExpandMode(url) {
 
 function setExpandMode(container, url, nth, mode) {
 	
+	if ($(container).hasClass('skip-fold'))
+		return;
+	
 	hasExpandMode(url);
 	
 	var expand = JSON.parse(localStorage.getItem(url));
@@ -81,8 +84,8 @@ function setExpandMode(container, url, nth, mode) {
 	if (mode == "closed") {
 		$(container).children(':not(h3)').each(function(l, noth3) {
 			$(noth3).hide();
+			$(container).addClass('up-container');	
 		});
-		$(container).addClass('up-container');	
 	} else {
 		$(container).children(':not(h3)').each(function(l, noth3) {
 			$(noth3).show();
@@ -92,6 +95,9 @@ function setExpandMode(container, url, nth, mode) {
 }
 
 function getExpandMode(container, url, nth) {
+	if ($(container).hasClass('skip-fold'))
+		return;
+	
 	hasExpandMode(url);
 	var expand = JSON.parse(localStorage.getItem(url));
 	if (nth in expand) {

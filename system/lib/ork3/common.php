@@ -103,34 +103,73 @@ function signUrl( $myUrlToSign, $privateKey )
 class Common
 {
 
+  public static $rate_limit;
+  public static $init;
+  
 	public function __construct()
 	{
-		global $DB;
-		global $LOG;
-		$this->log = $LOG;
-		$this->db = $DB;
-		$this->config = new yapo( $this->db, DB_PREFIX . 'configuration' );
-		$this->officer = new yapo( $this->db, DB_PREFIX . 'officer' );
-		$this->authorization = new yapo( $this->db, DB_PREFIX . 'authorization' );
+      global $DB;
+      global $LOG;
+      $this->log = $LOG;
+      $this->db = $DB;
+      $this->config = new yapo( $this->db, DB_PREFIX . 'configuration' );
+      $this->officer = new yapo( $this->db, DB_PREFIX . 'officer' );
+      $this->authorization = new yapo( $this->db, DB_PREFIX . 'authorization' );
+      if (Common::$init != 'init') {
+        Common::$rate_limit = new yapo( $this->db, DB_PREFIX . 'rate_limit' );
+        Common::$init = 'init';
+      }
 	}
 
+  public static function RateLimit($service, $limit = 20, $per = "+1 week") {
+    Common::$rate_limit->clear();
+    Common::$rate_limit->ip_address = $_SERVER['REMOTE_ADDR'];
+    Common::$rate_limit->service = $service;
+    if (Common::$rate_limit->find()) {
+      if (strtotime(Common::$rate_limit->expires) > time()) {
+        if (Common::$rate_limit->count > $limit) {
+          return false; 
+        }
+        Common::$rate_limit->count = Common::$rate_limit->count + 1;
+        Common::$rate_limit->save();
+        return true;
+      } else {
+        Common::$rate_limit->delete(); 
+      }
+    }
+    Common::$rate_limit->clear();
+    Common::$rate_limit->ip_address = $_SERVER['REMOTE_ADDR'];
+    Common::$rate_limit->count = 1;
+    Common::$rate_limit->service = $service;
+    Common::$rate_limit->expires = date("Y-m-d H:i:s", strtotime($per));
+    Common::$rate_limit->save();
+    return true;
+  }
+  
 	public static function Geocode( $address, $city, $state, $postal_code, $geocode = null )
 	{
+    $c = new Common();
+    
+    if (!Common::RateLimit('geocode'))
+      return array( "You have exceeded your rate limit" );
+    
 		logtrace( "Geocode", [ $address, $city, $state, $postal_code, $geocode ] );
 		if ( strlen( $geocode ) > 0 ) {
 			$latlng = urlencode( str_replace( ' ', '', $geocode ) );
-			$geocodeURL = signUrl( "http://maps.googleapis.com/maps/api/geocode/json?latlng=$latlng&sensor=false", GOOGLE_MAPS_API_KEY );
+			$geocodeURL = signUrl( "https://maps.googleapis.com/maps/api/geocode/json?latlng=$latlng&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY );
 		} else {
 			$address = urlencode( $address . ', ' . $city . ', ' . $state . ', ' . $postal_code );
-			$geocodeURL = signUrl( "http://maps.googleapis.com/maps/api/geocode/json?address=$address&sensor=false", GOOGLE_MAPS_API_KEY );
+			$geocodeURL = signUrl( "https://maps.googleapis.com/maps/api/geocode/json?address=$address&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY );
 		}
 		$ch = curl_init( $geocodeURL );
+    curl_setopt($ch, CURLOPT_REFERER, 'https://amtgard.com/ork');
+    curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
 		$result = curl_exec( $ch );
 		$httpCode = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
 		curl_close( $ch );
 		$details = [ ];
-		logtrace( "Geocode: Processing.", null );
+		logtrace( "Geocode: Processing.", array( $httpCode, $result ));
 		if ( $httpCode == 200 ) {
 			$geocode = json_decode( $result );
 			logtrace( "Geocode: Processing.", $geocode );
@@ -344,6 +383,17 @@ class Common
 		$this->parktitle->save();
 	}
 
+  public function find_matching_officer_award( $kingdom_id, $park_id, $role ) {
+    $monarch = array( 92, 70, 71, 72, 73, 74, 75, 76, 227, 234 );
+    $regent = array( 90, 77, 78, 79, 80, 228, 235 );
+    $prime_minister = array( 91, 81, 82, 83, 84, 205, 237 );
+    $champion = array( 89, 85, 86, 87, 88, 236 );
+    
+    $sql = "select ka.award_id, ka.kingdom_award_id, a.name as award_name, ka.name as kingdom_award_name
+              from " . DB_PREFIX . "award a left join " . DB_PREFIX . "kingdomaward ka on ka.award_id = a.award_id
+            where ka.award_id in ";
+  }
+  
 	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0 )
 	{
 		$this->officer->clear();

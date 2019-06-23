@@ -4,21 +4,21 @@ class Controller_Admin extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
-		
+
 		$this->load_model('Park');
 		$this->load_model('Kingdom');
 		$this->data['Call'] = $call;
 	}
-	
+
 	public function index($duh = null) {
 		unset($this->session->kingdom_id);
 		unset($this->session->kingdom_name);
 		unset($this->session->park_name);
 		unset($this->session->park_id);
-		
+
 		$this->data['ActiveKingdomSummary'] = $this->Report->GetActiveKingdomsSummary();
 	}
-    
+
     public function mergepark($submit = null) {
     	if ($submit == 'submit' && valid_id($this->request->FromParkId) && valid_id($this->request->ToParkId)) {
 			$this->request->save('Admin_mergepark');
@@ -44,7 +44,7 @@ class Controller_Admin extends Controller {
 			}
 		}
     }
-    
+
 	public function mergeunit($submit = null) {
     	$this->load_model('Unit');
     	if ($submit == 'submit' && valid_id($this->request->FromUnitId) && valid_id($this->request->ToUnitId)) {
@@ -69,7 +69,7 @@ class Controller_Admin extends Controller {
 			}
 		}
     }
-	
+
 	public function transferpark($kingdom_id = 0) {
 		$this->data['KingdomName'] = $this->Kingdom->get_kingdom_name($kingdom_id);
 		$this->data['KingdomId'] = $kingdom_id;
@@ -95,13 +95,13 @@ class Controller_Admin extends Controller {
 			}
 		}
 	}
-	
+
 	public function unit($unit_id) {
     	unset($this->session->kingdom_id);
 		unset($this->session->kingdom_name);
 		unset($this->session->park_name);
 		unset($this->session->park_id);
-		
+
 		$this->load_model('Unit');
 		if (strlen($this->request->Action) > 0) {
 			$this->request->save('Admin_unit', true);
@@ -114,7 +114,7 @@ class Controller_Admin extends Controller {
 						if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 							if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("u_%05d", $unit_id))) {
 								$h_im = file_get_contents(DIR_TMP . sprintf("u_%05d", $unit_id));
-								$h_imdata = base64_encode($h_im); 
+								$h_imdata = base64_encode($h_im);
 							}
 						}
 						$r = $this->Unit->set_unit_details(array(
@@ -190,13 +190,13 @@ class Controller_Admin extends Controller {
 				}
 			}
 		}
-		
+
 		if ($this->request->exists('Admin_unit')) {
 			$this->data['Admin_unit'] = $this->request->Admin_unit->Request;
 		}
 		$this->data['Unit_heraldryurl'] = $this->Unit->get_heraldry($unit_id);
 		$this->data['Unit'] = $this->Unit->get_unit_details($unit_id);
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['unit'] = array( 'url' => UIR."Unit/index/$unit_id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
 	}
 
@@ -211,7 +211,7 @@ class Controller_Admin extends Controller {
 						if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 							if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("p_%05d", $park_id))) {
 								$h_im = file_get_contents(DIR_TMP . sprintf("p_%05d", $park_id));
-								$h_imdata = base64_encode($h_im); 
+								$h_imdata = base64_encode($h_im);
 							} else {
 								$Status = array(
 									'Status' => 1000,
@@ -275,7 +275,7 @@ class Controller_Admin extends Controller {
 				} else if ($Status['Status'] != 0) {
 					$this->data['Error'] .= '<b>'.$Status['Error'].'</b>:<br />'.$Status['Detail'].'<p />';
 					$error = true;
-				} 
+				}
 				if (!$error) {
 					$this->data['Message'] = "Parks have been updated.";
 					$this->request->clear('Admin_editpark');
@@ -292,7 +292,7 @@ class Controller_Admin extends Controller {
 		$this->data['Park_config'] = $data['ParkConfiguration'];
 		$this->data['Park_days'] = $data['ParkDays'];
 	}
-	
+
 	public function editparks($kingdom_id) {
 		$this->load_model('Kingdom');
 		if (strlen($this->request->Action) > 0) {
@@ -317,7 +317,7 @@ class Controller_Admin extends Controller {
 					} else if ($Status['Status'] != 0) {
 						$this->data['Error'] .= '<b>'.$Status['Error'].'</b>:<br />'.$Status['Detail'].'<p />';
 						$error = true;
-					} 
+					}
 				}
 				if (!$error) {
 					$this->data['Message'] = "Parks have been updated.";
@@ -331,8 +331,8 @@ class Controller_Admin extends Controller {
 		$this->data['KingdomId'] = $kingdom_id;
 		$this->data['ParkInfo'] = $this->Kingdom->get_park_info($kingdom_id);
 	}
-	
-	public function setkingdomofficers($post=null) {			
+
+	public function setkingdomofficers($post=null) {
 		$this->load_model('Kingdom');
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_setofficers', true);
@@ -375,9 +375,9 @@ class Controller_Admin extends Controller {
 		if ($this->request->exists('Admin_setofficers')) {
 			$this->data['Admin_setofficers'] = $this->request->Admin_setofficers->Request;
 		}
-	}	
-	
-	public function setparkofficers($post=null) {			
+	}
+
+	public function setparkofficers($post=null) {
 		$this->load_model('Park');
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_setofficers', true);
@@ -420,15 +420,15 @@ class Controller_Admin extends Controller {
 		if ($this->request->exists('Admin_setofficers')) {
 			$this->data['Admin_setofficers'] = $this->request->Admin_setofficers->Request;
 		}
-	}	
-	
+	}
+
 	public function event($p) {
 		$params = explode('/',$p);
 		$event_id = $params[0];
 		if (count($params) > 1) $post = $params[1];
-		
+
 		logtrace("index($p)", $params);
-		
+
 		$this->load_model('Event');
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_event', true);
@@ -440,7 +440,7 @@ class Controller_Admin extends Controller {
 				if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 					if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("e_%05d", $event_id))) {
 						$h_im = file_get_contents(DIR_TMP . sprintf("e_%05d", $event_id));
-						$h_imdata = base64_encode($h_im); 
+						$h_imdata = base64_encode($h_im);
 					} else {
 						$Status = array(
 							'Status' => 1000,
@@ -498,7 +498,7 @@ class Controller_Admin extends Controller {
 				}
 			}
 		}
-		
+
 		$this->data['EventDetails'] = $this->Event->get_event_details($event_id);
 		if ($this->data['EventDetails']['Status']['Status'] != 0) {
 			$this->data['Error'] = $this->data['EventDetails']['Status']['Error'];
@@ -507,8 +507,8 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_event'] = $this->request->Admin_event->Request;
 		}
 		$this->data['menu']['event'] = array( 'url' => UIR.'Event/index/'.$event_id, 'display' => $this->data['EventDetails']['Name'] );
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$event_id, 'display' => 'Admin' );
-	}	
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$event_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+	}
 
 	public function manageevent($post=null) {
 		$this->load_model('Event');
@@ -518,10 +518,10 @@ class Controller_Admin extends Controller {
 				header( 'Location: '.UIR.'Login/login/Admin/event' );
 			} else {
 				$r = $this->Event->create_event(
-									$this->session->token, 
-									$this->request->Admin_manageevent->CreateKingdomId, 
-									$this->request->Admin_manageevent->CreateParkId, 
-									$this->request->Admin_manageevent->CreateMundaneId, 
+									$this->session->token,
+									$this->request->Admin_manageevent->CreateKingdomId,
+									$this->request->Admin_manageevent->CreateParkId,
+									$this->request->Admin_manageevent->CreateMundaneId,
 									$this->request->Admin_manageevent->CreateUnitId,
 									$this->request->Admin_manageevent->CreateEventName);
 				if ($r['Status'] == 0) {
@@ -540,7 +540,7 @@ class Controller_Admin extends Controller {
 			if (valid_id($this->data['CreateUnitId'])) {
 				$unit = $this->Unit->get_unit($this->data['CreateUnitId']);
 				$this->data['menu']['player'] = array( 'url' => UIR."Unit/index/{$this->data[CreateUnitId]}", 'display' => $unit['Unit']['Name'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data[CreateUnitId]}", 'display' => 'Admin' );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data[CreateUnitId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_manageevent->CreateMundaneId)) {
@@ -549,14 +549,14 @@ class Controller_Admin extends Controller {
 			if (valid_id($this->data['CreateMundaneId'])) {
 				$player = $this->Player->fetch_player($this->data['CreateMundaneId']);
 				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data[CreateMundaneId]}", 'display' => $player['Persona'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data[CreateMundaneId]}", 'display' => 'Admin' );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data[CreateMundaneId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if ($this->request->exists('Admin_manageevent')) {
 			$this->data['Admin_manageevent'] = $this->request->Admin_manageevent->Request;
 		}
-	}	
-	
+	}
+
 	public function createevent($post=null) {
 		$this->load_model('Event');
 		if (valid_id($this->request->UnitId) || valid_id($this->request->Admin_manageevent->CreateUnitId)) {
@@ -575,7 +575,7 @@ class Controller_Admin extends Controller {
 			$this->data['Events_list'] = array();
 		}
 	}
-	
+
 	public function authorization($post=null) {
 		$this->load_model('Authorization');
 		$this->load_model('Reports');
@@ -630,23 +630,24 @@ class Controller_Admin extends Controller {
 				'admin' => 'Administrator'
 			);
 	}
-	
+
 	public function player($id) {
 		logtrace("player call", $_REQUEST);
 		$this->load_model('Player');
 		$this->load_model('Award');
 		$this->load_model('Unit');
-		
+
 		$params = explode('/',$id);
 		$id = $params[0];
 		if (count($params) > 1)
 			$action = $params[1];
 		if (count($params) > 2)
 			$roastbeef = $params[2];
-				
-				
+		if (count($params) > 3)
+			$detail_param = $params[3];
+
+
 		$thePlayerDetails = $this->Player->fetch_player_details($id);
-        
 		if (strlen($action) > 0) {
 			$this->request->save('Admin_player', true);
 			$r = array('Status'=>0);
@@ -688,7 +689,7 @@ class Controller_Admin extends Controller {
 							if ($_FILES['Waiver']['size'] > 0 && Common::supported_mime_types($_FILES['Waiver']['type'])) {
 								if (move_uploaded_file($_FILES['Waiver']['tmp_name'], DIR_TMP . sprintf("w_%06d", $id))) {
 									$w_im = file_get_contents(DIR_TMP . sprintf("w_%06d", $id));
-									$w_imdata = base64_encode($w_im); 
+									$w_imdata = base64_encode($w_im);
 									$this->Player->SetWaiver(array(
 										'MundaneId' => $id,
 										'HasImage' => strlen($pi_imdata),
@@ -702,7 +703,7 @@ class Controller_Admin extends Controller {
 							if ($_FILES['PlayerImage']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
 								if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {
 									$pi_im = file_get_contents(DIR_TMP . sprintf("pi_%06d", $id));
-									$pi_imdata = base64_encode($pi_im); 
+									$pi_imdata = base64_encode($pi_im);
 									$this->Player->SetImage(array(
 										'MundaneId' => $id,
 										'HasImage' => strlen($pi_imdata),
@@ -779,6 +780,20 @@ class Controller_Admin extends Controller {
 								'AwardsId' => $roastbeef
 							));
 						break;
+					case 'revokeaward':
+						$r = $this->Player->revoke_player_award(array(
+								'Token' => $this->session->token,
+								'AwardsId' => $roastbeef,
+								'Revocation' => $detail_param
+							));
+						break;
+					case 'revokeallawards':
+						$r = $this->Player->revoke_all_awards(array(
+								'Token' => $this->session->token,
+								'MundaneId' => $id,
+								'Revocation' => $roastbeef
+							));
+						break;
 					case 'updateaward':
 						$r = $this->Player->update_player_award(array(
 								'Token' => $this->session->token,
@@ -795,7 +810,7 @@ class Controller_Admin extends Controller {
 							));
 						break;
 					case 'quitunit':
-						$r = $this->Unit->retire_unit_member( array ('UnitId' => $roastbeef, 'MundaneId' => $id ) );
+						$r = $this->Unit->retire_unit_member( array ('UnitId' => $id, 'UnitMundaneId' => $roastbeef, 'Token' => $this->session->token) );
 						break;
     				case 'deletenote':
 						$r = $this->Player->remove_note( array ('NotesId' => $roastbeef, 'MundaneId' => $id, 'Token' => $this->session->token ) );
@@ -813,29 +828,30 @@ class Controller_Admin extends Controller {
 		} else {
 			$this->request->clear('Admin_player');
 		}
-		
+
 		if ($this->request->exists('Admin_player')) {
 			$this->data['Admin_player'] = $this->request->Admin_player->Request;
 		}
 		$this->data['KingdomId'] = $this->session->kingdom_id;
-		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id);
+		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
-		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseholds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin' );
+		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
+		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
-		
+
 	}
-	
+
 	public function player_bak($mundane_id) {
 		$this->load_model('Player');
 		$this->data['Player'] = $this->Player->fetch_player($mundane_id);
 		$this->data['MundaneId'] = $mundane_id;
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$mundane_id", 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$mundane_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$mundane_id", 'display' => $this->data['Player']['Persona'] );
 	}
-	
+
 	public function mergeplayer($params=null) {
 		$params = explode('/',$params);
 		if ('submit' == $params[0]) {
@@ -872,8 +888,8 @@ class Controller_Admin extends Controller {
 		if ($this->request->exists('Admin_mergeplayer')) {
 			$this->data['Admin_mergeplayer'] = $this->request->Admin_mergeplayer->Request;
 		}
-	}	
-	
+	}
+
 	public function claimplayer($params=null) {
 		$params = explode('/',$params);
 		if ('submit' == $params[0]) {
@@ -912,7 +928,44 @@ class Controller_Admin extends Controller {
 		}
 		$this->template = 'Admin_moveplayer.tpl';
 	}
-	
+
+	public function suspendplayer($post=null) {
+		$this->load_model('Player');
+		if (strlen($post) > 0) {
+			$this->request->save('Admin_suspendplayer', true);
+			if (!isset($this->session->user_id)) {
+				header( 'Location: '.UIR.'Login/login/Admin/suspendplayer' );
+			} else if (isset($this->request->Admin_suspendplayer->MundaneId)) {
+				$suspended = isset($this->request->Admin_suspendplayer->Suspended) ? false : true;
+				$r = $this->Player->suspend_player(array(
+						'Token' => $this->session->token,
+						'MundaneId' => $this->request->Admin_suspendplayer->MundaneId,
+						'Suspended' => $suspended,
+						'SuspendedById' => $this->request->Admin_suspendplayer->SuspendatorId,
+						'SuspendedAt' => $this->request->Admin_suspendplayer->SuspendedAt,
+						'SuspendedUntil' => $this->request->Admin_suspendplayer->SuspendedUntil,
+						'Suspension' => $this->request->Admin_suspendplayer->Suspension,
+					));
+				if ($r['Status'] == 0) {
+					$this->data['Message'] = "Player has been <b><a href='" . UIR . "Reports/suspended/Kingdom&id=" . $this->session->kingdom_id . "'>" .
+						($suspended ?
+						 "suspended" :
+						 "UNsuspended") . "</a></b>";
+					$this->request->clear('Admin_suspendplayer');
+				} else if($r['Status'] == 5) {
+					header( 'Location: '.UIR.'Login' );
+				} else {
+					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+				}
+			} else {
+				$this->request->clear('Admin_suspendplayer');
+			}
+		}
+		if ($this->request->exists('Admin_suspendplayer')) {
+			$this->data['Admin_suspendplayer'] = $this->request->Admin_suspendplayer->Request;
+		}
+	}
+
 	public function moveplayer($post=null) {
 		$this->load_model('Player');
 		if (strlen($post) > 0) {
@@ -939,7 +992,7 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_moveplayer'] = $this->request->Admin_moveplayer->Request;
 		}
 	}
-	
+
 	public function createplayer($params=null) {
 		$params = explode('/',$params);
 		if ('submit' == $params[0]) {
@@ -995,6 +1048,7 @@ class Controller_Admin extends Controller {
 						'HasImage' => strlen($playerimage),
 						'Image' => strlen($playerimage)>0?$playerimage:null,
 						'ImageMimeType' => strlen($playerimage)>0?$_FILES['PlayerImage']['type']:'',
+						'IsActive' => 1,
 					));
 				if ($r['Status'] == 0) {
 					$this->data['Message'] = "Player created. <a href='".UIR."Player/index/$r[Detail]'>View your spawn here.</a>";
@@ -1010,7 +1064,7 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_createplayer'] = $this->request->Admin_createplayer->Request;
 		}
 	}
-	
+
 	public function banplayer($post=null) {
 		$this->load_model('Player');
 		$this->load_model('Reports');
@@ -1039,7 +1093,7 @@ class Controller_Admin extends Controller {
 		}
 		$this->data['banned_players'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 1);
 	}
-	
+
 	public function createkingdom($post=null) {
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_createkingdom', true);
@@ -1049,7 +1103,7 @@ class Controller_Admin extends Controller {
 				if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 					if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("k_%04d", $id))) {
 						$k_im = file_get_contents(DIR_TMP . sprintf("k_%04d", $id));
-						$k_imdata = base64_encode($k_im); 
+						$k_imdata = base64_encode($k_im);
 					}
 				}
 				$r = $this->Kingdom->create_kingdom(array(
@@ -1084,10 +1138,10 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_createkingdom'] = $this->request->Admin_createkingdom->Request;
 		}
 	}
-	
+
 	public function editkingdom($id) {
 		$this->kingdom_route($id);
-		
+
 		if (isset($this->request->Action)) {
 			$this->request->save('Admin_editkingdom', true);
 			if (!isset($this->session->user_id)) {
@@ -1098,7 +1152,7 @@ class Controller_Admin extends Controller {
 						if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 							if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("k_%04d", $id))) {
 								$k_im = file_get_contents(DIR_TMP . sprintf("k_%04d", $id));
-								$k_imdata = base64_encode($k_im); 
+								$k_imdata = base64_encode($k_im);
 							}
 						}
 						$r = $this->Kingdom->set_kingdom_details(array(
@@ -1174,7 +1228,7 @@ class Controller_Admin extends Controller {
 						if (is_array($this->request->Admin_editkingdom->KingdomAwardName)) {
 							$award_edits = array();
 							foreach ($this->request->Admin_editkingdom->KingdomAwardName as $AwardId => $award) {
-								if ( 
+								if (
 									$AwardId > 0 && (
 									$this->request->Admin_editkingdom->KingdomAwardName[$AwardId] != $KAwards['Awards'][$AwardId]['KingdomAwardName'] ||
 									$this->request->Admin_editkingdom->ReignLimit[$AwardId] != $KAwards['Awards'][$AwardId]['ReignLimit'] ||
@@ -1225,7 +1279,7 @@ class Controller_Admin extends Controller {
 				}
 			}
 		}
-		
+
 		$this->data['AttendancePeriodType_options'] = array('month'=>'Month','week'=>'Week');
 		$this->data['DuesPeriodType_options'] = array('month'=>'Month','week'=>'Week');
 		$kingdom_info = $this->Kingdom->get_kingdom_details($id);
@@ -1238,7 +1292,7 @@ class Controller_Admin extends Controller {
 		$this->data['Canonical_awards'] = $this->Award->GetAwardList(array());
 		$this->data['Kingdom_heraldryurl'] = $kingdom_info['Heraldry'];
 	}
-	
+
 	public function createpark($params=null) {
 		$params = explode('/',$params);
 		if ('submit' == $params[0]) {
@@ -1292,7 +1346,7 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_createpark'] = $this->request->Admin_createpark->Request;
 		}
 	}
-	
+
 	public function kingdom($id) {
 		$this->kingdom_route($id);
 		$r = $this->Kingdom->get_kingdom_details($id);
@@ -1311,11 +1365,11 @@ class Controller_Admin extends Controller {
 			$this->data[$key] = $detail;
 		}
 	}
-	
+
 	private function kingdom_route($id) {
 		$this->data['kingdom_id'] = $id;
 		$this->session->kingdom_id = $id;
-		
+
 		if (isset($this->request->kingdom_name)) {
 			$this->session->kingdom_name = $this->request->kingdom_name;
 		} else if (!isset($this->session->kingdom_name)) {
@@ -1323,33 +1377,33 @@ class Controller_Admin extends Controller {
 			$this->session->kingdom_name = $this->Kingdom->get_kingdom_name($id);
 		}
 		$this->data['kingdom_name'] = $this->session->kingdom_name;
-		
+
 		unset($this->session->park_id);
 		unset($this->session->park_name);
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 	}
-	
+
 	private function park_route($id) {
 		$this->session->park_id = $id;
-		
+
 		if (!isset($this->session->kingdom_id)) {
 			// Direct link
 			$park_info = $this->Park->get_park_info($id);
 			$this->session->park_name = $park_info['ParkInfo']['ParkName'];
 			$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 			$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
-		} 
+		}
 		$this->data['kingdom_id'] = $this->session->kingdom_id;
 		$this->data['park_id'] = $this->session->park_id;
 		$this->data['kingdom_name'] = $this->session->kingdom_id;
-		
+
 		if (isset($this->request->park_name)) {
 			$this->session->park_name = $this->request->park_name;
 		}
 		$this->data['park_name'] = $this->session->park_name;
-		
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin' );
+
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 		$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
 	}

@@ -38,6 +38,11 @@ p {
 #contents {
 	margin: 0px 0px 0px 12px;
 }
+
+#newmenu>#controls>ul>li.search-switch-off {
+  display: none; 
+}
+
 @media (min-width: 0px) {
 	#newmenu {
 		display: block;
@@ -46,11 +51,11 @@ p {
 		left: 0;
 		position: fixed;
 		background-color: #444;
-		color: #eee;
-		padding: 4px;
+		color: #fff;
+		padding: 0px;
 	}
 	#newmenu a {
-		color: #eee;	
+		color: #fff;	
 	}
 	#newmenu div {
 		display: table;
@@ -63,10 +68,12 @@ p {
 	}
 	#newmenu div ul li {
 		display: table-cell;	
+    vertical-align: middle;
 	}
 	#navmenu {
 		clear: none;
 		float: left;
+    margin: 4px 0 4px 4px;
 	}
 	#navmenu li {
 		padding-right: 8px;
@@ -74,7 +81,8 @@ p {
 	#controls {
 		float: right;
 		width: auto;
-		padding-right: 8px;
+		padding: 4px 8px 4px 0;
+    background-color: #509dbf;
 	}
 	#controls li {
 		padding-left: 8px;
@@ -82,11 +90,17 @@ p {
 	#controls input {
 		border-width: 0 0 1px 0;
 		border-color: #eee;
-		background-color: #444;
+		background-color: #509dbf;
 		margin-left: 4px;
-		color: #ffcc00;
+		color: #fff;
 		font-weight: bold;
 	}
+  #controls input::placeholder {
+    color: #ddd; 
+  }
+}
+.sidr li button {
+  margin-left: 15px; 
 }
 a {
 	text-decoration: none;
@@ -104,11 +118,21 @@ a:hover {
 	vertical-align: top;
 	background-color: white;
 }
+.suspended-player {
+	border: 1px solid #fcc;
+	background-color: #fee;
+}
 .info-container>ul {
 	margin-right: 25px;
 }
 .info-container h3 {
 	cursor: pointer;
+}
+.suspended-player h3 {
+	border: 1px solid #daa;
+	background-color: #ecc;
+	color: #822;
+	text-shadow: 0 2px 3px #d99;
 }
 .info-container h3:after {
 	content: '\25b2';
@@ -148,7 +172,11 @@ a:hover {
 	cursor: pointer;
 }
 .information-table tr.penalty-box {
-	background-color: #fed;
+	background-color: #fcc;
+	color: #966;
+}
+.information-table tr.penalty-box a {
+	color: #966;
 }
 .action-table {
 	float: right;
@@ -346,6 +374,10 @@ a.unimplemented, .unimplemented h3, .unimplemented .form-container input, .unimp
     margin: 0;
     max-height: 32px;
     max-width: 32px;
+}
+
+#simple-menu {
+	display: none;
 }
 
 

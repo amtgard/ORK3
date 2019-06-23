@@ -6,7 +6,7 @@ class Model_Reports extends Model {
 		parent::__construct();
 		$this->Report = new APIModel('Report');
 	}
-	
+
 	function get_tournaments($limit=10, $kingdom_id=null, $park_id=null, $event_id=null, $event_calendardetail_id=null) {
 		return $this->Report->TournamentReport(array(
 			'KingdomId' => $kingdom_id,
@@ -16,7 +16,7 @@ class Model_Reports extends Model {
 			'Limit' => $limit
 		));
 	}
-	
+
 	function get_heraldry_report($request) {
 		return $this->Report->HeraldryReport($request);
 	}
@@ -29,7 +29,7 @@ class Model_Reports extends Model {
 		}
 		return false;
 	}
-	
+
 	function kingdom_awards($request) {
 		logtrace("kingdom_awards($kingdom_id, $park_id)", null);
 		$r = $this->Report->PlayerAwards($request);
@@ -38,7 +38,25 @@ class Model_Reports extends Model {
 		}
 		return false;
 	}
-	
+
+	function crown_qualed($request) {
+		logtrace("crown_qualed($kingdom_id, $park_id)", null);
+		$r = $this->Report->CrownQualed($request['KingdomId']);
+		if ($r['Status']['Status'] == 0) {
+			return $r['Awards'];
+		}
+		return false;
+	}
+
+	function class_masters($request) {
+		logtrace("class_masters($kingdom_id, $park_id)", null);
+		$r = $this->Report->ClassMasters($request);
+		if ($r['Status']['Status'] == 0) {
+			return $r['Awards'];
+		}
+		return false;
+	}
+
 	function knights_and_masters($request) {
 		logtrace("knights_and_masters()", $request);
 		$r = $this->Report->PlayerAwards($request);
@@ -47,7 +65,7 @@ class Model_Reports extends Model {
 		}
 		return false;
 	}
-	
+
 	function get_attendance_summary($type, $id, $period, $num_periods) {
 		logtrace("get_attendance_summary($type, $id, $period, $num_periods)", null);
 		if ('All' == $period) {
@@ -57,7 +75,7 @@ class Model_Reports extends Model {
 		}
 		return $r;
 	}
-	
+
 	function get_periodical_summary($type, $id, $period, $num_periods, $by_period) {
 		logtrace("get_periodical_summary($type, $id, $period, $num_periods, $by_period)", null);
 		if ('All' == $period) {
@@ -67,7 +85,7 @@ class Model_Reports extends Model {
 		}
 		return $r;
 	}
-	
+
 	function get_authorization_list($type, $id, $officers) {
 		$request = array(
 				'Type' => $type,
@@ -79,7 +97,7 @@ class Model_Reports extends Model {
 		logtrace('Model_Reports: get_authorization_list()', $r);
 		return $r;
 	}
-	
+
 	function active_players($type, $id, $period_type, $period, $minimum_weekly_attendance, $minimum_credits, $duespaid = false, $waivered = null, $minimum_daily_attendance = null, $montly_credit_maximum = null, $peerage = null) {
 		$request = array(
 				'ReportFromDate' => null,
@@ -114,11 +132,11 @@ class Model_Reports extends Model {
 		}
 		logtrace('Model_Reports: active_players()', $request);
 		$r = $this->Report->GetActivePlayers($request);
-		
+
 		return $r['ActivePlayerSummary'];
 	}
-	
-	function player_roster($type, $id, $waivered, $duespaid = 0, $banned = 0, $active = 1) {
+
+	function player_roster($type, $id, $waivered, $duespaid = 0, $banned = 0, $active = 1, $suspended = 0) {
 		$request = array(
 				'Type' => $type,
 				'Id' => $id,
@@ -128,14 +146,15 @@ class Model_Reports extends Model {
 				'UnWaivered' => !is_null($waivered)&&0==$waivered?1:0,
 				'Token' => $this->session->token,
 				'DuesPaid' => $duespaid,
-				'Banned' => $banned==1?true:false
+				'Banned' => $banned==1?true:false,
+				'Suspended' => $suspended
 			);
-			
+
 		$r = $this->Report->GetPlayerRoster($request);
-		
+
 		return $r['Roster'];
 	}
-	
+
 }
 
 ?>

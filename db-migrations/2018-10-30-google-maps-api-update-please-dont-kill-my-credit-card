@@ -1,0 +1,23 @@
+ALTER TABLE `ork_parkday` ADD `google_geocode` MEDIUMTEXT NOT NULL AFTER `postal_code`, ADD `latitude` DOUBLE NOT NULL AFTER `google_geocode`, ADD `longitude` DOUBLE NOT NULL AFTER `latitude`, ADD `location` MEDIUMTEXT NOT NULL AFTER `longitude`;
+ALTER TABLE `ork_event_calendardetail` ADD `latitude` DOUBLE NOT NULL AFTER `location`, ADD `longitude` DOUBLE NOT NULL AFTER `latitude`;
+--
+-- Table structure for table `ork_day_convert`
+--
+
+CREATE TABLE `ork_day_convert` (
+  `day` int(11) NOT NULL,
+  `dayname` varchar(15) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+--
+-- Dumping data for table `ork_day_convert`
+--
+
+INSERT INTO `ork_day_convert` (`day`, `dayname`) VALUES
+(0, 'Monday'),
+(1, 'Tuesday'),
+(2, 'Wednesday'),
+(3, 'Thursday'),
+(4, 'Friday'),
+(5, 'Saturday'),
+(6, 'Sunday');

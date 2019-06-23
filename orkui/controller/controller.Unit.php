@@ -20,7 +20,7 @@ class Controller_Unit extends Controller {
 	public function index($unit_id) {
 		$this->data['Unit_heraldryurl'] = $this->Unit->get_heraldry($unit_id);
 		$this->data['Unit'] = $this->Unit->get_unit_details($unit_id);
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['unit'] = array( 'url' => UIR."Unit/index/$id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
 	}
 	

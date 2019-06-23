@@ -24,12 +24,26 @@
 <div class='info-container'>
 	<h3>Park Days</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/editpark/<?=$ParkId ?>&Action=config'>
+    <style>
+      .address-row {
+        max-width: 10vw;
+      }
+      @media only screen and (max-width: 800px) {
+        .address-row {
+          max-width: 30vw;
+        }
+        .park-day-type {
+          display: none;
+        }
+      }
+    </style>
 		<table class='information-table'>
 			<thead>
 				<tr>
 					<th>When</th>
 					<th>Time</th>
-					<th>Purpose</th>
+					<th class='park-day-type'>Purpose</th>
+					<th>Map</th>
 					<th>Location</th>
 				</tr>
 			</thead>
@@ -46,7 +60,7 @@
 ?>
 				</td>
 				<td><?=date('g:i A', strtotime($day['Time'])) ?></td>
-				<td>
+				<td class='park-day-type'>
 <?php 
 	switch($day['Purpose']) { 
 		case 'park-day': echo 'Regular Park Day'; break; 
@@ -56,7 +70,24 @@
 	} 
 ?>
 				</td>
-				<td><a target='_new' href='<?=trimlen($day['MapUrl'])>0?$day['MapUrl']:"http://maps.google.com/maps?z=14&t=m&q=loc:{$location->lat}+{$location->lng}" ?>'><?=trimlen($day['MapUrl'])>0?(substr($day['MapUrl'],0,25) . (strlen($day['MapUrl'])>25?"...":"")):"Regular Park" ?></a></td>
+				<td>
+<?php
+  if (trimlen($day['Location']) > 0) {
+    $daylocation = json_decode(stripslashes($day['Location'])); 
+    $daylocation = ((isset($daylocation->location)) ? $daylocation->location : $daylocation->bounds->northeast);
+    $mapurl = "http://maps.google.com/maps?z=14&t=m&q=loc:{$daylocation->lat}+{$daylocation->lng}";
+    $mapname = "Alternate Park";
+  } else if (trimlen($day['MapUrl']) > 0) {
+    $mapurl = $day['MapUrl'];
+    $mapname = "Alternate Park";
+  } else {
+    $mapurl = "http://maps.google.com/maps?z=14&t=m&q=loc:{$location->lat}+{$location->lng}";
+    $mapname = "Regular Park";
+  }
+?>
+          <a target='_new' href='<?=$mapurl ?>'><?=$mapname ?></a>
+        </td>
+				<td class='address-row'><?=$day['Address'] ?></td>
 			</tr>
 <?php endforeach; ?>
 			</tbody>
@@ -76,12 +107,14 @@
 				<li><a href='<?=UIR ?>Reports/duespaid/Park&id=<?=$park_id ?>'>Dues Paid Players</a></li>
 				<li><a href='<?=UIR ?>Reports/waivered/Park&id=<?=$park_id ?>'>Waivered Players</a></li>
 				<li><a href='<?=UIR ?>Reports/unwaivered/Park&id=<?=$park_id ?>'>Unwaivered Players</a></li>
-    			<li><a href='<?=UIR ?>Reports/active_duespaid/Park&id=<?=$park_id ?>'>Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/suspended/Park&id=<?=$park_id ?>'>Suspended Players</a></li>
+   			<li><a href='<?=UIR ?>Reports/active_duespaid/Park&id=<?=$park_id ?>'>Player Attendance</a></li>
 				<li><a href='<?=UIR ?>Reports/active_waivered_duespaid/Park&id=<?=$park_id ?>'>Waivered Player Attendance</a></li>
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Reports/guilds&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Park Guilds</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Player Awards</a></li>
+		<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Class Masters/Paragons</a></li>
 		<li>
 			Attendance
 			<ul>
@@ -112,7 +145,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg">
+						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
 					</div>
 					<?=$event['Name'] ?>
 				</td>

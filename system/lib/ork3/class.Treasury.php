@@ -25,22 +25,17 @@ class Treasury extends Ork3 {
 	}
 	
 	public function dues_through($mundane_id, $kingdom_id, $park_id, $startdate) {
-		$this->db->Clear();
-		$this->db->kingdom_id = $kingdom_id;
-		$this->db->park_id = $park_id;
-		$this->db->mundane_id = $mundane_id;
-
 		$sql = "
 			SELECT split.dues_through
 				FROM 
 					`" . DB_PREFIX . "split` split 
 						left join " . DB_PREFIX . "account account on split.account_id = account.account_id
-				where (kingdom_id = :kingdom_id or park_id = :park_id) and src_mundane_id = :mundane_id and is_dues = 1
+				where (kingdom_id = '" . mysql_real_escape_string($kingdom_id) . "' or park_id = '" . mysql_real_escape_string($park_id) . "') and src_mundane_id = '" . mysql_real_escape_string($mundane_id) . "' and is_dues = 1
 				order by dues_through desc 
 				limit 1
 		";
-		$lastdues = $this->db->Query($sql);
-		if ($lastdues != false && $lastdues->Size() == 1) {
+		$lastdues = $this->db->query($sql);
+		if ($lastdues != false && $lastdues->size() == 1) {
 			if (strtotime($lastdues->dues_through) > strtotime($startdate))
 				return $lastdues->dues_through;
 		}
@@ -55,17 +50,15 @@ class Treasury extends Ork3 {
 				
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $player['ParkId'], AUTH_EDIT)) {
-			$this->db->Clear();
-			$this->db->mundane_id = $request['MundaneId'];
 			$sql = "select 
 			                s.transaction_id 
 			            from " . DB_PREFIX . "split s 
 			                left join " . DB_PREFIX . "transaction t on s.transaction_id = t.transaction_id
 			            where 
-			                src_mundane_id = :mundane_id and is_dues = 1 order by t.date_created desc limit 1";
+			                src_mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' and is_dues = 1 order by t.date_created desc limit 1";
         logtrace('Passed Security', $sql);
-			$lastdues = $this->db->Query($sql);
-    		if ($lastdues != false && $lastdues->Size() == 1) {
+			$lastdues = $this->db->query($sql);
+    		if ($lastdues != false && $lastdues->size() == 1) {
     			$this->remove_transaction($lastdues->transaction_id);
     			return Success('Transaction ' . $lastdues->transaction_id . ' removed.');
     		}

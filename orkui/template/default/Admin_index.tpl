@@ -14,7 +14,7 @@
         <li>Parks
             <ul>
             	<li><a href='<?=UIR ?>Admin/transferpark'>Move Park</a></li>
-            	<li><a href='<?=UIR ?>Admin/mergepark'>Merge Parks</a></li>
+            	<li><a href='<?=UIR ?>Admin/mergepark'>Migrate Park Members</a></li>
             </ul>
         </li>
     	<li><a href='<?=UIR ?>Admin/mergeunit'>Merge Units</a></li>
@@ -26,10 +26,12 @@
 	<h3>Reports</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Reports/roster'>Player Roster</a></li>
+		<li><a href='<?=UIR ?>Reports/suspended'>Suspended Players</a></li>
 		<li><a href='<?=UIR ?>Reports/waivered'>Waivered Players</a></li>
 		<li><a href='<?=UIR ?>Reports/unwaivered'>Unwaivered Players</a></li>
 		<li><a href='<?=UIR ?>Reports/knights_and_masters'>Knights and Masters</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8'>Kingdom-level Awards</a></li>
+		<li><a href='<?=UIR ?>Reports/class_masters'>Class Masters/Paragons</a></li>
 		<li><a href='<?=UIR ?>Reports/guilds'>Guilds</a></li>
 		<li>
 			Attendance

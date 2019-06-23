@@ -125,14 +125,15 @@ class Authorization  extends Ork3 {
 			Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($password), $this->mundane->password_expires, 1);
 			
 			$this->mundane->save();
-			$m = new Mail();
+			$m = new Mail('smtp', 'smtp.sendgrid.net', 'apikey', SENDGRID_API_KEY, 587);
 			$m->setTo($this->mundane->email);
-			$m->setFrom('ork3@amtgardrecords.com');
+			$m->setFrom('ork3@amtgard.com');
 			$m->setSubject('Reset ORK Password (Expires in 24 hours)');
-			$m->setHtml("THIS PASSWORD WILL EXPIRE IN 24 HOURS.\n\nYour password has been set to: " . $password);
-			$m->setSender('ork3@amtgardrecords.com');
+			$m->setHtml("<h2>ORK Password Reset</h2>We have generated a temporary password that will <b>expire in 24 hours</b>. You will need to log in immediately and reset your password. <p>You can log in with the following link:<p><a href='" . UIR . "Login/login&username=" . $request['UserName'] . "&password=" . $password . "'>Click here to be logged in temporarily.</a><p>Regards,<p>-ORK 3 Team");
+			$m->setSender('ork3@amtgard.com');
 			$m->send();
 			$response = Success();
+  		$this->log->Write('ResetPassword Email', 0, LOG_EDIT, array($response));
 		} else {
 			$response = InvalidParameter(null, "Login and username could not be found.");
 		}
@@ -158,10 +159,10 @@ class Authorization  extends Ork3 {
 		$response = array();
 		if ($this->IsLocalCall() || true) {
 			$response = $this->Authorize_h($request);
-			$response['Status']['Detail'] = "Local Authorization Attempt"; // . print_r($this->trace, true);
+			$response['Status']['Detail'] = "Local Authorization Attempt: " . $response['Status']['Detail']; // . print_r($this->trace, true);
 		} else {
 			$response = $this->Authorize_app($request);
-			$response['Status']['Detail'] = "Remote Authorization Attempt"; // . print_r($this->trace, true);
+			$response['Status']['Detail'] = "Remote Authorization Attempt: " . $response['Status']['Detail']; // . print_r($this->trace, true);
 		}
 		return $response;
 	}
@@ -245,10 +246,10 @@ class Authorization  extends Ork3 {
 					$this->mundane->clear();
 					$this->mundane->mundane_id = $this->app_auth->mundane_id;
 					if ($this->mundane->find()) {
-						if ($this->mundane->penalty_box == 1) {
-							$response['Status'] = NoAuthorization();
+						if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+							$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 						} else {
-							$this->app_auth->token = md5($request['Password'] . microtime());
+							$this->app_auth->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 							$this->app_auth->token_expires = date('c', time() + LOGIN_TIMEOUT);
 							$this->app_auth->save();
 							$response['Status'] = Success();
@@ -273,10 +274,10 @@ class Authorization  extends Ork3 {
 				$this->mundane->clear();
 				$this->mundane->mundane_id = $this->app_auth->mundane_id;
 				if ($this->mundane->find()) {
-					if ($this->mundane->penalty_box == 1) {
-						$response['Status'] = NoAuthorization();
+					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else if (strtotime($this->mundane->token_expires) > time()) {
-						$this->app_auth->token = md5($request['Password'] . microtime());
+						$this->app_auth->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 						$this->app_auth->token_expires = date('c', time() + LOGIN_TIMEOUT);
 						$this->app_auth->save();
 						$response['Status'] = Success();
@@ -310,10 +311,10 @@ class Authorization  extends Ork3 {
 					Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']), $this->mundane->password_expires);
 				}
 				if (Authorization::KeyExists($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']))) {
-					if ($this->mundane->penalty_box == 1) {
-						$response['Status'] = NoAuthorization();
+					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
-						$this->mundane->token = md5($request['Password'] . microtime());
+						$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 						$this->mundane->token_expires = date('c', time() + LOGIN_TIMEOUT);
 						$this->mundane->save();
 						$response['Status'] = Success();
@@ -331,8 +332,8 @@ class Authorization  extends Ork3 {
 			$this->mundane->clear();
 			$this->mundane->token = $request['Token'];
 			if ($this->mundane->find()) {
-				if ($this->mundane->penalty_box == 1) {
-					$response['Status'] = NoAuthorization();
+				if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 				} else if (strtotime($this->mundane->token_expires) > time()) {
 					$this->mundane->token = md5($this->mundane->token . microtime());
 					$this->mundane->token_expires = date('c', time() + LOGIN_TIMEOUT);
@@ -359,7 +360,7 @@ class Authorization  extends Ork3 {
 		$DB->query("delete from " . DB_PREFIX . "credential where expiration <= now()");
 		$credential = new yapo($DB, DB_PREFIX . 'credential');
 		$credential->clear();
-		$key = Authorization::CryptStrip512(trim($salt) . trim($password), $salt);
+		$key = Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt);
 		$credential->key = $key;
 		//echo "<!-- $key -->";
 		if ($credential->find()) {
@@ -384,12 +385,18 @@ class Authorization  extends Ork3 {
 			$timestamp = time() + rand(-20 * 60 * 60 * 24, 20 * 60 * 60 * 24) + 60 * 60 * 24 * 365 * 2;
 		}
 		
-		$DB->Clear();
-		$DB->key = Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt);
-		$DB->expiration = $resetrequest == 1 ? (date("Y-m-d H:i:s", $timestamp)) : (date("Y-m-d H:i:s", time() + 24 * 60 * 60));
-		$DB->resetrequest = $resetrequest;
+		if ($resetrequest == 1)
+			$sql = "insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", time() + 24 * 60 * 60)). "', $resetrequest)";
+		else
+			$sql = "insert into " . DB_PREFIX . "credential (`key`, `expiration`,`resetrequest`) values ('" . Authorization::CryptStrip512(trim($salt) . mysql_real_escape_string(trim($password)), $salt) . "', '" .(date("Y-m-d H:i:s", $timestamp)). "', $resetrequest)";
+		$DB->query($sql);
 		
-		$DB->Query($sql);
+		//$DB->query("insert into " . DB_PREFIX . "credential (`key`, `expiration`) values ('" .Authorization::CryptStrip512(rand().microtime(), $salt). "', '" .(date("Y-m-d H:i:s", $timestamp + rand(-60 * 60 * 24 * 182.5, 0))). "')");
+		/*
+		for ($i = 0; $i < 3; $i++) {
+			$DB->query("insert into " . DB_PREFIX . "credential (`key`, `expiration`) values ('" .Authorization::CryptStrip512(rand().microtime(), $salt). "', '" .(date("Y-m-d H:i:s", $timestamp + rand(-60 * 60 * 24 * 182.5, 60 * 60 * 24 * 182.5))). "')");
+		}
+		*/
 	}
 	
 	public static function CryptStrip512($string, $salt) {

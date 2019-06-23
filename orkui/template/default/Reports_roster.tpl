@@ -14,13 +14,20 @@
 				<th>Waivered</th>
 <?php if (isset($show_duespaid)) : ?>
 				<th>Dues Paid</th>
+				<th>Dues Through</th>
+<?php endif; ?>
+				<th>Suspended Until</th>
+<?php if (isset($show_suspension)) : ?>
+				<th>Suspended At</th>
+				<th>Suspendator</th>
+				<th>Suspension</th>
 <?php endif; ?>
 			</tr>
 		</thead>
 		<tbody>
 <?php if (is_array($roster)) : ?>
 <?php 	foreach ($roster as $k => $player): ?>
-			<tr <?=$player['PenaltyBox']==1?"class='penalty-box'":"" ?>>
+			<tr <?=$player['Suspended']==1?"class='penalty-box'":"" ?>>
 <?php 		if (!isset($this->__session->kingdom_id)) : ?>
 				<td><a href='<?=UIR.'Kingdom/index/'.$player['KingdomId'] ?>'><?=$player['KingdomName'] ?></a></td>
 <?php 		endif; ?>
@@ -32,6 +39,13 @@
 				<td><?=($player['Waivered']==1?"Waiver":"") ?></td>
 <?php if (isset($show_duespaid)) : ?>
 				<td><?=($player['DuesPaid']?"Paid":"") ?></td>
+				<td><?=($player['DuesThrough']?$player['DuesThrough']:"") ?></td>
+<?php endif; ?>
+				<td><?=$player['SuspendedUntil'] ?></td>
+<?php if (isset($show_suspension)) : ?>
+				<td><?=$player['SuspendedAt'] ?></td>
+				<td><?=$player['Suspendator'] ?></td>
+				<td><?=$player['Suspension'] ?></td>
 <?php endif; ?>
 			</tr>
 <?php 	endforeach; ?>

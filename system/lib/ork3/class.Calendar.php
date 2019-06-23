@@ -15,23 +15,17 @@ class Calendar extends Ork3 {
 	}
 	
 	public function NextWeek($request) {
-		$this->db->Clear();
-		$this->db->date = $request['Date'];
-		$sql = "select event.event_id, event.name, detail.event_start, detail.event_end, detail.url, detail.description from " . DB_PREFIX . "event event left join " . DB_PREFIX . "event_calendardetail detail on detail.event_id = event.event_id where event_start >= :date and event_end <= date_add(:date, interval 7 day)";
+		$sql = "select event.event_id, event.name, detail.event_start, detail.event_end, detail.url, detail.description from " . DB_PREFIX . "event event left join " . DB_PREFIX . "event_calendardetail detail on detail.event_id = event.event_id where event_start >= '" . mysql_real_escape_string($request['Date']) ."' and event_end <= date_add('" . mysql_real_escape_string($request['Date']) ."', interval 7 day)";
 		return array('Status'=>Success(), 'Dates' => array_merge($this->_make_calendar_set($sql), $this->_park_days(strtotime($request['Date']), 'week')));
 	}
 	
 	public function NextMonth($request) {
-		$this->db->Clear();
-		$this->db->date = $request['Date'];
-		$sql = "select event.event_id, event.name, detail.event_start, detail.event_end, detail.url, detail.description from " . DB_PREFIX . "event event left join " . DB_PREFIX . "event_calendardetail detail on detail.event_id = event.event_id where event_start >= :date and event_end <= date_add(:date, interval 1 month)";
+		$sql = "select event.event_id, event.name, detail.event_start, detail.event_end, detail.url, detail.description from " . DB_PREFIX . "event event left join " . DB_PREFIX . "event_calendardetail detail on detail.event_id = event.event_id where event_start >= '" . mysql_real_escape_string($request['Date']) ."' and event_end <= date_add('" . mysql_real_escape_string($request['Date']) ."', interval 1 month)";
 		return array('Status'=>Success(), 'Dates' => array_merge($this->_make_calendar_set($sql), $this->_park_days(strtotime($request['Date']), 'month')));
 	}
 	
 	public function NextYear($request) {
-		$this->db->Clear();
-		$this->db->date = $request['Date'];
-		$sql = "select event.event_id, event.name, detail.event_start, detail.event_end, detail.url, detail.description from " . DB_PREFIX . "event event left join " . DB_PREFIX . "event_calendardetail detail on detail.event_id = event.event_id where event_start >= :date and event_end <= date_add(:date, interval 1 year)";
+		$sql = "select event.event_id, event.name, detail.event_start, detail.event_end, detail.url, detail.description from " . DB_PREFIX . "event event left join " . DB_PREFIX . "event_calendardetail detail on detail.event_id = event.event_id where event_start >= '" . mysql_real_escape_string($request['Date']) ."' and event_end <= date_add('" . mysql_real_escape_string($request['Date']) ."', interval 1 year)";
 		return array('Status'=>Success(), 'Dates' => array_merge($this->_make_calendar_set($sql), $this->_park_days(strtotime($request['Date']), 'year')));
 	}
 	
@@ -61,7 +55,7 @@ class Calendar extends Ork3 {
 						park.active = 'Active' and
 						recurrence is not null";
 		$dates = array();
-		$parkdays = $this->db->Query($sql);
+		$parkdays = $this->db->query($sql);
 		switch ($period) {
 			case 'week': $final_date = strtotime("+1 week", $start_date); break;
 			case 'month': $final_date = strtotime("+1 month", $start_date); break;

@@ -16,14 +16,6 @@
 			</span>
 		</div>
 		<div>
-			<span>Waiver:</span>
-			<span>
-				<img class='heraldry-img' src='<?=$Player['Waivered']>0?(($Player['WaiverExt']=='pdf')?HTTP_WAIVERS.'pdf.gif':$Player['Waiver']):HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
-				<div class='form-informational-field'><?=$Player['Waivered']>0?"<a href='$Player[Waiver]'>Waiver</a>":"No Waiver" ?></div>
-				<input type='file' class='restricted-document-type' name='Waiver' id='Waiver' />
-			</span>
-		</div>
-		<div>
 			<span></span>
 			<span><input type='submit' value='Update Media' name='Update' /></span>
 		</div>
@@ -75,15 +67,17 @@
 			<span>Company:</span>
 			<span class='form-informational-field'><?=isset($Admin_player)?$Admin_player['Company']:$Player['Company'] ?></span>
 		</div>
+    <!--
 		<div>
 			<span>Penalty Box:</span>
 			<span><input type='checkbox' value='Penalty' <?=((isset($Admin_player)?$Admin_player['PenaltyBox']:$Player['PenaltyBox'])==1)?"CHECKED":"" ?> DISABLED name='PenaltyBox' id='PenaltyBox' /></span>
 		</div>
-    	<div>
+    -->
+  	<div>
 			<span>Waivered:</span>
 			<span>
 				<input type='radio' value='Waivered' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"CHECKED":"" ?> name='Waivered' id='Waivered' /><label for='Waivered'>Waivered</label>
-				<input type='radio' value='Lawsuit Bait' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"":"CHECKED" ?> name='Waivered' id='NonWaivered' /><label for='NonWaivered'>Lawsuit Bait</label>
+				<input type='radio' value='Lawsuit Bait' <?=(isset($Admin_player)?$Admin_player['Waivered']:$Player['Waivered'])==1?"":"CHECKED" ?> name='Waivered' id='NonWaivered' /><label for='NonWaivered'>No Waiver</label>
 			</span>
 		</div>
 		<div>
@@ -129,7 +123,7 @@
 			<tr>
 				<td><a href='<?=UIR ?>Unit/index/<?=$unit['UnitId'] ?>'><?=$unit['Name'] ?></td>
 				<td><?=ucfirst($unit['Type']) ?></td>
-				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/quitunit/<?=$unit['UnitId'] ?>'>&times;</a></td>
+				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/quitunit/<?=$unit['UnitMundaneId'] ?>'>&times;</a></td>
 			</tr>
 <?php endforeach ?>
 		</tbody>
@@ -266,7 +260,7 @@
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
 						});
 						response(suggestions);
 					}
@@ -342,6 +336,10 @@
 <div class='info-container' id='award-editor'>
 	<h3>Add Award</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/addaward'>
+		<div id='AwardType'>
+			<span>Type:</span>
+			<span><input type='radio' name='awardtype' value='awards' checked>Awards <input type='radio' name='awardtype' value='officers'>Officers</span>
+		</div>
 		<div>
 			<span>Award:</span>
 			<span>
@@ -388,7 +386,19 @@
 
 <script type='text/javascript'>
 
+  var awardoptions = "<option value=''></option><?=$AwardOptions ?>";
+
+  var officeroptions = "<option value=''></option><?=$OfficerOptions ?>";
+
 	$(document).ready(function() {
+    $( '[name="awardtype"]' ).on('click', function() {
+      var awards = awardoptions;
+      if ($(this).val() == 'officers') {
+        awards = officeroptions;
+      }
+      $('#AwardId').html(awards);
+    });
+  
 		$( '#Cancel' ).click(function() { Reset(); });
 		$( '.deletion a' ).click(function() { Reset(); });
 		$( '#AwardNameField' ).hide();
@@ -398,6 +408,12 @@
 			else
 				$( '#AwardNameField' ).hide();
 		})
+		$('a.revocation').on('click', function() {
+			$(this).attr('href', $(this).attr('href') + $('input[name=revocation]').val());
+		});
+		$('#burn-it-all').on('submit', function() {
+			$('#burn-it-all').attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' + $('input[name=revocation]').val());
+		});
 	});
 	
 	function Reset() {
@@ -418,6 +434,7 @@
 	}
 
 	function EditAward(id) {
+    return;
         Reset();
 		$( '#award-editor h3' ).text('Update Award');
 		$( '#award-editor form' ).attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/updateaward/' + id.toString() );
@@ -445,7 +462,20 @@
 </script>
 
 <div class='info-container'>
-	<h3>Awards &amp; Titles</h3>
+	<h3>Awards</h3>
+	<div class='info-container skip-fold'>
+		<div style='padding: 16px 0'>Strip <b>all Awards &amp; Titles</b> or choose from below. Details will be recorded for posterity.</div>
+		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
+			<div>
+				<span>Strip Award Details</span>
+				<input type="text" name="revocation">
+			</div>
+			<div>
+				<span></span>
+				<input type="submit" name="strip-all" value="Strip All Awards">
+			</div>
+		</form>
+	</div>
 	<table class='information-table' id='Awards'>
 		<thead>
 			<tr>
@@ -456,11 +486,13 @@
 				<th>Given At</th>
 				<th>Note</th>
 				<th class='deletion'>&times;</th>
+				<th>Strip</th>
 			</tr>
 		</thead>
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] === 'none') : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
 				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -469,7 +501,57 @@
 				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td class='award-note'><?=$detail['Note'] ?></td>
 				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='revocation'>Strip</a></td>
 			</tr>
+<?php endif ?>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+
+<div class='info-container'>
+	<h3>Titles</h3>
+	<div class='info-container skip-fold'>
+		<div style='padding: 16px 0'>Strip <b>all Awards &amp; Titles</b> or choose from below. Details will be recorded for posterity.</div>
+		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
+			<div>
+				<span>Strip Award Details</span>
+				<input type="text" name="revocation">
+			</div>
+			<div>
+				<span></span>
+				<input type="submit" name="strip-all" value="Strip All Awards">
+			</div>
+		</form>
+	</div>
+	<table class='information-table' id='Awards'>
+		<thead>
+			<tr>
+				<th>Award</th>
+				<th>Rank</th>
+				<th>Date</th>
+				<th>Given By</th>
+				<th>Given At</th>
+				<th>Note</th>
+				<th class='deletion'>&times;</th>
+				<th>Strip</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
+<?php foreach ($Details['Awards'] as $key => $detail) : ?>
+<?php if ($detail['OfficerRole'] !== 'none') : ?>
+			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
+				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
+				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
+				<td class='award-date'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
+				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
+				<td class='award-note'><?=$detail['Note'] ?></td>
+				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='revocation'>Strip</a></td>
+			</tr>
+<?php endif ?>
 <?php endforeach ?>
 		</tbody>
 	</table>

@@ -1,0 +1,7 @@
+CREATE TABLE `amtgard_ork3esdraelon`.`ork_rate_limit` ( `rate_limit_id` INT(11) NOT NULL AUTO_INCREMENT , `service` ENUM('geocode') NOT NULL , `ip_address` VARCHAR(24) NOT NULL , `count` INT(11) NOT NULL , `expires` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP , PRIMARY KEY (`rate_limit_id`)) ENGINE = InnoDB;
+ALTER TABLE `ork_rate_limit`
+  ADD PRIMARY KEY (`rate_limit_id`),
+  ADD UNIQUE KEY `service` (`service`,`ip_address`);
+ALTER TABLE `ork_rate_limit`
+  MODIFY `rate_limit_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+COMMIT;

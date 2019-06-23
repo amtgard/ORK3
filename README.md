@@ -25,3 +25,32 @@ Copy `config.dev.php` to `config.php`. Make sure to change the admin email to yo
 ### View the Site
 
 You can now view the site at http://servername/ork/orkui/.
+
+### Using Docker
+A docker-compose file is setup for quickly getting the environment running locally. If there are other environments using port 80 change the exposed port in the docker-compose file to keep from conflicting. Same goes for 3306 for the database. Run the following Docker command from the cloned directory.
+```
+docker-compose up
+```
+Once this completes and MySql is waiting on a socket there are some setup tasks required. In another window issue the following commands:
+```
+mysql -P 3306 --protocol=tcp -h localhost -u root -proot ork < ork.sql
+```
+This will setup the database.
+
+Download and extract a recent Ork backup from https://amtgard.com/ork/assets/backups/
+
+```
+mysql -P 3306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/2019.02.28.02.00.amtgard_ork3production.sql
+```
+This will take a while but will hydrate the database with the backup that was downloaded and extracted above.
+```
+mysql -P 3306 --protocol=tcp -h localhost -u root -proot 
+```
+Once the SQL prompt appears enter:
+```
+SET GLOBAL sql_mode = '';
+exit
+```
+This was needed to allow the database to accept certain values sent by the PHP APIs.
+
+Navigate to http://localhost/ork/orkui and see the contents of the backup that was restored.  Login with your ORK account and password provided you have recently setup your password before the backup database was created on the production server.

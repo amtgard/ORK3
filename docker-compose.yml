@@ -1,0 +1,44 @@
+version: '2'
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: php.Dockerfile
+    ports:
+     - 80:80
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www/html/ork/
+    env_file: .dev.env
+    container_name: ork-app
+    networks:
+      - orknet
+  mysql:
+    image: mysql:5.6.35
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'ork'
+      # So you don't have to use root, but you can if you like
+      MYSQL_USER: 'ork'
+      # You can use whatever password you like
+      MYSQL_PASSWORD: 'secret'
+      # Password for root access
+      MYSQL_ROOT_PASSWORD: 'root'
+    ports:
+      # <Port exposed> : < MySQL Port running inside container>
+      - '3306:3306'
+    expose:
+      # Opens port 3306 on the container
+      - '3306'
+      # Where our data will be persisted
+    volumes:
+      - data-db:/var/lib/mysql
+    container_name: mysql
+    networks:
+      - orknet
+
+volumes:
+  data-db: {}
+
+networks:
+  orknet:

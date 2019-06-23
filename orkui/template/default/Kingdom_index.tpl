@@ -27,7 +27,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg">
+						<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
 					</div>
 					<?=$park['ParkName'] ?>
 				</td>
@@ -59,7 +59,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_KINGDOM_HERALDRY . sprintf("%04d", $prinz['KingdomId']) ?>.jpg">
+						<img src="<?=HTTP_KINGDOM_HERALDRY . sprintf("%04d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='<?=HTTP_KINGDOM_HERALDRY ?>0000.jpg';">
 					</div>
 					<?=$prinz['Name'] ?>
 				</td>
@@ -82,7 +82,8 @@
 				<li><a href='<?=UIR ?>Reports/duespaid/Kingdom&id=<?=$kingdom_id ?>'>Dues Paid Players</a></li>
 				<li><a href='<?=UIR ?>Reports/waivered/Kingdom&id=<?=$kingdom_id ?>'>Waivered Players</a></li>
 				<li><a href='<?=UIR ?>Reports/unwaivered/Kingdom&id=<?=$kingdom_id ?>'>Unwaivered Players</a></li>
-        		<li><a href='<?=UIR ?>Reports/active_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/suspended/Kingdom&id=<?=$kingdom_id ?>'>Suspended Players</a></li>
+        <li><a href='<?=UIR ?>Reports/active_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Player Attendance</a></li>
 				<li><a href='<?=UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Waivered Player Attendance</a></li>
 			</ul>
 		</li>
@@ -90,7 +91,10 @@
 			Awards
 			<ul>
 				<li><a href='<?=UIR ?>Reports/knights_and_masters&KingdomId=<?=$kingdom_id ?>'>Knights and Masters</a></li>
+				<li><a href='<?=UIR ?>Reports/knights_list&KingdomId=<?=$kingdom_id ?>'>Knights</a></li>
+				<li><a href='<?=UIR ?>Reports/masters_list&KingdomId=<?=$kingdom_id ?>'>Masters</a></li>
 				<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?>-level Awards</a></li>
+				<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>'>Class Masters/Paragons</a></li>
 				<li><a href='<?=UIR ?>Reports/guilds&KingdomId=<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?> Guilds</a></li>
 			</ul>
 		</li>
@@ -133,7 +137,7 @@
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg">
+						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
 					</div>
 					<?=$event['Name'] ?>
 				</td>

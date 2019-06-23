@@ -1,6 +1,10 @@
 <?php
 
-include_once( dirname( __FILE__ ) . '/config.php' );
+if (getenv('ENVIRONMENT') == 'DEV') {
+	include_once( dirname( __FILE__ ) . '/config.dev.php');
+} else {
+	include_once( dirname( __FILE__ ) . '/config.php' );
+}
 
 // System Setup
 
@@ -11,7 +15,7 @@ $LOG;
 $DB;
 
 if ( !isset( $DB ) ) {
-	$DB = new YapoMysql( DB_HOSTNAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD );
+	$DB = new yapo_mysql( DB_HOSTNAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD );
 }
 
 if ( !DO_SETUP ) {

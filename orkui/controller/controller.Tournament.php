@@ -29,7 +29,7 @@ class Controller_Tournament extends Controller {
 		}
 		$this->data['park_name'] = $this->session->park_name;
 		
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin' );
+		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menulist']['admin'] = array(
 				array( 'url' => UIR.'Admin/tournament/'.$id, 'display' => 'tournament' ),
 				array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Park' ),

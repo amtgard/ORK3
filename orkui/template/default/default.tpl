@@ -25,6 +25,7 @@
 </style>
 <div class='info-container kingdom-summary'>
 	<h3>Kingdoms</h3>
+  <a href='https://play.amtgard.com' style='padding: 16px 0 12px 8px; display: block;'><b>Find a Chapter Near You!</b></a>
 	<table class='information-table action-table'>
 		<thead>
 			<tr>
@@ -112,11 +113,12 @@
 	</table>
 </div>
 <div class='info-container'>
-    <h3>Reports</h3>
+    <h3>Find a Chapter!</h3>
     <ul>
+        <li><a href='https://play.amtgard.com'><b>Find a Chapter - Play Amtgard Today!</b></a></li>
         <li>
             <a href='<?=UIR ?>Atlas'>
-                <img style='display: block; padding: 4px; margin: 6px 0; border-radius: 4px; border: 1px solid #ccc;' src='/ork/orkui/template/default/img/map.jpg' />
+                <img style='display: block; padding: 4px; margin: 6px 0; border-radius: 4px; border: 1px solid #ccc;' src='<?=HTTP_UI . '/template/default/img/map.jpg' ?>' />
                 Amtgard Atlas Map 
             </a>
         </li>

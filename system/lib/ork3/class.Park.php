@@ -10,6 +10,18 @@ class Park extends Ork3
 		$this->parkday = new yapo( $this->db, DB_PREFIX . 'parkday' );
 	}
 
+  public function GetParkByAbbreviation($request) {
+    if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3)
+      return null;
+    
+    $this->park->clear();
+    $this->park->abbreviation = strtoupper(trim($request['Abbreviation']));
+    if ($this->park->find()) {
+      return $this->park->park_id; 
+    }
+    return null;
+  }
+  
 	public function MergeParks( $request )
 	{
 		logtrace( "MergeParks", $request );
@@ -17,15 +29,21 @@ class Park extends Ork3
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_ADMIN, $request[ 'FromParkId' ], AUTH_CREATE )
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_ADMIN, $request[ 'ToParkId' ], AUTH_CREATE )
 		) {
-
+      
+      $to_kingdom_id = $this->GetParkKingdomId( $request[ 'ToParkId' ] );
+/*
 			$sql = "delete from " . DB_PREFIX . "account where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "configuration where id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "' and type = 'Park'";
 			$this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "event where id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "' and type = 'Park'";
 			$this->db->query( $sql );
+      */
+      $sql = "delete from `" . DB_PREFIX . "authorization` where authorization_id in (select authorization_id from `" . DB_PREFIX . "officer` where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "')";
+      $this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "officer where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      /*
 			$sql = "delete from " . DB_PREFIX . "park where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
 			$sql = "update " . DB_PREFIX . "attendance set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
@@ -40,12 +58,15 @@ class Park extends Ork3
 			$this->db->query( $sql );
 			$sql = "update " . DB_PREFIX . "glicko2 set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
-			$sql = "update " . DB_PREFIX . "mundane set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
+      */
+			$sql = "update " . DB_PREFIX . "mundane set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "', kingdom_id = $to_kingdom_id where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      /*
 			$sql = "update " . DB_PREFIX . "parkday set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
 			$sql = "update " . DB_PREFIX . "tournament set park_id = '" . mysql_real_escape_string( $request[ 'ToParkId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+      */
 			logtrace( "Parks Merged", null );
 			return Success();
 		}
@@ -91,12 +112,16 @@ class Park extends Ork3
 			$this->parkday->alternate_location = $request[ 'AlternateLocation' ];
 
 			if ( $request[ 'AlternateLocation' ] > 0 ) {
+     		logtrace( 'AddParkDay.AlternateLocation', null );
 				$this->parkday->address = $request[ 'Address' ];
 				$this->parkday->city = $request[ 'City' ];
 				$this->parkday->province = $request[ 'Province' ];
 				$this->parkday->postal_code = $request[ 'PostalCode' ];
 				$this->parkday->map_url = $request[ 'MapUrl' ];
+     		logtrace( 'AddParkDay', array( $this->parkday, $request ) );
+        $this->park_geocode_h(null, $this->parkday);
 			} else {
+     		logtrace( 'AddParkDay.NormalLocation', null );
 				$this->park->clear();
 				$this->park->park_id = $request[ 'ParkId' ];
 				$this->park->find();
@@ -104,6 +129,10 @@ class Park extends Ork3
 				$this->parkday->city = $this->park->city;
 				$this->parkday->province = $this->park->province;
 				$this->parkday->postal_code = $this->park->postal_code;
+				$this->parkday->latitude = $this->park->latitude;
+				$this->parkday->longitude = $this->park->longitude;
+				$this->parkday->google_geocode = $this->park->google_geocode;
+				$this->parkday->location = $this->park->location;
 				$this->parkday->map_url = $this->park->map_url;
 			}
 			$this->parkday->location_url = $request[ 'LocationUrl' ];
@@ -135,7 +164,7 @@ class Park extends Ork3
 
 	public function GetParks( $request )
 	{
-		$sql = "select * 
+		$sql = "select *
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "parktitle pt on pt.parktitle_id = p.parktitle_id
 					where p.park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "' and p.parent_park_id > 0
@@ -212,6 +241,16 @@ class Park extends Ork3
 		return $response;
 	}
 
+	public function GetParkKingdomId( $pid )
+	{
+		$this->park->clear();
+		$this->park->park_id = $pid;
+		if ( $this->park->find() ) {
+			return $this->park->kingdom_id;
+		}
+
+		return false;
+	}
 	public function GetParkShortInfo( $request )
 	{
 		$this->park->clear();
@@ -325,6 +364,8 @@ class Park extends Ork3
 					'City'              => $parkday->city,
 					'Province'          => $parkday->province,
 					'PostalCode'        => $parkday->postal_code,
+					'GoogleGeocode'     => $parkday->google_geocode,
+					'Location'          => $parkday->location,
 					'MapUrl'            => $parkday->map_url,
 					'LocationUrl'       => $parkday->location_url,
 				];
@@ -335,6 +376,79 @@ class Park extends Ork3
 		return $response;
 	}
 
+  public function PlayAmtgard($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (false && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+    $latitude = $request['latitude'];
+    $longitude = $request['longitude'];
+    $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
+    $end = date("Y-m-d", strtotime($request['end']));
+    $distance = isset($request['distance']) ? $request['distance'] : 25;
+    $limit = isset($request['limit']) ? $request['limit'] : 12;
+    
+    $sql = "select * 
+              from (
+                SELECT 
+                  d.*, p.kingdom_id, p.name park_name, k.name kingdom_name,
+                  '$start' + interval mod(((c.day - weekday('$start')) + 7), 7) day next_day,
+                  ( 3959 * acos( cos( radians($latitude) ) * cos( radians( d.latitude_d ) ) * cos( radians( d.longitude_d ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(d.latitude_d)) ) ) AS distance 
+                from 
+                  ( select 
+                      case sd.latitude when 0 then sp.latitude else sd.latitude end latitude_d,
+                      case sd.longitude when 0 then sp.longitude else sd.longitude end longitude_d,
+                      sd.*
+                    from ork_parkday sd left join ork_park sp on sd.park_id = sp.park_id ) d
+                  left join ork_day_convert c on d.week_day = c.dayname 
+                  left join ork_park p on d.park_id = p.park_id
+                    left join ork_kingdom k on p.kingdom_id = k.kingdom_id
+                where
+                  p.active = 'Active'
+                having
+                  next_day < '$end' and distance < $distance
+                order by next_day asc, distance asc limit $limit) date_src";
+
+    $r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['ParkDays'] = array();
+			do {
+				$response['ParkDays'][] = array(
+						'ParkdayId' => $r->parkday_id,
+						'KingdomId' => $r->kingdom_id,
+						'ParkId' => $r->park_id,
+						'ParkName' => $r->park_name,
+						'KingdomName' => $r->kingdom_name,
+						'Recurrence' => $r->recurrence,
+						'WeekOfMonth' => $r->week_of_month,
+						'WeekDay' => $r->week_day,
+						'MonthDay' => $r->month_day,
+						'Time' => $r->time,
+						'Purpose' => $r->purpose,
+						'Description' => $r->description,
+						'AlternateLocation' => $r->alternate_location,
+						'Address' => $r->address,
+						'City' => $r->city,
+						'Province' => $r->province,
+						'PostalCode' => $r->postal_code,
+						'GoogleGeocode' => $r->google_geocode,
+						'Latitude' => $r->latitude_d,
+						'Longitude' => $r->longitude_d,
+						'Location' => $r->location,
+						'MapUrl' => $r->map_url,
+						'LocationUrl' => $r->location_url,
+            'Distance' => $r->distance,
+            'NextDay' => $r->next_day
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+  }
+  
 	public function GetParkAuthorizations( $request )
 	{
 		$sql = "select authorization_id, username, a.mundane_id, role from " . DB_PREFIX . "authorization a left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id where a.park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "' and system=0";
@@ -357,36 +471,40 @@ class Park extends Ork3
 		return $response;
 	}
 
-	public function park_geocode_h( $geocode = null )
+	public function park_geocode_h( $geocode = null, & $parkobject = null )
 	{
+    $parkobject = is_null($parkobject) ? $this->park : $parkobject;
+ 		logtrace( 'park_geocode_h', $parkobject );
+
 		if ( trimlen( $geocode ) > 0 ) {
 			$details = Common::Geocode( null, null, null, null, $geocode );
 		} else {
-			$details = Common::Geocode( $this->park->address, $this->park->city, $this->park->province, $this->park->postal_code );
+			$details = Common::Geocode( $parkobject->address, $parkobject->city, $parkobject->province, $parkobject->postal_code );
 		}
 		if ( $details[ 'status' ] == 'OVER_QUERY_LIMIT' )
 			return;
 		$geocode = json_decode( $details[ 'Geocode' ] );
-		logtrace( 'park_geocode_h', $details );
-		$this->park->latitude = $geocode->results[ 0 ]->geometry->location->lat;
-		$this->park->longitude = $geocode->results[ 0 ]->geometry->location->lng;
-		$this->park->google_geocode = $details[ 'Geocode' ];
-		$this->park->location = $details[ 'Location' ];
-		$this->park->address = $details[ 'Address' ];
-		if ( isset( $details[ 'City' ] ) ) $this->park->city = $details[ 'City' ];
-		if ( isset( $details[ 'Province' ] ) ) $this->park->province = $details[ 'Province' ];
-		if ( isset( $details[ 'PostalCode' ] ) ) $this->park->postal_code = $details[ 'PostalCode' ];
+		$parkobject->latitude = $geocode->results[ 0 ]->geometry->location->lat;
+		$parkobject->longitude = $geocode->results[ 0 ]->geometry->location->lng;
+		$parkobject->google_geocode = $details[ 'Geocode' ];
+		$parkobject->location = $details[ 'Location' ];
+		$parkobject->address = $details[ 'Address' ];
+		if ( isset( $details[ 'City' ] ) ) $parkobject->city = $details[ 'City' ];
+		if ( isset( $details[ 'Province' ] ) ) $parkobject->province = $details[ 'Province' ];
+		if ( isset( $details[ 'PostalCode' ] ) ) $parkobject->postal_code = $details[ 'PostalCode' ];
 	}
 
 	public function ParkGeocode( $park_id )
 	{
-		$this->park->clear();
-		$this->park->park_id = $park_id;
-		if ( $this->park->find() && $this->park->park_id == $park_id ) {
-			if ( $this->park_geocode_h() ) {
-				$this->park->save();
+    $parkobject = is_null($parkobject) ? $this->park : $parkobject;
+    
+		$parkobject->clear();
+		$parkobject->park_id = $park_id;
+		if ( $parkobject->find()) do {
+			if ( $parkobject->park_id == $park_id && $this->park_geocode_h(null, $parkobject) ) {
+				$parkobject->save();
 			}
-		}
+		} while ($parkobject->next());
 	}
 
 	public function unique_username( $name )

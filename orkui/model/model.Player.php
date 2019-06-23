@@ -42,6 +42,14 @@ class Model_Player extends Model {
 		return $this->Player->RemoveAward($request);
 	}
 	
+	function revoke_player_award($request) {
+		return $this->Player->RevokeAward($request);
+	}
+	
+	function revoke_all_awards($request) {
+		return $this->Player->RevokeAllAwards($request);
+	}
+	
 	function add_player_award($request) {
 		return $this->Player->AddAward($request);
 	}
@@ -66,6 +74,11 @@ class Model_Player extends Model {
 	*/
 	function move_player($request) {
 		$r = $this->Player->MovePlayer($request);
+		return $r;
+	}
+	
+	function suspend_player($request) {
+		$r = $this->Player->SetPlayerSuspension($request);
 		return $r;
 	}
 	

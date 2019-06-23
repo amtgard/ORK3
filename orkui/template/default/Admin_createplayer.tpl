@@ -41,7 +41,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#ParkName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ParkName', ui);
 				$('#ParkId').val(ui.item.value);
@@ -68,7 +68,7 @@
 			focus: function( event, ui ) {
 				return showLabel('#KingdomName', ui);
 			}, 
-			delay: 50,
+			delay: 500,
 			select: function (e, ui) {
 				showLabel('#KingdomName', ui);
 				$('#KingdomId').val(ui.item.value);

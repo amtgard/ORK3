@@ -1,0 +1,1 @@
+UPDATE ork_awards a SET a.award_id = (SELECT k.award_id FROM ork_kingdomaward k WHERE k.kingdomaward_id = a.kingdomaward_id) WHERE a.award_id = 0
