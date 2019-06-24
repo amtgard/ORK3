@@ -970,6 +970,8 @@ class Report  extends Ork3 {
 			$per_period = mysql_real_escape_string($request['PerMonths']) . ' month';
 		}
 
+    $park_id = valid_id($request['ParkId']) ? $request['ParkId'] : 0;
+    
 		if (valid_id($request['ParkId'])) {
 			$location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 			$duesclause = "a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
@@ -1026,7 +1028,7 @@ class Report  extends Ork3 {
 			$waiver_clause = ' and m.waivered = 0';
 		}
 		$sql = "
-                select main_summary.*, total_monthly_credits, credit_counts.daily_credits, credit_counts.rop_limited_credits
+                select main_summary.*, total_monthly_credits, local_park_weeks, credit_counts.daily_credits, credit_counts.rop_limited_credits
                     from
                         (select
         						$peer_field count(week) as weeks_attended, sum(weekly_attendance) as park_days_attended, sum(daily_attendance) as days_attended, sum(credits_earned) total_credits, attendance_summary.mundane_id,
@@ -1077,6 +1079,16 @@ class Report  extends Ork3 {
                     							group by dayofyear(date), year(date), mundane_id) credit_list_source
                 					    group by mundane_id, month(`date`)) credit_list
                                 group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id
+                        left join
+                          (select
+										          count(a.attendance_id) as local_park_weeks, a.mundane_id
+									          from ork_attendance a
+										          left join ork_mundane m on a.mundane_id = m.mundane_id
+									          where
+										          m.park_id = a.park_id
+										          and date > adddate(curdate(), interval -6 month)
+										          and a.mundane_id > 0
+                            group by a.mundane_id) park_local_attendance on main_summary.mundane_id = park_local_attendance.mundane_id
 					";
 					// For last join, need to limit monthly credits to monthly credit maximum per kingdom config
 		logtrace('Report: GetActivePlayers', array($request,$sql));
@@ -1094,6 +1106,7 @@ class Report  extends Ork3 {
 					'TotalCredits' => $r->total_credits,
     				'TotalMonthlyCredits' => $r->total_monthly_credits,
 					'WeeksAttended' => $r->weeks_attended,
+    				'LocalParkWeeksAttended' => $r->local_park_weeks,
     				'ParkDaysAttended' => $r->park_days_attended,
         			'DaysAttended' => $r->days_attended,
         			'DailyCredits' => $r->daily_credits,

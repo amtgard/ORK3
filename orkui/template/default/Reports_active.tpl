@@ -19,6 +19,7 @@
 <?php endif; ?>
 				<th>Persona</th>
 				<th>Weeks</th>
+    			<th>Local Park Weeks</th>
     			<th>Park Weeks</th>
     			<th>Attendances</th>
 				<th>Monthly Credits</th>
@@ -42,6 +43,7 @@
 <?php 		endif; ?>
 				<td><a href='<?=UIR.'Player/index/'.$player['MundaneId'] ?>'><?=$player['Persona'] ?></a></td>
 				<td class='data-column'><?=$player['WeeksAttended'] ?></td>
+				<td class='data-column'><?=$player['LocalParkWeeksAttended'] ?></td>
     			<td class='data-column'><?=$player['ParkDaysAttended'] ?></td>
     			<td class='data-column'><?=$player['DaysAttended'] ?></td>
 				<td class='data-column'><?=$player['TotalMonthlyCredits'] ?></td>
