@@ -28,15 +28,19 @@ class Administration {
 			$total = 0;
 			while ($continue) {
 				set_time_limit(60);
-				$sql = "select count(log_id) as hits from " . DB_PREFIX . "log where action_time < '$date' order by log_id asc limit 50";
-				$find = $this->db->query($sql);
+				$sql = "select count(log_id) as hits from " . DB_PREFIX . "log where action_time < :date order by log_id asc limit 50";
+        $this->db->Clear();
+        $this->db->date = $date;
+				$find = $this->db->Query($sql);
 				if (!$find->size())
 					break;
 				if ($find->hits < 50)
 					$continue = false;
 				$total += $find->hits;
-				$sql = "delete from " . DB_PREFIX . "log where action_time < '$date' order by log_id asc limit 50";
-				$this->db->query($sql);
+				$sql = "delete from " . DB_PREFIX . "log where action_time < :date order by log_id asc limit 50";
+        $this->db->Clear();
+        $this->db->date = $date;
+				$this->db->Query($sql);
 			}
 			return Success($total);
 		}

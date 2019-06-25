@@ -243,8 +243,10 @@ class Event  extends Ork3 {
 		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
 			if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
 				if ($request['Current']) {
-					$sql = 'update ' . DB_PREFIX . 'event_calendardetail set current = 0 where event_id = ' . $event_id;
-					$this->db->query($sql);
+					$sql = 'update ' . DB_PREFIX . 'event_calendardetail set current = 0 where event_id = :event_id';
+          $this->db->Clear();
+          $this->db->event_id = $event_id;
+					$this->db->Query($sql);
 				}
 				
 				$this->detail->clear();
@@ -305,7 +307,7 @@ class Event  extends Ork3 {
               e.name as event_name,
               u.unit_id, u.name as unit_name,
               concat(year(cd.event_start), '-', lpad(week(cd.event_start), 2, '0')) starts_about,
-              ( 3959 * acos( cos( radians($latitude) ) * cos( radians( cd.latitude ) ) * cos( radians( cd.longitude ) - radians($longitude) ) + sin( radians($latitude) ) * sin(radians(cd.latitude)) ) ) AS distance 
+              ( 3959 * acos( cos( radians(:latitude) ) * cos( radians( cd.latitude ) ) * cos( radians( cd.longitude ) - radians(:longitude) ) + sin( radians(:latitude) ) * sin(radians(cd.latitude)) ) ) AS distance 
             FROM 
               ork_event_calendardetail cd
                 left join ork_event e on e.event_id = cd.event_id
@@ -313,13 +315,21 @@ class Event  extends Ork3 {
                   left join ork_park p on e.park_id = p.park_id
                   left join ork_unit u on e.unit_id = u.unit_id
             WHERE
-              event_start between '$start' and '$end' and current = 1 
-            HAVING distance < $distance
-            ORDER BY starts_about asc, distance asc LIMIT $limit";
+              event_start between :start and :end and current = 1 
+            HAVING distance < :distance
+            ORDER BY starts_about asc, distance asc 
+            LIMIT " . intval($limit);
     
-    $r = $this->db->query($sql);
+    $this->db->Clear();
+    $this->db->latitude = $latitude;
+    $this->db->longitude = $longitude;
+    $this->db->start = $start;
+    $this->db->end = $end;
+    $this->db->distance = $distance;
+    $this->db->limit = $limit;
+    $r = $this->db->Query($sql);
 		$response = array();
-		if ($r !== false && $r->size() > 0) {
+		if ($r->Size() > 0) {
 			$response['ParkDays'] = array();
 			do {
 				$response['ParkDays'][] = array(
@@ -352,7 +362,7 @@ class Event  extends Ork3 {
 			} while ($r->next());
 			$response['Status'] = Success();
 		} else {
-			$response['Status'] = InvalidParameter();
+			$response['Status'] = InvalidParameter($sql);
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
   }

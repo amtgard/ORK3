@@ -7,7 +7,8 @@ if(getenv('ENVIRONMENT') != 'DEV' && (empty($_SERVER['HTTPS']) || $_SERVER['HTTP
     exit();
 }
 
-error_reporting( 0 );
+error_reporting(E_ERROR);
+ini_set('display_errors', 1);
 
 include_once( "../startup.php" );
 define( 'UIR', HTTP_UI_REMOTE . 'index.php?Route=' );
