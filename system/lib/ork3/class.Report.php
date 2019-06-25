@@ -323,9 +323,9 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
 		if ($request['PerWeeks'] == 1)
-			$per_period = mysql_real_escape_string($request['Periods']) . " week";
+			$per_period = date("Y-m-d", strtotime("-$request[Periods] week"));
 		if ($request['PerMonths'] == 1)
-			$per_period = mysql_real_escape_string($request['Periods']) . " month";
+			$per_period = date("Y-m-d", strtotime("-$request[Periods] month"));
 
 		$sql = "select c.class_id, c.name as class_name, count(a.attendance_id) as attendance_count, m.persona, m.mundane_id, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
 					from " . DB_PREFIX . "class c
@@ -334,7 +334,7 @@ class Report  extends Ork3 {
 								left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 								left join " . DB_PREFIX . "park p on m.park_id = p.park_id
 					where
-						m.suspended = 0 and a.date > adddate('" . mysql_real_escape_string($request['ReportFromDate']) . "', interval -$per_period) $where
+						m.suspended = 0 and a.date > '$per_period', interval -$per_period) $where
 					group by a.mundane_id, a.class_id
 						having count(a.attendance_id) >= '" . mysql_real_escape_string($request['MinimumAttendanceRequirement']) . "'
 					order by m.kingdom_id, c.class_id, m.park_id, m.persona";
@@ -415,17 +415,17 @@ class Report  extends Ork3 {
 		}
 		*/
 		if ($request['PerWeeks'] == 1)
-			$per_period = mysql_real_escape_string($request['Periods']) . " week";
+			$per_period = date("Y-m-d", strtotime("-$request[Periods] week"));
 		if ($request['PerMonths'] == 1)
-			$per_period = mysql_real_escape_string($request['Periods']) . " month";
+			$per_period = date("Y-m-d", strtotime("-$request[Periods] month"));
 		switch($request['ByPeriod']) {
 		    case 'week':
-	                $by_period = 'year(ssa.date), week(ssa.date, 3)';
-	                $group_period = 'year(a.date), week(a.date, 3)';
+	                $by_period = 'ssa.date_year, ssa.date_week3';
+	                $group_period = 'a.date_year, a.date_week3';
 	            break;
 		    case 'month':
-		            $by_period = 'year(ssa.date), month(ssa.date)';
-	                $group_period = 'year(a.date), week(a.date, 3)';
+		            $by_period = 'ssa.date_year, ssa.date_month';
+	                $group_period = 'a.date_year, a.date_week3';
 		        break;
 		    case 'date':
 		    default:
@@ -436,7 +436,7 @@ class Report  extends Ork3 {
 
 
 		$sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
-					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
+					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, a.date_year as year, a.date_week3 as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
 					from
 						(select max(ssa.date) as `date`, ssa.mundane_id, ssd.event_start, ssd.event_end, ssa.park_id, ssd.event_calendardetail_id, ssd.event_id
@@ -452,7 +452,7 @@ class Report  extends Ork3 {
 							left join " . DB_PREFIX . "park ep on e.park_id = ep.park_id
 							left join " . DB_PREFIX . "kingdom ek on e.kingdom_id = ek.kingdom_id
 					where
-						a.date > adddate('" . mysql_real_escape_string($request['ReportFromDate']) . "', interval -$per_period) and a.date <= now()
+						a.date > '$per_period' and a.date <= now()
 					group by $group_period
 					order by a.date desc, kingdom_name asc, park_name asc, event_name asc";
 		$r = $this->db->query($sql);
@@ -853,9 +853,9 @@ class Report  extends Ork3 {
 		if ($request['Waivered']) $waivered_peeps = "m.waivered = 1 and";
 
 		if (strlen($request['AverageWeeks']) > 0) {
-			$per_period = mysql_real_escape_string($request['AverageWeeks']) . ' week';
+			$per_period = date("Y-m-d", strtotime("-$request[AverageWeeks] week"));
 		} else {
-			$per_period = mysql_real_escape_string($request['AverageMonths']) . ' month';
+			$per_period = date("Y-m-d", strtotime("-$request[AverageMonths] month"));
 		}
 
 		$sql = "select
@@ -864,16 +864,16 @@ class Report  extends Ork3 {
 						" . DB_PREFIX . "park p
 							left join
 								(select
-										a.mundane_id, week(a.date,3) as week, a.park_id
+										a.mundane_id, a.date_week3 as week, a.park_id
 									from " . DB_PREFIX . "attendance a
 										left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
 									where
 										$native_populace
 										$waivered_peeps
-										date > adddate(curdate(), interval -$per_period)
+										date > '$per_period'
 										and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
 										and a.mundane_id > 0
-									group by year(date), week(date,3), mundane_id) mundanesbyweek
+									group by date_year, date_week3, mundane_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
 					where p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "' and p.active = 'Active'
 					group by park_id
@@ -913,18 +913,18 @@ class Report  extends Ork3 {
 								count(mundanesbyweek.mundane_id) attendance_count, mundanesbyweek.kingdom_id
 							from
 								(select
-										mundane_id, week(date,3) as week, kingdom_id
+										mundane_id, date_week3 as week, kingdom_id
 									from " . DB_PREFIX . "attendance
-									where date > adddate(curdate(), interval - " . mysql_real_escape_string($request['KingdomAverageWeeks']) . " week) group by week(date,3), mundane_id)
+									where date > '" . date("Y-m-d", strtotime("-$request[KingdomAverageWeeks] week")) . "' group by date_week3, mundane_id)
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
 								count(mundanesbymonth.mundane_id) monthly_attendance_count, mundanesbymonth.kingdom_id
 							from
 								(select
-										mundane_id, month(date) as month, kingdom_id
+										mundane_id, date_month as month, kingdom_id
 									from " . DB_PREFIX . "attendance
-									where date > adddate(curdate(), interval - 12 month) group by month(date), mundane_id)
+									where date > '" . date("Y-m-d", strtotime("-1 year")) . "' group by date_month, mundane_id)
 									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
@@ -936,7 +936,7 @@ class Report  extends Ork3 {
 										(select
 												kingdom_id, park_id
 											from " . DB_PREFIX . "attendance
-											where date > adddate(curdate(), interval - " . mysql_real_escape_string($request['ParkAttendanceWithin']) . " week) group by week(date,3), mundane_id) mundanesbyweek
+											where date > '" . date("Y-m-d", strtotime("-$request[ParkAttendanceWithin] week")) . "' group by date_week3, mundane_id) mundanesbyweek
 									group by kingdom_id, park_id) parkcount
 							group by kingdom_id) activeparks on activeparks.kingdom_id = k.kingdom_id
 					where active = 'Active'
@@ -965,9 +965,9 @@ class Report  extends Ork3 {
 		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
 
 		if (strlen($request['PerWeeks']) > 0) {
-			$per_period = mysql_real_escape_string($request['PerWeeks']) . ' week';
+			$per_period = date("Y-m-d", strtotime("-$request[PerWeeks] week"));
 		} else {
-			$per_period = mysql_real_escape_string($request['PerMonths']) . ' month';
+			$per_period = date("Y-m-d", strtotime("-$request[PerMonths] month"));
 		}
 
     $park_id = valid_id($request['ParkId']) ? $request['ParkId'] : 0;
@@ -1036,12 +1036,12 @@ class Report  extends Ork3 {
         					from
         						(select
         								a.park_id > 0 as weekly_attendance, count(a.park_id > 0) as daily_attendance, a.mundane_id,
-                                        week(a.date,3) as week, year(a.date) as year, a.kingdom_id, a.park_id, max(credits) as credits_earned, m.waivered
+                                        a.date_week3 as week, a.date_year as year, a.kingdom_id, a.park_id, max(credits) as credits_earned, m.waivered
         							from " . DB_PREFIX . "attendance a
         								left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
         							where
-												m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $park_comparator $location $waiver_clause
-        							group by week(date,3), year(date), mundane_id) attendance_summary
+												m.suspended = 0 and date > '$per_period' $park_comparator $location $waiver_clause
+        							group by date_week3, date_year, mundane_id) attendance_summary
         					left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
         						left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
         						left join " . DB_PREFIX . "park park on park.park_id = mundane.park_id
@@ -1062,8 +1062,8 @@ class Report  extends Ork3 {
             							from ork_attendance a
             								left join ork_mundane m on a.mundane_id = m.mundane_id
             							where
-														m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
-            							group by month(date), year(date), mundane_id) monthly_list
+														m.suspended = 0 and date > '$per_period' $location $waiver_clause
+            							group by date_month, date_year, mundane_id) monthly_list
                                 group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
                         left join
                             (select mundane_id, sum(daily_credits) as daily_credits, sum(rop_limited_credits) as rop_limited_credits
@@ -1071,13 +1071,13 @@ class Report  extends Ork3 {
                                     (select least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(daily_credits)) as daily_credits, least(" . mysql_real_escape_string($request['MonthlyCreditMaximum']) . ", sum(rop_credits)) rop_limited_credits, mundane_id
                                         from
                                             (select
-                        							max(credits) as daily_credits, 1 as rop_credits, a.mundane_id, a.date
+                        							max(credits) as daily_credits, 1 as rop_credits, a.mundane_id, a.date, a.date_month
                     							from ork_attendance a
                     								left join ork_mundane m on a.mundane_id = m.mundane_id
                     							where
-																		m.suspended = 0 and date > adddate(curdate(), interval -$per_period) $location $waiver_clause
-                    							group by dayofyear(date), year(date), mundane_id) credit_list_source
-                					    group by mundane_id, month(`date`)) credit_list
+																		m.suspended = 0 and date > '$per_period' $location $waiver_clause
+                    							group by date, date_year, mundane_id) credit_list_source
+                					    group by mundane_id, date_month) credit_list
                                 group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id
                         left join
                           (select
@@ -1086,7 +1086,7 @@ class Report  extends Ork3 {
 										          left join ork_mundane m on a.mundane_id = m.mundane_id
 									          where
 										          m.park_id = a.park_id
-										          and date > adddate(curdate(), interval -6 month)
+										          and date > '$per_period'
 										          and a.mundane_id > 0
                             group by a.mundane_id) park_local_attendance on main_summary.mundane_id = park_local_attendance.mundane_id
 					";

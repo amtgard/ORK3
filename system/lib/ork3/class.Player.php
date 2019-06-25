@@ -282,9 +282,9 @@ class Player extends Ork3 {
 
 			-- It does now, which is going to piss some people off
 			-- Class double-counting can be added back in by changing
-					"group by year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id"
+					"group by ssa.date_year, ssa.date_week6) a on a.class_id = c.class_id"
 					to
-					group by ssa.class_id, year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id
+					group by ssa.class_id, ssa.date_year, ssa.date_week6) a on a.class_id = c.class_id
 
 
 			-- 2015-06-22
@@ -295,11 +295,11 @@ class Player extends Ork3 {
 		$sql = "select c.class_id, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
 					from " . DB_PREFIX . "class c
 						left join
-							(select ssa.class_id, count(ssa.attendance_id) as attendances, max(ssa.credits) as credits, week(ssa.date, 6) as week
+							(select ssa.class_id, count(ssa.attendance_id) as attendances, max(ssa.credits) as credits, ssa.date_week6 as week
 								from " . DB_PREFIX . "attendance ssa
 								where
 									ssa.mundane_id = $request[MundaneId]
-								group by year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id
+								group by ssa.date_year, ssa.date_week6) a on a.class_id = c.class_id
 						left join " . DB_PREFIX . "class_reconciliation cr on cr.class_id = c.class_id and cr.mundane_id = $request[MundaneId]
 					group by c.class_id
 				";
@@ -307,7 +307,7 @@ class Player extends Ork3 {
 		$sql = "select c.class_id, c.active, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
 					from " . DB_PREFIX . "class c
 						left join
-							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, week(ssa.date, 6) as week
+							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, ssa.date_week6 as week
 								from
 								(select min(killdupe.attendance_id) as attendance_id from " . DB_PREFIX . "attendance killdupe where killdupe.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' group by killdupe.date) kd
 								left join " . DB_PREFIX . "attendance ssa on ssa.attendance_id = kd.attendance_id
