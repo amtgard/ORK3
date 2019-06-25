@@ -164,12 +164,14 @@ class Attendance  extends Ork3 {
 			case 'Event':
 					if (!is_numeric($request['Value']))
 						return InvalidParameter('An event_calendardetail_id must be selected for this event test.');
-					$sql .= " event_calendardetail_id = " . $request['Value'];
+					$sql .= " event_calendardetail_id = :value";
 				break;
 			default:
 				return InvalidParameter('No valid Filter selected.');
 		}
-		$r = $this->db->query($sql);
+    $this->db->Clear();
+    $this->db->value = $request['Value'];
+		$r = $this->db->Query($sql);
 		return $r->has_attendance;
 	}
 	

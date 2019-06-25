@@ -77,12 +77,16 @@ class Tournament extends Ork3 {
 		
 		if (valid_id($request['CopyOfId'])) {
 			$sql = "insert into " . DB_PREFIX . "bracket (tournament_id, style, style_note, method, rings, participants, seeding) 
-						select tournament_id, style, style_note, method, rings, participants, seeding from " . DB_PREFIX . "bracket where bracket_id = $request[CopyOfId]";
-			$this->db->query($sql);
+						select tournament_id, style, style_note, method, rings, participants, seeding from " . DB_PREFIX . "bracket where bracket_id = :copy_of_id";
+      $this->db->Clear();
+      $this->db->copy_of_id = $request['CopyOfId'];
+			$this->db->Query($sql);
 			$bracket_id = $this->db->getInsertId();
 			$sql = "insert into " . DB_PREFIX . "participant (tournament_id, bracket_id, alias, mundane_id, unit_id, park_id, kingdom_id, team_id) 
-						select tournament_id, $bracket_id, alias, mundane_id, unit_id, park_id, kingdom_id, team_id from " . DB_PREFIX . "participant where bracket_id = $request[CopyOfId]";
-			$this->db->query($sql);
+						select tournament_id, $bracket_id, alias, mundane_id, unit_id, park_id, kingdom_id, team_id from " . DB_PREFIX . "participant where bracket_id = :copy_of_id";
+      $this->db->Clear();
+      $this->db->copy_of_id = $request['CopyOfId'];
+			$this->db->Query($sql);
 		} else {
 			$this->Bracket->clear();
 			$this->Bracket->tournament_id = $request['TournamentId'];
@@ -109,9 +113,16 @@ class Tournament extends Ork3 {
 		if (!$this->check_auth($request)) return NoAuthorization();
 		
 		if (valid_id($request['ParticipantId'])) {
-			$sql = "insert into " . DB_PREFIX . "participant (tournament_id, bracket_id, alias, mundane_id, unit_id, park_id, kingdom_id, team_id) 
-						select tournament_id, " . mysql_real_escape_string($request['BracketId']) . ", alias, mundane_id, unit_id, park_id, kingdom_id, team_id from " . DB_PREFIX . "participant where participant_id = '" . mysql_real_escape_string($request['ParticipantId']) . "'";
-			$this->db->query($sql);
+			$sql = 
+        "insert into " . DB_PREFIX . "participant (tournament_id, bracket_id, alias, mundane_id, unit_id, park_id, kingdom_id, team_id) 
+				  select 
+              tournament_id, :bracket_id, alias, mundane_id, unit_id, 
+                park_id, kingdom_id, team_id from " . DB_PREFIX . "participant 
+            where participant_id = :participant_id";
+      $this->db->Clear();
+      $this->db->bracket_id = $request['BracketId'];
+      $this->db->participant_id = $request['ParticipantId'];
+			$this->db->Query($sql);
 			return Success($this->db->getInsertId());
 		} else {
 			$this->Participant->clear();

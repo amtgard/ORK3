@@ -45,17 +45,17 @@ class Award  extends Ork3 {
       $officer_role_clause = " and officer_role != 'none'"; 
     } 
 		$sql = "select award_id, name, a.award_id, a.is_ladder, is_title, title_class, a.officer_role
-					from " . DB_PREFIX . "award a'
+					from " . DB_PREFIX . "award a
 					where 1
 						$ladder_clause
 						$title_clause
             $officer_role_clause
 					order by is_ladder, a.is_title, a.title_class desc, a.name";
-		$r = $this->db->query($sql);
+		$r = $this->db->Query($sql);
 
 		$response = array();
 		$response['Awards'] = array();
-		if ($r !== false && $r->size() > 0) {
+		if ($r !== false && $r->Size() > 0) {
 			do {
 				$response['Awards'][] = array(
 					'KingdomAwardId' => $r->award_id,
