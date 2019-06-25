@@ -96,6 +96,7 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+    
 		$( "#ParkName" ).autocomplete({
 			source: function( request, response ) {
 				kingdom_id = $('#KingdomId').val();
@@ -135,7 +136,8 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
-		$( "#Persona" ).autocomplete({
+
+    $( "#Persona" ).autocomplete({
 			source: function( request, response ) {
 				park_id = $('#ParkId').val();
 				kingdom_id = $('#KingdomId').val();
@@ -214,6 +216,7 @@
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
+    <div><div><b>Location</b></div></div>
 		<div>
 			<span>Kingdom</span>
 			<span><input type='text' value='<?=isset($Admin_event['KingdomName'])?$Admin_event['KingdomName']:$EventDetails['EventInfo'][0]['KingdomName'] ?>' name='KingdomName' id='KingdomName' /></span>

@@ -5,6 +5,48 @@
 		$('#event-creation-form').submit(function() {
 			$('#event-creation-form').attr('action', '<?=UIR ?>Admin/event/' + $('select[name=event_id]').val() + '/new');
 		});
+    
+		$( "#AlsoParkName" ).autocomplete({
+			source: function( request, response ) {
+				kingdom_id = $('#KingdomId').val();
+				$.getJSON(
+					"<?=HTTP_SERVICE ?>Search/SearchService.php",
+					{
+						Action: 'Search/Park',
+						name: request.term,
+						kingdom_id: kingdom_id
+					},
+					function( data ) {
+						var suggestions = [];
+						$.each(data, function(i, val) {
+							suggestions.push({label: val.Name, value: val.ParkId });
+						});
+						response(suggestions);
+					}
+				);
+			},
+			focus: function( event, ui ) {
+				return showLabel('#AlsoParkName', ui);
+			}, 
+			delay: 500,
+			select: function (e, ui) {
+				showLabel('#AlsoParkName', ui);
+				$('#AlsoParkId').val(ui.item.value);
+				return false;
+			},
+			change: function (e, ui) {
+				if (ui.item == null) {
+					showLabel('#AlsoParkName',null);
+					$('#AlsoParkId').val(null);
+				}
+				return false;
+			}
+		}).focus(function() {
+			if (this.value == "")
+				$(this).trigger('keydown.autocomplete');
+		});
+
+    
 	});
 </script>
 
@@ -20,6 +62,17 @@
 				<option value='<?=$event['EventId'] ?>'><?=$event['Name'] ?></option>
 <?php endforeach ; ?>
 			</select>
+		</div>
+		<div>
+			<span>Also:</span>
+			<span>
+        <input type='text' value='<?=isset($Admin_event['AlsoParkName'])?$Admin_event['AlsoParkName']:$EventDetails['EventInfo'][0]['AlsoParkName'] ?>' name='AlsoParkName' id='AlsoParkName' />
+        <input type='hidden' name='AlsoParkId' value='<?=$Admin_event['AlsoParkId'] ?>' id='AlsoParkId' />
+        <input type='hidden' name='KingdomId' value='<?=$Admin_event['KingdomId'] ?>' id='KingdomId' />
+        <input type='hidden' name='ParkId' value='<?=$Admin_event['ParkId'] ?>' id='ParkId' />
+        <input type='hidden' name='MundaneId' value='<?=$Admin_event['MundaneId'] ?>' id='MundaneId' />
+        <input type='hidden' name='UnitId' value='<?=$Admin_event['UnitId'] ?>' id='UnitId' />
+      </span>
 		</div>
 		<div>
 			<span>Start:</span>
