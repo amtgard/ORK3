@@ -15,7 +15,7 @@ $LOG;
 $DB;
 
 if ( !isset( $DB ) ) {
-	$DB = new yapo_mysql( DB_HOSTNAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD );
+	$DB = new YapoMysql( DB_HOSTNAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD );
 }
 
 if ( !DO_SETUP ) {
