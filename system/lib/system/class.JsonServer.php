@@ -147,18 +147,6 @@ class JsonServer {
 				echo JsonServer::Encode($this->error(JsonServer::BAD_CALL, "Call parameter must be in the form class/method or class $call_parts[0] does not exist.; "));
 				return;
 			}
-		} else if (isset(Ork3::$Lib->Request->endpoints)) {
-			echo JsonServer::Encode($this->get_classes());
-			return;
-	    } else if (isset(Ork3::$Lib->Request->list)) {
-			if ($this->valid_class(Ork3::$Lib->Request->list)) {
-				$methods = $this->get_methods(Ork3::$Lib->Request->list);
-				echo JsonServer::Encode($methods);
-				return;
-			} else {
-				echo JsonServer::Encode($this->error(JsonServer::NO_CLASS, "Class `{Ork3::$Lib->Request->list}` does not exist; "));
-				return;
-			}
 		} else if (isset(Ork3::$Lib->Request->describe)) {
 			$call_parts = explode('/', trim($this->_map(Ork3::$Lib->Request->describe)));
 			if (count($call_parts) == 2 && class_exists($call_parts[0])) {
@@ -179,8 +167,20 @@ class JsonServer {
 					return;
 				}
 			}
-		}
-      echo JsonServer::Encode($this->general_error(__LINE__));
+		} else if (isset(Ork3::$Lib->Request->list)) {
+			if ($this->valid_class(Ork3::$Lib->Request->list)) {
+				$methods = $this->get_methods(Ork3::$Lib->Request->list);
+				echo JsonServer::Encode($methods);
+				return;
+			} else {
+				echo JsonServer::Encode($this->error(JsonServer::NO_CLASS, "Class `{Ork3::$Lib->Request->list}` does not exist; "));
+				return;
+			}
+		} else {
+			echo JsonServer::Encode($this->get_classes());
+			return;
+	  }  
+      echo JsonServer::Encode($this->general_error("No parameters were specified"));
     }
     
     /***************************************************************************
