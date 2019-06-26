@@ -453,6 +453,7 @@ class Controller_Admin extends Controller {
 				$edit = array(
 							'Token' => $this->session->token,
 							'EventId' => $event_id,
+							'AtParkId' => $this->request->Admin_event->AtParkId,
 							'Current' => $this->request->Admin_event->Current=='Yes'?1:0,
 							'Price' => $this->request->Admin_event->Price,
 							'EventStart' => $this->request->Admin_event->StartDate,
@@ -559,13 +560,15 @@ class Controller_Admin extends Controller {
 
 	public function createevent($post=null) {
 		$this->load_model('Event');
-		if (valid_id($this->request->UnitId) || valid_id($this->request->Admin_manageevent->CreateUnitId)) {
-			$this->data['Events_list'] = $this->Event->GetEvents(array('UnitId' => valid_id($this->request->Admin_manageevent->UnitId)?$this->request->Admin_manageevent->UnitId:$this->request->UnitId, 'LimitTo' => true));
+		$this->request->save('Admin_event', true);
+		if (valid_id($this->request->UnitId) || valid_id($this->request->Admin_event->CreateUnitId)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('UnitId' => valid_id($this->request->Admin_event->UnitId)?$this->request->Admin_event->UnitId:$this->request->UnitId, 'LimitTo' => true));
 			$this->data['EventIdSelector'] = 'UnitId';
-		} else if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_manageevent->CreateMundaneId)) {
-			$this->data['Events_list'] = $this->Event->GetEvents(array('MundaneId' => valid_id($this->request->Admin_manageevent->MundaneId)?$this->request->Admin_manageevent->MundaneId:$this->request->MundaneId, 'LimitTo' => true));
+		} else if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_event->CreateMundaneId)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('MundaneId' => valid_id($this->request->Admin_event->MundaneId)?$this->request->Admin_event->MundaneId:$this->request->MundaneId, 'LimitTo' => true));
 			$this->data['EventIdSelector'] = 'MundaneId';
-		} else if (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+		} 
+    if (isset($this->session->park_id) && valid_id($this->session->park_id)) {
 			$this->data['Events_list'] = $this->Event->GetEvents(array('ParkId' => $this->session->park_id, 'LimitTo' => false));
 			$this->data['EventIdSelector'] = 'ParkId';
 		} else if (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
@@ -573,6 +576,9 @@ class Controller_Admin extends Controller {
 			$this->data['EventIdSelector'] = 'KingdomId';
 		} else {
 			$this->data['Events_list'] = array();
+		}
+		if ($this->request->exists('Admin_event')) {
+			$this->data['Admin_event'] = $this->request->Admin_event->Request;
 		}
 	}
 

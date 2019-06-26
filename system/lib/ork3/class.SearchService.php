@@ -111,6 +111,7 @@ class SearchService extends Ork3 {
 		if ($eventdetail->find()) {
 			$detail = array(
 					'EventId' => $eventdetail->event_id,
+					'AtParkId' => $eventdetail->at_park_id,
 					'Current' => $eventdetail->current,
 					'Price' => $eventdetail->price,
 					'EventStart' => $eventdetail->event_start,

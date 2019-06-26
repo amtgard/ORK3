@@ -455,7 +455,8 @@ class Report  extends Ork3 {
 						a.date > adddate('" . mysql_real_escape_string($request['ReportFromDate']) . "', interval -$per_period) and a.date <= now()
 					group by $group_period
 					order by a.date desc, kingdom_name asc, park_name asc, event_name asc";
-		$r = $this->db->query($sql);
+
+    $r = $this->db->query($sql);
 		if ($r !== false && $r->size() > 0) {
 			$response = array( 'Status' => Success(), 'Dates' => array());
 			do {

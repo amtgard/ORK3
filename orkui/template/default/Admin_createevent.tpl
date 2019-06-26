@@ -6,7 +6,7 @@
 			$('#event-creation-form').attr('action', '<?=UIR ?>Admin/event/' + $('select[name=event_id]').val() + '/new');
 		});
     
-		$( "#AlsoParkName" ).autocomplete({
+		$( "#AtParkName" ).autocomplete({
 			source: function( request, response ) {
 				kingdom_id = $('#KingdomId').val();
 				$.getJSON(
@@ -26,18 +26,18 @@
 				);
 			},
 			focus: function( event, ui ) {
-				return showLabel('#AlsoParkName', ui);
+				return showLabel('#AtParkName', ui);
 			}, 
 			delay: 500,
 			select: function (e, ui) {
-				showLabel('#AlsoParkName', ui);
-				$('#AlsoParkId').val(ui.item.value);
+				showLabel('#AtParkName', ui);
+				$('#AtParkId').val(ui.item.value);
 				return false;
 			},
 			change: function (e, ui) {
 				if (ui.item == null) {
-					showLabel('#AlsoParkName',null);
-					$('#AlsoParkId').val(null);
+					showLabel('#AtParkName',null);
+					$('#AtParkId').val(null);
 				}
 				return false;
 			}
@@ -66,10 +66,10 @@
 		<div>
 			<span>Also:</span>
 			<span>
-        <input type='text' value='<?=isset($Admin_event['AlsoParkName'])?$Admin_event['AlsoParkName']:$EventDetails['EventInfo'][0]['AlsoParkName'] ?>' name='AlsoParkName' id='AlsoParkName' />
-        <input type='hidden' name='AlsoParkId' value='<?=$Admin_event['AlsoParkId'] ?>' id='AlsoParkId' />
-        <input type='hidden' name='KingdomId' value='<?=$Admin_event['KingdomId'] ?>' id='KingdomId' />
-        <input type='hidden' name='ParkId' value='<?=$Admin_event['ParkId'] ?>' id='ParkId' />
+        <input type='text' value="<?=htmlentities(isset($Admin_event['AtParkName'])?$Admin_event['AtParkName']:$this->__session->park_name) ?>" name='AtParkName' id='AtParkName' />
+        <input type='hidden' name='AtParkId' value='<?=isset($Admin_event['AtParkId'])?$Admin_event['AtParkId']:$this->__session->park_id ?>' id='AtParkId' />
+        <input type='hidden' name='KingdomId' value='<?=$this->__session->kingdom_id ?>' id='KingdomId' />
+        <input type='hidden' name='ParkId' value='<?=$this->__session->kingdom_id ?>' id='ParkId' />
         <input type='hidden' name='MundaneId' value='<?=$Admin_event['MundaneId'] ?>' id='MundaneId' />
         <input type='hidden' name='UnitId' value='<?=$Admin_event['UnitId'] ?>' id='UnitId' />
       </span>

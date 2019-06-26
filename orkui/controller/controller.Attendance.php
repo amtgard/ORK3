@@ -192,10 +192,12 @@ class Controller_Attendance extends Controller {
 			} else {
 				switch ($action) {
 					case 'new':
-						$r = $this->Attendance->add_attendance(
+            $detail = $this->Attendance->get_eventdetail_info($detail_id);
+
+            $r = $this->Attendance->add_attendance(
 								$this->session->token, 
 								$this->request->Attendance_event->AttendanceDate, 
-								null, 
+								valid_id($detail['AtParkId'])?$detail['AtParkId']:null, 
 								$detail_id,
 								$this->request->Attendance_event->MundaneId, 
 								$this->request->Attendance_event->ClassId, 
@@ -229,7 +231,8 @@ class Controller_Attendance extends Controller {
 		if ($this->request->exists('Attendance_event')) {
 			$this->data['Attendance_event'] = $this->request->Attendance_event->Request;
 		}
-		$this->data['Classes'] = $this->Attendance->get_classes();
+    $classes = $this->Attendance->get_classes();
+		$this->data['Classes'] = $classes['Classes'];
 		if ($this->data['Classes']['Status']['Status'] != 0) {
 			$this->data['Error'] = $this->data['Classes']['Status']['Error'];
 		}

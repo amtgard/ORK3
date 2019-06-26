@@ -1,0 +1,3 @@
+ALTER TABLE `ork_event_calendardetail` ADD `at_park_id` INT(11) NOT NULL AFTER `event_id`;
+ALTER TABLE `ork_event_calendardetail` CHANGE `at_park_id` `at_park_id` INT(11) NULL;
+ALTER TABLE `ork_event_calendardetail` CHANGE `at_park_id` `at_park_id` INT(11) NULL DEFAULT NULL;
