@@ -116,7 +116,7 @@ class Attendance  extends Ork3 {
 		
         if ($this->attendance->attendance_id) {
           $sql = "update " . DB_PREFIX . "attendance set date_year = year(`date`), date_month = month(`date`), date_week3 = week(`date`, 3), date_week6 = week(`date`, 6) where attendance_id = " . $this->attendance->attendance_id;
-          // $this->db->query($sql);
+          $this->db->query($sql);
     		  return Success($this->attendance->attendance_id);
         }
         return InvalidParameter();
