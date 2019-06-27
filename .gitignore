@@ -18,6 +18,7 @@ assets/tmp/*
 !assets/tmp/.gitkeep
 assets/waivers/*
 !assets/waivers/.gitkeep
+assets/backups/*
 cache
 .idea
 vendor
