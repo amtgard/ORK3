@@ -439,7 +439,8 @@ class Report  extends Ork3 {
 					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
 					from
-						(select max(ssa.date) as `date`, ssa.mundane_id, ssd.event_start, ssd.event_end, ssa.park_id, ssd.event_calendardetail_id, ssd.event_id
+						(select max(ssa.date) as `date`, max(ssa.date_year) as date_year, max(ssa.date_month) as date_month, max(date_week3) as date_week3,
+              ssa.mundane_id, ssd.event_start, ssd.event_end, ssa.park_id, ssd.event_calendardetail_id, ssd.event_id
 							from " . DB_PREFIX . "attendance ssa
 								left join " . DB_PREFIX . "event_calendardetail ssd on ssa.event_calendardetail_id = ssd.event_calendardetail_id
 								left join " . DB_PREFIX . "park p on ssa.park_id = p.park_id
