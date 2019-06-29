@@ -334,7 +334,7 @@ class Report  extends Ork3 {
 								left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 								left join " . DB_PREFIX . "park p on m.park_id = p.park_id
 					where
-						m.suspended = 0 and a.date > '$per_period', interval -$per_period) $where
+						m.suspended = 0 and a.date > '$per_period' $where
 					group by a.mundane_id, a.class_id
 						having count(a.attendance_id) >= '" . mysql_real_escape_string($request['MinimumAttendanceRequirement']) . "'
 					order by m.kingdom_id, c.class_id, m.park_id, m.persona";
