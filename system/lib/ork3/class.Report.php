@@ -1097,7 +1097,6 @@ class Report  extends Ork3 {
                                 group by a.date_year, a.date_week3, a.mundane_id) local_park_week_count
                             group by local_park_week_count.mundane_id) park_local_attendance on main_summary.mundane_id = park_local_attendance.mundane_id
 					";
-    echo $sql;
 					// For last join, need to limit monthly credits to monthly credit maximum per kingdom config
 		logtrace('Report: GetActivePlayers', array($request,$sql));
 		$r = $this->db->query($sql);
