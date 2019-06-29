@@ -1064,7 +1064,7 @@ class Report  extends Ork3 {
             							from ork_attendance a
             								left join ork_mundane m on a.mundane_id = m.mundane_id
             							where
-														m.suspended = 0 and date > '$per_period' $location $waiver_clause
+														m.suspended = 0 and date > '$per_period' $location $waiver_clause $park_comparator
             							group by date_month, date_year, mundane_id) monthly_list
                                 group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
                         left join
@@ -1077,21 +1077,27 @@ class Report  extends Ork3 {
                     							from ork_attendance a
                     								left join ork_mundane m on a.mundane_id = m.mundane_id
                     							where
-																		m.suspended = 0 and date > '$per_period' $location $waiver_clause
+																		m.suspended = 0 and date > '$per_period' $location $waiver_clause $park_comparator
                     							group by date, date_year, mundane_id) credit_list_source
                 					    group by mundane_id, date_month) credit_list
                                 group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id
                         left join
                           (select
-										          count(a.attendance_id) as local_park_weeks, a.mundane_id
-									          from ork_attendance a
-										          left join ork_mundane m on a.mundane_id = m.mundane_id
-									          where
-										          m.park_id = a.park_id
-										          and date > '$per_period'
-										          and a.mundane_id > 0
-                            group by a.mundane_id) park_local_attendance on main_summary.mundane_id = park_local_attendance.mundane_id
+										          count(local_park_week_count.attendance_id) as local_park_weeks, local_park_week_count.mundane_id
+									          from 
+                              (select max(a.attendance_id) as attendance_id, a.mundane_id as mundane_id 
+                                from ork_attendance a
+                                  left join ork_mundane m on a.mundane_id = m.mundane_id
+                                where
+                                  m.park_id = a.park_id
+    										          and date > '$per_period'
+                                  and m.mundane_id > 0
+                                  $location
+                                  $park_comparator
+                                group by a.date_year, a.date_week3, a.mundane_id) local_park_week_count
+                            group by local_park_week_count.mundane_id) park_local_attendance on main_summary.mundane_id = park_local_attendance.mundane_id
 					";
+    echo $sql;
 					// For last join, need to limit monthly credits to monthly credit maximum per kingdom config
 		logtrace('Report: GetActivePlayers', array($request,$sql));
 		$r = $this->db->query($sql);
