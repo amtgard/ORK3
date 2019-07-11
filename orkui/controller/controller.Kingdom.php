@@ -46,7 +46,14 @@ class Controller_Kingdom extends Controller {
 	
 	public function map($kingdom_id = null) {
 		if (valid_id($kingdom_id)) {
-			$this->data['Parks'] = $this->Kingdom->GetParks(array('KingdomId' => $kingdom_id));
+      $all_parks = $this->Kingdom->GetParks(array('KingdomId' => $kingdom_id));
+      $all_parks['Parks'] = array_filter(
+        $all_parks['Parks'],
+        function ($park) {
+          return $park['Active'] == 'Active';
+        }
+      );
+      $this->data['Parks'] = $all_parks;
 		}
 	}
 
