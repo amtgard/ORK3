@@ -144,7 +144,8 @@ class Player extends Ork3 {
 					'HasImage' => $this->mundane->has_image,
 					'Image' => HTTP_PLAYER_IMAGE . sprintf('%06d.jpg', $this->mundane->mundane_id),
 					'PenaltyBox' => $this->mundane->penalty_box,
-					'Active' => $this->mundane->active
+          'Active' => $this->mundane->active,
+          'PasswordExpires' => $this->mundane->password_expires
 				);
 			$unit = Ork3::$Lib->unit->GetUnit(array( 'UnitId' => $response['Player']['CompanyId'] ));
 			if ($unit['Status']['Status'] != 0) {
@@ -456,7 +457,7 @@ class Player extends Ork3 {
 			return array (
 				'id' => $this->mundane->mundane_id, 'park_id' => $this->mundane->park_id, 'kingdom_id' => $this->mundane->kingdom_id,
 				'MundaneId' => $this->mundane->mundane_id, 'ParkId' => $this->mundane->park_id, 'KingdomId' => $this->mundane->kingdom_id,
-				'Surname' => $this->mundane->surname, 'GivenName' => $this->mundane->given_name
+				'Surname' => $this->mundane->surname, 'GivenName' => $this->mundane->given_name, 'PasswordExpires' => $this->mundane->password_expires
 				);
 		}
 	}

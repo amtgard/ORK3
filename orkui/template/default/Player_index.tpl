@@ -1,3 +1,11 @@
+<?php
+    $passwordExpired = strtotime($Player['PasswordExpires']) - time() <= 0;
+    if ($passwordExpired) {
+      $passwordExpiring = 'Expired';
+    } else {
+      $passwordExpiring = date('Y-m-j', strtotime($Player['PasswordExpires']));
+    }
+?>
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
@@ -68,7 +76,11 @@
 			<span>Dues Paid:</span>
 			<span class='form-informational-field'><?=$Player['DuesThrough']==0?"No":$Player['DuesThrough'] ?></span>
 		</div>
-	</form>
+		<div>
+			<span>Password Expires:</span>
+      <span class='form-informational-field'><?=$passwordExpiring ?></span>
+		</div>
+  </form>
 </div>
 
 <div class='info-container'>
