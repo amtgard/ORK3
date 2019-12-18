@@ -72,7 +72,6 @@ class Controller_Attendance extends Controller {
 					$this->data['AttendanceDate'] = $this->request->Attendance_kingdom->AttendanceDate;
 					$this->request->clear('Attendance_kingdom');
 				} else if($r['Status'] == 5) {
-					die(print_r($r,true));
 					header( 'Location: '.UIR."Login/login/Attendance/park/$id" );
 				} else {
 					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
@@ -202,7 +201,6 @@ class Controller_Attendance extends Controller {
 					$this->data['AttendanceDate'] = $this->request->Attendance_park->AttendanceDate;
 					$this->request->clear('Attendance_park');
 				} else if($r['Status'] == 5) {
-					die(print_r($r,true));
 					header( 'Location: '.UIR."Login/login/Attendance/park/$id" );
 				} else {
 					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];

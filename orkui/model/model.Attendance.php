@@ -16,7 +16,6 @@ class Model_Attendance extends Model {
 	
 	function add_attendance($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits) {
 		logtrace("Model_Attendance->add_attendance()", array($token, $date, $park_id, $event_id, $mundane_id, $class_id, $credits));
-    print_r(func_get_args());
 		return $this->Attendance->AddAttendance(array('Token'=>$token, 'Date'=>$date, 'ParkId'=>$park_id, 'EventCalendarDetailId'=>$detail_id, 'MundaneId'=>$mundane_id, 'ClassId'=>$class_id, 'Credits'=>$credits));
 	}
 	
