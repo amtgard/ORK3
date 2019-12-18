@@ -58,6 +58,10 @@ class Model_Player extends Model {
 		return $this->Player->UpdateAward($request);
 	}
 	
+  function one_shot($request) {
+    return $this->Player->AddOneShotFaceImage($request); 
+  }
+  
 	function update_player($request) {
 		return $this->Player->UpdatePlayer($request);
 	}

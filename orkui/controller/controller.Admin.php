@@ -719,6 +719,18 @@ class Controller_Admin extends Controller {
 									));
 								}
 							}
+              if ($_FILES['PlayerFace']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
+                if (move_uploaded_file($_FILES['PlayerFace']['tmp_name'], DIR_TMP . sprintf("fi_%06d", $id))) {
+                  $face_im = file_get_contents(DIR_TMP . sprintf("fi_%06d", $id));
+                  $face_imdata = base64_encode($face_im);
+                  $one = $this->Player->one_shot([
+                      'MundaneId' => $id,
+                      'Base64FaceImage' => $face_imdata
+                    ]);
+                    logtrace('One Shot.', $one);
+                  unlink(DIR_TMP . sprintf("fi_%06d", $id));
+                }
+              }
 						}
 						if ($this->request->Update == 'Update Details') {
 							if (valid_id($this->request->Admin_player->DuesSemesters)) {

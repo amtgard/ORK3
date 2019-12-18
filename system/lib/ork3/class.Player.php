@@ -5,9 +5,80 @@ class Player extends Ork3 {
 	public function __construct() {
 		parent::__construct();
 		$this->mundane = new yapo($this->db, DB_PREFIX . 'mundane');
-    	$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
+    $this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
 	}
 
+    public function AddOneShotFaceImage($request) {
+      $mundane = $this->player_info($request['MundaneId']);
+		  $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		  if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
+        //try {
+        $json_call = array(
+            "jsonrpc" => "2.0",
+            "method" => "store",
+            "params" => array(
+                BEHOLD_KEY,
+                $request['MundaneId'],
+                $request['Base64FaceImage']
+              ),
+            "id" => 1
+          );
+        $ch = curl_init('https://behold.amtgard.com/');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($json_call));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        $result = json_decode($response);
+        return $result->result;
+      } else {
+        logtrace('No Authorization found.', null);
+        return NoAuthorization();
+      }
+
+    }
+  
+    public function LookupByFaces($request) {
+      $json_call = array(
+          "jsonrpc" => "2.0",
+          "method" => "lookup",
+          "params" => array(
+              $request['Base64Selfie']
+            ),
+          "id" => 1
+        );
+      $ch = curl_init('https://behold.amtgard.com/');
+      curl_setopt($ch, CURLOPT_POST, 1);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($json_call));
+      curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-type: application/json']);
+      $response = curl_exec($ch);
+      curl_close($ch);
+      $result = json_decode($response);
+      
+      $facedetails = array();
+      
+      $found = array();
+      
+      foreach ($result->result->hits as $k => $face) {
+        if (!is_null($face)) {
+          $found[] =  $face[0];
+        }
+      }
+      
+      $playersfound = $this->hydrated_players($found);
+      
+      foreach ($result->result->hits as $k => $face) {
+        $player = is_null($face) ? array ('id' => 0) : $playersfound[$face[0]];
+        $facedetails[] = [ $player, $result->result->locations[$k] ];
+      }
+      
+      return $facedetails;
+    }
+  
     public function GetNotes($request) {
         if (valid_id($request['MundaneId'])) {
             $this->notes->clear();
@@ -446,6 +517,33 @@ class Player extends Ork3 {
 		}
 	}
 
+  public function hydrated_players($ids) {
+    $sql = "select k.name as kingdom, k.kingdom_id, p.name as park, p.park_id, m.mundane_id, m.persona 
+              from " . DB_PREFIX . "mundane m
+                left join " . DB_PREFIX . "park p on m.park_id = p.park_id
+                left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
+              where m.mundane_id in (" . implode(",",$ids) . ")";
+    
+    $r = $this->db->query($sql);
+
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response = array();
+			do {
+        $response[$r->mundane_id] = array(
+            'KingdomId' => $r->kingdom_id,
+            'Kingdom' => $r->kingdom,
+            'ParkId' => $r->park_id,
+            'Park' => $r->park,
+            'MundaneId' => $r->mundane_id,
+            'Persona' => $r->persona,
+            'id' => $r->mundane_id
+          );
+      } while ($r->next());
+    }
+    return $response;
+  }
+  
 	public function player_info($id) {
 	    if (strlen($id) == 32)
 	        $id = Ork3::$Lib->authorization->IsAuthorized($id);
@@ -457,7 +555,8 @@ class Player extends Ork3 {
 			return array (
 				'id' => $this->mundane->mundane_id, 'park_id' => $this->mundane->park_id, 'kingdom_id' => $this->mundane->kingdom_id,
 				'MundaneId' => $this->mundane->mundane_id, 'ParkId' => $this->mundane->park_id, 'KingdomId' => $this->mundane->kingdom_id,
-				'Surname' => $this->mundane->surname, 'GivenName' => $this->mundane->given_name, 'PasswordExpires' => $this->mundane->password_expires
+				'Surname' => $this->mundane->surname, 'GivenName' => $this->mundane->given_name, 'PasswordExpires' => $this->mundane->password_expires,
+        'Persona' => $this->mundane->persona
 				);
 		}
 	}
