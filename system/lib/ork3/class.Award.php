@@ -45,7 +45,7 @@ class Award  extends Ork3 {
       $officer_role_clause = " and officer_role != 'none'"; 
     } 
 		$sql = "select award_id, name, a.award_id, a.is_ladder, is_title, title_class, a.officer_role
-					from " . DB_PREFIX . "award a'
+					from " . DB_PREFIX . "award a 
 					where 1
 						$ladder_clause
 						$title_clause
@@ -54,7 +54,7 @@ class Award  extends Ork3 {
 		$r = $this->db->query($sql);
 
 		$response = array();
-		$response['Awards'] = array();
+    $response['Awards'] = array();
 		if ($r !== false && $r->size() > 0) {
 			do {
 				$response['Awards'][] = array(
