@@ -321,6 +321,7 @@ class Report  extends Ork3 {
 	public function Guilds($request) {
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
+		if (valid_id($request['MundaneId'])) $where = "and m.mundane_id = '$request[MundaneId]'";
 
 		if ($request['PerWeeks'] == 1)
 			$per_period = date("Y-m-d", strtotime("-$request[Periods] week"));
