@@ -144,7 +144,7 @@ class Common
 	{
     $c = new Common();
     
-    if (!Common::RateLimit('geocode'))
+    if (!Common::RateLimit('geocode', 1000, $per = "+1 day"))
       return array( "You have exceeded your rate limit" );
     
 		logtrace( "Geocode", [ $address, $city, $state, $postal_code, $geocode ] );
