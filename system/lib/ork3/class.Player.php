@@ -250,8 +250,13 @@ class Player extends Ork3 {
       $when = date("Y-m-d", strtotime($date_start));
       $sql .= " and a.date >= '$when' ";
     }
-    $sql .= " order by a.date desc";
-    $limit = $request['limit'];
+	if ($request['order'] && ($request['order'] == 'asc' || $request['order'] == 'desc')) {
+		$order = $request['order'];
+	} else {
+		$order = 'desc';
+	}
+    $sql .= " order by a.date " . $order;
+	$limit = $request['limit'];
 		$r = $this->db->query($sql);
 		$response = array();
 		$response['Attendance'] = array();
