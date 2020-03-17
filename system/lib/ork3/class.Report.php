@@ -144,7 +144,7 @@ class Report  extends Ork3 {
 								left join " . DB_PREFIX . "mundane m on m.mundane_id = ma.mundane_id
 									left join " . DB_PREFIX . "park p on p.park_id = m.park_id
 									left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-					where (0 $masters_clause) $location_clause
+					where (0 $masters_clause) and m.active = 1 $location_clause
 					order by $order a.peerage, a.name, m.persona
 			";
       logtrace("ClassMasters", $sql);
@@ -286,7 +286,7 @@ class Report  extends Ork3 {
 								left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = ma.by_whom_id
 									left join " . DB_PREFIX . "park p on p.park_id = m.park_id
 									left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-					where (0 $knights_clause $masters_clause $ladder_clause $title_clause) $location_clause $awards_clause
+					where (0 $knights_clause $masters_clause $ladder_clause $title_clause) and m.active = 1 $location_clause $awards_clause
 					order by $order a.peerage, a.name, m.persona
 			";
 
