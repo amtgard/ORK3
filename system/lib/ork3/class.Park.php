@@ -533,7 +533,7 @@ class Park extends Ork3
 			$this->park->clear();
 			$this->park->kingdom_id = $request[ 'KingdomId' ];
 			$this->park->name = $request[ 'Name' ];
-			$this->park->abbreviation = $request[ 'Abbreviation' ];
+			$this->park->abbreviation = strtoupper($request[ 'Abbreviation' ]);
 			$this->park->active = 'Active';
 			$this->park->modified = date( "Y-m-d H:i:s", time() );
 			$this->park->parktitle_id = $request[ 'ParkTitleId' ];
@@ -577,7 +577,7 @@ class Park extends Ork3
 
 				if ( Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_KINGDOM, $this->park->kingdom_id, AUTH_EDIT ) ) {
 					$this->park->name = trimlen( $request[ 'Name' ] ) == 0 ? $this->park->name : $request[ 'Name' ];
-					$this->park->abbreviation = trimlen( $request[ 'Abbreviation' ] ) == 0 ? $this->park->abbreviation : $request[ 'Abbreviation' ];
+					$this->park->abbreviation = trimlen( $request[ 'Abbreviation' ] ) == 0 ? strtoupper($this->park->abbreviation) : strtoupper($request[ 'Abbreviation' ]);
 					$parktitle = new yapo( $this->db, DB_PREFIX . 'parktitle' );
 					$parktitle->clear();
 					if ( isset( $request[ 'ParkTitleId' ] ) && $request[ 'ParkTitleId' ] != $this->park->parktitle_id ) {
