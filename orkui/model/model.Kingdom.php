@@ -22,6 +22,7 @@ class Model_Kingdom extends Model {
 			$z[] = $this->Park->SetParkDetails(array(
 					'Token' => $token,
 					'ParkId' => $details['ParkId'],
+					'Name' => $details['ParkName'],
 					'Abbreviation' => $details['Abbreviation'],
 					'ParkTitleId' => $details['ParkTitleId'],
 					'Active' => $details['Active']

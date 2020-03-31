@@ -14,12 +14,13 @@
 					<th>Title</th>
 					<th>Abbreviation</th>
 					<th>Active</th>
+					<th>View</th>
 				</tr>
 			</thead>
 			<tbody>
 <?php foreach ($ParkInfo['Parks'] as $k => $park): ?>
 				<tr>
-					<td><a href='<?=UIR;?>Park/index/<?=$park['ParkId'];?>&park_name=<?=$park['Name'];?>'><?=$park['Name'] ?></a></td>
+					<td><input type='text' name='ParkName[<?=$park['ParkId'] ?>]' value='<?=htmlentities($park['Name'], ENT_QUOTES); ?>'></td>
 					<td>
 						<select name='ParkTitle[<?=$park['ParkId'] ?>]'>
 <?php foreach ($ParkInfo['Titles'] as $t => $title) : ?>
@@ -29,10 +30,11 @@
 					</td>
 					<td><input type='text' name='Abbreviation[<?=$park['ParkId'] ?>]' class='narrow-field' maxlength='3' value='<?=$park['Abbreviation'] ?>' ></td>
 					<td><input type='checkbox' name='Active[<?=$park['ParkId'] ?>]' value='YES' <?=$park['Active']=='Active'?'CHECKED':''; ?> ></td>
+					<td><a href='<?=UIR;?>Park/index/<?=$park['ParkId'];?>&park_name=<?=$park['Name'];?>'><?=$park['Name'] ?></a></td>
 				</tr>
 <?php endforeach; ?>
 				<tr>
-					<td colspan='4'><input type='submit' value='Update' /></td>
+					<td colspan='5'><input type='submit' value='Update' /></td>
 				</tr>
 			</tbody>
 		</table>
