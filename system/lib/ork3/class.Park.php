@@ -21,7 +21,21 @@ class Park extends Ork3
     }
     return null;
   }
-  
+
+  public function GetParkInKingdomByAbbreviation($request, $kingdom_id) {
+    if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3)
+      return null;
+    
+    $this->park->clear();
+	$this->park->abbreviation = strtoupper(trim($request['Abbreviation']));
+	$this->park->kingdom_id = $kingdom_id;
+	
+    if ($this->park->find()) {
+      return $this->park->park_id; 
+    }
+    return null;
+  }
+
 	public function MergeParks( $request )
 	{
 		logtrace( "MergeParks", $request );
