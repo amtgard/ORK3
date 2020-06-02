@@ -43,7 +43,7 @@ if ( file_exists( DIR_CONTROLLER . 'controller.' . trim( $route[ 0 ] ) . '.php' 
     include_once( DIR_CONTROLLER . 'controller.' . trim( $route[ 0 ] ) . '.php' );
     $class = 'Controller_' . trim( $route[ 0 ] );
     $call = trim( $route[ 1 ] );
-    $action = trim( $route[ 2 ] );
+    $action = count($route) > 2 ? trim( $route[ 2 ] ) : null;
     if ( count( $route ) == 1 ) {
         logtrace( "Index: Route(1): $class(index)", null );
 

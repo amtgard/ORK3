@@ -16,7 +16,7 @@ To set up you will need a copy of the codebase, a recent copy of the database, a
 
 Clone the code to a a reasonable place in your web root.
 
-Rehydrate the database from https://amtgard.com/ork/assets/backups
+Rehydrate the database from https://ork.amtgard.com/assets/backups/
 
 ### Set Up the Config File
 
@@ -37,10 +37,10 @@ mysql -P 3306 --protocol=tcp -h localhost -u root -proot ork < ork.sql
 ```
 This will setup the database.
 
-Download and extract a recent Ork backup from https://amtgard.com/ork/assets/backups/
+Download and extract a recent Ork backup from https://ork.amtgard.com/assets/backups/
 
 ```
-mysql -P 3306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/2019.02.28.02.00.amtgard_ork3production.sql
+mysql -P 3306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/2020.01.20.06.06.01.sq
 ```
 This will take a while but will hydrate the database with the backup that was downloaded and extracted above.
 ```

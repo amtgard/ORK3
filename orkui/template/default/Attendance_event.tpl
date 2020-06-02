@@ -5,7 +5,7 @@
 	$(document).ready(function() {
 <?php if (valid_id($Attendance_index['ClassId'])) : ?>
 		$('#Class').val($Attendance_index['ClassId']);
-<?php endif ?>
+<?php endif; ?>
 		$( "#KingdomName" ).autocomplete({
 			source: function( request, response ) {
 				$.getJSON(
@@ -144,7 +144,7 @@
 		</div>
 		<div>
 			<span>Park:</span>
-			<span><input type='text' class='required-field' value='<?=trimlen($Attendance_index['ParkName'])?$Attendance_index['ParkName']:$DefaultParkName ?>' name='ParkName' id='ParkName' /></span>
+			<span><input type='text' class='required-field' value='<?=htmlentities(trimlen($Attendance_index['ParkName'])?$Attendance_index['ParkName']:$DefaultParkName) ?>' name='ParkName' id='ParkName' /></span>
 		</div>
 		<div>
 			<span>Player:</span>
@@ -155,9 +155,9 @@
 			<span>
 				<select name='ClassId' id='ClassId' class='required-field'>
 					<option value=''>-select one-</option>
-<? foreach ($Classes['Classes'] as $k => $class) : ?>
+<?php foreach ($Classes as $k => $class) : ?>
 					<option value='<?=$class['ClassId'] ?>'><?=$class['Name'] ?></option>
-<? endforeach ?>
+<?php endforeach ?>
 				</select>
 			</span>
 		</div>

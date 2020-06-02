@@ -34,7 +34,7 @@ class Controller_Player extends Controller {
 	
 	}
 	
-	public function index($id) {
+	public function index($id=NULL) {
 		$this->load_model('Unit');
 		
 		$params = explode('/',$id);
@@ -71,12 +71,6 @@ class Controller_Player extends Controller {
 							if (move_uploaded_file($_FILES['Waiver']['tmp_name'], DIR_TMP . sprintf("w_%06d", $id))) {
 								$w_im = file_get_contents(DIR_TMP . sprintf("w_%06d", $id));
 								$w_imdata = base64_encode($w_im); 
-							}
-						}
-						if ($_FILES['PlayerImage']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
-							if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {
-								$pi_im = file_get_contents(DIR_TMP . sprintf("pi_%06d", $id));
-								$pi_imdata = base64_encode($w_im); 
 							}
 						}
 						$r = $this->Player->update_player(array(

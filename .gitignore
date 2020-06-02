@@ -18,6 +18,11 @@ assets/tmp/*
 !assets/tmp/.gitkeep
 assets/waivers/*
 !assets/waivers/.gitkeep
+assets/backups/*
+system/lib/phpqrcode/temp/*
+system/lib/phpqrcode/temp/
+system/lib/phpqrcode/
+system/lib/phpqrcode/*
 cache
 .idea
 vendor
@@ -29,3 +34,6 @@ v4
 orkui/.htaccess
 .htaccess
 *.sql
+*.cache
+ork.zip
+v4.zip

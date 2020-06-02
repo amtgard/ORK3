@@ -96,6 +96,7 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+    
 		$( "#ParkName" ).autocomplete({
 			source: function( request, response ) {
 				kingdom_id = $('#KingdomId').val();
@@ -135,7 +136,8 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
-		$( "#Persona" ).autocomplete({
+
+    $( "#Persona" ).autocomplete({
 			source: function( request, response ) {
 				park_id = $('#ParkId').val();
 				kingdom_id = $('#KingdomId').val();
@@ -214,6 +216,7 @@
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
+    <div><div><b>Location</b></div></div>
 		<div>
 			<span>Kingdom</span>
 			<span><input type='text' value='<?=isset($Admin_event['KingdomName'])?$Admin_event['KingdomName']:$EventDetails['EventInfo'][0]['KingdomName'] ?>' name='KingdomName' id='KingdomName' /></span>
@@ -353,8 +356,8 @@
 				<td><?=$detail['MapUrlName'] ?> <a href='<?=$detail['MapUrl'] ?>'>[ Link ]</a></td>
 			<?php endif; ?>
 				<td><?php if ($detail['Current'] == 1) : ?>Yes<?php else : ?>No<?php endif ?></td>
-				<td><a href='<?=UIR ?>Attendance/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/<?=$detail['EventCalendarDetailId'] ?>'>Attendance</a></td>
 				<td><a href='<?=UIR ?>Tournament/index&EventCalendarDetailId=<?=$detail['EventCalendarDetailId'] ?>'>Tournaments</a></td>
+				<td><a href='<?=UIR ?>Attendance/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/<?=$detail['EventCalendarDetailId'] ?>'>Attendance</a></td>
 				<td class='deletion'><a href='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/delete&DetailId=<?=$detail['EventCalendarDetailId'] ?>'>&times;</a></td>
 			</tr>
 			<tr class='table-data-break'>

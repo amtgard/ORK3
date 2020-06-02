@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
-		<link rel="shortcut icon" href="/<?=ORK_DIST_NAME ?>/favicon.ico">
+		<link rel="shortcut icon" href="/favicon.ico">
 		<meta name=viewport content="user-scalable=no,width=device-width,minimum-scale=1" />
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/css/ui-lightness/jquery-ui-1.8.18.custom.css" rel="stylesheet" />
 		<link rel=StyleSheet href="<?=HTTP_TEMPLATE;?>default/style/default.css" type="text/css" media=screen>
@@ -17,7 +17,17 @@
 		
 		<script src="//cdn.jsdelivr.net/jquery.sidr/2.2.1/jquery.sidr.min.js"></script>
 		<link rel="stylesheet" href="//cdn.jsdelivr.net/jquery.sidr/2.2.1/stylesheets/jquery.sidr.dark.min.css">
-	</head>
+    
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-24692N9FNM"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-24692N9FNM');
+  </script>
+  </head>
 	<body>
 		<!-- Product edit warning -->
 		<!--
@@ -38,7 +48,7 @@
 			<div id='navmenu'>
 				<ul>
 	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
+					<li><a href='<?=$item['url'] ?>'><?=$item['display'] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
 	<?php endforeach; ?>
 				</ul>
 			</div>
@@ -64,7 +74,7 @@
 				<ul>
           <li><a href='https://www.facebook.com/mORKmobile/posts/2275859462673190'>Get the ORK Mobile!</a></li>
 	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a></li>
+					<li><a href='<?=$item['url'] ?>'><?=$item['display'] ?></a></li>
 	<?php endforeach; ?>
 	<?php if ($this->__session->token == null) : ?>
 					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>

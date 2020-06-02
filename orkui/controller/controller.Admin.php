@@ -304,6 +304,7 @@ class Controller_Admin extends Controller {
 				foreach ($this->request->Admin_editparks->ParkTitle as $park_id => $title_id) {
 					$request[] = array(
 							'ParkId' => $park_id,
+							'ParkName' => trim($this->request->Admin_editparks->ParkName[$park_id]),
 							'ParkTitleId' => $title_id,
 							'Abbreviation' => trim($this->request->Admin_editparks->Abbreviation[$park_id]),
 							'Active' => trimlen($this->request->Admin_editparks->Active[$park_id])>0?'Active':'Retired'
@@ -453,6 +454,7 @@ class Controller_Admin extends Controller {
 				$edit = array(
 							'Token' => $this->session->token,
 							'EventId' => $event_id,
+							'AtParkId' => $this->request->Admin_event->AtParkId,
 							'Current' => $this->request->Admin_event->Current=='Yes'?1:0,
 							'Price' => $this->request->Admin_event->Price,
 							'EventStart' => $this->request->Admin_event->StartDate,
@@ -559,13 +561,15 @@ class Controller_Admin extends Controller {
 
 	public function createevent($post=null) {
 		$this->load_model('Event');
-		if (valid_id($this->request->UnitId) || valid_id($this->request->Admin_manageevent->CreateUnitId)) {
-			$this->data['Events_list'] = $this->Event->GetEvents(array('UnitId' => valid_id($this->request->Admin_manageevent->UnitId)?$this->request->Admin_manageevent->UnitId:$this->request->UnitId, 'LimitTo' => true));
+		$this->request->save('Admin_event', true);
+		if (valid_id($this->request->UnitId) || valid_id($this->request->Admin_event->CreateUnitId)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('UnitId' => valid_id($this->request->Admin_event->UnitId)?$this->request->Admin_event->UnitId:$this->request->UnitId, 'LimitTo' => true));
 			$this->data['EventIdSelector'] = 'UnitId';
-		} else if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_manageevent->CreateMundaneId)) {
-			$this->data['Events_list'] = $this->Event->GetEvents(array('MundaneId' => valid_id($this->request->Admin_manageevent->MundaneId)?$this->request->Admin_manageevent->MundaneId:$this->request->MundaneId, 'LimitTo' => true));
+		} else if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_event->CreateMundaneId)) {
+			$this->data['Events_list'] = $this->Event->GetEvents(array('MundaneId' => valid_id($this->request->Admin_event->MundaneId)?$this->request->Admin_event->MundaneId:$this->request->MundaneId, 'LimitTo' => true));
 			$this->data['EventIdSelector'] = 'MundaneId';
-		} else if (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+		} 
+    if (isset($this->session->park_id) && valid_id($this->session->park_id)) {
 			$this->data['Events_list'] = $this->Event->GetEvents(array('ParkId' => $this->session->park_id, 'LimitTo' => false));
 			$this->data['EventIdSelector'] = 'ParkId';
 		} else if (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
@@ -573,6 +577,9 @@ class Controller_Admin extends Controller {
 			$this->data['EventIdSelector'] = 'KingdomId';
 		} else {
 			$this->data['Events_list'] = array();
+		}
+		if ($this->request->exists('Admin_event')) {
+			$this->data['Admin_event'] = $this->request->Admin_event->Request;
 		}
 	}
 
@@ -713,6 +720,18 @@ class Controller_Admin extends Controller {
 									));
 								}
 							}
+              if ($_FILES['PlayerFace']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
+                if (move_uploaded_file($_FILES['PlayerFace']['tmp_name'], DIR_TMP . sprintf("fi_%06d", $id))) {
+                  $face_im = file_get_contents(DIR_TMP . sprintf("fi_%06d", $id));
+                  $face_imdata = base64_encode($face_im);
+                  $one = $this->Player->one_shot([
+                      'MundaneId' => $id,
+                      'Base64FaceImage' => $face_imdata
+                    ]);
+                    logtrace('One Shot.', $one);
+                  unlink(DIR_TMP . sprintf("fi_%06d", $id));
+                }
+              }
 						}
 						if ($this->request->Update == 'Update Details') {
 							if (valid_id($this->request->Admin_player->DuesSemesters)) {

@@ -28,7 +28,7 @@ class Controller_Attendance extends Controller {
 	
 	}
 	
-	public function index() {
+	public function index($action = NULL) {
 	
 	}
 	
@@ -72,7 +72,6 @@ class Controller_Attendance extends Controller {
 					$this->data['AttendanceDate'] = $this->request->Attendance_kingdom->AttendanceDate;
 					$this->request->clear('Attendance_kingdom');
 				} else if($r['Status'] == 5) {
-					die(print_r($r,true));
 					header( 'Location: '.UIR."Login/login/Attendance/park/$id" );
 				} else {
 					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
@@ -94,6 +93,66 @@ class Controller_Attendance extends Controller {
 		}
 	}
 	
+  public function behold($p) {
+		$params = explode('/',$p);
+		$action = $params[0];
+
+    if (is_numeric($action)) {
+      $this->session->behold_park_id = $action;
+    }
+    
+    switch ($action) {
+      case 'gaze':
+          if ($_FILES['GroupSelfie']['size'] > 0 && Common::supported_mime_types($_FILES['GroupSelfie']['type'])) {
+            $id = rand(0, 1000000);
+            if (move_uploaded_file($_FILES['GroupSelfie']['tmp_name'], DIR_TMP . sprintf("gs_%06d", $id))) {
+              $face_im = file_get_contents(DIR_TMP . sprintf("gs_%06d", $id));
+              $face_imdata = base64_encode($face_im);
+              $faces = $this->Attendance->lookup_by_faces([
+                  'Base64Selfie' => $face_imdata
+                ]);
+              unlink(DIR_TMP . sprintf("gs_%06d", $id));
+            }
+          }
+    		  $this->data['QueryImage'] = $face_imdata;
+    		  $this->data['FaceLocations'] = $faces;
+          $fdata = array();
+          foreach ($faces as $k => $fd) {
+            $fdata[] = $fd[0]['id'] > 0 ? [$fd[0]['id'], $fd[0]['Persona'], $fd[1]] : [$fd[0]['id'], "", $fd[1]];
+          }
+    		  $this->data['FaceData'] = $fdata;
+      		$this->data['Classes'] = $this->Attendance->get_classes();
+          
+          logtrace("Faces of Gazes", $faces);
+        break;
+      case 'behold':
+        if (!is_numeric($this->session->behold_park_id)) {
+          die ('Park ID is not numeric'); 
+        }
+        foreach ($this->request->class as $mundane_id => $class_id) {
+						$r = $this->Attendance->add_attendance(
+								$this->session->token, 
+								$this->request->attendance_date, 
+								$this->session->behold_park_id, 
+								null,
+								$mundane_id, 
+								$class_id, 
+								1
+							);
+          if ($r['Status'] == 5) {
+            header('location: /orkui/index.php?Route=Login/login'); 
+          }
+        }
+        $id = $this->session->behold_park_id;
+        unset($this->session->behold_park_id);
+        header('location: /orkui/index.php?Route=Attendance/park/' . $id);
+        break;
+    }
+		if (!isset($this->data['AttendanceDate'])) {
+			$this->data['AttendanceDate'] = isset($this->request->AttendanceDate)?$this->request->AttendanceDate:date('Y-m-d');
+		}
+  }
+  
 	public function park($p) {
 		$params = explode('/',$p);
 		$id = $params[0];
@@ -142,7 +201,6 @@ class Controller_Attendance extends Controller {
 					$this->data['AttendanceDate'] = $this->request->Attendance_park->AttendanceDate;
 					$this->request->clear('Attendance_park');
 				} else if($r['Status'] == 5) {
-					die(print_r($r,true));
 					header( 'Location: '.UIR."Login/login/Attendance/park/$id" );
 				} else {
 					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
@@ -192,10 +250,12 @@ class Controller_Attendance extends Controller {
 			} else {
 				switch ($action) {
 					case 'new':
-						$r = $this->Attendance->add_attendance(
+            $detail = $this->Attendance->get_eventdetail_info($detail_id);
+
+            $r = $this->Attendance->add_attendance(
 								$this->session->token, 
 								$this->request->Attendance_event->AttendanceDate, 
-								null, 
+								valid_id($detail['AtParkId'])?$detail['AtParkId']:null, 
 								$detail_id,
 								$this->request->Attendance_event->MundaneId, 
 								$this->request->Attendance_event->ClassId, 
@@ -229,7 +289,8 @@ class Controller_Attendance extends Controller {
 		if ($this->request->exists('Attendance_event')) {
 			$this->data['Attendance_event'] = $this->request->Attendance_event->Request;
 		}
-		$this->data['Classes'] = $this->Attendance->get_classes();
+    $classes = $this->Attendance->get_classes();
+		$this->data['Classes'] = $classes['Classes'];
 		if ($this->data['Classes']['Status']['Status'] != 0) {
 			$this->data['Error'] = $this->data['Classes']['Status']['Error'];
 		}

@@ -113,6 +113,7 @@ class SearchService extends Ork3 {
 		if ($eventdetail->find()) {
 			$detail = array(
 					'EventId' => $eventdetail->event_id,
+					'AtParkId' => $eventdetail->at_park_id,
 					'Current' => $eventdetail->current,
 					'Price' => $eventdetail->price,
 					'EventStart' => $eventdetail->event_start,
@@ -142,6 +143,7 @@ class SearchService extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
 			return $cache;
 		
+    $this->db->Clear();
     $limit = min($limit, 50);
 		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
@@ -254,7 +256,7 @@ class SearchService extends Ork3 {
     preg_match('/([a-z]{2,3}):([a-z]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
     
     $k_id = Ork3::$Lib->kingdom->GetKingdomByAbbreviation(array('Abbreviation'=>$matches[1]));
-    $p_id = Ork3::$Lib->park->GetParkByAbbreviation(array('Abbreviation'=>$matches[2]));
+    $p_id = Ork3::$Lib->park->GetParkInKingdomByAbbreviation(array('Abbreviation'=>$matches[2]), $k_id);
     
     return array( 
       (trimlen($matches[3])==0?$term:$matches[3]), 
@@ -264,7 +266,7 @@ class SearchService extends Ork3 {
   
 	public function Player($type, $search, $limit=15, $kingdom_id = null, $park_id = null, $waivered = null, $persona_required = true) {
     list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
-    
+				
 		$searchtokens = preg_split("/[\s,-]+/", $search);
     	$opt = array("1");
         $limit = min(valid_id($limit)?$limit:15, 50);

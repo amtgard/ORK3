@@ -16,6 +16,12 @@
 			</span>
 		</div>
 		<div>
+			<span>Behold!</span>
+			<span>
+				<input type='file' class='restricted-image-type' name='PlayerFace' id='PlayerFace' />
+			</span>
+		</div>
+		<div>
 			<span></span>
 			<span><input type='submit' value='Update Media' name='Update' /></span>
 		</div>

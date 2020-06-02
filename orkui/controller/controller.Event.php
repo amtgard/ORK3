@@ -27,7 +27,7 @@ class Controller_Event extends Controller {
 			);
 	}
 
-	public function index($event_id) {
+	public function index($event_id = NULL) {
 		$this->data['EventDetails'] = $this->Event->get_event_details($event_id);
 		if ($this->data['EventDetails']['Status']['Status'] != 0) {
 			$this->data['Error'] = $this->data['EventDetails']['Status']['Error'];

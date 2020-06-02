@@ -123,6 +123,7 @@ class Event  extends Ork3 {
 			$nr = array();
 			$nr['EventCalendarDetailId'] = $this->detail->event_calendardetail_id;
 			$nr['EventId'] = $this->detail->event_id;
+			$nr['AtParkId'] = $this->detail->at_park_id;
 			$nr['Current'] = $this->detail->current;
 			$nr['Price'] = $this->detail->price;
 			$nr['EventStart'] = $this->detail->event_start;
@@ -160,6 +161,7 @@ class Event  extends Ork3 {
 				$nr = array();
 				$nr['EventCalendarDetailId'] = $this->detail->event_calendardetail_id;
 				$nr['EventId'] = $this->detail->event_id;
+  			$nr['AtParkId'] = $this->detail->at_park_id;
 				$nr['Current'] = $this->detail->current;
 				$nr['Price'] = $this->detail->price;
 				$nr['EventStart'] = $this->detail->event_start;
@@ -189,21 +191,21 @@ class Event  extends Ork3 {
 	public function CreateEventDetails($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
-		//print_r(array("class.Event.php", $request,$mundane_id)); die();
-		
 		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_CREATE)) {
 			if (valid_id($request['Current']) && valid_id($request['EventId'])) {
 				$this->detail->clear();
 				$this->detail->event_id = $request['EventId'];
-				$this->detail->current = 0;
-				$this->detail->update();
+        if ($this->detail->find()) {
+          $this->detail->current = 0;
+          $this->detail->update();
+        }
 			}
-			
-			$details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
+      $details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
   		$geocode = json_decode( $details[ 'Geocode' ] );
 			
 			$this->detail->clear();
 			$this->detail->event_id = $request['EventId'];
+			if (valid_id($request['AtParkId'])) $this->detail->at_park_id = $request['AtParkId'];
 			$this->detail->current = $request['Current'];
 			$this->detail->price = $request['Price'];
 			$this->detail->event_start = $request['EventStart'];

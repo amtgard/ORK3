@@ -92,3 +92,4 @@ require_once( DIR_LIB . 'yapo/class.yapo_result.php' );
 require_once( DIR_SYSTEMLIB . 'class.Log.php' );
 
 
+define( 'DIR_CACHE', DIR_BASENAME.''); 

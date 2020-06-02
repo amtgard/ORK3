@@ -320,7 +320,8 @@ class Authorization  extends Ork3 {
 						$response['Status'] = Success();
 						$response['Token'] = $this->mundane->token;
 						$response['UserId'] = $this->mundane->mundane_id;
-						$response['Timeout'] = $this->mundane->token_expires;
+            $response['Timeout'] = $this->mundane->token_expires;
+            $response['PasswordExpires'] = $this->mundane->password_expires;
 					}
 				} else {
 					$response['Status'] = InvalidParameter(null, "Login could not be found.");

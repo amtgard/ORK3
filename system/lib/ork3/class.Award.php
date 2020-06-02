@@ -54,8 +54,8 @@ class Award  extends Ork3 {
 		$r = $this->db->Query($sql);
 
 		$response = array();
-		$response['Awards'] = array();
-		if ($r !== false && $r->Size() > 0) {
+    $response['Awards'] = array();
+		if ($r !== false && $r->size() > 0) {
 			do {
 				$response['Awards'][] = array(
 					'KingdomAwardId' => $r->award_id,

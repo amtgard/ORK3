@@ -60,7 +60,7 @@ class Attendance  extends Ork3 {
 		logtrace("Attendance->AddAttendance()", $request);
 
 		if (($type = $this->AttendanceAuthority($request)) === false) {
-            logtrace("Attendance->AddAttendance: No Authority", $request);
+      logtrace("Attendance->AddAttendance: No Authority", $request);
 			return NoAuthorization('Type is not specified.');
 		}
 		
@@ -93,10 +93,14 @@ class Attendance  extends Ork3 {
 				break;
 			case AUTH_EVENT:
 				$detail = Ork3::$Lib->event->GetEventDetail(array('EventCalendarDetailId' => $request['EventCalendarDetailId']));
+        $kingdom_id = Ork3::$Lib->park->GetParkKingdomId($detail['CalendarEventDetails'][0]['AtParkId']);
 				if ($detail['Status']['Status'] != 0) {
                     logtrace("AddAttendance: Could not fetch Event Detail", $detail);
 					return InvalidParameter();
 				}
+
+        $this->attendance->kingdom_id = $kingdom_id;
+        $this->attendance->park_id = $detail['CalendarEventDetails'][0]['AtParkId'];
 				$this->attendance->date = $detail['CalendarEventDetails'][0]['EventStart'];
 				$this->attendance->event_id = $detail['CalendarEventDetails'][0]['EventId'];
 				$this->attendance->event_calendardetail_id = $request['EventCalendarDetailId'];
@@ -105,12 +109,16 @@ class Attendance  extends Ork3 {
 				return InvalidParameter();
 		}
 		
-		$this->attendance->save();
+		$attendance_id = $this->attendance->save();
+                    
 		
-		logtrace("Attendance->AddAttendance()", array($this->attendance->lastSql(), $request, $detail));
+		logtrace("Attendance->AddAttendance()", array($this->attendance->__LastSql, $request, $detail));
 		
-        if ($this->attendance->attendance_id)
-    		return Success($this->attendance->attendance_id);
+        if ($this->attendance->attendance_id) {
+          $sql = "update " . DB_PREFIX . "attendance set date_year = year(`date`), date_month = month(`date`), date_week3 = week(`date`, 3), date_week6 = week(`date`, 6) where attendance_id = " . $this->attendance->attendance_id;
+          $this->db->query($sql);
+    		  return Success($this->attendance->attendance_id);
+        }
         return InvalidParameter();
 	}
 	
@@ -198,15 +206,7 @@ class Attendance  extends Ork3 {
 	private function attendance_authority_h($request) {
     logtrace("Attendance->attendance_authority_h()", $request);
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		if (valid_id($request['ParkId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
-				return AUTH_PARK;
-      }
-		} else if (valid_id($request['KingdomId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
-				return AUTH_KINGDOM;
-			}
-		} else if (valid_id($request['EventCalendarDetailId'])) {
+		if (valid_id($request['EventCalendarDetailId'])) {
 			$detail = Ork3::$Lib->event->GetEventDetail(array('EventCalendarDetailId' => $request['EventCalendarDetailId']));
 			if ($detail['Status']['Status'] != 0) {
 				logtrace('attendance_authority_h() - ecdid match', $detail);
@@ -219,7 +219,15 @@ class Attendance  extends Ork3 {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_CREATE)) {
 				return AUTH_EVENT;
 			}
-		} else {
+		} else if (valid_id($request['ParkId'])) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+				return AUTH_PARK;
+      }
+		} else if (valid_id($request['KingdomId'])) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
+				return AUTH_KINGDOM;
+			}
+		}else {
 			logtrace('attendance_authority_h() - no matches');
 			return false;
     }

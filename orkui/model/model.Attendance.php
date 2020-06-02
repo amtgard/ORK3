@@ -23,6 +23,11 @@ class Model_Attendance extends Model {
 	
 	}
 	
+  function lookup_by_faces($request) {
+    $p = new APIModel("Player");
+    return $p->LookupByFaces($request);
+  }
+  
 	function delete_attendance($token, $attendance_id) {
 		return $this->Attendance->RemoveAttendance(array('Token'=>$token, 'AttendanceId' => $attendance_id ));
 	}

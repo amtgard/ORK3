@@ -5,9 +5,80 @@ class Player extends Ork3 {
 	public function __construct() {
 		parent::__construct();
 		$this->mundane = new yapo($this->db, DB_PREFIX . 'mundane');
-    	$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
+    $this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
 	}
 
+    public function AddOneShotFaceImage($request) {
+      $mundane = $this->player_info($request['MundaneId']);
+		  $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		  if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
+        //try {
+        $json_call = array(
+            "jsonrpc" => "2.0",
+            "method" => "store",
+            "params" => array(
+                BEHOLD_KEY,
+                $request['MundaneId'],
+                $request['Base64FaceImage']
+              ),
+            "id" => 1
+          );
+        $ch = curl_init('https://behold.amtgard.com/');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($json_call));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        $result = json_decode($response);
+        return $result->result;
+      } else {
+        logtrace('No Authorization found.', null);
+        return NoAuthorization();
+      }
+
+    }
+  
+    public function LookupByFaces($request) {
+      $json_call = array(
+          "jsonrpc" => "2.0",
+          "method" => "lookup",
+          "params" => array(
+              $request['Base64Selfie']
+            ),
+          "id" => 1
+        );
+      $ch = curl_init('https://behold.amtgard.com/');
+      curl_setopt($ch, CURLOPT_POST, 1);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($json_call));
+      curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-type: application/json']);
+      $response = curl_exec($ch);
+      curl_close($ch);
+      $result = json_decode($response);
+      
+      $facedetails = array();
+      
+      $found = array();
+      
+      foreach ($result->result->hits as $k => $face) {
+        if (!is_null($face)) {
+          $found[] =  $face[0];
+        }
+      }
+      
+      $playersfound = $this->hydrated_players($found);
+      
+      foreach ($result->result->hits as $k => $face) {
+        $player = is_null($face) ? array ('id' => 0) : $playersfound[$face[0]];
+        $facedetails[] = [ $player, $result->result->locations[$k] ];
+      }
+      
+      return $facedetails;
+    }
+  
     public function GetNotes($request) {
         if (valid_id($request['MundaneId'])) {
             $this->notes->clear();
@@ -144,7 +215,8 @@ class Player extends Ork3 {
 					'HasImage' => $this->mundane->has_image,
 					'Image' => HTTP_PLAYER_IMAGE . sprintf('%06d.jpg', $this->mundane->mundane_id),
 					'PenaltyBox' => $this->mundane->penalty_box,
-					'Active' => $this->mundane->active
+          'Active' => $this->mundane->active,
+          'PasswordExpires' => $this->mundane->password_expires
 				);
 			$unit = Ork3::$Lib->unit->GetUnit(array( 'UnitId' => $response['Player']['CompanyId'] ));
 			if ($unit['Status']['Status'] != 0) {
@@ -178,8 +250,13 @@ class Player extends Ork3 {
       $when = date("Y-m-d", strtotime($date_start));
       $sql .= " and a.date >= '$when' ";
     }
-    $sql .= " order by a.date desc";
-    $limit = $request['limit'];
+	if ($request['order'] && ($request['order'] == 'asc' || $request['order'] == 'desc')) {
+		$order = $request['order'];
+	} else {
+		$order = 'desc';
+	}
+    $sql .= " order by a.date " . $order;
+	$limit = $request['limit'];
 		$r = $this->db->query($sql);
 		$response = array();
 		$response['Attendance'] = array();
@@ -282,9 +359,9 @@ class Player extends Ork3 {
 
 			-- It does now, which is going to piss some people off
 			-- Class double-counting can be added back in by changing
-					"group by year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id"
+					"group by ssa.date_year, ssa.date_week6) a on a.class_id = c.class_id"
 					to
-					group by ssa.class_id, year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id
+					group by ssa.class_id, ssa.date_year, ssa.date_week6) a on a.class_id = c.class_id
 
 
 			-- 2015-06-22
@@ -295,11 +372,11 @@ class Player extends Ork3 {
 		$sql = "select c.class_id, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
 					from " . DB_PREFIX . "class c
 						left join
-							(select ssa.class_id, count(ssa.attendance_id) as attendances, max(ssa.credits) as credits, week(ssa.date, 6) as week
+							(select ssa.class_id, count(ssa.attendance_id) as attendances, max(ssa.credits) as credits, ssa.date_week6 as week
 								from " . DB_PREFIX . "attendance ssa
 								where
 									ssa.mundane_id = $request[MundaneId]
-								group by year(ssa.date), week(ssa.date, 6)) a on a.class_id = c.class_id
+								group by ssa.date_year, ssa.date_week6) a on a.class_id = c.class_id
 						left join " . DB_PREFIX . "class_reconciliation cr on cr.class_id = c.class_id and cr.mundane_id = $request[MundaneId]
 					group by c.class_id
 				";
@@ -307,7 +384,7 @@ class Player extends Ork3 {
 		$sql = "select c.class_id, c.active, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
 					from " . DB_PREFIX . "class c
 						left join
-							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, week(ssa.date, 6) as week
+							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, ssa.date_week6 as week
 								from
 								(select min(killdupe.attendance_id) as attendance_id from " . DB_PREFIX . "attendance killdupe where killdupe.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' group by killdupe.date) kd
 								left join " . DB_PREFIX . "attendance ssa on ssa.attendance_id = kd.attendance_id
@@ -445,6 +522,33 @@ class Player extends Ork3 {
 		}
 	}
 
+  public function hydrated_players($ids) {
+    $sql = "select k.name as kingdom, k.kingdom_id, p.name as park, p.park_id, m.mundane_id, m.persona 
+              from " . DB_PREFIX . "mundane m
+                left join " . DB_PREFIX . "park p on m.park_id = p.park_id
+                left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
+              where m.mundane_id in (" . implode(",",$ids) . ")";
+    
+    $r = $this->db->query($sql);
+
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response = array();
+			do {
+        $response[$r->mundane_id] = array(
+            'KingdomId' => $r->kingdom_id,
+            'Kingdom' => $r->kingdom,
+            'ParkId' => $r->park_id,
+            'Park' => $r->park,
+            'MundaneId' => $r->mundane_id,
+            'Persona' => $r->persona,
+            'id' => $r->mundane_id
+          );
+      } while ($r->next());
+    }
+    return $response;
+  }
+  
 	public function player_info($id) {
 	    if (strlen($id) == 32)
 	        $id = Ork3::$Lib->authorization->IsAuthorized($id);
@@ -456,7 +560,8 @@ class Player extends Ork3 {
 			return array (
 				'id' => $this->mundane->mundane_id, 'park_id' => $this->mundane->park_id, 'kingdom_id' => $this->mundane->kingdom_id,
 				'MundaneId' => $this->mundane->mundane_id, 'ParkId' => $this->mundane->park_id, 'KingdomId' => $this->mundane->kingdom_id,
-				'Surname' => $this->mundane->surname, 'GivenName' => $this->mundane->given_name
+				'Surname' => $this->mundane->surname, 'GivenName' => $this->mundane->given_name, 'PasswordExpires' => $this->mundane->password_expires,
+        'Persona' => $this->mundane->persona
 				);
 		}
 	}

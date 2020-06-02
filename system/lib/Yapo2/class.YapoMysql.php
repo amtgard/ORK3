@@ -10,7 +10,7 @@ class YapoMysql extends YapoDb {
 	
 	function __construct($host, $dbname, $user, $password) {
 		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname", $user, $password);
-		$this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+		$this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 	}
 	
 	function TableDescription($table) {
@@ -77,11 +77,15 @@ class YapoMysql extends YapoDb {
 		$cnt = 3;
 		do {
 			$Query = $this->DBH->prepare($sql);
-			if (count($this->Data) > 0)
-				$Query->execute($this->Data);
-			else
-				$Query->execute();
-			$failed = $this->handle_errors($cnt--, $Query);
+      try {
+        if (is_iterable($this->Data) && count($this->Data) > 0)
+          $Query->execute($this->Data);
+        else
+          $Query->execute();
+      } catch (Exception $exc) {
+        echo $sql;        
+      }
+      $failed = $this->handle_errors($cnt--, $Query);
 		} while (!$failed);
 		return new YapoResultSet($Query, $sql);
 	}

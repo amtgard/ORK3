@@ -8,7 +8,7 @@ class Controller_Authorization extends Controller {
 		$this->Authorization = new APIModel('Authorization');
 	}
 	
-	public function index() {
+	public function index($action = NULL) {
 
 	}
 

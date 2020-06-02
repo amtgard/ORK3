@@ -7,7 +7,7 @@ class Controller_Login extends Controller {
 		parent::__construct($call, $method);
 	}
 	
-	public function index() {
+	public function index($login = NULL) {
 
 	}
 	

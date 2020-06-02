@@ -8,7 +8,7 @@ class Controller_Atlas extends Controller {
 		$this->Map = new APIModel('Map');
 	}
 	
-	public function index() {
+	public function index($action = NULL) {
   	$this->data['Parks'] = $this->Map->GetParkLocations(array('KingdomId' => $kingdom_id));
 	}
     
