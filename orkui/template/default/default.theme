@@ -55,6 +55,7 @@
 	<?php endif; ?>
 			<div id='controls'>
 				<ul>
+					<li><a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target="_blank" style='border-right: 1px solid #666; padding-right: 6px;'>Documentation</a></li>
 	<?php if ($this->__session->token == null) : ?>
 					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
 	<?php else : ?>
