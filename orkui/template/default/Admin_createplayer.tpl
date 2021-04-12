@@ -148,10 +148,6 @@
 			<input type='radio' value='1' name='Waivered' id='Waivered' <?=$Admin_createplayer['Waivered']==1?"Checked":"" ?> /><label for="Waivered">Waivered </label></span>
 		</div>
 		<div>
-			<span>Waiver:</span>
-			<span><input type='file' class='restricted-document-type' name='Waiver' /></span>
-		</div>
-		<div>
 			<span></span>
 			<span><input type='submit' value='Create Player' name='CreatePlayer' /></span>
 		</div>
