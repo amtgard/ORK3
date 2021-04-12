@@ -4,6 +4,7 @@
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
 		<link rel="shortcut icon" href="/favicon.ico">
 		<meta name=viewport content="user-scalable=no,width=device-width,minimum-scale=1" />
+		<meta property="og:image" content="/fancy_logo.jpg">
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/css/ui-lightness/jquery-ui-1.8.18.custom.css" rel="stylesheet" />
 		<link rel=StyleSheet href="<?=HTTP_TEMPLATE;?>default/style/default.css" type="text/css" media=screen>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-1.7.1.min.js"></script>
