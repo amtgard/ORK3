@@ -187,7 +187,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] === 'none') : ?>
+<?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
     		<tr>
 				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -220,7 +220,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] !== 'none') : ?>
+<?php if (!in_array($detail['OfficerRole'], ['none', null]) || $detail['IsTitle'] == 1) : ?>
     		<tr>
 				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>

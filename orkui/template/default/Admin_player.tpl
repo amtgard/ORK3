@@ -498,7 +498,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] === 'none') : ?>
+<?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
 				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -546,7 +546,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] !== 'none') : ?>
+<?php if (!in_array($detail['OfficerRole'], ['none', null]) || $detail['IsTitle'] == 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
 				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
