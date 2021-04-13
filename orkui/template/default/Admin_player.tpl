@@ -316,7 +316,7 @@
 </div>
 
 <div class='info-container'>
-    <h3>Notes</h3>
+    <h3>Historical Imports</h3>
     <table class='information-table form-container' id='Notes'>
 		<thead>
 			<tr>
