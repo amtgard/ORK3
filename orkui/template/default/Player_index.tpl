@@ -80,6 +80,10 @@
 			<span>Password Expires:</span>
       <span class='form-informational-field'><?=$passwordExpiring ?></span>
 		</div>
+		<div>
+			<span>Park Member Since:</span>
+      <span class='form-informational-field'><?=$Player['ParkMemberSince'] ?></span>
+		</div>
   </form>
 </div>
 

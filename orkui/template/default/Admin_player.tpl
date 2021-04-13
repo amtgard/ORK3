@@ -195,7 +195,7 @@
 
 	$(document).ready(function() {
 		$( '#DuesDate' ).datepicker();
-		$( '#ParkMemberSince' ).datepicker();
+		$( '#ParkMemberSince' ).datepicker({ dateFormat: "yy-mm-dd", showMinute: false});
 		$( '#Cancel' ).hide();
 		$( '#Date' ).datepicker({dateFormat: 'yy-mm-dd'});
 		$( '#Rank' ).blur(function() {
