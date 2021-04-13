@@ -18,7 +18,7 @@
 		<div>
 			<span>Image:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Player['HasImage']>0?HTTP_PLAYER_IMAGE . sprintf('%06d', $Player['MundaneId']) . '.jpg':HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<img class='heraldry-img' src='<?=$Player['HasImage']>0?$Player['Image'] :HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
 			</span>
 		</div>
 	</form>
