@@ -210,6 +210,15 @@ class Controller_Reports extends Controller {
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
 	}
 
+	public function reeve($type=null) {
+		$this->template = 'Reports_reeve.tpl';
+		$this->data['reeve_qualified'] = $this->Reports->reeve_qualified($this->request->KingdomId, $this->request->ParkId, null, 0, 0, 1);
+	}
+	public function corpora($type=null) {
+		$this->template = 'Reports_corpora.tpl';
+		$this->data['corpora_qualified'] = $this->Reports->corpora_qualified($this->request->KingdomId, $this->request->ParkId, null, 0, 0, 1);
+	}
+
 	public function inactive($type=null) {
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 0);
 	}

@@ -209,6 +209,10 @@ class Player extends Ork3 {
 					'Waivered' => $this->mundane->waivered,
 					'Waiver' => $fetchprivate?"":(HTTP_WAIVERS . sprintf('%06d.' . $this->mundane->waiver_ext, $this->mundane->mundane_id)),
 					'WaiverExt' => $this->mundane->waiver_ext,
+					'ReeveQualified' => $this->mundane->reeve_qualified,
+					'ReeveQualifiedUntil' => $this->mundane->reeve_qualified_until,
+					'CorporaQualified' => $this->mundane->corpora_qualified,
+					'CorporaQualifiedUntil' => $this->mundane->corpora_qualified_until,
 					'DuesThrough' => Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->kingdom_id, $this->mundane->park_id, 0),
 					'HasHeraldry' => $this->mundane->has_heraldry,
 					'Heraldry' => $heraldry['Url'],
@@ -767,6 +771,8 @@ class Player extends Ork3 {
 
 				$this->mundane->reeve_qualified = is_null($request['ReeveQualified'])?$this->mundane->reeve_qualified:$request['ReeveQualified'];
 				$this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil'])?$this->mundane->reeve_qualified_until:$request['ReeveQualifiedUntil'];
+				$this->mundane->corpora_qualified = is_null($request['CorporaQualified'])?$this->mundane->corpora_qualified:$request['CorporaQualified'];
+				$this->mundane->corpora_qualified_until = is_null($request['CorporaQualifiedUntil'])?$this->mundane->corpora_qualified_until:$request['CorporaQualifiedUntil'];
 
 				$this->mundane->save();
 				$this->set_waiver($request);

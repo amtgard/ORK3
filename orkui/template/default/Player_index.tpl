@@ -80,6 +80,14 @@
 			<span>Password Expires:</span>
       <span class='form-informational-field'><?=$passwordExpiring ?></span>
 		</div>
+		<div>
+			<span>Reeve Qualified:</span>
+			<span class='form-informational-field'><?=$Player['ReeveQualified']==0?"No":'Until ' . $Player['ReeveQualifiedUntil'] ?></span>
+		</div>
+		<div>
+			<span>Corpora Qualified:</span>
+			<span class='form-informational-field'><?=$Player['CorporaQualified']==0?"No":'Until ' . $Player['CorporaQualifiedUntil'] ?></span>
+		</div>
   </form>
 </div>
 
