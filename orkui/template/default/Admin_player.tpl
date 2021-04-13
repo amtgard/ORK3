@@ -105,6 +105,12 @@
 			</span>
 		</div>
 		<div>
+			<span>Park Member Since:</span>
+			<span>
+				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['ParkMemberSince']:$Player['ParkMemberSince'] ?>' name='ParkMemberSince' id='ParkMemberSince' />
+			</span>
+		</div>
+		<div>
 			<span></span>
 			<span><input type='submit' value='Update Details' name='Update' /></span>
 		</div>
@@ -189,6 +195,7 @@
 
 	$(document).ready(function() {
 		$( '#DuesDate' ).datepicker();
+		$( '#ParkMemberSince' ).datepicker();
 		$( '#Cancel' ).hide();
 		$( '#Date' ).datepicker({dateFormat: 'yy-mm-dd'});
 		$( '#Rank' ).blur(function() {

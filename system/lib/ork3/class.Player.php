@@ -791,6 +791,9 @@ class Player extends Ork3 {
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
     				$this->mundane->active = is_null($request['Active'])?$this->mundane->restricted:$request['Active']?1:0;
 				}
+				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+					$this->mundane->ParkMemberSince = is_null($request['ParkMemberSince']) ? $this->mundane->ParkMemberSince : $request['ParkMemberSince'];
+				}
 				if (strlen($request['Heraldry'])) {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
 				}
