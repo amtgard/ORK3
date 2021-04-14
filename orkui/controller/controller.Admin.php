@@ -755,6 +755,7 @@ class Controller_Admin extends Controller {
 									'Email' =>  html_decode($this->request->Admin_player->Email),
 									'Restricted' =>  $this->request->Admin_player->Restricted=='Restricted'?1:0,
 									'Active' =>  $this->request->Admin_player->Active=='Active'?1:0,
+									'ParkMemberSince' => $this->request->Admin_player->ParkMemberSince,
 									'HasImage' => strlen($pi_imdata),
 									'Image' => strlen($pi_imdata)>0?$pi_imdata:null,
 									'ImageMimeType' => strlen($pi_imdata)>0?$_FILES['PlayerImage']['type']:'',

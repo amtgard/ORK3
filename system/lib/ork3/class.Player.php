@@ -215,8 +215,10 @@ class Player extends Ork3 {
 					'HasImage' => $this->mundane->has_image,
 					'Image' => HTTP_PLAYER_IMAGE . sprintf('%06d.jpg', $this->mundane->mundane_id),
 					'PenaltyBox' => $this->mundane->penalty_box,
-          'Active' => $this->mundane->active,
-          'PasswordExpires' => $this->mundane->password_expires
+					'Active' => $this->mundane->active,
+					'PasswordExpires' => $this->mundane->password_expires,
+					//'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
+					'ParkMemberSince' => $this->mundane->park_member_since
 				);
 			$unit = Ork3::$Lib->unit->GetUnit(array( 'UnitId' => $response['Player']['CompanyId'] ));
 			if ($unit['Status']['Status'] != 0) {
@@ -474,6 +476,7 @@ class Player extends Ork3 {
 				$this->mundane->active = $request['IsActive'];
 				$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
 				$this->mundane->password_salt = md5(rand().microtime());
+				$this->mundane->park_member_since = date('Y-m-d');
 				$this->mundane->save();
 
 				Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
@@ -655,6 +658,7 @@ class Player extends Ork3 {
 
 			$this->mundane->park_id = $request['ParkId'];
 			$this->mundane->kingdom_id = $park->kingdom_id;
+			$this->mundane->park_member_since = date('Y-m-d');
 			$this->mundane->waivered = $request['Waivered']?1:0;
 			$this->mundane->save();
 			logtrace('MovePlayer(): Success', $request);
@@ -790,6 +794,9 @@ class Player extends Ork3 {
 
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
     				$this->mundane->active = is_null($request['Active'])?$this->mundane->restricted:$request['Active']?1:0;
+				}
+				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+					$this->mundane->park_member_since = is_null($request['ParkMemberSince']) ? $this->mundane->park_member_since : $request['ParkMemberSince'];
 				}
 				if (strlen($request['Heraldry'])) {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);

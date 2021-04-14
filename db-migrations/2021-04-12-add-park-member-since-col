@@ -1,0 +1,1 @@
+ALTER TABLE `ork_mundane`  ADD `park_member_since` date DEFAULT NULL AFTER `reeve_qualified_until`;
