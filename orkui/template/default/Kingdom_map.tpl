@@ -52,7 +52,7 @@
 		var pinColor = "FE7569";
 		var pinImage = getMarker(pinColor);
 		/*
-		var pinShadow = new google.maps.MarkerImage("https://amtgard.com/ork/orkservice/Map/charticon.php?pin=000000",
+		var pinShadow = new google.maps.MarkerImage("https://ork.amtgard.com/orkservice/Map/charticon.php?pin=000000",
 				new google.maps.Size(40, 37),
 				new google.maps.Point(0, 0),
 				new google.maps.Point(12, 35));
@@ -89,7 +89,7 @@
 	function getMarker(pinColor) {
 			if (pinColor in Markers)
 					return Markers[pinColor];
-			var pinIcon = new google.maps.MarkerImage("https://amtgard.com/ork/orkservice/Map/charticon.php?pin=" + pinColor,
+			var pinIcon = new google.maps.MarkerImage("https://ork.amtgard.com/orkservice/Map/charticon.php?pin=" + pinColor,
 					new google.maps.Size(21, 34),
 					new google.maps.Point(0,0),
 					new google.maps.Point(10, 34));
