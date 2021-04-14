@@ -155,6 +155,27 @@ class Model_Reports extends Model {
 		return $r['Roster'];
 	}
 
+	function reeve_qualified($kingdom_id, $park_id = null) {
+		$request = array(
+				'KingdomId' => $kingdom_id,
+				'ParkId' => $park_idd
+			);
+
+		$r = $this->Report->GetReeveQualified($request);
+
+		return $r['ReeveQualified'];
+	}
+
+	function corpora_qualified($kingdom_id, $park_id = null) {
+		$request = array(
+				'KingdomId' => $kingdom_id,
+				'ParkId' => $park_idd
+			);
+
+		$r = $this->Report->GetCorporaQualified($request);
+
+		return $r['CorporaQualified'];
+	}
 }
 
 ?>

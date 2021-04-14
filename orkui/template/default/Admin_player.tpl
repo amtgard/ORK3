@@ -105,7 +105,37 @@
 			</span>
 		</div>
 		<div>
-			<span>Park Member Since:</span>
+			<hr/>
+		</div>
+		<div>
+			<span>Reeve Qualified:</span>
+			
+			<span>
+				<input type='radio' value='1' <?=(isset($Admin_player)?$Admin_player['ReeveQualified']:$Player['ReeveQualified'])==1?"CHECKED":"" ?> name='ReeveQualified' id='ReeveQualified' /><label for='ReeveQualified'>Yes</label>
+				<input type='radio' value='0' <?=(isset($Admin_player)?$Admin_player['ReeveQualified']:$Player['ReeveQualified'])==0?"CHECKED":"" ?> name='ReeveQualified' id='NotReeveQualified' /><label for='NotReeveQualified'>No</label>
+			</span>
+		</div>
+		<div>
+			<span>Reeve Until:</span>
+			<span>
+				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['ReeveQualifiedUntil']:$Player['ReeveQualifiedUntil'] ?>' name='ReeveQualifiedUntil' id='ReeveQualifiedUntil' />
+			</span>
+		</div>
+		<div>
+			<span>Corpora Qualified:</span>
+			
+			<span>
+				<input type='radio' value='1' <?=(isset($Admin_player)?$Admin_player['CorporaQualified']:$Player['CorporaQualified'])==1?"CHECKED":"" ?> name='CorporaQualified' id='CorporaQualified' /><label for='CorporaQualified'>Yes</label>
+				<input type='radio' value='0' <?=(isset($Admin_player)?$Admin_player['CorporaQualified']:$Player['CorporaQualified'])==0?"CHECKED":"" ?> name='CorporaQualified' id='NotCorporaQualified' /><label for='NotCorporaQualified'>No</label>
+			</span>
+		</div>
+		<div>
+			<span>Corpora Until:</span>
+			<span>
+				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['CorporaQualifiedUntil']:$Player['CorporaQualifiedUntil'] ?>' name='CorporaQualifiedUntil' id='CorporaQualifiedUntil' />
+		</div>
+		<div>
+      <span>Park Member Since:</span>
 			<span>
 				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['ParkMemberSince']:$Player['ParkMemberSince'] ?>' name='ParkMemberSince' id='ParkMemberSince' />
 			</span>
@@ -195,6 +225,8 @@
 
 	$(document).ready(function() {
 		$( '#DuesDate' ).datepicker();
+		$( '#ReeveQualifiedUntil' ).datepicker();
+		$( '#CorporaQualifiedUntil' ).datepicker();
 		$( '#ParkMemberSince' ).datepicker({ dateFormat: "yy-mm-dd", showMinute: false});
 		$( '#Cancel' ).hide();
 		$( '#Date' ).datepicker({dateFormat: 'yy-mm-dd'});

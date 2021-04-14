@@ -1131,6 +1131,80 @@ class Report  extends Ork3 {
 
 		return $response;
 	}
+
+	public function GetReeveQualified($request) {
+		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
+		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
+
+		$sql = "select m.persona, m.mundane_id, m.corpora_qualified_until, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
+					from " . DB_PREFIX . "mundane m
+						left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
+						left join " . DB_PREFIX . "park p on m.park_id = p.park_id
+					where
+						m.suspended = 0 
+						and m.reeve_qualified = 1
+						and m.reeve_qualified_until >= CAST(CURRENT_TIMESTAMP AS DATE) 
+						$where
+					order by m.kingdom_id, m.park_id, m.persona";
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && !$r->isEmpty() > 0) {
+			$response['ReeveQualified'] = array();
+			do {
+				$response['ReeveQualified'][] = array(
+						'MundaneId' => $r->mundane_id,
+						'Persona' => $r->persona,
+						'ReeveQualifiedUntil' => $r->corpora_qualified_until,
+						'ParkId' => $r->park_id,
+						'ParkName' => $r->park_name,
+						'KingdomId' => $r->kingdom_id,
+						'ParentKingdomId' => $r->parent_kingodm_id,
+						'KingdomName' => $r->kingdom_name
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return $response;
+	}
+
+	public function GetCorporaQualified($request) {
+		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
+		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
+
+		$sql = "select m.persona, m.mundane_id, m.corpora_qualified_until, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
+					from " . DB_PREFIX . "mundane m
+						left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
+						left join " . DB_PREFIX . "park p on m.park_id = p.park_id
+					where
+						m.suspended = 0 
+						and m.corpora_qualified = 1
+						and m.corpora_qualified_until >= CAST(CURRENT_TIMESTAMP AS DATE) 
+						$where
+					order by m.kingdom_id, m.park_id, m.persona";
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && !$r->isEmpty() > 0) {
+			$response['CorporaQualified'] = array();
+			do {
+				$response['CorporaQualified'][] = array(
+						'MundaneId' => $r->mundane_id,
+						'Persona' => $r->persona,
+						'CorporaQualifiedUntil' => $r->corpora_qualified_until,
+						'ParkId' => $r->park_id,
+						'ParkName' => $r->park_name,
+						'KingdomId' => $r->kingdom_id,
+						'ParentKingdomId' => $r->parent_kingodm_id,
+						'KingdomName' => $r->kingdom_name
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return $response;
+	}
 }
 
 ?>

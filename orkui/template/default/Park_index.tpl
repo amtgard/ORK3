@@ -111,6 +111,8 @@
 				<li><a href='<?=UIR ?>Reports/suspended/Park&id=<?=$park_id ?>'>Suspended Players</a></li>
    			<li><a href='<?=UIR ?>Reports/active_duespaid/Park&id=<?=$park_id ?>'>Player Attendance</a></li>
 				<li><a href='<?=UIR ?>Reports/active_waivered_duespaid/Park&id=<?=$park_id ?>'>Waivered Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/reeve&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Reeve Qualified</a></li>
+				<li><a href='<?=UIR ?>Reports/corpora&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Corpora Qualified</a></li>
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Reports/guilds&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Park Guilds</a></li>

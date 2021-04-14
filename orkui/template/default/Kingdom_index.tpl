@@ -85,6 +85,8 @@
 				<li><a href='<?=UIR ?>Reports/suspended/Kingdom&id=<?=$kingdom_id ?>'>Suspended Players</a></li>
         <li><a href='<?=UIR ?>Reports/active_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Player Attendance</a></li>
 				<li><a href='<?=UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?=$kingdom_id ?>'>Waivered Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/reeve&KingdomId=<?=$kingdom_id ?>'>Reeve Qualified</a></li>
+				<li><a href='<?=UIR ?>Reports/corpora&KingdomId=<?=$kingdom_id ?>'>Corpora Qualified</a></li>
 			</ul>
 		</li>
 		<li>

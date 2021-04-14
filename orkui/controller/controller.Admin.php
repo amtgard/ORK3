@@ -764,6 +764,10 @@ class Controller_Admin extends Controller {
 									'Waivered' => $this->request->Admin_player->Waivered == 'Waivered' || strlen($w_imdata),
 									'Waiver' => strlen($w_imdata)>0?$w_imdata:null,
 									'WaiverMimeType' => strlen($w_imdata)>0?$_FILES['Waiver']['type']:'',
+									'ReeveQualified' => ($this->request->Admin_player->ReeveQualified == 1)?1:0,
+									'ReeveQualifiedUntil' => strlen($this->request->Admin_player->ReeveQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->ReeveQualifiedUntil)):null,
+									'CorporaQualified' => ($this->request->Admin_player->CorporaQualified == 1)?1:0,
+									'CorporaQualifiedUntil' => strlen($this->request->Admin_player->CorporaQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->CorporaQualifiedUntil)):null,
 									'Token' => $this->session->token
 								));
 							if ($this->request->Admin_player->Password!=$this->request->Admin_player->PasswordAgain)

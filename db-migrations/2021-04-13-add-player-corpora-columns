@@ -1,0 +1,3 @@
+ALTER TABLE `ork_mundane` 
+    ADD `corpora_qualified` tinyint(1) DEFAULT 0 AFTER `reeve_qualified_until`,
+    ADD `corpora_qualified_until` date DEFAULT NULL AFTER `corpora_qualified`;
