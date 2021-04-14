@@ -476,6 +476,7 @@ class Player extends Ork3 {
 				$this->mundane->active = $request['IsActive'];
 				$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
 				$this->mundane->password_salt = md5(rand().microtime());
+				$this->mundane->park_member_since = date('Y-m-d');
 				$this->mundane->save();
 
 				Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
