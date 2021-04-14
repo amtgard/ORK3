@@ -18,13 +18,13 @@ class Model_Award extends Model {
                     'IsLadder' => null,
                     'IsTitle' => null,
                     'KingdomId' => $kingdom_id,
-          'OfficerRole' => $officer_role
+                    'OfficerRole' => $officer_role
                 ));
         } else {
             $awards = $this->Award->GetAwardList(array(
                     'IsLadder' => null,
                     'IsTitle' => null,
-          'OfficerRole' => $officer_role
+                    'OfficerRole' => $officer_role
                 ));
         }
             

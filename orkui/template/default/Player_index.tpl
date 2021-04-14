@@ -18,7 +18,7 @@
 		<div>
 			<span>Image:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Player['HasImage']>0?HTTP_PLAYER_IMAGE . sprintf('%06d', $Player['MundaneId']) . '.jpg':HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<img class='heraldry-img' src='<?=$Player['HasImage']>0?$Player['Image'] :HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
 			</span>
 		</div>
 	</form>
@@ -87,6 +87,10 @@
 		<div>
 			<span>Corpora Qualified:</span>
 			<span class='form-informational-field'><?=$Player['CorporaQualified']==0?"No":'Until ' . $Player['CorporaQualifiedUntil'] ?></span>
+		</div>
+		<div>
+			<span>Park Member Since:</span>
+      <span class='form-informational-field'><?=$Player['ParkMemberSince'] ?></span>
 		</div>
   </form>
 </div>
@@ -157,7 +161,7 @@
 </div>
 
 <div class='info-container'>
-    <h3>Notes</h3>
+    <h3>Historical Imports</h3>
 	<table class='information-table form-container' id='Notes'>
 		<thead>
 			<tr>
@@ -195,7 +199,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] === 'none') : ?>
+<?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
     		<tr>
 				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -228,7 +232,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] !== 'none') : ?>
+<?php if (!in_array($detail['OfficerRole'], ['none', null]) || $detail['IsTitle'] == 1) : ?>
     		<tr>
 				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>

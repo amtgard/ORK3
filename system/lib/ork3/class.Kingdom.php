@@ -108,11 +108,6 @@ class Kingdom  extends Ork3 {
 		} else if ($request['IsTitle'] == 'NonTitle') {
 			$ladder_clause = " and is_title = 0";
 		}
-    if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards') {
-      $officer_role_clause = " and officer_role = 'none'"; 
-    } else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers') {
-      $officer_role_clause = " and officer_role != 'none'"; 
-    } 
 		$sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
 						a.award_id, a.is_ladder, ifnull(a.is_title, ka.is_title) as is_title, ifnull(a.title_class, ka.title_class) as title_class,
             a.officer_role
@@ -121,7 +116,7 @@ class Kingdom  extends Ork3 {
 					where 1
 						$ladder_clause
 						$title_clause
-            $officer_role_clause
+            
 						and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
 					order by is_ladder, ka.is_title, ka.title_class desc, ka.name, a.name";
 		$r = $this->db->query($sql);
@@ -131,6 +126,12 @@ class Kingdom  extends Ork3 {
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
 			do {
+				if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards' && !in_array($r->officer_role, ['none', null])) {
+					continue;
+				} else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers' && in_array($r->officer_role, ['none', null])) {
+					continue;
+				} 
+
 				$response['Awards'][$r->kingdomaward_id] = array(
 					'KingdomAwardId' => $r->kingdomaward_id,
 					'KingdomAwardName' => $r->kingdom_awardname,

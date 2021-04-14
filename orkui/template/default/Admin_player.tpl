@@ -11,7 +11,7 @@
 		<div>
 			<span>Image:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Player['HasImage']>0?HTTP_PLAYER_IMAGE . sprintf("%06d", $Player['MundaneId']) . '.jpg':HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<img class='heraldry-img' src='<?=$Player['HasImage']>0?$Player['Image']:HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
 				<input type='file' class='restricted-image-type' name='PlayerImage' id='PlayerImage' />
 			</span>
 		</div>
@@ -133,6 +133,11 @@
 			<span>Corpora Until:</span>
 			<span>
 				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['CorporaQualifiedUntil']:$Player['CorporaQualifiedUntil'] ?>' name='CorporaQualifiedUntil' id='CorporaQualifiedUntil' />
+		</div>
+		<div>
+      <span>Park Member Since:</span>
+			<span>
+				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['ParkMemberSince']:$Player['ParkMemberSince'] ?>' name='ParkMemberSince' id='ParkMemberSince' />
 			</span>
 		</div>
 		<div>
@@ -222,6 +227,7 @@
 		$( '#DuesDate' ).datepicker();
 		$( '#ReeveQualifiedUntil' ).datepicker();
 		$( '#CorporaQualifiedUntil' ).datepicker();
+		$( '#ParkMemberSince' ).datepicker({ dateFormat: "yy-mm-dd", showMinute: false});
 		$( '#Cancel' ).hide();
 		$( '#Date' ).datepicker({dateFormat: 'yy-mm-dd'});
 		$( '#Rank' ).blur(function() {
@@ -349,7 +355,7 @@
 </div>
 
 <div class='info-container'>
-    <h3>Notes</h3>
+    <h3>Historical Imports</h3>
     <table class='information-table form-container' id='Notes'>
 		<thead>
 			<tr>
@@ -531,7 +537,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] === 'none') : ?>
+<?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
 				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
@@ -579,7 +585,7 @@
 		<tbody>
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
-<?php if ($detail['OfficerRole'] !== 'none') : ?>
+<?php if (!in_array($detail['OfficerRole'], ['none', null]) || $detail['IsTitle'] == 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
 				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
