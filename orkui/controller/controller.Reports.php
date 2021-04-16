@@ -233,10 +233,19 @@ class Controller_Reports extends Controller {
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 0);
 	}
 
+	/* Old broken dues functionality */
 	public function duespaid($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_duespaid'] = 1;
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1, 0, 2);
+	}
+
+	/* New Cooler Dues functionality */
+	public function dues($type=null) {
+		// TODO: totally dupe and change up this template
+		$this->template = 'Reports_dues.tpl';
+		$this->data['roster'] = $this->Reports->dues_paid_list($type, $this->request->id);
+
 	}
 
 	public function suspended($type=null) {

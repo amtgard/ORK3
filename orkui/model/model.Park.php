@@ -58,6 +58,11 @@ class Model_Park extends Model {
 	function get_park_info($park_id) {
 		return $this->Park->GetParkShortInfo(array('ParkId'=>$park_id));
 	}
+
+	function get_park_name($park_id) {
+		$r = $this->Park->GetParkShortInfo(array('ParkId'=>$park_id));
+		return $r['ParkInfo']['ParkName'];
+	}
 		
 	function get_park_events($park_id) {
 		$r = $this->Search->Search_Event(null, null, $park_id, null, null, null);

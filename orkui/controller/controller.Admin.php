@@ -720,18 +720,18 @@ class Controller_Admin extends Controller {
 									));
 								}
 							}
-              if ($_FILES['PlayerFace']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
-                if (move_uploaded_file($_FILES['PlayerFace']['tmp_name'], DIR_TMP . sprintf("fi_%06d", $id))) {
-                  $face_im = file_get_contents(DIR_TMP . sprintf("fi_%06d", $id));
-                  $face_imdata = base64_encode($face_im);
-                  $one = $this->Player->one_shot([
-                      'MundaneId' => $id,
-                      'Base64FaceImage' => $face_imdata
-                    ]);
-                    logtrace('One Shot.', $one);
-                  unlink(DIR_TMP . sprintf("fi_%06d", $id));
-                }
-              }
+							if ($_FILES['PlayerFace']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
+								if (move_uploaded_file($_FILES['PlayerFace']['tmp_name'], DIR_TMP . sprintf("fi_%06d", $id))) {
+								$face_im = file_get_contents(DIR_TMP . sprintf("fi_%06d", $id));
+								$face_imdata = base64_encode($face_im);
+								$one = $this->Player->one_shot([
+									'MundaneId' => $id,
+									'Base64FaceImage' => $face_imdata
+									]);
+									logtrace('One Shot.', $one);
+								unlink(DIR_TMP . sprintf("fi_%06d", $id));
+								}
+							}
 						}
 						if ($this->request->Update == 'Update Details') {
 							if (valid_id($this->request->Admin_player->DuesSemesters)) {
@@ -839,6 +839,29 @@ class Controller_Admin extends Controller {
     				case 'deletenote':
 						$r = $this->Player->remove_note( array ('NotesId' => $roastbeef, 'MundaneId' => $id, 'Token' => $this->session->token ) );
 						break;
+    				case 'adddues':
+                        if (!valid_id($id)) {
+                            $this->data['Error'] = 'Invalid player selection, please try again.'; break;
+                        }
+                        if (!valid_id($this->request->Admin_player->KingdomId)) {
+                            $this->data['Error'] = 'Invalid Kingdom, please try again.'; break;
+                        }
+						$r = $this->Player->add_dues(array(
+								'MundaneId' => $id,
+								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
+								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
+								'DuesFrom' => $this->request->Admin_player->DuesFrom,
+								'Terms' => $this->request->Admin_player->Terms,
+								'DuesForLife' => $this->request->Admin_player->DuesForLife
+							));
+						break;
+					case 'revokedues':
+						echo('<br/><br/>Revoke Dues called');
+						$r = $this->Player->revoke_dues(array(
+							'Token' => $this->session->token,
+							'DuesId' => $roastbeef,
+						));
+						break;
 				}
 				if ($r['Status'] == 0) {
 					$this->data['Message'] .= 'Player has been updated:<blockquote>' . $r['Detail'] . '</blockquote>';
@@ -857,11 +880,13 @@ class Controller_Admin extends Controller {
 			$this->data['Admin_player'] = $this->request->Admin_player->Request;
 		}
 		$this->data['KingdomId'] = $this->session->kingdom_id;
+		$this->data['KingdomConfig'] = Common::get_configs($this->session->kingdom_id);
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
+    	$this->data['Dues'] = $this->Player->get_dues($id);
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
 		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );

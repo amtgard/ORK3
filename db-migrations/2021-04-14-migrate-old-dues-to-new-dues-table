@@ -1,0 +1,21 @@
+INSERT INTO `ork_dues` (`mundane_id`, `kingdom_id`, `park_id`, `created_on`, `created_by`, `dues_from`, `terms`, `dues_until`, `import_transaction_id`)
+ SELECT
+ m.mundane_id,
+  CASE 
+   WHEN a.park_id = m.park_id AND a.kingdom_id != p.kingdom_id THEN p.kingdom_id /* This resolves the issue where parks that changed kingdoms from not appearing on dues reports  */
+   ELSE a.kingdom_id
+ END AS kingdom_id,
+  a.park_id as park_id,
+ t.transaction_date as created_on,
+ t.recorded_by as created_by,
+ t.transaction_date as dues_from,
+ 1 as terms,
+ s.dues_through as dues_until,
+ t.transaction_id as import_transaction_id /* Preserve the original transaction_id in case we ever need to reference for audit */
+FROM `ork_split` s  
+LEFT JOIN ork_mundane m on s.src_mundane_id = m.mundane_id
+LEFT JOIN ork_account a on s.account_id = a.account_id
+LEFT JOIN ork_transaction t on s.transaction_id = t.transaction_id
+LEFT JOIN ork_park p on a.park_id = p.park_id
+WHERE s.is_dues = 1
+AND s.dues_through > CURRENT_DATE

@@ -1205,6 +1205,81 @@ class Report  extends Ork3 {
 		}
 		return $response;
 	}
+
+	public function GetDuesPaidList($request) {
+		$response = array();
+		$where = '';
+		if (!empty($request['Type']) && valid_id($request['Id'])) {
+			switch ($request['Type']) {
+				case 'Kingdom':
+					$where = ' AND d.kingdom_id = ' . mysql_real_escape_string($request['Id']);
+					break;
+				case 'Park':
+					$where = ' AND d.park_id = ' . mysql_real_escape_string($request['Id']);
+					break;
+			}
+		} else {
+			// Only process park and kingdom reqeusts.
+			 return [];
+		}
+
+		if (strlen($request['Token']) > 0
+			&& ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+			&& Ork3::$Lib->authorization->HasAuthority($mundane_id, $request['Type'], $request['Id'], AUTH_EDIT)) {
+			// Unrestrict data when we have an authorized player
+			$restrict_access = false;
+		} else {
+			$restrict_access = true;
+		}
+
+		$sql = "select 
+				d.mundane_id,
+				d.*,
+				m.persona,";
+		$sql .= (!$restrict_access) ? ' m.surname, m.given_name,':'NULL as surname, NULL as given_name,';
+
+		$sql .= "m.suspended, 
+				m.waivered,
+				k.name as kingdom_name, 
+				p.name as park_name
+			from " . DB_PREFIX . "dues d
+			left join " . DB_PREFIX . "mundane m on d.mundane_id = m.mundane_id
+			left join " . DB_PREFIX . "kingdom k on d.kingdom_id = k.kingdom_id
+			left join " . DB_PREFIX . "park p on d.park_id = p.park_id
+			where 
+				d.revoked = 0
+				AND (d.dues_until >= CAST(CURRENT_TIMESTAMP AS DATE) OR d.dues_for_life = 1)";
+			$sql .= $where;
+			$sql .= "  group by d.mundane_id order by m.kingdom_id, m.park_id, m.persona";
+
+		$r = $this->db->query($sql);
+		$response = array();
+		$kingdom = new Model_Kingdom();
+		$park = new Model_Park();
+		if ($r !== false && !$r->isEmpty() > 0) {
+			do {
+				$response['DuesPaidList'][] = array(
+						'DuesId' => $r->dues_id,
+						'KingdomId' => $r->kingdom_id,
+						'KingdomName' => $kingdom->get_kingdom_name($r->kingdom_id),
+						'Persona' => $r->persona,
+						'GivenName' => $r->given_name,
+						'Surname' => $r->surname,
+						'MundaneId' => $r->mundane_id,
+						'Waivered' => $r->waivered,
+						'ParkId' => $r->park_id,
+						'ParkName' => $park->get_park_name($r->park_id),
+						'DuesUntil' => $r->dues_until,
+						'DuesFrom' => $r->dues_from,
+						'DuesForLife' => $r->dues_for_life,
+						'Revoked' => $r->revoked
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+			$response['RestrictAccess'] = $restrict_access; 
+		}
+        return $response;
+	}
 }
 
 ?>

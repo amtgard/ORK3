@@ -96,6 +96,32 @@
 </div>
 
 <div class='info-container'>
+    <h3>Dues</h3>
+	<table class='information-table form-container' id='DuesTable'>
+		<thead>
+			<tr>
+				<th>Kingdom</th>
+				<th>Park</th>
+				<th>Dues Paid Until</th>
+				<th>Dues Paid On</th>
+				<th>Dues For Life?</th>
+			</tr>
+		</thead>
+		<tbody>
+			<?php if (is_array($Dues)) foreach ($Dues as $k => $v) : ?>
+				<tr>
+					<td><?= $v['KingdomName'] ?></td>
+					<td><?= $v['ParkName'] ?></td>
+					<td style="border: 2px dashed green; background-color: #ccf0cd;"><?= $v['DuesUntil'] ?></td>
+					<td><?= $v['DuesFrom'] ?></td>
+					<td><?= ($v['DuesForLife'] == 1) ? 'Yes':'No' ?></td>
+				</tr>
+			<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+
+<div class='info-container'>
 	<h3>Companies &amp; Households</h3>
 	<table class='information-table' id='Attendance'>
 		<thead>

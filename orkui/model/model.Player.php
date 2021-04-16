@@ -57,10 +57,22 @@ class Model_Player extends Model {
 	function update_player_award($request) {
 		return $this->Player->UpdateAward($request);
 	}
+
+	function add_dues($request) {
+		return $this->Player->AddDues($request);
+	}
+
+	function get_dues($id, $exclude_revoked = 0, $active = false) {
+        return $this->Player->GetDues(array('MundaneId' => $id, 'ExcludeRevoked' => $exclude_revoked, 'Active' => $active));
+	}
+
+	function revoke_dues($request) {
+        return $this->Player->RevokeDues($request);
+	}
 	
-  function one_shot($request) {
-    return $this->Player->AddOneShotFaceImage($request); 
-  }
+	function one_shot($request) {
+		return $this->Player->AddOneShotFaceImage($request); 
+	}
   
 	function update_player($request) {
 		return $this->Player->UpdatePlayer($request);
