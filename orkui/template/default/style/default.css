@@ -339,7 +339,7 @@ tr.table-data-break:last-child td {
 .required-field {
 	border: 1px solid #633 !important;
 }
-a.unimplemented, .unimplemented h3, .unimplemented .form-container input, .unimplemented .form-container select, .unimplemented .information-table th {
+a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-container input, .unimplemented .form-container select, .unimplemented .information-table th {
 	color: #ccc;
 	background-color: #f8f8f8;
 }

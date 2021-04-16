@@ -1,0 +1,24 @@
+CREATE TABLE `ork_dues` (
+  `dues_id` int(11) NOT NULL AUTO_INCREMENT,
+  `mundane_id` int(11) NOT NULL,
+  `kingdom_id` int(11) NOT NULL,
+  `park_id` int(11) NOT NULL,
+  `created_on` date DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `dues_from` date DEFAULT NULL,
+  `terms` int(11) NOT NULL,
+  `dues_until` date DEFAULT NULL,
+  `dues_closed_from` date DEFAULT NULL,
+  `dues_for_life` tinyint(1) NOT NULL DEFAULT '0',
+  `revoked` tinyint(1) NOT NULL DEFAULT '0',
+  `revoked_on` date DEFAULT NULL,
+  `revoked_by` int(11) DEFAULT NULL,
+  `import_transaction_id` int(11) DEFAULT NULL,
+   PRIMARY KEY (`dues_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+ALTER TABLE `ork_dues`
+  ADD KEY `mundane_id` (`mundane_id`),
+  ADD KEY `dues_until` (`dues_until`),
+  ADD KEY `revoked` (`revoked`),
+  ADD KEY `revoked_by` (`revoked_by`);

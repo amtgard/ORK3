@@ -105,7 +105,7 @@
 				<li><a href='<?=UIR ?>Reports/roster/Park&id=<?=$park_id ?>'>Player Roster</a></li>
 				<li><a href='<?=UIR ?>Reports/inactive/Park&id=<?=$park_id ?>'>Inactive Player Roster</a></li>
 				<li><a href='<?=UIR ?>Reports/active/Park&id=<?=$park_id ?>'>Active Players</a></li>
-				<li><a href='<?=UIR ?>Reports/duespaid/Park&id=<?=$park_id ?>'>Dues Paid Players</a></li>
+				<li><a href='<?=UIR ?>Reports/dues/Park&id=<?=$park_id ?>'>Dues Paid Players</a></li>
 				<li><a href='<?=UIR ?>Reports/waivered/Park&id=<?=$park_id ?>'>Waivered Players</a></li>
 				<li><a href='<?=UIR ?>Reports/unwaivered/Park&id=<?=$park_id ?>'>Unwaivered Players</a></li>
 				<li><a href='<?=UIR ?>Reports/suspended/Park&id=<?=$park_id ?>'>Suspended Players</a></li>
@@ -113,6 +113,7 @@
 				<li><a href='<?=UIR ?>Reports/active_waivered_duespaid/Park&id=<?=$park_id ?>'>Waivered Player Attendance</a></li>
 				<li><a href='<?=UIR ?>Reports/reeve&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Reeve Qualified</a></li>
 				<li><a href='<?=UIR ?>Reports/corpora&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Corpora Qualified</a></li>
+				<li><a class="unimplemented" href='<?=UIR ?>Reports/duespaid/Park&id=<?=$park_id ?>'>Dues Paid Players (OLD)</a></li>
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Reports/guilds&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Park Guilds</a></li>

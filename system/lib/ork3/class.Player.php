@@ -5,7 +5,10 @@ class Player extends Ork3 {
 	public function __construct() {
 		parent::__construct();
 		$this->mundane = new yapo($this->db, DB_PREFIX . 'mundane');
-    $this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
+		$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
+		$this->dues = new yapo($this->db, DB_PREFIX . 'dues');
+		$this->load_model('Kingdom');
+		$this->load_model('Park');
 	}
 
     public function AddOneShotFaceImage($request) {
@@ -222,7 +225,8 @@ class Player extends Ork3 {
 					'Active' => $this->mundane->active,
 					'PasswordExpires' => $this->mundane->password_expires,
 					//'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
-					'ParkMemberSince' => $this->mundane->park_member_since
+					'ParkMemberSince' => $this->mundane->park_member_since,
+					'DuesPaidList' => $this->GetDues(['MundaneId' => $this->mundane->mundane_id, 'ExcludeRevoked' => 1, 'Active' => 1])
 				);
 			$unit = Ork3::$Lib->unit->GetUnit(array( 'UnitId' => $response['Player']['CompanyId'] ));
 			if ($unit['Status']['Status'] != 0) {
@@ -1220,6 +1224,97 @@ class Player extends Ork3 {
 			return InvalidParameter();
 		}
 	}
+
+	public function AddDues($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$dues = new yapo($this->db, DB_PREFIX . 'dues');
+		$dues->clear();
+
+		if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
+			$dues->mundane_id = $request['MundaneId'];
+			$dues->created_by = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+			$dues->created_on = date('Y-m-d');
+			$dues->park_id = $request['ParkId'];
+			$dues->kingdom_id = $request['KingdomId'];
+			$dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
+			// TODO: create private function that determins DuesUntil based on kingdom configured terms
+			$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
+			$dues->terms = $request['Terms'];
+			$dues->dues_for_life = $request['DuesForLife'];
+			$dues->save();
+
+			return Success($dues->dues_id);
+		} else {
+			return NoAuthorization();
+		}
+	}
+
+	private function determine_dues_until($kingdom_id, $dues_from = null, $terms = null) {
+		$kconfig = Common::get_configs($kingdom_id);
+		$dues_config = $kconfig['DuesPeriod'];
+		$n = (int)$dues_config['Value']->Period * (int)$terms; 
+		$dues_until = date('Y-m-d', strtotime($dues_from . ' + ' . $n . ' ' . $dues_config['Value']->Type));
+		return $dues_until;
+	}
+
+	public function GetDues($request) {
+		// $request['MundaneId'] $request['ExcludeRevoked'] $request['Active']
+        if (valid_id($request['MundaneId'])) {
+            $this->dues->clear();
+            $this->dues->mundane_id = $request['MundaneId'];
+			if (!empty($request['ExcludeRevoked'])) {
+				$this->dues->revoked = 0;
+			}
+			if (!empty($request['Active'])) {
+				$this->dues->dues_until_conjunction = ' AND ( `dues_for_life` = 1 OR ';
+				$this->dues->dues_until_term = "> '" . date('Y-m-d') . "') " . ' AND "" = ' ;
+				//$this->dues->dues_until_term_with = ' herehowaboutthis ' ;
+			}
+            $dues = array();
+			$now = time();
+            if ($this->dues->find()) do {
+				if (!empty($request['Active']) && $now > strtotime($this->dues->dues_until) && $this->dues->dues_for_life == 0) {
+					continue;
+				}
+                $dues[] = array(
+                        'DuesId' => $this->dues->dues_id,
+                        'KingdomId' => $this->dues->kingdom_id,
+                        'KingdomName' => $this->Kingdom->get_kingdom_name($this->dues->kingdom_id),
+                        'ParkId' => $this->dues->kingdom_id,
+                        'ParkName' => $this->Park->get_park_name($this->dues->park_id),
+                        'DuesUntil' => $this->dues->dues_until,
+                        'DuesFrom' => $this->dues->dues_from,
+                        'DuesForLife' => $this->dues->dues_for_life,
+                        'Revoked' => $this->dues->revoked
+                    );
+            } while ($this->dues->next());
+        }
+        return $dues;
+	}
+
+	// TODO:
+	public function RevokeDues($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$dues = new yapo($this->db, DB_PREFIX . 'dues');
+		$dues->clear();
+		$dues->dues_id = $request['DuesId'];
+		if (valid_id($request['DuesId']) && $dues->find()) {
+			$mundane = $this->player_info($dues->mundane_id);
+			if (valid_id($mundane_id)
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+				$dues->revoked = 1;
+				$dues->revoked_on = date('Y-m-d');
+				$dues->revoked_by = $mundane_id;
+				$dues->save();
+				return Success($dues->dues_id);
+			} else {
+				return NoAuthorization();
+			}
+		} else {
+			return InvalidParamter();
+		}
+	}
+
 }
 
 ?>

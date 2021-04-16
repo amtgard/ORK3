@@ -158,7 +158,7 @@ class Model_Reports extends Model {
 	function reeve_qualified($kingdom_id, $park_id = null) {
 		$request = array(
 				'KingdomId' => $kingdom_id,
-				'ParkId' => $park_idd
+				'ParkId' => $park_id
 			);
 
 		$r = $this->Report->GetReeveQualified($request);
@@ -169,12 +169,23 @@ class Model_Reports extends Model {
 	function corpora_qualified($kingdom_id, $park_id = null) {
 		$request = array(
 				'KingdomId' => $kingdom_id,
-				'ParkId' => $park_idd
+				'ParkId' => $park_id
 			);
 
 		$r = $this->Report->GetCorporaQualified($request);
 
 		return $r['CorporaQualified'];
+	}
+
+	function dues_paid_list($type, $id) {
+		$request = array(
+			'Token' => $this->session->token,
+			'Type' => $type,
+			'Id' => $id
+		);
+		$r = $this->Report->GetDuesPaidList($request);
+
+		return $r;
 	}
 }
 

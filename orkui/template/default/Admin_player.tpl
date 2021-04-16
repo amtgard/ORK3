@@ -93,15 +93,18 @@
 				<input type='radio' value='Inactive' <?=(isset($Admin_player)?$Admin_player['Active']:$Player['Active'])==1?"":"CHECKED" ?> name='Active' id='InActive' /><label for='InActive'>Retired</label>
 			</span>
 		</div>
-		<div>
-			<span>Dues Paid:</span>
-			<span class='form-informational-field'><?=$Player['DuesThrough']==0?"No":$Player['DuesThrough'] ?><input type="submit" value="Revoke Dues" name="RemoveDues" /></span>
+		<div class="unimplemented">
+			<span style="color:orange; text-align: center; display:inline-block !important;">Notice: Dues can now  <br>be foundin their own section!</span>	
 		</div>
-		<div>
+		<div class="unimplemented">
+			<span>Dues Paid:</span>
+			<span class='form-informational-field'><?=$Player['DuesThrough']==0?"No":$Player['DuesThrough'] ?><input type="submit" value="Revoke Dues" name="RemoveDues" disabled="disabled" /></span>
+		</div>
+		<div class="unimplemented">
 			<span>Dues Semesters:</span>
 			<span>
-				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['DuesDate']:$Player['DuesDate'] ?>' name='DuesDate' id='DuesDate' />
-				<input type='text' class='numeric-field integer-field' value='<?=isset($Admin_player)?$Admin_player['DuesSemesters']:$Player['DuesSemesters'] ?>' name='DuesSemesters' id='DuesSemesters' style='float: none;' />
+				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['DuesDate']:$Player['DuesDate'] ?>' name='DuesDate' id='DuesDate'  disabled="disabled"/>
+				<input type='text' class='numeric-field integer-field' value='<?=isset($Admin_player)?$Admin_player['DuesSemesters']:$Player['DuesSemesters'] ?>' name='DuesSemesters' id='DuesSemesters' style='float: none;'  disabled="disabled"/>
 			</span>
 		</div>
 		<div>
@@ -146,6 +149,61 @@
 		</div>
 		<input type="hidden" name="MAX_FILE_SIZE" value="153600" />
 	</form>
+</div>
+
+<div class='info-container'>
+    <h3>Dues</h3>
+	<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/adddues'>
+		<div>
+			<span>Date Paid:</span>
+			<span><input type='text' value='' name='DuesFrom' id='DuesFrom' /> <i id="showDateUntil"></i></span>
+		</div>
+		<div>
+			<span>Terms:</span>
+			<span><input type='text' class='numeric-field' style='float:none;' value='1' name='Terms' id='Terms' /> 1 Term = <?= $KingdomConfig['DuesPeriod']['Value']->Period . ' ' .  $KingdomConfig['DuesPeriod']['Value']->Type . '(s)' ?></span>
+		</div>
+		<div id='DuesForLife'>
+			<span>Dues For Life:</span>
+			<span><input type='radio' name='DuesForLife' value='1' >Yes <input type='radio' name='DuesForLife' value='0' checked>No</span>
+		</div>
+		<div>
+			<span></span>
+			<span><input type='submit' id='Add' value='Add Dues' /></span>
+		</div>
+		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=isset($Admin_player)?$Admin_player['MundaneId']:0 ?>' />
+		<input type='hidden' id='ParkId' name='ParkId' value='<?=isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId'] ?>' />
+		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=isset($Admin_player)?$Admin_player['KingdomId']:$Player['KingdomId'] ?>' />
+	</form>
+	<table class='information-table form-container' id='DuesTable'>
+		<thead>
+			<tr>
+				<th>Kingdom</th>
+				<th>Park</th>
+				<th>Dues Paid Until</th>
+				<th>Dues Paid On</th>
+				<th>Dues For Life?</th>
+				<th>&nbsp;</th>
+			</tr>
+		</thead>
+		<tbody>
+			<?php if (is_array($Dues)) foreach ($Dues as $k => $v) : ?>
+				<tr class="<?= ($v['Revoked'] == 1) ? 'penalty-box': '' ?>">
+					<td><?= $v['KingdomName'] ?></td>
+					<td><?= $v['ParkName'] ?></td>
+					<td style="<?= ($v['DuesUntil'] >= $v['DuesFrom']) ? 'border: 2px dashed green; background-color: #ccf0cd;' : '' ?>"><?= $v['DuesUntil'] ?></td>
+					<td><?= $v['DuesFrom'] ?></td>
+					<td style="<?= ($v['DuesForLife'] == 1) ? 'border: 2px dashed green; background-color: #ccf0cd;' : '' ?>"><?= ($v['DuesForLife'] == 1) ? 'Yes':'No' ?></td>
+					<td>
+						<?php if ($v['Revoked'] == 1): ?>
+							Revoked
+						<?php else: ?>
+							<a class="confirm-revoke-dues" href="<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokedues/<?=$v['DuesId'] ?>">Revoke
+						<?php endif; ?>
+					</td>
+				</tr>
+			<?php endforeach ?>
+		</tbody>
+	</table>
 </div>
 
 
@@ -221,9 +279,56 @@
 		});
 	</script></div>
 
+<div id="dialogs" style="display: none">
+	<div id="revoke-dues" title="Confirmation Required">
+		Are you sure you want to revoke this dues entry?
+	</div>
+</div>
+<script type="text/javascript">
+	$(document).ready(function() {
+		$(".confirm-revoke-dues").click(function(e) {
+			e.preventDefault();
+			var targetUrl = $(this).attr("href");
+
+			$( "#revoke-dues" ).dialog({ width: 460,
+				buttons: { 
+					"Cancel": function() { $(this).dialog("close"); }, 
+					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+				}
+			 });
+		});
+	});
+
+</script>
+
 <script type='text/javascript'>
+	function calculateDuesUntil(pdate) {
+		$('#showDateUntil').html('');
+		var exdate = new Date(pdate.toString());
+		if (exdate != "Invalid Date") {
+			var terms = ($('#Terms').val()) ? $('#Terms').val() : 1
+			<?php if ($KingdomConfig['DuesPeriod']['Value']->Type == 'month'): ?>
+				var newDate = new Date(exdate.setMonth(exdate.getMonth() + (parseInt(terms) * parseInt(<?= $KingdomConfig['DuesPeriod']['Value']->Period ?>))));
+			<?php endif; ?>
+			<?php if ($KingdomConfig['DuesPeriod']['Value']->Type == 'week'): ?>
+				var newDate = new Date(exdate.setDate(exdate.getDate() + (parseInt(terms) * parseInt(<?= $KingdomConfig['DuesPeriod']['Value']->Period ?>)))); 
+			<?php endif; ?>
+			if (parseInt(terms) > 0) {
+				$('#showDateUntil').html('through ' + newDate.getFullYear() + '-' + ('0' + newDate.getMonth()).slice(-2) + '-' + ('0' + newDate.getDate()).slice(-2)) ;
+			}
+		} 
+	}
 
 	$(document).ready(function() {
+		$( '#DuesFrom' ).datepicker({
+			dateFormat: "yy-mm-dd", showMinute: false,
+			onSelect: function(selectedDate) {
+				$( '#DuesFrom' ).change();
+			}
+		});
+		$('#Terms, #DuesFrom').on('change', function() {
+			calculateDuesUntil($('#DuesFrom').val());
+		});
 		$( '#DuesDate' ).datepicker();
 		$( '#ReeveQualifiedUntil' ).datepicker();
 		$( '#CorporaQualifiedUntil' ).datepicker();
