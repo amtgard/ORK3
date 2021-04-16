@@ -194,6 +194,9 @@ class Player extends Ork3 {
 			}
 			$heraldry = Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type'=>'Player', 'Id'=>$this->mundane->mundane_id));
 			$response['Status'] = Success();
+			// Moving Dues response here to stuff the old DuesThrough response until mORK updates go out
+			$dues = $this->GetDues(['MundaneId' => $this->mundane->mundane_id, 'ExcludeRevoked' => 1, 'Active' => 1]);
+			$old_dues_through = (!empty($dues)) ? $dues[0]['dues_until']: '';
 			$response['Player'] = array(
 					'MundaneId' => $this->mundane->mundane_id,
 					'GivenName' => $fetchprivate?"":$this->mundane->given_name,
@@ -216,7 +219,7 @@ class Player extends Ork3 {
 					'ReeveQualifiedUntil' => $this->mundane->reeve_qualified_until,
 					'CorporaQualified' => $this->mundane->corpora_qualified,
 					'CorporaQualifiedUntil' => $this->mundane->corpora_qualified_until,
-					'DuesThrough' => Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->kingdom_id, $this->mundane->park_id, 0),
+					'DuesThrough' => $old_dues_through, //Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->kingdom_id, $this->mundane->park_id, 0),
 					'HasHeraldry' => $this->mundane->has_heraldry,
 					'Heraldry' => $heraldry['Url'] . '?' . strtotime($this->mundane->modified),
 					'HasImage' => $this->mundane->has_image,
@@ -226,7 +229,7 @@ class Player extends Ork3 {
 					'PasswordExpires' => $this->mundane->password_expires,
 					//'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
 					'ParkMemberSince' => $this->mundane->park_member_since,
-					'DuesPaidList' => $this->GetDues(['MundaneId' => $this->mundane->mundane_id, 'ExcludeRevoked' => 1, 'Active' => 1])
+					'DuesPaidList' => $dues
 				);
 			$unit = Ork3::$Lib->unit->GetUnit(array( 'UnitId' => $response['Player']['CompanyId'] ));
 			if ($unit['Status']['Status'] != 0) {
@@ -735,10 +738,13 @@ class Player extends Ork3 {
 		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
 		if ($request['RemoveDues'] === "Revoke Dues") {
+			// No way to reliably gap revoke for the Dues transition. mORK will need to update their code
+			return NoAuthorization('Outdated Request Method.');
+			
 			$this->load_model('Treasury');
 			return $this->Treasury->RemoveLastDuesPaid(array(
-							'MundaneId' => $request['MundaneId'],
-							'Token' => $request['Token']
+				'MundaneId' => $request['MundaneId'],
+				'Token' => $request['Token']
 			));
 		}
 
@@ -812,6 +818,9 @@ class Player extends Ork3 {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
 				}
 				if ($request['DuesDate']) {
+					// Add dues to new system as well until mORK is updated
+					$dues = $this->AddDues([ 'Token' => $request['Token'], 'ParkId' => $mundane->park_id, 'MundaneId' => $mundane->mundane_id, 'KingdomId' => $mundane->kingdom_id, 'DuesFrom' => $request['DuesDate'], 'Terms' => $request['DuesSemesters'] ]);
+
 					$this->load_model('Treasury');
 					$duespaid = $this->Treasury->DuesPaidToPark(array(
 						'MundaneId' => $request['MundaneId'],
