@@ -856,7 +856,6 @@ class Controller_Admin extends Controller {
 							));
 						break;
 					case 'revokedues':
-						echo('<br/><br/>Revoke Dues called');
 						$r = $this->Player->revoke_dues(array(
 							'Token' => $this->session->token,
 							'DuesId' => $roastbeef,

@@ -93,15 +93,18 @@
 				<input type='radio' value='Inactive' <?=(isset($Admin_player)?$Admin_player['Active']:$Player['Active'])==1?"":"CHECKED" ?> name='Active' id='InActive' /><label for='InActive'>Retired</label>
 			</span>
 		</div>
-		<div>
-			<span>Dues Paid:</span>
-			<span class='form-informational-field'><?=$Player['DuesThrough']==0?"No":$Player['DuesThrough'] ?><input type="submit" value="Revoke Dues" name="RemoveDues" /></span>
+		<div class="unimplemented">
+			<span style="color:orange; text-align: center; display:inline-block !important;">Notice: Dues can now  <br>be foundin their own section!</span>	
 		</div>
-		<div>
+		<div class="unimplemented">
+			<span>Dues Paid:</span>
+			<span class='form-informational-field'><?=$Player['DuesThrough']==0?"No":$Player['DuesThrough'] ?><input type="submit" value="Revoke Dues" name="RemoveDues" disabled="disabled" /></span>
+		</div>
+		<div class="unimplemented">
 			<span>Dues Semesters:</span>
 			<span>
-				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['DuesDate']:$Player['DuesDate'] ?>' name='DuesDate' id='DuesDate' />
-				<input type='text' class='numeric-field integer-field' value='<?=isset($Admin_player)?$Admin_player['DuesSemesters']:$Player['DuesSemesters'] ?>' name='DuesSemesters' id='DuesSemesters' style='float: none;' />
+				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['DuesDate']:$Player['DuesDate'] ?>' name='DuesDate' id='DuesDate'  disabled="disabled"/>
+				<input type='text' class='numeric-field integer-field' value='<?=isset($Admin_player)?$Admin_player['DuesSemesters']:$Player['DuesSemesters'] ?>' name='DuesSemesters' id='DuesSemesters' style='float: none;'  disabled="disabled"/>
 			</span>
 		</div>
 		<div>

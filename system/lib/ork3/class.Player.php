@@ -225,7 +225,8 @@ class Player extends Ork3 {
 					'Active' => $this->mundane->active,
 					'PasswordExpires' => $this->mundane->password_expires,
 					//'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
-					'ParkMemberSince' => $this->mundane->park_member_since
+					'ParkMemberSince' => $this->mundane->park_member_since,
+					'DuesPaidList' => $this->GetDues(['MundaneId' => $this->mundane->mundane_id, 'ExcludeRevoked' => 1, 'Active' => 1])
 				);
 			$unit = Ork3::$Lib->unit->GetUnit(array( 'UnitId' => $response['Player']['CompanyId'] ));
 			if ($unit['Status']['Status'] != 0) {
@@ -1257,6 +1258,7 @@ class Player extends Ork3 {
 	}
 
 	public function GetDues($request) {
+		// $request['MundaneId'] $request['ExcludeRevoked'] $request['Active']
         if (valid_id($request['MundaneId'])) {
             $this->dues->clear();
             $this->dues->mundane_id = $request['MundaneId'];
@@ -1306,10 +1308,10 @@ class Player extends Ork3 {
 				$dues->save();
 				return Success($dues->dues_id);
 			} else {
-				return InvalidParamter();
+				return NoAuthorization();
 			}
 		} else {
-			return NoAuthorization();
+			return InvalidParamter();
 		}
 	}
 
