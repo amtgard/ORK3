@@ -196,7 +196,11 @@ class Player extends Ork3 {
 			$response['Status'] = Success();
 			// Moving Dues response here to stuff the old DuesThrough response until mORK updates go out
 			$dues = $this->GetDues(['MundaneId' => $this->mundane->mundane_id, 'ExcludeRevoked' => 1, 'Active' => 1]);
-			$old_dues_through = (!empty($dues)) ? $dues[0]['dues_until']: '';
+			// Sort the dues by date and use the furthest out DuesUntil
+			usort($dues, function($a, $b) {
+				return strtotime($a['DuesUntil']) - strtotime($b['DuesUntil']);
+			});
+			$old_dues_through = (!empty($dues)) ? $dues[sizeof($dues)-1]['DuesUntil']: '';
 			$response['Player'] = array(
 					'MundaneId' => $this->mundane->mundane_id,
 					'GivenName' => $fetchprivate?"":$this->mundane->given_name,
@@ -819,7 +823,7 @@ class Player extends Ork3 {
 				}
 				if ($request['DuesDate']) {
 					// Add dues to new system as well until mORK is updated
-					$dues = $this->AddDues([ 'Token' => $request['Token'], 'ParkId' => $mundane->park_id, 'MundaneId' => $mundane->mundane_id, 'KingdomId' => $mundane->kingdom_id, 'DuesFrom' => $request['DuesDate'], 'Terms' => $request['DuesSemesters'] ]);
+					$dues = $this->AddDues([ 'Token' => $request['Token'], 'ParkId' => $mundane['ParkId'], 'MundaneId' => $mundane['MundaneId'], 'KingdomId' => $mundane['KingdomId'], 'DuesFrom' => $request['DuesDate'], 'Terms' => $request['DuesSemesters'] ]);
 
 					$this->load_model('Treasury');
 					$duespaid = $this->Treasury->DuesPaidToPark(array(
