@@ -20,6 +20,9 @@
 		<li><?php $location = json_decode(stripslashes($park_info['ParkInfo']['Location'])); $location = ((isset($location->location))?$location->location:$location->bounds->northeast);  ?>
 			<a href="http://maps.google.com/maps?q=@<?= $location->lat . ',' . $location->lng ?>">Park Map</a>
 		</li>
+		<?php if (!empty($park_info['ParkInfo']['Url'])): ?>
+		<li><a href='<?=$park_info['ParkInfo']['Url'] ?>' target="_blank">Website</a></li>
+		<?php endif; ?>
 	</ul>
 	<?php if (!empty($park_officers['Officers'])): ?>
 	<h4>Park Monarchy</h4>
