@@ -21,6 +21,14 @@
 			<a href="http://maps.google.com/maps?q=@<?= $location->lat . ',' . $location->lng ?>">Park Map</a>
 		</li>
 	</ul>
+	<?php if (!empty($park_officers['Officers'])): ?>
+	<h4>Park Monarchy</h4>
+		<ul>
+			<?php foreach ($park_officers['Officers'] as $key => $officer): ?>
+				<li><?= $officer['OfficerRole']; ?>: <a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a></li>
+			<?php endforeach; ?>
+		</ul>
+	<?php endif; ?>	
 </div>
 <div class='info-container'>
 	<h3>Park Days</h3>
