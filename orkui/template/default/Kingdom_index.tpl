@@ -7,6 +7,15 @@
 		<li><a href='<?=UIR ?>Kingdom/map/<?=$kingdom_id ?>'>Kingdom Atlas</a></li>
 		<li><a href='<?=UIR ?>Treasury/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Treasury</a></li>
 	</ul>
+
+	<?php if (!empty($kingdom_officers['Officers'])): ?>
+	<h4>Monarchy</h4>
+		<ul>
+			<?php foreach ($kingdom_officers['Officers'] as $key => $officer): ?>
+				<li><?= $officer['OfficerRole']; ?>: <a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a></li>
+			<?php endforeach; ?>
+		</ul>
+	<?php endif; ?>
 </div>
 
 <div class='info-container'>
