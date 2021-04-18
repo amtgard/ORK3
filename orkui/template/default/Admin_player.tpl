@@ -94,7 +94,7 @@
 			</span>
 		</div>
 		<div class="unimplemented">
-			<span style="color:orange; text-align: center; display:inline-block !important;">Notice: Dues can now  <br>be foundin their own section!</span>	
+			<span style="color:orange; text-align: center; display:inline-block !important;">Notice: Dues can now  <br>be found in their own section!</span>	
 		</div>
 		<div class="unimplemented">
 			<span>Dues Paid:</span>
