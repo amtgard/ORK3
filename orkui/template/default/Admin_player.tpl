@@ -156,7 +156,7 @@
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/adddues'>
 		<div>
 			<span>Date Paid:</span>
-			<span><input type='text' value='' name='DuesFrom' id='DuesFrom' /> <i id="showDateUntil"></i></span>
+			<span><input type='text' value='<?= date('Y-m-d'); ?>' name='DuesFrom' id='DuesFrom' /> <i id="showDateUntil"></i></span>
 		</div>
 		<div>
 			<span>Terms:</span>
