@@ -682,15 +682,20 @@ class Controller_Admin extends Controller {
 					    }
 						if ($this->request->Update == 'Update Media') {
 							if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
-								if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
-									$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
-									$h_imdata = base64_encode($h_im);
-									$this->Player->SetHeraldry(array(
-										'MundaneId' => $id,
-										'Heraldry' => strlen($h_imdata)>0?$h_imdata:null,
-										'HeraldryMimeType' => strlen($h_imdata)>0?$_FILES['Heraldry']['type']:'',
-										'Token' => $this->session->token
-									));
+								if ((int) $_FILES['Heraldry']['size'] * 1.333 > 465000) {
+									$this->data['Error'] = 'Image Error: File size is to large.';
+									$r['Status'] = NULL;
+								} else {
+									if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
+										$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
+										$h_imdata = base64_encode($h_im);
+										$this->Player->SetHeraldry(array(
+											'MundaneId' => $id,
+											'Heraldry' => strlen($h_imdata)>0?$h_imdata:null,
+											'HeraldryMimeType' => strlen($h_imdata)>0?$_FILES['Heraldry']['type']:'',
+											'Token' => $this->session->token
+										));
+									}
 								}
 							}
 							if ($_FILES['Waiver']['size'] > 0 && Common::supported_mime_types($_FILES['Waiver']['type'])) {
@@ -708,16 +713,21 @@ class Controller_Admin extends Controller {
 								}
 							}
 							if ($_FILES['PlayerImage']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
-								if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {
-									$pi_im = file_get_contents(DIR_TMP . sprintf("pi_%06d", $id));
-									$pi_imdata = base64_encode($pi_im);
-									$this->Player->SetImage(array(
-										'MundaneId' => $id,
-										'HasImage' => strlen($pi_imdata),
-										'Image' => strlen($pi_imdata)>0?$pi_imdata:null,
-										'ImageMimeType' => strlen($pi_imdata)>0?$_FILES['PlayerImage']['type']:'',
-										'Token' => $this->session->token
-									));
+								if ((int) $_FILES['PlayerImage']['size'] * 1.333 > 465000) {
+									$this->data['Error'] = 'Image Error: File size is to large.';
+									$r['Status'] = NULL;
+								} else {
+									if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {
+										$pi_im = file_get_contents(DIR_TMP . sprintf("pi_%06d", $id));
+										$pi_imdata = base64_encode($pi_im);
+										$this->Player->SetImage(array(
+											'MundaneId' => $id,
+											'HasImage' => strlen($pi_imdata),
+											'Image' => strlen($pi_imdata)>0?$pi_imdata:null,
+											'ImageMimeType' => strlen($pi_imdata)>0?$_FILES['PlayerImage']['type']:'',
+											'Token' => $this->session->token
+										));
+									}
 								}
 							}
 							if ($_FILES['PlayerFace']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerFace']['type'])) {
@@ -889,7 +899,6 @@ class Controller_Admin extends Controller {
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
 		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
-
 	}
 
 	public function player_bak($mundane_id) {
