@@ -1233,8 +1233,21 @@ class Report  extends Ork3 {
 		}
 
 		$sql = "select 
-				d.mundane_id,
-				d.*,
+				d.dues_id, 
+				d.mundane_id, 
+				d.kingdom_id, 
+				d.park_id, 
+				d.created_on, 
+				d.created_by, 
+				d.dues_from, 
+				d.terms, 
+				MAX(d.dues_until) as dues_until, 
+				d.dues_closed_from, 
+				d.dues_for_life, 
+				d.revoked, 
+				d.revoked_on, 
+				d.revoked_by, 
+				d.import_transaction_id, 
 				m.persona,";
 		$sql .= (!$restrict_access) ? ' m.surname, m.given_name,':'NULL as surname, NULL as given_name,';
 
@@ -1250,7 +1263,7 @@ class Report  extends Ork3 {
 				d.revoked = 0
 				AND (d.dues_until >= CAST(CURRENT_TIMESTAMP AS DATE) OR d.dues_for_life = 1)";
 			$sql .= $where;
-			$sql .= "  group by d.mundane_id order by m.kingdom_id, m.park_id, m.persona";
+			$sql .= "  group by d.mundane_id order by d.dues_until DESC, m.kingdom_id ASC, m.park_id ASC, m.persona ASC";
 
 		$r = $this->db->query($sql);
 		$response = array();
