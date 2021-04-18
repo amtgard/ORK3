@@ -683,7 +683,7 @@ class Controller_Admin extends Controller {
 						if ($this->request->Update == 'Update Media') {
 							if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 								if ((int) $_FILES['Heraldry']['size'] * 1.333 > 465000) {
-									$this->data['Error'] = 'Image Error: File size is to large.';
+									$this->data['Error'] = 'Image Error: File size is too large.';
 									$r['Status'] = NULL;
 								} else {
 									if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
@@ -714,7 +714,7 @@ class Controller_Admin extends Controller {
 							}
 							if ($_FILES['PlayerImage']['size'] > 0 && Common::supported_mime_types($_FILES['PlayerImage']['type'])) {
 								if ((int) $_FILES['PlayerImage']['size'] * 1.333 > 465000) {
-									$this->data['Error'] = 'Image Error: File size is to large.';
+									$this->data['Error'] = 'Image Error: File size is too large.';
 									$r['Status'] = NULL;
 								} else {
 									if (move_uploaded_file($_FILES['PlayerImage']['tmp_name'], DIR_TMP . sprintf("pi_%06d", $id))) {

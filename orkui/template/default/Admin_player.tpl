@@ -31,7 +31,7 @@
 		</div>
 		<div>
 			<span></span>
-			<span style="font-size: 10px;">Max Size: 2725 Kb (348836 bytes)</span>
+			<span style="font-size: 10px;">Max Size: 340 KB (348836 bytes)</span>
 		</div>
 	</form>
 </div>
