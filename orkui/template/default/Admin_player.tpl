@@ -25,6 +25,14 @@
 			<span></span>
 			<span><input type='submit' value='Update Media' name='Update' /></span>
 		</div>
+		<div>
+			<span></span>
+			<span style="font-size: 10px;">Supported Types: JPG, GIF, PNG</span>
+		</div>
+		<div>
+			<span></span>
+			<span style="font-size: 10px;">Max Size: 340 KB (348836 bytes)</span>
+		</div>
 	</form>
 </div>
 
