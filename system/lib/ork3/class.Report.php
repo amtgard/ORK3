@@ -1263,7 +1263,7 @@ class Report  extends Ork3 {
 				d.revoked = 0
 				AND (d.dues_until >= CAST(CURRENT_TIMESTAMP AS DATE) OR d.dues_for_life = 1)";
 			$sql .= $where;
-			$sql .= "  group by d.mundane_id order by d.dues_until DESC, m.kingdom_id ASC, m.park_id ASC, m.persona ASC";
+			$sql .= "  group by d.mundane_id order by m.kingdom_id ASC, m.park_id ASC, m.persona ASC, d.dues_until DESC";
 
 		$r = $this->db->query($sql);
 		$response = array();
