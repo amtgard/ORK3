@@ -294,6 +294,9 @@
 	<div id="delete-award" title="Confirmation Required">
 		Are you sure you want to delete this award entry?
 	</div>
+	<div id="delete-note" title="Confirmation Required">
+		Are you sure you want to delete this Historic Import entry?
+	</div>
 	<div id="strip-award" title="Confirmation Required">
 		Are you sure you want to strip this award entry?
 	</div>
@@ -322,6 +325,17 @@
 			var targetUrl = $(this).attr("href");
 
 			$( "#delete-award" ).dialog({ width: 460,
+				buttons: { 
+					"Cancel": function() { $(this).dialog("close"); }, 
+					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+				}
+			 });
+		});
+		$(".confirm-delete-note").click(function(e) {
+			e.preventDefault();
+			var targetUrl = $(this).attr("href");
+
+			$( "#delete-note" ).dialog({ width: 460,
 				buttons: { 
 					"Cancel": function() { $(this).dialog("close"); }, 
 					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
@@ -541,7 +555,7 @@
 				<td><?=$note['Note'] ?></td>
     			<td><?=$note['Description'] ?></td>
     			<td class='form-informational-field' style='text-wrap: nowrap'><?=$note['Date'] . (strtotime($note['DateComplete'])>0?(" - " . $note['DateComplete']):"") ?></td>
-    			<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deletenote/<?=$note['NoteId'] ?>'>&times;</a></td>
+    			<td class='deletion'><a class="confirm-delete-note" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deletenote/<?=$note['NoteId'] ?>'>&times;</a></td>
 			</tr>
 <?php endforeach ?>
 		</tbody>
