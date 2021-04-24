@@ -112,9 +112,15 @@
 				<tr>
 					<td><?= $v['KingdomName'] ?></td>
 					<td><?= $v['ParkName'] ?></td>
-					<td style="border: 2px dashed green; background-color: #ccf0cd;"><?= $v['DuesUntil'] ?></td>
+					<td style="border: 2px dashed green; background-color: #ccf0cd;">
+					<?= ($v['DuesForLife'] == 0) ? $v['DuesUntil']:'' ?>
+					</td>								
 					<td><?= $v['DuesFrom'] ?></td>
-					<td><?= ($v['DuesForLife'] == 1) ? 'Yes':'No' ?></td>
+					<?php if ($v['DuesForLife'] == 1) : ?><td style="border: 2px dashed green; background-color: #ccf0cd;">
+					<?php else : ?><td>
+					<?php endif; ?>
+					<?= ($v['DuesForLife'] == 1) ? 'Yes':'No' ?>
+					</td>
 				</tr>
 			<?php endforeach ?>
 		</tbody>
