@@ -106,6 +106,10 @@
 			<span class='form-informational-field'><?=$Unit['Details']['Unit']['Type'] ?> <?php if ($Unit['Details']['Unit']['Type'] == 'Company') : ?><a style='float: right; display: inline-block; padding: 3px; border: 1px solid #900; background-color: #fcd' href='<?=UIR ?>Admin/unit/<?=$Unit['Details']['Unit']['UnitId'] ?>&Action=giveup'>Convert to Household</a><?php endif; ?></span>
 		</div>
 		<div>
+			<span>URL:</span>
+			<span><input type='text' class='name-field' value='<?=htmlentities($Unit['Details']['Unit']['Url'], ENT_QUOTES) ?>' name='Url' /></span>
+		</div>
+		<div>
 			<span>Description:</span>
 			<span class='form-informational-field'><textarea name='Description' rows=10 cols=50><?=$Unit['Details']['Unit']['Description'] ?></textarea></span>
 		</div>
