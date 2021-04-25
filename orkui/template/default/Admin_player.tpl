@@ -501,13 +501,13 @@
 			delay: 250,
 			select: function (e, ui) {
 				showLabel('#GivenBy', ui);
-				$('#MundaneId').val(ui.item.value);
+				$('input[name=MundaneId]').val(ui.item.value);
 				return false;
 			},
 			change: function (e, ui) {
 				if (ui.item == null) {
 					showLabel('#GivenBy',null);
-					$('#MundaneId').val(null);
+					$('input[name=MundaneId]').val(null);
 				}
 				return false;
 			}
