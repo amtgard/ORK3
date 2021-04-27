@@ -977,13 +977,11 @@ class Report  extends Ork3 {
     
 		if (valid_id($request['ParkId'])) {
 			$location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
-			$duesclause = "a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
     		if (valid_id($request['ByLocalPark'])) {
     		    $park_comparator = " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "' ";
     		}
 		} else if (strlen($request['KingdomId']) > 0 && $request['KingdomId'] > 0) {
 			$location = " and m.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
-			$duesclause = "a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
     		if (valid_id($request['ByKingdom'])) {
     		    $park_list = Ork3::$Lib->Kingdom->GetParks($request);
     		    $parks = array();
@@ -994,21 +992,13 @@ class Report  extends Ork3 {
 		} else {
 		    $park_comparator = "";
 		}
+		$select_dues_paid = '';
 		if ($request['KingdomId'] > 0 || $request['ParkId'] > 0) {
-            if ($request['DuesPaid'])
-                $has_dues = "and s.is_dues = 1";
-			$duespaid_clause = "
-					left join
-						(select distinct case split_id when null then 0 else 1 end as split_id, src_mundane_id
-							from " . DB_PREFIX . "split s
-							left join " . DB_PREFIX . "account a on s.account_id = a.account_id
-								and $duesclause
-								$has_dues
-							where s.dues_through > curdate()) dues on attendance_summary.mundane_id = dues.src_mundane_id
-			";
-			$duespaid_field = ',
-							ifnull(split_id,0) as duespaid';
-			$duespaid_order = 'duespaid desc, ';
+            if ($request['DuesPaid']) {
+				// Check for non-revoked active or dues for life
+				$select_dues_paid = ', (SELECT COUNT(dues_id) FROM '  . DB_PREFIX . 'dues d WHERE d.mundane_id = attendance_summary.mundane_id AND d.kingdom_id = kingdom.kingdom_id AND d.revoked != 1 AND (d.dues_until >= CAST(CURRENT_TIMESTAMP AS DATE) OR d.dues_for_life = 1)) as duespaid';
+				$duespaid_order = 'duespaid desc, ';
+			}
 		}
         if (trimlen($request['Peerage']) > 0) {
             $peerage = "
@@ -1031,11 +1021,11 @@ class Report  extends Ork3 {
 			$waiver_clause = ' and m.waivered = 0';
 		}
 		$sql = "
-                select main_summary.*, total_monthly_credits, local_park_weeks, credit_counts.daily_credits, credit_counts.rop_limited_credits
+                select main_summary.*, total_monthly_credits, local_park_weeks, credit_counts.daily_credits, credit_counts.rop_limited_credits 
                     from
                         (select
         						$peer_field count(week) as weeks_attended, sum(weekly_attendance) as park_days_attended, sum(daily_attendance) as days_attended, sum(credits_earned) total_credits, attendance_summary.mundane_id,
-        							mundane.persona, kingdom.kingdom_id, park.park_id, kingdom.name kingdom_name, kingdom.parent_kingdom_id, park.name park_name, attendance_summary.waivered $duespaid_field
+        							mundane.persona, kingdom.kingdom_id, park.park_id, kingdom.name kingdom_name, kingdom.parent_kingdom_id, park.name park_name, attendance_summary.waivered $select_dues_paid
         					from
         						(select
         								a.park_id > 0 as weekly_attendance, count(a.park_id > 0) as daily_attendance, a.mundane_id,
@@ -1048,7 +1038,7 @@ class Report  extends Ork3 {
         					left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
         						left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
         						left join " . DB_PREFIX . "park park on park.park_id = mundane.park_id
-        					$duespaid_clause
+        					
                             $peerage
         					group by mundane_id
         					having
@@ -1263,7 +1253,7 @@ class Report  extends Ork3 {
 				d.revoked = 0
 				AND (d.dues_until >= CAST(CURRENT_TIMESTAMP AS DATE) OR d.dues_for_life = 1)";
 			$sql .= $where;
-			$sql .= "  group by d.mundane_id order by d.dues_until DESC, m.kingdom_id ASC, m.park_id ASC, m.persona ASC";
+			$sql .= "  group by d.mundane_id order by m.kingdom_id ASC, m.park_id ASC, m.persona ASC, d.dues_until DESC";
 
 		$r = $this->db->query($sql);
 		$response = array();

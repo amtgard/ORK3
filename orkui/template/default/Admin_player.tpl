@@ -231,7 +231,7 @@
 			<tr>
 				<td><a href='<?=UIR ?>Unit/index/<?=$unit['UnitId'] ?>'><?=$unit['Name'] ?></td>
 				<td><?=ucfirst($unit['Type']) ?></td>
-				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/quitunit/<?=$unit['UnitMundaneId'] ?>'>&times;</a></td>
+				<td class='deletion'><a class="confirm-remove-unit" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/quitunit/<?=$unit['UnitMundaneId'] ?>'>&times;</a></td>
 			</tr>
 <?php endforeach ?>
 		</tbody>
@@ -291,6 +291,21 @@
 	<div id="revoke-dues" title="Confirmation Required">
 		Are you sure you want to revoke this dues entry?
 	</div>
+	<div id="delete-award" title="Confirmation Required">
+		Are you sure you want to delete this award entry?
+	</div>
+	<div id="delete-note" title="Confirmation Required">
+		Are you sure you want to delete this Historic Import entry?
+	</div>
+	<div id="strip-award" title="Confirmation Required">
+		Are you sure you want to strip this award entry?
+	</div>
+	<div id="strip-all" title="Confirmation Required">
+		Are you sure you want to strip ALL award entries?
+	</div>
+	<div id="remove-unit" title="Confirmation Required">
+		Are you sure you want to remove this player from the unit?
+	</div>
 </div>
 <script type="text/javascript">
 	$(document).ready(function() {
@@ -302,6 +317,62 @@
 				buttons: { 
 					"Cancel": function() { $(this).dialog("close"); }, 
 					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+				}
+			 });
+		});
+		$(".confirm-delete-award").click(function(e) {
+			e.preventDefault();
+			var targetUrl = $(this).attr("href");
+
+			$( "#delete-award" ).dialog({ width: 460,
+				buttons: { 
+					"Cancel": function() { $(this).dialog("close"); }, 
+					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+				}
+			 });
+		});
+		$(".confirm-delete-note").click(function(e) {
+			e.preventDefault();
+			var targetUrl = $(this).attr("href");
+
+			$( "#delete-note" ).dialog({ width: 460,
+				buttons: { 
+					"Cancel": function() { $(this).dialog("close"); }, 
+					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+				}
+			 });
+		});
+		$(".confirm-strip-award").click(function(e) {
+			e.preventDefault();
+			var targetUrl = $(this).attr("href");
+
+			$( "#strip-award" ).dialog({ width: 460,
+				buttons: { 
+					"Cancel": function() { $(this).dialog("close"); }, 
+					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+				}
+			 });
+		});
+		$(".confirm-remove-unit").click(function(e) {
+			e.preventDefault();
+			var targetUrl = $(this).attr("href");
+
+			$( "#remove-unit" ).dialog({ width: 460,
+				buttons: { 
+					"Cancel": function() { $(this).dialog("close"); }, 
+					"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+				}
+			 });
+		});
+		$("form input[name=strip-all]").click(function(e) {
+			e.preventDefault();
+			console.log('strip butto clicked');
+			var thisBtn = $(e.target);
+
+			$( "#strip-all" ).dialog({ width: 460,
+				buttons: { 
+					"Cancel": function() { $(this).dialog("close"); }, 
+					"Confirm": function() { thisBtn.closest("form").submit(); $(this).dialog("close"); } 
 				}
 			 });
 		});
@@ -430,13 +501,13 @@
 			delay: 250,
 			select: function (e, ui) {
 				showLabel('#GivenBy', ui);
-				$('#MundaneId').val(ui.item.value);
+				$('input[name=MundaneId]').val(ui.item.value);
 				return false;
 			},
 			change: function (e, ui) {
 				if (ui.item == null) {
 					showLabel('#GivenBy',null);
-					$('#MundaneId').val(null);
+					$('input[name=MundaneId]').val(null);
 				}
 				return false;
 			}
@@ -484,7 +555,7 @@
 				<td><?=$note['Note'] ?></td>
     			<td><?=$note['Description'] ?></td>
     			<td class='form-informational-field' style='text-wrap: nowrap'><?=$note['Date'] . (strtotime($note['DateComplete'])>0?(" - " . $note['DateComplete']):"") ?></td>
-    			<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deletenote/<?=$note['NoteId'] ?>'>&times;</a></td>
+    			<td class='deletion'><a class="confirm-delete-note" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deletenote/<?=$note['NoteId'] ?>'>&times;</a></td>
 			</tr>
 <?php endforeach ?>
 		</tbody>
@@ -625,7 +696,7 @@
 		<div style='padding: 16px 0'>Strip <b>all Awards &amp; Titles</b> or choose from below. Details will be recorded for posterity.</div>
 		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
 			<div>
-				<span>Strip Award Details</span>
+				<span>Strip Awards Reason</span>
 				<input type="text" name="revocation">
 			</div>
 			<div>
@@ -658,8 +729,8 @@
 				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
 				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td class='award-note'><?=$detail['Note'] ?></td>
-				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
-				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='revocation'>Strip</a></td>
+				<td class='deletion'><a class="confirm-delete-award" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='confirm-strip-award revocation'>Strip</a></td>
 			</tr>
 <?php endif ?>
 <?php endforeach ?>
@@ -673,7 +744,7 @@
 		<div style='padding: 16px 0'>Strip <b>all Awards &amp; Titles</b> or choose from below. Details will be recorded for posterity.</div>
 		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
 			<div>
-				<span>Strip Award Details</span>
+				<span>Strip Awards Reason</span>
 				<input type="text" name="revocation">
 			</div>
 			<div>
@@ -706,8 +777,8 @@
 				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
 				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td class='award-note'><?=$detail['Note'] ?></td>
-				<td class='deletion'><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
-				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='revocation'>Strip</a></td>
+				<td class='deletion'><a class="confirm-delete-award" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='confirm-strip-award revocation'>Strip</a></td>
 			</tr>
 <?php endif ?>
 <?php endforeach ?>
