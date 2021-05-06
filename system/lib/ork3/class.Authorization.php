@@ -131,7 +131,7 @@ class Authorization  extends Ork3 {
 			$m->setTo($this->mundane->email);
 			$m->setFrom('ork3@amtgard.com');
 			$m->setSubject('Reset ORK Password (Expires in 24 hours)');
-			$m->setHtml("<h2>ORK Password Reset</h2>We have generated a temporary password that will <b>expire in 24 hours</b>. You will need to log in immediately and reset your password. <p>You can log in with the following link:<p><a href='" . UIR . "Login/login&username=" . $request['UserName'] . "&password=" . $password . "'>Click here to be logged in temporarily.</a><p>Regards,<p>-ORK 3 Team");
+			$m->setHtml('<h2>ORK Password Reset</h2>We have generated a temporary password that will <b>expire in 24 hours</b>. You will need to log in immediately and reset your password. <p>You can log in with the following link:<p><a rel="nofollow" href="' . UIR . 'Login/login&username=' . $request['UserName'] . '&password=' . $password . '">Click here to be logged in temporarily.</a> OR login with this temporary password: ' . $password . '<p>Regards,<p>-ORK 3 Team');
 			$m->setSender('ork3@amtgard.com');
 			$m->send();
 			$response = Success();
