@@ -253,7 +253,7 @@ class SearchService extends Ork3 {
 	}
 	
   public function magic_search($term, $kingdom_id, $park_id) {
-    preg_match('/([a-z]{2,3}):([a-z]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
+    preg_match('/([a-z0-9]{2,3}):([a-z0-9]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
     
     $k_id = Ork3::$Lib->kingdom->GetKingdomByAbbreviation(array('Abbreviation'=>$matches[1]));
     $p_id = Ork3::$Lib->park->GetParkInKingdomByAbbreviation(array('Abbreviation'=>$matches[2]), $k_id);
