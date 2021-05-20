@@ -107,10 +107,13 @@ class Controller_Reports extends Controller {
 		}
 		$this->template = $template;
 		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => $knights, 'IncludeMasters' => $masters));
-    if ($type == 'Kingdom' && valid_id($id) && $masters) {
-      $cqual = $this->Reports->crown_qualed(array('KingdomId'=>$id));
-      $this->data['Awards'] = array_merge($cqual, $this->data['Awards']);
-    }
+
+		if ($type == 'Kingdom' && valid_id($id) && $masters) {
+			$cqual = $this->Reports->crown_qualed(array('KingdomId'=>$id));
+			if (is_array($cqual)) {
+				$this->data['Awards'] = array_merge($cqual, $this->data['Awards']);
+			}
+		}
   }
   
 	public function masters_list($params=null) {
