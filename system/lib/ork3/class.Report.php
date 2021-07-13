@@ -1126,7 +1126,7 @@ class Report  extends Ork3 {
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
-		$sql = "select m.persona, m.mundane_id, m.corpora_qualified_until, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
+		$sql = "select m.persona, m.mundane_id, m.reeve_qualified_until, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
 					from " . DB_PREFIX . "mundane m
 						left join " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 						left join " . DB_PREFIX . "park p on m.park_id = p.park_id
@@ -1144,7 +1144,7 @@ class Report  extends Ork3 {
 				$response['ReeveQualified'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
-						'ReeveQualifiedUntil' => $r->corpora_qualified_until,
+						'ReeveQualifiedUntil' => $r->reeve_qualified_until,
 						'ParkId' => $r->park_id,
 						'ParkName' => $r->park_name,
 						'KingdomId' => $r->kingdom_id,
