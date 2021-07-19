@@ -16,7 +16,7 @@ To set up you will need a copy of the codebase, a recent copy of the database, a
 
 Clone the code to a a reasonable place in your web root.
 
-Rehydrate the database from https://ork.amtgard.com/assets/backups/
+Rehydrate the database from https://drive.google.com/drive/folders/1ai6zOM1EogUWE-Zf_fg_gGrZclM4nSQC
 
 ### Set Up the Config File
 
