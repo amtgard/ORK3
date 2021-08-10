@@ -211,7 +211,7 @@ class Park extends Ork3
 
 	public function GetOfficers( $request )
 	{
-		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
+		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
 						left join " . DB_PREFIX . "authorization a on a.authorization_id = o.authorization_id
@@ -229,7 +229,7 @@ class Park extends Ork3
 			do {
 				$response[ 'Officers' ][] = [
 					'AuthorizationId' => $r->authorization_id,
-					'MundaneId'       => $r->mundane_id,
+					'MundaneId'       => $r->m_mundane_id,
 					'ParkId'          => $r->park_id,
 					'KingdomId'       => $r->kingdom_id,
 					'EventId'         => $r->event_id,
