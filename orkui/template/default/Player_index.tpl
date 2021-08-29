@@ -25,6 +25,12 @@
 </div>
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 	<h3>Player Details</h3>
+	<?php if (strlen($Error) > 0) : ?>
+		<div class='error-message'><?=$Error ?></div>
+	<?php endif; ?>
+	<?php if (strlen($Message) > 0) : ?>
+		<div class='success-message'><?=$Message ?></div>
+	<?php endif; ?>	
 	<form class='form-container' >
 		<div>
 			<span>Given Name:</span>
@@ -188,6 +194,17 @@
 					level = 2;
 				$(trow).find('td:nth-child(3)').html(level);
 			});
+
+			// Recommendation form validation
+			$('#rec-form-submit').on('click', function(e){
+				e.preventDefault()
+				if ($('#recommendation-form select[name=KingdomAwardId]').val() && $('#recommendation-form input[name=Reason]').val() ) {
+					$('#recommendation-form').submit();
+				} else {
+					alert('Select an award and give a reason.')
+				}
+
+			});
 		});
 	</script>
 </div>
@@ -216,6 +233,36 @@
 
 <div class='info-container'>
 	<h3>Awards</h3>
+	<div style="background-color:#eee; margin: 5px 5px; padding: 5px 5px;">
+		<?php if ($LoggedIn == true): ?>
+			<form id="recommendation-form" class='form-container' method='post' action='<?=UIR ?>Player/index/<?=$Player['MundaneId'] ?>/addrecommendation'>
+				Award:
+				<select name="KingdomAwardId">
+					<option>Select Award...</option>
+					<?=$AwardOptions ?>
+				</select>
+				Rank: 
+				<select name="Rank">
+					<option value="">Select...</option>
+					<option value="1">1st</option>
+					<option value="2">2nd</option>
+					<option value="3">3rd</option>
+					<option value="4">4th</option>
+					<option value="5">5th</option>
+					<option value="6">6th</option>
+					<option value="7">7th</option>
+					<option value="8">8th</option>
+					<option value="9">9th</option>
+					<option value="10">10th</option>
+				</select>
+				Reason: <input type="text" name="Reason">
+			</form>
+			<button id="rec-form-submit" type="submit">Recommend</button>
+		<?php else: ?>
+			Login to send an award recomemendation.
+
+		<?php endif; ?>
+	</div>
 	<table class='information-table form-container' id='Awards'>
 		<thead>
 			<tr>

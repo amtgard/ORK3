@@ -318,6 +318,58 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
+	public function PlayerAwardRecommendations($request) {
+
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+		if (valid_id($request['KingdomId'])) {
+			$location_clause = " m.kingdom_id = $request[KingdomId]";
+		}
+		if (valid_id($request['ParkId'])) {
+			$location_clause = " m.park_id = $request[ParkId]";
+		}
+
+		$sql = "select 
+              a.peerage, ifnull(ka.name, a.name) as award_name, 
+              m.persona, r.date_recommended, m.mundane_id, r.rank, 
+              rbi.mundane_id as recommended_by_id, rbi.persona as recommended_by_persona,
+              r.award_id,
+			  r.reason,
+			  (SELECT COUNT(sub.awards_id) from " . DB_PREFIX . "awards sub WHERE sub.mundane_id = r.mundane_id AND sub.kingdomaward_id = r.kingdomaward_id AND ((r.rank > 0 AND sub.rank > r.rank) OR r.rank = 0 ))  as hasAward
+					from " . DB_PREFIX . "recommendations r
+						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = r.kingdomaward_id
+							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+								left join " . DB_PREFIX . "mundane m on m.mundane_id = r.mundane_id
+								left join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = r.recommended_by_id
+					where $location_clause
+					having hasAward = 0
+					order by m.persona, a.name, r.rank, m.persona
+			";
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['AwardRecommendations'] = array();
+			do {
+				$response['AwardRecommendations'][] = array(
+						'MundaneId' => $r->mundane_id,
+						'Persona' => $r->persona,
+						'DateRecommended' => $r->date_recommended,
+						'Rank' => $r->rank,
+						'AwardName' => $r->award_name,
+						'Reason' => $r->reason,
+						'RecommendedByName' => $r->recommended_by_persona,
+						'RecommendedById' => $r->recommended_by_id
+					);
+			} while ($r->next());
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
 	public function Guilds($request) {
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
