@@ -259,7 +259,7 @@
 			</form>
 			<button id="rec-form-submit" type="submit">Recommend</button>
 		<?php else: ?>
-			Login to send an award recomemendation.
+			Login to send an award recommendation.
 
 		<?php endif; ?>
 	</div>
