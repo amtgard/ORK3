@@ -11,6 +11,7 @@
 				<th>Rank</th>
 				<th>Date</th>
 				<th>Sent By</th>
+				<th>Reason</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -22,6 +23,7 @@
 				<td><?=valid_id($recommendation['Rank'])?$recommendation['Rank']:'' ?></td>
 				<td><?=$recommendation['DateRecommended'] ?></td>
 				<td><a href="<?=UIR.'Player/index/'.$recommendation['RecommendedById'] ?>"><?=$recommendation['RecommendedByName'] ?></a></td>
+				<td><?=$recommendation['Reason'] ?></td>
 			</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
