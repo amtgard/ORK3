@@ -39,6 +39,14 @@ class Model_Reports extends Model {
 		return false;
 	}
 
+	function recommended_awards($request) {
+		$r = $this->Report->PlayerAwardRecommendations($request);
+		if ($r['Status']['Status'] == 0) {
+			return $r['AwardRecommendations'];
+		}
+		return false;
+	}
+
 	function crown_qualed($request) {
 		logtrace("crown_qualed($kingdom_id, $park_id)", null);
 		$r = $this->Report->CrownQualed($request['KingdomId']);

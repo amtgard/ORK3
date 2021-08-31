@@ -131,9 +131,19 @@ class Controller_Player extends Controller {
 								'EventId' => valid_id($this->request->Player_index->EventId)?$this->request->Player_index->EventId:0
 							));
 						break;
+					case 'addrecommendation':
+						$r = $this->Player->add_player_recommendation(array(
+								'Token' => $this->session->token,
+								'MundaneId' => $id,
+								'KingdomAwardId' => $this->request->Player_index->KingdomAwardId,
+								'Rank' => $this->request->Player_index->Rank,
+								'GivenById' => $this->request->Player_index->MundaneId,
+								'Reason' => $this->request->Player_index->Reason
+							));
+						break;
 				}
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = 'Player has been updated';
+					$this->data['Message'] = 'Player has been updated.';
 					$this->request->clear('Player_index');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR."Login/login/Player/index/$id" );
@@ -146,6 +156,7 @@ class Controller_Player extends Controller {
 		if ($this->request->exists('Player_index')) {
 			$this->data['Player_index'] = $this->request->Player_index->Request;
 		}
+		$this->data['LoggedIn'] = isset($this->session->user_id);
 		$this->data['KingdomId'] = $this->session->kingdom_id;
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
