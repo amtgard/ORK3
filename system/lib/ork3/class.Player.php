@@ -1332,6 +1332,71 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function AddAwardRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		$this->mundane->clear();
+		$this->mundane->mundane_id = $request['MundaneId'];
+		if (!$this->mundane->find()) {
+			return InvalidParameter();
+		}
+		$recipient = array ( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
+
+        if (valid_id($request['AwardId'])) {
+            $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
+        } else if (valid_id($request['KingdomAwardId'])) {
+            list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
+        } else {
+            return InvalidParameter();
+        }
+
+		// Check for duplicates
+		$dupeRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$dupeRec->clear();
+		$dupeRec->kingdomaward_id = $request['KingdomAwardId'];
+		$dupeRec->mundane_id = $request['MundaneId'];
+		$dupeRec->recommended_by_id = $mundane_id;
+		if (isset($request['Rank'])) {
+			$dupeRec->rank = $request['Rank'];
+		}
+		$dupeRec->find();
+		if ($dupeRec->recommendations_id) {
+			return InvalidParameter('You already recommended that award.');
+		}
+		
+		// Check for existing award rank
+		if (isset($request['Rank'])) {
+			$existingAward = new yapo($this->db, DB_PREFIX . 'awards');
+			$existingAward->clear();
+			$existingAward->kingdomaward_id = $request['KingdomAwardId'];
+			$existingAward->mundane_id = $request['MundaneId'];
+			$existingAward->rank = $request['Rank'];
+			$existingAward->find();
+			if ($existingAward->awards_id) {
+				return InvalidParameter('They already have that award.');
+			}
+		}
+
+
+
+		if (valid_id($mundane_id)) {
+			$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+			$awardRec->clear();
+			$awardRec->kingdomaward_id = $request['KingdomAwardId'];
+    		$awardRec->award_id = $request['AwardId'];
+			$awardRec->mundane_id = $request['MundaneId'];
+			$awardRec->rank = $request['Rank'];
+			$awardRec->date_recommended = date('Y-m-d');
+			$awardRec->recommended_by_id = $mundane_id;
+			$awardRec->reason = $request['Reason'];
+			$awardRec->save();
+			return Success('Recommendation Added!');
+		} else {
+			return NoAuthorization();
+		}
+	}
+
 }
 
 ?>

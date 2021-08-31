@@ -102,6 +102,10 @@ class Model_Player extends Model {
 		$r = $this->Player->MergePlayer($request);
 		return $r;
 	}
+
+	function add_player_recommendation($request) {
+		return $this->Player->AddAwardRecommendation($request);
+	}
 }
 
 ?>
