@@ -7,10 +7,18 @@
 		<meta property="og:image" content="/fancy_logo.jpg">
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/css/ui-lightness/jquery-ui-1.8.18.custom.css" rel="stylesheet" />
 		<link rel=StyleSheet href="<?=HTTP_TEMPLATE;?>default/style/default.css" type="text/css" media=screen>
+		<link rel=StyleSheet href="<?=HTTP_TEMPLATE;?>default/style/css/theme.jui.css" type="text/css" media=screen>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-1.7.1.min.js"></script>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-ui-1.8.18.custom.min.js"></script>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-ui-timepicker-addon.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/default.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/jquery.tablesorter.min.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/jquery.tablesorter.widgets.min.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/widgets/widget-print.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/widgets/widget-staticRow.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/widgets/widget-scroller.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-simple-txt-counter.min.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/table2csv.min.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/highcharts.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.data.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.exporting.js"></script>
