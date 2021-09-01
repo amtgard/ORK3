@@ -1,0 +1,5 @@
+ALTER TABLE `ork_recommendations` 
+    ADD `mask_giver` tinyint(1) NOT NULL DEFAULT 0 AFTER `date_recommended`,
+    ADD `deleted_at` timestamp NULL DEFAULT NULL AFTER `reason`,
+    ADD `deleted_by` int(11) NULL DEFAULT NULL AFTER `deleted_at`
+    ;

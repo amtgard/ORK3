@@ -465,3 +465,12 @@ tr.tablesorter-headerRow th:hover {
 	color: #eee;
 	text-shadow: none;
 }
+/* Extra selectors needed to override the default styling */
+table.tablesorter tbody tr.normal-row td {
+	background: #fff;
+	color: #000;
+  }
+  table.tablesorter tbody tr.alt-row td {
+	background: #eee;
+	color: #000;
+  }

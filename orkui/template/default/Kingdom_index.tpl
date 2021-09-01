@@ -103,7 +103,7 @@
 			Awards
 			<ul>
 				<li><a href='<?=UIR ?>Reports/player_award_recommendations&KingdomId=<?=$kingdom_id ?>'>Award Recommendations</a></li>
-				<li><a href='<?=UIR ?>Reports/player_award_rknights_and_master&KingdomId=<?=$kingdom_id ?>'>Knights and Masters</a></li>
+				<li><a href='<?=UIR ?>Reports/knights_and_masters&KingdomId=<?=$kingdom_id ?>'>Knights and Masters</a></li>
 				<li><a href='<?=UIR ?>Reports/knights_list&KingdomId=<?=$kingdom_id ?>'>Knights</a></li>
 				<li><a href='<?=UIR ?>Reports/masters_list&KingdomId=<?=$kingdom_id ?>'>Masters</a></li>
 				<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?>-level Awards</a></li>
