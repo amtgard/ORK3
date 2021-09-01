@@ -1,6 +1,6 @@
 <div class='info-container'>
 	<h3>Award Recommendations</h3>
-	<table class='information-table'>
+	<table class='information-table tablesorter'>
 		<thead>
 			<tr>
 <?php if (!isset($this->__session->kingdom_id)) : ?>
@@ -30,3 +30,8 @@
 		</tbody>
 	</table>
 </div>
+<script>
+	$(function() {
+		$(".information-table.tablesorter").tablesorter();
+	});
+</script>
