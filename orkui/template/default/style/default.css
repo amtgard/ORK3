@@ -459,3 +459,9 @@ a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-cont
 		overflow: auto;
 	}
 }
+tr.tablesorter-headerRow th:hover {
+    cursor: pointer;
+	background-color: #ccc;
+	color: #eee;
+	text-shadow: none;
+}

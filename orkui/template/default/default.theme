@@ -13,6 +13,7 @@
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-ui-timepicker-addon.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/default.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery.tablesorter.min.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-simple-txt-counter.min.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/highcharts.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.data.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/highcharts/modules.exporting.js"></script>

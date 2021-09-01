@@ -205,6 +205,11 @@
 				}
 
 			});
+
+			$('#recommendation-form input[name=Reason]').simpleTxtCounter({
+				maxLength: 400,
+				countElem: '<span style="margin-left:5px;" class="form-text"></span>'
+			});
 		});
 	</script>
 </div>
