@@ -337,7 +337,7 @@ class Report  extends Ork3 {
               rbi.mundane_id as recommended_by_id, rbi.persona as recommended_by_persona,
               r.award_id,
 			  r.reason,
-			  (SELECT COUNT(sub.awards_id) from " . DB_PREFIX . "awards sub WHERE sub.mundane_id = r.mundane_id AND sub.kingdomaward_id = r.kingdomaward_id AND ((r.rank > 0 AND sub.rank > r.rank) OR r.rank = 0 ))  as hasAward
+			  (SELECT COUNT(sub.awards_id) from " . DB_PREFIX . "awards sub WHERE sub.mundane_id = r.mundane_id AND sub.kingdomaward_id = r.kingdomaward_id AND ((r.rank > 0 AND sub.rank >= r.rank) OR r.rank = 0 ))  as hasAward
 					from " . DB_PREFIX . "recommendations r
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = r.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
