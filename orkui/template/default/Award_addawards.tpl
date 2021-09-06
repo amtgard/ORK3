@@ -184,6 +184,7 @@
 			<span>Award:</span>
 			<span>
 				<select name='AwardId' id='AwardId'>
+					<option value=''></option>
 <?=$AwardOptions ?>
 				</select>
 			</span>
