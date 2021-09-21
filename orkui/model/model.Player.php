@@ -106,6 +106,10 @@ class Model_Player extends Model {
 	function add_player_recommendation($request) {
 		return $this->Player->AddAwardRecommendation($request);
 	}
+
+	function delete_player_recommendation($request) {
+		return $this->Player->DeleteAwardRecommendation($request);
+	}
 }
 
 ?>

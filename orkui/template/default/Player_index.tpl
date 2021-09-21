@@ -333,6 +333,43 @@
 </div>
 
 <div class='info-container'>
+	<h3>Award Recommendations</h3>
+	<table class='information-table form-container' id='AwardRecommendations'>
+		<thead>
+			<tr>
+				<th class="filter-select">Award</th>
+				<th class="filter-select">Rank</th>
+				<th class="filter-select" style="min-width:80px;">Date</th>
+				<th class="filter-select">Sent By</th>
+				<th>Reason</th>
+				<?php if($this->__session->user_id): ?>
+					<th class="sorter-false filter-false">Actions</th>
+				<?php endif; ?>
+			</tr>
+		</thead>
+		<tbody>
+<?php if (!is_array($AwardRecommendations)) $AwardRecommendations = array(); ?>
+<?php foreach ($AwardRecommendations as $key => $recommendation) : ?>
+			<tr>
+				<td><?=$recommendation['AwardName'] ?></td>
+				<td><?=valid_id($recommendation['Rank'])?$recommendation['Rank']:'' ?></td>
+				<td><?=$recommendation['DateRecommended'] ?></td>
+				<td><a href="<?=UIR.'Player/index/'.$recommendation['RecommendedById'] ?>"><?=$recommendation['RecommendedByName'] ?></a></td>
+				<td><?=$recommendation['Reason'] ?></td>
+				<?php if($this->__session->user_id): ?>
+					<td>
+						<?php if ($this->__session->user_id == $recommendation['RecommendedById'] || $this->__session->user_id == $recommendation['MundaneId']): ?>
+							<a class="confirm-delete-recommendation" href="<?=UIR.'Player/index/' . $recommendation['MundaneId'] . '/deleterecommendation/'.$recommendation['RecommendationsId'] ?>">Delete</a> 
+						<?php endif; ?>
+					</td>
+				<?php endif; ?>
+			</tr>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+
+<div class='info-container'>
 	<h3>Attendance</h3>
 	<table class='information-table' id='Attendance'>
 		<thead>
@@ -360,4 +397,28 @@
 		</tbody>
 	</table>
 </div>
+
+<?php if ($this->__session->user_id): ?>
+	<div id="dialogs" style="display: none">
+		<div id="delete-recommendation" title="Confirmation Required">
+			Are you sure you want to delete this recommendation?
+		</div>
+	</div>
+<?php endif; ?>
+<script>
+		<?php if ($this->__session->user_id): ?>
+			$(".confirm-delete-recommendation").click(function(e) {
+				e.preventDefault();
+				var targetUrl = $(this).attr("href");
+
+				$( "#delete-recommendation" ).dialog({ width: 460,
+					buttons: { 
+						"Cancel": function() { $(this).dialog("close"); }, 
+						"Confirm": function() { window.location.href = targetUrl; $(this).dialog("close"); } 
+					}
+				});
+			});
+		<?php endif; ?>
+
+</script>
 

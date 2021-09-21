@@ -325,25 +325,31 @@ class Report  extends Ork3 {
 			return $cache;
 
 		if (valid_id($request['KingdomId'])) {
-			$location_clause = " m.kingdom_id = $request[KingdomId]";
+			$location_clause = " AND m.kingdom_id = $request[KingdomId]";
 		}
 		if (valid_id($request['ParkId'])) {
-			$location_clause = " m.park_id = $request[ParkId]";
+			$location_clause = " AND m.park_id = $request[ParkId]";
+		}
+		if (valid_id($request['PlayerId'])) {
+			$location_clause = " AND r.mundane_id = $request[PlayerId]";
 		}
 
 		$sql = "select 
               a.peerage, ifnull(ka.name, a.name) as award_name, 
               m.persona, r.date_recommended, m.mundane_id, r.rank, 
               rbi.mundane_id as recommended_by_id, rbi.persona as recommended_by_persona,
+			  r.recommendations_id,
               r.award_id,
 			  r.reason,
+			  r.deleted_at,
+			  r.deleted_by,
 			  (SELECT COUNT(sub.awards_id) from " . DB_PREFIX . "awards sub WHERE sub.mundane_id = r.mundane_id AND sub.kingdomaward_id = r.kingdomaward_id AND ((r.rank > 0 AND sub.rank >= r.rank) OR r.rank = 0 ))  as hasAward
 					from " . DB_PREFIX . "recommendations r
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = r.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
 								left join " . DB_PREFIX . "mundane m on m.mundane_id = r.mundane_id
 								left join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = r.recommended_by_id
-					where $location_clause
+					where (r.deleted_by IS NULL OR r.deleted_by = 0) $location_clause
 					having hasAward = 0
 					order by m.persona, a.name, r.rank, m.persona
 			";
@@ -353,6 +359,7 @@ class Report  extends Ork3 {
 			$response['AwardRecommendations'] = array();
 			do {
 				$response['AwardRecommendations'][] = array(
+						'RecommendationsId' => $r->recommendations_id,
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
 						'DateRecommended' => $r->date_recommended,

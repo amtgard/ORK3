@@ -7,6 +7,7 @@ class Controller_Player extends Controller {
 
 		$this->load_model('Park');
 		$this->load_model('Award');
+		$this->load_model('Reports');
 		$params = explode('/',$id);
 		$id = $params[0];
 				
@@ -141,6 +142,13 @@ class Controller_Player extends Controller {
 								'Reason' => $this->request->Player_index->Reason
 							));
 						break;
+					case 'deleterecommendation':
+						$r = $this->Player->delete_player_recommendation(array(
+								'Token' => $this->session->token,
+								'RecommendationsId' => $roastbeef,
+								'RequestedBy' => $this->session->user_id
+							));
+						break;
 				}
 				if ($r['Status'] == 0) {
 					$this->data['Message'] = 'Player has been updated.';
@@ -167,6 +175,7 @@ class Controller_Player extends Controller {
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
 		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
+		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
 		
 	}
 	
