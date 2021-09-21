@@ -1397,6 +1397,32 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function DeleteAwardRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (valid_id($request['RequestedBy'])) {
+			$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+			$awardRec->clear();
+			$awardRec->recommendations_id = $request['RecommendationsId'];
+
+			if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
+				if ($request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
+					$awardRec->deleted_by = $request['RequestedBy'];
+					$awardRec->deleted_at = date('Y-m-d H:i:s');
+					$awardRec->save();
+					return Success('Recommendation Removed!');
+				} else {
+					return InvalidParameter('Only the giver or recipient may delete a recommendation.');
+				}
+			} else {
+				return InvalidParameter('There was a problem with the request.');
+			}
+		} else {
+			return NoAuthorization();
+		}
+	}
+
 }
 
 ?>
