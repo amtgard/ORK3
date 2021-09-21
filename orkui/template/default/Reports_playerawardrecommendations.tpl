@@ -1,4 +1,3 @@
-<?php echo $this->__session->user_id; ?>
 <div class='info-container'>
 	<h3>Award Recommendations</h3>
 	<div class="actions"><button class="print button">Print</button> <button class="download button">Download CSV</button></div>
