@@ -282,7 +282,9 @@ class Player extends Ork3 {
 		} else if ($r->size() > 0) {
 			do {
 				$response['Attendance'][] = array(
-						'AttendanceId' => $r->attenance_id,
+						'AttendanceId' => $r->attendance_id,
+						'EnteredById' => $r->by_whom_id,
+						'EnteredAt' => $r->entered_at,
 						'MundaneId' => $r->mundane_id,
 						'ClassId' => $r->class_id,
 						'Date' => $r->date,

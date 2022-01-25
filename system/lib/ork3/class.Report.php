@@ -578,6 +578,7 @@ class Report  extends Ork3 {
 			do {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
+						'EnteredAt' => $r->entered_at,
 						'MundaneId' => $r->mundane_id,
 						'ClassId' => $r->class_id,
 						'Date' => $r->date,
@@ -667,6 +668,7 @@ class Report  extends Ork3 {
 						'UnitName' => $r->unit_name,
 						'EnteredBy' => $r->by_whom_persona,
 						'EnteredById' => $r->by_whom_id,
+						'EnteredAt' => $r->entered_at,
 						'Persona' => $r->persona,
 						'ClassName' => $r->class_name,
         				'AttendancePersona' => $r->attendance_persona,
