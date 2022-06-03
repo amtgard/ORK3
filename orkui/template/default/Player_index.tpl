@@ -289,7 +289,15 @@
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
 				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
-				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
+				<td>
+					<?php 
+						if (valid_id($detail['EventId'])) {
+							echo $detail['EventName'];
+						} else {
+							echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ',' . $detail['KingdomName'] : $detail[KingdomName];
+						}
+					?>
+				</td>
 				<td><?=$detail['Note'] ?></td>
 				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 			</tr>
@@ -322,7 +330,15 @@
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
 				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
-				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
+				<td> 
+					<?php 
+						if (valid_id($detail['EventId'])) {
+							echo $detail['EventName'];
+						} else {
+							echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ',' . $detail['KingdomName'] : $detail[KingdomName];
+						}
+					?>
+				</td>
 				<td><?=$detail['Note'] ?></td>
 				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 			</tr>
