@@ -343,7 +343,7 @@ class Report  extends Ork3 {
 			  r.reason,
 			  r.deleted_at,
 			  r.deleted_by,
-			  (SELECT COUNT(sub.awards_id) from " . DB_PREFIX . "awards sub WHERE sub.mundane_id = r.mundane_id AND sub.kingdomaward_id = r.kingdomaward_id AND ((r.rank > 0 AND sub.rank >= r.rank) OR r.rank = 0 ))  as hasAward
+			  (SELECT COUNT(sub.awards_id) from " . DB_PREFIX . "awards sub WHERE sub.mundane_id = r.mundane_id AND (ka.kingdomaward_id = sub.kingdomaward_id OR (r.award_id > 0 AND a.award_id = r.award_id)) AND (r.rank > 0 AND sub.rank >= r.rank))  as hasAward
 					from " . DB_PREFIX . "recommendations r
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = r.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
