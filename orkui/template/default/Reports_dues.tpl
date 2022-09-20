@@ -8,6 +8,7 @@
 
 <div class='info-container'>
 	<h3>Dues Paid List</h3>
+	<div class="actions"><button class="print button">Print</button> <button class="download button">Download CSV</button></div>
 	<div id="dues-filter-box" style="border: 1px solid #ccc; margin-bottom:15px; padding-bottom: 15px;">
 		<h4 style="width: 90%; margin: 5px 4px; margin: 5px auto 10px;">Filters</h4>
 		<div style="width: 90%; margin: 0 auto;">
@@ -27,6 +28,7 @@
 					<th>Mundane</th>
 				<?php endif; ?>
 				<th>Waivered</th>
+				<th>Suspended</th>
 				<th>Date Paid</th>
 				<th>Expires</th>
 				<th>Dues For Life</th>
@@ -43,6 +45,7 @@
 					<td><?= $player[GivenName] . ' ' . $player['Surname'] ?></td>
 				<?php endif; ?>
 				<td><?= ($player['Waivered'])?'Yes':'' ?></td>
+				<td><?= ($player['Suspended'])?'Yes':'' ?></td>
 				<td><?=($player['DuesFrom']?$player['DuesFrom']:'') ?></td>
 				<td style="border: 2px dashed green; background-color: #ccf0cd;"><?=($player['DuesUntil'] && $player['DuesForLife'] == 0?$player['DuesUntil']:'') ?></td>
 				<td style="<?= ($player['DuesForLife'] == 1) ? 'border: 2px dashed green; background-color: #ccf0cd;' : '' ?>"><?=($player['DuesForLife'] == 1?'Yes':'') ?></td>
@@ -69,7 +72,55 @@
 			$('#dues-filtered-total').html(visible);
 			$('#dues-hidden-total').html(ttl - visible);
 		})
+
 	});
 </script>
 
+
+<script>
+	$(function() {
+		$.tablesorter.language.button_print = "Print";
+		$.tablesorter.language.button_close = "Close";
+		$(".information-table").on('filterEnd', function () {
+			var visible;
+			var ttl = parseInt(<?= count($roster['DuesPaidList']); ?>);
+			visible = parseInt($('#dues-paid-list-table tr:visible').length - 2);
+			$('#dues-filtered-total').html(visible);
+			$('#dues-hidden-total').html(ttl - visible);
+    }).tablesorter({
+			theme: 'jui',
+			widgets: ["zebra", "filter", "print"],
+    widgetOptions : {
+		zebra : [ "normal-row", "alt-row" ],
+      columnSelector_container : $('#columnSelector'),
+      columnSelector_name : 'data-name',
+
+      print_title      : '',          // this option > caption > table id > "table"
+      print_dataAttrib : 'data-name', // header attrib containing modified header name
+      print_rows       : 'f',         // (a)ll, (v)isible, (f)iltered, or custom css selector
+      print_columns    : 's',         // (a)ll, (v)isible or (s)elected (columnSelector widget)
+      print_extraCSS   : '',          // add any extra css definitions for the popup window here
+      //print_styleSheet : '../css/theme.blue.css', // add the url of your print stylesheet
+      print_now        : true,        // Open the print dialog immediately if true
+      // callback executed when processing completes - default setting is null
+      print_callback   : function(config, $table, printStyle) {
+        // do something to the $table (jQuery object of table wrapped in a div)
+        // or add to the printStyle string, then...
+        // print the table using the following code
+        $.tablesorter.printTable.printOutput( config, $table.html(), printStyle );
+      }
+    }
+		});
+
+		$('.print.button').click(function(e) {
+			e.preventDefault();
+			$('.tablesorter').trigger('printTable');
+		});
+
+		$('.download.button').click(function(e) {
+			e.preventDefault();
+			$("table.information-table").table2csv({"filename":"Dues Paid List", "excludeRows":".tablesorter-filter-row"});
+		});
+	});
+</script>
 <?php
