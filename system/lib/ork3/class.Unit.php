@@ -63,7 +63,7 @@ class Unit extends Ork3 {
 		$authorizer = array ( 'KingdomId' => $mundane->kingdom_id, 'ParkId' => $mundane->park_id );
 
         if (valid_id($request['AwardId'])) {
-            $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
+            list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } else if (valid_id($request['KingdomAwardId'])) {
             list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $recipient['KingdomAwardId']));
         }
@@ -78,7 +78,7 @@ class Unit extends Ork3 {
 					return InvalidParameter('Invalid Parameter 2');
 			}
             if (valid_id($request['AwardId'])) {
-                $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $request['KingdomId'], 'AwardId' => $request['AwardId']));
+                list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $request['KingdomId'], 'AwardId' => $request['AwardId']));
             }
 			$awards = new yapo($this->db, DB_PREFIX . 'awards');
 			$awards->clear();
