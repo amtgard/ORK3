@@ -1052,7 +1052,7 @@ class Player extends Ork3 {
 		$recipient = array ( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
 
         if (valid_id($request['AwardId'])) {
-            $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
+            list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } else if (valid_id($request['KingdomAwardId'])) {
             list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
         } else {
@@ -1344,7 +1344,7 @@ class Player extends Ork3 {
 		$recipient = array ( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
 
         if (valid_id($request['AwardId'])) {
-            $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
+            list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } else if (valid_id($request['KingdomAwardId'])) {
             list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
         } else {
