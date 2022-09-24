@@ -1054,7 +1054,7 @@ class Player extends Ork3 {
         if (valid_id($request['AwardId'])) {
             $request['KingdomAwardId'] = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } else if (valid_id($request['KingdomAwardId'])) {
-            list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $recipient['KingdomAwardId']));
+            list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
         } else {
             return InvalidParameter();
         }
