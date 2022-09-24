@@ -14,7 +14,7 @@ class Award  extends Ork3 {
             $kingdomaward->kingdom_id = $request['KingdomId'];
             $kingdomaward->award_id = $request['AwardId'];
             $kingdomaward->find();
-            return $kingdomaward->kingdomaward_id;
+			return array($kingdomaward->kingdomaward_id, $kingdomaward->award_id);
         }
     }
 
