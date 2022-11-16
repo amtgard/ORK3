@@ -162,7 +162,7 @@
 					<td><input type='text' class='name-field' value="<?=$award['KingdomAwardName'] ?>" name='KingdomAwardName[<?=$award['KingdomAwardId'] ?>]' /></td>
 					<td><input type='text' class='numeric-field' value='<?=$award['ReignLimit'] ?>' name='ReignLimit[<?=$award['KingdomAwardId'] ?>]' /></td>
 					<td><input type='text' class='numeric-field' value='<?=$award['MonthLimit'] ?>' name='MonthLimit[<?=$award['KingdomAwardId'] ?>]' /></td>
-					<td><input type='checkbox' value='YES' name='IsTitle[<?=$award['KingdomAwardId'] ?>]' <?=$award['IsTitle']==1?'CHECKED':'' ?> <?=valid_id($award['AwardId'])?'DISABLED':''?> /></td>
+					<td><input type='checkbox' value='1' name='IsTitle[<?=$award['KingdomAwardId'] ?>]' <?=$award['IsTitle']==1?'CHECKED':'' ?> <?=valid_id($award['AwardId'])?'DISABLED':''?> /></td>
 					<td><input type='text' class='numeric-field' value='<?=$award['IsTitle']==1?$award['TitleClass']:'' ?>' name='TitleClass[<?=$award['KingdomAwardId'] ?>]' <?=($award['IsTitle']==1)?'':'DISABLED' ?> /></td>
 					<?php if (! valid_id($award['AwardId'])) : ?>
 					<td class='deletion'><a href='<?=UIR ?>Admin/editkingdom/<?=$Kingdom_data['KingdomId'] ?>&Action=deleteaward&KingdomAwardId=<?=$award['KingdomAwardId'] ?>'>&times;</a></td>
@@ -183,7 +183,7 @@
 					<td><input type='text' class='name-field' value='' name='KingdomAwardName[New]' ></td>
 					<td><input type='text' class='numeric-field' value='' name='ReignLimit[New]' /></td>
 					<td><input type='text' class='numeric-field' value='' name='MonthLimit[New]' /></td>
-					<td><input type='checkbox' value='YES' name='IsTitle[New]' /></td>
+					<td><input type='checkbox' value='1' name='IsTitle[New]' /></td>
 					<td><input class='numeric-field' type='text' value='' name='TitleClass[New]' /></td>
 				</tr>
 				<tr>
