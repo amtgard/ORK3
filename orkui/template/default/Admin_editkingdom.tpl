@@ -183,7 +183,7 @@
 					<td><input type='text' class='name-field' value='' name='KingdomAwardName[New]' ></td>
 					<td><input type='text' class='numeric-field' value='' name='ReignLimit[New]' /></td>
 					<td><input type='text' class='numeric-field' value='' name='MonthLimit[New]' /></td>
-					<td><input type='checkbox' value='YES' name='IsTitle[New]' /></td>
+					<td><input type='checkbox' value='1' name='IsTitle[New]' /></td>
 					<td><input class='numeric-field' type='text' value='' name='TitleClass[New]' /></td>
 				</tr>
 				<tr>
