@@ -349,6 +349,8 @@ class Controller_Admin extends Controller {
 					$officers['Regent'] = array( 'MundaneId' =>$this->request->Admin_setofficers->RegentId, 'Role' => 'Regent' );
 				if (valid_id($this->request->Admin_setofficers->ChampionId))
 					$officers['Champion'] = array( 'MundaneId' =>$this->request->Admin_setofficers->ChampionId, 'Role' => 'Champion' );
+				if (valid_id($this->request->Admin_setofficers->GMRId))
+					$officers['GMR'] = array( 'MundaneId' =>$this->request->Admin_setofficers->GMRId, 'Role' => 'GMR' );
 				$r = $this->Kingdom->set_officers($this->session->token, $this->session->kingdom_id, $officers);
 				$error = false;
 				foreach ($r as $k => $Status) {
@@ -394,6 +396,8 @@ class Controller_Admin extends Controller {
 					$officers['Regent'] = array( 'MundaneId' =>$this->request->Admin_setofficers->RegentId, 'Role' => 'Regent' );
 				if (valid_id($this->request->Admin_setofficers->ChampionId))
 					$officers['Champion'] = array( 'MundaneId' =>$this->request->Admin_setofficers->ChampionId, 'Role' => 'Champion' );
+				if (valid_id($this->request->Admin_setofficers->GMRId))
+					$officers['GMR'] = array( 'MundaneId' =>$this->request->Admin_setofficers->GMRId, 'Role' => 'GMR' );
 				$r = $this->Park->set_officers($this->session->token, $this->session->park_id, $officers);
 				$error = false;
 				foreach ($r as $k => $Status) {
