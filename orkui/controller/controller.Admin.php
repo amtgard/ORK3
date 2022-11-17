@@ -765,7 +765,7 @@ class Controller_Admin extends Controller {
 									'GivenName' =>  html_decode($this->request->Admin_player->GivenName),
 									'Surname' =>  html_decode($this->request->Admin_player->Surname),
 									'Persona' =>  html_decode($this->request->Admin_player->Persona),
-									'Pronoun' =>  $this->request->Admin_player->PronounId,
+									'PronounId' =>  $this->request->Admin_player->PronounId,
 									'UserName' =>  html_decode($this->request->Admin_player->UserName),
 									'Password' =>  $this->request->Admin_player->Password==$this->request->Admin_player->PasswordAgain?$this->request->Admin_player->Password:null,
 									'Email' =>  html_decode($this->request->Admin_player->Email),

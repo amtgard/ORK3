@@ -795,6 +795,7 @@ class Player extends Ork3 {
 				$this->mundane->other_name = is_null($request['OtherName'])?$this->mundane->other_name:$request['OtherName'];
 				$this->mundane->username = is_null($request['UserName'])?$this->mundane->username:$request['UserName'];
 				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:$request['Persona'];
+				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
 
 				// reeve or corpora qual changes
 				// TODO: add error messaging
