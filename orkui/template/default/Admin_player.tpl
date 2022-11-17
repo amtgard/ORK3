@@ -58,6 +58,15 @@
 			<span><input type='text' class='required-field name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['Persona']:$Player['Persona']) ?>' name='Persona' id='Persona' /></span>
 		</div>
 		<div>
+			<span>Pronouns:</span>
+			<span>
+				<select name="PronounId">
+					<option value="">Choose...</option>
+					<?php echo (!empty($PronounOptions)) ? $PronounOptions : ''; ?>
+				</select>
+			</span>
+		</div>
+		<div>
 			<span>Username:</span>
 			<span><input type='text' class='required-field name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['UserName']:$Player['UserName']) ?>' name='UserName' id='UserName' /></span>
 		</div>

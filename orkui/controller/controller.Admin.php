@@ -647,6 +647,7 @@ class Controller_Admin extends Controller {
 		$this->load_model('Player');
 		$this->load_model('Award');
 		$this->load_model('Unit');
+		$this->load_model('Pronoun');
 
 		$params = explode('/',$id);
 		$id = $params[0];
@@ -764,6 +765,7 @@ class Controller_Admin extends Controller {
 									'GivenName' =>  html_decode($this->request->Admin_player->GivenName),
 									'Surname' =>  html_decode($this->request->Admin_player->Surname),
 									'Persona' =>  html_decode($this->request->Admin_player->Persona),
+									'Pronoun' =>  $this->request->Admin_player->PronounId,
 									'UserName' =>  html_decode($this->request->Admin_player->UserName),
 									'Password' =>  $this->request->Admin_player->Password==$this->request->Admin_player->PasswordAgain?$this->request->Admin_player->Password:null,
 									'Email' =>  html_decode($this->request->Admin_player->Email),
@@ -897,6 +899,7 @@ class Controller_Admin extends Controller {
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
+		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id);

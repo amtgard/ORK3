@@ -45,6 +45,10 @@
 			<span class='form-informational-field'><?=$Player['Persona'] ?></span>
 		</div>
 		<div>
+			<span>Pronouns:</span>
+			<span class='form-informational-field'><?=$Player['PronounText'] ?></span>
+		</div>
+		<div>
 			<span>Username:</span>
 			<span class='form-informational-field'><?=$Player['UserName'] ?></span>
 		</div>

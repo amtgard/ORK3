@@ -7,6 +7,7 @@ class Player extends Ork3 {
 		$this->mundane = new yapo($this->db, DB_PREFIX . 'mundane');
 		$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
 		$this->dues = new yapo($this->db, DB_PREFIX . 'dues');
+		$this->pronoun = new yapo($this->db, DB_PREFIX . 'pronoun');
 		$this->load_model('Kingdom');
 		$this->load_model('Park');
 	}
@@ -201,12 +202,18 @@ class Player extends Ork3 {
 				return strtotime($a['DuesUntil']) - strtotime($b['DuesUntil']);
 			});
 			$old_dues_through = (!empty($dues)) ? $dues[sizeof($dues)-1]['DuesUntil']: '';
+			$this->pronoun->clear();
+			$this->pronoun->pronoun_id = $this->mundane->pronoun_id;
+			$this->pronoun->find();
+			$pronountext = (!empty($this->pronoun->subject)) ? $this->pronoun->subject . '[' . $this->pronoun->object . ']' : '';
 			$response['Player'] = array(
 					'MundaneId' => $this->mundane->mundane_id,
 					'GivenName' => $fetchprivate?"":$this->mundane->given_name,
 					'Surname' => $fetchprivate?"":$this->mundane->surname,
 					'OtherName' => $fetchprivate?"":$this->mundane->other_name,
 					'UserName' => $this->mundane->username,
+					'PronounId' => $this->mundane->pronoun_id,
+					'PronounText' => $pronountext,
 					'Persona' => $this->mundane->persona,
 					'Suspended' => $this->mundane->suspended,
 					'SuspendedAt' => $this->mundane->suspended_at,

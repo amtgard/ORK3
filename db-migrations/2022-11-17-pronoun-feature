@@ -1,0 +1,33 @@
+ALTER TABLE ork_mundane
+ADD pronoun_id int(11) DEFAULT NULL
+AFTER `other_name`;
+
+
+CREATE TABLE `ork_pronoun` (
+  `pronoun_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `subject` varchar(30) DEFAULT NULL,
+  `object` varchar(30) DEFAULT NULL,
+  `possessive` varchar(30) DEFAULT NULL,
+  `possessivepronoun` varchar(30) DEFAULT NULL,
+  `reflexive` varchar(30) DEFAULT NULL,
+  PRIMARY KEY (`pronoun_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+LOCK TABLES `ork_pronoun` WRITE;
+/*!40000 ALTER TABLE `ork_pronoun` DISABLE KEYS */;
+
+INSERT INTO `ork_pronoun` (`pronoun_id`, `subject`, `object`, `possessive`, `possessivepronoun`, `reflexive`)
+VALUES
+	(1,'e/ey','em','eir','eirs','eirself'),
+	(2,'he','him','his','his','himself'),
+	(3,'per','per','pers','pers','perself'),
+	(4,'she','her','her','hers','herself'),
+	(5,'they','them','their','theirs','themself'),
+	(6,'ve','ver','vis','vis','verself'),
+	(7,'xe','xem','xyr','xyrs','xemself'),
+	(8,'ze/zie','hir','hir','hirs','hirself'),
+	(9,'ae','aer','aer','aers','aerself'),
+	(10,'fae','faer','faer','faers','faerself');
+
+/*!40000 ALTER TABLE `ork_pronoun` ENABLE KEYS */;
+UNLOCK TABLES;
