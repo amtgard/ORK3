@@ -397,7 +397,7 @@ class Common
 		$this->officer->system = $system;
 		$this->authorization->clear();
 		if ( $this->officer->find() ) {
-			if ( 'Champion' == $role ) {
+			if ( 'Champion' == $role || 'GMR' == $role) {
 				$this->officer->mundane_id = $new_officer_id;
 				$this->officer->modified = time();
 				$this->officer->save();
