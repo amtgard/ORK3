@@ -897,9 +897,15 @@ $('#pronoun-picker').on('click', function (e) {
 		if (r == true) {
 			var blip = '';
 			var blip2 = '';
+			var blip3 = '';
+			var blip4 = '';
+			var blip5 = '';
 			$('select[name=p_subject] option:selected').each(function(i, el) {blip += (i != 0) ? '/' + $(el).text() : $(el).text()});
 			$('select[name=p_object] option:selected').each(function(i, el) {blip2 += (i != 0) ? '/' + $(el).text() : $(el).text()})
-			$('#pselect_display').text(blip + ' [' + blip2 + ']');
+			$('select[name=p_possessive] option:selected').each(function(i, el) {blip3 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_possessivepronoun] option:selected').each(function(i, el) {blip4 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_reflexive] option:selected').each(function(i, el) {blip5 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('#pselect_display').text(blip + ' [' + blip2 + ' ' + blip3 + ' ' + blip5 + ' ' + blip5 + ']');
 			$('#pronoun_custom').val(JSON.stringify({ s: $('select[name=p_subject]').val(), o: $('select[name=p_object]').val(), p: $('select[name=p_possessive]').val(), pp: $('select[name=p_possessivepronoun]').val(), r: $('select[name=p_reflexive]').val()}))
 		}
 		console.log('pform', $('select[name=p_subject]').val(), $('select[name=p_object]').val());
