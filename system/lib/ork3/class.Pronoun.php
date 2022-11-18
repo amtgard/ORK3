@@ -9,11 +9,12 @@ class Pronoun  extends Ork3 {
 
 	public function GetPronounList($in = null) {
 		$in_sql = (!empty($in) && is_array($in)) ? ' AND pronoun_id IN(' . implode(',', $in) . ')' : '';
+		// Note: Sort needs to remain by pronoun_id asc, to keep consistency when filtyering duplicate parts down the line
 		$sql = "select pronoun_id, subject, object, possessive, possessivepronoun, reflexive
 					from " . DB_PREFIX . "pronoun p 
 					where 1
 					" . $in_sql . "
-					order by p.subject asc";
+					order by p.pronoun_id asc";
 		$r = $this->db->query($sql);
 
 		$response = array();

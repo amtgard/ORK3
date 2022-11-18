@@ -70,10 +70,15 @@ class Model_Pronoun extends Model {
         $pronouns = $this->Pronoun->GetPronounList($ids);
         $parts = [
             'subjective' => [],
+            's_unique' => [],
             'objective' => [],
+            'o_unique' => [],
             'possessive' => [],
+            'p_unique' => [],
             'possessivepronoun' => [],
-            'reflexive' => []
+            'pp_unique' => [],
+            'reflexive' => [],
+            'r_unique' => []
         ]; 
         $part_assignment = [
             's' => ['Subject', 'subjective'],
@@ -86,13 +91,25 @@ class Model_Pronoun extends Model {
             foreach ($id_arr as $k => $v) {
                 if (is_array($v)) {
                     foreach ($v as $kk => $vv) {
-                        $parts[$part_assignment[$k][1]][] = $pronouns['Pronouns'][$vv][$part_assignment[$k][0]];
+                        if (!in_array($pronouns['Pronouns'][$vv][$part_assignment[$k][0]], $parts[$k . '_unique'])) {
+                            $parts[$part_assignment[$k][1]][$pronouns['Pronouns'][$vv][$part_assignment[$k][0]]] = $pronouns['Pronouns'][$vv][$part_assignment[$k][0]];
+                            $parts[$k . '_unique'][] = $pronouns['Pronouns'][$vv][$part_assignment[$k][0]]; 
+                        }
                     }
                 } else {
-                    $parts[$part_assignment[$k][1]][] = $pronouns['Pronouns'][$v][$part_assignment[$k][0]];
+                    if (!in_array($pronouns['Pronouns'][$v][$part_assignment[$k][0]], $parts[$k . '_unique'])) {
+                        $parts[$part_assignment[$k][1]][$pronouns['Pronouns'][$v][$part_assignment[$k][0]]] = $pronouns['Pronouns'][$v][$part_assignment[$k][0]];
+                        $parts[$k . '_unique'][] = $pronouns['Pronouns'][$v][$part_assignment[$k][0]];
+                    }
                 }
             }
 
+            unset($parts['s_unique'], $parts['o_unique'], $parts['p_unique'], $parts['pp_unique'], $parts['r_unique']);
+            ksort($parts['subjective']);
+            ksort($parts['objective']);
+            ksort($parts['possessive']);
+            ksort($parts['possessivepronoun']);
+            ksort($parts['reflexive']);
             return $parts;
         } else { 
             return array();
