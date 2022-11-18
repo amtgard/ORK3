@@ -66,7 +66,7 @@
 				</select>
 				<a id="pronoun-picker" href="#">custom</a>
 			</span>
-			<input id="pronoun_custom" type="hidden" name="pronoun_custom" value='<?php echo isset($Admin_player)?$Admin_player['PronounCustom']:$Player['PronounCustom']; ?>' />
+			<input id="pronoun_custom" type="hidden" name="PronounCustom" value='<?php echo isset($Admin_player)?$Admin_player['PronounCustom']:$Player['PronounCustom']; ?>' />
 		</div>
 		<div>
 			<span>&nbsp;</span>
