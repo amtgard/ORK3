@@ -7,10 +7,12 @@ class Pronoun  extends Ork3 {
 		$this->pronoun = new yapo($this->db, DB_PREFIX . 'pronoun');
 	}
 
-	public function GetPronounList() {
+	public function GetPronounList($in = null) {
+		$in_sql = (!empty($in) && is_array($in)) ? ' AND pronoun_id IN(' . implode(',', $in) . ')' : '';
 		$sql = "select pronoun_id, subject, object, possessive, possessivepronoun, reflexive
 					from " . DB_PREFIX . "pronoun p 
 					where 1
+					" . $in_sql . "
 					order by p.subject asc";
 		$r = $this->db->query($sql);
 
@@ -18,7 +20,7 @@ class Pronoun  extends Ork3 {
         $response['Pronouns'] = array();
 		if ($r !== false && $r->size() > 0) {
 			do {
-				$response['Pronouns'][] = array(
+				$response['Pronouns'][$r->pronoun_id] = array(
 					'PronounId' => $r->pronoun_id,
 					'Subject' => $r->subject,
 					'Object' => $r->object,

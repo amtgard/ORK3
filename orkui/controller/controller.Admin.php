@@ -766,6 +766,7 @@ class Controller_Admin extends Controller {
 									'Surname' =>  html_decode($this->request->Admin_player->Surname),
 									'Persona' =>  html_decode($this->request->Admin_player->Persona),
 									'PronounId' =>  $this->request->Admin_player->PronounId,
+									'PronounCustom' =>  $this->request->Admin_player->PronounCustom,
 									'UserName' =>  html_decode($this->request->Admin_player->UserName),
 									'Password' =>  $this->request->Admin_player->Password==$this->request->Admin_player->PasswordAgain?$this->request->Admin_player->Password:null,
 									'Email' =>  html_decode($this->request->Admin_player->Email),
@@ -900,6 +901,7 @@ class Controller_Admin extends Controller {
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
+		$this->data['PronounList'] = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id);

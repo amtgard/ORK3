@@ -2,6 +2,10 @@ ALTER TABLE ork_mundane
 ADD pronoun_id int(11) DEFAULT NULL
 AFTER `other_name`;
 
+ALTER TABLE ork_mundane
+ADD pronoun_custom varchar(255) DEFAULT NULL
+AFTER `pronoun_id`;
+
 
 CREATE TABLE `ork_pronoun` (
   `pronoun_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -27,7 +31,9 @@ VALUES
 	(7,'xe','xem','xyr','xyrs','xemself'),
 	(8,'ze/zie','hir','hir','hirs','hirself'),
 	(9,'ae','aer','aer','aers','aerself'),
-	(10,'fae','faer','faer','faers','faerself');
+	(10,'fae','faer','faer','faers','faerself'),
+	(11,'he','they','his','their','t/himself'),
+	(12,'she','they','her','their','t/herself');
 
 /*!40000 ALTER TABLE `ork_pronoun` ENABLE KEYS */;
 UNLOCK TABLES;

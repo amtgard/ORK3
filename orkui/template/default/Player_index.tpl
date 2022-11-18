@@ -46,7 +46,7 @@
 		</div>
 		<div>
 			<span>Pronouns:</span>
-			<span class='form-informational-field'><?=$Player['PronounText'] ?></span>
+			<span class='form-informational-field'><?= (!empty($Player['PronounCustomText'])) ? $Player['PronounCustomText'] : $Player['PronounText'] ?></span>
 		</div>
 		<div>
 			<span>Username:</span>
