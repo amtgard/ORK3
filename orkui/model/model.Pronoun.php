@@ -59,10 +59,14 @@ class Model_Pronoun extends Model {
         foreach ($id_arr as $k => $v) {
             if (is_array($v)) {
                 foreach ($v as $kk => $vv) {
-                    $ids[] = $vv;
+                    if (!empty($vv)) {
+                        $ids[] = $vv;
+                    }
                 }
             } else {
-                $ids[] = $v;
+                if (!empty($v)) {
+                    $ids[] = $v;
+                }
             }
         }
 
