@@ -58,6 +58,21 @@
 			<span><input type='text' class='required-field name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['Persona']:$Player['Persona']) ?>' name='Persona' id='Persona' /></span>
 		</div>
 		<div>
+			<span>Pronouns:</span>
+			<span>
+				<select name="PronounId">
+					<option value="">Choose...</option>
+					<?php echo (!empty($PronounOptions)) ? $PronounOptions : ''; ?>
+				</select>
+				<a id="pronoun-picker" href="#">custom</a>
+			</span>
+			<input id="pronoun_custom" type="hidden" name="PronounCustom" value='<?php echo isset($Admin_player)?$Admin_player['PronounCustom']:$Player['PronounCustom']; ?>' />
+		</div>
+		<div>
+			<span>&nbsp;</span>
+			<span id="pselect_display" style="padding-left: 10px;"></span>
+		</div>
+		<div>
 			<span>Username:</span>
 			<span><input type='text' class='required-field name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['UserName']:$Player['UserName']) ?>' name='UserName' id='UserName' /></span>
 		</div>
@@ -785,3 +800,362 @@
 		</tbody>
 	</table>
 </div>
+
+<script type='text/javascript'>
+/*Example popup code to show functionality of the popup function*/
+var buttons = [
+	{text:"Select", value:true, class:"ok", checkForm:true},
+	{text:"Cancel", value:false, class:"no"},
+	{text:"Need help?", value:"yolo", class:"help", close:false}
+];
+
+<?php $pronoun_custom_arr = isset($Admin_player)? json_decode($Admin_player['PronounCustom']) : json_decode($Player['PronounCustom']);
+$curr_custom_pronoun_txt = $Player['PronounCustomText'];
+ ?>
+
+var pnform = `
+	<div class="pchoice">
+		<span>Subjective</span>
+		<select name="p_subject" multiple>
+			<option value="">Choose...</option>
+			<?php if (!empty($PronounList)): ?>
+				<?php foreach($PronounList['subjective'] as $s): ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && ( $pronoun_custom_arr->s == $s['value']) || (is_array($pronoun_custom_arr->s) &&  in_array($s['value'], $pronoun_custom_arr->s))) ? 'selected' : ''; ?>
+					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
+				<?php endforeach; ?>
+			<?php endif ?>
+		</select>
+		<div style="clear:both;"></div>
+	</div>
+	<div class="pchoice">
+		<span>Objective</span>
+		<select name="p_object" multiple>
+			<option value="">Choose...</option>
+			<?php if (!empty($PronounList)): ?>
+				<?php foreach($PronounList['objective'] as $s): ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && ( $pronoun_custom_arr->o == $s['value']) || (is_array($pronoun_custom_arr->o) &&  in_array($s['value'], $pronoun_custom_arr->o))) ? 'selected' : ''; ?>
+					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
+				<?php endforeach; ?>
+			<?php endif ?>
+		</select>
+		<div style="clear:both;"></div>
+	</div>
+	<div class="pchoice">
+		<span>Possessive determininer</span>
+		<select name="p_possessive" multiple>
+			<option value="">Choose...</option>
+			<?php if (!empty($PronounList)): ?>
+				<?php foreach($PronounList['possessive'] as $s): ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && $pronoun_custom_arr->p == $s['value']) ? 'selected' : ''; ?>
+					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
+				<?php endforeach; ?>
+			<?php endif ?>
+		</select>
+		<div style="clear:both;"></div>
+	</div>
+	<div class="pchoice">
+		<span>Possessive pronoun</span>
+		<select name="p_possessivepronoun" multiple>
+			<option value="">Choose...</option>
+			<?php if (!empty($PronounList)): ?>
+				<?php foreach($PronounList['possessivepronoun'] as $s): ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && $pronoun_custom_arr->pp == $s['value']) ? 'selected' : ''; ?>
+					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
+				<?php endforeach; ?>
+			<?php endif ?>
+		</select>
+		<div style="clear:both;"></div>
+	</div>
+	<div class="pchoice">
+		<span>Reflexive</span>
+		<select name="p_reflexive" multiple>
+			<option value="">Choose...</option>
+			<?php if (!empty($PronounList)): ?>
+				<?php foreach($PronounList['reflexive'] as $s): ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && $pronoun_custom_arr->r == $s['value']) ? 'selected' : ''; ?>
+					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
+				<?php endforeach; ?>
+			<?php endif ?>
+		</select>
+		<div style="clear:both;"></div>
+	</div>
+	`;
+
+var example = new popup(buttons, "Pronoun Picker", pnform);
+var save_pronoun_custom = $('#pronoun_custom').val() || null;
+if (save_pronoun_custom != null) {
+	$('#pselect_display').text('<?php echo $curr_custom_pronoun_txt; ?>');
+
+}
+example.draggable(true);
+example.addClass("example");
+$('#pronoun-picker').on('click', function (e) {
+	e.preventDefault();
+	example.open(function(r, f) {
+		if (r == false) return ;
+		if (r == true) {
+			var blip = '';
+			var blip2 = '';
+			var blip3 = '';
+			var blip4 = '';
+			var blip5 = '';
+			$('select[name=p_subject] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip += (i != 0) ? '/' + $(el).text() : $(el).text()});
+			$('select[name=p_object] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip2 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_possessive] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip3 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_possessivepronoun] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip4 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_reflexive] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip5 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('#pselect_display').text(blip + ' [' + blip2 + ' ' + blip3 + ' ' + blip5 + ' ' + blip5 + ']');
+			$('#pronoun_custom').val(JSON.stringify({ s: $('select[name=p_subject]').val(), o: $('select[name=p_object]').val(), p: $('select[name=p_possessive]').val(), pp: $('select[name=p_possessivepronoun]').val(), r: $('select[name=p_reflexive]').val()}))
+		}
+		if(r == "yolo") {
+			var whut = new popup([{text: "Close"}], "Need help?", "<p>If you don't see your pronouns, let us know on the <a href=\"https://www.facebook.com/groups/orkupdates\" target=\"_blank\">ORK Facebook Group</a></p>");
+			whut.draggable(true);
+			whut.open();
+		}
+	});
+});
+
+/*Popup function*/
+function popup(buttons, title, html) {
+	var popup_html = "<div class=\"popup_wrapper\"><form class=\"popup\">";
+	if(title) {
+		popup_html += "<h2 class=\"title\">"+title+"</h2>";
+	}
+	if(html) {
+		popup_html += html;
+	}
+	if(buttons) {
+		popup_html += "<div class=\"buttons\">";
+		for(var x = 0; x < buttons.length; x++) {
+			var bClass = buttons[x]["class"] ? " class="+buttons[x]["class"]:"";
+			var bCheckForm = buttons[x]["checkForm"] ? " data-checkForm="+buttons[x]["checkForm"]:"";
+			var bClose = buttons[x]["close"] === false ? " data-close="+buttons[x]["close"]:"";
+			var bValue = buttons[x]["value"] !== undefined	? " data-value="+buttons[x]["value"]:"";
+			var bText = buttons[x]["text"] || "";
+			popup_html += "<button"+bClass+bClose+bCheckForm+bValue+">"+bText+"</button>";
+		}
+		popup_html += "</div>";
+	}
+	popup_html += "</form></div>";
+	var popup = $(popup_html);
+	var form = popup.children("form");
+	var top;
+	function open() {
+		$("body").append(popup);
+		popup.fadeIn(500);
+		top = $("body").scrollTop();
+		$("html").css({"position":"fixed", "top":-top});
+	}
+	function close() {
+		popup.fadeOut(200, function() {
+			popup.remove();
+			$("html").css({"position":"static", "top":0});
+			$("html, body").scrollTop(top);
+		});
+	}
+	this.open = function(f) {
+		var r = $.Deferred();
+		open();
+		var closed = false;
+		popup.on("click", ".buttons button", function(e) {
+			e.preventDefault();
+			var value = $(this).data("value");
+			var checkForm = $(this).data("checkForm");
+			var autoClose = $(this).data("close");
+			if(!form[0].checkValidity() && checkForm) {
+				$('<input type="submit">').hide().appendTo(form).click().remove();
+			} else {
+				if(!closed) {
+					r.notify(value, form);
+				}
+				if(autoClose !== false) {
+					close();
+					closed = true;
+				}
+			}
+		});
+		return r.progress(f);
+	};
+	this.close = function() {
+		close();
+	};
+	this.addClass = function(fClass) {
+		$(popup).addClass(fClass);
+	};
+	this.removeClass = function(fClass) {
+		$(popup).removeClass(fClass);
+	};
+	this.draggable = function(fDraggable) {
+		if(fDraggable) {
+			draggable = true;
+			form.children(".title").css("cursor", "move");
+		} else {
+			draggable = false;
+			form.children(".title").css("cursor", "inherit");
+		}
+	};
+	var draggable = false;
+	var dragging = false;
+	var fX;
+	var fX;
+	var y;
+	var x;
+	form.children(".title").on("mousedown touchstart", function(e) {
+		if (draggable) {
+			dragging = true;
+			fY = form.offset().top;
+			fX = form.offset().left;
+			console.log(e);
+			y = e.pageY || e.originalEvent.touches[0].pageY;
+			x = e.pageX || e.originalEvent.touches[0].pageX;
+			form.css("user-select", "none");
+		}
+	});
+	$("html").on("mousemove touchmove", function(e) {
+		if (dragging && draggable) {
+			mY = e.pageY || e.originalEvent.touches[0].pageY;
+			mX = e.pageX || e.originalEvent.touches[0].pageX;
+			form.offset({
+				top: fY + mY - y,
+				left: fX + mX - x
+			});
+			if(form.offset().top < 0) {
+				form.offset({top: 0});
+			}
+			if(form.offset().left < 0) {
+				form.offset({left: 0});
+			}
+			if(popup.height() - form.offset().top - form.outerHeight() < 0) {
+				form.offset({top: popup.height() - form.outerHeight()});
+			}
+			if(popup.width() - form.offset().left - form.outerWidth() < 0) {
+				form.offset({left: popup.width() - form.outerWidth()});
+			}
+		}
+	});
+	$("html").on("mouseup touchend", function(e) {
+		if (draggable) {
+			dragging = false;
+			form.css("user-select", "inherit");
+		}
+	});
+}
+</script>
+
+<style>
+html {
+	overflow-y: scroll;
+	/* Important for the code that disables scrolling */
+	height: 100%;
+	width: 100%;
+}
+.popup_wrapper {
+	background: rgba(232,232,232,.8);
+	z-index: 9999;
+	overflow-y: scroll;
+	position: fixed;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	right: 0;
+	/*Hide scrollbar*/
+	right: auto;
+	padding-right: 20px;
+	width: 100%;
+	/*Fallback*/
+	text-align: center;
+	white-space: nowrap;
+	font-size: 0;
+	/*Flexbox*/
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+.popup_wrapper:before {
+	/*Fallback*/
+	content: "";
+	display: inline-block;
+	height: 100%;
+	vertical-align: middle;
+}
+.popup_wrapper .popup {
+	background: #fff;
+	width: 400px;
+	border-radius: 3px;
+	box-shadow: 0 5px 20px rgba(0,0,0,.1);
+	border: 1px solid rgba(0,0,0,.03);
+	background-clip: padding-box;
+	margin: 20px;
+	font-family: 'Roboto', sans-serif;
+	/*Fallback*/
+	display: inline-block;
+	vertical-align: middle;
+	text-align: initial;
+	font-size: initial;
+	white-space: initial;
+	/*IE6-9 doesn't support initial*/
+	text-align: left\9;
+	font-size: 16px\9;
+	white-space: normal\9;
+}
+/*IE10+ doesn't support initial*/
+_:-ms-lang(x),
+.popup {
+	text-align: left;
+	font-size: 16px;
+	white-space: normal;
+}
+
+.popup div.pchoice {
+	margin-left: 25px;
+	padding: 10px 40px 10px 0;
+}
+
+.popup div.pchoice select {
+	float: right;
+}
+
+.popup_wrapper .popup .title {
+	font-size: 18px;
+	color: #444;
+	line-height: 64px;
+	padding: 0 20px;
+	margin-bottom: 10px;
+}
+.popup_wrapper .popup p {
+	font-size: 16px;
+	color: #777;
+	line-height: 32px;
+	padding: 0 20px;
+}
+.popup_wrapper .popup .buttons button {
+	font-family: 'Roboto', sans-serif;
+	font-size: 14px;
+	font-weight: 700;
+	color: #777;
+	line-height: 36px;
+	padding: 0 10px;
+	margin: 20px 20px 20px 0;
+	border: 0;
+	border-radius: 3px;
+	background: none;
+	float: right;
+	cursor: pointer;
+	outline: 0;
+}
+.popup_wrapper .popup .buttons button.help {
+	float: left;
+}
+.popup_wrapper .popup .buttons button:hover {
+	background: #eee;
+}
+.popup_wrapper .popup .buttons button:active {
+	background: #ddd;
+}
+.popup_wrapper .popup .buttons button.ok {
+	color: #176299;
+}
+.popup_wrapper .popup .buttons button.no {
+	color: #ff0000;
+}
+</style>

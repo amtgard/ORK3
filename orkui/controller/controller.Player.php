@@ -6,6 +6,7 @@ class Controller_Player extends Controller {
 		parent::__construct($call, $id);
 
 		$this->load_model('Park');
+		$this->load_model('Pronoun');
 		$this->load_model('Award');
 		$this->load_model('Reports');
 		$params = explode('/',$id);
@@ -79,6 +80,7 @@ class Controller_Player extends Controller {
 								'GiveName' =>  $this->request->Player_index->GivenName,
 								'Surname' =>  $this->request->Player_index->Surname,
 								'Persona' =>  $this->request->Player_index->Persona,
+								'PronounId' =>  $this->request->Player_index->PronounId,
 								'UserName' =>  $this->request->Player_index->UserName,
 								'Password' =>  $this->request->Player_index->Password==$this->request->Player_index->PasswordAgain?$this->request->Player_index->Password:null,
 								'Email' =>  $this->request->Player_index->Email,
@@ -169,6 +171,7 @@ class Controller_Player extends Controller {
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
+		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id, 1, true);

@@ -1,0 +1,12 @@
+ALTER TABLE
+    `ork_officer`
+MODIFY COLUMN
+    `role` enum(
+        'Monarch','Regent','Prime Minister','Champion','GMR'
+    )
+NOT NULL AFTER `mundane_id`;
+
+INSERT INTO ork_officer  (kingdom_id, park_id, role)
+	SELECT oo2.kingdom_id, oo2.park_id, 'GMR'
+	FROM ork_officer oo2
+	WHERE oo2.role = 'Monarch';

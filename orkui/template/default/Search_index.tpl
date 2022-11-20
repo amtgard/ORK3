@@ -9,7 +9,7 @@
 				Action: 'Search/Player',
 				<?=valid_id($KingdomId)?"kingdom_id: $KingdomId,\n":"\n" ?>
 				<?=valid_id($ParkId)?"park_id: $ParkId,\n":"\n" ?>
-				search: (request!=null?request.term:''),
+				search: (request!=null?request.term.trim():''),
 				type: 'all',
 				limit: 25
 			},
