@@ -12,7 +12,7 @@
 				park_id: park_id,
 				unit_id: unit_id,
 				mundane_id: mundane_id,
-				name: (request!=null?request.term:''),
+				name: (request!=null?request.term.trim():''),
 				limit: 20
 			},
 			function( data ) {
