@@ -10,7 +10,7 @@
 				kingdom_id: kingdom_id,
 				park_id: park_id,
 				mundane_id: mundane_id,
-				name: (request!=null?request.term:''),
+				name: (request!=null?request.term.trim():''),
 				limit: 15
 			},
 			function( data ) {

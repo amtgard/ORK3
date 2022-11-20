@@ -7,8 +7,10 @@ class Player extends Ork3 {
 		$this->mundane = new yapo($this->db, DB_PREFIX . 'mundane');
 		$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
 		$this->dues = new yapo($this->db, DB_PREFIX . 'dues');
+		$this->pronoun = new yapo($this->db, DB_PREFIX . 'pronoun');
 		$this->load_model('Kingdom');
 		$this->load_model('Park');
+		$this->load_model('Pronoun');
 	}
 
     public function AddOneShotFaceImage($request) {
@@ -201,12 +203,24 @@ class Player extends Ork3 {
 				return strtotime($a['DuesUntil']) - strtotime($b['DuesUntil']);
 			});
 			$old_dues_through = (!empty($dues)) ? $dues[sizeof($dues)-1]['DuesUntil']: '';
+			$this->pronoun->clear();
+			$this->pronoun->pronoun_id = $this->mundane->pronoun_id;
+			$this->pronoun->find();
+			$pronountext = (!empty($this->pronoun->subject)) ? $this->pronoun->subject . '[' . $this->pronoun->object . ']' : '';
+			$pronouncustomArr = (!empty($this->mundane->pronoun_custom) && json_decode($this->mundane->pronoun_custom)) ? $this->Pronoun->fetch_custom_pronoun_display($this->mundane->pronoun_custom) : false;
+			//$pronouncustomtext = json_encode($pronouncustomArr);
+			$pronouncustomtext = (!empty($pronouncustomArr)) ? implode('/', $pronouncustomArr['subjective']) . ' [' . implode('/', $pronouncustomArr['objective']) . ' ' . implode('/', $pronouncustomArr['possessive']) . ' ' . implode('/', $pronouncustomArr['possessivepronoun']) . ' ' . implode('/', $pronouncustomArr['reflexive']) . ']' : '';
+
 			$response['Player'] = array(
 					'MundaneId' => $this->mundane->mundane_id,
 					'GivenName' => $fetchprivate?"":$this->mundane->given_name,
 					'Surname' => $fetchprivate?"":$this->mundane->surname,
 					'OtherName' => $fetchprivate?"":$this->mundane->other_name,
 					'UserName' => $this->mundane->username,
+					'PronounId' => $this->mundane->pronoun_id,
+					'PronounCustom' => $this->mundane->pronoun_custom,
+					'PronounText' => $pronountext,
+					'PronounCustomText' => $pronouncustomtext,
 					'Persona' => $this->mundane->persona,
 					'Suspended' => $this->mundane->suspended,
 					'SuspendedAt' => $this->mundane->suspended_at,
@@ -788,6 +802,8 @@ class Player extends Ork3 {
 				$this->mundane->other_name = is_null($request['OtherName'])?$this->mundane->other_name:$request['OtherName'];
 				$this->mundane->username = is_null($request['UserName'])?$this->mundane->username:$request['UserName'];
 				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:$request['Persona'];
+				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
+				$this->mundane->pronoun_custom = is_null($request['PronounCustom'])?$this->mundane->pronoun_custom:$request['PronounCustom'];
 
 				// reeve or corpora qual changes
 				// TODO: add error messaging
