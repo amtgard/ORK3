@@ -812,7 +812,6 @@ var buttons = [
 <?php $pronoun_custom_arr = isset($Admin_player)? json_decode($Admin_player['PronounCustom']) : json_decode($Player['PronounCustom']);
 $curr_custom_pronoun_txt = $Player['PronounCustomText'];
  ?>
- console.log('1', '<?php echo $Admin_player; ?>', '<?php echo json_encode($Player); ?>');
 
 var pnform = `
 	<div class="pchoice">
@@ -908,7 +907,6 @@ $('#pronoun-picker').on('click', function (e) {
 			$('#pselect_display').text(blip + ' [' + blip2 + ' ' + blip3 + ' ' + blip5 + ' ' + blip5 + ']');
 			$('#pronoun_custom').val(JSON.stringify({ s: $('select[name=p_subject]').val(), o: $('select[name=p_object]').val(), p: $('select[name=p_possessive]').val(), pp: $('select[name=p_possessivepronoun]').val(), r: $('select[name=p_reflexive]').val()}))
 		}
-		console.log('pform', $('select[name=p_subject]').val(), $('select[name=p_object]').val());
 		if(r == "yolo") {
 			var whut = new popup([{text: "Close"}], "Need help?", "<p>If you don't see your pronouns, let us know on the <a href=\"https://www.facebook.com/groups/orkupdates\" target=\"_blank\">ORK Facebook Group</a></p>");
 			whut.draggable(true);
