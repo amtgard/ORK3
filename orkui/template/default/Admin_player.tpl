@@ -846,7 +846,7 @@ var pnform = `
 			<option value="">Choose...</option>
 			<?php if (!empty($PronounList)): ?>
 				<?php foreach($PronounList['possessive'] as $s): ?>
-					<?php $selected = (!empty($pronoun_custom_arr) && $pronoun_custom_arr->p == $s['value']) ? 'selected' : ''; ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && ( $pronoun_custom_arr->p == $s['value']) || (is_array($pronoun_custom_arr->p) &&  in_array($s['value'], $pronoun_custom_arr->p))) ? 'selected' : ''; ?>
 					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
 				<?php endforeach; ?>
 			<?php endif ?>
@@ -859,7 +859,7 @@ var pnform = `
 			<option value="">Choose...</option>
 			<?php if (!empty($PronounList)): ?>
 				<?php foreach($PronounList['possessivepronoun'] as $s): ?>
-					<?php $selected = (!empty($pronoun_custom_arr) && $pronoun_custom_arr->pp == $s['value']) ? 'selected' : ''; ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && ( $pronoun_custom_arr->pp == $s['value']) || (is_array($pronoun_custom_arr->pp) &&  in_array($s['value'], $pronoun_custom_arr->pp))) ? 'selected' : ''; ?>
 					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
 				<?php endforeach; ?>
 			<?php endif ?>
@@ -872,7 +872,7 @@ var pnform = `
 			<option value="">Choose...</option>
 			<?php if (!empty($PronounList)): ?>
 				<?php foreach($PronounList['reflexive'] as $s): ?>
-					<?php $selected = (!empty($pronoun_custom_arr) && $pronoun_custom_arr->r == $s['value']) ? 'selected' : ''; ?>
+					<?php $selected = (!empty($pronoun_custom_arr) && ( $pronoun_custom_arr->r == $s['value']) || (is_array($pronoun_custom_arr->r) &&  in_array($s['value'], $pronoun_custom_arr->r))) ? 'selected' : ''; ?>
 					<option value="<?php echo $s['value']; ?>" <?php echo $selected; ?>><?php echo $s['display']; ?></option>
 				<?php endforeach; ?>
 			<?php endif ?>
@@ -899,13 +899,26 @@ $('#pronoun-picker').on('click', function (e) {
 			var blip3 = '';
 			var blip4 = '';
 			var blip5 = '';
-			$('select[name=p_subject] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip += (i != 0) ? '/' + $(el).text() : $(el).text()});
-			$('select[name=p_object] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip2 += (i != 0) ? '/' + $(el).text() : $(el).text()})
-			$('select[name=p_possessive] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip3 += (i != 0) ? '/' + $(el).text() : $(el).text()})
-			$('select[name=p_possessivepronoun] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip4 += (i != 0) ? '/' + $(el).text() : $(el).text()})
-			$('select[name=p_reflexive] option:selected').each(function(i, el) {if(!$(el).val()){return;} blip5 += (i != 0) ? '/' + $(el).text() : $(el).text()})
-			$('#pselect_display').text(blip + ' [' + blip2 + ' ' + blip3 + ' ' + blip5 + ' ' + blip5 + ']');
-			$('#pronoun_custom').val(JSON.stringify({ s: $('select[name=p_subject]').val(), o: $('select[name=p_object]').val(), p: $('select[name=p_possessive]').val(), pp: $('select[name=p_possessivepronoun]').val(), r: $('select[name=p_reflexive]').val()}))
+			var anySelected = false;
+			$('select[name=p_subject] option:selected').each(function(i, el) {if(!$(el).val()){return;}anySelected = true;blip += (i != 0) ? '/' + $(el).text() : $(el).text()});
+			$('select[name=p_object] option:selected').each(function(i, el) {if(!$(el).val()){return;} anySelected = true; blip2 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_possessive] option:selected').each(function(i, el) {if(!$(el).val()){return;} anySelected = true; blip3 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_possessivepronoun] option:selected').each(function(i, el) {if(!$(el).val()){return;} anySelected = true; blip4 += (i != 0) ? '/' + $(el).text() : $(el).text()})
+			$('select[name=p_reflexive] option:selected').each(function(i, el) {if(!$(el).val()){return;}anySelected = true;blip5 += (i != 0) ? '/' + $(el).text() : $(el).text()});
+			if (anySelected) {
+				$('#pselect_display').text(blip + ' [' + blip2 + ' ' + blip3 + ' ' + blip4 + ' ' + blip5 + ']');
+				$('#pronoun_custom').val(JSON.stringify(
+					{
+						s: $('select[name=p_subject]').val() || ['0'],
+						o: $('select[name=p_object]').val() || ['0'],
+						p: $('select[name=p_possessive]').val() || ['0'],
+						pp: $('select[name=p_possessivepronoun]').val() || ['0'],
+						r: $('select[name=p_reflexive]').val() || ['0']
+					}));
+			} else {
+				$('#pselect_display').text("");
+				$('#pronoun_custom').val("");
+			}
 		}
 		if(r == "yolo") {
 			var whut = new popup([{text: "Close"}], "Need help?", "<p>If you don't see your pronouns, let us know on the <a href=\"https://www.facebook.com/groups/orkupdates\" target=\"_blank\">ORK Facebook Group</a></p>");
