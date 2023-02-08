@@ -253,7 +253,7 @@ class Player extends Ork3 {
 			if ($unit['Status']['Status'] != 0) {
 				$response['Player']['Company'] = "";
 			} else {
-				$response['Player']['Company'] = $unit['Unit']['Name'];
+				$response['Player']['Company'] = $unit['Units'];
 			}
 		} else {
 			$response['Status'] = InvalidParameter();
