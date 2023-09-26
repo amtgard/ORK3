@@ -2,27 +2,21 @@
 
 class Ghettocache {
 
+	public $memcache;
+
 	function __construct() {
-		
+		$this->memcache = new Memcached();
+		$this->memcache->addServer('localhost', 11211);
 	}
 	
 	function get($call, $key, $lifetime) {
-		$stat = @stat(DIR_CACHE . "$call.$key.cache");
-		if ($stat === false)
-			return false;
-		if ($stat['mtime'] < time() - $lifetime)
-			return false;
-		
-		logtrace("fetch ghettocache: " . DIR_CACHE . "$call.$key.cache", $content);
-		return json_decode(file_get_contents(DIR_CACHE . "$call.$key.cache"), true);
+		$cached = $this->memcache->get("$call.$key");
+		logtrace("fetch memcached: $call.$key.cache", $content);
+		return $cached;
 	}
 	
 	function cache($call, $key, $content) {
-		$cache = json_encode(utf8_encode_recursive($content), !JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE);
-		if (json_last_error() != JSON_ERROR_NONE)
-			die(json_last_error_msg());
-		file_put_contents(DIR_CACHE . "$call.$key.cache", $cache, LOCK_EX);
-		logtrace("put ghettocache: " . DIR_CACHE . "$call.$key.cache", $content);
+		$this->memcache->set("$call.$key", $content);
 		return $content;
 	}
 	
