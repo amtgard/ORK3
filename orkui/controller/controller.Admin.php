@@ -349,6 +349,8 @@ class Controller_Admin extends Controller {
 					$officers['Regent'] = array( 'MundaneId' =>$this->request->Admin_setofficers->RegentId, 'Role' => 'Regent' );
 				if (valid_id($this->request->Admin_setofficers->ChampionId))
 					$officers['Champion'] = array( 'MundaneId' =>$this->request->Admin_setofficers->ChampionId, 'Role' => 'Champion' );
+				if (valid_id($this->request->Admin_setofficers->GMRId))
+					$officers['GMR'] = array( 'MundaneId' =>$this->request->Admin_setofficers->GMRId, 'Role' => 'GMR' );
 				$r = $this->Kingdom->set_officers($this->session->token, $this->session->kingdom_id, $officers);
 				$error = false;
 				foreach ($r as $k => $Status) {
@@ -394,6 +396,8 @@ class Controller_Admin extends Controller {
 					$officers['Regent'] = array( 'MundaneId' =>$this->request->Admin_setofficers->RegentId, 'Role' => 'Regent' );
 				if (valid_id($this->request->Admin_setofficers->ChampionId))
 					$officers['Champion'] = array( 'MundaneId' =>$this->request->Admin_setofficers->ChampionId, 'Role' => 'Champion' );
+				if (valid_id($this->request->Admin_setofficers->GMRId))
+					$officers['GMR'] = array( 'MundaneId' =>$this->request->Admin_setofficers->GMRId, 'Role' => 'GMR' );
 				$r = $this->Park->set_officers($this->session->token, $this->session->park_id, $officers);
 				$error = false;
 				foreach ($r as $k => $Status) {
@@ -643,6 +647,7 @@ class Controller_Admin extends Controller {
 		$this->load_model('Player');
 		$this->load_model('Award');
 		$this->load_model('Unit');
+		$this->load_model('Pronoun');
 
 		$params = explode('/',$id);
 		$id = $params[0];
@@ -760,6 +765,8 @@ class Controller_Admin extends Controller {
 									'GivenName' =>  html_decode($this->request->Admin_player->GivenName),
 									'Surname' =>  html_decode($this->request->Admin_player->Surname),
 									'Persona' =>  html_decode($this->request->Admin_player->Persona),
+									'PronounId' =>  $this->request->Admin_player->PronounId,
+									'PronounCustom' =>  $this->request->Admin_player->PronounCustom,
 									'UserName' =>  html_decode($this->request->Admin_player->UserName),
 									'Password' =>  $this->request->Admin_player->Password==$this->request->Admin_player->PasswordAgain?$this->request->Admin_player->Password:null,
 									'Email' =>  html_decode($this->request->Admin_player->Email),
@@ -893,6 +900,8 @@ class Controller_Admin extends Controller {
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
+		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
+		$this->data['PronounList'] = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id);
