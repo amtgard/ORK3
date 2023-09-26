@@ -249,11 +249,11 @@ class Player extends Ork3 {
 					'ParkMemberSince' => $this->mundane->park_member_since,
 					'DuesPaidList' => $dues
 				);
-			$unit = Ork3::$Lib->unit->GetUnit(array( 'UnitId' => $response['Player']['CompanyId'] ));
+			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
 				$response['Player']['Company'] = "";
 			} else {
-				$response['Player']['Company'] = $unit['Unit']['Name'];
+				$response['Player']['Company'] = $unit['Units'];
 			}
 		} else {
 			$response['Status'] = InvalidParameter();
