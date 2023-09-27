@@ -92,10 +92,6 @@
 			<span>Restricted:</span>
 			<span><input type='checkbox' value='Restricted' <?=(isset($Admin_player)?$Admin_player['Restricted']:$Player['Restricted'])==1?"Checked":"" ?> name='Restricted' id='Restricted' /></span>
 		</div>
-		<div>
-			<span>Company:</span>
-			<span class='form-informational-field'><?=isset($Admin_player)?$Admin_player['Company']:$Player['Company'] ?></span>
-		</div>
     <!--
 		<div>
 			<span>Penalty Box:</span>
@@ -492,6 +488,7 @@
 		});
 		$( "#GivenBy" ).autocomplete({
 			source: function( request, response ) {
+				park_id = $('#ParkId').val();
 				$.getJSON(
 					"<?=HTTP_SERVICE ?>Search/SearchService.php",
 					{
