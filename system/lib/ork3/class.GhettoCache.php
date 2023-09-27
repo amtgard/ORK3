@@ -3,20 +3,38 @@
 class Ghettocache {
 
 	public $memcache;
+	public $lifetimes;
+	public $prefix;
 
 	function __construct() {
 		$this->memcache = new Memcached();
 		$this->memcache->addServer('localhost', 11211);
+		$this->lifetime = array();
+		$this->prefix = $_SERVER[ 'HTTP_HOST' ];
 	}
 	
 	function get($call, $key, $lifetime) {
-		$cached = $this->memcache->get("$call.$key");
-		logtrace("fetch memcached: $call.$key.cache", $content);
+		$cached = $this->memcache->get("{$this->prefix}.$call.$key");
+		logtrace("fetch memcached: {$this->prefix}.$call.$key", $cached);
+
+		/**
+		 * OK, so the lifetime parameter in GhettoCache is inverted, but the call pattern looks like this:
+		 * 
+		 * if (cache.get) then return cache;
+		 * cache.cache(content);
+		 * return content;
+		 * 
+		 * So, during the call to cache() we've already seen the key and the lifetime that's requested ...
+		 * 
+		 */
+		$this->lifetime["{$this->prefix}.$call.$key"] = $lifetime;
 		return $cached;
 	}
 	
 	function cache($call, $key, $content) {
-		$this->memcache->set("$call.$key", $content);
+		$expiration = $this->lifetime["{$this->prefix}.$call.$key"] ? $this->lifetime["{$this->prefix}.$call.$key"] : 300;
+		$this->memcache->set("{$this->prefix}.$call.$key", $content, $expiration);
+		logtrace("memcached expiration {$this->prefix}.$call.$key: ", $expiration);
 		return $content;
 	}
 	
