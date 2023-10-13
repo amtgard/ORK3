@@ -1,6 +1,6 @@
 <div class='info-container'>
 	<h3><?=$this->__session->park_name; ?></h3>
-	<?=$park_info['ParkInfo']['HasHeraldry']==1?"<img src='{$park_info[Heraldry][Url]}' class='heraldry-img' />":"" ?>
+	<?=$park_info['ParkInfo']['HasHeraldry']==1?"<img src='{$park_info["Heraldry"]["Url"]}' class='heraldry-img' />":"" ?>
 <?php if (trimlen($park_info['ParkInfo']['Description']) > 0) : ?>
     <h3>Description</h3>
     <div style='max-width: 600px;'><?=$park_info['ParkInfo']['Description'] ?></div>

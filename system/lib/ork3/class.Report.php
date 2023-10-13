@@ -971,9 +971,9 @@ class Report  extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
 
-		if (strlen($request['KingdomAverageWeeks']) == 0) $request['KingdomAverageWeeks'] = 26;
-		if (strlen($request['ParkAttendanceWithin']) == 0) $request['ParkAttendanceWithin'] = 4;
-		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
+		if (strlen($request['KingdomAverageWeeks'] ?? '') == 0) $request['KingdomAverageWeeks'] = 26;
+		if (strlen($request['ParkAttendanceWithin'] ?? '') == 0) $request['ParkAttendanceWithin'] = 4;
+		if (strlen($request['ReportFromDate'] ?? '') == 0) $request['ReportFromDate'] = 'curdate()';
 		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(activeparks.parkcount,0) active_parks
 					FROM `" . DB_PREFIX . "kingdom` k
 					left join
@@ -1014,11 +1014,11 @@ class Report  extends Ork3 {
 		logtrace('Report: GetActiveKingdomsSummary', array($request, $sql));
 		$r = $this->db->query($sql);
 		$report = array();
-		do {
+		while ($r->next()) {
 			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id,
 									'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id,
 									'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'Participation' => $r->active_parks );
-		} while ($r->next());
+		}
 		$response = array(
 			'Status' => Success(),
 			'ActiveKingdomsSummaryList' => $report

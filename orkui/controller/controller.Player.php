@@ -36,7 +36,7 @@ class Controller_Player extends Controller {
 	
 	}
 	
-	public function index($id) {
+	public function index($id = null) {
 		$this->load_model('Unit');
 		
 		$params = explode('/',$id);

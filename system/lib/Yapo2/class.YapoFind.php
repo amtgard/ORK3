@@ -33,7 +33,7 @@ class YapoFind extends YapoAction {
             
         
 		
-		return array($sql . $wsql . $osql . $lsql, $fields);
+		return array($sql . ($wsql ?? '') . ($osql ?? '') . ($lsql ?? ''), $fields);
 	}
 }
 

@@ -110,10 +110,8 @@ class Authorization  extends Ork3 {
 		$this->log->Write('Credential', 0, LOG_EDIT, array($request, $_SESSION, $_SERVER));
 		$response = array();
 		$this->mundane->clear();
-		$this->mundane->username = $request['UserName'];
-		$this->mundane->username_term = 'like';
-		$this->mundane->email = $request['Email'];
-		$this->mundane->email_term = 'like';
+		$this->mundane->like('username', $request['UserName']);
+		$this->mundane->like('email', $request['Email']);
 		if ($this->mundane->find()) {
 			$password = substr(md5(microtime()),2,11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
@@ -306,8 +304,7 @@ class Authorization  extends Ork3 {
 		$this->mundane->clear();
 		
 		if ($request['Token'] == null) {
-			$this->mundane->username = $request['UserName'];
-			$this->mundane->username_term = 'like';
+			$this->mundane->like('username', $request['UserName']);
 			if ($this->mundane->find()) {
 				// Harmonizes old password style with new password style
 				if (Authorization::KeyExists($this->mundane->password_salt, trim($request['Password']))) {

@@ -8,14 +8,14 @@ ini_set( 'display_errors', 'false' );
 
 // HTTP
 define( 'ORK_DIST_NAME', 'ork');
-define( 'HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkservice/'); 
-define( 'HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
-define( 'HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/' . ORK_DIST_NAME . '/orkui/'); 
+define( 'HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkservice/'); 
+define( 'HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 
+define( 'HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 
 define( 'HTTP_TEMPLATE', HTTP_UI . 'template/' );
-define( 'HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST']. '/' . ORK_DIST_NAME . '/assets/');
-define( 'HTTP_WAIVERS', 'http://amtgard.com/ork/assets/waivers/' );
-define( 'HTTP_HERALDRY', 'http://amtgard.com/ork/assets/heraldry/' );
-define( 'HTTP_PLAYER_IMAGE', 'http://amtgard.com/ork/assets/players/' );
+define( 'HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/');
+define( 'HTTP_WAIVERS', 'http://ork.amtgard.com/assets/waivers/' );
+define( 'HTTP_HERALDRY', 'http://ork.amtgard.com/assets/heraldry/' );
+define( 'HTTP_PLAYER_IMAGE', 'http://ork.amtgard.com/assets/players/' );
 define( 'HTTP_PLAYER_HERALDRY', HTTP_HERALDRY . 'player/' );
 define( 'HTTP_PARK_HERALDRY', HTTP_HERALDRY . 'park/' );
 define( 'HTTP_KINGDOM_HERALDRY', HTTP_HERALDRY . 'kingdom/' );
@@ -63,7 +63,7 @@ define( 'DIR_MODEL', DIR_UI . 'model/' );
 
 // DB
 define( 'DB_DRIVER', 'mysql' );
-define( 'DB_HOSTNAME', 'mysql' );
+define( 'DB_HOSTNAME', 'ork3-php8-db' );
 define( 'DB_USERNAME', 'ork' );
 define( 'DB_PASSWORD', 'secret' );
 define( 'DB_DATABASE', 'ork' );
@@ -85,9 +85,7 @@ define( 'GOOGLE_MAPS_API_KEY', '' );
 
 // INCLUDE
 require_once( DIR_LIB . 'mail.php' );
-require_once( DIR_LIB . 'yapo/class.yapo_mysql.php' );
-require_once( DIR_LIB . 'yapo/class.yapo.php' );
-require_once( DIR_LIB . 'yapo/class.yapo_result.php' );
+require_once( DIR_LIB . 'Yapo2/class.Yapo.php' );
 
 require_once( DIR_SYSTEMLIB . 'class.Log.php' );
 

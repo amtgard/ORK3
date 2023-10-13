@@ -28,7 +28,7 @@ class Controller_Attendance extends Controller {
 	
 	}
 	
-	public function index() {
+	public function index($action = null) {
 	
 	}
 	

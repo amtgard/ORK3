@@ -298,7 +298,7 @@
 						if (valid_id($detail['EventId'])) {
 							echo $detail['EventName'];
 						} else {
-							echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ',' . $detail['KingdomName'] : $detail[KingdomName];
+							echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ',' . $detail['KingdomName'] : $detail['KingdomName'];
 						}
 					?>
 				</td>
@@ -339,7 +339,7 @@
 						if (valid_id($detail['EventId'])) {
 							echo $detail['EventName'];
 						} else {
-							echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ',' . $detail['KingdomName'] : $detail[KingdomName];
+							echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ',' . $detail['KingdomName'] : $detail['KingdomName'];
 						}
 					?>
 				</td>

@@ -177,8 +177,7 @@ class Game extends Ork3 {
 	private function game_security($game_id, $game_code) {
 		$this->game->clear();
 		$this->game->game_id = $game_id;
-		$this->game->code = $game_code;
-		$this->game->code_term = 'like';
+		$this->game->like('code', $game_code);
 		if ($this->game->find() && $this->game->game_id == $game_id)
 			return true;
 		return false;

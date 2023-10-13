@@ -46,7 +46,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$report['KingdomId']; ?>&kingdom_name=<?=$report['KingdomName']; ?>";'>
 				<td>
 				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>'></div>
-				    <?=stripslashes($report['KingdomName']); ?>
+				    <?=stripslashes($report['KingdomName'] ?? ''); ?>
 				</td>
 				<td class='data-column'><?=$report['ParkCount']; ?></td>
 				<td class='data-column'><?=$report['Participation']; ?>/<?=$report['ParkCount']; ?></td>
@@ -171,7 +171,7 @@
 				<td><?=$tournament['KingdomName'] ?></a></td>
 				<td><?=$tournament['ParkName'] ?></a></td>
 				<td><?=$tournament['EventName'] ?></a></td>
-				<td><?=date("M. j, Y", strtotime($tournament['DateTime'])) ?></td>
+				<td><?=date("M. j, Y", strtotime($tournament['DateTime'] ?? '')) ?></td>
 			</tr>
 <?php endforeach; ?>
 		</tbody>

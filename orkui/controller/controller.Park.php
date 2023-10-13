@@ -40,7 +40,7 @@ class Controller_Park extends Controller
 		$this->data[ 'menu' ][ 'park' ] = [ 'url' => UIR . 'Park/index/' . $this->session->park_id, 'display' => $this->session->park_name ];
 	}
 
-	public function index( $park_id )
+	public function index( $park_id = null )
 	{
 		$this->load_model( 'Reports' );
 		$this->data[ 'event_summary' ] = $this->Park->get_park_events( $park_id );

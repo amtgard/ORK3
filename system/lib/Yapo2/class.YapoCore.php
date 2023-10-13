@@ -73,7 +73,7 @@ class YapoCore {
 	}
 	
 	function Comparator($field, $comparator, $value) {
-		if (!is_array($this->__field_actions[$field]))
+		if (isset($this->__field_actions[$field]) && !is_array($this->__field_actions[$field]))
 			$this->__field_actions[$field] = array();
 		$this->__field_actions[$field][$comparator] = $value;
 		if (Yapo::SET == $comparator && isset($this->__field_actions[$field][Yapo::EQUALS]) && $this->__field_actions[$field][Yapo::EQUALS] != $this->__field_actions[$field][Yapo::SET]) {

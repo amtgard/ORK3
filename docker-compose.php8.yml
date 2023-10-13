@@ -1,19 +1,21 @@
 version: '2'
 services:
-  orkapp:
+  ork3app:
     build:
       context: ./
-      dockerfile: php.Dockerfile
+      dockerfile: Dockerfile.nginx-php8
     ports:
-     - 18080:80
+     - 19080:80
     working_dir: /var/www
     volumes:
-      - ./:/var/www/html/ork/
+      - .:/var/www/ork.amtgard.com
     env_file: .dev.env
-    container_name: ork-app
+    environment:
+      - ENVIRONMENT=DEV
+    container_name: ork3-php8-app
     networks:
-      - orknet
-  orkdb:
+      - ork3-php8-net
+  ork3db:
     image: mariadb:latest
     restart: always
     environment:
@@ -26,19 +28,19 @@ services:
       MARIADB_ROOT_PASSWORD: 'root'
     ports:
       # <Port exposed> : < MySQL Port running inside container>
-      - '23306:3306'
+      - '24306:3306'
     expose:
       # Opens port 3306 on the container
       - '3306'
       # Where our data will be persisted
     volumes:
       - data-db:/var/lib/mysql
-    container_name: ork-db
+    container_name: ork3-php8-db
     networks:
-      - orknet
+      - ork3-php8-net
 
 volumes:
   data-db: {}
 
 networks:
-  orknet:
+  ork3-php8-net:

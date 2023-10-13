@@ -29,7 +29,7 @@ You can now view the site at http://servername/ork/orkui/.
 ### Using Docker
 A docker-compose file is setup for quickly getting the environment running locally. If there are other environments using port 80 change the exposed port in the docker-compose file to keep from conflicting. Same goes for 3306 for the database. Run the following Docker command from the cloned directory.
 ```
-docker-compose up
+docker-compose up -d
 ```
 Once this completes and MySql is waiting on a socket there are some setup tasks required. In another window issue the following commands:
 ```
@@ -54,3 +54,10 @@ exit
 This was needed to allow the database to accept certain values sent by the PHP APIs.
 
 Navigate to http://localhost/ork/orkui and see the contents of the backup that was restored.  Login with your ORK account and password provided you have recently setup your password before the backup database was created on the production server.
+
+### Using Docker 8.1 (Under Development)
+
+```
+docker build -t amtgard/ork3/php8.1-nginx:latest -f Dockerfile.nginx-php8 .
+docker run -dit --name ork3 -p 30080:80 -v .:/var/www/ork.amtgard.com -e ENVIRONMENT=DEV amtgard/ork3/php8.1-nginx:latest
+```

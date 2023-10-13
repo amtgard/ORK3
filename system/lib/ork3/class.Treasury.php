@@ -186,8 +186,7 @@ class Treasury extends Ork3 {
 		$config->clear();
 		$config->type = 'Kingdom';
 		$config->id = $id;
-		$config->key = "'DuesPeriod','DuesAmount','KingdomDuesTake'";
-		$config->key_term_with = 'IN';
+		$config->in('key', "'DuesPeriod','DuesAmount','KingdomDuesTake'");
 		if ($config->find()) {
 			return json_decode($config->value);
 		} else {

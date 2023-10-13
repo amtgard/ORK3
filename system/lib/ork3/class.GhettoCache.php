@@ -32,7 +32,7 @@ class Ghettocache {
 	}
 	
 	function cache($call, $key, $content) {
-		$expiration = $this->lifetime["{$this->prefix}.$call.$key"] ? $this->lifetime["{$this->prefix}.$call.$key"] : 300;
+		$expiration = isset($this->lifetime["{$this->prefix}.$call.$key"]) ? $this->lifetime["{$this->prefix}.$call.$key"] : 300;
 		$this->memcache->set("{$this->prefix}.$call.$key", $content, $expiration);
 		logtrace("memcached expiration {$this->prefix}.$call.$key: ", $expiration);
 		return $content;

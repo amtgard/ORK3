@@ -77,7 +77,7 @@ class YapoMysql extends YapoDb {
 		$cnt = 3;
 		do {
 			$Query = $this->DBH->prepare($sql);
-			if (count($this->Data) > 0)
+			if (is_countable($this->Data) && count($this->Data) > 0)
 				$Query->execute($this->Data);
 			else
 				$Query->execute();

@@ -832,10 +832,10 @@ class Player extends Ork3 {
 					logtrace("No password update", $request['Password']);
 				}
 				logtrace("Mundane DB 2", $this->mundane);
-				$this->mundane->restricted = is_null($request['Restricted'])?$this->mundane->restricted:$request['Restricted']?1:0;
+				$this->mundane->restricted = is_null($request['Restricted']) ? $this->mundane->restricted : ($request['Restricted'] ? 1 : 0);
 
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
-    				$this->mundane->active = is_null($request['Active'])?$this->mundane->restricted:$request['Active']?1:0;
+    				$this->mundane->active = is_null($request['Active']) ? $this->mundane->restricted : ($request['Active']?1:0);
 				}
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
 					$this->mundane->park_member_since = is_null($request['ParkMemberSince']) ? $this->mundane->park_member_since : $request['ParkMemberSince'];
@@ -1301,9 +1301,9 @@ class Player extends Ork3 {
 				$this->dues->revoked = 0;
 			}
 			if (!empty($request['Active'])) {
+				// ... wtf
 				$this->dues->dues_until_conjunction = ' AND ( `dues_for_life` = 1 OR ';
 				$this->dues->dues_until_term = "> '" . date('Y-m-d') . "') " . ' AND "" = ' ;
-				//$this->dues->dues_until_term_with = ' herehowaboutthis ' ;
 			}
             $dues = array();
 			$now = time();

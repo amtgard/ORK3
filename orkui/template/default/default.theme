@@ -57,7 +57,7 @@
 			<div id='navmenu'>
 				<ul>
 	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
+					<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
 	<?php endforeach; ?>
 				</ul>
 			</div>
@@ -84,7 +84,7 @@
 				<ul>
           <li><a href='https://www.facebook.com/mORKmobile/posts/2275859462673190'>Get the ORK Mobile!</a></li>
 	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item[url] ?>'><?=$item[display] ?></a></li>
+					<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a></li>
 	<?php endforeach; ?>
 	<?php if ($this->__session->token == null) : ?>
 					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
