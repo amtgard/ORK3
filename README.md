@@ -58,6 +58,11 @@ Navigate to http://localhost/ork/orkui and see the contents of the backup that w
 ### Using Docker 8.1 (Under Development)
 
 ```
-docker build -t amtgard/ork3/php8.1-nginx:latest -f Dockerfile.nginx-php8 .
-docker run -dit --name ork3 -p 30080:80 -v .:/var/www/ork.amtgard.com -e ENVIRONMENT=DEV amtgard/ork3/php8.1-nginx:latest
+docker-compose -f docker-compose.php8.yml up
 ```
+
+You can access from local at: `http://localhost:19080/orkui/`
+
+This may redirect to port `80`, you may need to add the `19080` port.
+
+On first run, you will need to import a database backup to configure the database.
