@@ -1,6 +1,3 @@
-<?php
-
-?>
 <style type='text/css'>
 	@media (max-width: 425px) {
 		.kingdom-summary td:nth-child(n+3), .kingdom-summary th:nth-child(n+3) {

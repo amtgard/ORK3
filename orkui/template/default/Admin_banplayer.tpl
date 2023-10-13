@@ -100,7 +100,7 @@
 	<h3>Penalty Box</h3>
 	<ul class='triple'>
 <?php foreach ($banned_players as $k => $info): ?>
-		<li><?="$info[Persona] (".($info['Displayable']==0?"<span class='restricted-player-display'>Restricted</span>":"$info[Surname], $info[GivenName]").")" ?></li>
+		<li><?="$info['Persona'] (".($info['Displayable']==0?"<span class='restricted-player-display'>Restricted</span>":"$info['Surname'], $info['GivenName']").")" ?></li>
 <?php endforeach; ?>
 	</ul>
 </div>

@@ -289,7 +289,7 @@
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
 <?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
     		<tr>
-				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
+				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail['Name']]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
 				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
@@ -330,7 +330,7 @@
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
 <?php if (!in_array($detail['OfficerRole'], ['none', null]) || $detail['IsTitle'] == 1) : ?>
     		<tr>
-				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
+				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail['Name']]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
 				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>

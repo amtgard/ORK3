@@ -119,17 +119,17 @@
 				</tr>
 <?php endforeach; ?>
 				<tr>
-					<td><input type='text' value='' name='Title[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='Class[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='MinimumAttendance[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='MinimumCutoff[New]' /></td>
+					<td><input type='text' value='' name='Title["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='Class["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='MinimumAttendance["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='MinimumCutoff["New"]' /></td>
 					<td>
-						<select name='Period[New]'>
+						<select name='Period["New"]'>
 							<option value='month'>Month</option>
 							<option value='week'>Week</option>
 						</select>
 					</td>
-					<td><input type='text' class='numeric-field' name='Length[New]' /></td>
+					<td><input type='text' class='numeric-field' name='Length["New"]' /></td>
 					
 				</tr>
 				<tr>
@@ -180,11 +180,11 @@
 <?php endforeach; ?>
 						</select>
 					</td>
-					<td><input type='text' class='name-field' value='' name='KingdomAwardName[New]' ></td>
-					<td><input type='text' class='numeric-field' value='' name='ReignLimit[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='MonthLimit[New]' /></td>
-					<td><input type='checkbox' value='1' name='IsTitle[New]' /></td>
-					<td><input class='numeric-field' type='text' value='' name='TitleClass[New]' /></td>
+					<td><input type='text' class='name-field' value='' name='KingdomAwardName["New"]' ></td>
+					<td><input type='text' class='numeric-field' value='' name='ReignLimit["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='MonthLimit["New"]' /></td>
+					<td><input type='checkbox' value='1' name='IsTitle["New"]' /></td>
+					<td><input class='numeric-field' type='text' value='' name='TitleClass["New"]' /></td>
 				</tr>
 				<tr>
 					<td colspan=7><input type='submit' value='Update Awards' ?></td>

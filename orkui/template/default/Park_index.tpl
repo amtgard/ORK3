@@ -183,7 +183,7 @@
 		</thead>
 		<tbody>
 <?php foreach ($park_tournaments['Tournaments'] as $k => $tournament) : ?>
-			<tr onClick='window.document.location.href="<?=UIR ?>Tournament/worksheet/<?=$tournament[TournamentId] ?>"'>
+			<tr onClick='window.document.location.href="<?=UIR ?>Tournament/worksheet/<?=$tournament['TournamentId'] ?>"'>
 				<td><?=$tournament['Name'] ?></td>
 				<td><?=$tournament['EventName'] ?></td>
 				<td><?=date("M. j, Y", strtotime($tournament['DateTime'])) ?></td>
