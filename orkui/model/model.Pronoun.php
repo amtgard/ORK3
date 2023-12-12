@@ -19,7 +19,7 @@ class Model_Pronoun extends Model {
             //uasort($pronouns['Pronouns'], array('Model_Pronoun','comparePronounsByName'));
 
 			foreach ($pronouns['Pronouns'] as $k => $pronoun) {
-                $isSelected = (!empty($selected) && $pronoun[PronounId] == $selected) ? ' selected': '';
+                $isSelected = (!empty($selected) && $pronoun['PronounId'] == $selected) ? ' selected': '';
                 $options .= "<option value='$pronoun[PronounId]' $isSelected>$pronoun[Subject] [$pronoun[Object]]</option>";
             }
             return $options;

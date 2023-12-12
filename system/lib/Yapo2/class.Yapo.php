@@ -42,6 +42,10 @@ class Yapo {
 		$this->__Core->Clear();
 	}
 	
+	public function lastSql() {
+		return $this->__LastSql;
+	}
+
 	public function save($all = false) {
 		list($sql, $Data) = $this->__Core->__Save->GenerateSql(array('all'=>$all));
 		$this->__LastSql = $sql;

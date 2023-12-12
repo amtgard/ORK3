@@ -1,5 +1,7 @@
 <?php
 
+if (!isset($server)) return;
+
 if (is_object($server)) {
 
 	$server->wsdl->addComplexType(
