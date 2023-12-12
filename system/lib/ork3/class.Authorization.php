@@ -113,7 +113,6 @@ class Authorization  extends Ork3 {
 		$this->mundane->like('username', $request['UserName']);
 		$this->mundane->like('email', $request['Email']);
 		if ($this->mundane->find()) {
-			print_r($this->mundane);
 			$password = substr(md5(microtime()),2,11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
 			/* Only salt on password change or first password
@@ -126,20 +125,13 @@ class Authorization  extends Ork3 {
 			Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($password), $this->mundane->password_expires, 1);
 			
 			$this->mundane->save();
-			print_r($this->mundane);
-			die();
 			$m = new Mail('smtp', 'smtp.sendgrid.net', 'apikey', SENDGRID_API_KEY, 587);
 			$m->setTo($this->mundane->email);
 			$m->setFrom('ork3@amtgard.com');
 			$m->setSubject('Reset ORK Password (Expires in 24 hours)');
 			$m->setHtml('<h2>ORK Password Reset</h2>We have generated a temporary password that will <b>expire in 24 hours</b>. You will need to log in immediately and reset your password. <p>You can log in with the following link:<p><a rel="nofollow" href="https:' . UIR . 'Login/login&username=' . $request['UserName'] . '&password=' . $password . '">Click here to be logged in temporarily.</a> OR login with this temporary password: ' . $password . '<p>Regards,<p>-ORK 3 Team');
 			$m->setSender('ork3@amtgard.com');
-			try {
-				$m->send();
-			} catch (\Exception $send) {
-				print_r($send);
-				die();
-			}
+			$m->send();
 			$response = Success();
   			$this->log->Write('ResetPassword Email', 0, LOG_EDIT, array($response));
 		} else {

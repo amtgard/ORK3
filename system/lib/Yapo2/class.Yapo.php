@@ -55,13 +55,11 @@ class Yapo {
 		
 		$last_insert_id = $this->__Core->GetLastInsertId();
 		
-		if ("insert" == $this->__Core->__Save->Mode) {
-			$this->Clear();
-			$primary_key = $this->__Core->GetPrimaryKeyField();
-			$this->$primary_key = $last_insert_id;
-			$this->Find();
-			$this->Next();
-		}
+		$this->Clear();
+		$primary_key = $this->__Core->GetPrimaryKeyField();
+		$this->$primary_key = $last_insert_id;
+		$this->Find();
+		$this->Next();
 		
 		return $last_insert_id;
 	}
