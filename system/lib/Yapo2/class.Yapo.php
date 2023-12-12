@@ -49,15 +49,19 @@ class Yapo {
 	public function save($all = false) {
 		list($sql, $Data) = $this->__Core->__Save->GenerateSql(array('all'=>$all));
 		$this->__LastSql = $sql;
+		$primary_key = $this->__Core->GetPrimaryKeyField();
 		
+		$pk_id = $this->$primary_key;
+
 		$this->__Core->SetData($Data);
 		$this->__Core->DataSet($sql);
 		
-		$last_insert_id = $this->__Core->GetLastInsertId();
+		if ("insert" == $this->__Core->__Save->Mode) {
+			$pk_id = $this->__Core->__Save->Mode;
+		}
 		
 		$this->Clear();
-		$primary_key = $this->__Core->GetPrimaryKeyField();
-		$this->$primary_key = $last_insert_id;
+		$this->$primary_key = $pk_id;
 		$this->Find();
 		$this->Next();
 		
