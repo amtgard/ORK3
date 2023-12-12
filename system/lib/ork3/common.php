@@ -140,13 +140,12 @@ class Common
     return true;
   }
   
-	public static function Geocode( $address, $city, $state, $postal_code, $geocode = null )
-	{
-    $c = new Common();
-    
-    if (!Common::RateLimit('geocode', 1000, $per = "+1 day"))
-      return array( "You have exceeded your rate limit" );
-    
+	public static function Geocode( $address, $city, $state, $postal_code, $geocode = null ) {
+		$c = new Common();
+		
+		if (!Common::RateLimit('geocode', 1000, $per = "+1 day"))
+			return array( "You have exceeded your rate limit" );
+		
 		logtrace( "Geocode", [ $address, $city, $state, $postal_code, $geocode ] );
 		if ( strlen( $geocode ) > 0 ) {
 			$latlng = urlencode( str_replace( ' ', '', $geocode ) );
@@ -156,8 +155,8 @@ class Common
 			$geocodeURL = signUrl( "https://maps.googleapis.com/maps/api/geocode/json?address=$address&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY );
 		}
 		$ch = curl_init( $geocodeURL );
-    curl_setopt($ch, CURLOPT_REFERER, 'https://amtgard.com/ork');
-    curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+		curl_setopt($ch, CURLOPT_REFERER, 'https://amtgard.com/ork');
+		curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
 		$result = curl_exec( $ch );
 		$httpCode = curl_getinfo( $ch, CURLINFO_HTTP_CODE );

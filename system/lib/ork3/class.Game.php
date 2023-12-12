@@ -82,9 +82,9 @@ class Game extends Ork3 {
 		if (valid_id($request['GameId'])) {
 			$this->objective->clear();
 			$this->objective->game_id = $request['GameId'];
-			if ($this->objective->find() && $this->objective->game_id == $request['GameId']) do {
+			if ($this->objective->find() && $this->objective->game_id == $request['GameId']) while ($this->objective->next()) {
 				$objectives[] = $this->objective->game_objective_id;
-			} while ($this->objective->next());
+			}
 		}
 		return $objectives;
 	}

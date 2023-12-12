@@ -14,6 +14,7 @@ class Ghettocache {
 	}
 	
 	function get($call, $key, $lifetime) {
+		if (defined('CACHE_ENABLED') && CACHE_ENABLED == false) return false;
 		$cached = $this->memcache->get("{$this->prefix}.$call.$key");
 		logtrace("fetch memcached: {$this->prefix}.$call.$key", $cached);
 

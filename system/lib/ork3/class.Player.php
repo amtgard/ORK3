@@ -294,7 +294,7 @@ class Player extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing request.');
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
 						'EnteredById' => $r->by_whom_id,
@@ -317,11 +317,11 @@ class Player extends Ork3 {
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name
 					);
-          if (is_numeric($limit)) {
-            $limit--;
-            if ($limit == 0) break;
-          }
-      } while ($r->next());
+				if (is_numeric($limit)) {
+					$limit--;
+					if ($limit == 0) break;
+				}
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
@@ -352,7 +352,7 @@ class Player extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing request.');
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Awards'][] = array(
 						'AwardsId' => $r->awards_id,
 						'AwardId' => $r->award_id,
@@ -378,7 +378,7 @@ class Player extends Ork3 {
 						'EnteredById' => $r->entered_by_id,
 						'EnteredBy' => $r->entered_by_persona,
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
@@ -435,7 +435,7 @@ class Player extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter();
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Classes'][$r->class_id] = array(
 						'ClassReconciliationId' => $r->class_reconciliation_id,
 						'Reconciled' => $r->reconciled,
@@ -445,7 +445,7 @@ class Player extends Ork3 {
 						'Attendances' => $r->attendances,
 						'Credits' => $r->credits
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = Success();
@@ -458,7 +458,7 @@ class Player extends Ork3 {
 			return false;
         $srcname = $username;
         $found = false;
-        do {
+        while (!$found && $calls > 0) {
     		$this->mundane->clear();
     		$this->mundane->username = $username;
     		if ($this->mundane->find()) {
@@ -469,7 +469,7 @@ class Player extends Ork3 {
         	    $found = true;
     		}
 			$calls--;
-        } while (!$found && $calls > 0);
+        }
         echo " username is available ... ";
         return $username;
     }
@@ -568,17 +568,17 @@ class Player extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response = array();
-			do {
-        $response[$r->mundane_id] = array(
-            'KingdomId' => $r->kingdom_id,
-            'Kingdom' => $r->kingdom,
-            'ParkId' => $r->park_id,
-            'Park' => $r->park,
-            'MundaneId' => $r->mundane_id,
-            'Persona' => $r->persona,
-            'id' => $r->mundane_id
-          );
-      } while ($r->next());
+			while ($r->next()) {
+				$response[$r->mundane_id] = array(
+					'KingdomId' => $r->kingdom_id,
+					'Kingdom' => $r->kingdom,
+					'ParkId' => $r->park_id,
+					'Park' => $r->park,
+					'MundaneId' => $r->mundane_id,
+					'Persona' => $r->persona,
+					'id' => $r->mundane_id
+				);
+			}
     }
     return $response;
   }
@@ -1297,34 +1297,44 @@ class Player extends Ork3 {
         if (valid_id($request['MundaneId'])) {
             $this->dues->clear();
             $this->dues->mundane_id = $request['MundaneId'];
+			$sql = "select * from ork_dues where mundane_id = $request[MundaneId]";
+
 			if (!empty($request['ExcludeRevoked'])) {
 				$this->dues->revoked = 0;
+				$sql .= " and revoked = 0";
 			}
 			if (!empty($request['Active'])) {
 				// ... wtf
-				$this->dues->dues_until_conjunction = ' AND ( `dues_for_life` = 1 OR ';
-				$this->dues->dues_until_term = "> '" . date('Y-m-d') . "') " . ' AND "" = ' ;
+				//$this->dues->dues_until_conjunction = ' AND ( `dues_for_life` = 1 OR ';
+				//$this->dues->dues_until_term = "> '" . date('Y-m-d') . "') " . ' AND "" = ' ;
+				$sql .= " and (dues_for_life = 1 or dues_until > '" . date('Y-m-d') . "')";
 			}
-            $dues = array();
+
+			$this->db->clear();
+			$this->db->mundane_id = $request['MundaneId'];
+			$this->db->dues_until = date('Y-m-d');
+			$dues = $this->db->query($sql);
+
+            $duesReport = array();
 			$now = time();
-            if ($this->dues->find()) do {
-				if (!empty($request['Active']) && $now > strtotime($this->dues->dues_until) && $this->dues->dues_for_life == 0) {
+            if ($dues->size() > 0) while ($dues->next()) {
+				if (!empty($request['Active']) && $now > strtotime($dues->dues_until) && $dues->dues_for_life == 0) {
 					continue;
 				}
-                $dues[] = array(
-                        'DuesId' => $this->dues->dues_id,
-                        'KingdomId' => $this->dues->kingdom_id,
-                        'KingdomName' => $this->Kingdom->get_kingdom_name($this->dues->kingdom_id),
-                        'ParkId' => $this->dues->kingdom_id,
-                        'ParkName' => $this->Park->get_park_name($this->dues->park_id),
-                        'DuesUntil' => $this->dues->dues_until,
-                        'DuesFrom' => $this->dues->dues_from,
-                        'DuesForLife' => $this->dues->dues_for_life,
-                        'Revoked' => $this->dues->revoked
+                $duesReport[] = array(
+                        'DuesId' => $dues->dues_id,
+                        'KingdomId' => $dues->kingdom_id,
+                        'KingdomName' => $this->Kingdom->get_kingdom_name($dues->kingdom_id),
+                        'ParkId' => $dues->kingdom_id,
+                        'ParkName' => $this->Park->get_park_name($dues->park_id),
+                        'DuesUntil' => $dues->dues_until,
+                        'DuesFrom' => $dues->dues_from,
+                        'DuesForLife' => $dues->dues_for_life,
+                        'Revoked' => $dues->revoked
                     );
-            } while ($this->dues->next());
+            }
         }
-        return $dues;
+        return $duesReport;
 	}
 
 	// TODO:

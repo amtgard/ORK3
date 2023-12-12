@@ -13,7 +13,9 @@ if (!defined('CONFIG')) {
 }
 //require_once(DIR_LIB."nusoap/nusoap.php");
 
-error_reporting ( E_ALL ^ E_NOTICE );
+error_reporting ( ~E_ALL );
+ini_set( 'display_errors', '0' );
+
 
 
 ?>

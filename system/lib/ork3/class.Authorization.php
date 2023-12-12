@@ -113,6 +113,7 @@ class Authorization  extends Ork3 {
 		$this->mundane->like('username', $request['UserName']);
 		$this->mundane->like('email', $request['Email']);
 		if ($this->mundane->find()) {
+			print_r($this->mundane);
 			$password = substr(md5(microtime()),2,11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
 			/* Only salt on password change or first password
@@ -125,15 +126,22 @@ class Authorization  extends Ork3 {
 			Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($password), $this->mundane->password_expires, 1);
 			
 			$this->mundane->save();
+			print_r($this->mundane);
+			die();
 			$m = new Mail('smtp', 'smtp.sendgrid.net', 'apikey', SENDGRID_API_KEY, 587);
 			$m->setTo($this->mundane->email);
 			$m->setFrom('ork3@amtgard.com');
 			$m->setSubject('Reset ORK Password (Expires in 24 hours)');
 			$m->setHtml('<h2>ORK Password Reset</h2>We have generated a temporary password that will <b>expire in 24 hours</b>. You will need to log in immediately and reset your password. <p>You can log in with the following link:<p><a rel="nofollow" href="https:' . UIR . 'Login/login&username=' . $request['UserName'] . '&password=' . $password . '">Click here to be logged in temporarily.</a> OR login with this temporary password: ' . $password . '<p>Regards,<p>-ORK 3 Team');
 			$m->setSender('ork3@amtgard.com');
-			$m->send();
+			try {
+				$m->send();
+			} catch (\Exception $send) {
+				print_r($send);
+				die();
+			}
 			$response = Success();
-  		$this->log->Write('ResetPassword Email', 0, LOG_EDIT, array($response));
+  			$this->log->Write('ResetPassword Email', 0, LOG_EDIT, array($response));
 		} else {
 			$response = InvalidParameter(null, "Login and username could not be found.");
 		}
@@ -306,6 +314,7 @@ class Authorization  extends Ork3 {
 		if ($request['Token'] == null) {
 			$this->mundane->like('username', $request['UserName']);
 			if ($this->mundane->find()) {
+				$mundane_id = $this->mundane->mundane_id;
 				// Harmonizes old password style with new password style
 				if (Authorization::KeyExists($this->mundane->password_salt, trim($request['Password']))) {
 					Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']), $this->mundane->password_expires);
@@ -315,13 +324,13 @@ class Authorization  extends Ork3 {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
 						$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
-						$this->mundane->token_expires = date('c', time() + LOGIN_TIMEOUT);
+						$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
 						$this->mundane->save();
 						$response['Status'] = Success();
 						$response['Token'] = $this->mundane->token;
-						$response['UserId'] = $this->mundane->mundane_id;
-            $response['Timeout'] = $this->mundane->token_expires;
-            $response['PasswordExpires'] = $this->mundane->password_expires;
+						$response['UserId'] = $mundane_id;
+						$response['Timeout'] = $this->mundane->token_expires;
+						$response['PasswordExpires'] = $this->mundane->password_expires;
 					}
 				} else {
 					$response['Status'] = InvalidParameter(null, "Login could not be found. <a href='" . UIR . "Login/forgotpassword'>Reset forgotten or expired password</a>");
@@ -333,15 +342,16 @@ class Authorization  extends Ork3 {
 			$this->mundane->clear();
 			$this->mundane->token = $request['Token'];
 			if ($this->mundane->find()) {
+				$mundane_id = $this->mundane->mundane_id;
 				if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 				} else if (strtotime($this->mundane->token_expires) > time()) {
 					$this->mundane->token = md5($this->mundane->token . microtime());
-					$this->mundane->token_expires = date('c', time() + LOGIN_TIMEOUT);
+					$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
 					$this->mundane->save();
 					$response['Status'] = Success();
 					$response['Token'] = $this->mundane->token;
-					$response['UserId'] = $this->mundane->mundane_id;
+					$response['UserId'] = $mundane_id;
 					$response['Timeout'] = $this->mundane->token_expires;
 				} else {
 					$response['Status'] = InvalidParameter(null, "Token has expired: " . strtotime($this->mundane->token_expires) . ' <= ' . time());
@@ -501,7 +511,8 @@ class Authorization  extends Ork3 {
 	
 	public function HasAuthority($mundane_id, $type, $id, $role) {
         logtrace("HasAuthority", array($mundane_id, $type, $id, $role));
-        if (valid_id($mundane_id) && (valid_id($id) || $type == AUTH_ADMIN)) {
+
+		if (valid_id($mundane_id) && (valid_id($id) || $type == AUTH_ADMIN)) {
             ;
         } else if($type == AUTH_ADMIN && valid_id($mundane_id)) {
             ;

@@ -125,7 +125,7 @@ class Kingdom  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
-			do {
+			while ($r->next()) {
 				if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards' && !in_array($r->officer_role, ['none', null])) {
 					continue;
 				} else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers' && in_array($r->officer_role, ['none', null])) {
@@ -144,7 +144,7 @@ class Kingdom  extends Ork3 {
 					'TitleClass' => $r->title_class,
 					'OfficerRole' => $r->officer_role
 				);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing request.');
@@ -218,7 +218,7 @@ class Kingdom  extends Ork3 {
 		$parktitle->kingdom_id = $request['KingdomId'];
 		$response['ParkTitles'] = array();
 		if ($parktitle->find(array('class desc'))) {
-			do {
+			while ($parktitle->next()) {
 				$response['ParkTitles'][] = array(
 						'ParkTitleId'=>$parktitle->parktitle_id,
 						'Title'=>$parktitle->title,
@@ -228,7 +228,7 @@ class Kingdom  extends Ork3 {
 						'Period'=>$parktitle->period,
 						'Length'=>$parktitle->period_length
 					);
-			} while ($parktitle->next());
+			}
 			$response['Status'] = Success();
 			return $response;
 		}
@@ -277,14 +277,14 @@ class Kingdom  extends Ork3 {
 		$response['Authorizations'] = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Status'] = Success();
-			do {
+			while ($r->next()) {
 				$response['Authorizations'][] = array( 
 						'AuthorizationId' => $r->authorization_id,
 						'UserName' => $r->username,
 						'MundaneId' => $r->mundane_id,
 						'Role' => $r->role
 					);
-			} while ($r->next());
+			}
 		} else {
 			$response['Status'] = InvalidParameter(null, 'Problem processing request.');
 		}
@@ -347,14 +347,14 @@ class Kingdom  extends Ork3 {
 		$this->kingdom->parent_kingdom_id = $request['KingdomId'];
 		$result = array('Status' => Success(), 'Principalities' => array());
 		if ($this->kingdom->find()) {
-			do {
+			while ($this->kingdom->next()) {
 				$result['Principalities'][] = array(
 						'KingdomId' => $this->kingdom->kingdom_id,
 						'Name' => $this->kingdom->name,
 						'IsPrincipality' => 1,
 						'ParentKingdomId' => $this->kingdom->parent_kingdom_id
 					);
-			} while ($this->kingdom->next());
+			}
 		} else {
 			$result['Status'] = InvalidParameter();
 		}
@@ -370,7 +370,7 @@ class Kingdom  extends Ork3 {
 		$r = $this->db->query($sql);
 		if ($r !== false && $r->size() > 0) {
 			$response = array('Status' => Success(), 'Parks' => array());
-			do {
+			while ($r->next()) {
 				$response['Parks'][] = array(
 						'ParkId' => $r->park_id,
 						'KingdomId' => $r->kingdom_id,
@@ -388,7 +388,7 @@ class Kingdom  extends Ork3 {
                         'HasHeraldry' => $r->has_heraldry,
 						'ParentOf' => $r->is_principality==1?Ork3::$Lib->park->GetParks(array('ParkId'=>$r->park_id, 'Stack' => array($r->park_id))):null
 					);
-			} while ($r->next());
+			}
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
@@ -510,7 +510,7 @@ class Kingdom  extends Ork3 {
 		$response['Officers'] = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Status'] = Success();
-			do {
+			while ($r->next()) {
 				$response['Officers'][] = array(
 							'AuthorizationId' => $r->authorization_id,
 							'MundaneId' => $r->m_mundane_id,
@@ -531,7 +531,7 @@ class Kingdom  extends Ork3 {
 							'OfficerId' => $r->officer_id,
 							'OfficerRole' => $r->officer_role
 						);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();

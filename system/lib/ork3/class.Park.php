@@ -133,7 +133,7 @@ class Park extends Ork3
 				$this->parkday->postal_code = $request[ 'PostalCode' ];
 				$this->parkday->map_url = $request[ 'MapUrl' ];
      		logtrace( 'AddParkDay', array( $this->parkday, $request ) );
-        $this->park_geocode_h(null, $this->parkday);
+        	$this->park_geocode_h(null, $this->parkday);
 			} else {
      		logtrace( 'AddParkDay.NormalLocation', null );
 				$this->park->clear();
@@ -186,7 +186,7 @@ class Park extends Ork3
 		$r = $this->db->query( $sql );
 		if ( $r !== false && $r->size() > 0 ) {
 			$response = [ 'Status' => Success(), 'Parks' => [ ] ];
-			do {
+			while ( $r->next() ) {
 				$response[ 'Parks' ][] = [
 					'ParkId'       => $r->park_id,
 					'KingdomId'    => $r->kingdom_id,
@@ -202,7 +202,7 @@ class Park extends Ork3
 					'Class'        => $r->class,
 					'ParentOf'     => ( $r->is_principality == 1 && !array_search( $r->park_id, $request[ 'Stack' ] ) ) ? $this->GetParks( [ 'ParkId' => $r->park_id, 'Stack' => push_stack( $request[ 'Stack' ], $r->park_id ) ] ) : null,
 				];
-			} while ( $r->next() );
+			}
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
 		}
@@ -226,7 +226,7 @@ class Park extends Ork3
 		$response[ 'Officers' ] = [ ];
 		if ( $r !== false && $r->size() > 0 ) {
 			$response[ 'Status' ] = Success();
-			do {
+			while ( $r->next() ) {
 				$response[ 'Officers' ][] = [
 					'AuthorizationId' => $r->authorization_id,
 					'MundaneId'       => $r->m_mundane_id,
@@ -247,7 +247,7 @@ class Park extends Ork3
 					'OfficerId'       => $r->officer_id,
 					'OfficerRole'     => $r->officer_role,
 				];
-			} while ( $r->next() );
+			}
 			$response[ 'Status' ] = Success();
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
@@ -423,11 +423,11 @@ class Park extends Ork3
                   next_day < '$end' and distance < $distance
                 order by next_day asc, distance asc limit $limit) date_src";
 
-    $r = $this->db->query($sql);
+    	$r = $this->db->query($sql);
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['ParkDays'] = array();
-			do {
+			while ($r->next()) {
 				$response['ParkDays'][] = array(
 						'ParkdayId' => $r->parkday_id,
 						'KingdomId' => $r->kingdom_id,
@@ -452,10 +452,10 @@ class Park extends Ork3
 						'Location' => $r->location,
 						'MapUrl' => $r->map_url,
 						'LocationUrl' => $r->location_url,
-            'Distance' => $r->distance,
-            'NextDay' => $r->next_day
+						'Distance' => $r->distance,
+						'NextDay' => $r->next_day
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -471,14 +471,14 @@ class Park extends Ork3
 		$response[ 'Authorizations' ] = [ ];
 		if ( $r !== false && $r->size() > 0 ) {
 			$response[ 'Status' ] = Success();
-			do {
+			while ( $r->next() ) {
 				$response[ 'Authorizations' ][] = [
 					'AuthorizationId' => $r->authorization_id,
 					'UserName'        => $r->username,
 					'MundaneId'       => $r->mundane_id,
 					'Role'            => $r->role,
 				];
-			} while ( $r->next() );
+			}
 		} else {
 			$response[ 'Status' ] = InvalidParameter( NULL, 'Problem processing request.' );
 		}
@@ -525,7 +525,7 @@ class Park extends Ork3
 	{
 		$srcname = $name;
 		$found = false;
-		do {
+		while ( !$found ) {
 			$this->park->clear();
 			$this->park->name = $name;
 			if ( $this->park->find() ) {
@@ -533,7 +533,7 @@ class Park extends Ork3
 			} else {
 				$found = true;
 			}
-		} while ( !$found );
+		}
 		return $name;
 	}
 

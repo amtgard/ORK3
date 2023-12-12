@@ -735,11 +735,11 @@
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
 <?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
-				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail['Name'])</i>":"" ?></td>
+				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='award-date'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
-				<td><?=trimlen($detail['ParkName'])>0?"$detail['ParkName'], $detail['KingdomName']":(valid_id($detail['EventId'])?"$detail['EventName']":"$detail['KingdomName']") ?></td>
+				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td class='award-note'><?=$detail['Note'] ?></td>
 				<td class='deletion'><a class="confirm-delete-award" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='confirm-strip-award revocation'>Strip</a></td>
@@ -783,11 +783,11 @@
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
 <?php if (!in_array($detail['OfficerRole'], ['none', null]) || $detail['IsTitle'] == 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
-				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail['Name'])</i>":"" ?></td>
+				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='award-date'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
-				<td><?=trimlen($detail['ParkName'])>0?"$detail['ParkName'], $detail['KingdomName']":(valid_id($detail['EventId'])?"$detail['EventName']":"$detail['KingdomName']") ?></td>
+				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td class='award-note'><?=$detail['Note'] ?></td>
 				<td class='deletion'><a class="confirm-delete-award" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='confirm-strip-award revocation'>Strip</a></td>

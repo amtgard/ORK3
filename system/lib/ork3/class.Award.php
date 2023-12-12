@@ -56,7 +56,7 @@ class Award  extends Ork3 {
 		$response = array();
     $response['Awards'] = array();
 		if ($r !== false && $r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Awards'][] = array(
 					'KingdomAwardId' => $r->award_id,
 					'KingdomAwardName' => $r->name,
@@ -67,9 +67,9 @@ class Award  extends Ork3 {
 					'IsLadder' => $r->is_ladder,
 					'IsTitle' => $r->is_title,
 					'TitleClass' => $r->title_class,
-          'OfficerRole' => $r->officer_role
+          			'OfficerRole' => $r->officer_role
 				);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing your request.');
@@ -106,7 +106,7 @@ class Award  extends Ork3 {
 				$this->award->is_title = $request['IsTitle'];
 				$this->award->title_class = $request['TitleClass'];
 				$this->award->peerage = $request['Peerage'];
-  			$this->award->officer_role = $request['OfficerRole'];
+  				$this->award->officer_role = $request['OfficerRole'];
 				$this->award->award->save();
 
 			} else {

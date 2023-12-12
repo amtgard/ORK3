@@ -36,7 +36,7 @@ class YapoSave extends YapoAction {
 	private function insert() {
 		$sql = "insert into {$this->Core->__table} ";
 		$insert_fields = array();
-		foreach ($this->Core->__definition as $field => $definition) {
+		foreach ($this->Core->__definition->Fields as $field => $definition) {
 			if (strtoupper($definition['Null']) == 'NO') {
 				$insert_fields[$this->Core->GetQualifiedName($field)] = "";
 			}
