@@ -1112,9 +1112,10 @@ class Player extends Ork3 {
             }
 			// Events are awesome.
 
+			$awards->save();
+
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
 
-			$awards->save();
 			return Success('');
 		} else {
 			return NoAuthorization();

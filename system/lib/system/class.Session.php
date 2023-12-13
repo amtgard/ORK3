@@ -5,7 +5,8 @@ class Session
 	function __construct( $default_path = true, $path = '' )
 	{
 		$path = $default_path ? str_replace('//', '/', ( '/' . ORK_DIST_NAME . '/orkui/' )) : $path;
-		session_set_cookie_params( LOGIN_TIMEOUT, $path, $_SERVER[ 'HTTP_HOST' ] );
+		$server = explode(':', $_SERVER[ 'HTTP_HOST' ])[0];
+		session_set_cookie_params( LOGIN_TIMEOUT, $path, 'localhost' );
 		session_start();
     
 		if ( !isset( $_SESSION[ 'Session_Vars' ] ) ) $_SESSION[ 'Session_Vars' ] = [ ];

@@ -382,6 +382,7 @@ class Controller_Admin extends Controller {
 
 	public function setparkofficers($post=null) {
 		$this->load_model('Park');
+		$this->session->park_id = $this->request->ParkId;
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_setofficers', true);
 			if (!isset($this->session->user_id)) {

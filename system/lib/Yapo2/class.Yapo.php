@@ -50,14 +50,16 @@ class Yapo {
 		list($sql, $Data) = $this->__Core->__Save->GenerateSql(array('all'=>$all));
 		$this->__LastSql = $sql;
 		$primary_key = $this->__Core->GetPrimaryKeyField();
-		
-		$pk_id = $this->$primary_key;
+
+		if (isset($this->$primary_key)) {
+			$pk_id = $this->$primary_key;
+		}
 
 		$this->__Core->SetData($Data);
 		$this->__Core->DataSet($sql);
 		
 		if ("insert" == $this->__Core->__Save->Mode) {
-			$pk_id = $this->__Core->__Save->Mode;
+			$pk_id = $this->__Core->GetLastInsertId();
 		}
 		
 		$this->Clear();
@@ -238,6 +240,9 @@ class Yapo {
 		if (is_object($value)) {
 			debug_print_backtrace (); die();
 		}
+		if (!isset($value)) return;
+		//$def = $this->__Core->__definition['Fields'][$field];
+		//$value = $this->__Core->__DB->ValidateField($def, $value);
 		$this->__Core->__field_values[$field] = $value;
 		$this->Equals($field, $value);
 		$this->Set($field, $value);

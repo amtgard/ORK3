@@ -4,10 +4,10 @@ date_default_timezone_set( 'America/Chicago' );
 define( 'CONFIG', true );
 
 error_reporting( E_ALL );
-ini_set( 'display_errors', 'false' );
+ini_set( 'display_errors', '1' );
 
 // HTTP
-define( 'ORK_DIST_NAME', 'ork');
+define( 'ORK_DIST_NAME', '');
 define( 'HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkservice/'); 
 define( 'HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 
 define( 'HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 

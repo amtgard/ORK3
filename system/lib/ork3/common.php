@@ -394,11 +394,9 @@ class Common
 		$this->officer->park_id = $park_id;
 		$this->officer->role = $role;
 		$this->officer->system = $system;
-		$this->authorization->clear();
 		if ( $this->officer->find() ) {
 			if ( 'Champion' == $role || 'GMR' == $role) {
 				$this->officer->mundane_id = $new_officer_id;
-				$this->officer->modified = time();
 				$this->officer->save();
 			} else {
 				$this->authorization->clear();
@@ -406,7 +404,6 @@ class Common
 				if ( $this->authorization->find() ) {
 					$this->officer->mundane_id = $new_officer_id;
 					$this->authorization->mundane_id = $new_officer_id;
-					$this->officer->modified = time();
 					$this->officer->save();
 					$this->authorization->save();
 				}

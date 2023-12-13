@@ -509,8 +509,8 @@ class Authorization  extends Ork3 {
         } else if($type == AUTH_ADMIN && valid_id($mundane_id)) {
             ;
         } else {
+			return false;
 			;
-            return false;
         }
 		// Is Admin?
 		$this->auth->clear();
