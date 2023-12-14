@@ -555,8 +555,8 @@ class Controller_Admin extends Controller {
 			$this->data['CreateMundaneId'] = valid_id($this->request->Admin_manageevent->MundaneId)?$this->request->Admin_manageevent->MundaneId:$this->request->MundaneId;
 			if (valid_id($this->data['CreateMundaneId'])) {
 				$player = $this->Player->fetch_player($this->data['CreateMundaneId']);
-				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data[CreateMundaneId]}", 'display' => $player['Persona'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data[CreateMundaneId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data['CreateMundaneId']}", 'display' => $player['Persona'] );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data['CreateMundaneId']}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if ($this->request->exists('Admin_manageevent')) {
