@@ -18,7 +18,7 @@ class SearchService extends Ork3 {
 		$unit->like('name', "%$name%");
 		if ($unit->find()) {
 			$r = array();
-			while ($unit->next() && $limit --> 0) {
+			do {
 				$r[] = array(
 						'UnitId' => $unit->unit_id,
 						'Type' => $unit->type,
@@ -26,7 +26,7 @@ class SearchService extends Ork3 {
 						'HasHeraldry' => $unit->has_heraldry,
 						'Url' => $unit->url
 					);
-			}
+			} while ($unit->next() && $limit --> 0);
 			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 		}
 		return array();
@@ -201,7 +201,7 @@ class SearchService extends Ork3 {
 		$i = 0;
 		if ($kingdom->find(array('name'))) {
 			$r = array();
-			while ($kingdom->next()) {
+			do {
 				$r[$i++] = array(
 						'KingdomId' => $kingdom->kingdom_id,
 						'Name' => $kingdom->name
@@ -210,7 +210,7 @@ class SearchService extends Ork3 {
 					if ($limit == 0) break;
 					$limit--;
 				}
-			}
+			} while ($kingdom->next());
 			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 		} else {
 			return array();

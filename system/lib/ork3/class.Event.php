@@ -157,7 +157,7 @@ class Event  extends Ork3 {
 		$response = array();
 		if (valid_id($request['EventId']) && $this->detail->find(array('event_start DESC'),'AND',($request['Current']?1:null))) {
 			$response['CalendarEventDetails'] = array();
-			while ($this->detail->next()) {
+			do {
 				$nr = array();
 				$nr['EventCalendarDetailId'] = $this->detail->event_calendardetail_id;
 				$nr['EventId'] = $this->detail->event_id;
@@ -180,7 +180,7 @@ class Event  extends Ork3 {
 				$nr['MapUrlName'] = $this->detail->map_url_name;
 				$nr['Modified'] = $this->detail->modified;
 				$response['CalendarEventDetails'][] = $nr;
-			}
+			} while ($this->detail->next());
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();

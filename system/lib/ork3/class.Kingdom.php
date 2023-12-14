@@ -218,7 +218,7 @@ class Kingdom  extends Ork3 {
 		$parktitle->kingdom_id = $request['KingdomId'];
 		$response['ParkTitles'] = array();
 		if ($parktitle->find(array('class desc'))) {
-			while ($parktitle->next()) {
+			do {
 				$response['ParkTitles'][] = array(
 						'ParkTitleId'=>$parktitle->parktitle_id,
 						'Title'=>$parktitle->title,
@@ -228,7 +228,7 @@ class Kingdom  extends Ork3 {
 						'Period'=>$parktitle->period,
 						'Length'=>$parktitle->period_length
 					);
-			}
+			} while ($parktitle->next());
 			$response['Status'] = Success();
 			return $response;
 		}
@@ -347,14 +347,14 @@ class Kingdom  extends Ork3 {
 		$this->kingdom->parent_kingdom_id = $request['KingdomId'];
 		$result = array('Status' => Success(), 'Principalities' => array());
 		if ($this->kingdom->find()) {
-			while ($this->kingdom->next()) {
+			do {
 				$result['Principalities'][] = array(
 						'KingdomId' => $this->kingdom->kingdom_id,
 						'Name' => $this->kingdom->name,
 						'IsPrincipality' => 1,
 						'ParentKingdomId' => $this->kingdom->parent_kingdom_id
 					);
-			}
+			} while ($this->kingdom->next());
 		} else {
 			$result['Status'] = InvalidParameter();
 		}
