@@ -546,8 +546,8 @@ class Controller_Admin extends Controller {
 			$this->data['CreateUnitId'] = valid_id($this->request->Admin_manageevent->UnitId)?$this->request->Admin_manageevent->UnitId:$this->request->UnitId;
 			if (valid_id($this->data['CreateUnitId'])) {
 				$unit = $this->Unit->get_unit($this->data['CreateUnitId']);
-				$this->data['menu']['player'] = array( 'url' => UIR."Unit/index/{$this->data[CreateUnitId]}", 'display' => $unit['Unit']['Name'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data[CreateUnitId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+				$this->data['menu']['player'] = array( 'url' => UIR."Unit/index/{$this->data['CreateUnitId']}", 'display' => $unit['Unit']['Name'] );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data['CreateUnitId']}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_manageevent->CreateMundaneId)) {

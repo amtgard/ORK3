@@ -52,8 +52,8 @@
 					<td><?=$config['Key'] ?></td>
 					<td>
 <?php 		if (is_object($config['Value'])) : ?>
-<?php 			foreach ($config['Value'] as $v_key => $v_value) : ?>
-<?php				if (is_object($config['AllowedValues']) && array_key_exists($v_key, $config['AllowedValues'])) : ?>
+<?php 			foreach (get_object_vars($config['Value']) as $v_key => $v_value) : ?>
+<?php				if (is_object($config['AllowedValues']) && array_key_exists($v_key, get_object_vars($config['AllowedValues']))) : ?>
 						<div class='config-input'>
 							<span><!--<?=$v_key ?>--></span>
 							<select name='Config[<?=$config['ConfigurationId'] ?>][<?=$v_key ?>]' value='<?=$v_value ?>' />
