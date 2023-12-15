@@ -692,15 +692,19 @@ class Controller_Admin extends Controller {
 									$this->data['Error'] = 'Image Error: File size is too large.';
 									$r['Status'] = NULL;
 								} else {
-									if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
-										$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
-										$h_imdata = base64_encode($h_im);
-										$this->Player->SetHeraldry(array(
-											'MundaneId' => $id,
-											'Heraldry' => strlen($h_imdata)>0?$h_imdata:null,
-											'HeraldryMimeType' => strlen($h_imdata)>0?$_FILES['Heraldry']['type']:'',
-											'Token' => $this->session->token
-										));
+									if (is_dir(DIR_TMP) && is_writable(DIR_TMP)) {
+										if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
+											$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
+											$h_imdata = base64_encode($h_im);
+											$this->Player->SetHeraldry(array(
+												'MundaneId' => $id,
+												'Heraldry' => strlen($h_imdata)>0?$h_imdata:null,
+												'HeraldryMimeType' => strlen($h_imdata)>0?$_FILES['Heraldry']['type']:'',
+												'Token' => $this->session->token
+											));
+										}
+									} else {
+										die('TMP_DIR is not writable.');
 									}
 								}
 							}
