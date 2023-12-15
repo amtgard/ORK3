@@ -12,7 +12,13 @@ RUN sed -i 's/memory_limit = 128M/memory_limit = 512M/g' /etc/php/8.1/fpm/php.in
 RUN sed -i 's/-m 64/-m 1024/g' /etc/memcached.conf
 
 RUN mkdir -p /var/www/ork.amtgard.com
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/player
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/event
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/kingdom
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/park
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/unit
 RUN chown -R www-data:www-data /var/www/ork.amtgard.com
+RUN find /var/www/ork.amtgard.com/assets -type d -exec chmod g+w {} +
 
 COPY nginx.ork3.config /etc/nginx/sites-available/ork.amtgard.com
 RUN rm /etc/nginx/sites-enabled/*

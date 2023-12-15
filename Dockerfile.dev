@@ -19,6 +19,7 @@ RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/kingdom
 RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/park
 RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/unit
 RUN chown -R www-data:www-data /var/www/ork.amtgard.com
+RUN find /var/www/ork.amtgard.com/assets -type d -exec chmod g+w {} +
 
 COPY nginx.ork3.config /etc/nginx/sites-available/ork.amtgard.com
 RUN rm /etc/nginx/sites-enabled/*
