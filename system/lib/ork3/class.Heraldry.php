@@ -60,7 +60,8 @@ class Heraldry  extends Ork3 {
                 $src_id = ucwords($table) . 'Id';
 				if (file_exists( $path.(sprintf("%0" . $img_len . "d",$request[$src_id])).'.jpg')) 
                     unlink( $path.(sprintf("%0" . $img_len . "d",$request[$src_id])).'.jpg');
-				imagejpeg($heraldry, $path.(sprintf("%0" . $img_len . "d",$request[$src_id])).'.jpg'); 
+				$fullpath = $path.(sprintf("%0" . $img_len . "d",$request[$src_id])).'.jpg';
+				imagejpeg($heraldry, $fullpath); 
 				$this->$table->has_heraldry = 1;
 			}
 		}

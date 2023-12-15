@@ -688,7 +688,7 @@ class Controller_Admin extends Controller {
 					    }
 						if ($this->request->Update == 'Update Media') {
 							if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
-								if ((int) $_FILES['Heraldry']['size'] * 1.333 > 465000) {
+								if ((int) $_FILES['Heraldry']['size'] / 1.333 > 465000) {
 									$this->data['Error'] = 'Image Error: File size is too large.';
 									$r['Status'] = NULL;
 								} else {
