@@ -206,10 +206,12 @@ class Player extends Ork3 {
 			$this->pronoun->clear();
 			$this->pronoun->pronoun_id = $this->mundane->pronoun_id;
 			$this->pronoun->find();
-			$pronountext = (!empty($this->pronoun->subject)) ? $this->pronoun->subject . '[' . $this->pronoun->object . ']' : '';
-			$pronouncustomArr = (!empty($this->mundane->pronoun_custom) && json_decode($this->mundane->pronoun_custom)) ? $this->Pronoun->fetch_custom_pronoun_display($this->mundane->pronoun_custom) : false;
+			$subject = $this->pronoun->subject;
+			$pronoun_custom = $this->mundane->pronoun_custom;
+			$pronountext = isset($subject) ? $this->pronoun->subject . '[' . $this->pronoun->object . ']' : '';
+			$pronouncustomArr = (isset($pronoun_custom) && json_decode($this->mundane->pronoun_custom)) ? $this->Pronoun->fetch_custom_pronoun_display($this->mundane->pronoun_custom) : false;
 			//$pronouncustomtext = json_encode($pronouncustomArr);
-			$pronouncustomtext = (!empty($pronouncustomArr)) ? implode('/', $pronouncustomArr['subjective']) . ' [' . implode('/', $pronouncustomArr['objective']) . ' ' . implode('/', $pronouncustomArr['possessive']) . ' ' . implode('/', $pronouncustomArr['possessivepronoun']) . ' ' . implode('/', $pronouncustomArr['reflexive']) . ']' : '';
+			$pronouncustomtext = (isset($pronouncustomArr) && $pronouncustomArr) ? implode('/', $pronouncustomArr['subjective']) . ' [' . implode('/', $pronouncustomArr['objective']) . ' ' . implode('/', $pronouncustomArr['possessive']) . ' ' . implode('/', $pronouncustomArr['possessivepronoun']) . ' ' . implode('/', $pronouncustomArr['reflexive']) . ']' : '';
 
 			$response['Player'] = array(
 					'MundaneId' => $this->mundane->mundane_id,
