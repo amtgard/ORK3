@@ -26,7 +26,7 @@ Copy `config.dev.php` to `config.php`. Make sure to change the admin email to yo
 
 You can now view the site at http://servername/ork/orkui/.
 
-### Using Docker
+### Using Docker (Will be outdated with PHP8 changes see below)
 A docker-compose file is setup for quickly getting the environment running locally. If there are other environments using port 80 change the exposed port in the docker-compose file to keep from conflicting. Same goes for 3306 for the database. Run the following Docker command from the cloned directory.
 ```
 docker-compose up -d
@@ -66,3 +66,5 @@ You can access from local at: `http://localhost:19080/orkui/`
 This may redirect to port `80`, you may need to add the `19080` port.
 
 On first run, you will need to import a database backup to configure the database.
+
+mysql -P 24306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/[somedate].sql
