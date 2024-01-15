@@ -53,6 +53,7 @@ class YapoCore {
 		$this->__ordering = array();
         $this->__pagination = null;
         $this->__page = null;
+		$this->__field_values = array();
 		$this->__DB->Clear();
 	}
 	
