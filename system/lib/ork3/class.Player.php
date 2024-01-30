@@ -1083,7 +1083,7 @@ class Player extends Ork3 {
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_EDIT)) {
 			if (valid_id($request['ParkId'])) {
 				$Park = new Park();
-				$park_info = $Park->GetParkShortInfo(array( 'ParkId' => $given_by['Player']['ParkId'] ));
+				$park_info = $Park->GetParkShortInfo($request);
 				if ($park_info['Status']['Status'] != 0)
 					return InvalidParameter();
 			}
@@ -1388,16 +1388,15 @@ class Player extends Ork3 {
 		$dupeRec->kingdomaward_id = $request['KingdomAwardId'];
 		$dupeRec->mundane_id = $request['MundaneId'];
 		$dupeRec->recommended_by_id = $mundane_id;
-		if (isset($request['Rank'])) {
+		if (trimlen($request['Rank']) > 0) {
 			$dupeRec->rank = $request['Rank'];
 		}
-		$dupeRec->find();
-		if ($dupeRec->recommendations_id) {
+		if ($dupeRec->find()) {
 			return InvalidParameter('You already recommended that award.');
 		}
 		
 		// Check for existing award rank
-		if (isset($request['Rank'])) {
+		if (trimlen($request['Rank']) > 0) {
 			$existingAward = new yapo($this->db, DB_PREFIX . 'awards');
 			$existingAward->clear();
 			$existingAward->kingdomaward_id = $request['KingdomAwardId'];

@@ -51,7 +51,7 @@ class Yapo {
 		$this->__LastSql = $sql;
 		$primary_key = $this->__Core->GetPrimaryKeyField();
 
-		if (isset($this->$primary_key)) {
+		if (isset($this->__Core->$primary_key)) {
 			$pk_id = $this->$primary_key;
 		}
 
@@ -142,9 +142,14 @@ class Yapo {
 	const NOT_EQ = 'neq';
 	const NOT_LIKE = 'nlike';
 	const NOT_IN = 'nin';
+	const IS_NULL = 'is_null';
 	
 	function equals($field, $value) {
-		$this->comparator($field, Yapo::EQUALS, $value);
+		if (is_null($value)) {
+			$this->comparator($field, Yapo::IS_NULL, $value);
+		} else {
+			$this->comparator($field, Yapo::EQUALS, $value);
+		}
 	}
 	
 	function not_equals($field, $value) {
@@ -240,7 +245,7 @@ class Yapo {
 		if (is_object($value)) {
 			debug_print_backtrace (); die();
 		}
-		if (!isset($value)) return;
+		//if (!isset($value)) return;
 		//$def = $this->__Core->__definition['Fields'][$field];
 		//$value = $this->__Core->__DB->ValidateField($def, $value);
 		$this->__Core->__field_values[$field] = $value;

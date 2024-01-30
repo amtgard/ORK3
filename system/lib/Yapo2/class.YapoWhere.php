@@ -35,6 +35,9 @@ class YapoWhere extends YapoAction {
 						$where_clauses[] = $this->Core->GetQualifiedName($field) . ($comparator==Yapo::EQUALS?'=':'!=') . " :where_{$comparator}_" . $this->Core->GetQualifiedName($field, "_"); 
 						$where_fields["where_{$comparator}_" . $this->Core->GetQualifiedName($field, "_")] =$value;
 						break;
+					case Yapo::IS_NULL:
+						$where_clauses[] = $this->Core->GetQualifiedName($field) . " is null "; 
+						break;
 					case Yapo::NOT_LIKE:
 					case Yapo::LIKE: 
 						$where_clauses[] = $this->Core->GetQualifiedName($field) . ($comparator==Yapo::NOT_LIKE?' not ':'') . " like :where_{$comparator}_" . $this->Core->GetQualifiedName($field, "_"); 
