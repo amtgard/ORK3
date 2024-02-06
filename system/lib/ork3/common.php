@@ -390,7 +390,7 @@ class Common
 	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0 )
 	{
 		$this->officer->clear();
-		$this->officer->kingdom_id = $kingdom_id;
+		if (isset($kingdom_id)) $this->officer->kingdom_id = $kingdom_id;
 		$this->officer->park_id = $park_id;
 		$this->officer->role = $role;
 		$this->officer->system = $system;

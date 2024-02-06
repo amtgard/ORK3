@@ -663,9 +663,16 @@ class Park extends Ork3
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
 		) {
-			$officer = new yapo( $this->db, DB_PREFIX . 'officer' );
+			if (!isset($request['KingdomId'])) {
+				if (!isset($request['ParkId'])) {
+					return InvalidParameter( 'Either ParkId or KingdomId must be set to update officers.' );
+				}
+				$kingdomId = $this->GetParkKingdomId($request[ 'ParkId' ]);
+			} else {
+				$kingdomId = $request['KingdomId'];
+			}
 			$c = new Common();
-			$c->set_officer( $request[ 'KingdomId' ], $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ] );
+			$c->set_officer( $kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ] );
 		} else {
 			$response = NoAuthorization();
 		}
