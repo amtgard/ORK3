@@ -1,0 +1,24 @@
+version: '2'
+services:
+  ork3app-green:
+    build:
+      context: ./
+      dockerfile: Dockerfile.dev
+    ports:
+     - 19080:80
+    working_dir: /var/www
+    volumes:
+      - .:/var/www/ork.amtgard.com
+    env_file: .dev.env
+    environment:
+      - ENVIRONMENT=DEV
+    container_name: ork3-php8-app-green
+    networks:
+      - ork3-php8-net
+    restart: always
+
+volumes:
+  data-db: {}
+
+networks:
+  ork3-php8-net:

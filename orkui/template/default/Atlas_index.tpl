@@ -14,10 +14,16 @@
 //<![CDATA[
 
   var map;
-	function initMap() {
+	async function initMap() {
+
+		const { Map } = await google.maps.importLibrary("maps");
+		const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
+
+
 		map = new google.maps.Map(document.getElementById('map'), {
 			center: {lat: 0, lng: 0},
-			zoom: 2
+			zoom: 2,
+			mapId: 'ORK3_MAP_ID'
 		});
 		$('.info-container:first-child').height($(window).height() * 0.85);
 		$('#map').height($(window).height() * 0.75);
@@ -63,11 +69,11 @@
 		for (i = 0; i < locations.length; i++) {
 			var pinImage = getMarker(locations[i][6]);  
 
-			marker = new google.maps.Marker({
-			position: new google.maps.LatLng(locations[i][1], locations[i][2]),
+			marker = new google.maps.marker.AdvancedMarkerElement({
+				position: new google.maps.LatLng(locations[i][1], locations[i][2]),
 				map: map,
 				title: locations[i][0],
-				icon: pinImage
+				//icon: pinImage
 			});
 
 			google.maps.event.addListener(marker, 'click', (function(marker, i) {
@@ -106,6 +112,6 @@
 //]]>
 </script>
 
-<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyA8bOLm-eLdymz6DcIE3Q2KGkAVmx-BY4g&callback=initMap" type="text/javascript"></script>
+<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyA8bOLm-eLdymz6DcIE3Q2KGkAVmx-BY4g&callback=initMap&v=weekly&libraries=marker" type="text/javascript"></script>
 
 

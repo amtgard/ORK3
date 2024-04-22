@@ -188,7 +188,7 @@ $(function() {
 			});
 	});
 	$('.name-field').change(function() {
-		var words = new RegExp("^[a-zA-Z '-,_\.]*$");
+		var words = new RegExp(/^[a-zA-Z '\-,_\.]*$/);
 		if (!words.test($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');

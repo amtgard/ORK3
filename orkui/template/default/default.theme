@@ -11,7 +11,7 @@
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-1.7.1.min.js"></script>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-ui-1.8.18.custom.min.js"></script>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-ui-timepicker-addon.js"></script>
-		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/default.js"></script>
+		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/default.js?ver=2024-04-22-001"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/jquery.tablesorter.min.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/jquery.tablesorter.widgets.min.js"></script>
 		<script type='text/javascript' src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-tablesorter/widgets/widget-print.js"></script>
