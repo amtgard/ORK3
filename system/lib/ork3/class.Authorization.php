@@ -325,10 +325,18 @@ class Authorization  extends Ork3 {
 						$response['PasswordExpires'] = $this->mundane->password_expires;
 					}
 				} else {
-					$response['Status'] = InvalidParameter(null, "Login could not be found. <a href='" . UIR . "Login/forgotpassword'>Reset forgotten or expired password</a>");
+					if (defined('UIR')) {
+						$response['Status'] = InvalidParameter(null, "Login could not be found. <a href='" . UIR . "Login/forgotpassword'>Reset forgotten or expired password</a>");
+					} else {
+						$response['Status'] = InvalidParameter(null, "Login could not be found.");
+					}
 				}
 			} else {
-				$response['Status'] = InvalidParameter(null, "Login and username could not be found. <a href='" . UIR . "Login/forgotpassword'>Reset forgotten or expired password</a>");
+				if (defined('UIR')) {
+					$response['Status'] = InvalidParameter(null, "Login and username could not be found. <a href='" . UIR . "Login/forgotpassword'>Reset forgotten or expired password</a>");
+				} else {
+					$response['Status'] = InvalidParameter(null, "Login and username could not be found.");
+				}
 			}
 		} else {
 			$this->mundane->clear();
