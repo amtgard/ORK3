@@ -1,9 +1,10 @@
 version: '2'
+name: ork-green
 services:
   ork3app-green:
     build:
       context: ./
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.prod
     ports:
      - 19080:80
     working_dir: /var/www

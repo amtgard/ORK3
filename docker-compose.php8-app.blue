@@ -1,9 +1,10 @@
 version: '2'
+name: ork-blue
 services:
   ork3app-blue:
     build:
       context: ./
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.prod
     ports:
      - 29080:80
     working_dir: /var/www

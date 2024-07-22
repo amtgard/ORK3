@@ -126,16 +126,16 @@ class Park extends Ork3
 			$this->parkday->alternate_location = $request[ 'AlternateLocation' ];
 
 			if ( $request[ 'AlternateLocation' ] > 0 ) {
-     		logtrace( 'AddParkDay.AlternateLocation', null );
+     			logtrace( 'AddParkDay.AlternateLocation', null );
 				$this->parkday->address = $request[ 'Address' ];
 				$this->parkday->city = $request[ 'City' ];
 				$this->parkday->province = $request[ 'Province' ];
 				$this->parkday->postal_code = $request[ 'PostalCode' ];
 				$this->parkday->map_url = $request[ 'MapUrl' ];
-     		logtrace( 'AddParkDay', array( $this->parkday, $request ) );
-        	$this->park_geocode_h(null, $this->parkday);
+     			logtrace( 'AddParkDay', array( $this->parkday, $request ) );
+        		$this->park_geocode_h(null, $this->parkday);
 			} else {
-     		logtrace( 'AddParkDay.NormalLocation', null );
+     			logtrace( 'AddParkDay.NormalLocation', null );
 				$this->park->clear();
 				$this->park->park_id = $request[ 'ParkId' ];
 				$this->park->find();
@@ -150,7 +150,6 @@ class Park extends Ork3
 				$this->parkday->map_url = $this->park->map_url;
 			}
 			$this->parkday->location_url = $request[ 'LocationUrl' ];
-
 			$this->parkday->save();
 		} else {
 			return NoAuthorization();
@@ -487,7 +486,7 @@ class Park extends Ork3
 
 	public function park_geocode_h( $geocode = null, & $parkobject = null )
 	{
-    $parkobject = is_null($parkobject) ? $this->park : $parkobject;
+    	$parkobject = is_null($parkobject) ? $this->park : $parkobject;
  		logtrace( 'park_geocode_h', $parkobject );
 
 		if ( trimlen( $geocode ) > 0 ) {

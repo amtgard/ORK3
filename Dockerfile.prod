@@ -4,20 +4,27 @@ RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y install tzdata
 RUN apt-get update && apt-get install -y less gzip wget nginx zip unzip git nano mysql-client memcached
 RUN apt-get update && apt-get install --no-install-recommends -y php8.1
-RUN apt-get install -y php8.1-fpm php8.1-cli php8.1-common php8.1-mysql php8.1-mbstring php8.1-curl php8.1-xml php8.1-memcached php8.1-gd
+RUN apt-get update && apt-get install -y php8.1-fpm php8.1-cli php8.1-common php8.1-mysql php8.1-mbstring php8.1-curl php8.1-xml php8.1-memcached php8.1-gd
+
 
 RUN sed -i 's/;\s*clear_env = no/clear_env = no/g' /etc/php/8.1/fpm/pool.d/www.conf
-RUN echo "env[ENVIRONMENT] = PROD" >> /etc/php/8.1/fpm/pool.d/www.conf
+#RUN echo "env[ENVIRONMENT] = DEV" >> /etc/php/8.1/fpm/pool.d/www.conf
 RUN sed -i 's/memory_limit = 128M/memory_limit = 512M/g' /etc/php/8.1/fpm/php.ini
-RUN sed -i 's/-m 64/-m 1024/g' /etc/memcached.conf
+RUN sed -i 's/-m 64/-m 128/g' /etc/memcached.conf
 
 RUN mkdir -p /var/www/ork.amtgard.com
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/player
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/event
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/kingdom
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/park
+RUN mkdir -p /var/www/ork.amtgard.com/assets/heraldry/unit
 RUN chown -R www-data:www-data /var/www/ork.amtgard.com
 RUN find /var/www/ork.amtgard.com/assets -type d -exec chmod g+w {} +
 
 COPY nginx.ork3.config /etc/nginx/sites-available/ork.amtgard.com
 RUN rm /etc/nginx/sites-enabled/*
 RUN ln -s /etc/nginx/sites-available/ork.amtgard.com /etc/nginx/sites-enabled/ork.amtgard.com
+
 
 WORKDIR /var/www
 

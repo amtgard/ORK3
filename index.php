@@ -5,7 +5,7 @@ if (getenv('ENVIRONMENT') == 'DEV') {
 } else {
 	include_once('config.php');
 	header("HTTP/1.1 302 Moved Temporarily");
-	header("Location: https:" . HTTP_UI);
+	header("Location: " . HTTP_UI);
 }
 
 ?>
