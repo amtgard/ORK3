@@ -67,13 +67,17 @@
 		*/
 		
 		for (i = 0; i < locations.length; i++) {
-			var pinImage = getMarker(locations[i][6]);  
+			var kingdomColor = locations[i][6];
+			const pinGlyph = new PinElement({
+				background: "#" + kingdomColor,
+				scale: 0.7
+			});
 
 			marker = new google.maps.marker.AdvancedMarkerElement({
 				position: new google.maps.LatLng(locations[i][1], locations[i][2]),
 				map: map,
 				title: locations[i][0],
-				//icon: pinImage
+				content: pinGlyph.element
 			});
 
 			google.maps.event.addListener(marker, 'click', (function(marker, i) {
@@ -112,6 +116,6 @@
 //]]>
 </script>
 
-<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyA8bOLm-eLdymz6DcIE3Q2KGkAVmx-BY4g&callback=initMap&v=weekly&libraries=marker" type="text/javascript"></script>
+<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyA8bOLm-eLdymz6DcIE3Q2KGkAVmx-BY4g&loading=async&callback=initMap&v=weekly&libraries=marker" type="text/javascript"></script>
 
 
