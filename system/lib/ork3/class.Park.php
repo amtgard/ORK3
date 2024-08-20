@@ -98,7 +98,11 @@ class Park extends Ork3
 			if ( $this->park->find() && $this->park->park_id == $request[ 'ParkId' ] ) {
 				$this->park->kingdom_id = $request[ 'KingdomId' ];
 				$this->park->save();
+				// Move all players in the park to the new kingdom
 				$sql = "update " . DB_PREFIX . "mundane set kingdom_id = '" . mysql_real_escape_string( $request[ 'KingdomId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "'";
+				$this->db->query( $sql );
+				// Move all officers in the park to the new kingdom
+				$sql = "update " . DB_PREFIX . "officer set kingdom_id = '" . mysql_real_escape_string( $request[ 'KingdomId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "'";
 				$this->db->query( $sql );
 				return Success();
 			} else {
