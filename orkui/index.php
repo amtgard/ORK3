@@ -1,16 +1,9 @@
 <?php
 
-if(getenv('ENVIRONMENT') != 'DEV' && (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] == "off")){
-    $redirect = 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
-    header('HTTP/1.1 301 Moved Permanently');
-    header('Location: ' . $redirect);
-    exit();
-}
-
-error_reporting( 0 );
-
 include_once( "../startup.php" );
 define( 'UIR', HTTP_UI_REMOTE . 'index.php?Route=' );
+
+ini_set("error_reporting", E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 
 /***********************************************
  * Simple MVC Site
@@ -37,6 +30,7 @@ if ( empty( $_REQUEST[ 'Route' ] ) ) {
 }
 $route = explode( '/', $_REQUEST[ "Route" ] );
 logtrace( 'Index: Route', $route );
+Ork3::$Lib->session = $Session;
 Ork3::$Lib->session->times[ 'Route' ] = time();
 if ( file_exists( DIR_CONTROLLER . 'controller.' . trim( $route[ 0 ] ) . '.php' ) ) {
     include_once( DIR_CONTROLLER . 'controller.' . trim( $route[ 0 ] ) . '.php' );

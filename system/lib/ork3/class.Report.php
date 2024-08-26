@@ -95,7 +95,7 @@ class Report  extends Ork3 {
 		if ($r !== false) {
 			$response['Tournaments'] = array();
 			if ($r->size() > 0) {
-				do {
+				while($r->next()) {
 					$response['Tournaments'][] = array(
 							'TournamentId' => $r->tournament_id,
 							'KingdomId' => $r->kingdom_id,
@@ -110,7 +110,7 @@ class Report  extends Ork3 {
 							'Url' => $r->url,
 							'DateTime' => $r->date_time
 						);
-				} while ($r->next());
+				}
 			}
 			$response['Status'] = Success();
 		} else {
@@ -152,7 +152,7 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
-			do {
+			while ($r->next()) {
 				$response['Awards'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
@@ -166,7 +166,7 @@ class Report  extends Ork3 {
 						'AwardName' => $r->award_name,
 						'LastAttended' => $r->last_attended
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -221,21 +221,21 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
-			do {
-        $name = array();
-        if ($r->kingdom_points > 0)
-          $name[] = $r->kingdom_points . ' Kingdom Points';
-        if ($r->ducal_points > 0 || $r->kingdom_points)
-          $name[] = ($r->ducal_points + $r->kingdom_points) . ' Ducal Points';
+			while ($r->next()) {
+				$name = array();
+				if ($r->kingdom_points > 0)
+				$name[] = $r->kingdom_points . ' Kingdom Points';
+				if ($r->ducal_points > 0 || $r->kingdom_points)
+				$name[] = ($r->ducal_points + $r->kingdom_points) . ' Ducal Points';
 				$response['Awards'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
 						'KingdomId' => $kingdom_id,
-            'DucalPoints' => $r->ducal_points,
-            'KingdomPoints' => $r->kingdom_points,
+						'DucalPoints' => $r->ducal_points,
+						'KingdomPoints' => $r->kingdom_points,
 						'AwardName' => implode(', ', $name)
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -295,14 +295,14 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
-			do {
+			while ($r->next()) {
 				$response['Awards'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
 						'Date' => $r->date,
 						'ParkId' => $r->park_id,
 						'KingdomId' => $r->kingdom_id,
-						'ParentKingdomId' => $r->parent_kingodm_id,
+						'ParentKingdomId' => $r->parent_kingdom_id,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
 						'Rank' => $r->rank,
@@ -310,7 +310,7 @@ class Report  extends Ork3 {
 						'EnteredBy' => $r->by_whom_persona,
 						'EnteredById' => $r->by_whom_id
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -362,7 +362,7 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['AwardRecommendations'] = array();
-			do {
+			while ($r->next()) {
 				$response['AwardRecommendations'][] = array(
 						'RecommendationsId' => $r->recommendations_id,
 						'MundaneId' => $r->mundane_id,
@@ -374,7 +374,7 @@ class Report  extends Ork3 {
 						'RecommendedByName' => $r->recommended_by_persona,
 						'RecommendedById' => $r->recommended_by_id
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -405,9 +405,9 @@ class Report  extends Ork3 {
 					order by m.kingdom_id, c.class_id, m.park_id, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
-		if ($r !== false && !$r->isEmpty() > 0) {
+		if ($r !== false && $r->size() > 0) {
 			$response['Guilds'] = array();
-			do {
+			while ($r->next()) {
 				$response['Guilds'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
@@ -420,7 +420,7 @@ class Report  extends Ork3 {
 						'ParentKingdomId' => $r->parent_kingodm_id,
 						'KingdomName' => $r->kingdom_name
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -452,7 +452,7 @@ class Report  extends Ork3 {
 		if ($r === false) {
 			$response['Status'] = InvalidParameter();
 		} else if ($r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Units'][] = array(
 					'UnitId' => $r->unit_id,
 					'Type' => $r->type,
@@ -461,7 +461,7 @@ class Report  extends Ork3 {
 					'MemberCount' => $r->member_count,
 					'UnitMundaneId' => $r->unit_mundane_id
 				);
-			} while ($r->next());
+			}
 		}
 		return $response;
 	}
@@ -525,7 +525,7 @@ class Report  extends Ork3 {
     $r = $this->db->query($sql);
 		if ($r !== false && $r->size() > 0) {
 			$response = array( 'Status' => Success(), 'Dates' => array());
-			do {
+			while ($r->next()) {
 				$response['Dates'][] = array(
 						'Date' => $r->date,
 						'Year' => $r->year,
@@ -542,7 +542,7 @@ class Report  extends Ork3 {
 						'EventEnd' => $r->event_end,
 						'EventName' => $r->event_name
 					);
-			} while ($r->next());
+			}
 		} else {
 			$response['Status'] = InvalidParameter('A parameter was set incorrectly: ' . $sql . "\n" . print_r($request, true));
 		}
@@ -580,7 +580,7 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Attendance'] = array();
-			do {
+			while ($r->next()) {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
 						'EnteredAt' => $r->entered_at,
@@ -600,7 +600,7 @@ class Report  extends Ork3 {
 						'Persona' => $r->persona,
 						'ClassName' => $r->class_name,
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -649,7 +649,7 @@ class Report  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['Attendance'] = array();
-			do {
+			while ($r->next()) {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
 						'MundaneId' => $r->mundane_id,
@@ -681,7 +681,7 @@ class Report  extends Ork3 {
             			'Note' => $r->note,
             			'Flavor' => $r->class_id==6?$r->flavor:'',
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success($sql);
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -757,7 +757,7 @@ class Report  extends Ork3 {
 			$response['Status'] = Success();
 			$response['Authorizations'] = array();
 			if ($r->size() > 0) {
-				do {
+				while ($r->next()) {
 					$response['Authorizations'][] = array(
 								'AuthorizationId' => $r->authorization_id,
 								'MundaneId' => $r->mundane_id,
@@ -779,7 +779,7 @@ class Report  extends Ork3 {
 								'OfficerId' => $r->officer_id,
 								'OfficerRole' => $r->officer_role
 							);
-				} while ($r->next());
+				}
 			}
 		} else {
 			$response['Status'] = InvalidParameter('Problem processing request.');
@@ -828,14 +828,14 @@ class Report  extends Ork3 {
 				'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name',
 				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'suspended_by.persona suspendator',
 				'p.name as park_name','k.name as kingdom_name','m.penalty_box'));
-		if (true == $request['Active']) $restrict_clause[] = ' m.active = 1 ';
-		if (true == $request['InActive']) $restrict_clause[] = ' m.active = 0 ';
-		if (true == $request['Waivered']) $restrict_clause[] = ' m.waivered = 1';
-		if (true == $request['UnWaivered']) $restrict_clause[] = ' m.waivered = 0';
-		if (true == $request['Banned']) $restrict_clause[] = ' m.penalty_box = 1';
-		if (true == $request['Suspended']) $restrict_clause[] = ' m.suspended = 1';
-		if (true == $request['DuesPaid'] && (AUTH_PARK == $request['Type'] || AUTH_KINGDOM == $request['Type'])) {
-			$duespaid_clause = 'INNER JOIN
+			if (true == $request['Active']) $restrict_clause[] = ' m.active = 1 ';
+			if (true == $request['InActive']) $restrict_clause[] = ' m.active = 0 ';
+			if (true == $request['Waivered']) $restrict_clause[] = ' m.waivered = 1';
+			if (true == $request['UnWaivered']) $restrict_clause[] = ' m.waivered = 0';
+			if (true == $request['Banned']) $restrict_clause[] = ' m.penalty_box = 1';
+			if (true == $request['Suspended']) $restrict_clause[] = ' m.suspended = 1';
+			if (true == $request['DuesPaid'] && (AUTH_PARK == $request['Type'] || AUTH_KINGDOM == $request['Type'])) {
+				$duespaid_clause = 'INNER JOIN
 									(select dues_through, case split_id when null then 0 else 1 end as split_id, src_mundane_id
 										from ' . DB_PREFIX . 'split s
 										INNER join ' . DB_PREFIX . 'account a on s.account_id = a.account_id
@@ -875,7 +875,7 @@ class Report  extends Ork3 {
 			$response['Status'] = Success();
 			$response['Roster'] = array();
 			if ($r->size() > 0) {
-				do {
+				while ($r->next()) {
 					$response['Roster'][] = array(
 								'MundaneId' => $r->mundane_id,
 								'GivenName' => $restricted_access&&$r->restricted==0?$r->given_name:"",
@@ -902,7 +902,7 @@ class Report  extends Ork3 {
 								'PenaltyBox' => $r->penalty_box,
 								'Displayable' => $restricted_access||$r->restricted==0
 							);
-				} while ($r->next());
+				}
 			}
 		} else {
 			$response['Status'] = InvalidParameter('Problem with request.');
@@ -958,9 +958,9 @@ class Report  extends Ork3 {
 			$response['Status'] = InvalidParameter();
 		} else {
 			$report = array();
-			do {
+			while ($r->next()) {
 				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id );
-			} while ($r->next());
+			}
 			$response['KingdomParkAveragesSummary'] = $report;
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
@@ -971,9 +971,9 @@ class Report  extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
 
-		if (strlen($request['KingdomAverageWeeks']) == 0) $request['KingdomAverageWeeks'] = 26;
-		if (strlen($request['ParkAttendanceWithin']) == 0) $request['ParkAttendanceWithin'] = 4;
-		if (strlen($request['ReportFromDate']) == 0) $request['ReportFromDate'] = 'curdate()';
+		if (strlen($request['KingdomAverageWeeks'] ?? '') == 0) $request['KingdomAverageWeeks'] = 26;
+		if (strlen($request['ParkAttendanceWithin'] ?? '') == 0) $request['ParkAttendanceWithin'] = 4;
+		if (strlen($request['ReportFromDate'] ?? '') == 0) $request['ReportFromDate'] = 'curdate()';
 		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(activeparks.parkcount,0) active_parks
 					FROM `" . DB_PREFIX . "kingdom` k
 					left join
@@ -1014,11 +1014,11 @@ class Report  extends Ork3 {
 		logtrace('Report: GetActiveKingdomsSummary', array($request, $sql));
 		$r = $this->db->query($sql);
 		$report = array();
-		do {
+		while ($r->next()) {
 			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id,
 									'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id,
 									'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'Participation' => $r->active_parks );
-		} while ($r->next());
+		}
 		$response = array(
 			'Status' => Success(),
 			'ActiveKingdomsSummaryList' => $report
@@ -1159,7 +1159,7 @@ class Report  extends Ork3 {
 		logtrace('Report: GetActivePlayers', array($request,$sql));
 		$r = $this->db->query($sql);
 		$report = array();
-		if ($r !== false && $r->size() > 0) do {
+		if ($r !== false && $r->size() > 0) while ($r->next()) {
 			$report[] = array(
 					'KingdomName' => $r->kingdom_name,
 					'KingdomId' => $r->kingdom_id,
@@ -1179,7 +1179,7 @@ class Report  extends Ork3 {
 					'DuesPaid' => $r->duespaid,
 					'Waivered' => $r->waivered
 				);
-		} while ($r->next());
+		}
 
 		$response = array(
 			'Status' => Success(),
@@ -1205,9 +1205,9 @@ class Report  extends Ork3 {
 					order by m.kingdom_id, m.park_id, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
-		if ($r !== false && !$r->isEmpty() > 0) {
+		if ($r !== false && $r->size() > 0) {
 			$response['ReeveQualified'] = array();
-			do {
+			while ($r->next()) {
 				$response['ReeveQualified'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
@@ -1218,7 +1218,7 @@ class Report  extends Ork3 {
 						'ParentKingdomId' => $r->parent_kingodm_id,
 						'KingdomName' => $r->kingdom_name
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -1242,9 +1242,9 @@ class Report  extends Ork3 {
 					order by m.kingdom_id, m.park_id, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
-		if ($r !== false && !$r->isEmpty() > 0) {
+		if ($r !== false && $r->size() > 0) {
 			$response['CorporaQualified'] = array();
-			do {
+			while ($r->next()) {
 				$response['CorporaQualified'][] = array(
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
@@ -1255,7 +1255,7 @@ class Report  extends Ork3 {
 						'ParentKingdomId' => $r->parent_kingodm_id,
 						'KingdomName' => $r->kingdom_name
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -1326,8 +1326,8 @@ class Report  extends Ork3 {
 		$response = array();
 		$kingdom = new Model_Kingdom();
 		$park = new Model_Park();
-		if ($r !== false && !$r->isEmpty() > 0) {
-			do {
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
 				$response['DuesPaidList'][] = array(
 						'DuesId' => $r->dues_id,
 						'KingdomId' => $r->kingdom_id,
@@ -1344,7 +1344,7 @@ class Report  extends Ork3 {
 						'DuesForLife' => $r->dues_for_life,
 						'Revoked' => $r->revoked
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 			$response['RestrictAccess'] = $restrict_access; 
 		}

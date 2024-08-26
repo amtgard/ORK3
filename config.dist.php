@@ -1,12 +1,10 @@
 <?php
 
-//die("The ORK is down for transfer.");
-
-// Server is West Coast
-date_default_timezone_set('America/Anchorage');
+date_default_timezone_set( 'America/Chicago' );
 define('CONFIG', true);
 
-error_reporting(0);
+error_reporting( E_ALL );
+ini_set( 'display_errors', '1' );
 
 // HTTP
 define('ORK_DIST_NAME', 'ork');
@@ -66,9 +64,6 @@ define('DIR_VIEW', DIR_UI.'view/');
 define('DIR_MODEL', DIR_UI.'model/');
 define('CUSTOM_CSS', HTTP_TEMPLATE.'default/style/custom.css');
 
-// Service
-
-
 // DB
 define('DB_DRIVER', 'mysql');
 define('DB_HOSTNAME', 'mysql.amtgard.com');
@@ -86,23 +81,19 @@ define('ORK3_SERVICE_URL', HTTP_SERVICE);
 define('SETUP_ADMIN_EMAIL', 'amtgardinc@gmail.com');
 define('DO_SETUP', false);
 
+define( 'TRACE', false );
+define( 'DUMPTRACE', false );
 
-//define('TRACE', true);
-//define('DUMPTRACE', true);
-
-define('TRACE', false);
-define('DUMPTRACE', false);
-
-define('GOOGLE_MAPS_API_KEY', '');
+define('GOOGLE_MAPS_ACCESS_API_KEY', '');
+define('SENDGRID_API_KEY', '');
+define('BEHOLD_KEY', '');
 
 // INCLUDE
-require_once(DIR_LIB.'mail.php');
-require_once(DIR_LIB.'yapo/class.yapo_mysql.php');
-require_once(DIR_LIB.'yapo/class.yapo.php');
-require_once(DIR_LIB.'yapo/class.yapo_result.php');
+require_once( DIR_LIB . 'mail.php' );
+require_once( DIR_LIB . 'Yapo2/class.Yapo.php' );
 
-require_once(DIR_SYSTEMLIB.'class.Log.php');
+require_once( DIR_SYSTEMLIB . 'class.Log.php' );
 
-//require_once(DIR_LIB.'Yapo2/class.Yapo.php');
+define( 'DIR_CACHE', DIR_BASENAME.''); 
 
-?>
+define( 'CACHE_ENABLED', false);

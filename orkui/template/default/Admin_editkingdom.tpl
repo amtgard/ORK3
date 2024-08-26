@@ -52,8 +52,8 @@
 					<td><?=$config['Key'] ?></td>
 					<td>
 <?php 		if (is_object($config['Value'])) : ?>
-<?php 			foreach ($config['Value'] as $v_key => $v_value) : ?>
-<?php				if (is_object($config['AllowedValues']) && array_key_exists($v_key, $config['AllowedValues'])) : ?>
+<?php 			foreach (get_object_vars($config['Value']) as $v_key => $v_value) : ?>
+<?php				if (is_object($config['AllowedValues']) && array_key_exists($v_key, get_object_vars($config['AllowedValues']))) : ?>
 						<div class='config-input'>
 							<span><!--<?=$v_key ?>--></span>
 							<select name='Config[<?=$config['ConfigurationId'] ?>][<?=$v_key ?>]' value='<?=$v_value ?>' />
@@ -119,17 +119,17 @@
 				</tr>
 <?php endforeach; ?>
 				<tr>
-					<td><input type='text' value='' name='Title[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='Class[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='MinimumAttendance[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='MinimumCutoff[New]' /></td>
+					<td><input type='text' value='' name='Title["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='Class["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='MinimumAttendance["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='MinimumCutoff["New"]' /></td>
 					<td>
-						<select name='Period[New]'>
+						<select name='Period["New"]'>
 							<option value='month'>Month</option>
 							<option value='week'>Week</option>
 						</select>
 					</td>
-					<td><input type='text' class='numeric-field' name='Length[New]' /></td>
+					<td><input type='text' class='numeric-field' name='Length["New"]' /></td>
 					
 				</tr>
 				<tr>
@@ -180,11 +180,11 @@
 <?php endforeach; ?>
 						</select>
 					</td>
-					<td><input type='text' class='name-field' value='' name='KingdomAwardName[New]' ></td>
-					<td><input type='text' class='numeric-field' value='' name='ReignLimit[New]' /></td>
-					<td><input type='text' class='numeric-field' value='' name='MonthLimit[New]' /></td>
-					<td><input type='checkbox' value='1' name='IsTitle[New]' /></td>
-					<td><input class='numeric-field' type='text' value='' name='TitleClass[New]' /></td>
+					<td><input type='text' class='name-field' value='' name='KingdomAwardName["New"]' ></td>
+					<td><input type='text' class='numeric-field' value='' name='ReignLimit["New"]' /></td>
+					<td><input type='text' class='numeric-field' value='' name='MonthLimit["New"]' /></td>
+					<td><input type='checkbox' value='1' name='IsTitle["New"]' /></td>
+					<td><input class='numeric-field' type='text' value='' name='TitleClass["New"]' /></td>
 				</tr>
 				<tr>
 					<td colspan=7><input type='submit' value='Update Awards' ?></td>

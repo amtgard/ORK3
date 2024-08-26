@@ -30,6 +30,8 @@ class Controller_Award extends Controller {
 		$this->data['Call'] = $call;
 	}
 	
+	public function index($action = null) {}
+
 	public function park($id) {
 		$params = explode('/',$id);
 		$id = $params[0];

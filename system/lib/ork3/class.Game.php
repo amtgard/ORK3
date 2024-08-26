@@ -82,9 +82,9 @@ class Game extends Ork3 {
 		if (valid_id($request['GameId'])) {
 			$this->objective->clear();
 			$this->objective->game_id = $request['GameId'];
-			if ($this->objective->find() && $this->objective->game_id == $request['GameId']) do {
+			if ($this->objective->find() && $this->objective->game_id == $request['GameId']) while ($this->objective->next()) {
 				$objectives[] = $this->objective->game_objective_id;
-			} while ($this->objective->next());
+			}
 		}
 		return $objectives;
 	}
@@ -177,8 +177,7 @@ class Game extends Ork3 {
 	private function game_security($game_id, $game_code) {
 		$this->game->clear();
 		$this->game->game_id = $game_id;
-		$this->game->code = $game_code;
-		$this->game->code_term = 'like';
+		$this->game->like('code', $game_code);
 		if ($this->game->find() && $this->game->game_id == $game_id)
 			return true;
 		return false;

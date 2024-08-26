@@ -161,7 +161,7 @@ class Event  extends Ork3 {
 				$nr = array();
 				$nr['EventCalendarDetailId'] = $this->detail->event_calendardetail_id;
 				$nr['EventId'] = $this->detail->event_id;
-  			$nr['AtParkId'] = $this->detail->at_park_id;
+  				$nr['AtParkId'] = $this->detail->at_park_id;
 				$nr['Current'] = $this->detail->current;
 				$nr['Price'] = $this->detail->price;
 				$nr['EventStart'] = $this->detail->event_start;
@@ -195,13 +195,13 @@ class Event  extends Ork3 {
 			if (valid_id($request['Current']) && valid_id($request['EventId'])) {
 				$this->detail->clear();
 				$this->detail->event_id = $request['EventId'];
-        if ($this->detail->find()) {
-          $this->detail->current = 0;
-          $this->detail->update();
-        }
+				if ($this->detail->find()) {
+					$this->detail->current = 0;
+					$this->detail->save();
+				}
 			}
-      $details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
-  		$geocode = json_decode( $details[ 'Geocode' ] );
+      		$details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
+  			$geocode = json_decode( $details[ 'Geocode' ] );
 			
 			$this->detail->clear();
 			$this->detail->event_id = $request['EventId'];
@@ -223,8 +223,8 @@ class Event  extends Ork3 {
 			$this->detail->modified = date('Y-m-d H:i:s');
 			$this->detail->google_geocode = $details['Geocode'];
 			$this->detail->location = $details['Location'];
-      $this->detail->latitude = $geocode->results[ 0 ]->geometry->location->lat;
-      $this->detail->longitude = $geocode->results[ 0 ]->geometry->location->lng;
+			$this->detail->latitude = $geocode->results[ 0 ]->geometry->location->lat;
+			$this->detail->longitude = $geocode->results[ 0 ]->geometry->location->lng;
 			$this->detail->save();
 			return Success($this->detail->event_calendardetail_id);
 		} else {
@@ -323,7 +323,7 @@ class Event  extends Ork3 {
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['ParkDays'] = array();
-			do {
+			while ($r->next()) {
 				$response['ParkDays'][] = array(
 						'EventId' => $r->event_id,
 						'DetailId' => $r->event_calendardetail_id,
@@ -348,10 +348,10 @@ class Event  extends Ork3 {
 						'Longitude' => $r->longitude,
 						'Start' => $r->event_start,
 						'End' => $r->event_end,
-            'Distance' => $r->distance,
-            'StartsAbout' => $r->starts_about
+						'Distance' => $r->distance,
+						'StartsAbout' => $r->starts_about
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -374,7 +374,7 @@ class Event  extends Ork3 {
 					return InvalidParameter('The scheduled event for this template cannot be updated because it has already been used (attendance has been entered!).  Please try scheduling a new event for this template.');
 			
 				$details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['Postal_code']);
-    		$geocode = json_decode( $details[ 'Geocode' ] );
+    			$geocode = json_decode( $details[ 'Geocode' ] );
 			
 				$this->detail->event_id = $request['EventId'];
 				$this->detail->current = $request['Current'];
@@ -394,8 +394,8 @@ class Event  extends Ork3 {
 				$this->detail->modified = date('Y-m-d H:i:s');
 				$this->detail->google_geocode = $details['Geocode'];
 				$this->detail->location = $details['Location'];
-        $this->detail->latitude = $geocode->results[ 0 ]->geometry->location->lat;
-        $this->detail->longitude = $geocode->results[ 0 ]->geometry->location->lng;
+				$this->detail->latitude = $geocode->results[ 0 ]->geometry->location->lat;
+				$this->detail->longitude = $geocode->results[ 0 ]->geometry->location->lng;
 				Ork3::$Lib->heraldry->SetEventHeraldry($request);
 				$this->detail->save();
 				if (valid_id($request['Current'])) {

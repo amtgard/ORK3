@@ -382,6 +382,7 @@ class Controller_Admin extends Controller {
 
 	public function setparkofficers($post=null) {
 		$this->load_model('Park');
+		$this->session->park_id = $this->request->ParkId;
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_setofficers', true);
 			if (!isset($this->session->user_id)) {
@@ -545,8 +546,8 @@ class Controller_Admin extends Controller {
 			$this->data['CreateUnitId'] = valid_id($this->request->Admin_manageevent->UnitId)?$this->request->Admin_manageevent->UnitId:$this->request->UnitId;
 			if (valid_id($this->data['CreateUnitId'])) {
 				$unit = $this->Unit->get_unit($this->data['CreateUnitId']);
-				$this->data['menu']['player'] = array( 'url' => UIR."Unit/index/{$this->data[CreateUnitId]}", 'display' => $unit['Unit']['Name'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data[CreateUnitId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+				$this->data['menu']['player'] = array( 'url' => UIR."Unit/index/{$this->data['CreateUnitId']}", 'display' => $unit['Unit']['Name'] );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/{$this->data['CreateUnitId']}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if (valid_id($this->request->MundaneId) || valid_id($this->request->Admin_manageevent->CreateMundaneId)) {
@@ -554,8 +555,8 @@ class Controller_Admin extends Controller {
 			$this->data['CreateMundaneId'] = valid_id($this->request->Admin_manageevent->MundaneId)?$this->request->Admin_manageevent->MundaneId:$this->request->MundaneId;
 			if (valid_id($this->data['CreateMundaneId'])) {
 				$player = $this->Player->fetch_player($this->data['CreateMundaneId']);
-				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data[CreateMundaneId]}", 'display' => $player['Persona'] );
-				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data[CreateMundaneId]}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data['CreateMundaneId']}", 'display' => $player['Persona'] );
+				$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data['CreateMundaneId']}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			}
 		}
 		if ($this->request->exists('Admin_manageevent')) {
@@ -687,19 +688,23 @@ class Controller_Admin extends Controller {
 					    }
 						if ($this->request->Update == 'Update Media') {
 							if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
-								if ((int) $_FILES['Heraldry']['size'] * 1.333 > 465000) {
+								if ((int) $_FILES['Heraldry']['size'] / 1.333 > 465000) {
 									$this->data['Error'] = 'Image Error: File size is too large.';
 									$r['Status'] = NULL;
 								} else {
-									if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
-										$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
-										$h_imdata = base64_encode($h_im);
-										$this->Player->SetHeraldry(array(
-											'MundaneId' => $id,
-											'Heraldry' => strlen($h_imdata)>0?$h_imdata:null,
-											'HeraldryMimeType' => strlen($h_imdata)>0?$_FILES['Heraldry']['type']:'',
-											'Token' => $this->session->token
-										));
+									if (is_dir(DIR_TMP) && is_writable(DIR_TMP)) {
+										if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
+											$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
+											$h_imdata = base64_encode($h_im);
+											$this->Player->SetHeraldry(array(
+												'MundaneId' => $id,
+												'Heraldry' => strlen($h_imdata)>0?$h_imdata:null,
+												'HeraldryMimeType' => strlen($h_imdata)>0?$_FILES['Heraldry']['type']:'',
+												'Token' => $this->session->token
+											));
+										}
+									} else {
+										die('TMP_DIR is not writable.');
 									}
 								}
 							}
@@ -782,9 +787,9 @@ class Controller_Admin extends Controller {
 									'Waiver' => strlen($w_imdata)>0?$w_imdata:null,
 									'WaiverMimeType' => strlen($w_imdata)>0?$_FILES['Waiver']['type']:'',
 									'ReeveQualified' => ($this->request->Admin_player->ReeveQualified == 1)?1:0,
-									'ReeveQualifiedUntil' => strlen($this->request->Admin_player->ReeveQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->ReeveQualifiedUntil)):null,
+									'ReeveQualifiedUntil' => strlen($this->request->Admin_player->ReeveQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->ReeveQualifiedUntil ?? '')):null,
 									'CorporaQualified' => ($this->request->Admin_player->CorporaQualified == 1)?1:0,
-									'CorporaQualifiedUntil' => strlen($this->request->Admin_player->CorporaQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->CorporaQualifiedUntil)):null,
+									'CorporaQualifiedUntil' => strlen($this->request->Admin_player->CorporaQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->CorporaQualifiedUntil ?? '')):null,
 									'Token' => $this->session->token
 								));
 							if ($this->request->Admin_player->Password!=$this->request->Admin_player->PasswordAgain)

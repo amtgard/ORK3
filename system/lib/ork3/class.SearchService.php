@@ -12,11 +12,10 @@ class SearchService extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
 			return $cache;
 		
-    $limit = min($limit, 50);
+   		$limit = min($limit, 50);
 		$unit = new yapo($this->db, DB_PREFIX . 'unit');
 		$unit->clear();
-		$unit->name = "%$name%";
-		$unit->name_term = "like";
+		$unit->like('name', "%$name%");
 		if ($unit->find()) {
 			$r = array();
 			do {
@@ -78,9 +77,9 @@ class SearchService extends Ork3 {
 					where p.name like '%" . mysql_real_escape_string($name) . "%' limit 4)
 				";
 		$d = $this->db->query($sql);
-		if ($d !== false && !$d->isEmpty()) {
+		if ($d !== false && $d->size()) {
 			$r = array();
-			do {
+			while ($d->next()) {
 				$r[] = array(
 						'KingdomId' => $d->kingdom_id,
 						'KingdomName' => $d->kingdom_name,
@@ -93,7 +92,7 @@ class SearchService extends Ork3 {
 						'ShortName' => ($d->event_id > 0?$d->event_name:($d->park_id > 0?$d->park_name:$d->kingdom_name)),
 						'Type' => ($d->event_id > 0?"Event":($d->park_id > 0?"Park":"Kingdom"))
 					);
-			} while ($d->next());
+			}
 		} else {
 			return null;
 		}
@@ -136,12 +135,12 @@ class SearchService extends Ork3 {
 	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1) {
 		$keys = func_get_args();
 		if (count($keys) > 0)
-			$keys[0] = substr($keys[0], 0, 4);
+			$keys[0] = substr($keys[0] ?? '', 0, 4);
 		$key = Ork3::$Lib->ghettocache->key($keys); 
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
 			return $cache;
 		
-    $limit = min($limit, 50);
+    	$limit = min($limit, 50);
 		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
@@ -166,13 +165,12 @@ class SearchService extends Ork3 {
 		} else {
 			$sql .= " order by kingdom_name, park_name, e.name";
 		}
-		//echo $sql;
 		$d = $this->db->query($sql);
 		$i = 0;
 		$r = array();
-		if ($d !== false && !$d->isEmpty()) {
-			do {
-				$r[$i++] = array(
+		if ($d !== false && $d->Size() > 0) {
+			while ($d->next()) {
+				$r[] = array(
 						'EventId' => $d->event_id,
 						'Name' => $d->name,
 						'KingdomName' => $d->kingdom_name,
@@ -186,7 +184,7 @@ class SearchService extends Ork3 {
     				$limit--;
 					if ($limit == 0) break;
 				}
-			} while ($d->next());
+			}
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 	}
@@ -199,8 +197,7 @@ class SearchService extends Ork3 {
 		
 		$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
 		$kingdom->clear();
-		$kingdom->name = "%$name%";
-		$kingdom->name_term = 'like';
+		$kingdom->like('name', "%$name%");
 		$i = 0;
 		if ($kingdom->find(array('name'))) {
 			$r = array();
@@ -228,14 +225,13 @@ class SearchService extends Ork3 {
 		
 		$park = new yapo($this->db, DB_PREFIX . 'park');
 		$park->clear();
-		$park->name = "%$name%";
-		$park->name_term = 'like';
+		$park->like('name', "%$name%");
 		if(is_numeric($kingdom_id)) $park->kingdom_id = $kingdom_id;
 		$i = 0;
-		if ($park->find(array('name'))) {
+		if ($park->find()) {
 			$r = array();
 			do {
-				$r[$i++] = array(
+				$r[] = array(
 						'ParkId' => $park->park_id,
 						'KingdomId' => $park->kingdom_id,
 						'Name' => $park->name,
@@ -252,22 +248,24 @@ class SearchService extends Ork3 {
 		}
 	}
 	
-  public function magic_search($term, $kingdom_id, $park_id) {
-    preg_match('/([a-z0-9]{2,3}):([a-z0-9]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
-    
-    $k_id = Ork3::$Lib->kingdom->GetKingdomByAbbreviation(array('Abbreviation'=>$matches[1]));
-    $p_id = Ork3::$Lib->park->GetParkInKingdomByAbbreviation(array('Abbreviation'=>$matches[2]), $k_id);
-    
-    return array( 
-      (trimlen($matches[3])==0?$term:$matches[3]), 
-      (is_null($k_id)?$kingdom_id:$k_id), 
-      (is_null($p_id)?$park_id:$p_id) );
-  }
+	public function magic_search($term, $kingdom_id, $park_id) {
+		preg_match('/([a-z0-9]{2,3}):([a-z0-9]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
+
+		$k_id = isset($matches[1]) ? Ork3::$Lib->kingdom->GetKingdomByAbbreviation(array('Abbreviation'=>$matches[1])) : null;
+		$p_id = isset($matches[2]) ? Ork3::$Lib->park->GetParkInKingdomByAbbreviation(array('Abbreviation'=>$matches[2]), $k_id) : null;
+
+		$abbrev_match = isset($matches[3]) ? (trimlen($matches[3])==0?$term:$matches[3]) : $term;
+
+		return array( 
+			$abbrev_match, 
+			(is_null($k_id)?$kingdom_id:$k_id), 
+			(is_null($p_id)?$park_id:$p_id) );
+	}
   
 	public function Player($type, $search, $limit=15, $kingdom_id = null, $park_id = null, $waivered = null, $persona_required = true) {
-    list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
+    	list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
 				
-		$searchtokens = preg_split("/[\s,-]+/", $search);
+		$searchtokens = preg_split("/[\s,-]+/", $search ?? '');
     	$opt = array("1");
         $limit = min(valid_id($limit)?$limit:15, 50);
 		switch (strtoupper($type)) {
@@ -306,8 +304,8 @@ class SearchService extends Ork3 {
 		if (is_numeric($waivered) && $waivered > 0) {
 			$opt[] = "waivered =".($waivered?1:0);
 		}
+		$order = $order ?? '';
 		$sql = "select 
-						$parameters
 						`mundane_id`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
 						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
 					from " . DB_PREFIX . "mundane m
@@ -316,10 +314,11 @@ class SearchService extends Ork3 {
 					where ($s) and (".implode(' and ', $opt).") $order
 					limit $limit";
 		$i = 0;
+		$this->db->clear();
 		$q = $this->db->query($sql);
 		if ($q !== false && $q->size() > 0) {
 			$r = array();
-			do {
+			while ($q->next()) {
 				$r[$i++] = array(
 						'MundaneId' => $q->mundane_id,
 						'GivenName' => '',//$q->restricted==1?"Restricted":$q->given_name,
@@ -335,16 +334,16 @@ class SearchService extends Ork3 {
 						'Waivered' => $q->waivered,
 						'PenaltyBox' => $q->penalty_box,
 						'KAbbr' => $q->k_abbr,
-            'PAbbr' => $q->p_abbr,
-            'Suspended' => $q->suspended,
-            'SuspendedAt' => $q->suspended_at,
-            'SuspendedUntil' => $q->suspended_until
+						'PAbbr' => $q->p_abbr,
+						'Suspended' => $q->suspended,
+						'SuspendedAt' => $q->suspended_at,
+						'SuspendedUntil' => $q->suspended_until
 					);
 				if (is_numeric($limit)) {
 					if ($limit == 0) break;
 					$limit--;
 				}
-			} while ($q->next());
+			}
 			return $r;
 		} else {
 			return array();

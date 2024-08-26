@@ -42,7 +42,7 @@
 				<td><a href='<?=UIR.'Park/index/'.$player['ParkId'] ?>'><?=$player['ParkName'] ?></a></td>
 				<td><a href='<?=UIR.'Player/index/'.$player['MundaneId'] ?>'><?= $player['Persona'] ?></a></td>
 				<?php if (!$roster['RestrictAccess']): ?>
-					<td><?= $player[GivenName] . ' ' . $player['Surname'] ?></td>
+					<td><?= $player['GivenName'] . ' ' . $player['Surname'] ?></td>
 				<?php endif; ?>
 				<td><?= ($player['Waivered'])?'Yes':'' ?></td>
 				<td><?= ($player['Suspended'])?'Yes':'' ?></td>

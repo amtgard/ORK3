@@ -1,6 +1,6 @@
 <div class='info-container'>
 	<h3><?=$kingdom_name; ?></h3>
-	<?=$kingdom_info['Info']['KingdomInfo']['HasHeraldry']==1?"<img src='{$kingdom_info[HeraldryUrl][Url]}' class='heraldry-img' />":"" ?>
+	<?=$kingdom_info['Info']['KingdomInfo']['HasHeraldry']==1?"<img src='{$kingdom_info["HeraldryUrl"]["Url"]}' class='heraldry-img' />":"" ?>
 	<ul>
 		<li><a href='<?=UIR ?>Search/kingdom/<?=$kingdom_id ?>'>Search Players</a></li>
 		<li><a href='<?=UIR ?>Award/kingdom/<?=$kingdom_id ?>'>Enter Awards</a></li>
@@ -173,7 +173,7 @@
 		</thead>
 		<tbody>
 <?php foreach ($kingdom_tournaments['Tournaments'] as $k => $tournament) : ?>
-			<tr onClick='window.document.location.href="<?=UIR ?>Tournament/worksheet/<?=$tournament[TournamentId] ?>"'>
+			<tr onClick='window.document.location.href="<?=UIR ?>Tournament/worksheet/<?=$tournament['TournamentId'] ?>"'>
 				<td><?=$tournament['Name'] ?></td>
 				<td><?=$tournament['ParkName'] ?></td>
 				<td><?=$tournament['EventName'] ?></td>

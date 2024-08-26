@@ -60,7 +60,7 @@ class Attendance  extends Ork3 {
 		logtrace("Attendance->AddAttendance()", $request);
 
 		if (($type = $this->AttendanceAuthority($request)) === false) {
-      logtrace("Attendance->AddAttendance: No Authority", $request);
+      		logtrace("Attendance->AddAttendance: No Authority", $request);
 			return NoAuthorization('Type is not specified.');
 		}
 		
@@ -93,14 +93,15 @@ class Attendance  extends Ork3 {
 				break;
 			case AUTH_EVENT:
 				$detail = Ork3::$Lib->event->GetEventDetail(array('EventCalendarDetailId' => $request['EventCalendarDetailId']));
-        $kingdom_id = Ork3::$Lib->park->GetParkKingdomId($detail['CalendarEventDetails'][0]['AtParkId']);
+				$event = Ork3::$Lib->event->GetEvent(array('EventId' => $detail['CalendarEventDetails'][0]['EventId']));
+        		$kingdom_id = $event['KingdomId'];
 				if ($detail['Status']['Status'] != 0) {
                     logtrace("AddAttendance: Could not fetch Event Detail", $detail);
 					return InvalidParameter();
 				}
 
-        $this->attendance->kingdom_id = $kingdom_id;
-        $this->attendance->park_id = $detail['CalendarEventDetails'][0]['AtParkId'];
+				if ($kingdom_id) $this->attendance->kingdom_id = $kingdom_id;
+				if (isset($detail['CalendarEventDetails'][0]['AtParkId'])) $this->attendance->park_id = $detail['CalendarEventDetails'][0]['AtParkId'];
 				$this->attendance->date = $detail['CalendarEventDetails'][0]['EventStart'];
 				$this->attendance->event_id = $detail['CalendarEventDetails'][0]['EventId'];
 				$this->attendance->event_calendardetail_id = $request['EventCalendarDetailId'];
@@ -110,7 +111,6 @@ class Attendance  extends Ork3 {
 		}
 		
 		$attendance_id = $this->attendance->save();
-                    
 		
 		logtrace("Attendance->AddAttendance()", array($this->attendance->lastSql(), $request, $detail));
 		

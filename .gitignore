@@ -35,4 +35,5 @@ orkui/.htaccess
 .htaccess
 *.cache
 ork.zip
-
+.prod.env
+config.tmpprod.php

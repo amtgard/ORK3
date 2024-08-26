@@ -8,7 +8,7 @@ class Controller_Reports extends Controller {
 		$this->data['menu']['reports'] = array( 'url' => UIR.'Reports', 'display' => 'Reports' );
 	}
 
-	public function index() {
+	public function index($action = null) {
 
 	}
 

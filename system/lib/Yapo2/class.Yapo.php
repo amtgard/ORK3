@@ -42,22 +42,30 @@ class Yapo {
 		$this->__Core->Clear();
 	}
 	
+	public function lastSql() {
+		return $this->__LastSql;
+	}
+
 	public function save($all = false) {
 		list($sql, $Data) = $this->__Core->__Save->GenerateSql(array('all'=>$all));
 		$this->__LastSql = $sql;
-		
+		$primary_key = $this->__Core->GetPrimaryKeyField();
+
+		if (isset($this->__Core->$primary_key)) {
+			$pk_id = $this->$primary_key;
+		}
+
 		$this->__Core->SetData($Data);
 		$this->__Core->DataSet($sql);
 		
-		$last_insert_id = $this->__Core->GetLastInsertId();
-		
 		if ("insert" == $this->__Core->__Save->Mode) {
-			$this->Clear();
-			$primary_key = $this->__Core->GetPrimaryKeyField();
-			$this->$primary_key = $last_insert_id;
-			$this->Find();
-			$this->Next();
+			$pk_id = $this->__Core->GetLastInsertId();
 		}
+		
+		$this->Clear();
+		$this->$primary_key = $pk_id;
+		$this->Find();
+		$this->Next();
 		
 		return $last_insert_id;
 	}
@@ -134,9 +142,14 @@ class Yapo {
 	const NOT_EQ = 'neq';
 	const NOT_LIKE = 'nlike';
 	const NOT_IN = 'nin';
+	const IS_NULL = 'is_null';
 	
 	function equals($field, $value) {
-		$this->comparator($field, Yapo::EQUALS, $value);
+		if (is_null($value)) {
+			$this->comparator($field, Yapo::IS_NULL, $value);
+		} else {
+			$this->comparator($field, Yapo::EQUALS, $value);
+		}
 	}
 	
 	function not_equals($field, $value) {
@@ -232,6 +245,9 @@ class Yapo {
 		if (is_object($value)) {
 			debug_print_backtrace (); die();
 		}
+		//if (!isset($value)) return;
+		//$def = $this->__Core->__definition['Fields'][$field];
+		//$value = $this->__Core->__DB->ValidateField($def, $value);
 		$this->__Core->__field_values[$field] = $value;
 		$this->Equals($field, $value);
 		$this->Set($field, $value);

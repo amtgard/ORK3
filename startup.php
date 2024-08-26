@@ -6,6 +6,10 @@ if (getenv('ENVIRONMENT') == 'DEV') {
 	include_once( dirname( __FILE__ ) . '/config.php' );
 }
 
+function mysql_real_escape_string($str) {
+	return $str;
+}
+
 // System Setup
 
 if ( isset( $LOG ) )
@@ -15,7 +19,7 @@ $LOG;
 $DB;
 
 if ( !isset( $DB ) ) {
-	$DB = new yapo_mysql( DB_HOSTNAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD );
+	$DB = new YapoMysql( DB_HOSTNAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD );
 }
 
 if ( !DO_SETUP ) {

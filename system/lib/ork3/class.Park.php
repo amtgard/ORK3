@@ -98,7 +98,11 @@ class Park extends Ork3
 			if ( $this->park->find() && $this->park->park_id == $request[ 'ParkId' ] ) {
 				$this->park->kingdom_id = $request[ 'KingdomId' ];
 				$this->park->save();
+				// Move all players in the park to the new kingdom
 				$sql = "update " . DB_PREFIX . "mundane set kingdom_id = '" . mysql_real_escape_string( $request[ 'KingdomId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "'";
+				$this->db->query( $sql );
+				// Move all officers in the park to the new kingdom
+				$sql = "update " . DB_PREFIX . "officer set kingdom_id = '" . mysql_real_escape_string( $request[ 'KingdomId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "'";
 				$this->db->query( $sql );
 				return Success();
 			} else {
@@ -126,16 +130,16 @@ class Park extends Ork3
 			$this->parkday->alternate_location = $request[ 'AlternateLocation' ];
 
 			if ( $request[ 'AlternateLocation' ] > 0 ) {
-     		logtrace( 'AddParkDay.AlternateLocation', null );
+     			logtrace( 'AddParkDay.AlternateLocation', null );
 				$this->parkday->address = $request[ 'Address' ];
 				$this->parkday->city = $request[ 'City' ];
 				$this->parkday->province = $request[ 'Province' ];
 				$this->parkday->postal_code = $request[ 'PostalCode' ];
 				$this->parkday->map_url = $request[ 'MapUrl' ];
-     		logtrace( 'AddParkDay', array( $this->parkday, $request ) );
-        $this->park_geocode_h(null, $this->parkday);
+     			logtrace( 'AddParkDay', array( $this->parkday, $request ) );
+        		$this->park_geocode_h(null, $this->parkday);
 			} else {
-     		logtrace( 'AddParkDay.NormalLocation', null );
+     			logtrace( 'AddParkDay.NormalLocation', null );
 				$this->park->clear();
 				$this->park->park_id = $request[ 'ParkId' ];
 				$this->park->find();
@@ -150,7 +154,6 @@ class Park extends Ork3
 				$this->parkday->map_url = $this->park->map_url;
 			}
 			$this->parkday->location_url = $request[ 'LocationUrl' ];
-
 			$this->parkday->save();
 		} else {
 			return NoAuthorization();
@@ -186,7 +189,7 @@ class Park extends Ork3
 		$r = $this->db->query( $sql );
 		if ( $r !== false && $r->size() > 0 ) {
 			$response = [ 'Status' => Success(), 'Parks' => [ ] ];
-			do {
+			while ( $r->next() ) {
 				$response[ 'Parks' ][] = [
 					'ParkId'       => $r->park_id,
 					'KingdomId'    => $r->kingdom_id,
@@ -202,7 +205,7 @@ class Park extends Ork3
 					'Class'        => $r->class,
 					'ParentOf'     => ( $r->is_principality == 1 && !array_search( $r->park_id, $request[ 'Stack' ] ) ) ? $this->GetParks( [ 'ParkId' => $r->park_id, 'Stack' => push_stack( $request[ 'Stack' ], $r->park_id ) ] ) : null,
 				];
-			} while ( $r->next() );
+			}
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
 		}
@@ -226,7 +229,7 @@ class Park extends Ork3
 		$response[ 'Officers' ] = [ ];
 		if ( $r !== false && $r->size() > 0 ) {
 			$response[ 'Status' ] = Success();
-			do {
+			while ( $r->next() ) {
 				$response[ 'Officers' ][] = [
 					'AuthorizationId' => $r->authorization_id,
 					'MundaneId'       => $r->m_mundane_id,
@@ -247,7 +250,7 @@ class Park extends Ork3
 					'OfficerId'       => $r->officer_id,
 					'OfficerRole'     => $r->officer_role,
 				];
-			} while ( $r->next() );
+			}
 			$response[ 'Status' ] = Success();
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
@@ -423,11 +426,11 @@ class Park extends Ork3
                   next_day < '$end' and distance < $distance
                 order by next_day asc, distance asc limit $limit) date_src";
 
-    $r = $this->db->query($sql);
+    	$r = $this->db->query($sql);
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
 			$response['ParkDays'] = array();
-			do {
+			while ($r->next()) {
 				$response['ParkDays'][] = array(
 						'ParkdayId' => $r->parkday_id,
 						'KingdomId' => $r->kingdom_id,
@@ -452,10 +455,10 @@ class Park extends Ork3
 						'Location' => $r->location,
 						'MapUrl' => $r->map_url,
 						'LocationUrl' => $r->location_url,
-            'Distance' => $r->distance,
-            'NextDay' => $r->next_day
+						'Distance' => $r->distance,
+						'NextDay' => $r->next_day
 					);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -471,14 +474,14 @@ class Park extends Ork3
 		$response[ 'Authorizations' ] = [ ];
 		if ( $r !== false && $r->size() > 0 ) {
 			$response[ 'Status' ] = Success();
-			do {
+			while ( $r->next() ) {
 				$response[ 'Authorizations' ][] = [
 					'AuthorizationId' => $r->authorization_id,
 					'UserName'        => $r->username,
 					'MundaneId'       => $r->mundane_id,
 					'Role'            => $r->role,
 				];
-			} while ( $r->next() );
+			}
 		} else {
 			$response[ 'Status' ] = InvalidParameter( NULL, 'Problem processing request.' );
 		}
@@ -487,7 +490,7 @@ class Park extends Ork3
 
 	public function park_geocode_h( $geocode = null, & $parkobject = null )
 	{
-    $parkobject = is_null($parkobject) ? $this->park : $parkobject;
+    	$parkobject = is_null($parkobject) ? $this->park : $parkobject;
  		logtrace( 'park_geocode_h', $parkobject );
 
 		if ( trimlen( $geocode ) > 0 ) {
@@ -510,7 +513,7 @@ class Park extends Ork3
 
 	public function ParkGeocode( $park_id )
 	{
-    $parkobject = is_null($parkobject) ? $this->park : $parkobject;
+    	$parkobject = is_null($parkobject) ? $this->park : $parkobject;
     
 		$parkobject->clear();
 		$parkobject->park_id = $park_id;
@@ -525,7 +528,7 @@ class Park extends Ork3
 	{
 		$srcname = $name;
 		$found = false;
-		do {
+		while ( !$found ) {
 			$this->park->clear();
 			$this->park->name = $name;
 			if ( $this->park->find() ) {
@@ -533,7 +536,7 @@ class Park extends Ork3
 			} else {
 				$found = true;
 			}
-		} while ( !$found );
+		}
 		return $name;
 	}
 
@@ -663,9 +666,16 @@ class Park extends Ork3
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
 		) {
-			$officer = new yapo( $this->db, DB_PREFIX . 'officer' );
+			if (!isset($request['KingdomId'])) {
+				if (!isset($request['ParkId'])) {
+					return InvalidParameter( 'Either ParkId or KingdomId must be set to update officers.' );
+				}
+				$kingdomId = $this->GetParkKingdomId($request[ 'ParkId' ]);
+			} else {
+				$kingdomId = $request['KingdomId'];
+			}
 			$c = new Common();
-			$c->set_officer( $request[ 'KingdomId' ], $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ] );
+			$c->set_officer( $kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ] );
 		} else {
 			$response = NoAuthorization();
 		}

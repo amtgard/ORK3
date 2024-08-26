@@ -1,7 +1,5 @@
 <?php
 
-require_once(DIR_LIB.'nusoap/nusoap.php');
-
 class JSONModel {
 	
 	var $JSONSource;

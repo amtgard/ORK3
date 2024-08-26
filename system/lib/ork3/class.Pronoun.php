@@ -20,7 +20,7 @@ class Pronoun  extends Ork3 {
 		$response = array();
         $response['Pronouns'] = array();
 		if ($r !== false && $r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Pronouns'][$r->pronoun_id] = array(
 					'PronounId' => $r->pronoun_id,
 					'Subject' => $r->subject,
@@ -29,7 +29,7 @@ class Pronoun  extends Ork3 {
 					'PossessivePronoun' => $r->possessivepronoun,
 					'Reflexive' => $r->reflexive,
 				);
-			} while ($r->next());
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter(NULL, 'Problem processing your request.');

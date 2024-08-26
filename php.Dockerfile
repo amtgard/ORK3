@@ -2,6 +2,8 @@ FROM php:5.6-apache
 RUN a2enmod headers
 RUN a2enmod rewrite
 
+RUN echo "deb http://archive.debian.org/debian stretch main" > /etc/apt/sources.list
+
 RUN apt-get update && apt-get install -y \
 && docker-php-ext-install mysql
 RUN apt-get update -y && apt-get install -y \

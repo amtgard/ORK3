@@ -77,7 +77,7 @@ class YapoMysql extends YapoDb {
 		$cnt = 3;
 		do {
 			$Query = $this->DBH->prepare($sql);
-			if (count($this->Data) > 0)
+			if (is_countable($this->Data) && count($this->Data) > 0)
 				$Query->execute($this->Data);
 			else
 				$Query->execute();
@@ -107,14 +107,21 @@ class YapoMysql extends YapoDb {
 			stristr($field_def['MajorType'], 'decimal') ||
 			stristr($field_def['MajorType'], 'numeric')) {
 			return $value;
-		} else if (strtoupper($field_def['MajorType']) == 'TIME') {
-			return "'" . date("H:i:s", strtotime($value)) . "'";
-		} else if (stristr($field_def['MajorType'], 'time')) {
-			return "'" . date("Y-m-d H:i:s", strtotime($value)) . "'";
+		} else if (strtoupper($field_def['MajorType']) == 'TIME' ||
+					stristr($field_def['MajorType'], 'timestamp')) {
+			if (is_numeric($value)) {
+				return date("Y-m-d H:i:s", $value);
+			} else {
+				return date("Y-m-d H:i:s", strtotime($value));
+			}
 		} else if (stristr($field_def['MajorType'], 'date')) {
-			return "'" . date("Y-m-d", strtotime($value)) . "'";
+			if (is_numeric($value)) {
+				return date("Y-m-d", $value);
+			} else {
+				return date("Y-m-d", strtotime($value));
+			}
 		} else if (strtoupper($field_def['MajorType']) == 'YEAR') {
-			return "'" . date("Y", strtotime($value)) . "'";
+			return date("Y", strtotime($value));
 		} else if (stristr($field_def['MajorType'], 'text')) {
 			// incomplete
 		}

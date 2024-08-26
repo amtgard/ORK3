@@ -66,6 +66,7 @@ class YapoDb {
 	}
 	
 	function Query($sql, $DataSet = null) {
+		$this->Clear();
 		if (is_array($DataSet))
 			$this->SetData($DataSet);
 		return $this->DataSet($sql);
@@ -101,7 +102,10 @@ class YapoDb {
 				$Query->execute();
 			$failed = $this->handle_errors($cnt--, $Query);
 		} while (!$failed);
-		return new YapoResultSet($Query, $sql);
+		$result = new YapoResultSet($Query, $sql);
+
+		$result->next();
+		return $result;
 	}
 	
 	function handle_errors($cnt, $Query) {
