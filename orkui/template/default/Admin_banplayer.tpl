@@ -98,10 +98,10 @@
 <?php if (count($banned_players)>0): ?>
 <div class='info-container'>
 	<h3>Penalty Box</h3>
-	<ul class='triple'>
+	<ul>
 <?php foreach ($banned_players as $k => $info): ?>
-		<li><?="$info['Persona'] (".($info['Displayable']==0?"<span class='restricted-player-display'>Restricted</span>":"$info['Surname'], $info['GivenName']").")" ?></li>
-<?php endforeach; ?>
+<li><a href="<?=UIR.'Player/index/'.$info['MundaneId'] ?>"><?= $info['Persona']; ?></a></li>
+<?php endforeach ?>
 	</ul>
 </div>
 <?php endif; ?>

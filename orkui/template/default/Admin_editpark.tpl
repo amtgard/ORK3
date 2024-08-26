@@ -6,6 +6,7 @@
 <?php if (strlen($Error) > 0) : ?>
 	<div class='error-message'><?=$Error ?></div>
 <?php endif; ?>
+<?php $activePark = $Park_data['Active'] === 'Active'; ?>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/editpark/<?=$ParkId ?>&Action=details' enctype='multipart/form-data'>
 		<div>
 			<span>Heraldry:</span>
@@ -24,7 +25,7 @@
 		</div>
 		<div>
 			<span>Active:</span>
-			<span class='form-informational-field'><?=$Park_data['Active']?'Active':'<i>Inactive</i>' ?></span>
+			<span class='form-informational-field'><?=$activePark ?'Active':'<i>Inactive</i>' ?></span>
 		</div>
 		<div>
 			<span>Url:</span>

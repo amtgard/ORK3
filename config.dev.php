@@ -9,14 +9,14 @@ ini_set( 'display_errors', '1' );
 // HTTP
 define( 'ORK_DIST_NAME', '');
 
-define( 'HTTP_SERVICE', 'https://' . $_SERVER['HTTP_HOST'] . '/orkservice/'); 
-define( 'HTTP_UI', 'https://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 
-define( 'HTTP_UI_REMOTE', 'https://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 
+define( 'HTTP_SERVICE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkservice/'); 
+define( 'HTTP_UI', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 
+define( 'HTTP_UI_REMOTE', 'http://' . $_SERVER['HTTP_HOST'] . '/orkui/'); 
 define( 'HTTP_TEMPLATE', HTTP_UI . 'template/' );
-define( 'HTTP_ASSETS', 'https://' . $_SERVER['HTTP_HOST'] . '/assets/');
-define( 'HTTP_WAIVERS', 'https://' . $_SERVER['HTTP_HOST'] . '/assets/waivers/' );
-define( 'HTTP_HERALDRY', 'https://' . $_SERVER['HTTP_HOST'] . '/assets/heraldry/' );
-define( 'HTTP_PLAYER_IMAGE', 'https://' . $_SERVER['HTTP_HOST'] . '/assets/players/' );
+define( 'HTTP_ASSETS', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/');
+define( 'HTTP_WAIVERS', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/waivers/' );
+define( 'HTTP_HERALDRY', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/heraldry/' );
+define( 'HTTP_PLAYER_IMAGE', 'http://' . $_SERVER['HTTP_HOST'] . '/assets/players/' );
 define( 'HTTP_PLAYER_HERALDRY', HTTP_HERALDRY . 'player/' );
 define( 'HTTP_PARK_HERALDRY', HTTP_HERALDRY . 'park/' );
 define( 'HTTP_KINGDOM_HERALDRY', HTTP_HERALDRY . 'kingdom/' );
@@ -65,7 +65,7 @@ define( 'DIR_MODEL', DIR_UI . 'model/' );
 
 // DB
 define( 'DB_DRIVER', 'mysql' );
-define( 'DB_HOSTNAME', 'db.apps.amtgard.com;port=24306' );
+define( 'DB_HOSTNAME', 'ork3-php8-db' );
 define( 'DB_USERNAME', 'ork' );
 define( 'DB_PASSWORD', 'secret' );
 define( 'DB_DATABASE', 'ork' );
