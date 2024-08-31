@@ -417,11 +417,13 @@ class Common
 		$this->create_officer( $kingdom_id, $park_id, 'Regent', 'create' );
 		$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create' );
 		$this->create_officer( $kingdom_id, $park_id, 'Champion', null );
+		$this->create_officer( $kingdom_id, $park_id, 'GMR', null );
 		if ( valid_id( $for_principality ) ) {
 			$this->create_officer( $kingdom_id, $park_id, 'Monarch', 'create', 1, $principality_id );
 			$this->create_officer( $kingdom_id, $park_id, 'Regent', 'create', 1, $principality_id );
 			$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create', 1, $principality_id );
 			$this->create_officer( $kingdom_id, $park_id, 'Champion', null, 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'GMR', null, 1, $principality_id );
 		}
 	}
 
