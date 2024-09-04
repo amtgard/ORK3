@@ -495,6 +495,10 @@ class Kingdom  extends Ork3 {
 	}
 
 	public function GetOfficers($request) {
+		$kingdom_id = mysql_real_escape_string($request['KingdomId']);
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$is_authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
+
 		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
@@ -503,7 +507,7 @@ class Kingdom  extends Ork3 {
 							left join ".DB_PREFIX."kingdom k on a.kingdom_id = k.kingdom_id
 							left join ".DB_PREFIX."event e on a.event_id = e.event_id
 							left join ".DB_PREFIX."unit u on a.unit_id = u.unit_id
-				where o.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "' and o.park_id = 0
+				where o.kingdom_id = '" . $kingdom_id . "' and o.park_id = 0
 			";
 		$r = $this->db->query($sql);
 		$response = array();
@@ -511,6 +515,10 @@ class Kingdom  extends Ork3 {
 		if ($r !== false && $r->size() > 0) {
 			$response['Status'] = Success();
 			while ($r->next()) {
+				$fetchprivate = true;
+				if ($mundane_id > 0 && $is_authorized) {
+					$fetchprivate = false;
+				}
 				$response['Officers'][] = array(
 							'AuthorizationId' => $r->authorization_id,
 							'MundaneId' => $r->m_mundane_id,
@@ -525,8 +533,8 @@ class Kingdom  extends Ork3 {
 							'UnitName' => $r->unit_name,
 							'Restricted' => $r->restricted,
 							'UserName' => $r->username,
-							'GivenName' => $restricted_access||$r->restricted==0?$r->given_name:"",
-							'Surname' => $restricted_access||$r->restricted==0?$r->surname:"",
+							'GivenName' => $fetchprivate?"":$r->given_name,
+							'Surname' => $fetchprivate?"":$r->surname,
 							'Persona' => $r->persona,
 							'OfficerId' => $r->officer_id,
 							'OfficerRole' => $r->officer_role
