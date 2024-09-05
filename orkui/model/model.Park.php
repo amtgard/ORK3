@@ -31,8 +31,8 @@ class Model_Park extends Model {
 						'Heraldry' => $this->Heraldry->GetHeraldryUrl(array('Type' => 'Park', 'Id' => $park_id )));
 	}
 	
-	function get_officers($park_id) {
-		$r = $this->Park->GetOfficers(array( 'ParkId' => $park_id ));
+	function get_officers($park_id, $token) {
+		$r = $this->Park->GetOfficers(array( 'ParkId' => $park_id, 'Token' => $token ));
 		logtrace("get_officers($park_id)", $r);
 		if ($r['Status']['Status'] == 0)
 			return $r['Officers'];

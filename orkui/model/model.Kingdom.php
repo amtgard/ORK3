@@ -40,8 +40,8 @@ class Model_Kingdom extends Model {
 		return array();
 	}
 	
-	function get_officers($kingdom_id) {
-		$r = $this->Kingdom->GetOfficers(array( 'KingdomId' => $kingdom_id ));
+	function get_officers($kingdom_id, $token) {
+		$r = $this->Kingdom->GetOfficers(array('KingdomId' => $kingdom_id, 'Token' => $token ));
 		logtrace("get_officers($kingdom_id)", $r);
 		if ($r['Status']['Status'] == 0)
 			return $r['Officers'];

@@ -368,7 +368,7 @@ class Controller_Admin extends Controller {
 			}
 		}
 		$this->template = 'Admin_setofficers.tpl';
-		if (($officers = $this->Kingdom->get_officers($this->request->KingdomId))) {
+		if (($officers = $this->Kingdom->get_officers($this->request->KingdomId, $this->session->token))) {
 			$this->data['Officers'] = $officers;
 		} else {
 			$this->data['Officers'] = array();
@@ -416,7 +416,7 @@ class Controller_Admin extends Controller {
 			}
 		}
 		$this->template = 'Admin_setofficers.tpl';
-		if (($officers = $this->Park->get_officers($this->request->ParkId))) {
+		if (($officers = $this->Park->get_officers($this->request->ParkId, $this->session->token))) {
 			$this->data['Officers'] = $officers;
 		} else {
 			$this->data['Officers'] = array();

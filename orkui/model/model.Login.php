@@ -12,6 +12,11 @@ class Model_Login extends Model {
 		unset($this->session->user_name);
 		unset($this->session->token);
 		unset($this->session->timeout);
+		unset($this->session->kingdom_id);
+		unset($this->session->kingdom_name);
+		if (isset($_SESSION['is_authorized_mundane_id'])) {
+			unset($_SESSION['is_authorized_mundane_id']);
+		}
 	}
 	
 	function login($username, $password) {
