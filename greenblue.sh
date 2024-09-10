@@ -9,6 +9,8 @@ CURR_COLOR_CODE="\e[36m"
 TGT_COLOR_CODE="\e[32m"
 END_CODE="\e[0m"
 
+cd /var/www/ORK3
+
 # Assumes docker image is of the format <name>:prod-<color>
 for i in $(docker ps | tail -n +2 | tr -s " " | cut -d " " -f 2 | cut -d "-" -f 4); do
   CURRENT_COLOR=$i
