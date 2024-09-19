@@ -169,7 +169,11 @@ class Player extends Ork3 {
 				$reconciled->clear();
 				$reconciled->class_id = $values['ClassId'];
 				$reconciled->mundane_id = $request['MundaneId'];
-				$reconciled->find();
+				if (!$reconciled->find()) {
+					$reconciled->clear();
+					$reconciled->class_id = $values['ClassId'];
+					$reconciled->mundane_id = $request['MundaneId'];						
+				};
 				if ($reconciled->mundane_id == $request['MundaneId'] && $reconciled->class_id == $values['ClassId']) {
 					$reconciled->reconciled = $values['Quantity'];
 					$reconciled->save();
