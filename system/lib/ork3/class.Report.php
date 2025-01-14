@@ -793,6 +793,11 @@ class Report  extends Ork3 {
 		$select_list = array();
 		$order_by = "k.name, p.name";
 		$restrict_clause = array();
+		if (true == $request['Suspended']) {
+			/* Borrowed from Player class to clear the suspensions past their suspended_until date before running the report */
+			$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
+			$this->db->query($sql);
+		}
 		switch ($request['Type']) {
 			case AUTH_PARK:
 				    $kdid  = Ork3::$Lib->park->GetParkKingdomId($request['Id']);

@@ -70,11 +70,11 @@
 			<span class='form-informational-field'><?=$Player['SuspendedAt'] ?></span>
 		</div>
 		<div>
-			<span>Suspended At:</span>
+			<span>Suspended Until:</span>
 			<span class='form-informational-field'><?=$Player['SuspendedUntil'] ?></span>
 		</div>
 		<div>
-			<span>Suspended At:</span>
+			<span>Suspension:</span>
 			<span class='form-informational-field'><?=$Player['Suspension'] ?></span>
 		</div>
 	<?php endif; ?>
