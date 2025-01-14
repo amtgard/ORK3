@@ -706,7 +706,7 @@ class Player extends Ork3 {
 	}
 
 	public function _ClearSuspensions() {
-		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null";
+		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
 		$this->db->query($sql);
 	}
 
