@@ -345,6 +345,7 @@ class Kingdom  extends Ork3 {
 	public function GetPrincipalities($request) {
 		$this->kingdom->clear();
 		$this->kingdom->parent_kingdom_id = $request['KingdomId'];
+		$this->kingdom->active = 'Active';
 		$result = array('Status' => Success(), 'Principalities' => array());
 		if ($this->kingdom->find()) {
 			do {
