@@ -514,7 +514,9 @@ class Common
 		// Ditto, above
 		$this->config->type = strlen( $type ) > 0 ? $type : $this->config->type;
 		$this->config->id = strlen( $id ) > 0 ? $id : $this->config->id;
-		$this->config->key = strlen( $key ) > 0 ? $key : $this->config->key;
+		if (strlen( $key ) > 0) {
+			$this->config->key = $key;
+		}
 		if ( $this->config->find() ) {
 			if ( $value != null ) {
 				$allowed = json_decode( $this->config->allowed_values );
