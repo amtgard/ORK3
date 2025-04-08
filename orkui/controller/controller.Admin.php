@@ -1267,15 +1267,15 @@ class Controller_Admin extends Controller {
 									);
 							}
 						}
-						if (strlen($this->request->Admin_editkingdom->Title['"New"']) > 0) {
+						if (strlen($this->request->Admin_editkingdom->Title['New']) > 0) {
 							$title_edits[] = array(
 									'Action' => CFG_ADD,
-									'Title' => $this->request->Admin_editkingdom->Title['"New"'],
-									'Class' => $this->request->Admin_editkingdom->Class['"New"'],
-									'MinimumAttendance' => $this->request->Admin_editkingdom->MinimumAttendance['"New"'],
-									'MinimumCutoff' => $this->request->Admin_editkingdom->MinimumCutoff['"New"'],
-									'Period' => $this->request->Admin_editkingdom->Period['"New"'],
-									'PeriodLength' => $this->request->Admin_editkingdom->Length['"New"'],
+									'Title' => $this->request->Admin_editkingdom->Title['New'],
+									'Class' => $this->request->Admin_editkingdom->Class['New'],
+									'MinimumAttendance' => $this->request->Admin_editkingdom->MinimumAttendance['New'],
+									'MinimumCutoff' => $this->request->Admin_editkingdom->MinimumCutoff['New'],
+									'Period' => $this->request->Admin_editkingdom->Period['New'],
+									'PeriodLength' => $this->request->Admin_editkingdom->Length['New'],
 								);
 						}
 						$r = $this->Kingdom->set_kingdom_parktitles(array(
@@ -1320,7 +1320,7 @@ class Controller_Admin extends Controller {
 								}
 							}
 						}
-						if (strlen($this->request->Admin_editkingdom->KingdomAwardName['"New"']) > 0) {
+						if (strlen($this->request->Admin_editkingdom->KingdomAwardName['New']) > 0) {
 							$r = $this->Kingdom->CreateAward(array(
 								'Token' => $this->session->token,
 								'KingdomId' => $id,
