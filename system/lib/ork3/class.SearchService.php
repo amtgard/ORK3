@@ -317,7 +317,6 @@ class SearchService extends Ork3 {
 					limit $limit";
 		$i = 0;
 		$this->db->clear();
-		error_log("olgafix: " . $sql, 0);
 		$q = $this->db->query($sql);
 		if ($q !== false && $q->size() > 0) {
 			$r = array();
