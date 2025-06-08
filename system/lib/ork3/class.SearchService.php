@@ -265,7 +265,7 @@ class SearchService extends Ork3 {
 	public function Player($type, $search, $limit=15, $kingdom_id = null, $park_id = null, $waivered = null, $persona_required = true) {
     	list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
 				
-		$searchtokens = preg_split("/[\s,-]+/", str_replace('-','',$search) ?? '');
+		$searchtokens = preg_split("/[\s,-]+/", $search ?? '');
     	$opt = array("1");
         $limit = min(valid_id($limit)?$limit:15, 50);
 		switch (strtoupper($type)) {
@@ -288,10 +288,10 @@ class SearchService extends Ork3 {
                     $opt[] = "length(`username`) > 0";
 				break;
 			default:
-				$zztop = implode('* ', $searchtokens) . '*';
+				$zztop = $searchtokens[0] . '*';
 				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)
 				and (`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or `username` like '%" . mysql_real_escape_string($search) . "%'
-				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%')";
+				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%')";
 			break;
 		}
         if ($persona_required === true) {
@@ -317,6 +317,7 @@ class SearchService extends Ork3 {
 					limit $limit";
 		$i = 0;
 		$this->db->clear();
+		error_log("olgafix: " . $sql, 0);
 		$q = $this->db->query($sql);
 		if ($q !== false && $q->size() > 0) {
 			$r = array();
