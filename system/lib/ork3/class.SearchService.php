@@ -288,8 +288,10 @@ class SearchService extends Ork3 {
                     $opt[] = "length(`username`) > 0";
 				break;
 			default:
-				$zztop = implode('* ', $searchtokens) . '*';
-				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)";
+				$zztop = $searchtokens[0] . '*';
+				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)
+				and (`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or `username` like '%" . mysql_real_escape_string($search) . "%'
+				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%')";
 			break;
 		}
         if ($persona_required === true) {
