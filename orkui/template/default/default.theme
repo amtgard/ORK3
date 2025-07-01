@@ -14,6 +14,15 @@
 		-->
     	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.2/css/all.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous">
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
+		<!-- Google tag (gtag.js) -->
+		<script async src="https://www.googletagmanager.com/gtag/js?id=G-PVQCKENY0M"></script>
+		<script>
+		window.dataLayer = window.dataLayer || [];
+		function gtag(){dataLayer.push(arguments);}
+		gtag('js', new Date());
+
+		gtag('config', 'G-PVQCKENY0M');
+		</script>
 		<!--
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-1.7.1.min.js"></script>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/js/jquery-ui-1.8.18.custom.min.js"></script>
