@@ -12,6 +12,7 @@ class Controller_Attendance extends Controller {
 				break;
 			case 'park':
 				$park_info = $this->Park->get_park_info($id);
+				$this->session->park_id = $park_info['ParkInfo']['ParkId'];
 				$this->session->park_name = $park_info['ParkInfo']['ParkName'];
 				$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 				$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
