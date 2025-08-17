@@ -139,36 +139,15 @@
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg">
+						<?php if ($event['HasHeraldry']==1): ?>
+							<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+						<?php else: ?>
+							<img src="<?=HTTP_EVENT_HERALDRY ?>00000.jpg">
+						<?php endif; ?>
 					</div>
 					<?=$event['Name'] ?>
 				</td>
 				<td><?=0 == $event['NextDate']?"":date("M. j, Y", strtotime($event['NextDate'])) ?></td>
-			</tr>
-<?php endforeach; ?>
-		</tbody>
-	</table>
-</div>
-<div class='info-container' id='tournaments'>
-	<h3>Tournaments</h3>
-	<table class='information-table action-table'>
-		<thead>
-			<tr>
-				<th>Tournament</th>
-				<th>Kingdom</th>
-				<th>Park</th>
-				<th>Event</th>
-				<th>Date</th>
-			</tr>
-		</thead>
-		<tbody>
-<?php foreach ((array)$Tournaments['Tournaments'] as $k => $tournament) : ?>
-			<tr onClick='javascript:window.location.href="<?=UIR ?>Tournament/create&<?=valid_id($tournament['EventCalendarDetailId'])?('EventCalendarDetailId='.$tournament['EventCalendarDetailId']):(valid_id($tournament['ParkId'])?'ParkId='.$tournament['ParkId']:('KingdomId='.$tournament['KingdomId'])) ?>"'>
-				<td><?=$tournament['Name'] ?></td>
-				<td><?=$tournament['KingdomName'] ?></a></td>
-				<td><?=$tournament['ParkName'] ?></a></td>
-				<td><?=$tournament['EventName'] ?></a></td>
-				<td><?=date("M. j, Y", strtotime($tournament['DateTime'] ?? '')) ?></td>
 			</tr>
 <?php endforeach; ?>
 		</tbody>
