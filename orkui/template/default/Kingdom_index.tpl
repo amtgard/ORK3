@@ -150,7 +150,11 @@
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+						<?php if ($event['HasHeraldry']==1): ?>
+							<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+						<?php else: ?>
+							<img src="<?=HTTP_EVENT_HERALDRY ?>00000.jpg">
+						<?php endif; ?>
 					</div>
 					<?=$event['Name'] ?>
 				</td>
