@@ -36,12 +36,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<?php if ($park['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
-						<?php else: ?>
-							<img src="<?=HTTP_PARK_HERALDRY ?>0000.jpg">
-						<?php endif; ?>
-
+						<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
 					</div>
 					<?=$park['ParkName'] ?>
 				</td>
@@ -58,7 +53,7 @@
 	</table>
 </div>
 
-<?php if (!$IsPrinz && is_array($principalities['Principalities']) && (sizeof($principalities['Principalities']) > 0)) : ?>
+<?php if (!$IsPrinz && is_array($principalities['Principalities']) && ) : ?>
 <div class='info-container'>
 	<h3>Principalities</h3>
 	<table class='information-table action-table'>
