@@ -5,6 +5,7 @@ class Controller_Park extends Controller
 	public function __construct( $call = null, $id = null )
 	{
 		parent::__construct( $call, $id );
+		$id = preg_replace('/[^0-9]/', '', $id);
 
 		if ( $id != $this->session->park_id ) {
 			unset( $this->session->kingdom_id );
@@ -42,6 +43,7 @@ class Controller_Park extends Controller
 
 	public function index( $park_id = null )
 	{
+		$park_id = preg_replace('/[^0-9]/', '', $park_id);
 		$this->load_model( 'Reports' );
 		$this->data[ 'event_summary' ] = $this->Park->get_park_events( $park_id );
 		$this->data[ 'park_days' ] = $this->Park->get_park_parkdays( $park_id );

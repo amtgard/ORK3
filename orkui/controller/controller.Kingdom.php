@@ -4,6 +4,7 @@ class Controller_Kingdom extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
+		$id = preg_replace('/[^0-9]/', '', $id);
 		
 		if ($id != $this->session->kingdom_id) {
 			unset($this->session->kingdom_id);
@@ -34,6 +35,7 @@ class Controller_Kingdom extends Controller {
 	}
 	
 	public function index($kingdom_id = null) {
+		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$this->load_model('Reports');
 		$this->data['park_summary'] = $this->Kingdom->get_park_summary($kingdom_id);
 		$this->data['principalities'] = $this->Kingdom->get_principalities($kingdom_id);
