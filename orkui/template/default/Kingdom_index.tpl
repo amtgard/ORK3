@@ -36,7 +36,11 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
+						<?php if ($park['HasHeraldry']==1): ?>
+							<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
+						<?php else: ?>
+							<img src="<?=HTTP_PARK_HERALDRY ?>00000.jpg">
+						<?php endif; ?>
 					</div>
 					<?=$park['ParkName'] ?>
 				</td>

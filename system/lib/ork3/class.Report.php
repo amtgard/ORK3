@@ -934,7 +934,7 @@ class Report  extends Ork3 {
 		}
 
 		$sql = "select
-						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name
+						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name, p.has_heraldry
 					from
 						" . DB_PREFIX . "park p
 							left join
@@ -964,7 +964,7 @@ class Report  extends Ork3 {
 		} else {
 			$report = array();
 			while ($r->next()) {
-				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id );
+				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id, 'HasHeraldry' => $r->has_heraldry );
 			}
 			$response['KingdomParkAveragesSummary'] = $report;
 		}
