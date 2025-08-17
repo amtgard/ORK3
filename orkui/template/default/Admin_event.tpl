@@ -313,10 +313,6 @@
 		</div>
 		<input type='hidden' name='EventCalendarDetailId' value='<?=$Admin_event['EventCalendarDetailId'] ?>' id='EventCalendarDetailId' ?>
 	</form>
-	<h3>Details</h3>
-	<ul>
-		<li><a href='' id='CreateTournament' class='unimplemented'>Tournaments</a></li>
-	</ul>
 </div>
 
 <div class='info-container'>
@@ -328,11 +324,8 @@
 				<th>Date</th>
 				<th>Website</th>
 				<th>Location</th>
-			<?php if (trimlen($detail['MapUrlName']) > 0) : ?>
 				<th>Map</th>
-			<?php endif ; ?>
 				<th>Current</th>
-				<th>Tournaments</th>
 				<th>Attendance</th>
 				<th class='deletion'>&times;</th>
 			</tr>
@@ -354,9 +347,10 @@
 				</td>
 			<?php if (trimlen($detail['MapUrlName']) > 0) : ?>
 				<td><?=$detail['MapUrlName'] ?> <a href='<?=$detail['MapUrl'] ?>'>[ Link ]</a></td>
+			<?php else: ?>
+				<td></td>
 			<?php endif; ?>
 				<td><?php if ($detail['Current'] == 1) : ?>Yes<?php else : ?>No<?php endif ?></td>
-				<td><a href='<?=UIR ?>Tournament/index&EventCalendarDetailId=<?=$detail['EventCalendarDetailId'] ?>'>Tournaments</a></td>
 				<td><a href='<?=UIR ?>Attendance/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/<?=$detail['EventCalendarDetailId'] ?>'>Attendance</a></td>
 				<td class='deletion'><a href='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/delete&DetailId=<?=$detail['EventCalendarDetailId'] ?>'>&times;</a></td>
 			</tr>

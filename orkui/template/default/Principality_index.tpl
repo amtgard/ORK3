@@ -100,30 +100,7 @@
 		</tbody>
 	</table>
 </div>
-<div class='info-container'>
-	<h3>Tournaments</h3>
-	<table class='information-table action-table'>
-		<thead>
-			<tr>
-				<th>Tournament</th>
-				<th>Park</th>
-				<th>Event</th>
-				<th>Date</th>
-			</tr>
-		</thead>
-		<tbody>
-<?php if (!is_array($principality_tournaments['Tournaments'])) $principality_tournaments['Tournaments'] = array(); ?>
-<?php foreach ($principality_tournaments['Tournaments'] as $k => $tournament) : ?>
-			<tr>
-				<td><?=$tournament['Name'] ?></td>
-				<td><?=$tournament['ParkName'] ?></td>
-				<td><?=$tournament['EventName'] ?></td>
-				<td><?=date("M. j, Y", strtotime($tournament['DateTime'])) ?></td>
-			</tr>
-<?php endforeach; ?>
-		</tbody>
-	</table>
-</div>
+
 <div class='info-container'>
 	<h3>Calendar</h3>
 </div>

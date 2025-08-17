@@ -49,6 +49,7 @@ class Controller_Park extends Controller
 		$this->data[ 'park_days' ] = $this->Park->get_park_parkdays( $park_id );
 		$this->data[ 'park_info' ] = $this->Park->get_park_details( $park_id );
 		$this->data[ 'park_officers' ] = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
-		$this->data[ 'park_tournaments' ] = $this->Reports->get_tournaments( null, null, $park_id );
+		// Remove Tournaments until implemented
+		// $this->data[ 'park_tournaments' ] = $this->Reports->get_tournaments( null, null, $park_id );
 	}
 }

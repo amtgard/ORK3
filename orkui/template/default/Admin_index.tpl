@@ -2,7 +2,6 @@
 	<h3>ORK Management</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Admin/createkingdom'>Create Kingdom</a></li>
-		<li><a href='http://www.amtgard-ork.org/AmtgardORK/ork3/'>Source Code</a></li>
         <li>Players
             <ul>
             	<li><a href='<?=UIR ?>Admin/banplayer'>Ban Player</a></li>
@@ -20,6 +19,7 @@
     	<li><a href='<?=UIR ?>Admin/mergeunit'>Merge Units</a></li>
 		<li><a href='<?=UIR ?>Admin/authorization'>Edit Auths</a></li>
 		<li><a href='<?=UIR ?>Admin/manageevent'>Manage Events</a></li>
+		<li><a href='https://github.com/amtgard/ORK3' target="_blank">Source Code</a></li>
 	</ul>
 </div>
 <div class='info-container'>
