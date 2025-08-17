@@ -25,25 +25,10 @@
 <div class='info-container'>
 	<h3>Reports</h3>
 	<ul>
-		<li><a href='<?=UIR ?>Reports/roster'>Player Roster</a></li>
 		<li><a href='<?=UIR ?>Reports/suspended'>Suspended Players</a></li>
-		<li><a href='<?=UIR ?>Reports/waivered'>Waivered Players</a></li>
-		<li><a href='<?=UIR ?>Reports/unwaivered'>Unwaivered Players</a></li>
 		<li><a href='<?=UIR ?>Reports/knights_and_masters'>Knights and Masters</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8'>Kingdom-level Awards</a></li>
 		<li><a href='<?=UIR ?>Reports/class_masters'>Class Masters/Paragons</a></li>
-		<li><a href='<?=UIR ?>Reports/guilds'>Guilds</a></li>
-		<li>
-			Attendance
-			<ul>
-				<li><a href='<?=UIR ?>Reports/attendance/All/0/Weeks/1'>Past Week</a></li>
-				<li><a href='<?=UIR ?>Reports/attendance/All/0/Months/1'>Past Month</a></li>
-				<li><a href='<?=UIR ?>Reports/attendance/All/0/Months/3'>Past 3 Months</a></li>
-				<li><a href='<?=UIR ?>Reports/attendance/All/0/Months/6'>Past 6 Months</a></li>
-				<li><a href='<?=UIR ?>Reports/attendance/All/0/Months/12'>Past 12 Months</a></li>
-				<li><a href=''>All</a></li>
-			</ul>
-		</li>
 		<li><a href='<?=UIR ?>Unit/unitlist'>Companies and Households</a></li>
 	</ul>
 </div>
