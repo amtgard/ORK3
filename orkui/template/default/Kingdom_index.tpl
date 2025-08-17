@@ -39,7 +39,7 @@
 						<?php if ($park['HasHeraldry']==1): ?>
 							<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
-							<img src="<?=HTTP_PARK_HERALDRY ?>0000.jpg">
+							<img src="<?=HTTP_PARK_HERALDRY ?>00000.jpg">
 						<?php endif; ?>
 
 					</div>
