@@ -43,9 +43,8 @@ class Controller_Kingdom extends Controller {
 		$this->data['kingdom_info'] = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
 		$this->data['kingdom_officers'] = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
 		$this->data['IsPrinz'] = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
-		// Remove tournaments until implemented
-		// $this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $kingdom_id);
-		// logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
+		$this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $kingdom_id);
+		logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
 	}
 	
 	public function map($kingdom_id = null) {

@@ -40,9 +40,8 @@ class Controller_Principality extends Controller {
 		$this->data['park_summary'] = $this->Principality->get_park_summary($principality_id);
 		$this->data['event_summary'] = $this->Principality->get_kingdom_events($principality_id);
 		$this->data['principality_info'] = $this->Principality->get_principality_shortinfo($principality_id);
-		// Remove tournaments until implemented
-		// $this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $principality_id);
-		// logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
+		$this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $principality_id);
+		logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
 	}
 
 }

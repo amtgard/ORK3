@@ -326,6 +326,7 @@
 				<th>Location</th>
 				<th>Map</th>
 				<th>Current</th>
+				<th>Tournament</th>
 				<th>Attendance</th>
 				<th class='deletion'>&times;</th>
 			</tr>
@@ -351,6 +352,7 @@
 				<td></td>
 			<?php endif; ?>
 				<td><?php if ($detail['Current'] == 1) : ?>Yes<?php else : ?>No<?php endif ?></td>
+				<td><a href='<?=UIR ?>Tournament/index&EventCalendarDetailId=<?=$detail['EventCalendarDetailId'] ?>'>Tournaments</a></td>
 				<td><a href='<?=UIR ?>Attendance/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/<?=$detail['EventCalendarDetailId'] ?>'>Attendance</a></td>
 				<td class='deletion'><a href='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/delete&DetailId=<?=$detail['EventCalendarDetailId'] ?>'>&times;</a></td>
 			</tr>
