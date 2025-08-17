@@ -178,7 +178,8 @@ class SearchService extends Ork3 {
 						'Persona' => $d->persona,
 						'UnitName' => $d->unit_name,
 						'NextDate' => $d->event_start,
-						'ShortDescription' => $d->short_description
+						'ShortDescription' => $d->short_description,
+						'HasHeraldry' => $d->has_heraldry
 					);
 				if (!is_null($limit)) {
     				$limit--;
