@@ -53,7 +53,7 @@
 	</table>
 </div>
 
-<?php if (!$IsPrinz && is_array($principalities['Principalities']) && ) : ?>
+<?php if (!$IsPrinz && is_array($principalities['Principalities']) && (sizeof($principalities['Principalities']) > 0)) : ?>
 <div class='info-container'>
 	<h3>Principalities</h3>
 	<table class='information-table action-table'>
@@ -159,6 +159,29 @@
 					<?=$event['Name'] ?>
 				</td>
 				<td><?=0 == $event['NextDate']?"":date("M. j, Y", strtotime($event['NextDate'])) ?></td>
+			</tr>
+<?php endforeach; ?>
+		</tbody>
+	</table>
+</div>
+<div class='info-container'>
+	<h3>Tournaments</h3>
+	<table class='information-table action-table'>
+		<thead>
+			<tr>
+				<th>Tournament</th>
+				<th>Park</th>
+				<th>Event</th>
+				<th>Date</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php foreach ($kingdom_tournaments['Tournaments'] as $k => $tournament) : ?>
+			<tr onClick='window.document.location.href="<?=UIR ?>Tournament/worksheet/<?=$tournament['TournamentId'] ?>"'>
+				<td><?=$tournament['Name'] ?></td>
+				<td><?=$tournament['ParkName'] ?></td>
+				<td><?=$tournament['EventName'] ?></td>
+				<td><?=date("M. j, Y", strtotime($tournament['DateTime'])) ?></td>
 			</tr>
 <?php endforeach; ?>
 		</tbody>
