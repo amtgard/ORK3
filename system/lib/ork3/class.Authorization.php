@@ -125,7 +125,7 @@ class Authorization  extends Ork3 {
 			Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($password), $this->mundane->password_expires, 1);
 			
 			$this->mundane->save();
-			$m = new Mail('smtp', AMAZON_SES_HOST, AMAZON_SES_USERNAME, AMAZON_SES_PASSWORD, 587);
+			$m = new Mail('smtp', 'smtp.sendgrid.net', 'apikey', SENDGRID_API_KEY, 587);
 			$m->setTo($this->mundane->email);
 			$m->setFrom('ork3@amtgard.com');
 			$m->setSubject('Reset ORK Password (Expires in 24 hours)');
