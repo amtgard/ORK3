@@ -95,6 +95,8 @@ final class Mail {
 		} else {
 			$eol = "\n";
 		}    
+		// Seems required
+		$eol = "\r\n";
 	
 		$header = '';
 	
@@ -204,7 +206,23 @@ final class Mail {
 					if (substr($reply, 0, 3) != 250) {
 						echo_error('Error: EHLO not accepted from server! ' . $reply . ' ' . __LINE__);
 					}
+					$reply = '';
+					fputs($handle, 'STARTTLS' . $eol);
+				
+					while ($line = fgets($handle, 515)) {
+						$reply .= $line;
+					
+						if (substr($line, 3, 1) == ' ') {
+							break;
+						}
+					}
 		
+					if (substr($reply, 0, 3) != 220) {
+						echo_error('Error: STARTTLS not accepted from server! ' . $reply . ' ' . __LINE__);
+					}
+
+					$crypto_ok = stream_socket_enable_crypto($handle, true, STREAM_CRYPTO_METHOD_SSLv23_CLIENT);
+					
 					fputs($handle, 'AUTH LOGIN' . $eol);
 		
 					$reply = '';
