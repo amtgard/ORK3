@@ -1,3 +1,7 @@
+User-agent: Googlebot
+Disallow: /
+Allow: /$
+
 User-agent: Amazonbot
 Disallow: /
 
