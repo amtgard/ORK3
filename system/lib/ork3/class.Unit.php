@@ -50,7 +50,28 @@ class Unit extends Ork3 {
         return NoAuthorization();
     }
 
-    public function AddAward($request) {
+    public function ConvertToCompany($request) {
+        logtrace('ConvertToCompany', $request);
+		$mundane = Ork3::$Lib->player->player_info($request['Token']);
+
+    	if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)
+			    || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) )) {
+
+            $this->unit->clear();
+            $this->unit->unit_id = $request['UnitId'];
+            if ($this->unit->find() && $this->unit->type == 'Household') {
+                $this->unit->type = 'Company';
+                $this->unit->save();
+                return Success();
+            } else {
+                return InvalidParameter();
+            }
+        }
+        return NoAuthorization();
+    }
+
+	public function AddAward($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
 			return NoAuthorization();
 

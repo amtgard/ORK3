@@ -131,6 +131,9 @@ class Controller_Admin extends Controller {
     				case 'giveup':
 						$r = $this->Unit->convert_to_household($unit_id);
 						break;
+    				case 'tocompany':
+						$r = $this->Unit->convert_to_company($unit_id);
+						break;
 					case 'addauth':
 						$r = $this->Unit->add_unit_auth(array(
 								'Token' => $this->session->token,

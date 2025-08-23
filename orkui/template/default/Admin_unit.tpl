@@ -103,7 +103,11 @@
 		</div>
 		<div>
 			<span>Type:</span>
-			<span class='form-informational-field'><?=$Unit['Details']['Unit']['Type'] ?> <?php if ($Unit['Details']['Unit']['Type'] == 'Company') : ?><a style='float: right; display: inline-block; padding: 3px; border: 1px solid #900; background-color: #fcd' href='<?=UIR ?>Admin/unit/<?=$Unit['Details']['Unit']['UnitId'] ?>&Action=giveup'>Convert to Household</a><?php endif; ?></span>
+			<?php if ($Unit['Details']['Unit']['Type'] == 'Company') : ?>
+				<span class='form-informational-field'><?=$Unit['Details']['Unit']['Type'] ?><a style='float: right; display: inline-block; padding: 3px; border: 1px solid #900; background-color: #fcd' href='<?=UIR ?>Admin/unit/<?=$Unit['Details']['Unit']['UnitId'] ?>&Action=giveup'>Convert to Household</a></span>
+			<?php else: ?>
+				<span class='form-informational-field'><?=$Unit['Details']['Unit']['Type'] ?><a style='float: right; display: inline-block; padding: 3px; border: 1px solid #900; background-color: #fcd' href='<?=UIR ?>Admin/unit/<?=$Unit['Details']['Unit']['UnitId'] ?>&Action=tocompany'>Convert to Company</a></span>
+			<?php endif; ?>
 		</div>
 		<div>
 			<span>URL:</span>

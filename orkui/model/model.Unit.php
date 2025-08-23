@@ -21,6 +21,13 @@ class Model_Unit extends Model {
             ));
     }
 
+    function convert_to_company($unit_id) {
+        return $this->Unit->ConvertToCompany(array(
+                'Token' => $this->session->token,
+                'UnitId' => $unit_id
+            ));
+    }
+
 	function create_unit($request) {
 		return $this->Unit->CreateUnit($request);
 	}
