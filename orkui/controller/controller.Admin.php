@@ -1053,7 +1053,7 @@ class Controller_Admin extends Controller {
 						'ParkId' => $this->request->Admin_moveplayer->ParkId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player has been moved to <a href='".UIR."/Park/index/{$this->request->Admin_moveplayer->ParkId}'>their new home.</a>";
+					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/index/{$this->request->Admin_moveplayer->ParkId}'>their new home.</a>";
 					$this->request->clear('Admin_moveplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
