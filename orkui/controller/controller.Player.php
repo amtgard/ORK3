@@ -153,7 +153,11 @@ class Controller_Player extends Controller {
 						break;
 				}
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = 'Player has been updated.';
+					if ($r['Detail']) {
+						$this->data['Message'] = $r['Detail'];
+					} else {
+						$this->data['Message'] = 'Player has been updated.';
+					}
 					$this->request->clear('Player_index');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR."Login/login/Player/index/$id" );

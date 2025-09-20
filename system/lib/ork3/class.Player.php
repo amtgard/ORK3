@@ -1386,6 +1386,21 @@ class Player extends Ork3 {
             return InvalidParameter();
         }
 
+		// Check for existing award rank
+		$check_rank = 0;
+		if (trimlen($request['Rank']) > 0) {
+			$check_rank = $request['Rank'];
+		}
+		$existingAward = new yapo($this->db, DB_PREFIX . 'awards');
+		$existingAward->clear();
+		$existingAward->kingdomaward_id = $request['KingdomAwardId'];
+		$existingAward->mundane_id = $request['MundaneId'];
+		$existingAward->rank = $check_rank;
+		$existingAward->find();
+		if ($existingAward->awards_id) {
+			return InvalidParameter('They already have that award.');
+		}
+
 		// Check for duplicates
 		$dupeRec = new yapo($this->db, DB_PREFIX . 'recommendations');
 		$dupeRec->clear();
@@ -1394,25 +1409,14 @@ class Player extends Ork3 {
 		$dupeRec->recommended_by_id = $mundane_id;
 		if (trimlen($request['Rank']) > 0) {
 			$dupeRec->rank = $request['Rank'];
+		} else {
+			$dupeRec->rank = 0;
 		}
-		if ($dupeRec->find()) {
-			return InvalidParameter('You already recommended that award.');
-		}
-		
-		// Check for existing award rank
-		if (trimlen($request['Rank']) > 0) {
-			$existingAward = new yapo($this->db, DB_PREFIX . 'awards');
-			$existingAward->clear();
-			$existingAward->kingdomaward_id = $request['KingdomAwardId'];
-			$existingAward->mundane_id = $request['MundaneId'];
-			$existingAward->rank = $request['Rank'];
-			$existingAward->find();
-			if ($existingAward->awards_id) {
-				return InvalidParameter('They already have that award.');
+		if ($dupeRec->find()) do {
+			if (!$dupeRec->deleted_at) {
+				return InvalidParameter('You already recommended that award and level.');
 			}
-		}
-
-
+		} while ($dupeRec->next());
 
 		if (valid_id($mundane_id)) {
 			$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
@@ -1420,7 +1424,7 @@ class Player extends Ork3 {
 			$awardRec->kingdomaward_id = $request['KingdomAwardId'];
     		$awardRec->award_id = $request['AwardId'];
 			$awardRec->mundane_id = $request['MundaneId'];
-			$awardRec->rank = $request['Rank'];
+			$awardRec->rank = $check_rank;
 			$awardRec->date_recommended = date('Y-m-d');
 			$awardRec->recommended_by_id = $mundane_id;
 			$awardRec->reason = $request['Reason'];
