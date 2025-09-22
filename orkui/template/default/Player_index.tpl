@@ -6,6 +6,21 @@
       $passwordExpiring = date('Y-m-j', strtotime($Player['PasswordExpires']));
     }
 ?>
+<?php
+	$can_delete_recommendation = false;
+	if($this->__session->user_id) {
+		if (isset($this->__session->park_id)) {
+			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_EDIT)) {
+				$can_delete_recommendation = true;
+			}
+		} else if (isset($this->__session->kingdom_id)) {
+			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_EDIT)) {
+				$can_delete_recommendation = true;
+			}
+		}
+	}
+?>
+
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
@@ -383,7 +398,7 @@
 				<td><?=$recommendation['Reason'] ?></td>
 				<?php if($this->__session->user_id): ?>
 					<td>
-						<?php if ($this->__session->user_id == $recommendation['RecommendedById'] || $this->__session->user_id == $recommendation['MundaneId']): ?>
+						<?php if ($can_delete_recommendation || $this->__session->user_id == $recommendation['RecommendedById'] || $this->__session->user_id == $recommendation['MundaneId']): ?>
 							<a class="confirm-delete-recommendation" href="<?=UIR.'Player/index/' . $recommendation['MundaneId'] . '/deleterecommendation/'.$recommendation['RecommendationsId'] ?>">Delete</a> 
 						<?php endif; ?>
 					</td>

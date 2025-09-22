@@ -1440,18 +1440,23 @@ class Player extends Ork3 {
 			return NoAuthorization();
 
 		if (valid_id($request['RequestedBy'])) {
+			$can_delete_recommendation = false;
 			$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
 			$awardRec->clear();
 			$awardRec->recommendations_id = $request['RecommendationsId'];
 
 			if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
-				if ($request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
+				$recipientInfo = $this->player_info($awardRec->mundane_id);
+				if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+					$can_delete_recommendation = true;
+				}
+				if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
 					$awardRec->deleted_by = $request['RequestedBy'];
 					$awardRec->deleted_at = date('Y-m-d H:i:s');
 					$awardRec->save();
 					return Success('Recommendation Removed!');
 				} else {
-					return InvalidParameter('Only the giver or recipient may delete a recommendation.');
+					return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');
 				}
 			} else {
 				return InvalidParameter('There was a problem with the request.');

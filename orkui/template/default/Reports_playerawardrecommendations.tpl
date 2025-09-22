@@ -1,12 +1,23 @@
+<?php
+	$can_delete = false;
+	if($this->__session->user_id) {
+		if (isset($this->__session->park_id)) {
+			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_EDIT)) {
+				$can_delete = true;
+			}
+		} else if (isset($this->__session->kingdom_id)) {
+			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_EDIT)) {
+				$can_delete = true;
+			}
+		}
+	}
+?>
 <div class='info-container'>
 	<h3>Award Recommendations</h3>
 	<div class="actions"><button class="print button">Print</button> <button class="download button">Download CSV</button></div>
 	<table class='information-table'>
 		<thead>
 			<tr>
-<?php if (!isset($this->__session->kingdom_id)) : ?>
-				<th>Kingdom</th>
-<?php endif; ?>
 				<th class="filter-select" data-placeholder="Select a Persona" data-priority="2" data-name="Persona">Persona</th>
 				<th class="filter-select">Award</th>
 				<th class="filter-select">Rank</th>
@@ -30,7 +41,7 @@
 				<td><?=$recommendation['Reason'] ?></td>
 				<?php if($this->__session->user_id): ?>
 					<td>
-						<?php if ($this->__session->user_id == $recommendation['RecommendedById'] || $this->__session->user_id == $recommendation['MundaneId']): ?>
+						<?php if ($can_delete || $this->__session->user_id == $recommendation['RecommendedById'] || $this->__session->user_id == $recommendation['MundaneId']): ?>
 							<a class="confirm-delete-recommendation" href="<?=UIR.'Player/index/' . $recommendation['MundaneId'] . '/deleterecommendation/'.$recommendation['RecommendationsId'] ?>">Delete</a> 
 						<?php endif; ?>
 					</td>

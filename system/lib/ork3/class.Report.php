@@ -321,8 +321,11 @@ class Report  extends Ork3 {
 	public function PlayerAwardRecommendations($request) {
 
 		$key = Ork3::$Lib->ghettocache->key($request);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
-			return $cache;
+
+		// Removing the cache to ensure the feature is working correctly and users are not confused when
+		// recommendations are not deleted or added as expected.
+		// if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+		// 	return $cache;
 
 		if (valid_id($request['KingdomId'])) {
 			$location_clause = " AND m.kingdom_id = $request[KingdomId]";
