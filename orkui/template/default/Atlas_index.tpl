@@ -93,7 +93,7 @@
 		        strokeOpacity: 1.0,
 		        strokeWeight: 1,
 		        center: marker.position, // Set the center to the marker's position
-		        radius: 25000 // Radius in meters (e.g., 5000 meters = 5 km)
+		        radius: 40233.6 // Radius in meters (e.g., 5000 meters = 5 km)
     		});
 			allCircles.push(parkRadius);
 
