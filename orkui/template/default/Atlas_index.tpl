@@ -1,5 +1,8 @@
 <div class='info-container' style="width: 65%;">
     <h3>Amtgard Atlas</h3>
+		<div><input type="checkbox" id="park-radius" onclick="toggleRadius(event)">
+<label for="park-radius">Show 25 Mile Park Radius</label>
+		</div>
 		<div style='border: 1px solid #aaa;' >
 			<div id="map" style="width: 100%; height: 100%; min-width: 400px; min-height: 400px;"></div>
 		</div>
@@ -12,8 +15,13 @@
 
 <script type="text/javascript">
 //<![CDATA[
-
-  var map;
+	var map;
+	var allCircles = [];
+	function toggleRadius(event) {
+		var setTo = event.currentTarget.checked ? map : null;
+		allCircles.forEach(function(aCircle) { aCircle.setMap(setTo) });
+	}
+	allCircles.forEach(function(aCircle) { aCircle.setMap(null) })
 	async function initMap() {
 
 		const { Map } = await google.maps.importLibrary("maps");
@@ -79,6 +87,15 @@
 				title: locations[i][0],
 				content: pinGlyph.element
 			});
+			parkRadius = new google.maps.Circle({
+				fillOpacity: 0,
+		        strokeColor: "#000000",
+		        strokeOpacity: 1.0,
+		        strokeWeight: 1,
+		        center: marker.position, // Set the center to the marker's position
+		        radius: 25000 // Radius in meters (e.g., 5000 meters = 5 km)
+    		});
+			allCircles.push(parkRadius);
 
 			google.maps.event.addListener(marker, 'click', (function(marker, i) {
 				return function() {
