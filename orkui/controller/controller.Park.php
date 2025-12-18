@@ -32,7 +32,9 @@ class Controller_Park extends Controller
 		}
 		$this->data[ 'park_name' ] = $this->session->park_name;
 
-		$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+		if ($this->data['LoggedIn']) {
+			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+		}
 		$this->data[ 'menulist' ][ 'admin' ] = [
 			[ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Park' ],
 			[ 'url' => UIR . 'Admin/kingdom/' . $this->session->kingdom_id, 'display' => 'Kingdom' ],

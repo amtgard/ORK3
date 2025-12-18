@@ -167,7 +167,9 @@
 		</div>
 		<div>
 			<span></span>
+<?php if ($LoggedIn) : ?>
 			<span><input value='Add' type='submit' /></span>
+<?php endif ; ?>
 		</div>
     	<input type='hidden' id='AttendanceDate' name='AttendanceDate' value='<?=date("Y-m-d", strtotime($EventDetailInfo['EventStart'])) ?>' />
 		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=valid_id($Attendance_index['KingdomId'])?$Attendance_index['KingdomId']:$DefaultKingdomId ?>' />
@@ -199,7 +201,9 @@
 				<td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
 				<td><?=$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>
+<?php if ($LoggedIn) : ?>
 				<td class='deletion'><a href='<?=UIR ?>Attendance/event/<?=$EventId ?>/<?=$DetailId ?>/delete/<?=$detail['AttendanceId'] ?>'>&times;</a></td>
+<?php endif ; ?>
 			</tr>
 <?php endforeach ?>
 		</tbody>

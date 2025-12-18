@@ -27,22 +27,34 @@ class Controller
 		$this->Report = new APIModel( 'Report' );
 		$this->Search = new JSONModel( 'Search' );
 
-		$this->data[ 'page_title' ] = $this->method;
+		if (get_class( $this ) == "Controller") {
+			$this->data[ 'page_title' ] = "Home";
+		} else {
+			$this->data[ 'page_title' ] = $this->method;
+		}
+		$this->data['LoggedIn'] = isset($this->session->user_id);
+
 		$this->data[ 'controller_title' ] = get_class( $this );
 		$this->data[ 'path' ] = [ get_class( $this ), $method ];
 
 		$this->data[ 'menu' ] = [ ];
 		$this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
-		$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel', 'no-crumb' => 'no-crumb' ];
+		if ($this->data['LoggedIn']) {
+			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel', 'no-crumb' => 'no-crumb' ];
+		}
 
     if ( isset( $this->session->kingdom_id ) ) {
 			$this->data[ 'menu' ][ 'kingdom' ] = [ 'url' => UIR . 'Kingdom/index/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name ];
-			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/kingdom/' . $this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+			if ($this->data['LoggedIn']) {
+				$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/kingdom/' . $this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+			}
 		}
 
 		if ( isset( $this->session->park_id ) ) {
 			$this->data[ 'menu' ][ 'park' ] = [ 'url' => UIR . 'Park/index/' . $this->session->park_id, 'display' => $this->session->park_name ];
-			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+			if ($this->data['LoggedIn']) {
+				$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+			}
 		}
 	}
 
@@ -75,7 +87,9 @@ class Controller
 		$this->data[ 'ActiveKingdomSummary' ] = $this->Report->GetActiveKingdomsSummary();
 		$this->data[ 'EventSummary' ] = $this->Search->Search_Event( null, null, 0, null, null, 15, null, true );
 		$this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
-		$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+		if ($this->data['LoggedIn']) {
+			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+		}
 		unset( $this->data[ 'menu' ][ 'kingdom' ] );
 		unset( $this->data[ 'menu' ][ 'park' ] );
 	}

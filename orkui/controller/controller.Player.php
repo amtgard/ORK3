@@ -19,7 +19,9 @@ class Controller_Player extends Controller {
 		$this->session->park_id = $park_info['ParkInfo']['ParkId'];
 		$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 		$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
-		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+		if ($this->data['LoggedIn']) {
+			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+		}
 		$this->data['menulist']['admin'] = array(
 				array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Player' ),
 				array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Park' ),
@@ -180,7 +182,9 @@ class Controller_Player extends Controller {
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id, 1, true);
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
-		$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+		if ($this->data['LoggedIn']) {
+			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
 		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
 		

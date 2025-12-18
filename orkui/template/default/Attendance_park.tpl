@@ -172,7 +172,9 @@
 		</div>
 		<div>
 			<span></span>
+<?php if ($LoggedIn) : ?>
 			<span><input value='Add' type='submit' /></span>
+<?php endif ; ?>
 		</div>
 		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=valid_id($Attendance_index['KingdomId'])?$Attendance_index['KingdomId']:$DefaultKingdomId ?>' />
 		<input type='hidden' id='ParkId' name='ParkId' value='<?=valid_id($Attendance_index['ParkId'])?$Attendance_index['ParkId']:$DefaultParkId ?>' />
@@ -208,7 +210,9 @@
 				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>
 				<td class='data-column'><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
+	<?php if ($LoggedIn) : ?>
 				<td class='deletion'><a href='<?=UIR ?>Attendance/park/<?=$Id ?>/delete/<?=$detail['AttendanceId'] ?>&AttendanceDate=<?=$AttendanceDate ?>'>&times;</a></td>
+	<?php endif ; ?>
 			</tr>
 <?php endforeach ?>
 		</tbody>
