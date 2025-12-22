@@ -1,14 +1,6 @@
 <div class='info-container'>
 	<h3><?=$this->__session->park_name; ?></h3>
 	<?=$park_info['ParkInfo']['HasHeraldry']==1?"<img src='{$park_info["Heraldry"]["Url"]}' class='heraldry-img' />":"" ?>
-<?php if (trimlen($park_info['ParkInfo']['Description']) > 0) : ?>
-    <h3>Description</h3>
-    <div style='max-width: 600px;'><?=$park_info['ParkInfo']['Description'] ?></div>
-<?php endif ; ?>
-<?php if (trimlen($park_info['ParkInfo']['Directions']) > 0) : ?>
-    <h3>Directions</h3>
-    <div style='max-width: 600px;'><?=$park_info['ParkInfo']['Directions'] ?></div>
-<?php endif ; ?>
 	<ul>
 		<li><a href='<?=UIR ?>Attendance/park/<?=$park_id ?>'>Enter Attendance</a></li>
 		<li><a href='<?=UIR ?>Attendance/behold/<?=$park_id ?>'>Behold!</a></li>
@@ -32,6 +24,17 @@
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>	
+	<?php foreach ([
+		'Park Title'  => 'ParkTitle',
+		'Description' => 'Description',
+		'Directions'  => 'Directions'
+	] as $label => $field): ?>
+		<?php if (trimlen($park_info['ParkInfo'][$field]) > 0): ?>
+			<h3><?= $label ?></h3>
+			<div style='max-width: 600px;'><?= $park_info['ParkInfo'][$field] ?></div>
+			<br>
+		<?php endif; ?>
+	<?php endforeach; ?>
 </div>
 <div class='info-container'>
 	<h3>Park Days</h3>

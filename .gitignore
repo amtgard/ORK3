@@ -37,3 +37,5 @@ orkui/.htaccess
 ork.zip
 .prod.env
 config.tmpprod.php
+.DS_Store
+.vscode/
