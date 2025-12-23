@@ -75,7 +75,7 @@ class Controller_Award extends Controller
 		}
 
 		$this->set_template();
-		$this->set_award_data();
+		$this->set_award_data($id);
 	}
 
 	public function kingdom($id)
@@ -119,7 +119,7 @@ class Controller_Award extends Controller
 		}
 
 		$this->set_template();
-		$this->set_award_data();
+		$this->set_award_data($id);
 	}
 	private function add_award()
 	{
@@ -152,7 +152,7 @@ class Controller_Award extends Controller
 	{
 		$this->template = 'Award_addawards.tpl';
 	}
-	private function set_award_data()
+	private function set_award_data($id)
 	{
 		if ($this->request->exists('Award_addawards')) {
 			$this->data['Award_addawards'] = $this->request->Award_addawards->Request;
