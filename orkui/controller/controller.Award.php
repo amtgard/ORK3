@@ -65,14 +65,7 @@ class Controller_Award extends Controller
 						break;
 				}
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = 'Award recorded for ' . $this->request->Award_addawards->GivenTo;
-					$this->request->clear('Player_index');
-					unset($_REQUEST['MundaneId']);
-					unset($_REQUEST['AwardId']);
-					unset($_REQUEST['Rank']);
-					unset($_REQUEST['Note']);
-					unset($_REQUEST['GivenTo']);
-					$this->request->save('Award_addawards', true);
+					$this->handle_success();
 				} else if ($r['Status'] == 5) {
 					header('Location: ' . UIR . "Login/login/Award/park/$id");
 				} else {
@@ -116,14 +109,7 @@ class Controller_Award extends Controller
 						break;
 				}
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = 'Award recorded for ' . $this->request->Award_addawards->GivenTo;
-					$this->request->clear('Player_index');
-					unset($_REQUEST['MundaneId']);
-					unset($_REQUEST['AwardId']);
-					unset($_REQUEST['Rank']);
-					unset($_REQUEST['Note']);
-					unset($_REQUEST['GivenTo']);
-					$this->request->save('Award_addawards', true);
+					$this->handle_success();
 				} else if ($r['Status'] == 5) {
 					header('Location: ' . UIR . "Login/login/Award/kingdom/$id");
 				} else {
@@ -150,6 +136,17 @@ class Controller_Award extends Controller
 			'KingdomId' => valid_id($this->request->Award_addawards->KingdomId) ? $this->request->Award_addawards->KingdomId : 0,
 			'EventId' => valid_id($this->request->Award_addawards->EventId) ? $this->request->Award_addawards->EventId : 0
 		));
+	}
+	private function handle_success()
+	{
+		$this->data['Message'] = 'Award recorded for ' . $this->request->Award_addawards->GivenTo;
+		$this->request->clear('Player_index');
+		unset($_REQUEST['MundaneId']);
+		unset($_REQUEST['AwardId']);
+		unset($_REQUEST['Rank']);
+		unset($_REQUEST['Note']);
+		unset($_REQUEST['GivenTo']);
+		$this->request->save('Award_addawards', true);
 	}
 	private function set_template()
 	{
