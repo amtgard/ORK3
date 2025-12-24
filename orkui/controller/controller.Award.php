@@ -36,33 +36,32 @@ class Controller_Award extends Controller
 
 	public function park($id)
 	{
-		$params = explode('/', $id);
-		$id = $params[0];
-		if (count($params) > 1)
-			$action = $params[1];
-
-		if (strlen($action) > 0) {
-			$this->handle_action($action, "Login/login/Award/park/$id");
-		}
-
-		$this->set_template();
-		$this->set_award_data($id);
+		$this->handle_award_route($id, 'park');
 	}
 
 	public function kingdom($id)
 	{
+		$this->handle_award_route($id, 'kingdom');
+	}
+
+	private function handle_award_route($id, $type)
+	{
 		$params = explode('/', $id);
 		$id = $params[0];
-		if (count($params) > 1)
+		$action = null;
+
+		if (count($params) > 1) {
 			$action = $params[1];
+		}
 
 		if (strlen($action) > 0) {
-			$this->handle_action($action, "Login/login/Award/kingdom/$id");
+			$this->handle_action($action, "Login/login/Award/$type/$id");
 		}
 
 		$this->set_template();
 		$this->set_award_data($id);
 	}
+
 	private function handle_action($action, $route)
 	{
 		$this->request->save('Award_addawards', true);
