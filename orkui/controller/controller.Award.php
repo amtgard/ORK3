@@ -47,22 +47,8 @@ class Controller_Award extends Controller
 			if (!isset($this->session->user_id)) {
 				header('Location: ' . UIR . "Login/login/Award/park/$id");
 			} else {
-				switch ($action) {
-					case 'addaward':
-						if (!valid_id($this->request->Award_addawards->MundaneId)) {
-							$this->data['Error'] = 'You must choose a recipient. Award not added!';
-							break;
-						}
-						if (!valid_id($this->request->Award_addawards->AwardId)) {
-							$this->data['Error'] = 'You must choose an award. Award not added!';
-							break;
-						}
-						if (!valid_id($this->request->Award_addawards->GivenById)) {
-							$this->data['Error'] = 'Who gave this award? Award not added!';
-							break;
-						}
-						$r = $this->add_award();
-						break;
+				if ($action == 'addaward' && $this->is_request_valid()) {
+					$r = $this->add_award();
 				}
 				if ($r['Status'] == 0) {
 					$this->handle_success();
@@ -91,23 +77,10 @@ class Controller_Award extends Controller
 			if (!isset($this->session->user_id)) {
 				header('Location: ' . UIR . "Login/login/Award/kingdom/$id");
 			} else {
-				switch ($action) {
-					case 'addaward':
-						if (!valid_id($this->request->Award_addawards->MundaneId)) {
-							$this->data['Error'] = 'You must choose a recipient. Award not added!';
-							break;
-						}
-						if (!valid_id($this->request->Award_addawards->AwardId)) {
-							$this->data['Error'] = 'You must choose an award. Award not added!';
-							break;
-						}
-						if (!valid_id($this->request->Award_addawards->GivenById)) {
-							$this->data['Error'] = 'Who gave this award? Award not added!';
-							break;
-						}
-						$r = $this->add_award();
-						break;
+				if ($action == 'addaward' && $this->is_request_valid()) {
+					$r = $this->add_award();
 				}
+
 				if ($r['Status'] == 0) {
 					$this->handle_success();
 				} else if ($r['Status'] == 5) {
@@ -120,6 +93,22 @@ class Controller_Award extends Controller
 
 		$this->set_template();
 		$this->set_award_data($id);
+	}
+	private function is_request_valid()
+	{
+		if (!valid_id($this->request->Award_addawards->MundaneId)) {
+			$this->data['Error'] = 'You must choose a recipient. Award not added!';
+			return false;
+		}
+		if (!valid_id($this->request->Award_addawards->AwardId)) {
+			$this->data['Error'] = 'You must choose an award. Award not added!';
+			return false;
+		}
+		if (!valid_id($this->request->Award_addawards->GivenById)) {
+			$this->data['Error'] = 'Who gave this award? Award not added!';
+			return false;
+		}
+		return true;
 	}
 	private function add_award()
 	{
