@@ -42,22 +42,7 @@ class Controller_Award extends Controller
 			$action = $params[1];
 
 		if (strlen($action) > 0) {
-			$this->request->save('Award_addawards', true);
-			$r = array('Status' => 0);
-			if (!isset($this->session->user_id)) {
-				header('Location: ' . UIR . "Login/login/Award/park/$id");
-			} else {
-				if ($action == 'addaward' && $this->is_request_valid()) {
-					$r = $this->add_award();
-				}
-				if ($r['Status'] == 0) {
-					$this->handle_success();
-				} else if ($r['Status'] == 5) {
-					header('Location: ' . UIR . "Login/login/Award/park/$id");
-				} else {
-					$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
-				}
-			}
+			$this->handle_action($action, "Login/login/Award/park/$id");
 		}
 
 		$this->set_template();
@@ -72,27 +57,31 @@ class Controller_Award extends Controller
 			$action = $params[1];
 
 		if (strlen($action) > 0) {
-			$this->request->save('Award_addawards', true);
-			$r = array('Status' => 0);
-			if (!isset($this->session->user_id)) {
-				header('Location: ' . UIR . "Login/login/Award/kingdom/$id");
-			} else {
-				if ($action == 'addaward' && $this->is_request_valid()) {
-					$r = $this->add_award();
-				}
-
-				if ($r['Status'] == 0) {
-					$this->handle_success();
-				} else if ($r['Status'] == 5) {
-					header('Location: ' . UIR . "Login/login/Award/kingdom/$id");
-				} else {
-					$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
-				}
-			}
+			$this->handle_action($action, "Login/login/Award/kingdom/$id");
 		}
 
 		$this->set_template();
 		$this->set_award_data($id);
+	}
+	private function handle_action($action, $route)
+	{
+		$this->request->save('Award_addawards', true);
+		$r = array('Status' => 0);
+		if (!isset($this->session->user_id)) {
+			header('Location: ' . UIR . $route);
+		} else {
+			if ($action == 'addaward' && $this->is_request_valid()) {
+				$r = $this->add_award();
+			}
+
+			if ($r['Status'] == 0) {
+				$this->handle_success();
+			} else if ($r['Status'] == 5) {
+				header('Location: ' . UIR . $route);
+			} else {
+				$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
+			}
+		}
 	}
 	private function is_request_valid()
 	{
