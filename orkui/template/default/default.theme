@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
-		<link rel="icon" href="/favicon.ico">
+		<link rel="icon" href="/favicon.jpeg">
 		<?php if ($no_index) : ?>
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
