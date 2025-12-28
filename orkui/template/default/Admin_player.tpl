@@ -594,7 +594,7 @@
 			<span>Award Name:</span>
 			<span><input type='text' value='<?=isset($Admin_player)?$Admin_player['AwardName']:$Player['AwardName'] ?>' name='AwardName' id='AwardName' /></span>
 		</div>
-		<div>
+		<div id='AwardRankField'>
 			<span>Rank:</span>
 			<span><input type='text' class='numeric-field' style='float:none;' value='<?=isset($Admin_player)?$Admin_player['Rank']:$Player['Rank'] ?>' name='Rank' id='Rank' /></span>
 		</div>
@@ -649,6 +649,14 @@
 			else
 				$( '#AwardNameField' ).hide();
 		})
+		$( '[name="awardtype"]'  ).change(function() {
+			if($(this).val() == 'officers'){
+				$( '#AwardNameField' ).hide();
+				$( '#AwardRankField' ).hide();
+			}else{
+				$( '#AwardRankField' ).show();
+			}
+		});
 		$('a.revocation').on('click', function() {
 			$(this).attr('href', $(this).attr('href') + $('input[name=revocation]').val());
 		});

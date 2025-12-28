@@ -15,6 +15,21 @@
   
 		$( '#Cancel' ).hide();
 		$( '#Date' ).datepicker({dateFormat: 'yy-mm-dd'});
+		$( '#AwardNameField' ).hide();
+		$( '#AwardId' ).change(function() {
+			if ($('#AwardId :selected').text() == 'Custom Award')
+				$( '#AwardNameField' ).show();
+			else
+				$( '#AwardNameField' ).hide();
+		});
+		$( '[name="awardtype"]'  ).change(function() {
+			if($(this).val() == 'officers'){
+				$( '#AwardNameField' ).hide();
+				$( '#AwardRankField' ).hide();
+			}else{
+				$( '#AwardRankField' ).show();
+			}
+		});
 		$( '#Rank' ).blur(function() {
 			rank = $( '#Rank' ).val();
 			if (isNaN(rank) || rank < 1 || rank > 10) {
@@ -159,7 +174,6 @@
 				$(this).trigger('keydown.autocomplete');
 		});
 	});
-	
 	function setSideEffects(details) {
 		$( '#KingdomId' ).val(details['KingdomId']);
 		$( '#ParkId' ).val(details['ParkId']);
@@ -189,7 +203,11 @@
 				</select>
 			</span>
 		</div>
-		<div>
+		<div id='AwardNameField'>
+			<span>Award Name:</span>
+			<span><input type='text' value='<?=isset($Admin_player)?$Admin_player['AwardName']:$Player['AwardName'] ?>' name='AwardName' id='AwardName' /></span>
+		</div>
+		<div id='AwardRankField'>
 			<span>Rank:</span>
 			<span><input type='text' value='<?=$Award_addawards['Rank'] ?>' name='Rank' id='Rank' /></span>
 		</div>
