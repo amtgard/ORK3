@@ -927,7 +927,7 @@ class Controller_Admin extends Controller {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
-		$this->data[ 'page_title' ] = "Admin Page: " . $this->data['Player']['Persona'];
+		$this->data[ 'page_title' ] = "Admin: " . $this->data['Player']['Persona'];
 	}
 
 	public function player_bak($mundane_id) {
@@ -1441,7 +1441,7 @@ class Controller_Admin extends Controller {
 		foreach ($r as $key => $detail) {
 			$this->data[$key] = $detail;
 		}
-		$this->data[ 'page_title' ] = "Admin Page: " . $this->data['KingdomInfo']['KingdomName'];
+		$this->data[ 'page_title' ] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
 		$this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
 		$r = $this->Kingdom->get_park_summary($id);
 		$this->data['park_summary'] = $r;
@@ -1453,7 +1453,7 @@ class Controller_Admin extends Controller {
 		foreach ($r as $key => $detail) {
 			$this->data[$key] = $detail;
 		}
-		$this->data[ 'page_title' ] = "Admin Page: " . $this->data['ParkInfo']['ParkName'];
+		$this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
 	}
 
 	private function kingdom_route($id) {
