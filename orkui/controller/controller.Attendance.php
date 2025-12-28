@@ -6,6 +6,7 @@ class Controller_Attendance extends Controller {
 		parent::__construct($call, $id);
 
 		$this->load_model('Park');
+		$this->data[ 'no_index' ] = true;
 		
 		switch ($call) {
 			case 'kingdom':
@@ -285,6 +286,7 @@ class Controller_Attendance extends Controller {
 			
 		$this->data['EventDetailInfo'] = $this->Attendance->get_eventdetail_info($detail_id);
 		$this->data['EventInfo'] = $this->Attendance->get_event_info($event_id);
+		$this->data['page_title'] = $this->data['EventInfo'][0]['Name'];
 		logtrace('Attendance->event()',array($params, $this->request));
 		$this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
 		if ($this->request->exists('Attendance_event')) {

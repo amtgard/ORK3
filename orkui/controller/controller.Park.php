@@ -31,6 +31,7 @@ class Controller_Park extends Controller
 			$this->session->park_name = $this->request->park_name;
 		}
 		$this->data[ 'park_name' ] = $this->session->park_name;
+		$this->data[ 'page_title' ] = $this->session->park_name;
 
 		if ($this->data['LoggedIn']) {
 			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];

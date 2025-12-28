@@ -1,5 +1,11 @@
 <div class='info-container'>
+<?php if (!isset($this->__session->kingdom_id)) : ?>
+	<h3>All Kingdom Awards</h3>
+<?php elseif (!isset($this->__session->park_id)) : ?>
 	<h3>Kingdom Awards</h3>
+<?php else : ?>
+	<h3>Park Awards</h3>
+<?php endif; ?>
 	<table class='information-table'>
 		<thead>
 			<tr>

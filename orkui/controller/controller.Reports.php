@@ -6,6 +6,7 @@ class Controller_Reports extends Controller {
 	public function __construct($call=null, $method=null) {
 		parent::__construct($call, $method);
 		$this->data['menu']['reports'] = array( 'url' => UIR.'Reports', 'display' => 'Reports' );
+		$this->data[ 'no_index' ] = true;
 	}
 
 	public function index($action = null) {
@@ -19,6 +20,7 @@ class Controller_Reports extends Controller {
 										'Type' => 'Park',
 										'KingdomId' => $kingdom_id
 									));
+		$this->data['page_title'] = "Park Heraldry";
 	}
 
 	function kingdomheraldry($request=null) {
@@ -27,6 +29,7 @@ class Controller_Reports extends Controller {
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Kingdom'
 									));
+		$this->data['page_title'] = "Kingdom Heraldry";
 	}
 
 	function playerheraldry($kingdom_id=null) {
@@ -37,6 +40,7 @@ class Controller_Reports extends Controller {
 										'KingdomId' => $kingdom_id,
 										'ParkId' => $this->request->ParkId
 									));
+		$this->data['page_title'] = "Player Heraldry";
 	}
 
 	function unitheraldry($request=null) {
@@ -45,6 +49,7 @@ class Controller_Reports extends Controller {
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Unit'
 									));
+		$this->data['page_title'] = "Unit Heraldry";
 	}
 
 	function eventheraldry($kingdom_id=null) {
@@ -54,6 +59,7 @@ class Controller_Reports extends Controller {
 										'Type' => 'Event',
 										'KingdomId' => $kingdom_id
 									));
+		$this->data['page_title'] = "Event Heraldry";
 	}
 
 	public function guilds($param=null) {
@@ -69,13 +75,16 @@ class Controller_Reports extends Controller {
 	}
 
 	public function player_awards($params=null) {
+		$this->data[ 'page_title' ] = "All Awards";
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;
+			$this->data[ 'page_title' ] = "Kingdom Awards";
 		}
 		if (isset($this->request->ParkId)) {
 			$type = 'Park';
 			$id = $this->request->ParkId;
+			$this->data[ 'page_title' ] = "Park Awards";
 		}
 		if (isset($this->request->Ladder))
 			$ladder = $this->request->Ladder;
@@ -96,16 +105,19 @@ class Controller_Reports extends Controller {
 			$ladder = $this->request->Ladder;
 		$this->template = 'Reports_playerawardrecommendations.tpl';
 		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+		$this->data[ 'page_title' ] = "Award Recommendations";
 	}
 
 	public function class_masters($params=null) {
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;
+			$this->data[ 'page_title' ] = "Kingdom Class Masters/Paragons";
 		}
 		if (isset($this->request->ParkId)) {
 			$type = 'Park';
 			$id = $this->request->ParkId;
+			$this->data[ 'page_title' ] = "Park Class Masters/Paragons";
 		}
 		$this->template = 'Reports_classmasters.tpl';
 		$this->data['Awards'] = $this->Reports->class_masters(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0));
@@ -133,14 +145,17 @@ class Controller_Reports extends Controller {
   
 	public function masters_list($params=null) {
     $this->_kam($params, 'Reports_kam.tpl', 0, 1);
+	$this->data[ 'page_title' ] = "Masters List";
 	}
 
 	public function knights_list($params=null) {
     $this->_kam($params, 'Reports_kam.tpl', 1, 0);
+	$this->data[ 'page_title' ] = "Knights List";
 	}
 
 	public function knights_and_masters($params=null) {
     $this->_kam($params, 'Reports_kam.tpl', 1, 1);
+	$this->data[ 'page_title' ] = "Knights & Masters List";
 	}
 
 	public function attendance($params) {
@@ -179,6 +194,7 @@ class Controller_Reports extends Controller {
 
 	public function active($type=null) {
         $kingdom_config = $this->kingdom_config($type);
+		$this->data['page_title'] ="Active Player Roster";
         $this->data['active_players'] = $this->Reports->active_players(
                 $type,
                 $this->request->id,
@@ -190,20 +206,24 @@ class Controller_Reports extends Controller {
 
 	public function active_waivered_duespaid($type=null) {
         $this->_peerage_waivered_duespaid(null, $type);
+		$this->data['page_title'] ="Active Waivered Dues Paid";
 	}
 
     public function active_duespaid($type=null) {
         $this->_peerage_waivered_duespaid(null, $type, true, null);
+		$this->data['page_title'] ="Active Dues Paid";
 	}
 
     public function knights($type=null) {
         $this->_peerage_waivered_duespaid('Knight', $type, false, null);
     	$this->template = 'Reports_knights.tpl';
+		$this->data['page_title'] = "Active Knights";
 	}
 
     public function masters($type=null) {
         $this->_peerage_waivered_duespaid('Master', $type, false, null);
     	$this->template = 'Reports_masters.tpl';
+		$this->data['page_title'] ="Active Masters";
 	}
 
     private function _peerage_waivered_duespaid($peerage, $type=null, $dues=true, $waivered=true) {
@@ -226,29 +246,35 @@ class Controller_Reports extends Controller {
 
 	public function roster($type=null) {
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
+		$this->data['page_title'] ="Player Roster";
 	}
 
 	public function reeve($type=null) {
 		$this->template = 'Reports_reeve.tpl';
 		$this->data['reeve_qualified'] = $this->Reports->reeve_qualified($this->request->KingdomId, $this->request->ParkId, null, 0, 0, 1);
+		$this->data['page_title'] ="Reeve Qualified";
 	}
 	public function corpora($type=null) {
 		$this->template = 'Reports_corpora.tpl';
 		$this->data['corpora_qualified'] = $this->Reports->corpora_qualified($this->request->KingdomId, $this->request->ParkId, null, 0, 0, 1);
+		$this->data['page_title'] ="Corpora Qualified";
 	}
 
 	public function inactive($type=null) {
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 0);
+		$this->data['page_title'] ="Inactive Player Roster";
 	}
 
 	public function waivered($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 1);
+		$this->data['page_title'] ="Waivered Player Roster";
 	}
 
 	public function unwaivered($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 0);
+		$this->data['page_title'] ="Unwaivered Player Roster";
 	}
 
 	/* Old broken dues functionality */
@@ -263,6 +289,7 @@ class Controller_Reports extends Controller {
 		// TODO: totally dupe and change up this template
 		$this->template = 'Reports_dues.tpl';
 		$this->data['roster'] = $this->Reports->dues_paid_list($type, $this->request->id);
+		$this->data['page_title'] ="Dues Paid List";
 
 	}
 
@@ -270,6 +297,7 @@ class Controller_Reports extends Controller {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_suspension'] = 1;
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, null, null, 2, 1);
+		$this->data['page_title'] ="Suspended Player Roster";
 	}
 
 }

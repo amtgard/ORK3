@@ -15,6 +15,7 @@ class Controller_Event extends Controller {
 		if ($this->data['EventDetails']['Status']['Status'] != 0) {
 			$this->data['Error'] = $this->data['EventDetails']['Status']['Error'];
 		}
+		$this->data[ 'page_title' ] = $this->data['EventDetails']['Name'];
 		
 		if (valid_id($this->data['EventDetails']['KingdomId']))
 			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->data['EventDetails']['KingdomId'], 'display' => $this->data['EventDetails']['EventInfo'][0]['KingdomName'] );

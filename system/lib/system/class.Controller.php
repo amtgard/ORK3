@@ -26,6 +26,7 @@ class Controller
 
 		$this->Report = new APIModel( 'Report' );
 		$this->Search = new JSONModel( 'Search' );
+		$this->data[ 'no_index' ] = false;
 
 		if (get_class( $this ) == "Controller") {
 			$this->data[ 'page_title' ] = "Home";

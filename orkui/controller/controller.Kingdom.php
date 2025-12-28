@@ -23,6 +23,7 @@ class Controller_Kingdom extends Controller {
 			$this->session->kingdom_name = $this->Kingdom->get_kingdom_name($id);
 		}
 		$this->data['kingdom_name'] = $this->session->kingdom_name;
+		$this->data[ 'page_title' ] = $this->session->kingdom_name;
 		
 		unset($this->session->park_id);
 		unset($this->session->park_name);

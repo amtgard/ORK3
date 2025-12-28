@@ -5,6 +5,7 @@ class Controller_Login extends Controller {
 
 	public function __construct($call=null, $method=null) {
 		parent::__construct($call, $method);
+		$this->data[ 'page_title' ] = 'Login';
 	}
 	
 	public function index($action = null) {

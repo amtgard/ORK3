@@ -35,6 +35,7 @@ class Controller_Player extends Controller {
 			unset($this->data['menu']['park']);
 		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/$call/$id", 'display' => $this->data['Player']['Persona'] );
+		$this->data['page_title'] = $this->data['Player']['Persona'];
 	
 	}
 	
