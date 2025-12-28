@@ -3,7 +3,9 @@
 	<?=$principality_info['Info']['PrincipalityInfo']['HasHeraldry']==1?"<img src='{$principality_info['HeraldryUrl']['Url']}' class='heraldry-img' />":"" ?>
 	<ul>
 		<li><a href='<?=UIR ?>Search/principality/<?=$principality_id ?>'>Search Players</a></li>
+<?php if ($LoggedIn) : ?>
 		<li><a href='<?=UIR ?>Award/principality/<?=$principality_id ?>'>Enter Awards</a></li>
+<?php endif ; ?>
 		<li><a href='<?=UIR ?>Treasury/principality/<?=$PrincipalityInfo['PrincipalityId'] ?>'>Treasury</a></li>
 	</ul>
 </div>

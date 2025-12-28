@@ -3,7 +3,9 @@
 	<?=$kingdom_info['Info']['KingdomInfo']['HasHeraldry']==1?"<img src='{$kingdom_info["HeraldryUrl"]["Url"]}' class='heraldry-img' />":"" ?>
 	<ul>
 		<li><a href='<?=UIR ?>Search/kingdom/<?=$kingdom_id ?>'>Search Players</a></li>
+<?php if ($LoggedIn) : ?>
 		<li><a href='<?=UIR ?>Award/kingdom/<?=$kingdom_id ?>'>Enter Awards</a></li>
+<?php endif ; ?>
 		<li><a href='<?=UIR ?>Kingdom/map/<?=$kingdom_id ?>'>Kingdom Atlas</a></li>
 		<li><a href='<?=UIR ?>Treasury/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Treasury</a></li>
 	</ul>
