@@ -4,11 +4,15 @@ class Controller_Admin extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
-
-		$this->load_model('Park');
-		$this->load_model('Kingdom');
-		$this->data['Call'] = $call;
-		$this->data[ 'page_title' ] = "Admin Panel";
+		if (!isset($this->session->user_id)) {
+			logtrace('Header redirect: no user id', null);
+			header( 'Location: '.UIR."Login" );
+		} else {
+			$this->load_model('Park');
+			$this->load_model('Kingdom');
+			$this->data['Call'] = $call;
+			$this->data[ 'page_title' ] = "Admin Panel";
+		}
 	}
 
 	public function index($duh = null) {
