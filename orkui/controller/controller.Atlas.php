@@ -9,6 +9,7 @@ class Controller_Atlas extends Controller {
 	}
 	
 	public function index($action = null) {
+	$this->data[ 'page_title' ] = "Amtgard Atlas";
   	$this->data['Parks'] = $this->Map->GetParkLocations(array('KingdomId' => $kingdom_id));
 	}
     
