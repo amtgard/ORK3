@@ -23,7 +23,7 @@ git clone https://github.com/amtgard/ORK3.git
 cd ORK3
 ```
 
-3. Download the components, buid, and start your containers. There are two, one for the PHP and another for the Maria DB.
+3. Download the components, build, and start your containers. There are two, one for the PHP and another for the Maria DB.
 
 ```
 docker-compose -f docker-compose.php8.yml up
