@@ -35,7 +35,7 @@ docker-compose -f docker-compose.php8.yml up -d
     to do the build, run and detatch (run in background)
 ```
 
-4. Obtain the redacted database mentioned above and depending on the name and where it is located, run the following command on your desktop (you will require mysql in your development environmant)
+4. Obtain the redacted database mentioned above and depending on the name and where it is located, run the following command on your desktop (you will require mysql in your development environment)
 ```
 mysql -P 24306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/[somedate]redacted.sql
 
