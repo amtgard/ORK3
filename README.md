@@ -2,7 +2,7 @@
 
 [![Code Climate](https://codeclimate.com/github/amtgard/ORK3/badges/gpa.svg)](https://codeclimate.com/github/amtgard/ORK3)
 
-This is the third major release of the [Amtgard Online Record Keeper](http://amtwiki.net/amtwiki/index.php/ORK).
+This is the third major release of the [Amtgard Online Record Keeper](https://ork.amtgard.com/orkui/).
 
 ## Development
 ### Technologies used
