@@ -5,66 +5,51 @@
 This is the third major release of the [Amtgard Online Record Keeper](http://amtwiki.net/amtwiki/index.php/ORK).
 
 ## Development
+### Technologies used
+The ORK uses Apache, PHP, SQL, HTML, CSS, and Javascript, NGINX. You don't have to be a master of all of this, and the ORK development might be a good place to build your skillset in these areas if you're just starting out. You'll likely not have to touch the NGINX or Apache bits at all.
 
-### Envirionment
+Have a look at the [Open Issues](https://github.com/amtgard/ORK3/issues) and see if there's something easy looking or marked as a Good First Issue. Or reach out and ask if there's something we need working on.
+### Using Docker is the preferred method
+The easiest way to get up and running as a developer is to first contact the <a href="mailto:technicalad@amtgard.com?subject=ORK%20Development&body=I'm%20interested%20in%20becoming%20an%20ORK%20Developer%20and%20require%20the%20Work%20for%20Hire%20Transfer%20Agreement.">Amtgard Technical Assistant Director</a> and ask for the Amtgard Work for Hire Transfer Agreement. This requires your Legal Name and an email address. After this is signed then a redacted ORK Database will be made available for development purposes such that you can follow  the Docker workflow below.
 
-Git, PHP 5.6, MySQL 5.5 and Apache.
+1. Install Docker
 
-### Basic Setup
+Head to [Docker.com](https://www.docker.com/get-started/), download and install Docker
 
-To set up you will need a copy of the codebase, a recent copy of the database, and an LAMP or WAMP installation.
-
-Clone the code to a a reasonable place in your web root.
-
-Rehydrate the database from https://drive.google.com/drive/folders/1ai6zOM1EogUWE-Zf_fg_gGrZclM4nSQC
-
-### Set Up the Config File
-
-Copy `config.dev.php` to `config.php`. Make sure to change the admin email to your own in `config.php`.
-
-### View the Site
-
-You can now view the site at http://servername/ork/orkui/.
-
-### Using Docker (Will be outdated with PHP8 changes see below)
-A docker-compose file is setup for quickly getting the environment running locally. If there are other environments using port 80 change the exposed port in the docker-compose file to keep from conflicting. Same goes for 3306 for the database. Run the following Docker command from the cloned directory.
-```
-docker-compose up -d
-```
-Once this completes and MySql is waiting on a socket there are some setup tasks required. In another window issue the following commands:
-```
-mysql -P 3306 --protocol=tcp -h localhost -u root -proot ork < ork.sql
-```
-This will setup the database.
-
-Download and extract a recent Ork backup from https://ork.amtgard.com/assets/backups/
+2. Check out this repository locally 
 
 ```
-mysql -P 3306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/2020.01.20.06.06.01.sq
+git clone https://github.com/amtgard/ORK3.git
+cd ORK3
 ```
-This will take a while but will hydrate the database with the backup that was downloaded and extracted above.
+
+3. Download the components, buid, and start your containers. There are two, one for the PHP and another for the Maria DB.
+
 ```
-mysql -P 3306 --protocol=tcp -h localhost -u root -proot 
+docker-compose -f docker-compose.php8.yml up
+
+    or
+
+docker-compose -f docker-compose.php8.yml up -d
+
+    to do the build, run and detatch (run in background)
+```
+
+4. Obtain the redacted database mentioned above and depending on the name and where it is located, run the following command on your desktop (you will require mysql in your development environmant)
+```
+mysql -P 24306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/[somedate]redacted.sql
+
+```
+this will take a while. After it completes, need to run the following:
+```
+mysql -P 24306 --protocol=tcp -h localhost -u root -proot 
 ```
 Once the SQL prompt appears enter:
 ```
 SET GLOBAL sql_mode = '';
 exit
 ```
-This was needed to allow the database to accept certain values sent by the PHP APIs.
+This was needed to allow the database to accept certain values sent by the PHP APIs. If you find that even though you are logged into the ORK as an admin you cannot change values locally, redo this step, logout and log back in.
 
-Navigate to http://localhost/ork/orkui and see the contents of the backup that was restored.  Login with your ORK account and password provided you have recently setup your password before the backup database was created on the production server.
+5. You should be able to connect to the running PHP server now and can access from local at: `http://localhost:19080/orkui/`
 
-### Using Docker 8.1 (Under Development)
-
-```
-docker-compose -f docker-compose.php8.yml up
-```
-
-You can access from local at: `http://localhost:19080/orkui/`
-
-This may redirect to port `80`, you may need to add the `19080` port.
-
-On first run, you will need to import a database backup to configure the database.
-
-mysql -P 24306 --protocol=tcp -h localhost -u root -proot ork < ~/Downloads/[somedate].sql
