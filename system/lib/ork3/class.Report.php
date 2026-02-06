@@ -19,28 +19,72 @@ class Report  extends Ork3 {
 	public function HeraldryReport($request) {
 		// WithMissingHeraldries [No, Yes, Only]
 		$response = array();
-		$table = strtolower($request['Type']);
-		$$table = new yapo($this->db, DB_PREFIX . $table);
-		if ($request['WithMissingHeraldries'] == 'No')
-			$$table->has_heraldry = 1;
-		if ($request['WithMissingHeraldries'] == 'Only')
-			$$table->has_heraldry = 0;
-		if (valid_id($request['KingdomId'])) {
-			$$table->kingdom_id = $request['KingdomId'];
-		}
-		if (valid_id($request['ParkId'])) {
-			$$table->park_id = $request['ParkId'];
-		}
-		if ($$table->find()) {
-			$table_id = $table.'_id';
-			do {
-				$response[] = array(
-						'HasHeraldry' => $$table->has_heraldry,
-						'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array( 'Type' => ($request['Type']=='Mundane'?'Player':$request['Type']), 'Id' => $$table->$table_id )),
-						'Name' => $request['Type']=='Mundane'?$$table->persona:$$table->name,
-						'Url' => UIR . ($request['Type']=='Mundane'?'Player':$request['Type']) .'/index/' . $$table->$table_id
+
+		// Special handling for Mundane (Player) type with last attendance sorting
+		if ($request['Type'] == 'Mundane') {
+			$heraldry_clause = '';
+			if ($request['WithMissingHeraldries'] == 'No')
+				$heraldry_clause = ' and m.has_heraldry = 1';
+			if ($request['WithMissingHeraldries'] == 'Only')
+				$heraldry_clause = ' and m.has_heraldry = 0';
+
+			$kingdom_clause = '';
+			if (valid_id($request['KingdomId'])) {
+				$kingdom_clause = " and m.kingdom_id = " . $request['KingdomId'];
+			}
+
+			$park_clause = '';
+			if (valid_id($request['ParkId'])) {
+				$park_clause = " and m.park_id = " . $request['ParkId'];
+			}
+
+			$last_attendance = "(SELECT max(att.date) FROM " . DB_PREFIX . "attendance att WHERE att.mundane_id = m.mundane_id)";
+
+			$sql = "SELECT m.mundane_id, m.persona, m.has_heraldry, $last_attendance as last_signin
+					FROM " . DB_PREFIX . "mundane m
+					WHERE 1 = 1
+					$heraldry_clause
+					$kingdom_clause
+					$park_clause
+					ORDER BY last_signin DESC, m.persona ASC";
+
+			$r = $this->db->query($sql);
+			if ($r !== false && $r->size() > 0) {
+				while ($r->next()) {
+					$response[] = array(
+						'HasHeraldry' => $r->has_heraldry,
+						'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Player', 'Id' => $r->mundane_id)),
+						'Name' => $r->persona,
+						'Url' => UIR . 'Player/index/' . $r->mundane_id,
+						'LastSignin' => $r->last_signin
 					);
-			} while ($$table->next());
+				}
+			}
+		} else {
+			// Original implementation for other heraldry types (Park, Kingdom, Unit, Event)
+			$table = strtolower($request['Type']);
+			$$table = new yapo($this->db, DB_PREFIX . $table);
+			if ($request['WithMissingHeraldries'] == 'No')
+				$$table->has_heraldry = 1;
+			if ($request['WithMissingHeraldries'] == 'Only')
+				$$table->has_heraldry = 0;
+			if (valid_id($request['KingdomId'])) {
+				$$table->kingdom_id = $request['KingdomId'];
+			}
+			if (valid_id($request['ParkId'])) {
+				$$table->park_id = $request['ParkId'];
+			}
+			if ($$table->find()) {
+				$table_id = $table.'_id';
+				do {
+					$response[] = array(
+							'HasHeraldry' => $$table->has_heraldry,
+							'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array( 'Type' => $request['Type'], 'Id' => $$table->$table_id )),
+							'Name' => $$table->name,
+							'Url' => UIR . $request['Type'] .'/index/' . $$table->$table_id
+						);
+				} while ($$table->next());
+			}
 		}
 		return $response;
 	}
