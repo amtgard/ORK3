@@ -81,7 +81,8 @@ class Report  extends Ork3 {
 							'HasHeraldry' => $$table->has_heraldry,
 							'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array( 'Type' => $request['Type'], 'Id' => $$table->$table_id )),
 							'Name' => $$table->name,
-							'Url' => UIR . $request['Type'] .'/index/' . $$table->$table_id
+							'Url' => UIR . $request['Type'] .'/index/' . $$table->$table_id,
+							'LastSignin' => null
 						);
 				} while ($$table->next());
 			}
