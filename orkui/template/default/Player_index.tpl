@@ -21,6 +21,39 @@
 	}
 ?>
 
+<style type='text/css'>
+	.sortable-table thead th {
+		cursor: pointer;
+		background-color: #f0f0f0;
+		user-select: none;
+		-webkit-user-select: none;
+		-moz-user-select: none;
+		-ms-user-select: none;
+		position: relative;
+		padding-right: 20px;
+	}
+	
+	.sortable-table thead th:hover {
+		background-color: #e0e0e0;
+	}
+	
+	.sortable-table thead th.sort-asc::after {
+		content: ' ▲';
+		position: absolute;
+		right: 5px;
+		color: #333;
+		font-size: 0.8em;
+	}
+	
+	.sortable-table thead th.sort-desc::after {
+		content: ' ▼';
+		position: absolute;
+		right: 5px;
+		color: #333;
+		font-size: 0.8em;
+	}
+</style>
+
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
@@ -287,16 +320,16 @@
 
 		<?php endif; ?>
 	</div>
-	<table class='information-table form-container' id='Awards'>
+	<table class='information-table form-container sortable-table' id='Awards'>
 		<thead>
 			<tr>
-				<th>Award</th>
-				<th>Rank</th>
-				<th>Date</th>
-				<th>Given By</th>
-				<th>Given At</th>
-				<th>Note</th>
-				<th>Entered By</th>
+				<th data-sorttype='text'>Award</th>
+				<th data-sorttype='numeric'>Rank</th>
+				<th data-sorttype='date'>Date</th>
+				<th data-sorttype='text'>Given By</th>
+				<th data-sorttype='text'>Given At</th>
+				<th data-sorttype='text'>Note</th>
+				<th data-sorttype='text'>Entered By</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -333,16 +366,16 @@
 
 <div class='info-container'>
 	<h3>Titles</h3>
-	<table class='information-table form-container' id='Awards'>
+	<table class='information-table form-container sortable-table' id='Titles'>
 		<thead>
 			<tr>
-				<th>Award</th>
-				<th>Rank</th>
-				<th>Date</th>
-				<th>Given By</th>
-				<th>Given At</th>
-				<th>Note</th>
-				<th>Entered By</th>
+				<th data-sorttype='text'>Award</th>
+				<th data-sorttype='numeric'>Rank</th>
+				<th data-sorttype='date'>Date</th>
+				<th data-sorttype='text'>Given By</th>
+				<th data-sorttype='text'>Given At</th>
+				<th data-sorttype='text'>Note</th>
+				<th data-sorttype='text'>Entered By</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -411,15 +444,15 @@
 
 <div class='info-container'>
 	<h3>Attendance</h3>
-	<table class='information-table' id='Attendance'>
+	<table class='information-table sortable-table' id='AttendanceTable'>
 		<thead>
 			<tr>
-				<th>Date</th>
-				<th>Kingdom</th>
-				<th>Park</th>
-				<th>Event</th>
-				<th>Class</th>
-				<th>Credits</th>
+				<th data-sorttype='date'>Date</th>
+				<th data-sorttype='text'>Kingdom</th>
+				<th data-sorttype='text'>Park</th>
+				<th data-sorttype='text'>Event</th>
+				<th data-sorttype='text'>Class</th>
+				<th data-sorttype='numeric'>Credits</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -446,6 +479,7 @@
 	</div>
 <?php endif; ?>
 <script>
+	$(document).ready(function() {
 		<?php if ($this->__session->user_id): ?>
 			$(".confirm-delete-recommendation").click(function(e) {
 				e.preventDefault();
@@ -459,6 +493,70 @@
 				});
 			});
 		<?php endif; ?>
+
+		// Initialize sortable tables
+		initializeSortableTables();
+	});
+
+	function initializeSortableTables() {
+		$('.sortable-table').each(function() {
+			var table = $(this);
+			
+			// Make headers clickable
+			table.find('thead th').on('click', function() {
+				var columnIndex = $(this).index();
+				var sortType = $(this).data('sorttype') || 'text';
+				var isAscending = !$(this).hasClass('sort-asc');
+				
+				// Remove sort classes from all headers
+				table.find('thead th').removeClass('sort-asc sort-desc');
+				
+				// Add sort class to clicked header
+				$(this).addClass(isAscending ? 'sort-asc' : 'sort-desc');
+				
+				// Sort the table
+				sortTableByColumn(table, columnIndex, sortType, isAscending);
+			});
+		});
+	}
+
+	function sortTableByColumn(table, columnIndex, sortType, isAscending) {
+		var tbody = table.find('tbody');
+		var rows = tbody.find('tr').get();
+		
+		rows.sort(function(a, b) {
+			// Get actual cell content for more accurate comparison
+			var aCellContent = $(a).find('td').eq(columnIndex);
+			var bCellContent = $(b).find('td').eq(columnIndex);
+			
+			// Handle links - get the text content
+			var aText = aCellContent.text().trim();
+			var bText = bCellContent.text().trim();
+			
+			var comparison = 0;
+			
+			if (sortType === 'numeric') {
+				var aNum = parseFloat(aText) || 0;
+				var bNum = parseFloat(bText) || 0;
+				comparison = aNum - bNum;
+			} else if (sortType === 'date') {
+				// Parse dates - handles YYYY-MM-DD format
+				var aDate = new Date(aText).getTime() || 0;
+				var bDate = new Date(bText).getTime() || 0;
+				comparison = aDate - bDate;
+			} else {
+				// Text comparison
+				comparison = aText.localeCompare(bText);
+			}
+			
+			return isAscending ? comparison : -comparison;
+		});
+		
+		// Re-append sorted rows
+		$.each(rows, function(index, row) {
+			tbody.append(row);
+		});
+	}
 
 </script>
 
