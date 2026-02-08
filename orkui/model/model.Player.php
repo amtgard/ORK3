@@ -110,6 +110,10 @@ class Model_Player extends Model {
 	function delete_player_recommendation($request) {
 		return $this->Player->DeleteAwardRecommendation($request);
 	}
+
+	function get_latest_attendance_date($mundane_id) {
+		return Ork3::$Lib->player->get_latest_attendance_date($mundane_id);
+	}
 }
 
 ?>

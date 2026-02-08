@@ -1466,6 +1466,17 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function get_latest_attendance_date($mundane_id) {
+		$sql = "select max(date) as latest_date from " . DB_PREFIX . "attendance where mundane_id = '" . mysql_real_escape_string($mundane_id) . "'";
+		$r = $this->db->query($sql);
+		if ($r === false || $r->size() == 0) {
+			return null;
+		}
+		$r->next();
+		$date = $r->latest_date;
+		return $date ? date('Y-m-d', strtotime($date)) : null;
+	}
+
 }
 
 ?>
