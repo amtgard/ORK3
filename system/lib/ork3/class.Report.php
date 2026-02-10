@@ -692,6 +692,55 @@ class Report  extends Ork3 {
 		return $response;
 	}
 
+	public function RecentParkAttendees($request) {
+		$park_id = intval($request['ParkId']);
+		if (!valid_id($park_id)) {
+			return array('Status' => InvalidParameter(), 'Attendees' => array());
+		}
+
+		$sql = "SELECT
+					a.mundane_id,
+					m.persona,
+					mk.kingdom_id as kingdom_id,
+					mk.name as kingdom_name,
+					mp.park_id as from_park_id,
+					mp.name as from_park_name,
+					MAX(a.date) as last_signin,
+					SUBSTRING_INDEX(GROUP_CONCAT(a.class_id ORDER BY a.date DESC, a.attendance_id DESC SEPARATOR ','), ',', 1) as class_id,
+					SUBSTRING_INDEX(GROUP_CONCAT(c.name ORDER BY a.date DESC, a.attendance_id DESC SEPARATOR ','), ',', 1) as class_name
+				FROM " . DB_PREFIX . "attendance a
+					JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+					LEFT JOIN " . DB_PREFIX . "kingdom mk ON mk.kingdom_id = m.kingdom_id
+					LEFT JOIN " . DB_PREFIX . "park mp ON mp.park_id = m.park_id
+					LEFT JOIN " . DB_PREFIX . "class c ON c.class_id = a.class_id
+				WHERE a.park_id = $park_id
+					AND a.date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+					AND a.mundane_id > 0
+					AND m.mundane_id IS NOT NULL
+				GROUP BY a.mundane_id, m.persona, mk.kingdom_id, mk.name, mp.park_id, mp.name
+				ORDER BY m.persona";
+
+		$r = $this->db->query($sql);
+		$response = array('Attendees' => array());
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$response['Attendees'][] = array(
+					'MundaneId'   => $r->mundane_id,
+					'Persona'     => $r->persona,
+					'KingdomId'   => $r->kingdom_id,
+					'KingdomName' => $r->kingdom_name,
+					'ParkId'      => $r->from_park_id,
+					'ParkName'    => $r->from_park_name,
+					'LastSignIn'  => $r->last_signin,
+					'ClassId'     => $r->class_id,
+					'ClassName'   => $r->class_name,
+				);
+			}
+		}
+		$response['Status'] = Success();
+		return $response;
+	}
+
 	public function GeneralLedger($request) {
 
 	}
