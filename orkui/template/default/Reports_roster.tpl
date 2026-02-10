@@ -17,7 +17,8 @@
 				<th>Dues Paid</th>
 				<th>Dues Through</th>
 <?php endif; ?>
-				<th>Suspended Until</th>
+				<th>Last Sign-in</th>
+			<th>Suspended Until</th>
 <?php if (isset($show_suspension)) : ?>
 				<th>Suspended At</th>
 				<th>Suspendator</th>
@@ -42,7 +43,8 @@
 				<td><?=($player['DuesPaid']?"Paid":"") ?></td>
 				<td><?=($player['DuesThrough']?$player['DuesThrough']:"") ?></td>
 <?php endif; ?>
-				<td><?=$player['SuspendedUntil'] ?></td>
+				<td><?=$player['LastSignIn'] ?></td>
+			<td><?=$player['SuspendedUntil'] ?></td>
 <?php if (isset($show_suspension)) : ?>
 				<td><?=$player['SuspendedAt'] ?></td>
 				<td><?=$player['Suspendator'] ?></td>

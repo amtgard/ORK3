@@ -874,6 +874,7 @@ class Report  extends Ork3 {
 			$order_by = 'duespaid desc,'.$order_by;
 		}
 		$select_list[] = 'k.parent_kingdom_id';
+		$select_list[] = 'MAX(att.date) as last_sign_in';
 		$select_list = array_merge($select_list, array());
 		if (strlen($request['Token']) > 0
 				&& ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -887,6 +888,7 @@ class Report  extends Ork3 {
 						LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 						LEFT JOIN " . DB_PREFIX . "park p on m.park_id = p.park_id
 						left join " . DB_PREFIX . "mundane suspended_by on m.suspended_by_id = suspended_by.mundane_id
+						left join " . DB_PREFIX . "attendance att on att.mundane_id = m.mundane_id
 						$duespaid_clause
 						$join_clause
 					".(count($restrict_clause)?"where":"")."
@@ -926,6 +928,7 @@ class Report  extends Ork3 {
 								'UnitRole' => $r->unit_role,
 								'UnitTitle' => $r->unit_title,
 								'PenaltyBox' => $r->penalty_box,
+								'LastSignIn' => $r->last_sign_in,
 								'Displayable' => $restricted_access||$r->restricted==0
 							);
 				}
