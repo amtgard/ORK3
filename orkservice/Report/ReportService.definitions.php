@@ -224,6 +224,7 @@ $server->wsdl->addComplexType(
 				'Waivered'=>array('name'=>'Waivered','type'=>'xsd:string'),
 				'DuesPaid'=>array('name'=>'DuesPaid','type'=>'xsd:boolean'),
 				'PenaltyBox'=>array('name'=>'PenaltyBox','type'=>'xsd:boolean'),
+				'LastSignIn'=>array('name'=>'LastSignIn','type'=>'xsd:string'),
 				'Displayable'=>array('name'=>'Displayable','type'=>'xsd:boolean')
 			)
 	);
