@@ -9,6 +9,24 @@
 <?php else: ?>
 	<h3>Active Players</h3>
 <?php endif; ?>
+	<details style="margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; padding: 0;">
+		<summary style="cursor: pointer; padding: 8px 12px; background: #f0f0f0; font-weight: bold; list-style: none;">
+			<i class="fas fa-info-circle"></i> Report Explanation <span style="font-weight: normal; font-size: 0.85em; color: #666;">(click to expand)</span>
+		</summary>
+		<div style="padding: 10px 14px; font-size: 0.9em; line-height: 1.5;">
+			<p>This report lists all players who hold a <strong>Knight</strong> peerage award and meet the kingdom's minimum activity requirements within the <strong>last 6 months</strong>.</p>
+			<p><strong>How players qualify:</strong> A player must be a non-suspended member of this kingdom with at least one Knight-level award. They must also meet the kingdom's configured attendance and credit minimums during the lookback period.</p>
+			<p><strong>Column definitions:</strong></p>
+			<ul style="margin: 4px 0 8px 20px;">
+				<li><strong>Weeks</strong> &ndash; Number of distinct weeks in which the player had at least one attendance record.</li>
+				<li><strong>Park Weeks</strong> &ndash; Number of weeks the player attended at a park (park-level attendance count).</li>
+				<li><strong>Attendances</strong> &ndash; Total individual attendance records during the period.</li>
+				<li><strong>Credits</strong> &ndash; Total credits earned, with each month capped at the kingdom's configured monthly credit maximum.</li>
+				<li><strong>Dues Paid</strong> &ndash; Shows "Dues Paid" if the player has a current, non-revoked dues record on file (either active dues or dues for life).</li>
+			</ul>
+			<p style="margin-bottom: 0;"><strong>Note:</strong> Only attendance from the last 6 months is considered. Players who do not meet the minimum weekly attendance, daily attendance, or credit thresholds configured for this kingdom will not appear.</p>
+		</div>
+	</details>
 	<div class="actions"><button class="print button">Print</button> <button class="download button">Download CSV</button></div>
 	<table class='information-table'>
 		<thead>

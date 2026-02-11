@@ -215,13 +215,13 @@ class Controller_Reports extends Controller {
 	}
 
     public function knights($type=null) {
-        $this->_peerage_waivered_duespaid('Knight', $type, false, null);
+        $this->_peerage_waivered_duespaid('Knight', $type, true, null);
     	$this->template = 'Reports_knights.tpl';
 		$this->data['page_title'] = "Active Knights";
 	}
 
     public function masters($type=null) {
-        $this->_peerage_waivered_duespaid('Master', $type, false, null);
+        $this->_peerage_waivered_duespaid('Master', $type, true, null);
     	$this->template = 'Reports_masters.tpl';
 		$this->data['page_title'] ="Active Masters";
 	}
