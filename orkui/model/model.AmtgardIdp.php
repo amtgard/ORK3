@@ -19,6 +19,8 @@ class Model_AmtgardIdp extends Model {
             'code_verifier' => $codeVerifier,
         ]));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_REFERER, 'https://ork.amtgard.com');
+        curl_setopt($ch, CURLOPT_USERAGENT, 'AmtgardIDP/1.0');
         $response = curl_exec($ch);
         $curl_err = curl_error($ch);
         curl_close($ch);
@@ -39,6 +41,8 @@ class Model_AmtgardIdp extends Model {
             'Accept: application/json'
         ]);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_REFERER, 'https://ork.amtgard.com');
+        curl_setopt($ch, CURLOPT_USERAGENT, 'AmtgardIDP/1.0');
         $user_response = curl_exec($ch);
         curl_close($ch);
 
