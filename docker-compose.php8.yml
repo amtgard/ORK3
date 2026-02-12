@@ -5,7 +5,7 @@ services:
       context: ./
       dockerfile: Dockerfile.nginx-php8
     ports:
-     - 19080:80
+      - 19080:80
     working_dir: /var/www
     volumes:
       - .:/var/www/ork.amtgard.com
@@ -28,7 +28,7 @@ services:
       MARIADB_ROOT_PASSWORD: 'root'
     ports:
       # <Port exposed> : < MySQL Port running inside container>
-      - '24306:3306'
+      - '19306:3306'
     expose:
       # Opens port 3306 on the container
       - '3306'
