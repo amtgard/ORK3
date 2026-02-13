@@ -65,20 +65,19 @@ class Controller_Award extends Controller
 	private function handle_action($action, $route)
 	{
 		$this->request->save('Award_addawards', true);
-		$r = array('Status' => 0);
 		if (!isset($this->session->user_id)) {
 			header('Location: ' . UIR . $route);
 		} else {
 			if ($action == 'addaward' && $this->is_request_valid()) {
 				$r = $this->add_award();
-			}
 
-			if ($r['Status'] == 0) {
-				$this->handle_success();
-			} else if ($r['Status'] == 5) {
-				header('Location: ' . UIR . $route);
-			} else {
-				$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
+				if ($r['Status'] == 0) {
+					$this->handle_success();
+				} else if ($r['Status'] == 5) {
+					header('Location: ' . UIR . $route);
+				} else {
+					$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
+				}
 			}
 		}
 	}

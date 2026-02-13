@@ -820,7 +820,7 @@ class Controller_Admin extends Controller {
                             $this->data['Error'] = 'You must choose an award. Award not added!'; break;
                         }
                         if (!valid_id($this->request->Admin_player->MundaneId)) {
-                            $this->data['Error'] = 'Who gave this award? You should rethink your life decisions';
+                            $this->data['Error'] = 'Who gave this award? Award not added!'; break;
                         }
 						$r = $this->Player->add_player_award(array(
 								'Token' => $this->session->token,
@@ -900,13 +900,15 @@ class Controller_Admin extends Controller {
 						));
 						break;
 				}
-				if ($r['Status'] == 0) {
-					$this->data['Message'] .= 'Player has been updated:<blockquote>' . $r['Detail'] . '</blockquote>';
-					$this->request->clear('Admin_player');
-				} else if($r['Status'] == 5) {
-					header( 'Location: '.UIR."Login/login/Admin/player/$id" );
-				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+				if (strlen($this->data['Error']) == 0) {
+					if ($r['Status'] == 0) {
+						$this->data['Message'] .= 'Player has been updated:<blockquote>' . $r['Detail'] . '</blockquote>';
+						$this->request->clear('Admin_player');
+					} else if($r['Status'] == 5) {
+						header( 'Location: '.UIR."Login/login/Admin/player/$id" );
+					} else {
+						$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					}
 				}
 			}
 		} else {

@@ -514,6 +514,7 @@
 			select: function (e, ui) {
 				showLabel('#GivenBy', ui);
 				$('input[name=MundaneId]').val(ui.item.value);
+				checkRequiredFields();
 				return false;
 			},
 			change: function (e, ui) {
@@ -521,18 +522,25 @@
 					showLabel('#GivenBy',null);
 					$('input[name=MundaneId]').val(null);
 				}
+				checkRequiredFields();
 				return false;
 			}
 		}).focus(function() {
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		checkRequiredFields();
 	});
-	
+
 	function setSideEffects(details) {
 		$( '#KingdomId' ).val(details['KingdomId']);
 		$( '#ParkId' ).val(details['ParkId']);
 		$( '#EventId' ).val(details['EventId']);
+	}
+	function checkRequiredFields() {
+		var hasAward = $('#AwardId').val() !== '' && $('#AwardId').val() !== null;
+		var hasGivenBy = $('#MundaneId').val() !== '' && $('#MundaneId').val() !== null && $('#MundaneId').val() > 0;
+		$('#Add').prop('disabled', !(hasAward && hasGivenBy));
 	}
 </script>
 
@@ -616,7 +624,7 @@
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' id='Add' value='Add' /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
+			<span><input type='submit' id='Add' value='Add' disabled /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
 		</div>
 		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=isset($Admin_player)?$Admin_player['MundaneId']:0 ?>' />
 		<input type='hidden' id='ParkId' name='ParkId' value='<?=isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId'] ?>' />
@@ -648,6 +656,7 @@
 				$( '#AwardNameField' ).show();
 			else
 				$( '#AwardNameField' ).hide();
+			checkRequiredFields();
 		})
 		$( '[name="awardtype"]'  ).change(function() {
 			if($(this).val() == 'officers'){
@@ -680,6 +689,7 @@
 		$( '#ParkId' ).val('');
 		$( '#KingdomId' ).val('');
 		$( '#EventId' ).val('');
+		checkRequiredFields();
 	}
 
 	function EditAward(id) {
