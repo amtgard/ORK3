@@ -92,6 +92,22 @@ class Controller_Reports extends Controller {
 		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
 	}
 
+	public function custom_awards($params=null) {
+		$this->data['page_title'] = "Custom Awards";
+		if (isset($this->request->KingdomId)) {
+			$type = 'Kingdom';
+			$id = $this->request->KingdomId;
+			$this->data['page_title'] = "Kingdom Custom Awards";
+		}
+		if (isset($this->request->ParkId)) {
+			$type = 'Park';
+			$id = $this->request->ParkId;
+			$this->data['page_title'] = "Park Custom Awards";
+		}
+		$this->template = 'Reports_customawards.tpl';
+		$this->data['Awards'] = $this->Reports->custom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0));
+	}
+
 	public function player_award_recommendations($params=null) {
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';

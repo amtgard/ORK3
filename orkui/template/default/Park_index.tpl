@@ -136,6 +136,7 @@
 		<li><a href='<?=UIR ?>Reports/player_award_recommendations&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Award Recommendations</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Player Awards</a></li>
 		<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Class Masters/Paragons</a></li>
+		<li><a href='<?=UIR ?>Reports/custom_awards&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Custom Awards</a></li>
 		<li>
 			Attendance
 			<ul>
