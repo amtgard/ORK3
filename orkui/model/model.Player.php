@@ -103,6 +103,10 @@ class Model_Player extends Model {
 		return $r;
 	}
 
+	function reset_waivers($request) {
+		return $this->Player->ResetWaivers($request);
+	}
+
 	function add_player_recommendation($request) {
 		return $this->Player->AddAwardRecommendation($request);
 	}
