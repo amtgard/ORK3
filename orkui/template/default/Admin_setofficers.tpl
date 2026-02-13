@@ -44,6 +44,12 @@
 	});
 </script>
 
+<?php if (!empty($Error)) : ?>
+	<div class='error-message'><?=$Error ?></div>
+<?php endif; ?>
+<?php if (!empty($Message)) : ?>
+	<div class='success-message'><?=$Message ?></div>
+<?php endif; ?>
 <div class='info-container'>
 	<h3>Officers</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/<?=$Call ?>/post&<?=$Type ?>=<?=$Id ?>'>
@@ -55,6 +61,7 @@
 					<th>Role</th>
 					<th>Officer</th>
 					<th>Set To</th>
+					<th>Vacate</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -70,10 +77,16 @@
 <?php endif; ?>
 					<td><input type='text' class='officer-input' value='<?=$Award_setofficers[str_replace(' ', '_',$auth['OfficerRole'])] ?>' name='<?=str_replace(' ', '_',$auth['OfficerRole']) ?>' value='<?=str_replace(' ', '_',$auth['OfficerRole']) ?>'></td>
 					<input type='hidden' id='<?=str_replace(' ', '_',$auth['OfficerRole']) ?>Id' name='<?=str_replace(' ', '_',$auth['OfficerRole']) ?>Id' value='<?=$Award_setofficers[str_replace(' ', '_',$auth['OfficerRole']).'Id'] ?>' />
+					<td>
+<?php if (!empty($auth['MundaneId']) && $auth['MundaneId'] > 0): ?>
+						<?php $vacateAction = ($Type == 'KingdomId') ? 'vacatekingdomofficer' : 'vacateparkofficer'; ?>
+						<a href='<?=UIR ?>Admin/<?=$vacateAction ?>&<?=$Type ?>=<?=$Id ?>&Role=<?=urlencode($auth['OfficerRole']) ?>' onclick="return confirm('Are you sure you want to vacate the <?=$auth['OfficerRole'] ?> position?');">Set Vacant</a>
+<?php endif; ?>
+					</td>
 				</tr>
 	<?php 	endforeach; ?>
 				<tr>
-					<td colspan='5'><input type='submit' value='Update' /></td>
+					<td colspan='6'><input type='submit' value='Update' /></td>
 				</tr>
 			</tbody>
 		</table>

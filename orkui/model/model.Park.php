@@ -48,6 +48,10 @@ class Model_Park extends Model {
 		}
 		return $r;
 	}
+
+	function vacate_officer($park_id, $role, $token) {
+		return $this->Park->VacateOfficer(array('ParkId' => $park_id, 'Role' => $role, 'Token' => $token));
+	}
 	
 	function create_park($request) {
 		logtrace("create_park", $request);

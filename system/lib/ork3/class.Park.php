@@ -690,6 +690,21 @@ class Park extends Ork3
 		return $response;
 	}
 
+	public function VacateOfficer( $request )
+	{
+		$response = [ ];
+		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
+			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
+		) {
+			$kingdomId = $this->GetParkKingdomId( $request[ 'ParkId' ] );
+			$c = new Common();
+			$c->set_officer( $kingdomId, $request[ 'ParkId' ], 0, $request[ 'Role' ] );
+		} else {
+			$response = NoAuthorization();
+		}
+		return $response;
+	}
+
 	public function RetirePark( $request )
 	{
 		return $this->WafflePark( $request, 'Retired' );
