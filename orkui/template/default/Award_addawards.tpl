@@ -21,6 +21,7 @@
 				$( '#AwardNameField' ).show();
 			else
 				$( '#AwardNameField' ).hide();
+			checkRequiredFields();
 		});
 		$( '[name="awardtype"]'  ).change(function() {
 			if($(this).val() == 'officers'){
@@ -119,6 +120,7 @@
 			select: function (e, ui) {
 				showLabel('#GivenBy', ui);
 				$('#GivenById').val(ui.item.value);
+				checkRequiredFields();
 				return false;
 			},
 			change: function (e, ui) {
@@ -126,12 +128,13 @@
 					showLabel('#GivenBy',null);
 					$('#GivenById').val(null);
 				}
+				checkRequiredFields();
 				return false;
 			}
 		}).focus(function() {
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
-		});		
+		});
 		$( "#GivenTo" ).autocomplete({
 			source: function( request, response ) {
 				park_id = $('#ParkId').val();
@@ -160,6 +163,7 @@
 			select: function (e, ui) {
 				showLabel('#GivenTo', ui);
 				$('#MundaneId').val(ui.item.value);
+				checkRequiredFields();
 				return false;
 			},
 			change: function (e, ui) {
@@ -167,17 +171,25 @@
 					showLabel('#GivenTo',null);
 					$('#MundaneId').val(null);
 				}
+				checkRequiredFields();
 				return false;
 			}
 		}).focus(function() {
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		checkRequiredFields();
 	});
 	function setSideEffects(details) {
 		$( '#KingdomId' ).val(details['KingdomId']);
 		$( '#ParkId' ).val(details['ParkId']);
 		$( '#EventId' ).val(details['EventId']);
+	}
+	function checkRequiredFields() {
+		var hasAward = $('#AwardId').val() !== '' && $('#AwardId').val() !== null;
+		var hasRecipient = $('#MundaneId').val() !== '' && $('#MundaneId').val() !== null && $('#MundaneId').val() > 0;
+		var hasGivenBy = $('#GivenById').val() !== '' && $('#GivenById').val() !== null && $('#GivenById').val() > 0;
+		$('#Add').prop('disabled', !(hasAward && hasRecipient && hasGivenBy));
 	}
 </script>
 
@@ -233,7 +245,7 @@
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' id='Add' value='Add' /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
+			<span><input type='submit' id='Add' value='Add' disabled /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
 		</div>
 		<input type='hidden' id='GivenById' name='GivenById' value='<?=$Award_addawards['GivenById'] ?>' />
 		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Award_addawards['MundaneId'] ?>' />
