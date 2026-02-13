@@ -19,8 +19,11 @@ class Report  extends Ork3 {
 	public function HeraldryReport($request) {
 		// WithMissingHeraldries [No, Yes, Only]
 		$response = array();
+
+		// Unified handling for all heraldry types
 		$table = strtolower($request['Type']);
 		$$table = new yapo($this->db, DB_PREFIX . $table);
+		
 		if ($request['WithMissingHeraldries'] == 'No')
 			$$table->has_heraldry = 1;
 		if ($request['WithMissingHeraldries'] == 'Only')
@@ -31,17 +34,32 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) {
 			$$table->park_id = $request['ParkId'];
 		}
+		
 		if ($$table->find()) {
 			$table_id = $table.'_id';
 			do {
+				$last_signin = null;
+				
+				// Calculate LastSignin for Mundane types
+				if ($request['Type'] == 'Mundane') {
+					$sql = "SELECT MAX(att.date) as last_signin FROM " . DB_PREFIX . "attendance att WHERE att.mundane_id = '" . mysql_real_escape_string($$table->mundane_id) . "'";
+					$r = $this->db->query($sql);
+					if ($r && $r->size() > 0) {
+						$r->next();
+						$last_signin = $r->last_signin;
+					}
+				}
+				
 				$response[] = array(
-						'HasHeraldry' => $$table->has_heraldry,
-						'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array( 'Type' => ($request['Type']=='Mundane'?'Player':$request['Type']), 'Id' => $$table->$table_id )),
-						'Name' => $request['Type']=='Mundane'?$$table->persona:$$table->name,
-						'Url' => UIR . ($request['Type']=='Mundane'?'Player':$request['Type']) .'/index/' . $$table->$table_id
-					);
+					'HasHeraldry' => $$table->has_heraldry,
+					'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => $request['Type'], 'Id' => $$table->$table_id)),
+					'Name' => $$table->name,
+					'Url' => UIR . $request['Type'] . '/index/' . $$table->$table_id,
+					'LastSignin' => $last_signin
+				);
 			} while ($$table->next());
 		}
+		
 		return $response;
 	}
 

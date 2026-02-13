@@ -117,6 +117,10 @@
 			<span>Park Member Since:</span>
       <span class='form-informational-field'><?=$Player['ParkMemberSince'] ?></span>
 		</div>
+		<div>
+			<span>Last Sign-In Date:</span>
+      <span class='form-informational-field'><?=($Player['LastSignInDate'] ? $Player['LastSignInDate'] : 'N/A') ?></span>
+		</div>
   </form>
 </div>
 
