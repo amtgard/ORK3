@@ -47,6 +47,14 @@ class Model_Reports extends Model {
 		return false;
 	}
 
+	function custom_awards($request) {
+		$r = $this->Report->CustomAwards($request);
+		if ($r['Status']['Status'] == 0) {
+			return $r['Awards'];
+		}
+		return false;
+	}
+
 	function crown_qualed($request) {
 		logtrace("crown_qualed($kingdom_id, $park_id)", null);
 		$r = $this->Report->CrownQualed($request['KingdomId']);

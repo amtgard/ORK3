@@ -336,6 +336,78 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
+	public function CustomAwards($request) {
+
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+		$location_clause = '';
+		$order = '';
+		if (valid_id($request['KingdomId'])) {
+			$location_clause = " and m.kingdom_id = " . intval($request['KingdomId']);
+		} else {
+			$order = "k.name, ";
+		}
+		if (valid_id($request['ParkId'])) {
+			$location_clause = " and m.park_id = " . intval($request['ParkId']);
+		}
+
+		$past_year = date("Y-m-d", strtotime("-1 year"));
+
+		$sql = "select
+				distinct p.park_id, p.name as park_name,
+				k.kingdom_id, k.name as kingdom_name,
+				m.persona, m.mundane_id,
+				ma.custom_name, ma.date, ma.note,
+				gbm.mundane_id as given_by_id, gbm.persona as given_by_persona
+			from " . DB_PREFIX . "awards ma
+				left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
+				left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+				left join " . DB_PREFIX . "mundane m on m.mundane_id = ma.mundane_id
+				left join " . DB_PREFIX . "mundane gbm on gbm.mundane_id = ma.given_by_id
+				left join " . DB_PREFIX . "park p on p.park_id = m.park_id
+				left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
+			where ma.custom_name is not null
+				and ma.custom_name != ''
+				and (ma.revoked = 0 or ma.revoked is null)
+				and m.active = 1
+				$location_clause
+				and exists (
+					select 1 from " . DB_PREFIX . "attendance att
+					where att.mundane_id = m.mundane_id
+						and att.date > '$past_year'
+				)
+			order by $order p.name, m.persona, ma.date
+		";
+
+		logtrace("CustomAwards", $sql);
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['Awards'] = array();
+			while ($r->next()) {
+				$response['Awards'][] = array(
+					'MundaneId' => $r->mundane_id,
+					'Persona' => $r->persona,
+					'CustomAwardName' => $r->custom_name,
+					'Date' => $r->date,
+					'GivenById' => $r->given_by_id,
+					'GivenBy' => $r->given_by_persona,
+					'Note' => $r->note,
+					'ParkId' => $r->park_id,
+					'KingdomId' => $r->kingdom_id,
+					'ParkName' => $r->park_name,
+					'KingdomName' => $r->kingdom_name
+				);
+			}
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
 	public function PlayerAwardRecommendations($request) {
 
 		$key = Ork3::$Lib->ghettocache->key($request);

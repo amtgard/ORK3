@@ -120,6 +120,7 @@
 				<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?>-level Awards</a></li>
 				<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>'>Class Masters/Paragons</a></li>
 				<li><a href='<?=UIR ?>Reports/guilds&KingdomId=<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?> Guilds</a></li>
+				<li><a href='<?=UIR ?>Reports/custom_awards&KingdomId=<?=$kingdom_id ?>'>Custom Awards</a></li>
 			</ul>
 		</li>
 		<li>
