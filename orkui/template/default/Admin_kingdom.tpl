@@ -1,3 +1,9 @@
+<?php if (strlen($Message) > 0) : ?>
+	<div class='success-message'><?=$Message ?></div>
+<?php endif; ?>
+<?php if (strlen($Error) > 0) : ?>
+	<div class='error-message'><?=$Error ?></div>
+<?php endif; ?>
 <div class='info-container'>
 	<h3><?=$KingdomInfo['KingdomName'] ?> Administration</h3>
 	<ul>
@@ -16,6 +22,7 @@
 				<li><a href='<?=UIR ?>Admin/claimplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Move Player</a></li>
 				<li><a href='<?=UIR ?>Admin/mergeplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Merge Players</a></li>
 				<li><a href='<?=UIR ?>Admin/suspendplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Suspensions</a></li>
+				<li><a href='<?=UIR ?>Admin/resetwaivers/kingdom/<?=$KingdomInfo['KingdomId'] ?>' class='confirm-reset-waivers'>Reset Waivers</a></li>
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Admin/transferpark/<?=$KingdomInfo['KingdomId'] ?>'>Claim Park</a></li>
@@ -39,3 +46,27 @@
 		</li>
 	</ul>
 </div>
+<div id="dialogs" style="display: none">
+	<div id="reset-waivers" title="Confirmation Required">
+		This will reset all waivers for the <?=$IsPrinz?'principality':'kingdom' ?>. This action cannot be undone. Continue?
+	</div>
+</div>
+<script>
+$(document).ready(function() {
+	$(".confirm-reset-waivers").click(function(e) {
+		e.preventDefault();
+		var targetUrl = $(this).attr("href");
+		$("#reset-waivers").dialog({
+			width: 460,
+			modal: true,
+			buttons: {
+				"No": function() { $(this).dialog("close"); },
+				"Yes": function() {
+					window.location.href = targetUrl;
+					$(this).dialog("close");
+				}
+			}
+		});
+	});
+});
+</script>

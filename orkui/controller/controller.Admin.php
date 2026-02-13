@@ -1563,6 +1563,57 @@ class Controller_Admin extends Controller {
 		$this->data['NativePopulace'] = $native_populace;
 	}
 
+	public function resetwaivers($params = null) {
+		$this->load_model('Player');
+		$params = explode('/', $params);
+		$type = $params[0];
+		$id = isset($params[1]) ? $params[1] : 0;
+
+		if (!isset($this->session->user_id)) {
+			header('Location: ' . UIR . "Login/login/Admin/resetwaivers/$type/$id");
+			return;
+		}
+
+		$request = array('Token' => $this->session->token);
+		if ($type == 'kingdom') {
+			$request['KingdomId'] = $id;
+		} else if ($type == 'park') {
+			$request['ParkId'] = $id;
+		}
+
+		$r = $this->Player->reset_waivers($request);
+
+		if ($r['Status'] == 0) {
+			$this->data['Message'] = $r['Detail'];
+		} else if ($r['Status'] == 5) {
+			header('Location: ' . UIR . "Login/login/Admin/resetwaivers/$type/$id");
+			return;
+		} else {
+			$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
+		}
+
+		if ($type == 'kingdom') {
+			$this->kingdom_route($id);
+			$r = $this->Kingdom->get_kingdom_details($id);
+			foreach ($r as $key => $detail) {
+				$this->data[$key] = $detail;
+			}
+			$this->data['page_title'] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
+			$this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
+			$r = $this->Kingdom->get_park_summary($id);
+			$this->data['park_summary'] = $r;
+			$this->template = 'Admin_kingdom.tpl';
+		} else if ($type == 'park') {
+			$this->park_route($id);
+			$r = $this->Park->get_park_info($id);
+			foreach ($r as $key => $detail) {
+				$this->data[$key] = $detail;
+			}
+			$this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
+			$this->template = 'Admin_park.tpl';
+		}
+	}
+
 	private function kingdom_route($id) {
 		$this->data['kingdom_id'] = $id;
 		$this->session->kingdom_id = $id;
