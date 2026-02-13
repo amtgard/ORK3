@@ -566,6 +566,22 @@ class Kingdom  extends Ork3 {
 		return $response;
 	}
 	
+	public function VacateOfficer($request) {
+		$response = array();
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if ($mundane_id > 0) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				$c = new Common();
+				$c->set_officer($request['KingdomId'], 0, 0, $request['Role']);
+			} else {
+				$response = NoAuthorization();
+			}
+		} else {
+			$response = NoAuthorization();
+		}
+		return $response;
+	}
+
 	public function RetireKingdom($request) {
 		return $this->WaffleKingdom($request, 'Retired');
 	}

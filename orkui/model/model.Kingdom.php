@@ -57,6 +57,10 @@ class Model_Kingdom extends Model {
 		}
 		return $r;
 	}
+
+	function vacate_officer($kingdom_id, $role, $token) {
+		return $this->Kingdom->VacateOfficer(array('KingdomId' => $kingdom_id, 'Role' => $role, 'Token' => $token));
+	}
 	
 	function create_kingdom($request) {
 		logtrace("create_kingdom", $request);

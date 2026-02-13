@@ -438,6 +438,56 @@ class Controller_Admin extends Controller {
 		}
 	}
 
+	public function vacatekingdomofficer() {
+		$this->load_model('Kingdom');
+		$kingdom_id = $this->request->KingdomId;
+		if (!isset($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/setkingdomofficers');
+		} else {
+			$role = $this->request->Role;
+			$r = $this->Kingdom->vacate_officer($kingdom_id, $role, $this->session->token);
+			if (isset($r['Status']) && $r['Status'] != 0) {
+				$this->data['Error'] = 'Could not vacate officer: ' . $r['Detail'];
+			} else {
+				$this->data['Message'] = "The $role position has been vacated.";
+			}
+		}
+		$this->template = 'Admin_setofficers.tpl';
+		if (($officers = $this->Kingdom->get_officers($kingdom_id, $this->session->token))) {
+			$this->data['Officers'] = $officers;
+		} else {
+			$this->data['Officers'] = array();
+		}
+		$this->data['Type'] = 'KingdomId';
+		$this->data['Id'] = $kingdom_id;
+		$this->data['Call'] = 'setkingdomofficers';
+	}
+
+	public function vacateparkofficer() {
+		$this->load_model('Park');
+		$park_id = $this->request->ParkId;
+		if (!isset($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/setparkofficers');
+		} else {
+			$role = $this->request->Role;
+			$r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
+			if (isset($r['Status']) && $r['Status'] != 0) {
+				$this->data['Error'] = 'Could not vacate officer: ' . $r['Detail'];
+			} else {
+				$this->data['Message'] = "The $role position has been vacated.";
+			}
+		}
+		$this->template = 'Admin_setofficers.tpl';
+		if (($officers = $this->Park->get_officers($park_id, $this->session->token))) {
+			$this->data['Officers'] = $officers;
+		} else {
+			$this->data['Officers'] = array();
+		}
+		$this->data['Type'] = 'ParkId';
+		$this->data['Id'] = $park_id;
+		$this->data['Call'] = 'setparkofficers';
+	}
+
 	public function event($p) {
 		$params = explode('/',$p);
 		$event_id = $params[0];
