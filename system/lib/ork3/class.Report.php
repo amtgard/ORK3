@@ -936,8 +936,12 @@ class Report  extends Ork3 {
 			$per_period = date("Y-m-d", strtotime("-$request[AverageMonths] month"));
 		}
 
+		$monthly_period = date("Y-m-d", strtotime("-1 year"));
+		$escaped_kingdom_id = mysql_real_escape_string($request['KingdomId']);
+
 		$sql = "select
-						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name, p.has_heraldry
+						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name, p.has_heraldry,
+						ifnull(monthly_attendance.monthly_attendance_count, 0) monthly_count
 					from
 						" . DB_PREFIX . "park p
 							left join
@@ -949,11 +953,28 @@ class Report  extends Ork3 {
 										$native_populace
 										$waivered_peeps
 										date > '$per_period'
-										and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+										and a.kingdom_id = '$escaped_kingdom_id'
 										and a.mundane_id > 0
 									group by date_year, date_week3, mundane_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
-					where p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "' and p.active = 'Active'
+							left join
+								(select
+										count(mundanesbymonth.mundane_id) monthly_attendance_count, mundanesbymonth.park_id
+									from
+										(select
+												a.mundane_id, a.date_month as month, a.park_id
+											from " . DB_PREFIX . "attendance a
+												left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+											where
+												$native_populace
+												$waivered_peeps
+												date > '$monthly_period'
+												and a.kingdom_id = '$escaped_kingdom_id'
+												and a.mundane_id > 0
+											group by date_month, mundane_id) mundanesbymonth
+									group by mundanesbymonth.park_id) monthly_attendance
+								on p.park_id = monthly_attendance.park_id
+					where p.kingdom_id = '$escaped_kingdom_id' and p.active = 'Active'
 					group by park_id
 					order by name";
 		logtrace('Report: GetKingdomParkAverages', array($request,$sql));
@@ -967,7 +988,7 @@ class Report  extends Ork3 {
 		} else {
 			$report = array();
 			while ($r->next()) {
-				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id, 'HasHeraldry' => $r->has_heraldry );
+				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'MonthlyCount' => $r->monthly_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id, 'HasHeraldry' => $r->has_heraldry );
 			}
 			$response['KingdomParkAveragesSummary'] = $report;
 		}
