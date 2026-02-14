@@ -26,9 +26,9 @@
 		<thead>
 			<tr>
 				<th>Park</th>
-				<th>Ave.</th>
-				<th>Monthly</th>
-				<th>Total</th>
+				<th title="Average unique player sign-ins per week over the last 26 weeks (total ÷ 26)">Ave.</th>
+				<th title="Average unique player sign-ins per month over the last 12 months (total ÷ 12)">Monthly</th>
+				<th title="Total unique player sign-ins by week over the last 26 weeks. Multiple sign-ins in one week count once.">Total</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -62,16 +62,6 @@
 			</tr>
 		</tbody>
 	</table>
-	<details style="margin-top: 10px; padding: 5px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; display: block; width: 100%; clear: both;">
-		<summary style="cursor: pointer; font-weight: bold; padding: 4px;">About these numbers</summary>
-		<div style="padding: 8px 4px; font-size: 0.9em;">
-			<ul style="margin: 4px 0; padding-left: 20px;">
-				<li><strong>Ave.</strong> &mdash; Average unique player sign-ins per week, calculated over the last 26 weeks (total unique weekly sign-ins &divide; 26).</li>
-				<li><strong>Monthly</strong> &mdash; Average unique player sign-ins per month, calculated over the last 12 months (total unique monthly sign-ins &divide; 12).</li>
-				<li><strong>Total</strong> &mdash; Total unique player sign-ins (by week) over the last 26 weeks. A player signing in multiple times in one week counts once.</li>
-			</ul>
-		</div>
-	</details>
 </div>
 
 <?php if (!$IsPrinz && is_array($principalities['Principalities']) && (sizeof($principalities['Principalities']) > 0)) : ?>
