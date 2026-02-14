@@ -52,9 +52,9 @@ class Report  extends Ork3 {
 				
 				$response[] = array(
 					'HasHeraldry' => $$table->has_heraldry,
-					'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => $request['Type'], 'Id' => $$table->$table_id)),
-					'Name' => $$table->name,
-					'Url' => UIR . $request['Type'] . '/index/' . $$table->$table_id,
+					'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => ($request['Type'] == 'Mundane' ? 'Player' : $request['Type']), 'Id' => $$table->$table_id)),
+					'Name' => ($request['Type'] == 'Mundane') ? $$table->persona : $$table->name,
+					'Url' => UIR . ($request['Type'] == 'Mundane' ? 'Player' : $request['Type']) . '/index/' . $$table->$table_id,
 					'LastSignin' => $last_signin
 				);
 			} while ($$table->next());
