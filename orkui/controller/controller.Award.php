@@ -99,11 +99,12 @@ class Controller_Award extends Controller
 	}
 	private function add_award()
 	{
+		$isOfficer = $this->request->Award_addawards->awardtype === 'officers';
 		return $this->Player->add_player_award(array(
 			'Token' => $this->session->token,
 			'RecipientId' => $this->request->Award_addawards->MundaneId,
 			'KingdomAwardId' => $this->request->Award_addawards->AwardId,
-			'Rank' => $this->request->Award_addawards->Rank,
+			'Rank' => $isOfficer ? null : $this->request->Award_addawards->Rank,
 			'Date' => $this->request->Award_addawards->Date,
 			'GivenById' => $this->request->Award_addawards->GivenById,
 			'Note' => $this->request->Award_addawards->Note,

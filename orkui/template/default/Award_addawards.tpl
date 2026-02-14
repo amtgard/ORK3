@@ -27,6 +27,7 @@
 			if($(this).val() == 'officers'){
 				$( '#AwardNameField' ).hide();
 				$( '#AwardRankField' ).hide();
+				$( '#Rank' ).val('');
 			}else{
 				$( '#AwardRankField' ).show();
 			}
