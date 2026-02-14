@@ -371,6 +371,7 @@ class Report  extends Ork3 {
 			where ma.custom_name is not null
 				and ma.custom_name != ''
 				and (ma.revoked = 0 or ma.revoked is null)
+				and (a.is_ladder = 0 or a.is_ladder is null)
 				and m.active = 1
 				$location_clause
 				and exists (
