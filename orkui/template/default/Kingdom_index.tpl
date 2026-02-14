@@ -27,14 +27,17 @@
 			<tr>
 				<th>Park</th>
 				<th>Ave.</th>
+				<th>Monthly</th>
 				<th>Total</th>
 			</tr>
 		</thead>
 		<tbody>
 <?php if (!is_array($park_summary['KingdomParkAveragesSummary'])) $park_summary['KingdomParkAveragesSummary'] = array() ?>
 <?php $att = 0 ?>
+<?php $monthly_total = 0 ?>
 <?php foreach ($park_summary['KingdomParkAveragesSummary'] as $k => $park): ?>
     <?php $att += $park['AttendanceCount']; ?>
+    <?php $monthly_total += $park['MonthlyCount']; ?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
@@ -47,16 +50,28 @@
 					<?=$park['ParkName'] ?>
 				</td>
 				<td class='data-column'><?=sprintf("%0.02f",($park['AttendanceCount']/26)); ?></td>
+				<td class='data-column'><?=sprintf("%0.01f",($park['MonthlyCount']/12)); ?></td>
 				<td class='data-column'><?=$park['AttendanceCount']; ?></td>
 			</tr>
 <?php endforeach; ?>
     		<tr>
 				<td></td>
 				<td class='data-column'><?=sprintf("%0.02f",($att/26)); ?></td>
+				<td class='data-column'><?=sprintf("%0.01f",($monthly_total/12)); ?></td>
 				<td class='data-column'><?=$att; ?></td>
 			</tr>
 		</tbody>
 	</table>
+	<details style="margin-top: 10px; padding: 5px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; display: block; width: 100%; clear: both;">
+		<summary style="cursor: pointer; font-weight: bold; padding: 4px;">About these numbers</summary>
+		<div style="padding: 8px 4px; font-size: 0.9em;">
+			<ul style="margin: 4px 0; padding-left: 20px;">
+				<li><strong>Ave.</strong> &mdash; Average unique player sign-ins per week, calculated over the last 26 weeks (total unique weekly sign-ins &divide; 26).</li>
+				<li><strong>Monthly</strong> &mdash; Average unique player sign-ins per month, calculated over the last 12 months (total unique monthly sign-ins &divide; 12).</li>
+				<li><strong>Total</strong> &mdash; Total unique player sign-ins (by week) over the last 26 weeks. A player signing in multiple times in one week counts once.</li>
+			</ul>
+		</div>
+	</details>
 </div>
 
 <?php if (!$IsPrinz && is_array($principalities['Principalities']) && (sizeof($principalities['Principalities']) > 0)) : ?>
