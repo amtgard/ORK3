@@ -38,6 +38,12 @@ class Report  extends Ork3 {
 		if ($$table->find()) {
 			$table_id = $table.'_id';
 			do {
+				if ($request['Type'] == 'Mundane' && $$table->suspended == 1) {
+					continue;
+				}
+				if ($request['Type'] == 'Park' && $$table->active == 'Retired') {
+					continue;
+				}
 				$last_signin = null;
 				
 				// Calculate LastSignin for Mundane types
