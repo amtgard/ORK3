@@ -819,7 +819,7 @@ class Controller_Admin extends Controller {
                         if (!valid_id($this->request->Admin_player->KingdomAwardId)) {
                             $this->data['Error'] = 'You must choose an award. Award not added!'; break;
                         }
-                        if (!valid_id($this->request->Admin_player->MundaneId)) {
+                        if (!valid_id($this->request->Admin_player->GivenById)) {
                             $this->data['Error'] = 'Who gave this award? Award not added!'; break;
                         }
 						$r = $this->Player->add_player_award(array(
@@ -829,7 +829,7 @@ class Controller_Admin extends Controller {
 								'CustomName' => $this->request->Admin_player->AwardName,
 								'Rank' => $this->request->Admin_player->Rank,
 								'Date' => $this->request->Admin_player->Date,
-								'GivenById' => $this->request->Admin_player->MundaneId,
+								'GivenById' => $this->request->Admin_player->GivenById,
 								'Note' => $this->request->Admin_player->Note,
 								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
 								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
@@ -864,7 +864,7 @@ class Controller_Admin extends Controller {
 								'AwardId' => $this->request->Admin_player->AwardId,
 								'Rank' => $this->request->Admin_player->Rank,
 								'Date' => $this->request->Admin_player->Date,
-								'GivenById' => $this->request->Admin_player->MundaneId,
+								'GivenById' => $this->request->Admin_player->GivenById,
 								'Note' => $this->request->Admin_player->Note,
 								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
 								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
