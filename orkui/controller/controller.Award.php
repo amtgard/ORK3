@@ -137,5 +137,27 @@ class Controller_Award extends Controller
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Id'] = $id;
+
+		// Preload Kingdom and Park Monarch/Regent for GivenBy autocomplete
+		$preloadOfficers = array();
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $officer) {
+				if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+					$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
+				}
+			}
+		}
+		if (valid_id($this->session->park_id)) {
+			$parkOfficers = $this->Park->get_officers($this->session->park_id, $this->session->token);
+			if (is_array($parkOfficers)) {
+				foreach ($parkOfficers as $officer) {
+					if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+						$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
+					}
+				}
+			}
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
 	}
 }
