@@ -21,11 +21,11 @@
 		</div>
 		<div>
 			<span>Description:</span>
-			<span class='form-informational-field' style='white-space: normal'><?=$Unit['Details']['Unit']['Description'] ?></span>
+			<span class='form-informational-field' style='white-space: normal'><?=nl2br($Unit['Details']['Unit']['Description']) ?></span>
 		</div>
 		<div>
 			<span>History:</span>
-			<span class='form-informational-field' style='white-space: normal'><?=$Unit['Details']['Unit']['History'] ?></span>
+			<span class='form-informational-field' style='white-space: normal'><?=nl2br($Unit['Details']['Unit']['History']) ?></span>
 		</div>
 	</form>
 </div>
