@@ -1041,9 +1041,11 @@ class Report  extends Ork3 {
 
 		$sql = "select
 						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name, p.has_heraldry,
-						ifnull(monthly_attendance.monthly_attendance_count, 0) monthly_count
+						ifnull(monthly_attendance.monthly_attendance_count, 0) monthly_count,
+						pt.title, p.parktitle_id
 					from
 						" . DB_PREFIX . "park p
+							left join " . DB_PREFIX . "parktitle pt on pt.parktitle_id = p.parktitle_id
 							left join
 								(select
 										a.mundane_id, a.date_week3 as week, a.park_id

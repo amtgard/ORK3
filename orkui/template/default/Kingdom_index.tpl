@@ -25,6 +25,7 @@
 	<table class='information-table action-table'>
 		<thead>
 			<tr>
+				<th>Status</th>
 				<th>Park</th>
 				<th title="Average unique player sign-ins per week over the last 26 weeks (total ÷ 26)">Ave.</th>
 				<th title="Average unique player sign-ins per month over the last 12 months (total ÷ 12)">Monthly</th>
@@ -39,6 +40,7 @@
     <?php $att += $park['AttendanceCount']; ?>
     <?php $monthly_total += $park['MonthlyCount']; ?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
+				<td><?=!empty($park['Title']) ? $park['Title'] . ' of' : '' ?></td>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($park['HasHeraldry']==1): ?>
@@ -55,6 +57,7 @@
 			</tr>
 <?php endforeach; ?>
     		<tr>
+				<td></td>
 				<td></td>
 				<td class='data-column'><?=sprintf("%0.02f",($att/26)); ?></td>
 				<td class='data-column'><?=sprintf("%0.01f",($monthly_total/12)); ?></td>
