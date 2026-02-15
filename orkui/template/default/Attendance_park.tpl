@@ -86,6 +86,21 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		// Quick Add row submit
+		$('#quick-add-table').on('click', '.qa-add-btn', function() {
+			var row = $(this).closest('tr');
+			$('#qa-date').val($('#AttendanceDate').val());
+			$('#qa-mundane-id').val(row.data('mundane-id'));
+			$('#qa-kingdom-id').val(row.data('kingdom-id'));
+			$('#qa-kingdom-name').val(row.data('kingdom-name'));
+			$('#qa-park-id').val(row.data('park-id'));
+			$('#qa-park-name').val(row.data('park-name'));
+			$('#qa-player-name').val(row.data('persona'));
+			$('#qa-class-id').val(row.find('.qa-class').val());
+			$('#qa-credits').val(row.find('.qa-credits').val());
+			$('#quick-add-form').submit();
+		});
+
 		$( "#PlayerName" ).autocomplete({
 			source: function( request, response ) {
 				park_id = $('#ParkId').val();
@@ -111,7 +126,7 @@
 			},
 			focus: function( event, ui ) {
 				return showLabel('#PlayerName', ui);
-			}, 
+			},
 			delay: 250,
 			select: function (e, ui) {
 				showLabel('#PlayerName', ui);
@@ -190,6 +205,7 @@
 				<th>Kingdom</th>
 				<th>Park</th>
 				<th>Player</th>
+				<th>Home Park</th>
 				<th>Class</th>
 				<th>Credits</th>
 				<th>Entered By</th>
@@ -204,8 +220,10 @@
 				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
     <?php if ($detail['MundaneId']==0) : ?>
 				<td class='form-informational-field'><?=$detail['AttendancePersona'] ?> (<?=$detail['Note'] ?>)</td>
+				<td></td>
     <?php else : ?>
     			<td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
+				<td><a href='<?=UIR ?>Park/index/<?=$detail['FromParkId'] ?>'><?=html_encode($detail['FromParkName']) ?></a></td>
     <?php endif ; ?>
 				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>
@@ -218,3 +236,57 @@
 		</tbody>
 	</table>
 </div>
+
+<?php if ($LoggedIn && !empty($RecentAttendees['Attendees'])) : ?>
+<form id='quick-add-form' method='post' action='<?=UIR ?>Attendance/park/<?=$Id ?>/new' style='display:none'>
+	<input type='hidden' id='qa-date' name='AttendanceDate' />
+	<input type='hidden' id='qa-kingdom-id' name='KingdomId' />
+	<input type='hidden' id='qa-kingdom-name' name='KingdomName' />
+	<input type='hidden' id='qa-park-id' name='ParkId' />
+	<input type='hidden' id='qa-park-name' name='ParkName' />
+	<input type='hidden' id='qa-mundane-id' name='MundaneId' />
+	<input type='hidden' id='qa-player-name' name='PlayerName' />
+	<input type='hidden' id='qa-class-id' name='ClassId' />
+	<input type='hidden' id='qa-credits' name='Credits' />
+</form>
+<div class='info-container'>
+	<h3>Quick Add &mdash; Recent Attendees</h3>
+	<table class='information-table' id='quick-add-table'>
+		<thead>
+			<tr>
+				<th>Kingdom</th>
+				<th>Park</th>
+				<th>Player</th>
+				<th>Last Sign-In</th>
+				<th>Class</th>
+				<th>Credits</th>
+				<th>Add</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php foreach ($RecentAttendees['Attendees'] as $attendee) : ?>
+			<tr	data-mundane-id='<?=$attendee['MundaneId'] ?>'
+				data-kingdom-id='<?=$attendee['KingdomId'] ?>'
+				data-kingdom-name='<?=html_encode($attendee['KingdomName']) ?>'
+				data-park-id='<?=$attendee['ParkId'] ?>'
+				data-park-name='<?=html_encode($attendee['ParkName']) ?>'
+				data-persona='<?=html_encode($attendee['Persona']) ?>'>
+				<td><a href='<?=UIR ?>Kingdom/index/<?=$attendee['KingdomId'] ?>'><?=html_encode($attendee['KingdomName']) ?></a></td>
+				<td><a href='<?=UIR ?>Park/index/<?=$attendee['ParkId'] ?>'><?=html_encode($attendee['ParkName']) ?></a></td>
+				<td><a href='<?=UIR ?>Player/index/<?=$attendee['MundaneId'] ?>'><?=html_encode($attendee['Persona']) ?></a></td>
+				<td class='data-column'><?=$attendee['LastSignIn'] ?></td>
+				<td>
+					<select class='qa-class'>
+<?php foreach ($Classes['Classes'] as $class) : ?>
+						<option value='<?=$class['ClassId'] ?>'<?=$class['ClassId']==$attendee['ClassId']?' selected':'' ?>><?=$class['Name'] ?></option>
+<?php endforeach ?>
+					</select>
+				</td>
+				<td><input type='text' class='qa-credits numeric-field remove-float' value='1' size='3' /></td>
+				<td><input type='button' class='qa-add-btn' value='Add' /></td>
+			</tr>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+<?php endif ?>

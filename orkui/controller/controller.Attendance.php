@@ -222,7 +222,8 @@ class Controller_Attendance extends Controller {
 		if ($this->data['Classes']['Status']['Status'] != 0) {
 			$this->data['Error'] = $this->data['Classes']['Status']['Error'];
 		}
-	}	
+		$this->data['RecentAttendees'] = $this->Attendance->get_recent_attendees($id);
+	}
 
 	public function event($p) {
 		$params = explode('/',$p);
