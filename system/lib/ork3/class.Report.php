@@ -1668,6 +1668,7 @@ class Report  extends Ork3 {
 					AND a.kingdom_id = '$kingdom_id'
 					AND a.date >= '$start_date'
 					AND a.date <= '$end_date'
+					AND a.mundane_id > 0
 					$min_filter
 				GROUP BY a.mundane_id, period_label
 				ORDER BY m.persona, period_label";
