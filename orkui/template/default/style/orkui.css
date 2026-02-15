@@ -7079,3 +7079,26 @@ table.tablesorter tbody tr.normal-row td {
 	background-color: #e6bf99;
 }
 
+
+/* Heraldry image lightbox */
+.heraldry-img { cursor: pointer; }
+#ork-lightbox {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.78);
+	z-index: 9999;
+	cursor: zoom-out;
+}
+#ork-lightbox img {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	max-width: 90vw;
+	max-height: 90vh;
+	border: 3px solid #fff;
+	border-radius: 4px;
+	box-shadow: 0 4px 32px rgba(0,0,0,0.7);
+	cursor: default;
+}

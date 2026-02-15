@@ -11,7 +11,7 @@
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Park_data['HasHeraldry']?$Park_heraldry['Url']:HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<img class='heraldry-img' src='<?=($Park_data['HasHeraldry']?$Park_heraldry['Url']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
 				<input type='file' name='Heraldry' class='restricted-image-type' id='Heraldry' />
 			</span>
 		</div>	

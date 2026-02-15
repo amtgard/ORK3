@@ -93,7 +93,7 @@
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Unit['Details']['Unit']['HasHeraldry']?$Unit_heraldryurl['Url']:(HTTP_UNIT_HERALDRY.'00000.jpg') ?>' />
+				<img class='heraldry-img' src='<?=($Unit['Details']['Unit']['HasHeraldry']?$Unit_heraldryurl['Url']:(HTTP_UNIT_HERALDRY.'00000.jpg')) . '?t=' . time() ?>' />
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
