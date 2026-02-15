@@ -877,6 +877,11 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function RemoveHeraldry($request) {
+		logtrace("RemoveHeraldry", $request);
+		return Ork3::$Lib->heraldry->RemovePlayerHeraldry($request);
+	}
+
 	public function SetHeraldry($request) {
 	    logtrace("SetHeraldry", $request);
 		$mundane = $this->player_info($request['MundaneId']);
@@ -992,6 +997,30 @@ class Player extends Ork3 {
 			$this->mundane->mundane_id = $request['MundaneId'];
 			if ($this->mundane->find()) {
 				$this->mundane->restricted = $request['Restricted']?1:0;
+				$this->mundane->save();
+				return Success();
+			} else {
+				return InvalidParameter();
+			}
+		} else {
+			return NoAuthorization();
+		}
+	}
+
+	public function RemoveImage($request) {
+		logtrace("RemoveImage", $request);
+		$mundane = $this->player_info($request['MundaneId']);
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+			    || $requester_id == $request['MundaneId']) {
+			$this->mundane->clear();
+			$this->mundane->mundane_id = $request['MundaneId'];
+			if ($this->mundane->find()) {
+				$path = DIR_PLAYER_IMAGE . sprintf('%06d', $request['MundaneId']) . '.jpg';
+				if (file_exists($path)) unlink($path);
+				$this->mundane->has_image = 0;
 				$this->mundane->save();
 				return Success();
 			} else {

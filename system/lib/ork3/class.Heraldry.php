@@ -31,6 +31,28 @@ class Heraldry  extends Ork3 {
 		return $response;
 	}
 	
+	public function RemovePlayerHeraldry($request) {
+		$mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
+
+		if ((($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT))
+			|| $mundane_id == $request['MundaneId']) {
+			$this->mundane->clear();
+			$this->mundane->mundane_id = $request['MundaneId'];
+			if ($this->mundane->find()) {
+				$path = DIR_PLAYER_HERALDRY . sprintf('%06d', $request['MundaneId']) . '.jpg';
+				if (file_exists($path)) unlink($path);
+				$this->mundane->has_heraldry = 0;
+				$this->mundane->save();
+				return Success();
+			} else {
+				return InvalidParameter();
+			}
+		} else {
+			return NoAuthorization();
+		}
+	}
+
 	public function SetPlayerHeraldry($request) {
 		$mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
 	
