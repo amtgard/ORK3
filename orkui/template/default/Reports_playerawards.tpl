@@ -53,7 +53,7 @@
 			<option value="25">25</option>
 			<option value="50">50</option>
 			<option value="100">100</option>
-			<option value="all">All</option>
+			<option value="<?=is_array($Awards)?count($Awards):9999 ?>">All</option>
 		</select>
 	</div>
 </div>
@@ -95,7 +95,11 @@
 
 		$('.download.button').click(function(e) {
 			e.preventDefault();
-			$("table.information-table").table2csv({"filename":"Player Awards", "excludeRows":".tablesorter-filter-row"});
+			var $table = $("table.information-table");
+			var $hiddenRows = $table.find('tbody tr:hidden');
+			$hiddenRows.show();
+			$table.table2csv({"filename":"Player Awards", "excludeRows":".tablesorter-filter-row"});
+			$hiddenRows.hide();
 		});
 	});
 </script>
