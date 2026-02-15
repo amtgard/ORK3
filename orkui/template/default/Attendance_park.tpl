@@ -126,7 +126,7 @@
 			},
 			focus: function( event, ui ) {
 				return showLabel('#PlayerName', ui);
-			}, 
+			},
 			delay: 250,
 			select: function (e, ui) {
 				showLabel('#PlayerName', ui);
@@ -197,6 +197,46 @@
 	</form>
 </div>
 
+<div class='info-container'>
+	<h3><?=$AttendanceDate ?></h3>
+	<table class='information-table form-container' id='EventListTable'>
+		<thead>
+			<tr>
+				<th>Kingdom</th>
+				<th>Park</th>
+				<th>Player</th>
+				<th>Home Park</th>
+				<th>Class</th>
+				<th>Credits</th>
+				<th>Entered By</th>
+				<th class='deletion'>&times;</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php if (!is_array($AttendanceReport['Attendance'])) $AttendanceReport['Attendance'] = array(); ?>
+<?php foreach ($AttendanceReport['Attendance'] as $key => $detail) : ?>
+			<tr>
+				<td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
+				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
+    <?php if ($detail['MundaneId']==0) : ?>
+				<td class='form-informational-field'><?=$detail['AttendancePersona'] ?> (<?=$detail['Note'] ?>)</td>
+				<td></td>
+    <?php else : ?>
+    			<td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
+				<td><a href='<?=UIR ?>Park/index/<?=$detail['FromParkId'] ?>'><?=html_encode($detail['FromParkName']) ?></a></td>
+    <?php endif ; ?>
+				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
+				<td class='data-column'><?=$detail['Credits'] ?></td>
+				<td class='data-column'><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
+	<?php if ($LoggedIn) : ?>
+				<td class='deletion'><a href='<?=UIR ?>Attendance/park/<?=$Id ?>/delete/<?=$detail['AttendanceId'] ?>&AttendanceDate=<?=$AttendanceDate ?>'>&times;</a></td>
+	<?php endif ; ?>
+			</tr>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+
 <?php if ($LoggedIn && !empty($RecentAttendees['Attendees'])) : ?>
 <form id='quick-add-form' method='post' action='<?=UIR ?>Attendance/park/<?=$Id ?>/new' style='display:none'>
 	<input type='hidden' id='qa-date' name='AttendanceDate' />
@@ -250,40 +290,3 @@
 	</table>
 </div>
 <?php endif ?>
-
-<div class='info-container'>
-	<h3><?=$AttendanceDate ?></h3>
-	<table class='information-table form-container' id='EventListTable'>
-		<thead>
-			<tr>
-				<th>Kingdom</th>
-				<th>Park</th>
-				<th>Player</th>
-				<th>Class</th>
-				<th>Credits</th>
-				<th>Entered By</th>
-				<th class='deletion'>&times;</th>
-			</tr>
-		</thead>
-		<tbody>
-<?php if (!is_array($AttendanceReport['Attendance'])) $AttendanceReport['Attendance'] = array(); ?>
-<?php foreach ($AttendanceReport['Attendance'] as $key => $detail) : ?>
-			<tr>
-				<td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
-				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
-    <?php if ($detail['MundaneId']==0) : ?>
-				<td class='form-informational-field'><?=$detail['AttendancePersona'] ?> (<?=$detail['Note'] ?>)</td>
-    <?php else : ?>
-    			<td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
-    <?php endif ; ?>
-				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
-				<td class='data-column'><?=$detail['Credits'] ?></td>
-				<td class='data-column'><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
-	<?php if ($LoggedIn) : ?>
-				<td class='deletion'><a href='<?=UIR ?>Attendance/park/<?=$Id ?>/delete/<?=$detail['AttendanceId'] ?>&AttendanceDate=<?=$AttendanceDate ?>'>&times;</a></td>
-	<?php endif ; ?>
-			</tr>
-<?php endforeach ?>
-		</tbody>
-	</table>
-</div>
