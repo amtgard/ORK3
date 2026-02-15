@@ -478,7 +478,7 @@
 			change: function (e, ui) {
 				if (ui.item == null) {
 					showLabel('#GivenBy',null);
-					$('#MundaneId').val(null);
+					$('#GivenById').val('');
 				}
 				return false;
 			}
@@ -486,6 +486,7 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		var givenBySelected = false;
 		$( "#GivenBy" ).autocomplete({
 			source: function( request, response ) {
 				park_id = $('#ParkId').val();
@@ -513,15 +514,17 @@
 			delay: 250,
 			select: function (e, ui) {
 				showLabel('#GivenBy', ui);
-				$('input[name=MundaneId]').val(ui.item.value);
+				$('#GivenById').val(ui.item.value);
+				givenBySelected = true;
 				checkRequiredFields();
 				return false;
 			},
 			change: function (e, ui) {
-				if (ui.item == null) {
+				if (!givenBySelected) {
 					showLabel('#GivenBy',null);
-					$('input[name=MundaneId]').val(null);
+					$('#GivenById').val('');
 				}
+				givenBySelected = false;
 				checkRequiredFields();
 				return false;
 			}
@@ -539,8 +542,8 @@
 	}
 	function checkRequiredFields() {
 		var hasAward = $('#AwardId').val() !== '' && $('#AwardId').val() !== null;
-		var hasGivenBy = $('#MundaneId').val() !== '' && $('#MundaneId').val() !== null && $('#MundaneId').val() > 0;
-		$('#Add').prop('disabled', !(hasAward && hasGivenBy));
+		var hasGivenBy = $('#GivenById').val() !== '' && $('#GivenById').val() !== null && $('#GivenById').val() > 0;
+		$('#AddAward').prop('disabled', !(hasAward && hasGivenBy));
 	}
 </script>
 
@@ -624,9 +627,10 @@
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' id='Add' value='Add' disabled /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
+			<span><input type='submit' id='AddAward' value='Add' disabled /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
 		</div>
-		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=isset($Admin_player)?$Admin_player['MundaneId']:0 ?>' />
+		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Player['MundaneId'] ?>' />
+		<input type='hidden' id='GivenById' name='GivenById' value='<?=isset($Admin_player)?$Admin_player['GivenById']:'' ?>' />
 		<input type='hidden' id='ParkId' name='ParkId' value='<?=isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId'] ?>' />
 		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=isset($Admin_player)?$Admin_player['KingdomId']:$Player['KingdomId'] ?>' />
 		<input type='hidden' id='EventId' name='EventId' value='<?=isset($Admin_player)?$Admin_player['EventId']:$Player['EventId'] ?>' />
@@ -677,7 +681,7 @@
 	function Reset() {
 		$( '#award-editor h3' ).text('Add Award');
 		$( '#award-editor form' ).attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/addaward' );
-		$( '#Add' ).val('Add');
+		$( '#AddAward' ).val('Add');
 		$( '#Cancel' ).hide();
 		$( '#AwardId' ).val('');
 		$( '#Rank' ).val('');
@@ -685,7 +689,8 @@
 		$( '#GivenBy' ).val('');
 		$( '#GivenAt' ).val('');
 		$( '#Note' ).val('');
-		$( '#MundaneId' ).val('');
+		$( '#MundaneId' ).val('<?=$Player['MundaneId'] ?>');
+		$( '#GivenById' ).val('');
 		$( '#ParkId' ).val('');
 		$( '#KingdomId' ).val('');
 		$( '#EventId' ).val('');
@@ -698,7 +703,7 @@
 		$( '#award-editor h3' ).text('Update Award');
 		$( '#award-editor form' ).attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/updateaward/' + id.toString() );
 		$( '#Cancel' ).show();
-		$( '#Add' ).val('Update');
+		$( '#AddAward' ).val('Update');
 		$.getJSON(
 			"<?=HTTP_SERVICE ?>Search/SearchService.php",
 			{
@@ -712,7 +717,7 @@
 				$( '#GivenBy' ).val(data['GivenBy']);
 				$( '#GivenAt' ).val((data['AtEventId'] > 0)?(data['EventName']):((data['AtParkId']>0)?data['ParkName']:data['KingdomName']));
 				$( '#Note' ).val(data['Note']);
-				$( '#MundaneId' ).val(data['GivenById']);
+				$( '#GivenById' ).val(data['GivenById']);
 				$( '#ParkId' ).val(data['ParkId']);
 				$( '#KingdomId' ).val(data['KingdomId']);
 				$( '#EventId' ).val(data['EventId']);
