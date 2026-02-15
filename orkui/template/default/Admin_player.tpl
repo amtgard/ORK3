@@ -4,14 +4,24 @@
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=($Player['HasHeraldry']>0?$Player['Heraldry']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
+				<span style='position:relative;display:inline-block;'>
+					<img class='heraldry-img' src='<?=($Player['HasHeraldry']>0?$Player['Heraldry']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
+<?php if ($Player['HasHeraldry'] > 0 && ($this->__session->user_id == $Player['MundaneId'] || Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT))) : ?>
+					<button type='button' onclick="if(confirm('This will remove the image. This cannot be undone. Continue?')){var f=document.createElement('form');f.method='post';f.action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/removeheraldry';document.body.appendChild(f);f.submit();}" style='position:absolute;top:0;right:0;line-height:1;padding:2px 5px;cursor:pointer;'>&times;</button>
+<?php endif; ?>
+				</span>
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
 		<div>
 			<span>Image:</span>
 			<span>
-				<img class='heraldry-img' src='<?=($Player['HasImage']>0?$Player['Image']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
+				<span style='position:relative;display:inline-block;'>
+					<img class='heraldry-img' src='<?=($Player['HasImage']>0?$Player['Image']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
+<?php if ($Player['HasImage'] > 0 && ($this->__session->user_id == $Player['MundaneId'] || Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT))) : ?>
+					<button type='button' onclick="if(confirm('This will remove the image. This cannot be undone. Continue?')){var f=document.createElement('form');f.method='post';f.action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/removepicture';document.body.appendChild(f);f.submit();}" style='position:absolute;top:0;right:0;line-height:1;padding:2px 5px;cursor:pointer;'>&times;</button>
+<?php endif; ?>
+				</span>
 				<input type='file' class='restricted-image-type' name='PlayerImage' id='PlayerImage' />
 			</span>
 		</div>
