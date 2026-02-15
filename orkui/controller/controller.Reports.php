@@ -317,6 +317,50 @@ class Controller_Reports extends Controller {
 	}
 
 	/**
+	 * Generate all expected period labels between two rounded dates.
+	 */
+	private function _generatePeriodLabels($start, $end, $period) {
+		$labels = array();
+		$st = strtotime($start);
+		$et = strtotime($end);
+		if (!$st || !$et) return $labels;
+
+		switch ($period) {
+			case 'Weekly':
+				// ISO weeks: start on Monday
+				$cur = $st;
+				while ($cur <= $et) {
+					$labels[] = date('Y', $cur) . '-W' . str_pad(date('W', $cur), 2, '0', STR_PAD_LEFT);
+					$cur = strtotime('+1 week', $cur);
+				}
+				break;
+			case 'Monthly':
+				$cur = $st;
+				while ($cur <= $et) {
+					$labels[] = date('Y-m', $cur);
+					$cur = strtotime('+1 month', $cur);
+				}
+				break;
+			case 'Quarterly':
+				$cur = $st;
+				while ($cur <= $et) {
+					$q = ceil(date('n', $cur) / 3);
+					$labels[] = date('Y', $cur) . '-Q' . $q;
+					$cur = strtotime('+3 months', $cur);
+				}
+				break;
+			case 'Annually':
+				$cur = $st;
+				while ($cur <= $et) {
+					$labels[] = date('Y', $cur);
+					$cur = strtotime('+1 year', $cur);
+				}
+				break;
+		}
+		return $labels;
+	}
+
+	/**
 	 * Round a start date down to the beginning of its period.
 	 * Round an end date up to the end of its period.
 	 * Ensures full periods are always included in results.
@@ -408,8 +452,10 @@ class Controller_Reports extends Controller {
 
 			if (is_array($result)) {
 				$pivoted = array();
-				$all_periods = array();
+				// Pre-generate all expected period columns from the date range
+				$all_periods = $this->_generatePeriodLabels($rounded_start, $rounded_end, $period);
 				foreach ($result as $row) {
+					if (empty($row['PeriodLabel']) || empty($row['Persona'])) continue;
 					$mid = $row['MundaneId'];
 					if (!isset($pivoted[$mid])) {
 						$pivoted[$mid] = array(
@@ -423,10 +469,8 @@ class Controller_Reports extends Controller {
 					}
 					$pivoted[$mid]['Periods'][$row['PeriodLabel']] = $row['SignInCount'];
 					$pivoted[$mid]['Total'] += $row['SignInCount'];
-					$all_periods[$row['PeriodLabel']] = true;
 				}
-				ksort($all_periods);
-				$this->data['all_periods'] = array_keys($all_periods);
+				$this->data['all_periods'] = $all_periods;
 				// Sort players by persona
 				usort($pivoted, function($a, $b) {
 					return strcasecmp($a['Persona'], $b['Persona']);
