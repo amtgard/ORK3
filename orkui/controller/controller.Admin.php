@@ -862,7 +862,13 @@ class Controller_Admin extends Controller {
 								$this->data['Error'] = 'Passwords do not match.';
 						}
 						break;
-					case 'addaward':
+					case 'removeheraldry':
+					$this->Player->RemoveHeraldry(['MundaneId' => $id, 'Token' => $this->session->token]);
+					break;
+				case 'removepicture':
+					$this->Player->RemoveImage(['MundaneId' => $id, 'Token' => $this->session->token]);
+					break;
+				case 'addaward':
                         if (!valid_id($id)) {
                             $this->data['Error'] = 'You must choose a recipient. Award not added!'; break;
                         }
