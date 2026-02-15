@@ -212,7 +212,7 @@
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$EventDetails['HeraldryUrl']['Url'] ?>' />
+				<img class='heraldry-img' src='<?=$EventDetails['HeraldryUrl']['Url'] . '?t=' . time() ?>' />
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
