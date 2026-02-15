@@ -4,14 +4,14 @@
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Player['HasHeraldry']>0?$Player['Heraldry']:HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<img class='heraldry-img' src='<?=($Player['HasHeraldry']>0?$Player['Heraldry']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
 		<div>
 			<span>Image:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Player['HasImage']>0?$Player['Image']:HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<img class='heraldry-img' src='<?=($Player['HasImage']>0?$Player['Image']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
 				<input type='file' class='restricted-image-type' name='PlayerImage' id='PlayerImage' />
 			</span>
 		</div>

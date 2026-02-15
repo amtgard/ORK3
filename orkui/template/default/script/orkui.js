@@ -13963,6 +13963,42 @@ function expandUrl() {
 		return document.URL;
 }
 
+function resizeImageToLimit(file, maxBytes, onSuccess, onError) {
+	var MAX_ITERATIONS = 5;
+	var targetBytes = maxBytes - 100;
+
+	function attempt(sourceBlob, remainingTries) {
+		var img = new Image();
+		var url = URL.createObjectURL(sourceBlob);
+		img.onload = function() {
+			URL.revokeObjectURL(url);
+			var scale = Math.sqrt(targetBytes / sourceBlob.size) * 0.9;
+			scale = Math.min(scale, 1);
+			var canvas = document.createElement('canvas');
+			canvas.width  = Math.max(1, Math.floor(img.width  * scale));
+			canvas.height = Math.max(1, Math.floor(img.height * scale));
+			var ctx = canvas.getContext('2d');
+			ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+			canvas.toBlob(function(blob) {
+				if (blob.size <= maxBytes) {
+					onSuccess(blob, canvas.width, canvas.height);
+				} else if (remainingTries > 1) {
+					attempt(blob, remainingTries - 1);
+				} else {
+					onError('Could not resize image to fit within 340 KB. Please choose a smaller image.');
+				}
+			}, 'image/jpeg', 0.85);
+		};
+		img.onerror = function() {
+			URL.revokeObjectURL(url);
+			onError('Could not load image for resizing.');
+		};
+		img.src = url;
+	}
+
+	attempt(file, MAX_ITERATIONS);
+}
+
 $(function() {
 	$('.info-container').each(function(k, container) {
 		setExpandMode(container, expandUrl(), k, getExpandMode(container, expandUrl(), k));
@@ -13972,10 +14008,36 @@ $(function() {
 	});
 	$( '.hasDatePicker' ).datetimepicker({ dateFormat: "yy-mm-dd", showMinute: false });
 	$( '.restricted-image-type' ).change(function() {
-		if (!extension_check( $( this ), ['gif','png','jpg','jpeg'])) {
-			$( this ).effect("shake",{ times: 5 }, 50,
-				function () { replaceWith( $( this ).val('').clone( true ) ) } );
+		var $input = $(this);
+		var generation = ($input.data('resize-gen') || 0) + 1;
+		$input.data('resize-gen', generation);
+		$input.siblings('.image-resize-notice').remove();
+		if (!extension_check($input, ['gif','png','jpg','jpeg'])) {
+			$input.effect("shake", {times: 5}, 50,
+				function() { replaceWith($input.val('').clone(true)); });
+			return;
 		}
+		var file = this.files && this.files[0];
+		if (!file || file.size <= 348836) return;
+		var originalKB = Math.round(file.size / 1024);
+		$input.after('<span class="image-resize-notice" style="font-size:10px;color:#888;margin-left:6px;">Resizing\u2026</span>');
+		resizeImageToLimit(file, 348836,
+			function(blob, newW, newH) {
+				if ($input.data('resize-gen') !== generation) return;
+				var resizedKB = Math.round(blob.size / 1024);
+				var dt = new DataTransfer();
+				dt.items.add(new File([blob], 'resized.jpg', {type: 'image/jpeg'}));
+				$input[0].files = dt.files;
+				$input.siblings('.image-resize-notice')
+					.css('color', '#555')
+					.text('Resized ' + originalKB + ' KB \u2192 ' + resizedKB + ' KB (' + newW + '\xd7' + newH + ')');
+			},
+			function(errMsg) {
+				if ($input.data('resize-gen') !== generation) return;
+				$input.siblings('.image-resize-notice').css('color', 'red').text(errMsg);
+				$input.val('');
+			}
+		);
 	});
 	$( '.restricted-document-type' ).change(function() {
 		if (!extension_check( $( this ), ['gif','png','jpg','jpeg','pdf'])) {
@@ -14142,6 +14204,19 @@ $(function() {
 	$( "#ParkSearch" ).keydown( function () {
         $('#ParkSearch').autocomplete('option', 'delay', Math.max(100, 900 / ($('#ParkSearch').val().length + 1)) );
     });
+	// Heraldry image lightbox
+	$('body').append('<div id="ork-lightbox"><img /></div>');
+	$(document).on('click', '.heraldry-img', function() {
+		if ($(this).closest('a').length) return;
+		$('#ork-lightbox img').attr('src', this.src);
+		$('#ork-lightbox').fadeIn(150);
+	});
+	$('#ork-lightbox').on('click', function() {
+		$(this).fadeOut(150);
+	});
+	$(document).on('keydown', function(e) {
+		if (e.key === 'Escape') $('#ork-lightbox').fadeOut(150);
+	});
 });
 
 /*!
