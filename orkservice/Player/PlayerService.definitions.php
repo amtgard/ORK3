@@ -500,4 +500,19 @@ $server->wsdl->addComplexType(
 				'AwardsId'=>array('name'=>'AwardsId','type'=>'xsd:int')
 			)
 	);
+
+/// ResetWaivers()
+
+$server->wsdl->addComplexType(
+		'ResetWaiversRequest',
+		'complexType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
+				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
+				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int')
+			)
+	);
 ?>
