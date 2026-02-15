@@ -132,6 +132,7 @@
 				<li><a href='<?=UIR ?>Reports/attendance/Kingdom/<?=$kingdom_id ?>/Months/6'>Past 6 Months</a></li>
 				<li><a href='<?=UIR ?>Reports/attendance/Kingdom/<?=$kingdom_id ?>/Months/12'>Past 12 Months</a></li>
 				<li><a href='<?=UIR ?>Reports/attendance/Kingdom/<?=$kingdom_id ?>/All'>All</a></li>
+				<li><a href='<?=UIR ?>Reports/park_attendance_explorer'>Park Attendance Explorer</a></li>
 			</ul>
 		</li>
 		<li>

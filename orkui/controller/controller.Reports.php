@@ -316,6 +316,165 @@ class Controller_Reports extends Controller {
 		$this->data['page_title'] ="Suspended Player Roster";
 	}
 
+	/**
+	 * Round a start date down to the beginning of its period.
+	 * Round an end date up to the end of its period.
+	 * Ensures full periods are always included in results.
+	 */
+	private function _roundDateRange($start, $end, $period) {
+		$st = strtotime($start);
+		$et = strtotime($end);
+		if (!$st || !$et) return array($start, $end);
+
+		switch ($period) {
+			case 'Weekly':
+				// ISO week: Monday start. Round start down to Monday, end up to Sunday.
+				$dow_start = date('N', $st); // 1=Mon, 7=Sun
+				$st = strtotime('-' . ($dow_start - 1) . ' days', $st);
+				$dow_end = date('N', $et);
+				$et = strtotime('+' . (7 - $dow_end) . ' days', $et);
+				break;
+			case 'Monthly':
+				$st = strtotime(date('Y-m-01', $st));
+				$et = strtotime(date('Y-m-t', $et));
+				break;
+			case 'Quarterly':
+				$q_start = ceil(date('n', $st) / 3);
+				$q_start_month = ($q_start - 1) * 3 + 1;
+				$st = strtotime(date('Y', $st) . '-' . str_pad($q_start_month, 2, '0', STR_PAD_LEFT) . '-01');
+				$q_end = ceil(date('n', $et) / 3);
+				$q_end_month = $q_end * 3;
+				$et = strtotime(date('Y', $et) . '-' . str_pad($q_end_month, 2, '0', STR_PAD_LEFT) . '-01');
+				$et = strtotime(date('Y-m-t', $et)); // last day of quarter-end month
+				break;
+			case 'Annually':
+				$st = strtotime(date('Y', $st) . '-01-01');
+				$et = strtotime(date('Y', $et) . '-12-31');
+				break;
+		}
+
+		return array(date('Y-m-d', $st), date('Y-m-d', $et));
+	}
+
+	public function park_attendance_explorer($params = null) {
+		$this->template = 'Reports_parkattendanceexplorer.tpl';
+		$this->data['page_title'] = "Park Attendance Explorer";
+
+		$kingdom_id = $this->session->kingdom_id;
+		if (!valid_id($kingdom_id)) {
+			$this->data['no_kingdom'] = true;
+			return;
+		}
+
+		$this->data['kingdom_id'] = $kingdom_id;
+		$this->data['parks'] = $this->Reports->get_kingdom_parks($kingdom_id);
+
+		// Only run report on form submission
+		if (!isset($this->request->RunReport)) return;
+
+		$park_id = intval($this->request->ParkId);
+		$period = $this->request->Period;
+		if (!in_array($period, array('Weekly', 'Monthly', 'Quarterly', 'Annually'))) {
+			$period = 'Monthly';
+		}
+
+		// Round dates to encompass full periods
+		list($rounded_start, $rounded_end) = $this->_roundDateRange(
+			$this->request->StartDate, $this->request->EndDate, $period
+		);
+
+		$form = array(
+			'KingdomId' => $kingdom_id,
+			'StartDate' => $this->request->StartDate,
+			'EndDate' => $this->request->EndDate,
+			'Period' => $period,
+			'MinimumSignIns' => intval($this->request->MinimumSignIns),
+			'ParkId' => $park_id,
+			'AvgByUniques' => isset($this->request->AvgByUniques) ? 1 : 0
+		);
+		$this->data['form'] = $form;
+
+		if ($park_id > 0) {
+			// Single Park mode — player-by-period pivot table
+			$result = $this->Reports->park_attendance_single_park(array(
+				'KingdomId' => $kingdom_id,
+				'ParkId' => $park_id,
+				'StartDate' => $rounded_start,
+				'EndDate' => $rounded_end,
+				'Period' => $period,
+				'MinimumSignIns' => $form['MinimumSignIns']
+			));
+			$this->data['mode'] = 'single_park';
+
+			if (is_array($result)) {
+				$pivoted = array();
+				$all_periods = array();
+				foreach ($result as $row) {
+					$mid = $row['MundaneId'];
+					if (!isset($pivoted[$mid])) {
+						$pivoted[$mid] = array(
+							'MundaneId' => $row['MundaneId'],
+							'Persona' => $row['Persona'],
+							'Waivered' => $row['Waivered'],
+							'DuesPaid' => $row['DuesPaid'],
+							'Periods' => array(),
+							'Total' => 0
+						);
+					}
+					$pivoted[$mid]['Periods'][$row['PeriodLabel']] = $row['SignInCount'];
+					$pivoted[$mid]['Total'] += $row['SignInCount'];
+					$all_periods[$row['PeriodLabel']] = true;
+				}
+				ksort($all_periods);
+				$this->data['all_periods'] = array_keys($all_periods);
+				// Sort players by persona
+				usort($pivoted, function($a, $b) {
+					return strcasecmp($a['Persona'], $b['Persona']);
+				});
+				$this->data['players'] = $pivoted;
+			}
+		} else {
+			// All Parks mode — one row per park per period
+			$result = $this->Reports->park_attendance_all_parks(array(
+				'KingdomId' => $kingdom_id,
+				'StartDate' => $rounded_start,
+				'EndDate' => $rounded_end,
+				'Period' => $period
+			));
+			$this->data['mode'] = 'all_parks';
+
+			if (is_array($result)) {
+				$this->data['attendance'] = $result;
+
+				// Compute kingdom summary
+				$summary = array(
+					'TotalSignins' => 0,
+					'UniquePlayers' => 0,
+					'UniqueMembers' => 0,
+					'Members2Plus' => 0,
+					'Members3Plus' => 0,
+					'Members4Plus' => 0,
+					'WeeksInPeriod' => 0,
+					'MonthsInPeriod' => 0,
+					'RowCount' => count($result)
+				);
+				foreach ($result as $row) {
+					$summary['TotalSignins'] += $row['TotalSignins'];
+					$summary['UniquePlayers'] += $row['UniquePlayers'];
+					$summary['UniqueMembers'] += $row['UniqueMembers'];
+					$summary['Members2Plus'] += $row['Members2Plus'];
+					$summary['Members3Plus'] += $row['Members3Plus'];
+					$summary['Members4Plus'] += $row['Members4Plus'];
+					if ($row['WeeksInPeriod'] > $summary['WeeksInPeriod'])
+						$summary['WeeksInPeriod'] = $row['WeeksInPeriod'];
+					if ($row['MonthsInPeriod'] > $summary['MonthsInPeriod'])
+						$summary['MonthsInPeriod'] = $row['MonthsInPeriod'];
+				}
+				$this->data['summary'] = $summary;
+			}
+		}
+	}
+
 }
 
 ?>

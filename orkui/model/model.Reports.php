@@ -203,6 +203,31 @@ class Model_Reports extends Model {
 
 		return $r;
 	}
+
+	function park_attendance_all_parks($request) {
+		$r = $this->Report->ParkAttendanceAllParks($request);
+		if ($r['Status']['Status'] == 0) {
+			return $r['Attendance'];
+		}
+		return false;
+	}
+
+	function park_attendance_single_park($request) {
+		$r = $this->Report->ParkAttendanceSinglePark($request);
+		if ($r['Status']['Status'] == 0) {
+			return $r['Attendance'];
+		}
+		return false;
+	}
+
+	function get_kingdom_parks($kingdom_id) {
+		$kingdom = new APIModel('Kingdom');
+		$r = $kingdom->GetParks(array('KingdomId' => $kingdom_id));
+		if ($r['Status']['Status'] == 0) {
+			return $r['Parks'];
+		}
+		return array();
+	}
 }
 
 ?>
