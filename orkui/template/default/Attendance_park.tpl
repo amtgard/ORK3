@@ -1,7 +1,7 @@
 <?php global $Session ?>
 
 <style>
-.ui-autocomplete-separator { border-top: 1px solid #ccc; margin: 4px 0; height: 0; padding: 0; cursor: default; pointer-events: none; }
+.ui-autocomplete-separator { padding: 2px 12px; cursor: default; pointer-events: none; color: #999; font-size: 11px; }
 </style>
 
 <script type='text/javascript'>
@@ -160,7 +160,7 @@
 		});
 		playerAC.data('autocomplete')._renderItem = function(ul, item) {
 			if (item.separator) {
-				return $('<li class="ui-autocomplete-separator">').appendTo(ul);
+				return $('<li class="ui-autocomplete-separator">').text('── Kingdom ──').appendTo(ul);
 			}
 			return $('<li></li>').data('item.autocomplete', item).append($('<a>').text(item.label)).appendTo(ul);
 		};
