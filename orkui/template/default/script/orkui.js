@@ -14027,7 +14027,7 @@ $(function() {
 		if (!file || file.size <= 348836) return;
 		var originalKB = Math.round(file.size / 1024);
 		var isPng = (file.type === 'image/png');
-		$input.after('<span class="image-resize-notice" style="font-size:10px;color:#888;margin-left:6px;">Resizing\u2026</span>');
+		$input.after('<div class="image-resize-notice" style="font-size:10px;color:#888;">Resizing\u2026</div>');
 		resizeImageToLimit(file, 348836,
 			function(blob, newW, newH) {
 				if ($input.data('resize-gen') !== generation) return;
