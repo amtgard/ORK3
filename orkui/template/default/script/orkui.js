@@ -13963,9 +13963,11 @@ function expandUrl() {
 		return document.URL;
 }
 
-function resizeImageToLimit(file, maxBytes, onSuccess, onError) {
+function resizeImageToLimit(file, maxBytes, onSuccess, onError, preservePng) {
 	var MAX_ITERATIONS = 5;
 	var targetBytes = maxBytes - 100;
+	var mimeType = preservePng ? 'image/png' : 'image/jpeg';
+	var quality  = preservePng ? undefined : 0.85;
 
 	function attempt(sourceBlob, remainingTries) {
 		var img = new Image();
@@ -13978,6 +13980,10 @@ function resizeImageToLimit(file, maxBytes, onSuccess, onError) {
 			canvas.width  = Math.max(1, Math.floor(img.width  * scale));
 			canvas.height = Math.max(1, Math.floor(img.height * scale));
 			var ctx = canvas.getContext('2d');
+			if (!preservePng) {
+				ctx.fillStyle = '#ffffff';
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+			}
 			ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 			canvas.toBlob(function(blob) {
 				if (blob.size <= maxBytes) {
@@ -13987,7 +13993,7 @@ function resizeImageToLimit(file, maxBytes, onSuccess, onError) {
 				} else {
 					onError('Could not resize image to fit within 340 KB. Please choose a smaller image.');
 				}
-			}, 'image/jpeg', 0.85);
+			}, mimeType, quality);
 		};
 		img.onerror = function() {
 			URL.revokeObjectURL(url);
@@ -14020,13 +14026,16 @@ $(function() {
 		var file = this.files && this.files[0];
 		if (!file || file.size <= 348836) return;
 		var originalKB = Math.round(file.size / 1024);
+		var isPng = (file.type === 'image/png');
 		$input.after('<span class="image-resize-notice" style="font-size:10px;color:#888;margin-left:6px;">Resizing\u2026</span>');
 		resizeImageToLimit(file, 348836,
 			function(blob, newW, newH) {
 				if ($input.data('resize-gen') !== generation) return;
 				var resizedKB = Math.round(blob.size / 1024);
 				var dt = new DataTransfer();
-				dt.items.add(new File([blob], 'resized.jpg', {type: 'image/jpeg'}));
+				var outName = isPng ? 'resized.png' : 'resized.jpg';
+				var outType = isPng ? 'image/png' : 'image/jpeg';
+				dt.items.add(new File([blob], outName, {type: outType}));
 				$input[0].files = dt.files;
 				$input.siblings('.image-resize-notice')
 					.css('color', '#555')
@@ -14036,7 +14045,8 @@ $(function() {
 				if ($input.data('resize-gen') !== generation) return;
 				$input.siblings('.image-resize-notice').css('color', 'red').text(errMsg);
 				$input.val('');
-			}
+			},
+			isPng
 		);
 	});
 	$( '.restricted-document-type' ).change(function() {

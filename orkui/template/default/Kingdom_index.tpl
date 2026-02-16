@@ -42,7 +42,7 @@
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($park['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
+							<img src="<?=HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) ?>" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
 							<img src="<?=HTTP_PARK_HERALDRY ?>00000.jpg">
 						<?php endif; ?>
@@ -79,7 +79,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_KINGDOM_HERALDRY . sprintf("%04d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='<?=HTTP_KINGDOM_HERALDRY ?>0000.jpg';">
+						<img src="<?=HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prinz['KingdomId'])) ?>" onerror="this.src='<?=HTTP_KINGDOM_HERALDRY ?>0000.jpg';">
 					</div>
 					<?=$prinz['Name'] ?>
 				</td>
@@ -163,7 +163,7 @@
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+							<img src="<?=HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) ?>" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
 							<img src="<?=HTTP_EVENT_HERALDRY ?>00000.jpg">
 						<?php endif; ?>
