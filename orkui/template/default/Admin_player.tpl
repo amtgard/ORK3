@@ -10,6 +10,7 @@
 					<button type='button' onclick="if(confirm('This will remove the image. This cannot be undone. Continue?')){var f=document.createElement('form');f.method='post';f.action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/removeheraldry';document.body.appendChild(f);f.submit();}" style='position:absolute;top:0;right:0;line-height:1;padding:2px 5px;cursor:pointer;'>&times;</button>
 <?php endif; ?>
 				</span>
+				<br/>
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
@@ -22,6 +23,7 @@
 					<button type='button' onclick="if(confirm('This will remove the image. This cannot be undone. Continue?')){var f=document.createElement('form');f.method='post';f.action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/removepicture';document.body.appendChild(f);f.submit();}" style='position:absolute;top:0;right:0;line-height:1;padding:2px 5px;cursor:pointer;'>&times;</button>
 <?php endif; ?>
 				</span>
+				<br/>
 				<input type='file' class='restricted-image-type' name='PlayerImage' id='PlayerImage' />
 			</span>
 		</div>
