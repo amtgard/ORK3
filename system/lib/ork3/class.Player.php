@@ -247,7 +247,7 @@ class Player extends Ork3 {
 					'HasHeraldry' => $this->mundane->has_heraldry,
 					'Heraldry' => $heraldry['Url'] . '?' . strtotime($this->mundane->modified),
 					'HasImage' => $this->mundane->has_image,
-					'Image' => HTTP_PLAYER_IMAGE . sprintf('%06d.jpg?' . strtotime($this->mundane->modified), $this->mundane->mundane_id),
+					'Image' => $this->resolve_player_image_url($this->mundane->mundane_id, $this->mundane->modified),
 					'PenaltyBox' => $this->mundane->penalty_box,
 					'Active' => $this->mundane->active,
 					'PasswordExpires' => $this->mundane->password_expires,
@@ -520,11 +520,24 @@ class Player extends Ork3 {
 
 				if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
 					$waiver = @imagecreatefromstring(base64_decode($request['Waiver']));
-					if($waiver !== false)
+					if ($waiver !== false)
 					{
-						imagejpeg($waiver, DIR_WAIVERS.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg');
+						$base = DIR_WAIVERS . sprintf("%06d", $this->mundane->mundane_id);
+						$use_png = Common::gd_has_transparency($waiver);
+
+						if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+						if (file_exists($base . '.png')) unlink($base . '.png');
+
+						if ($use_png) {
+							imagealphablending($waiver, false);
+							imagesavealpha($waiver, true);
+							imagepng($waiver, $base . '.png');
+							$this->mundane->waiver_ext = 'png';
+						} else {
+							imagejpeg($waiver, $base . '.jpg');
+							$this->mundane->waiver_ext = 'jpg';
+						}
 						$this->mundane->waivered = 1;
-						$this->mundane->waiver_ext = 'jpg';
 					} else {
 						$this->mundane->saivered = 0;
 					}
@@ -538,9 +551,21 @@ class Player extends Ork3 {
 				}
 				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 					$playerimage = @imagecreatefromstring(base64_decode($request['Image']));
-					if($playerimage !== false)
+					if ($playerimage !== false)
 					{
-						imagejpeg($playerimage, DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg');
+						$base = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
+						$use_png = Common::gd_has_transparency($playerimage);
+
+						if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+						if (file_exists($base . '.png')) unlink($base . '.png');
+
+						if ($use_png) {
+							imagealphablending($playerimage, false);
+							imagesavealpha($playerimage, true);
+							imagepng($playerimage, $base . '.png');
+						} else {
+							imagejpeg($playerimage, $base . '.jpg');
+						}
 						$this->mundane->has_image = 1;
 					} else {
 						$this->mundane->has_image = 0;
@@ -922,11 +947,21 @@ class Player extends Ork3 {
         $request = $this->media_fetch('Image', $request);
 		if (strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 			$playerimage = imagecreatefromstring(base64_decode($request['Image']));
-			if($playerimage !== false)
+			if ($playerimage !== false)
 			{
-    			if (file_exists( DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg' ))
-                    unlink( DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg' );
-				imagejpeg($playerimage, DIR_PLAYER_IMAGE.(sprintf("%06d",$this->mundane->mundane_id)).'.jpg');
+				$base = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
+				$use_png = Common::gd_has_transparency($playerimage);
+
+				if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+				if (file_exists($base . '.png')) unlink($base . '.png');
+
+				if ($use_png) {
+					imagealphablending($playerimage, false);
+					imagesavealpha($playerimage, true);
+					imagepng($playerimage, $base . '.png');
+				} else {
+					imagejpeg($playerimage, $base . '.jpg');
+				}
 				$this->mundane->has_image = 1;
 			} else {
 				$notices .= "Image could not be decoded.";
@@ -936,6 +971,12 @@ class Player extends Ork3 {
 		}
 		logtrace("set_image() complete", array($request, $notices));
 		return Success($notices);
+	}
+
+	private function resolve_player_image_url($mundane_id, $modified) {
+		$name = sprintf('%06d', $mundane_id);
+		$ext = file_exists(DIR_PLAYER_IMAGE . $name . '.png') ? 'png' : 'jpg';
+		return HTTP_PLAYER_IMAGE . $name . '.' . $ext . '?' . strtotime($modified);
 	}
 
 	public function set_waiver($request) {
@@ -949,13 +990,24 @@ class Player extends Ork3 {
     		if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
 				logtrace("set_waiver() - image", $request);
     			$waiver = @imagecreatefromstring(base64_decode($request['Waiver']));
-    			if($waiver !== false)
+    			if ($waiver !== false)
     			{
-            		if (file_exists( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg' ))
-                        unlink( DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg' );
-    				imagejpeg($waiver, DIR_WAIVERS.(sprintf("%06d",$request['MundaneId'])).'.jpg');
+					$base = DIR_WAIVERS . sprintf("%06d", $request['MundaneId']);
+					$use_png = Common::gd_has_transparency($waiver);
+
+					if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+					if (file_exists($base . '.png')) unlink($base . '.png');
+
+					if ($use_png) {
+						imagealphablending($waiver, false);
+						imagesavealpha($waiver, true);
+						imagepng($waiver, $base . '.png');
+						$this->mundane->waiver_ext = 'png';
+					} else {
+						imagejpeg($waiver, $base . '.jpg');
+						$this->mundane->waiver_ext = 'jpg';
+					}
     				$this->mundane->waivered = 1;
-    				$this->mundane->waiver_ext = 'jpg';
     			} else {
     				$notices .= 'There was an error uploading or decoding your image.<br />';
 					return InvalidParameter($notices);

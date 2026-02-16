@@ -14,21 +14,35 @@ class Heraldry  extends Ork3 {
 	public function GetHeraldry($request) {
 		$response = array('Heraldry'=>'');
 		switch ($request['Type']) {
-			case 'Player': $response['Heraldry'] = base64_encode(file_get_contents(DIR_PLAYER_HERALDRY . sprintf('%06d.jpg', $request['Id']))); break;
+			case 'Player':
+				$name = sprintf('%06d', $request['Id']);
+				$path = file_exists(DIR_PLAYER_HERALDRY . $name . '.png')
+					? DIR_PLAYER_HERALDRY . $name . '.png'
+					: DIR_PLAYER_HERALDRY . $name . '.jpg';
+				$response['Heraldry'] = base64_encode(file_get_contents($path));
+				break;
 		}
 		return $response;
 	}
-	
+
 	public function GetHeraldryUrl($request) {
 		$response = array('Url'=>'');
 		switch ($request['Type']) {
-			case 'Player': $response['Url'] = HTTP_PLAYER_HERALDRY . sprintf('%06d.jpg', $request['Id']); break;
-			case 'Park': $response['Url'] = HTTP_PARK_HERALDRY . sprintf('%05d.jpg', $request['Id']); break;
-			case 'Kingdom': $response['Url'] = HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg', $request['Id']); break;
-			case 'Unit': $response['Url'] = HTTP_UNIT_HERALDRY . sprintf('%05d.jpg', $request['Id']); break;
-			case 'Event': $response['Url'] = HTTP_EVENT_HERALDRY . sprintf('%05d.jpg', $request['Id']); break;
+			case 'Player': $response['Url'] = $this->resolve_heraldry_url(HTTP_PLAYER_HERALDRY, DIR_PLAYER_HERALDRY, 6, $request['Id']); break;
+			case 'Park': $response['Url'] = $this->resolve_heraldry_url(HTTP_PARK_HERALDRY, DIR_PARK_HERALDRY, 5, $request['Id']); break;
+			case 'Kingdom': $response['Url'] = $this->resolve_heraldry_url(HTTP_KINGDOM_HERALDRY, DIR_KINGDOM_HERALDRY, 4, $request['Id']); break;
+			case 'Unit': $response['Url'] = $this->resolve_heraldry_url(HTTP_UNIT_HERALDRY, DIR_UNIT_HERALDRY, 5, $request['Id']); break;
+			case 'Event': $response['Url'] = $this->resolve_heraldry_url(HTTP_EVENT_HERALDRY, DIR_EVENT_HERALDRY, 5, $request['Id']); break;
 		}
 		return $response;
+	}
+
+	private function resolve_heraldry_url($http_base, $dir_base, $pad_len, $id) {
+		$name = sprintf("%0" . $pad_len . "d", $id);
+		if (file_exists($dir_base . $name . '.png')) {
+			return $http_base . $name . '.png';
+		}
+		return $http_base . $name . '.jpg';
 	}
 	
 	public function RemovePlayerHeraldry($request) {
@@ -76,14 +90,23 @@ class Heraldry  extends Ork3 {
     
     private function store_heraldry($request, $path, $img_len, $table) {
 		if (strlen($request['Heraldry']) > 0 && strlen($request['Heraldry']) < 465000 && Common::supported_mime_types($request['HeraldryMimeType'])) {
-			$heraldry = @imagecreatefromstring(base64_decode($request['Heraldry'])); 
-			if($heraldry !== false) 
-			{ 
-                $src_id = ucwords($table) . 'Id';
-				if (file_exists( $path.(sprintf("%0" . $img_len . "d",$request[$src_id])).'.jpg')) 
-                    unlink( $path.(sprintf("%0" . $img_len . "d",$request[$src_id])).'.jpg');
-				$fullpath = $path.(sprintf("%0" . $img_len . "d",$request[$src_id])).'.jpg';
-				imagejpeg($heraldry, $fullpath); 
+			$heraldry = @imagecreatefromstring(base64_decode($request['Heraldry']));
+			if ($heraldry !== false) {
+				$src_id = ucwords($table) . 'Id';
+				$base = $path . sprintf("%0" . $img_len . "d", $request[$src_id]);
+				$use_png = Common::gd_has_transparency($heraldry);
+
+				if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+				if (file_exists($base . '.png')) unlink($base . '.png');
+
+				if ($use_png) {
+					imagealphablending($heraldry, false);
+					imagesavealpha($heraldry, true);
+					imagepng($heraldry, $base . '.png');
+				} else {
+					imagejpeg($heraldry, $base . '.jpg');
+				}
+
 				$this->$table->has_heraldry = 1;
 			}
 		}

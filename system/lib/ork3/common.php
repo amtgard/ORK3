@@ -258,6 +258,36 @@ class Common
 		return false;
 	}
 
+	public static function gd_has_transparency( $gd )
+	{
+		// Check palette-based transparency (GIF)
+		if ( imagecolortransparent( $gd ) >= 0 ) {
+			return true;
+		}
+		// Sample a grid of pixels for alpha channel transparency (PNG)
+		$w = imagesx( $gd );
+		$h = imagesy( $gd );
+		$step_x = max( 1, (int)( $w / 16 ) );
+		$step_y = max( 1, (int)( $h / 16 ) );
+		for ( $x = 0; $x < $w; $x += $step_x ) {
+			for ( $y = 0; $y < $h; $y += $step_y ) {
+				$rgba = imagecolorsforindex( $gd, imagecolorat( $gd, $x, $y ) );
+				if ( $rgba['alpha'] > 0 ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	public static function resolve_image_ext( $dir_base, $name )
+	{
+		if ( file_exists( $dir_base . $name . '.png' ) ) {
+			return $name . '.png';
+		}
+		return $name . '.jpg';
+	}
+
 	public static function supported_mime_types( $type )
 	{
 		switch ( strtoupper( $type ) ) {
