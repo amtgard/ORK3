@@ -1543,6 +1543,26 @@ class Controller_Admin extends Controller {
 		$this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
 	}
 
+	public function topparks($limit = null) {
+		$this->load_model('Admin');
+		$limit = intval($limit) > 0 ? intval($limit) : 25;
+		$start_date = isset($this->request->StartDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->StartDate)
+			? $this->request->StartDate
+			: date("Y-m-d", strtotime("-12 month"));
+		$end_date = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
+			? $this->request->EndDate
+			: date("Y-m-d");
+		$week_count = max(1, ceil((strtotime($end_date) - strtotime($start_date)) / (7 * 86400)));
+		$native_populace = !empty($this->request->NativePopulace);
+		$result = $this->Admin->get_top_parks_by_attendance($limit, $start_date, $end_date, $native_populace);
+		$this->data['TopParks'] = $result['TopParksSummary'];
+		$this->data['StartDate'] = $start_date;
+		$this->data['EndDate'] = $end_date;
+		$this->data['WeekCount'] = $week_count;
+		$this->data['Limit'] = $limit;
+		$this->data['NativePopulace'] = $native_populace;
+	}
+
 	private function kingdom_route($id) {
 		$this->data['kingdom_id'] = $id;
 		$this->session->kingdom_id = $id;

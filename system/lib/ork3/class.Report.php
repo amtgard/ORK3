@@ -1124,6 +1124,73 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
+	public function GetTopParksByAttendance($request=null) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+			return $cache;
+
+		if (strlen($request['Limit'] ?? '') == 0) $request['Limit'] = 25;
+		if (strlen($request['StartDate'] ?? '') == 0) $request['StartDate'] = date("Y-m-d", strtotime("-12 month"));
+		if (strlen($request['EndDate'] ?? '') == 0) $request['EndDate'] = date("Y-m-d");
+
+		$escaped_start = mysql_real_escape_string($request['StartDate']);
+		$escaped_end = mysql_real_escape_string($request['EndDate']);
+		$escaped_limit = intval($request['Limit']);
+		$native_populace = $request['NativePopulace'] ? "m.park_id = a.park_id and" : "";
+
+		$sql = "select
+					count(mundanesbyweek.mundane_id) attendance_count,
+					p.park_id, p.name, p.has_heraldry,
+					k.name kingdom_name, k.kingdom_id,
+					pt.title, p.parktitle_id
+				from
+					" . DB_PREFIX . "park p
+						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = p.kingdom_id
+						left join " . DB_PREFIX . "parktitle pt on pt.parktitle_id = p.parktitle_id
+						left join
+							(select
+									a.mundane_id, a.date_week3 as week, a.park_id
+								from " . DB_PREFIX . "attendance a
+									left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+								where
+									$native_populace
+									date >= '$escaped_start'
+									and date <= '$escaped_end'
+									and a.mundane_id > 0
+								group by date_year, date_week3, mundane_id) mundanesbyweek
+							on p.park_id = mundanesbyweek.park_id
+				where p.active = 'Active'
+					and k.active = 'Active'
+				group by p.park_id
+				order by attendance_count desc
+				limit $escaped_limit";
+		logtrace('Report: GetTopParksByAttendance', array($request, $sql));
+		$r = $this->db->query($sql);
+		$response = array(
+			'Status' => Success(),
+			'TopParksSummary' => ''
+		);
+		if ($r === false) {
+			$response['Status'] = InvalidParameter();
+		} else {
+			$report = array();
+			while ($r->next()) {
+				$report[] = array(
+					'AttendanceCount' => $r->attendance_count,
+					'ParkId' => $r->park_id,
+					'ParkName' => $r->name,
+					'HasHeraldry' => $r->has_heraldry,
+					'KingdomId' => $r->kingdom_id,
+					'KingdomName' => $r->kingdom_name,
+					'Title' => $r->title,
+					'ParkTitleId' => $r->parktitle_id
+				);
+			}
+			$response['TopParksSummary'] = $report;
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
 	public function GetActiveKingdomsSummary($request=null) {
 		$key = Ork3::$Lib->ghettocache->key($request);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
