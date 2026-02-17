@@ -47,7 +47,7 @@
 			<tr id="local-players-row" style="<?=!empty($form['ParkId']) ? '' : 'display:none;'?>">
 				<td><label for="LocalPlayersOnly">Local Players Only?</label></td>
 				<td><input type="checkbox" id="LocalPlayersOnly" name="LocalPlayersOnly" value="1"<?=!empty($form['LocalPlayersOnly']) ? ' checked' : ''?> /></td>
-				<td colspan="2"><em style="color:#666; font-size:0.9em;">Only show players whose home park is the selected park.</em></td>
+				<td colspan="2"></td>
 			</tr>
 			<tr>
 				<td colspan="4">
