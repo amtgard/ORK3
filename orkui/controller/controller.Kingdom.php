@@ -50,6 +50,18 @@ class Controller_Kingdom extends Controller {
 		logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
 	}
 	
+	public function park_monthly_json($kingdom_id = null) {
+		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
+		$summary = $this->Report->GetKingdomParkMonthlyAverages(['KingdomId' => $kingdom_id]);
+		$result = array();
+		foreach ((array)($summary['KingdomParkMonthlySummary'] ?? []) as $park) {
+			$result[$park['ParkId']] = $park['MonthlyCount'];
+		}
+		header('Content-Type: application/json');
+		echo json_encode($result);
+		exit();
+	}
+
 	public function map($kingdom_id = null) {
 		if (valid_id($kingdom_id)) {
 	    	$kingdom_details = $this->Kingdom->GetKingdomDetails(array('KingdomId' => $kingdom_id));

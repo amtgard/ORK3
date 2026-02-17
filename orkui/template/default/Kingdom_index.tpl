@@ -35,11 +35,9 @@
 		<tbody>
 <?php if (!is_array($park_summary['KingdomParkAveragesSummary'])) $park_summary['KingdomParkAveragesSummary'] = array() ?>
 <?php $att = 0 ?>
-<?php $monthly_total = 0 ?>
 <?php foreach ($park_summary['KingdomParkAveragesSummary'] as $k => $park): ?>
     <?php $att += $park['AttendanceCount']; ?>
-    <?php $monthly_total += $park['MonthlyCount']; ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"' data-park-id='<?=$park['ParkId']?>'>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($park['HasHeraldry']==1): ?>
@@ -52,7 +50,7 @@
 				</td>
 				<td><?=!empty($park['Title']) ? $park['Title'] : '' ?></td>
 				<td class='data-column'><?=sprintf("%0.02f",($park['AttendanceCount']/26)); ?></td>
-				<td class='data-column'><?=sprintf("%0.01f",($park['MonthlyCount']/12)); ?></td>
+				<td class='data-column monthly-stat'>—</td>
 				<td class='data-column'><?=$park['AttendanceCount']; ?></td>
 			</tr>
 <?php endforeach; ?>
@@ -60,9 +58,25 @@
 				<td></td>
 				<td></td>
 				<td class='data-column'><?=sprintf("%0.02f",($att/26)); ?></td>
-				<td class='data-column'><?=sprintf("%0.01f",($monthly_total/12)); ?></td>
+				<td class='data-column monthly-total'>—</td>
 				<td class='data-column'><?=$att; ?></td>
 			</tr>
+<script>
+jQuery(document).ready(function($) {
+	$.get('<?=UIR?>Kingdom/park_monthly_json/<?=$kingdom_id?>', function(data) {
+		var total = 0;
+		$('[data-park-id]').each(function() {
+			var parkId = $(this).data('park-id');
+			var monthlyCount = data[parkId] || 0;
+			total += monthlyCount;
+			$(this).find('.monthly-stat').text((monthlyCount / 12).toFixed(1));
+		});
+		$('.monthly-total').text((total / 12).toFixed(1));
+	}, 'json').fail(function() {
+		$('.monthly-stat, .monthly-total').text('err');
+	});
+});
+</script>
 		</tbody>
 	</table>
 </div>
