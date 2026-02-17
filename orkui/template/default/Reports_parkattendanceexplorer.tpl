@@ -44,6 +44,11 @@
 				<td><label for="AvgByUniques">Average by Uniques?</label></td>
 				<td><input type="checkbox" id="AvgByUniques" name="AvgByUniques" value="1"<?=!empty($form['AvgByUniques']) ? ' checked' : ''?> /></td>
 			</tr>
+			<tr id="local-players-row" style="<?=!empty($form['ParkId']) ? '' : 'display:none;'?>">
+				<td><label for="LocalPlayersOnly">Local Players Only?</label></td>
+				<td><input type="checkbox" id="LocalPlayersOnly" name="LocalPlayersOnly" value="1"<?=!empty($form['LocalPlayersOnly']) ? ' checked' : ''?> /></td>
+				<td colspan="2"><em style="color:#666; font-size:0.9em;">Only show players whose home park is the selected park.</em></td>
+			</tr>
 			<tr>
 				<td colspan="4">
 					<button type="submit" name="RunReport" value="1" class="button">Run Report</button>
@@ -181,6 +186,8 @@
 			<li><strong>Period</strong> &mdash; How to group the data: Weekly (ISO weeks, Monday&ndash;Sunday), Monthly, Quarterly (Q1=Jan&ndash;Mar, Q2=Apr&ndash;Jun, Q3=Jul&ndash;Sep, Q4=Oct&ndash;Dec), or Annually.</li>
 			<li><strong>Park</strong> &mdash; Select &ldquo;All Parks&rdquo; for the kingdom summary view, or choose a specific park for the player detail view.</li>
 			<li><strong>Minimum Sign-Ins</strong> &mdash; In the individual park view, filters out players whose total sign-in count across the entire date range is below this number. Has no effect on the All Parks view.</li>
+			<li><strong>Local Players Only?</strong> (individual park view only) &mdash; When checked, restricts the player list to only those whose home park matches the selected park.
+				Visitors from other parks are excluded. Useful for reviewing your park's membership attendance specifically.</li>
 			<li><strong>Average by Uniques?</strong> &mdash; When checked, the Avg Weekly and Avg Monthly columns use Unique Players as the numerator instead of Total Sign-Ins.
 				For example, if a park had 30 total sign-ins in a quarter but only 12 unique players, unchecked shows 30 &divide; weeks, checked shows 12 &divide; weeks.
 				This is useful for understanding how many distinct people attend on average rather than total foot traffic.</li>
@@ -226,6 +233,18 @@
 <script>
 $(function() {
 	$('#StartDate, #EndDate').datepicker({dateFormat: 'yy-mm-dd'});
+
+	// Show/hide Local Players Only based on park selection
+	function toggleLocalPlayersRow() {
+		var parkId = parseInt($('#ParkId').val(), 10);
+		if (parkId > 0) {
+			$('#local-players-row').show();
+		} else {
+			$('#local-players-row').hide();
+			$('#LocalPlayersOnly').prop('checked', false);
+		}
+	}
+	$('#ParkId').on('change', toggleLocalPlayersRow);
 
 	if ($('.information-table').length) {
 		$.tablesorter.language.button_print = "Print";

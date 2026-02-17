@@ -1606,16 +1606,20 @@ class Report  extends Ork3 {
 		$min_signins = intval($request['MinimumSignIns']);
 		$period_expr = $this->_periodExpr($request['Period']);
 
+		$local_only = !empty($request['LocalPlayersOnly']);
+		$local_filter = $local_only ? "AND m.park_id = '$park_id'" : '';
+
 		$min_filter = '';
 		if ($min_signins > 0) {
-			$period_expr_a2 = $this->_periodExpr($request['Period'], 'a2');
 			$min_filter = "AND a.mundane_id IN (
 				SELECT a2.mundane_id
-				FROM " . DB_PREFIX . "attendance a2
+				FROM " . DB_PREFIX . "attendance a2" .
+				($local_only ? " INNER JOIN " . DB_PREFIX . "mundane m2 ON a2.mundane_id = m2.mundane_id AND m2.park_id = '$park_id'" : "") . "
 				WHERE a2.park_id = '$park_id'
 					AND a2.kingdom_id = '$kingdom_id'
 					AND a2.date >= '$start_date'
 					AND a2.date <= '$end_date'
+					AND a2.mundane_id > 0
 				GROUP BY a2.mundane_id
 				HAVING COUNT(*) >= $min_signins
 			)";
@@ -1640,6 +1644,7 @@ class Report  extends Ork3 {
 					AND a.date >= '$start_date'
 					AND a.date <= '$end_date'
 					AND a.mundane_id > 0
+					$local_filter
 					$min_filter
 				GROUP BY a.mundane_id, period_label
 				ORDER BY m.persona, period_label";
