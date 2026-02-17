@@ -21,6 +21,13 @@ $server->register(
 	);
 
 $server->register(
+		'GetKingdomParkMonthlyAverages',
+		array('GetKingdomParkMonthlyAverages'=>'tns:GetKingdomParkMonthlyAveragesRequest'),
+		array('return' => 'tns:GetKingdomParkMonthlyAveragesResponse'),
+		$namespace
+	);
+
+$server->register(
 		'GetPlayerRoster',
 		array('GetPlayerRoster'=>'tns:GetPlayerRosterRequest'),
 		array('return' => 'tns:GetPlayerRosterResponse'),

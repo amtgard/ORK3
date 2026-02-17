@@ -1036,12 +1036,15 @@ class Report  extends Ork3 {
 			$per_period = date("Y-m-d", strtotime("-$request[AverageMonths] month"));
 		}
 
-		$monthly_period = date("Y-m-d", strtotime("-1 year"));
 		$escaped_kingdom_id = mysql_real_escape_string($request['KingdomId']);
+
+		// Only join mundane table when NativePopulace or Waivered filters are active
+		$mundane_join = (!empty($native_populace) || !empty($waivered_peeps))
+			? "left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id"
+			: "";
 
 		$sql = "select
 						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name, p.has_heraldry,
-						ifnull(monthly_attendance.monthly_attendance_count, 0) monthly_count,
 						pt.title, p.parktitle_id
 					from
 						" . DB_PREFIX . "park p
@@ -1050,7 +1053,7 @@ class Report  extends Ork3 {
 								(select
 										a.mundane_id, a.date_week3 as week, a.park_id
 									from " . DB_PREFIX . "attendance a
-										left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+										$mundane_join
 									where
 										$native_populace
 										$waivered_peeps
@@ -1059,23 +1062,6 @@ class Report  extends Ork3 {
 										and a.mundane_id > 0
 									group by date_year, date_week3, mundane_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
-							left join
-								(select
-										count(mundanesbymonth.mundane_id) monthly_attendance_count, mundanesbymonth.park_id
-									from
-										(select
-												a.mundane_id, a.date_month as month, a.park_id
-											from " . DB_PREFIX . "attendance a
-												left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
-											where
-												$native_populace
-												$waivered_peeps
-												date > '$monthly_period'
-												and a.kingdom_id = '$escaped_kingdom_id'
-												and a.mundane_id > 0
-											group by date_month, mundane_id) mundanesbymonth
-									group by mundanesbymonth.park_id) monthly_attendance
-								on p.park_id = monthly_attendance.park_id
 					where p.kingdom_id = '$escaped_kingdom_id' and p.active = 'Active'
 					group by park_id
 					order by name";
@@ -1090,9 +1076,50 @@ class Report  extends Ork3 {
 		} else {
 			$report = array();
 			while ($r->next()) {
-				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'MonthlyCount' => $r->monthly_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id, 'HasHeraldry' => $r->has_heraldry );
+				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id, 'HasHeraldry' => $r->has_heraldry );
 			}
 			$response['KingdomParkAveragesSummary'] = $report;
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
+	public function GetKingdomParkMonthlyAverages($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+			return $cache;
+
+		if (strlen($request['KingdomId']) == 0) $request['KingdomId'] = '0';
+		$monthly_period = date("Y-m-d", strtotime("-1 year"));
+		$escaped_kingdom_id = mysql_real_escape_string($request['KingdomId']);
+
+		// Group by date_year AND date_month so the same calendar month in two
+		// different years (e.g. Feb 2025 vs Feb 2026) counts as two distinct months.
+		$sql = "select
+						count(mundanesbymonth.mundane_id) monthly_count, mundanesbymonth.park_id
+					from
+						(select
+								a.mundane_id, a.date_year, a.date_month, a.park_id
+							from " . DB_PREFIX . "attendance a
+							where
+								date > '$monthly_period'
+								and a.kingdom_id = '$escaped_kingdom_id'
+								and a.mundane_id > 0
+							group by a.date_year, a.date_month, a.mundane_id, a.park_id) mundanesbymonth
+					group by mundanesbymonth.park_id";
+		logtrace('Report: GetKingdomParkMonthlyAverages', array($request, $sql));
+		$r = $this->db->query($sql);
+		$response = array(
+			'Status' => Success(),
+			'KingdomParkMonthlySummary' => array()
+		);
+		if ($r === false) {
+			$response['Status'] = InvalidParameter();
+		} else {
+			$summary = array();
+			while ($r->next()) {
+				$summary[] = array( 'ParkId' => $r->park_id, 'MonthlyCount' => (int)$r->monthly_count );
+			}
+			$response['KingdomParkMonthlySummary'] = $summary;
 		}
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
