@@ -318,13 +318,17 @@ $(function() {
 			paginate();
 		});
 
-		// Re-paginate after tablesorter sorts (rows get reordered)
-		$detailTable.on('sortEnd', function() {
+		// Re-paginate after tablesorter sorts or filters (may reorder/show rows)
+		$detailTable.on('sortEnd filterEnd', function() {
+			currentPage = 0;
 			paginate();
 		});
 
-		// Initial pagination
-		paginate();
+		// Defer initial pagination until after tablesorter finishes async init
+		$detailTable.one('tablesorter-initialized', function() {
+			paginate();
+		});
+		setTimeout(paginate, 0);
 	}
 });
 </script>
