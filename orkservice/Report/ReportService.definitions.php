@@ -233,6 +233,60 @@ $server->wsdl->addComplexType(
 	);
 	
 $server->wsdl->addComplexType(
+		'GetTopParksByAttendanceRequest',
+		'complextType',
+		'struct',
+		'all',
+		'',
+		array(
+				'StartDate'=>array('name'=>'StartDate','type'=>'xsd:date'),
+				'EndDate'=>array('name'=>'EndDate','type'=>'xsd:date'),
+				'Limit'=>array('name'=>'Limit','type'=>'xsd:int'),
+				'NativePopulace'=>array('name'=>'NativePopulace','type'=>'xsd:boolean')
+			)
+	);
+
+$server->wsdl->addComplexType(
+		'TopParksSummaryItemType',
+		'complextType',
+		'struct',
+		'all',
+		'',
+		array(
+				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int'),
+				'ParkName'=>array('name'=>'ParkName','type'=>'xsd:string'),
+				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
+				'KingdomName'=>array('name'=>'KingdomName','type'=>'xsd:string'),
+				'AttendanceCount'=>array('name'=>'AttendanceCount','type'=>'xsd:int')
+			)
+	);
+
+$server->wsdl->addComplexType(
+		'TopParksSummaryListType',
+		'complexType',
+		'array',
+		'',
+		'SOAP-ENC:Array',
+		array(),
+		array(
+			array('ref'=>'SOAP-ENC:arrayType', 'wsdl:arrayType'=> 'tns:TopParksSummaryItemType[]')
+			),
+		'tns:TopParksSummaryItemType'
+	);
+
+$server->wsdl->addComplexType(
+		'GetTopParksByAttendanceResponse',
+		'complextType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Status'=>array('name'=>'Status','type'=>'tns:StatusType'),
+				'TopParksSummary'=>array('name'=>'TopParksSummary','type'=>'tns:TopParksSummaryListType')
+			)
+	);
+
+$server->wsdl->addComplexType(
 		'GetPlayerRosterRequest',
 		'complextType',
 		'struct',

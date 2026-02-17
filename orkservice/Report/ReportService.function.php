@@ -20,6 +20,11 @@ function GetKingdomParkMonthlyAverages($request) {
 	return $R->GetKingdomParkMonthlyAverages($request);
 }
 
+function GetTopParksByAttendance($request) {
+	$R = new Report();
+	return $R->GetTopParksByAttendance($request);
+}
+
 function GetPlayerRoster($request) {
 	$R = new Report();
 	return $R->GetPlayerRoster($request);

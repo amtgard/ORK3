@@ -28,6 +28,13 @@ $server->register(
 	);
 
 $server->register(
+		'GetTopParksByAttendance',
+		array('GetTopParksByAttendance'=>'tns:GetTopParksByAttendanceRequest'),
+		array('return' => 'tns:GetTopParksByAttendanceResponse'),
+		$namespace
+	);
+
+$server->register(
 		'GetPlayerRoster',
 		array('GetPlayerRoster'=>'tns:GetPlayerRosterRequest'),
 		array('return' => 'tns:GetPlayerRosterResponse'),
