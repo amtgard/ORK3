@@ -411,7 +411,11 @@ class Controller_Reports extends Controller {
 		}
 
 		$this->data['kingdom_id'] = $kingdom_id;
-		$this->data['parks'] = $this->Reports->get_kingdom_parks($kingdom_id);
+		$parks = $this->Reports->get_kingdom_parks($kingdom_id);
+		if (is_array($parks)) {
+			usort($parks, function($a, $b) { return strcasecmp($a['Name'], $b['Name']); });
+		}
+		$this->data['parks'] = $parks;
 
 		// Only run report on form submission
 		if (!isset($this->request->RunReport)) return;
