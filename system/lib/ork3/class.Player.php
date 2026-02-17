@@ -361,6 +361,7 @@ class Player extends Ork3 {
 			while ($r->next()) {
 				$response['Awards'][] = array(
 						'AwardsId' => $r->awards_id,
+						'KingdomAwardId' => $r->kingdomaward_id,
 						'AwardId' => $r->award_id,
 						'MundaneId' => $r->mundane_id,
 						'Rank' => $r->rank,
@@ -383,6 +384,7 @@ class Player extends Ork3 {
 						'GivenBy' => $r->persona,
 						'EnteredById' => $r->entered_by_id,
 						'EnteredBy' => $r->entered_by_persona,
+						'IsHistorical' => ($r->given_by_id == 0 && $r->at_park_id == 0 && $r->at_kingdom_id == 0 && $r->at_event_id == 0 && !$r->revoked) ? 1 : 0,
 					);
 			}
 			$response['Status'] = Success();
@@ -1323,6 +1325,111 @@ class Player extends Ork3 {
 		} else {
 			return NoAuthorization();
 		}
+	}
+
+	public function ReconcileAward($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$awards = new yapo($this->db, DB_PREFIX . 'awards');
+		$awards->clear();
+		$awards->awards_id = $request['AwardsId'];
+		if (valid_id($request['AwardsId']) && $awards->find()) {
+			$mundane = $this->player_info($awards->mundane_id);
+			if (valid_id($mundane_id)
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+
+				// Validate park and compute new location values for comparison
+				$info = null;
+				if (valid_id($request['ParkId'])) {
+					$Park = new Park();
+					$info = $Park->GetParkShortInfo(array( 'ParkId' => $request['ParkId'] ));
+					if ($info['Status']['Status'] != 0)
+						return InvalidParameter();
+				}
+
+				$new_kingdomaward_id = valid_id($request['KingdomAwardId']) ? $request['KingdomAwardId'] : $awards->kingdomaward_id;
+				$new_at_park_id = valid_id($request['ParkId']) ? $request['ParkId'] : 0;
+				$new_at_kingdom_id = valid_id($request['EventId']) ? 0 : (valid_id($request['ParkId']) ? $info['ParkInfo']['KingdomId'] : (valid_id($request['KingdomId']) ? $request['KingdomId'] : 0));
+				$new_at_event_id = valid_id($request['EventId']) ? $request['EventId'] : 0;
+				$new_custom_name = isset($request['CustomName']) ? $request['CustomName'] : $awards->custom_name;
+
+				// Skip save and audit if nothing actually changed
+				if ($new_kingdomaward_id == $awards->kingdomaward_id
+					&& intval($request['Rank']) == intval($awards->rank)
+					&& $request['GivenById'] == $awards->given_by_id
+					&& $request['Note'] == $awards->note
+					&& $new_custom_name == $awards->custom_name
+					&& $new_at_park_id == $awards->at_park_id
+					&& $new_at_kingdom_id == $awards->at_kingdom_id
+					&& $new_at_event_id == $awards->at_event_id) {
+					return Success(false);
+				}
+
+				if (valid_id($request['KingdomAwardId'])) {
+					list($kingdom_id, $new_award_id) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
+					$awards->kingdomaward_id = $request['KingdomAwardId'];
+					$awards->award_id = $new_award_id;
+				}
+
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
+
+				$awards->rank = $request['Rank'];
+				$awards->date = $request['Date'];
+				$awards->given_by_id = $request['GivenById'];
+				$awards->note = $request['Note'];
+				if (isset($request['CustomName'])) $awards->custom_name = $request['CustomName'];
+				$awards->at_park_id = $new_at_park_id;
+				$awards->at_kingdom_id = $new_at_kingdom_id;
+				$awards->at_event_id = $new_at_event_id;
+				$awards->save();
+
+				return Success($awards->awards_id);
+			} else {
+				return NoAuthorization();
+			}
+		} else {
+			return InvalidParameter();
+		}
+	}
+
+	public function AutoAssignRanks($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id))
+			return NoAuthorization();
+
+		$kingdomaward = new yapo($this->db, DB_PREFIX . 'kingdomaward');
+		$kingdomaward->clear();
+		$kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
+		if (!valid_id($request['KingdomAwardId']) || !$kingdomaward->find())
+			return InvalidParameter();
+
+		$award = new yapo($this->db, DB_PREFIX . 'award');
+		$award->clear();
+		$award->award_id = $kingdomaward->award_id;
+		if (!$award->find() || !$award->is_ladder)
+			return InvalidParameter('Award is not a ladder award.');
+
+		$recipient = $this->player_info($request['MundaneId']);
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_EDIT))
+			return NoAuthorization();
+
+		$sql = "SELECT awards_id FROM " . DB_PREFIX . "awards
+				WHERE mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
+				  AND kingdomaward_id = '" . mysql_real_escape_string($request['KingdomAwardId']) . "'
+				  AND revoked = 0
+				ORDER BY date ASC";
+		$r = $this->db->query($sql);
+		if ($r === false)
+			return InvalidParameter(NULL, 'Problem processing request.');
+
+		$rank = 1;
+		$assignments = array();
+		while ($r->next()) {
+			$this->db->execute("UPDATE " . DB_PREFIX . "awards SET rank = " . intval($rank) . " WHERE awards_id = '" . mysql_real_escape_string($r->awards_id) . "'");
+			$assignments[(string)$r->awards_id] = $rank;
+			$rank++;
+		}
+
+		return Success($assignments);
 	}
 
 	private function get_award(& $awards) {
