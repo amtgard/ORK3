@@ -8,7 +8,7 @@
 			<span>Heraldry:</span>
 			<span>
 				<img class='heraldry-img' src='<?=$Kingdom_heraldryurl['Url'] . '?t=' . time() ?>' />
-				<input type='file' name='Heraldry' id='Heraldry' />
+				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
 		<div>
