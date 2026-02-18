@@ -1147,15 +1147,14 @@ class Player extends Ork3 {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
 			return NoAuthorization();
 
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN))
+			return NoAuthorization();
+
 		if (valid_id($request['KingdomId'])) {
-			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT))
-				return NoAuthorization();
 			$sql = "UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
 			$this->db->query($sql);
 			return Success('Waivers have been reset for all players in the kingdom.');
 		} else if (valid_id($request['ParkId'])) {
-			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT))
-				return NoAuthorization();
 			$sql = "UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 			$this->db->query($sql);
 			return Success('Waivers have been reset for all players in the park.');

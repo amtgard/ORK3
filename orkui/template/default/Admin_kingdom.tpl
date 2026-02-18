@@ -22,7 +22,9 @@
 				<li><a href='<?=UIR ?>Admin/claimplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Move Player</a></li>
 				<li><a href='<?=UIR ?>Admin/mergeplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Merge Players</a></li>
 				<li><a href='<?=UIR ?>Admin/suspendplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Suspensions</a></li>
+				<?php if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) : ?>
 				<li><a href='<?=UIR ?>Admin/resetwaivers/kingdom/<?=$KingdomInfo['KingdomId'] ?>' class='confirm-reset-waivers'>Reset Waivers</a></li>
+			<?php endif; ?>
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Admin/transferpark/<?=$KingdomInfo['KingdomId'] ?>'>Claim Park</a></li>
