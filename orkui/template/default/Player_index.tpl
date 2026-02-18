@@ -54,6 +54,10 @@
 	}
 </style>
 
+<div id='playernew-preview-banner' style='display:block;width:calc(100% - 44px);background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:10px 16px;margin:10px;font-size:0.95em;color:#1a5276;'>
+	Want a sneak preview of our new, enhanced player profile? <a href='<?=UIR ?>Playernew/index/<?=$Player['MundaneId'] ?>'>Check it out here</a>. Note: Clicking any link will return you to the regular design.
+</div>
+
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
