@@ -438,6 +438,56 @@ class Controller_Admin extends Controller {
 		}
 	}
 
+	public function vacatekingdomofficer() {
+		$this->load_model('Kingdom');
+		$kingdom_id = $this->request->KingdomId;
+		if (!isset($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/setkingdomofficers');
+		} else {
+			$role = $this->request->Role;
+			$r = $this->Kingdom->vacate_officer($kingdom_id, $role, $this->session->token);
+			if (isset($r['Status']) && $r['Status'] != 0) {
+				$this->data['Error'] = 'Could not vacate officer: ' . $r['Detail'];
+			} else {
+				$this->data['Message'] = "The $role position has been vacated.";
+			}
+		}
+		$this->template = 'Admin_setofficers.tpl';
+		if (($officers = $this->Kingdom->get_officers($kingdom_id, $this->session->token))) {
+			$this->data['Officers'] = $officers;
+		} else {
+			$this->data['Officers'] = array();
+		}
+		$this->data['Type'] = 'KingdomId';
+		$this->data['Id'] = $kingdom_id;
+		$this->data['Call'] = 'setkingdomofficers';
+	}
+
+	public function vacateparkofficer() {
+		$this->load_model('Park');
+		$park_id = $this->request->ParkId;
+		if (!isset($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/setparkofficers');
+		} else {
+			$role = $this->request->Role;
+			$r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
+			if (isset($r['Status']) && $r['Status'] != 0) {
+				$this->data['Error'] = 'Could not vacate officer: ' . $r['Detail'];
+			} else {
+				$this->data['Message'] = "The $role position has been vacated.";
+			}
+		}
+		$this->template = 'Admin_setofficers.tpl';
+		if (($officers = $this->Park->get_officers($park_id, $this->session->token))) {
+			$this->data['Officers'] = $officers;
+		} else {
+			$this->data['Officers'] = array();
+		}
+		$this->data['Type'] = 'ParkId';
+		$this->data['Id'] = $park_id;
+		$this->data['Call'] = 'setparkofficers';
+	}
+
 	public function event($p) {
 		$params = explode('/',$p);
 		$event_id = $params[0];
@@ -812,15 +862,21 @@ class Controller_Admin extends Controller {
 								$this->data['Error'] = 'Passwords do not match.';
 						}
 						break;
-					case 'addaward':
+					case 'removeheraldry':
+					$this->Player->RemoveHeraldry(['MundaneId' => $id, 'Token' => $this->session->token]);
+					break;
+				case 'removepicture':
+					$this->Player->RemoveImage(['MundaneId' => $id, 'Token' => $this->session->token]);
+					break;
+				case 'addaward':
                         if (!valid_id($id)) {
                             $this->data['Error'] = 'You must choose a recipient. Award not added!'; break;
                         }
                         if (!valid_id($this->request->Admin_player->KingdomAwardId)) {
                             $this->data['Error'] = 'You must choose an award. Award not added!'; break;
                         }
-                        if (!valid_id($this->request->Admin_player->MundaneId)) {
-                            $this->data['Error'] = 'Who gave this award? You should rethink your life decisions';
+                        if (!valid_id($this->request->Admin_player->GivenById)) {
+                            $this->data['Error'] = 'Who gave this award? Award not added!'; break;
                         }
 						$r = $this->Player->add_player_award(array(
 								'Token' => $this->session->token,
@@ -829,7 +885,7 @@ class Controller_Admin extends Controller {
 								'CustomName' => $this->request->Admin_player->AwardName,
 								'Rank' => $this->request->Admin_player->Rank,
 								'Date' => $this->request->Admin_player->Date,
-								'GivenById' => $this->request->Admin_player->MundaneId,
+								'GivenById' => $this->request->Admin_player->GivenById,
 								'Note' => $this->request->Admin_player->Note,
 								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
 								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
@@ -864,7 +920,7 @@ class Controller_Admin extends Controller {
 								'AwardId' => $this->request->Admin_player->AwardId,
 								'Rank' => $this->request->Admin_player->Rank,
 								'Date' => $this->request->Admin_player->Date,
-								'GivenById' => $this->request->Admin_player->MundaneId,
+								'GivenById' => $this->request->Admin_player->GivenById,
 								'Note' => $this->request->Admin_player->Note,
 								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
 								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
@@ -900,13 +956,15 @@ class Controller_Admin extends Controller {
 						));
 						break;
 				}
-				if ($r['Status'] == 0) {
-					$this->data['Message'] .= 'Player has been updated:<blockquote>' . $r['Detail'] . '</blockquote>';
-					$this->request->clear('Admin_player');
-				} else if($r['Status'] == 5) {
-					header( 'Location: '.UIR."Login/login/Admin/player/$id" );
-				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+				if (strlen($this->data['Error']) == 0) {
+					if ($r['Status'] == 0) {
+						$this->data['Message'] .= 'Player has been updated:<blockquote>' . $r['Detail'] . '</blockquote>';
+						$this->request->clear('Admin_player');
+					} else if($r['Status'] == 5) {
+						header( 'Location: '.UIR."Login/login/Admin/player/$id" );
+					} else {
+						$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					}
 				}
 			}
 		} else {
@@ -921,6 +979,31 @@ class Controller_Admin extends Controller {
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
+
+		// Preload Kingdom and Park Monarch/Regent for GivenBy autocomplete
+		$this->load_model('Kingdom');
+		$this->load_model('Park');
+		$preloadOfficers = array();
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $officer) {
+				if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+					$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
+				}
+			}
+		}
+		$parkId = $this->data['Player']['ParkId'];
+		if (valid_id($parkId)) {
+			$parkOfficers = $this->Park->get_officers($parkId, $this->session->token);
+			if (is_array($parkOfficers)) {
+				foreach ($parkOfficers as $officer) {
+					if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+						$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
+					}
+				}
+			}
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['PronounList'] = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details'] = $this->Player->fetch_player_details($id);

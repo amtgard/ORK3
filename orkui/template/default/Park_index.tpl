@@ -22,7 +22,7 @@
 	<h4>Park Monarchy</h4>
 		<ul>
 			<?php foreach ($park_officers['Officers'] as $key => $officer): ?>
-				<li><?= $officer['OfficerRole']; ?>: <a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a></li>
+				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>	
@@ -136,6 +136,7 @@
 		<li><a href='<?=UIR ?>Reports/player_award_recommendations&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Award Recommendations</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Player Awards</a></li>
 		<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Class Masters/Paragons</a></li>
+		<li><a href='<?=UIR ?>Reports/custom_awards&KingdomId=<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Custom Awards</a></li>
 		<li>
 			Attendance
 			<ul>
@@ -167,7 +168,7 @@
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+							<img src="<?=HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) ?>" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
 							<img src="<?=HTTP_EVENT_HERALDRY ?>00000.jpg">
 						<?php endif; ?>

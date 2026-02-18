@@ -14,7 +14,7 @@
 	<h4>Monarchy</h4>
 		<ul>
 			<?php foreach ($kingdom_officers['Officers'] as $key => $officer): ?>
-				<li><?= $officer['OfficerRole']; ?>: <a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a></li>
+				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>
@@ -26,33 +26,41 @@
 		<thead>
 			<tr>
 				<th>Park</th>
-				<th>Ave.</th>
-				<th>Total</th>
+				<th>Status</th>
+				<th title="Average unique player sign-ins per week over the last 26 weeks (total ÷ 26)">Ave.</th>
+				<th title="Average unique player sign-ins per month over the last 12 months (total ÷ 12)">Monthly</th>
+				<th title="Total unique player sign-ins by week over the last 26 weeks. Multiple sign-ins in one week count once.">Total</th>
 			</tr>
 		</thead>
 		<tbody>
 <?php if (!is_array($park_summary['KingdomParkAveragesSummary'])) $park_summary['KingdomParkAveragesSummary'] = array() ?>
 <?php $att = 0 ?>
+<?php $monthly_total = 0 ?>
 <?php foreach ($park_summary['KingdomParkAveragesSummary'] as $k => $park): ?>
     <?php $att += $park['AttendanceCount']; ?>
+    <?php $monthly_total += $park['MonthlyCount']; ?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($park['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_PARK_HERALDRY . sprintf("%05d", $park['ParkId']) ?>.jpg" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
+							<img src="<?=HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) ?>" onerror="this.src='<?=HTTP_PARK_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
 							<img src="<?=HTTP_PARK_HERALDRY ?>00000.jpg">
 						<?php endif; ?>
 					</div>
 					<?=$park['ParkName'] ?>
 				</td>
+				<td><?=!empty($park['Title']) ? $park['Title'] : '' ?></td>
 				<td class='data-column'><?=sprintf("%0.02f",($park['AttendanceCount']/26)); ?></td>
+				<td class='data-column'><?=sprintf("%0.01f",($park['MonthlyCount']/12)); ?></td>
 				<td class='data-column'><?=$park['AttendanceCount']; ?></td>
 			</tr>
 <?php endforeach; ?>
     		<tr>
 				<td></td>
+				<td></td>
 				<td class='data-column'><?=sprintf("%0.02f",($att/26)); ?></td>
+				<td class='data-column'><?=sprintf("%0.01f",($monthly_total/12)); ?></td>
 				<td class='data-column'><?=$att; ?></td>
 			</tr>
 		</tbody>
@@ -74,7 +82,7 @@
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
-						<img src="<?=HTTP_KINGDOM_HERALDRY . sprintf("%04d", $prinz['KingdomId']) ?>.jpg" onerror="this.src='<?=HTTP_KINGDOM_HERALDRY ?>0000.jpg';">
+						<img src="<?=HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prinz['KingdomId'])) ?>" onerror="this.src='<?=HTTP_KINGDOM_HERALDRY ?>0000.jpg';">
 					</div>
 					<?=$prinz['Name'] ?>
 				</td>
@@ -115,6 +123,7 @@
 				<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?>-level Awards</a></li>
 				<li><a href='<?=UIR ?>Reports/class_masters&KingdomId=<?=$kingdom_id ?>'>Class Masters/Paragons</a></li>
 				<li><a href='<?=UIR ?>Reports/guilds&KingdomId=<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?> Guilds</a></li>
+				<li><a href='<?=UIR ?>Reports/custom_awards&KingdomId=<?=$kingdom_id ?>'>Custom Awards</a></li>
 			</ul>
 		</li>
 		<li>
@@ -157,7 +166,7 @@
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+							<img src="<?=HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) ?>" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
 							<img src="<?=HTTP_EVENT_HERALDRY ?>00000.jpg">
 						<?php endif; ?>

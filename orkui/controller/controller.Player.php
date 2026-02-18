@@ -178,6 +178,7 @@ class Controller_Player extends Controller {
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
+		$this->data['Player']['LastSignInDate'] = $this->Player->get_latest_attendance_date($id);
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
@@ -188,7 +189,31 @@ class Controller_Player extends Controller {
 		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
 		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
-		
+
+		// Preload Kingdom and Park Monarch/Regent for GivenBy autocomplete
+		$this->load_model('Kingdom');
+		$preloadOfficers = array();
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $officer) {
+				if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+					$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
+				}
+			}
+		}
+		$parkId = $this->data['Player']['ParkId'];
+		if (valid_id($parkId)) {
+			$parkOfficers = $this->Park->get_officers($parkId, $this->session->token);
+			if (is_array($parkOfficers)) {
+				foreach ($parkOfficers as $officer) {
+					if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+						$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
+					}
+				}
+			}
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
+
 	}
 	
 }

@@ -42,7 +42,7 @@
             <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance'];  $month_total += $report['Monthly'];?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$report['KingdomId']; ?>&kingdom_name=<?=$report['KingdomName']; ?>";'>
 				<td>
-				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>'></div>
+				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d',$report['KingdomId'])) ?>'></div>
 				    <?=stripslashes($report['KingdomName'] ?? ''); ?>
 				</td>
 				<td class='data-column'><?=$report['ParkCount']; ?></td>
@@ -86,7 +86,7 @@
             <?php $parks += $report['ParkCount']; $part += $report['Participation']; $ave += $report['Attendance']/26.0; $total += $report['Attendance'];  $month_total += $report['Monthly'];?>
 			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$report['KingdomId']; ?>";'>
 				<td>
-				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . sprintf('%04d.jpg',$report['KingdomId']) ?>'></div>
+				    <div class='tiny-heraldry'><img src='<?=HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d',$report['KingdomId'])) ?>'></div>
 				    <?=stripslashes($report['KingdomName']); ?>
 				</td>
 				<td class='data-column'><?=$report['ParkCount']; ?></td>
@@ -140,7 +140,7 @@
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_EVENT_HERALDRY . sprintf("%05d", $event['EventId']) ?>.jpg" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+							<img src="<?=HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) ?>" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
 							<img src="<?=HTTP_EVENT_HERALDRY ?>00000.jpg">
 						<?php endif; ?>

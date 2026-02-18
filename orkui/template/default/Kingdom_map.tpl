@@ -31,7 +31,7 @@
 			$location = ((isset($location->location))?$location->location:$location->bounds->northeast);
 			if (is_numeric($location->lat) && is_numeric($location->lng)) :
 	?>
-  	locations.push(["<?=ucwords($Details['Name']) ?>", <?=$location->lat ?>, <?=$location->lng ?>, <?=$Details['ParkId'] ?>, "<?=($Details['HasHeraldry']?"<img src='" . HTTP_PARK_HERALDRY . sprintf("%05d", $Details['ParkId']) . ".jpg' />":'') . urlencode($Details['Directions'] . "<h4>Description</h4>" . $Details['Description']) ?>", <?=$Details['KingdomId'] ?>, "<?=$Details['KingdomColor'] ?>" ]);
+  	locations.push(["<?=ucwords($Details['Name']) ?>", <?=$location->lat ?>, <?=$location->lng ?>, <?=$Details['ParkId'] ?>, "<?=($Details['HasHeraldry']?"<img src='" . HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $Details['ParkId'])) . "' />":'') . urlencode($Details['Directions'] . "<h4>Description</h4>" . $Details['Description']) ?>", <?=$Details['KingdomId'] ?>, "<?=$Details['KingdomColor'] ?>" ]);
 		LatLngList.push(new google.maps.LatLng (<?=$location->lat ?>, <?=$location->lng ?>));
 	<?php endif ; ?>
 	<?php endforeach ; ?>

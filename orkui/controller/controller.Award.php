@@ -65,20 +65,19 @@ class Controller_Award extends Controller
 	private function handle_action($action, $route)
 	{
 		$this->request->save('Award_addawards', true);
-		$r = array('Status' => 0);
 		if (!isset($this->session->user_id)) {
 			header('Location: ' . UIR . $route);
 		} else {
 			if ($action == 'addaward' && $this->is_request_valid()) {
 				$r = $this->add_award();
-			}
 
-			if ($r['Status'] == 0) {
-				$this->handle_success();
-			} else if ($r['Status'] == 5) {
-				header('Location: ' . UIR . $route);
-			} else {
-				$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
+				if ($r['Status'] == 0) {
+					$this->handle_success();
+				} else if ($r['Status'] == 5) {
+					header('Location: ' . UIR . $route);
+				} else {
+					$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
+				}
 			}
 		}
 	}
@@ -100,11 +99,12 @@ class Controller_Award extends Controller
 	}
 	private function add_award()
 	{
+		$isOfficer = $this->request->Award_addawards->awardtype === 'officers';
 		return $this->Player->add_player_award(array(
 			'Token' => $this->session->token,
 			'RecipientId' => $this->request->Award_addawards->MundaneId,
 			'KingdomAwardId' => $this->request->Award_addawards->AwardId,
-			'Rank' => $this->request->Award_addawards->Rank,
+			'Rank' => $isOfficer ? null : $this->request->Award_addawards->Rank,
 			'Date' => $this->request->Award_addawards->Date,
 			'GivenById' => $this->request->Award_addawards->GivenById,
 			'Note' => $this->request->Award_addawards->Note,
@@ -137,5 +137,27 @@ class Controller_Award extends Controller
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Id'] = $id;
+
+		// Preload Kingdom and Park Monarch/Regent for GivenBy autocomplete
+		$preloadOfficers = array();
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $officer) {
+				if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+					$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']);
+				}
+			}
+		}
+		if (valid_id($this->session->park_id)) {
+			$parkOfficers = $this->Park->get_officers($this->session->park_id, $this->session->token);
+			if (is_array($parkOfficers)) {
+				foreach ($parkOfficers as $officer) {
+					if (in_array($officer['OfficerRole'], array('Monarch', 'Regent')) && $officer['MundaneId'] > 0) {
+						$preloadOfficers[] = array('MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']);
+					}
+				}
+			}
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
 	}
 }

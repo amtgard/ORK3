@@ -19,8 +19,11 @@ class Report  extends Ork3 {
 	public function HeraldryReport($request) {
 		// WithMissingHeraldries [No, Yes, Only]
 		$response = array();
+
+		// Unified handling for all heraldry types
 		$table = strtolower($request['Type']);
 		$$table = new yapo($this->db, DB_PREFIX . $table);
+		
 		if ($request['WithMissingHeraldries'] == 'No')
 			$$table->has_heraldry = 1;
 		if ($request['WithMissingHeraldries'] == 'Only')
@@ -31,17 +34,38 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) {
 			$$table->park_id = $request['ParkId'];
 		}
+		
 		if ($$table->find()) {
 			$table_id = $table.'_id';
 			do {
+				if ($request['Type'] == 'Mundane' && $$table->suspended == 1) {
+					continue;
+				}
+				if ($request['Type'] == 'Park' && $$table->active == 'Retired') {
+					continue;
+				}
+				$last_signin = null;
+				
+				// Calculate LastSignin for Mundane types
+				if ($request['Type'] == 'Mundane') {
+					$sql = "SELECT MAX(att.date) as last_signin FROM " . DB_PREFIX . "attendance att WHERE att.mundane_id = '" . mysql_real_escape_string($$table->mundane_id) . "'";
+					$r = $this->db->query($sql);
+					if ($r && $r->size() > 0) {
+						$r->next();
+						$last_signin = $r->last_signin;
+					}
+				}
+				
 				$response[] = array(
-						'HasHeraldry' => $$table->has_heraldry,
-						'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array( 'Type' => ($request['Type']=='Mundane'?'Player':$request['Type']), 'Id' => $$table->$table_id )),
-						'Name' => $request['Type']=='Mundane'?$$table->persona:$$table->name,
-						'Url' => UIR . ($request['Type']=='Mundane'?'Player':$request['Type']) .'/index/' . $$table->$table_id
-					);
+					'HasHeraldry' => $$table->has_heraldry,
+					'HeraldryUrl' => Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => ($request['Type'] == 'Mundane' ? 'Player' : $request['Type']), 'Id' => $$table->$table_id)),
+					'Name' => ($request['Type'] == 'Mundane') ? $$table->persona : $$table->name,
+					'Url' => UIR . ($request['Type'] == 'Mundane' ? 'Player' : $request['Type']) . '/index/' . $$table->$table_id,
+					'LastSignin' => $last_signin
+				);
 			} while ($$table->next());
 		}
+		
 		return $response;
 	}
 
@@ -310,6 +334,79 @@ class Report  extends Ork3 {
 						'EnteredBy' => $r->by_whom_persona,
 						'EnteredById' => $r->by_whom_id
 					);
+			}
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
+	public function CustomAwards($request) {
+
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+
+		$location_clause = '';
+		$order = '';
+		if (valid_id($request['KingdomId'])) {
+			$location_clause = " and m.kingdom_id = " . intval($request['KingdomId']);
+		} else {
+			$order = "k.name, ";
+		}
+		if (valid_id($request['ParkId'])) {
+			$location_clause = " and m.park_id = " . intval($request['ParkId']);
+		}
+
+		$past_year = date("Y-m-d", strtotime("-1 year"));
+
+		$sql = "select
+				distinct p.park_id, p.name as park_name,
+				k.kingdom_id, k.name as kingdom_name,
+				m.persona, m.mundane_id,
+				ma.custom_name, ma.date, ma.note,
+				gbm.mundane_id as given_by_id, gbm.persona as given_by_persona
+			from " . DB_PREFIX . "awards ma
+				left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
+				left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+				left join " . DB_PREFIX . "mundane m on m.mundane_id = ma.mundane_id
+				left join " . DB_PREFIX . "mundane gbm on gbm.mundane_id = ma.given_by_id
+				left join " . DB_PREFIX . "park p on p.park_id = m.park_id
+				left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
+			where ma.custom_name is not null
+				and ma.custom_name != ''
+				and (ma.revoked = 0 or ma.revoked is null)
+				and (a.is_ladder = 0 or a.is_ladder is null)
+				and m.active = 1
+				$location_clause
+				and exists (
+					select 1 from " . DB_PREFIX . "attendance att
+					where att.mundane_id = m.mundane_id
+						and att.date > '$past_year'
+				)
+			order by $order p.name, m.persona, ma.date
+		";
+
+		logtrace("CustomAwards", $sql);
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false && $r->size() > 0) {
+			$response['Awards'] = array();
+			while ($r->next()) {
+				$response['Awards'][] = array(
+					'MundaneId' => $r->mundane_id,
+					'Persona' => $r->persona,
+					'CustomAwardName' => $r->custom_name,
+					'Date' => $r->date,
+					'GivenById' => $r->given_by_id,
+					'GivenBy' => $r->given_by_persona,
+					'Note' => $r->note,
+					'ParkId' => $r->park_id,
+					'KingdomId' => $r->kingdom_id,
+					'ParkName' => $r->park_name,
+					'KingdomName' => $r->kingdom_name
+				);
 			}
 			$response['Status'] = Success();
 		} else {
@@ -905,6 +1002,7 @@ class Report  extends Ork3 {
 			$order_by = 'duespaid desc,'.$order_by;
 		}
 		$select_list[] = 'k.parent_kingdom_id';
+		$select_list[] = 'MAX(att.date) as last_sign_in';
 		$select_list = array_merge($select_list, array());
 		if (strlen($request['Token']) > 0
 				&& ($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -918,6 +1016,7 @@ class Report  extends Ork3 {
 						LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
 						LEFT JOIN " . DB_PREFIX . "park p on m.park_id = p.park_id
 						left join " . DB_PREFIX . "mundane suspended_by on m.suspended_by_id = suspended_by.mundane_id
+						left join " . DB_PREFIX . "attendance att on att.mundane_id = m.mundane_id
 						$duespaid_clause
 						$join_clause
 					".(count($restrict_clause)?"where":"")."
@@ -957,6 +1056,7 @@ class Report  extends Ork3 {
 								'UnitRole' => $r->unit_role,
 								'UnitTitle' => $r->unit_title,
 								'PenaltyBox' => $r->penalty_box,
+								'LastSignIn' => $r->last_sign_in,
 								'Displayable' => $restricted_access||$r->restricted==0
 							);
 				}
@@ -985,10 +1085,16 @@ class Report  extends Ork3 {
 			$per_period = date("Y-m-d", strtotime("-$request[AverageMonths] month"));
 		}
 
+		$monthly_period = date("Y-m-d", strtotime("-1 year"));
+		$escaped_kingdom_id = mysql_real_escape_string($request['KingdomId']);
+
 		$sql = "select
-						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name, p.has_heraldry
+						count(mundanesbyweek.mundane_id) attendance_count, p.park_id, p.name, p.has_heraldry,
+						ifnull(monthly_attendance.monthly_attendance_count, 0) monthly_count,
+						pt.title, p.parktitle_id
 					from
 						" . DB_PREFIX . "park p
+							left join " . DB_PREFIX . "parktitle pt on pt.parktitle_id = p.parktitle_id
 							left join
 								(select
 										a.mundane_id, a.date_week3 as week, a.park_id
@@ -998,11 +1104,28 @@ class Report  extends Ork3 {
 										$native_populace
 										$waivered_peeps
 										date > '$per_period'
-										and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+										and a.kingdom_id = '$escaped_kingdom_id'
 										and a.mundane_id > 0
 									group by date_year, date_week3, mundane_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
-					where p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "' and p.active = 'Active'
+							left join
+								(select
+										count(mundanesbymonth.mundane_id) monthly_attendance_count, mundanesbymonth.park_id
+									from
+										(select
+												a.mundane_id, a.date_month as month, a.park_id
+											from " . DB_PREFIX . "attendance a
+												left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+											where
+												$native_populace
+												$waivered_peeps
+												date > '$monthly_period'
+												and a.kingdom_id = '$escaped_kingdom_id'
+												and a.mundane_id > 0
+											group by date_month, mundane_id) mundanesbymonth
+									group by mundanesbymonth.park_id) monthly_attendance
+								on p.park_id = monthly_attendance.park_id
+					where p.kingdom_id = '$escaped_kingdom_id' and p.active = 'Active'
 					group by park_id
 					order by name";
 		logtrace('Report: GetKingdomParkAverages', array($request,$sql));
@@ -1016,7 +1139,7 @@ class Report  extends Ork3 {
 		} else {
 			$report = array();
 			while ($r->next()) {
-				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id, 'HasHeraldry' => $r->has_heraldry );
+				$report[] = array( 'AttendanceCount' => $r->attendance_count, 'MonthlyCount' => $r->monthly_count, 'ParkId' => $r->park_id, 'ParkName' => $r->name, 'Title' => $r->title, 'ParkTitleId' => $r->parktitle_id, 'HasHeraldry' => $r->has_heraldry );
 			}
 			$response['KingdomParkAveragesSummary'] = $report;
 		}

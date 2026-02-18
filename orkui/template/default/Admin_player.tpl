@@ -4,14 +4,26 @@
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Player['HasHeraldry']>0?$Player['Heraldry']:HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<span style='position:relative;display:inline-block;'>
+					<img class='heraldry-img' src='<?=($Player['HasHeraldry']>0?$Player['Heraldry']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
+<?php if ($Player['HasHeraldry'] > 0 && ($this->__session->user_id == $Player['MundaneId'] || Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT))) : ?>
+					<button type='button' onclick="if(confirm('This will remove the image. This cannot be undone. Continue?')){var f=document.createElement('form');f.method='post';f.action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/removeheraldry';document.body.appendChild(f);f.submit();}" style='position:absolute;top:0;right:0;line-height:1;padding:2px 5px;cursor:pointer;'>&times;</button>
+<?php endif; ?>
+				</span>
+				<br/>
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>
 		<div>
 			<span>Image:</span>
 			<span>
-				<img class='heraldry-img' src='<?=$Player['HasImage']>0?$Player['Image']:HTTP_PLAYER_HERALDRY . '000000.jpg' ?>' />
+				<span style='position:relative;display:inline-block;'>
+					<img class='heraldry-img' src='<?=($Player['HasImage']>0?$Player['Image']:HTTP_PLAYER_HERALDRY . '000000.jpg') . '?t=' . time() ?>' />
+<?php if ($Player['HasImage'] > 0 && ($this->__session->user_id == $Player['MundaneId'] || Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT))) : ?>
+					<button type='button' onclick="if(confirm('This will remove the image. This cannot be undone. Continue?')){var f=document.createElement('form');f.method='post';f.action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/removepicture';document.body.appendChild(f);f.submit();}" style='position:absolute;top:0;right:0;line-height:1;padding:2px 5px;cursor:pointer;'>&times;</button>
+<?php endif; ?>
+				</span>
+				<br/>
 				<input type='file' class='restricted-image-type' name='PlayerImage' id='PlayerImage' />
 			</span>
 		</div>
@@ -478,7 +490,7 @@
 			change: function (e, ui) {
 				if (ui.item == null) {
 					showLabel('#GivenBy',null);
-					$('#MundaneId').val(null);
+					$('#GivenById').val('');
 				}
 				return false;
 			}
@@ -486,8 +498,19 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		var givenBySelected = false;
+		var preloadedOfficers = [
+<?php if (is_array($PreloadOfficers)) foreach ($PreloadOfficers as $officer) : ?>
+			{label: <?=json_encode($officer['Persona'] . ' (' . $officer['Role'] . ')') ?>, value: <?=intval($officer['MundaneId']) ?>},
+<?php endforeach; ?>
+		];
 		$( "#GivenBy" ).autocomplete({
+			minLength: 0,
 			source: function( request, response ) {
+				if (request.term === '') {
+					response(preloadedOfficers.concat([{label: '...or start typing to search.', value: -1}]));
+					return;
+				}
 				park_id = $('#ParkId').val();
 				$.getJSON(
 					"<?=HTTP_SERVICE ?>Search/SearchService.php",
@@ -508,31 +531,43 @@
 				);
 			},
 			focus: function( event, ui ) {
+				if (ui.item.value === -1) return false;
 				return showLabel('#GivenBy', ui);
-			}, 
+			},
 			delay: 250,
 			select: function (e, ui) {
+				if (ui.item.value === -1) return false;
 				showLabel('#GivenBy', ui);
-				$('input[name=MundaneId]').val(ui.item.value);
+				$('#GivenById').val(ui.item.value);
+				givenBySelected = true;
+				checkRequiredFields();
 				return false;
 			},
 			change: function (e, ui) {
-				if (ui.item == null) {
+				if (!givenBySelected) {
 					showLabel('#GivenBy',null);
-					$('input[name=MundaneId]').val(null);
+					$('#GivenById').val('');
 				}
+				givenBySelected = false;
+				checkRequiredFields();
 				return false;
 			}
 		}).focus(function() {
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		checkRequiredFields();
 	});
-	
+
 	function setSideEffects(details) {
 		$( '#KingdomId' ).val(details['KingdomId']);
 		$( '#ParkId' ).val(details['ParkId']);
 		$( '#EventId' ).val(details['EventId']);
+	}
+	function checkRequiredFields() {
+		var hasAward = $('#AwardId').val() !== '' && $('#AwardId').val() !== null;
+		var hasGivenBy = $('#GivenById').val() !== '' && $('#GivenById').val() !== null && $('#GivenById').val() > 0;
+		$('#AddAward').prop('disabled', !(hasAward && hasGivenBy));
 	}
 </script>
 
@@ -616,9 +651,10 @@
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' id='Add' value='Add' /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
+			<span><input type='submit' id='AddAward' value='Add' disabled /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
 		</div>
-		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=isset($Admin_player)?$Admin_player['MundaneId']:0 ?>' />
+		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Player['MundaneId'] ?>' />
+		<input type='hidden' id='GivenById' name='GivenById' value='<?=isset($Admin_player)?$Admin_player['GivenById']:'' ?>' />
 		<input type='hidden' id='ParkId' name='ParkId' value='<?=isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId'] ?>' />
 		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=isset($Admin_player)?$Admin_player['KingdomId']:$Player['KingdomId'] ?>' />
 		<input type='hidden' id='EventId' name='EventId' value='<?=isset($Admin_player)?$Admin_player['EventId']:$Player['EventId'] ?>' />
@@ -648,6 +684,7 @@
 				$( '#AwardNameField' ).show();
 			else
 				$( '#AwardNameField' ).hide();
+			checkRequiredFields();
 		})
 		$( '[name="awardtype"]'  ).change(function() {
 			if($(this).val() == 'officers'){
@@ -668,7 +705,7 @@
 	function Reset() {
 		$( '#award-editor h3' ).text('Add Award');
 		$( '#award-editor form' ).attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/addaward' );
-		$( '#Add' ).val('Add');
+		$( '#AddAward' ).val('Add');
 		$( '#Cancel' ).hide();
 		$( '#AwardId' ).val('');
 		$( '#Rank' ).val('');
@@ -676,10 +713,12 @@
 		$( '#GivenBy' ).val('');
 		$( '#GivenAt' ).val('');
 		$( '#Note' ).val('');
-		$( '#MundaneId' ).val('');
+		$( '#MundaneId' ).val('<?=$Player['MundaneId'] ?>');
+		$( '#GivenById' ).val('');
 		$( '#ParkId' ).val('');
 		$( '#KingdomId' ).val('');
 		$( '#EventId' ).val('');
+		checkRequiredFields();
 	}
 
 	function EditAward(id) {
@@ -688,7 +727,7 @@
 		$( '#award-editor h3' ).text('Update Award');
 		$( '#award-editor form' ).attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/updateaward/' + id.toString() );
 		$( '#Cancel' ).show();
-		$( '#Add' ).val('Update');
+		$( '#AddAward' ).val('Update');
 		$.getJSON(
 			"<?=HTTP_SERVICE ?>Search/SearchService.php",
 			{
@@ -702,7 +741,7 @@
 				$( '#GivenBy' ).val(data['GivenBy']);
 				$( '#GivenAt' ).val((data['AtEventId'] > 0)?(data['EventName']):((data['AtParkId']>0)?data['ParkName']:data['KingdomName']));
 				$( '#Note' ).val(data['Note']);
-				$( '#MundaneId' ).val(data['GivenById']);
+				$( '#GivenById' ).val(data['GivenById']);
 				$( '#ParkId' ).val(data['ParkId']);
 				$( '#KingdomId' ).val(data['KingdomId']);
 				$( '#EventId' ).val(data['EventId']);

@@ -21,11 +21,13 @@
 				$( '#AwardNameField' ).show();
 			else
 				$( '#AwardNameField' ).hide();
+			checkRequiredFields();
 		});
 		$( '[name="awardtype"]'  ).change(function() {
 			if($(this).val() == 'officers'){
 				$( '#AwardNameField' ).hide();
 				$( '#AwardRankField' ).hide();
+				$( '#Rank' ).val('');
 			}else{
 				$( '#AwardRankField' ).show();
 			}
@@ -91,8 +93,18 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		var preloadedGivenByOfficers = [
+<?php if (is_array($PreloadOfficers)) foreach ($PreloadOfficers as $officer) : ?>
+			{label: <?=json_encode($officer['Persona'] . ' (' . $officer['Role'] . ')') ?>, value: <?=intval($officer['MundaneId']) ?>},
+<?php endforeach; ?>
+		];
 		$( "#GivenBy" ).autocomplete({
+			minLength: 0,
 			source: function( request, response ) {
+				if (request.term === '') {
+					response(preloadedGivenByOfficers.concat([{label: '...or start typing to search.', value: -1}]));
+					return;
+				}
 				park_id = $('#ParkId').val();
 				$.getJSON(
 					"<?=HTTP_SERVICE ?>Search/SearchService.php",
@@ -113,12 +125,15 @@
 				);
 			},
 			focus: function( event, ui ) {
+				if (ui.item.value === -1) return false;
 				return showLabel('#GivenBy', ui);
-			}, 
+			},
 			delay: 250,
 			select: function (e, ui) {
+				if (ui.item.value === -1) return false;
 				showLabel('#GivenBy', ui);
 				$('#GivenById').val(ui.item.value);
+				checkRequiredFields();
 				return false;
 			},
 			change: function (e, ui) {
@@ -126,12 +141,13 @@
 					showLabel('#GivenBy',null);
 					$('#GivenById').val(null);
 				}
+				checkRequiredFields();
 				return false;
 			}
 		}).focus(function() {
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
-		});		
+		});
 		$( "#GivenTo" ).autocomplete({
 			source: function( request, response ) {
 				park_id = $('#ParkId').val();
@@ -160,6 +176,7 @@
 			select: function (e, ui) {
 				showLabel('#GivenTo', ui);
 				$('#MundaneId').val(ui.item.value);
+				checkRequiredFields();
 				return false;
 			},
 			change: function (e, ui) {
@@ -167,17 +184,25 @@
 					showLabel('#GivenTo',null);
 					$('#MundaneId').val(null);
 				}
+				checkRequiredFields();
 				return false;
 			}
 		}).focus(function() {
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		checkRequiredFields();
 	});
 	function setSideEffects(details) {
 		$( '#KingdomId' ).val(details['KingdomId']);
 		$( '#ParkId' ).val(details['ParkId']);
 		$( '#EventId' ).val(details['EventId']);
+	}
+	function checkRequiredFields() {
+		var hasAward = $('#AwardId').val() !== '' && $('#AwardId').val() !== null;
+		var hasRecipient = $('#MundaneId').val() !== '' && $('#MundaneId').val() !== null && $('#MundaneId').val() > 0;
+		var hasGivenBy = $('#GivenById').val() !== '' && $('#GivenById').val() !== null && $('#GivenById').val() > 0;
+		$('#Add').prop('disabled', !(hasAward && hasRecipient && hasGivenBy));
 	}
 </script>
 
@@ -233,7 +258,7 @@
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' id='Add' value='Add' /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
+			<span><input type='submit' id='Add' value='Add' disabled /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
 		</div>
 		<input type='hidden' id='GivenById' name='GivenById' value='<?=$Award_addawards['GivenById'] ?>' />
 		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Award_addawards['MundaneId'] ?>' />

@@ -1,5 +1,9 @@
 <?php global $Session ?>
 
+<style>
+.ui-autocomplete-separator { padding: 2px 12px; cursor: default; pointer-events: none; color: #999; font-size: 11px; }
+</style>
+
 <script type='text/javascript'>
 
 	$(document).ready(function() {
@@ -101,34 +105,54 @@
 			$('#quick-add-form').submit();
 		});
 
-		$( "#PlayerName" ).autocomplete({
+		var playerAC = $( "#PlayerName" ).autocomplete({
 			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				kingdom_id = $('#KingdomId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id,
-						kingdom_id: kingdom_id,
-                        limit: 15
-					},
-					function( data ) {
+				var park_id = $('#ParkId').val();
+				var kingdom_id = $('#KingdomId').val();
+				var search = request.term;
+				var svcUrl = "<?=HTTP_SERVICE ?>Search/SearchService.php";
+
+				if (!park_id || park_id == '0') {
+					$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 }, function(data) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: { MundaneId: val.MundaneId, PenaltyBox: val.PenaltyBox } });
+							suggestions.push({label: val.Persona, value: { MundaneId: val.MundaneId, PenaltyBox: val.PenaltyBox }});
 						});
 						response(suggestions);
+					});
+					return;
+				}
+
+				$.when(
+					$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, park_id: park_id, kingdom_id: kingdom_id, limit: 8 }),
+					$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 })
+				).done(function(parkRes, kingdomRes) {
+					var localIds = {};
+					var suggestions = [];
+					$.each(parkRes[0], function(i, val) {
+						localIds[val.MundaneId] = true;
+						suggestions.push({label: val.Persona, value: { MundaneId: val.MundaneId, PenaltyBox: val.PenaltyBox }});
+					});
+					var outsiders = [];
+					$.each(kingdomRes[0], function(i, val) {
+						if (!localIds[val.MundaneId]) {
+							var abbr = (val.KAbbr && val.PAbbr) ? val.KAbbr + ':' + val.PAbbr : val.ParkName;
+							outsiders.push({label: val.Persona + ' (' + abbr + ')', value: { MundaneId: val.MundaneId, PenaltyBox: val.PenaltyBox }});
+						}
+					});
+					if (suggestions.length > 0 && outsiders.length > 0) {
+						suggestions.push({label: '', value: null, separator: true});
 					}
-				);
+					response(suggestions.concat(outsiders));
+				});
 			},
 			focus: function( event, ui ) {
+				if (!ui.item.value) return false;
 				return showLabel('#PlayerName', ui);
 			},
 			delay: 250,
 			select: function (e, ui) {
+				if (!ui.item.value) return false;
 				showLabel('#PlayerName', ui);
 				$('#MundaneId').val(ui.item.value.MundaneId);
 				if (ui.item.value.PenaltyBox == "0") {
@@ -149,6 +173,12 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		playerAC.data('autocomplete')._renderItem = function(ul, item) {
+			if (item.separator) {
+				return $('<li class="ui-autocomplete-separator">').text('── Kingdom ──').appendTo(ul);
+			}
+			return $('<li></li>').data('item.autocomplete', item).append($('<a>').text(item.label)).appendTo(ul);
+		};
 	});
 </script>
 <div class='info-container' id='event-editor'>
