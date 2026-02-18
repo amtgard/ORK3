@@ -1060,7 +1060,7 @@ class Report  extends Ork3 {
 										date > '$per_period'
 										and a.kingdom_id = '$escaped_kingdom_id'
 										and a.mundane_id > 0
-									group by date_year, date_week3, mundane_id) mundanesbyweek
+									group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
 					where p.kingdom_id = '$escaped_kingdom_id' and p.active = 'Active'
 					group by park_id
@@ -1157,7 +1157,7 @@ class Report  extends Ork3 {
 									date >= '$escaped_start'
 									and date <= '$escaped_end'
 									and a.mundane_id > 0
-								group by date_year, date_week3, mundane_id) mundanesbyweek
+								group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 							on p.park_id = mundanesbyweek.park_id
 				where p.active = 'Active'
 					and k.active = 'Active'
