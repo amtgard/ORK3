@@ -45,7 +45,47 @@ class Controller_Playernew extends Controller {
 		$this->load_model('Kingdom');
 
 		$params = explode('/',$id);
-		$id = $params[0];
+		$id       = $params[0];
+		$action   = isset($params[1]) ? $params[1] : '';
+		$roastbeef = isset($params[2]) ? $params[2] : '';
+
+		// Handle POST actions — redirect back to Playernew on completion
+		if (strlen($action) > 0) {
+			$this->request->save('Playernew_index', true);
+			$r = array('Status' => 0);
+			if (!isset($this->session->user_id)) {
+				header('Location: ' . UIR . "Login/login/Playernew/index/$id");
+				exit;
+			} else {
+				switch ($action) {
+					case 'addrecommendation':
+						$r = $this->Player->add_player_recommendation(array(
+							'Token'          => $this->session->token,
+							'MundaneId'      => $id,
+							'KingdomAwardId' => $this->request->Playernew_index->KingdomAwardId,
+							'Rank'           => $this->request->Playernew_index->Rank,
+							'Reason'         => $this->request->Playernew_index->Reason
+						));
+						break;
+					case 'deleterecommendation':
+						$r = $this->Player->delete_player_recommendation(array(
+							'Token'             => $this->session->token,
+							'RecommendationsId' => $roastbeef,
+							'RequestedBy'       => $this->session->user_id
+						));
+						break;
+				}
+				if ($r['Status'] == 0) {
+					$this->data['Message'] = $r['Detail'] ? $r['Detail'] : 'Updated successfully.';
+					$this->request->clear('Playernew_index');
+				} else if ($r['Status'] == 5) {
+					header('Location: ' . UIR . "Login/login/Playernew/index/$id");
+					exit;
+				} else {
+					$this->data['Error'] = $r['Error'] . ': ' . $r['Detail'];
+				}
+			}
+		}
 
 		$this->data['LoggedIn'] = isset($this->session->user_id);
 		$this->data['KingdomId'] = $this->session->kingdom_id;
@@ -58,6 +98,30 @@ class Controller_Playernew extends Controller {
     	$this->data['Dues'] = $this->Player->get_dues($id, 1, true);
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
 		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0));
+
+		// Current officer positions for this player
+		global $DB;
+		$officerSql = "SELECT o.role, o.park_id,
+			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park') ELSE 'Kingdom' END AS entity_type,
+			CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
+			FROM ork_officer o
+			LEFT JOIN ork_kingdom k ON o.kingdom_id = k.kingdom_id
+			LEFT JOIN ork_park p ON o.park_id = p.park_id AND o.park_id > 0
+			LEFT JOIN ork_parktitle pt ON p.parktitle_id = pt.parktitle_id
+			WHERE o.mundane_id = " . (int)$id . "
+			ORDER BY o.park_id DESC, o.role";
+		$officerResult = $DB->DataSet($officerSql);
+		$officerRoles = array();
+		if ($officerResult->Size() > 0) {
+			while ($officerResult->Next()) {
+				$officerRoles[] = array(
+					'role'        => $officerResult->role,
+					'entity_type' => $officerResult->entity_type,
+					'entity_name' => $officerResult->entity_name,
+				);
+			}
+		}
+		$this->data['OfficerRoles'] = $officerRoles;
 
 		// Pre-compute summary stats
 		$this->data['Stats'] = array(

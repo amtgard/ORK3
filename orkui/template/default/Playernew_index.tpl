@@ -20,6 +20,18 @@
 	$pronounDisplay = (!empty($Player['PronounCustomText'])) ? $Player['PronounCustomText'] : $Player['PronounText'];
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 	$imageUrl = $Player['HasImage'] > 0 ? $Player['Image'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
+
+	$knightAwardIds = array(17, 18, 19, 20, 245);
+	$isKnight = false;
+	if (is_array($Details['Awards'])) {
+		foreach ($Details['Awards'] as $a) {
+			if (in_array((int)$a['AwardId'], $knightAwardIds)) {
+				$isKnight = true;
+				break;
+			}
+		}
+	}
+	$beltIconUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/assets/images/belt.svg';
 ?>
 
 <style type="text/css">
@@ -77,6 +89,20 @@
 	margin: 0 0 2px 0;
 	font-weight: 700;
 	line-height: 1.2;
+	background-color: transparent;
+	border: none;
+	text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+	padding: 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.pn-belt-icon {
+	width: 20px;
+	height: 27px;
+	flex-shrink: 0;
+	filter: brightness(0) invert(1);
+	opacity: 0.9;
 }
 .pn-real-name {
 	color: rgba(255,255,255,0.7);
@@ -123,6 +149,7 @@
 .pn-badge-blue   { background: #bee3f8; color: #2a4365; }
 .pn-badge-gray   { background: #e2e8f0; color: #4a5568; }
 .pn-badge-purple { background: #e9d8fd; color: #553c9a; }
+.pn-badge-gold   { background: #fefcbf; color: #744210; }
 
 .pn-suspended-detail {
 	color: rgba(255,255,255,0.8);
@@ -226,8 +253,12 @@
 	color: #4a5568;
 	text-transform: uppercase;
 	letter-spacing: 0.6px;
-	padding-bottom: 8px;
+	padding: 0 0 8px 0;
+	background-color: transparent;
+	border: none;
 	border-bottom: 1px solid #edf2f7;
+	text-shadow: none;
+	border-radius: 0;
 }
 .pn-detail-row {
 	display: flex;
@@ -423,6 +454,46 @@
 	font-style: italic;
 }
 
+/* Pagination */
+.pn-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 0 0 0;
+	margin-top: 6px;
+	border-top: 1px solid #edf2f7;
+}
+.pn-pagination-info {
+	color: #a0aec0;
+	font-size: 12px;
+}
+.pn-pagination-controls {
+	display: flex;
+	gap: 3px;
+	align-items: center;
+}
+.pn-page-btn {
+	min-width: 28px;
+	height: 28px;
+	border: 1px solid #e2e8f0;
+	border-radius: 4px;
+	background: #fff;
+	color: #4a5568;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	padding: 0 6px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.1s, border-color 0.1s;
+	line-height: 1;
+}
+.pn-page-btn:hover:not(:disabled) { background: #edf2f7; border-color: #cbd5e0; }
+.pn-page-btn.pn-page-active { background: #2c5282; color: #fff; border-color: #2c5282; }
+.pn-page-btn:disabled { opacity: 0.4; cursor: default; }
+.pn-page-ellipsis { color: #a0aec0; padding: 0 3px; font-size: 12px; line-height: 28px; }
+
 /* Recommendation form in modal */
 .pn-rec-field {
 	margin-bottom: 12px;
@@ -453,16 +524,132 @@
 	box-shadow: 0 0 0 2px rgba(49,130,206,0.15);
 }
 
-/* Delete link */
+/* Delete link + inline confirm */
 .pn-delete-link {
 	color: #e53e3e;
 	text-decoration: none;
 	font-size: 12px;
 	font-weight: 600;
 }
-.pn-delete-link:hover {
+.pn-delete-link:hover { text-decoration: underline; }
+.pn-delete-link.pn-hidden { display: none; }
+.pn-delete-confirm {
+	display: none;
+	align-items: center;
+	gap: 5px;
+	font-size: 12px;
+	color: #4a5568;
+	white-space: nowrap;
+}
+.pn-delete-confirm.pn-active { display: inline-flex; }
+.pn-delete-yes, .pn-delete-no {
+	background: none;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 600;
 	text-decoration: underline;
 }
+.pn-delete-yes { color: #e53e3e; }
+.pn-delete-no  { color: #718096; }
+
+/* Custom Modal */
+.pn-overlay {
+	position: fixed;
+	top: 0; left: 0; right: 0; bottom: 0;
+	background: rgba(0,0,0,0.5);
+	z-index: 10000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.2s ease;
+}
+.pn-overlay.pn-open {
+	opacity: 1;
+	pointer-events: auto;
+}
+.pn-modal-box {
+	background: #fff;
+	border-radius: 12px;
+	width: 500px;
+	max-width: calc(100vw - 40px);
+	box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+	transform: translateY(-16px) scale(0.98);
+	opacity: 0;
+	transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.pn-overlay.pn-open .pn-modal-box {
+	transform: translateY(0) scale(1);
+	opacity: 1;
+}
+.pn-modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 18px 20px;
+	border-bottom: 1px solid #e2e8f0;
+}
+.pn-modal-title {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 700;
+	color: #2d3748;
+	background: none;
+	border: none;
+	text-shadow: none;
+	padding: 0;
+	border-radius: 0;
+}
+.pn-modal-close-btn {
+	background: none;
+	border: none;
+	width: 30px;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	cursor: pointer;
+	color: #a0aec0;
+	font-size: 20px;
+	padding: 0;
+	line-height: 1;
+	transition: background 0.15s, color 0.15s;
+}
+.pn-modal-close-btn:hover { background: #f7fafc; color: #4a5568; }
+.pn-modal-body { padding: 20px; }
+.pn-modal-footer {
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+}
+.pn-btn-primary { background: #2c5282; color: #fff; }
+.pn-btn-primary:hover { background: #2a4a7f; }
+.pn-btn-secondary { background: #edf2f7; color: #4a5568; }
+.pn-btn-secondary:hover { background: #e2e8f0; }
+.pn-form-error {
+	background: #fff5f5;
+	border: 1px solid #fed7d7;
+	border-radius: 6px;
+	padding: 9px 12px;
+	color: #c53030;
+	font-size: 13px;
+	margin-bottom: 14px;
+	display: none;
+}
+.pn-char-count {
+	display: block;
+	text-align: right;
+	font-size: 11px;
+	color: #a0aec0;
+	margin-top: 3px;
+}
+.pn-char-count.pn-char-warn { color: #e53e3e; }
 
 /* Responsive */
 @media (max-width: 768px) {
@@ -524,7 +711,12 @@
 			<img src="<?= $imageUrl ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
 		</div>
 		<div class="pn-hero-info">
-			<h1 class="pn-persona"><?= htmlspecialchars($Player['Persona']) ?></h1>
+			<h1 class="pn-persona">
+				<?= htmlspecialchars($Player['Persona']) ?>
+				<?php if ($isKnight): ?>
+					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
+				<?php endif; ?>
+			</h1>
 			<?php if (strlen($Player['GivenName']) > 0 || strlen($Player['Surname']) > 0): ?>
 				<div class="pn-real-name"><?= htmlspecialchars(trim($Player['GivenName'] . ' ' . $Player['Surname'])) ?></div>
 			<?php endif; ?>
@@ -557,6 +749,11 @@
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
 				<?php else: ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Lapsed</span>
+				<?php endif; ?>
+				<?php if (!empty($OfficerRoles)): ?>
+					<?php foreach ($OfficerRoles as $office): ?>
+						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>
+					<?php endforeach; ?>
 				<?php endif; ?>
 			</div>
 			<?php if ($isSuspended): ?>
@@ -652,6 +849,14 @@
 			</div>
 		</div>
 
+		<!-- Heraldry -->
+		<div class="pn-card">
+			<h4><i class="fas fa-image"></i> Heraldry</h4>
+			<div style="text-align: center;">
+				<img src="<?= $heraldryUrl ?>" alt="Heraldry" style="max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain;" />
+			</div>
+		</div>
+
 		<!-- Qualifications -->
 		<div class="pn-card">
 			<h4><i class="fas fa-certificate"></i> Qualifications</h4>
@@ -734,37 +939,6 @@
 			<?php endif; ?>
 		</div>
 
-		<!-- Classes -->
-		<div class="pn-card">
-			<h4><i class="fas fa-shield-alt"></i> Classes</h4>
-			<?php
-				$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
-			?>
-			<?php if (count($classList) > 0): ?>
-				<table class="pn-mini-table" id="pn-classes-table">
-					<thead>
-						<tr>
-							<th>Class</th>
-							<th style="text-align:right">Credits</th>
-							<th style="text-align:right">Level</th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ($classList as $detail): ?>
-							<?php $totalCredits = $detail['Credits'] + (isset($Player_index) ? $Player_index['Class_' . $detail['ClassId']] : $detail['Reconciled']); ?>
-							<tr>
-								<td><?= $detail['ClassName'] ?></td>
-								<td style="text-align:right" class="pn-credits"><?= $totalCredits ?></td>
-								<td style="text-align:right" class="pn-level">-</td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-			<?php else: ?>
-				<div class="pn-empty">No class records</div>
-			<?php endif; ?>
-		</div>
-
 	</div>
 
 	<!-- ========== MAIN CONTENT (Tabbed) ========== -->
@@ -785,6 +959,9 @@
 				</li>
 				<li data-tab="history">
 					<i class="fas fa-history"></i> Historical <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
+				</li>
+				<li data-tab="classes">
+					<i class="fas fa-shield-alt"></i> Class Levels <span class="pn-tab-count">(<?= is_array($Details['Classes']) ? count($Details['Classes']) : 0 ?>)</span>
 				</li>
 			</ul>
 
@@ -966,7 +1143,14 @@
 									<?php if ($this->__session->user_id): ?>
 										<td>
 											<?php if ($can_delete_recommendation || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']): ?>
-												<a class="pn-delete-link pn-confirm-delete-rec" href="<?= UIR ?>Player/index/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>"><i class="fas fa-trash-alt"></i> Delete</a>
+												<span class="pn-delete-cell">
+												<a class="pn-delete-link pn-confirm-delete-rec" href="#"><i class="fas fa-trash-alt"></i> Delete</a>
+												<span class="pn-delete-confirm">
+													Delete?&nbsp;
+													<button class="pn-delete-yes" data-href="<?= UIR ?>Playernew/index/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">Yes</button>
+													&nbsp;<button class="pn-delete-no">No</button>
+												</span>
+											</span>
 											<?php endif; ?>
 										</td>
 									<?php endif; ?>
@@ -983,7 +1167,7 @@
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
 				<?php $notesList = is_array($Notes) ? $Notes : array(); ?>
 				<?php if (count($notesList) > 0): ?>
-					<table class="pn-table">
+					<table class="pn-table" id="pn-history-table">
 						<thead>
 							<tr>
 								<th>Note</th>
@@ -1006,56 +1190,182 @@
 				<?php endif; ?>
 			</div>
 
+			<!-- Class Levels Tab -->
+			<div class="pn-tab-panel" id="pn-tab-classes" style="display:none">
+				<?php $classList = is_array($Details['Classes']) ? $Details['Classes'] : array(); ?>
+				<?php if (count($classList) > 0): ?>
+					<table class="pn-table pn-sortable" id="pn-classes-table">
+						<thead>
+							<tr>
+								<th data-sorttype="text">Class</th>
+								<th data-sorttype="numeric" class="pn-col-numeric">Credits</th>
+								<th data-sorttype="numeric" class="pn-col-numeric">Level</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($classList as $detail): ?>
+								<?php $totalCredits = $detail['Credits'] + (isset($Player_index) ? $Player_index['Class_' . $detail['ClassId']] : $detail['Reconciled']); ?>
+								<tr>
+									<td><?= $detail['ClassName'] ?></td>
+									<td class="pn-col-numeric pn-credits"><?= $totalCredits ?></td>
+									<td class="pn-col-numeric pn-level">-</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php else: ?>
+					<div class="pn-empty">No class records</div>
+				<?php endif; ?>
+			</div>
+
 		</div>
 	</div>
 
 </div>
 
 <!-- =============================================
-     Recommendation Modal (hidden)
+     Recommendation Modal
      ============================================= -->
 <?php if ($LoggedIn): ?>
-<div id="pn-recommend-dialog" style="display:none" title="Recommend an Award">
-	<form id="pn-recommend-form" method="post" action="<?= UIR ?>Player/index/<?= $Player['MundaneId'] ?>/addrecommendation">
-		<div class="pn-rec-field">
-			<label for="pn-rec-award">Award</label>
-			<select name="KingdomAwardId" id="pn-rec-award">
-				<option value="">Select Award...</option>
-				<?= $AwardOptions ?>
-			</select>
+<div class="pn-overlay" id="pn-rec-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-award" style="margin-right:8px;color:#2c5282"></i>Recommend an Award</h3>
+			<button class="pn-modal-close-btn" id="pn-modal-close-btn" type="button">&times;</button>
 		</div>
-		<div class="pn-rec-field">
-			<label for="pn-rec-rank">Rank</label>
-			<select name="Rank" id="pn-rec-rank">
-				<option value="">Select...</option>
-				<option value="1">1st</option>
-				<option value="2">2nd</option>
-				<option value="3">3rd</option>
-				<option value="4">4th</option>
-				<option value="5">5th</option>
-				<option value="6">6th</option>
-				<option value="7">7th</option>
-				<option value="8">8th</option>
-				<option value="9">9th</option>
-				<option value="10">10th</option>
-			</select>
+		<div class="pn-modal-body">
+			<div class="pn-form-error" id="pn-rec-error"></div>
+			<form id="pn-recommend-form" method="post" action="<?= UIR ?>Playernew/index/<?= $Player['MundaneId'] ?>/addrecommendation">
+				<div class="pn-rec-field">
+					<label for="pn-rec-award">Award <span style="color:#e53e3e">*</span></label>
+					<select name="KingdomAwardId" id="pn-rec-award">
+						<option value="">Select award...</option>
+						<?= $AwardOptions ?>
+					</select>
+				</div>
+				<div class="pn-rec-field">
+					<label for="pn-rec-rank">Rank <span style="color:#a0aec0;font-weight:400;text-transform:none">(optional)</span></label>
+					<select name="Rank" id="pn-rec-rank">
+						<option value="">None</option>
+						<option value="1">1st</option>
+						<option value="2">2nd</option>
+						<option value="3">3rd</option>
+						<option value="4">4th</option>
+						<option value="5">5th</option>
+						<option value="6">6th</option>
+						<option value="7">7th</option>
+						<option value="8">8th</option>
+						<option value="9">9th</option>
+						<option value="10">10th</option>
+					</select>
+				</div>
+				<div class="pn-rec-field">
+					<label for="pn-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
+					<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
+					<span class="pn-char-count" id="pn-rec-char-count">400 characters remaining</span>
+				</div>
+			</form>
 		</div>
-		<div class="pn-rec-field">
-			<label for="pn-rec-reason">Reason</label>
-			<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-rec-cancel" type="button">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-rec-submit" type="button"><i class="fas fa-paper-plane"></i> Submit Recommendation</button>
 		</div>
-	</form>
-</div>
-
-<div id="pn-delete-rec-dialog" style="display:none" title="Confirm Deletion">
-	Are you sure you want to delete this recommendation?
+	</div>
 </div>
 <?php endif; ?>
+
+<?php
+// Build KingdomAwardId => max rank held by this player (for ladder award pre-fill)
+$playerAwardRanks = array();
+if (is_array($Details['Awards'])) {
+	foreach ($Details['Awards'] as $a) {
+		$aid  = (int)$a['AwardId'];
+		$rank = (int)$a['Rank'];
+		if ($aid > 0 && $rank > 0) {
+			if (!isset($playerAwardRanks[$aid]) || $rank > $playerAwardRanks[$aid]) {
+				$playerAwardRanks[$aid] = $rank;
+			}
+		}
+	}
+}
+?>
 
 <!-- =============================================
      JavaScript
      ============================================= -->
 <script type="text/javascript">
+// ---- Pagination Helpers ----
+function pnPageRange(current, total) {
+	var pages = [];
+	if (total <= 7) {
+		for (var p = 1; p <= total; p++) pages.push(p);
+	} else {
+		pages.push(1);
+		if (current > 3) pages.push(-1);
+		var s = Math.max(2, current - 1);
+		var e = Math.min(total - 1, current + 1);
+		for (var p = s; p <= e; p++) pages.push(p);
+		if (current < total - 2) pages.push(-1);
+		pages.push(total);
+	}
+	return pages;
+}
+
+function pnPaginate($table, page) {
+	var pageSize = 10;
+	var $rows = $table.find('tbody tr');
+	var total = $rows.length;
+	if (total === 0) return;
+	var totalPages = Math.max(1, Math.ceil(total / pageSize));
+	page = Math.max(1, Math.min(page, totalPages));
+	$table.data('pn-page', page);
+	$rows.each(function(i) {
+		$(this).toggle(i >= (page - 1) * pageSize && i < page * pageSize);
+	});
+	var $pg = $table.next('.pn-pagination');
+	if ($pg.length === 0) $pg = $('<div class="pn-pagination"></div>').insertAfter($table);
+	if (total <= pageSize) { $pg.empty().hide(); return; }
+	$pg.show();
+	var start = (page - 1) * pageSize + 1;
+	var end = Math.min(page * pageSize, total);
+	var html = '<span class="pn-pagination-info">Showing ' + start + '\u2013' + end + ' of ' + total + '</span>';
+	html += '<div class="pn-pagination-controls">';
+	html += '<button class="pn-page-btn pn-page-prev"' + (page === 1 ? ' disabled' : '') + '>&#8249;</button>';
+	var range = pnPageRange(page, totalPages);
+	for (var ri = 0; ri < range.length; ri++) {
+		if (range[ri] === -1) {
+			html += '<span class="pn-page-ellipsis">&hellip;</span>';
+		} else {
+			html += '<button class="pn-page-btn pn-page-num' + (range[ri] === page ? ' pn-page-active' : '') + '" data-page="' + range[ri] + '">' + range[ri] + '</button>';
+		}
+	}
+	html += '<button class="pn-page-btn pn-page-next"' + (page === totalPages ? ' disabled' : '') + '>&#8250;</button>';
+	html += '</div>';
+	$pg.html(html);
+}
+
+function pnSortDesc($table, colIndex, sortType) {
+	if (!$table.length) return;
+	$table.find('thead th').removeClass('sort-asc sort-desc');
+	$table.find('thead th').eq(colIndex).addClass('sort-desc');
+	var $tbody = $table.find('tbody');
+	var rows = $tbody.find('tr').get();
+	rows.sort(function(a, b) {
+		var aVal = $(a).find('td').eq(colIndex).text().trim();
+		var bVal = $(b).find('td').eq(colIndex).text().trim();
+		var cmp = 0;
+		if (sortType === 'numeric') {
+			cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
+		} else if (sortType === 'date') {
+			cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
+		} else {
+			cmp = aVal.localeCompare(bVal);
+		}
+		return -cmp;
+	});
+	$.each(rows, function(i, row) { $tbody.append(row); });
+}
+
 $(document).ready(function() {
 
 	// ---- Tab Switching ----
@@ -1111,52 +1421,137 @@ $(document).ready(function() {
 			$.each(rows, function(i, row) {
 				tbody.append(row);
 			});
+			pnPaginate(table, 1);
 		});
 	});
 
 	<?php if ($LoggedIn): ?>
-	// ---- Recommendation Modal ----
+	// ---- Custom Recommendation Modal ----
+	function pnOpenModal() {
+		$('#pn-rec-overlay').addClass('pn-open');
+		$('body').css('overflow', 'hidden');
+	}
+	function pnCloseModal() {
+		$('#pn-rec-overlay').removeClass('pn-open');
+		$('body').css('overflow', '');
+		$('#pn-rec-error').hide().text('');
+	}
+
 	$('#pn-recommend-btn').on('click', function(e) {
 		e.preventDefault();
-		$('#pn-recommend-dialog').dialog({
-			modal: true,
-			width: 460,
-			buttons: {
-				'Cancel': function() {
-					$(this).dialog('close');
-				},
-				'Submit': function() {
-					var form = $('#pn-recommend-form');
-					if (form.find('select[name=KingdomAwardId]').val() && form.find('input[name=Reason]').val()) {
-						form.submit();
-					} else {
-						alert('Select an award and provide a reason.');
-					}
-				}
-			}
-		});
+		pnOpenModal();
+	});
+	$('#pn-modal-close-btn, #pn-rec-cancel').on('click', function() {
+		pnCloseModal();
+	});
+	// Close on backdrop click
+	$('#pn-rec-overlay').on('click', function(e) {
+		if (e.target === this) pnCloseModal();
+	});
+	// Escape key
+	$(document).on('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && $('#pn-rec-overlay').hasClass('pn-open')) {
+			pnCloseModal();
+		}
 	});
 
-	// Character counter on reason field
-	$('#pn-rec-reason').simpleTxtCounter({
-		maxLength: 400,
-		countElem: '<span style="margin-left:5px;font-size:11px;color:#a0aec0;"></span>'
+	// Submit with validation
+	$('#pn-rec-submit').on('click', function() {
+		var award  = $('#pn-rec-award').val();
+		var reason = $.trim($('#pn-rec-reason').val());
+		if (!award || !reason) {
+			$('#pn-rec-error').text('Please select an award and provide a reason.').show();
+			return;
+		}
+		$('#pn-rec-error').hide();
+		$('#pn-rec-submit').prop('disabled', true).text('Submitting…');
+		$('#pn-recommend-form').submit();
 	});
 
-	// ---- Delete Recommendation Confirmation ----
-	$('.pn-confirm-delete-rec').on('click', function(e) {
+	// Character counter
+	$('#pn-rec-reason').on('input', function() {
+		var remaining = 400 - $(this).val().length;
+		$('#pn-rec-char-count')
+			.text(remaining + ' character' + (remaining !== 1 ? 's' : '') + ' remaining')
+			.toggleClass('pn-char-warn', remaining < 50);
+	});
+
+
+	// Auto-fill rank for ladder awards based on player's existing ranks
+	var pnAwardRanks = <?= json_encode($playerAwardRanks) ?>;
+	$('#pn-rec-award').on('change', function() {
+		var $opt     = $(this).find('option:selected');
+		var isLadder = $opt.data('is-ladder') == 1;
+		var baseId   = parseInt($opt.data('award-id')) || 0;
+		if (!$(this).val()) {
+			$('#pn-rec-rank').val('');
+		} else if (isLadder && baseId) {
+			var currentRank = pnAwardRanks[baseId] || 0;
+			$('#pn-rec-rank').val(String(Math.min(currentRank + 1, 6)));
+		} else {
+			$('#pn-rec-rank').val('');
+		}
+	});
+
+	// ---- Inline Delete Confirmation ----
+	$(document).on('click', '.pn-confirm-delete-rec', function(e) {
 		e.preventDefault();
-		var targetUrl = $(this).attr('href');
-		$('#pn-delete-rec-dialog').dialog({
-			modal: true,
-			width: 400,
-			buttons: {
-				'Cancel': function() { $(this).dialog('close'); },
-				'Delete': function() { window.location.href = targetUrl; $(this).dialog('close'); }
-			}
-		});
+		var $cell = $(this).closest('.pn-delete-cell');
+		$(this).addClass('pn-hidden');
+		$cell.find('.pn-delete-confirm').addClass('pn-active');
+	});
+	$(document).on('click', '.pn-delete-yes', function() {
+		window.location.href = $(this).data('href');
+	});
+	$(document).on('click', '.pn-delete-no', function() {
+		var $cell = $(this).closest('.pn-delete-cell');
+		$cell.find('.pn-delete-link').removeClass('pn-hidden');
+		$cell.find('.pn-delete-confirm').removeClass('pn-active');
 	});
 	<?php endif; ?>
+
+	// ---- Pagination: page button handlers ----
+	$(document).on('click', '.pn-page-num', function() {
+		var $table = $(this).closest('.pn-pagination').prev('.pn-table');
+		if ($table.length) pnPaginate($table, parseInt($(this).data('page')));
+	});
+	$(document).on('click', '.pn-page-prev', function() {
+		if ($(this).prop('disabled')) return;
+		var $table = $(this).closest('.pn-pagination').prev('.pn-table');
+		if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) - 1);
+	});
+	$(document).on('click', '.pn-page-next', function() {
+		if ($(this).prop('disabled')) return;
+		var $table = $(this).closest('.pn-pagination').prev('.pn-table');
+		if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) + 1);
+	});
+
+	// ---- Default sort (date desc) + initial pagination ----
+	<?php if (count($filteredAwards) > 0): ?>
+	pnSortDesc($('#pn-awards-table'), 2, 'date');
+	pnPaginate($('#pn-awards-table'), 1);
+	<?php endif; ?>
+	<?php if (count($filteredTitles) > 0): ?>
+	pnSortDesc($('#pn-titles-table'), 2, 'date');
+	pnPaginate($('#pn-titles-table'), 1);
+	<?php endif; ?>
+	<?php if (count($attendanceList) > 0): ?>
+	pnSortDesc($('#pn-attendance-table'), 0, 'date');
+	pnPaginate($('#pn-attendance-table'), 1);
+	<?php endif; ?>
+	<?php if (count($recList) > 0): ?>
+	pnSortDesc($('#pn-rec-table'), 2, 'date');
+	pnPaginate($('#pn-rec-table'), 1);
+	<?php endif; ?>
+	<?php if (count($notesList) > 0): ?>
+	pnSortDesc($('#pn-history-table'), 2, 'date');
+	pnPaginate($('#pn-history-table'), 1);
+	<?php endif; ?>
+	<?php if (count($classList) > 0): ?>
+	pnSortDesc($('#pn-classes-table'), 2, 'numeric');
+	pnPaginate($('#pn-classes-table'), 1);
+	<?php endif; ?>
+
 
 });
 </script>
