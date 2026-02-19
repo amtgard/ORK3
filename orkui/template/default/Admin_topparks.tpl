@@ -21,6 +21,10 @@
 				<td><input type='checkbox' name='NativePopulace' value='1' <?=$NativePopulace ? "checked='checked'" : ''; ?> /></td>
 			</tr>
 			<tr>
+				<td><label>Waivered Players Only</label></td>
+				<td><input type='checkbox' name='Waivered' value='1' <?=$Waivered ? "checked='checked'" : ''; ?> /></td>
+			</tr>
+			<tr>
 				<td></td>
 				<td><input type='submit' value='Update' /></td>
 			</tr>
@@ -57,6 +61,7 @@
 	<p><strong>How attendance is counted:</strong> Each player who attends a given park in a given calendar week counts once toward that park's total, regardless of how many days they attended that week. This deduplication prevents multi-day events from inflating a park's numbers.</p>
 	<p><strong>How the weekly average is calculated:</strong> The total deduplicated attendance count over the date range is divided by the number of weeks in the range. A park with a weekly average of 10.5 had, on average, 10&ndash;11 unique players attending each week.</p>
 	<p><strong>Local Players Only:</strong> When checked, only attendance by players whose home park matches the park being measured is counted. This filters out visitors and traveling players, giving a view of each park's core local membership activity rather than total foot traffic.</p>
+	<p><strong>Waivered Players Only:</strong> When checked, only attendance by players with a signed waiver on file is counted. This can give a more conservative view of active, registered membership.</p>
 	<p><strong>Filters applied:</strong> Only parks and kingdoms marked <em>Active</em> are included. Attendance records with no associated player (guest sign-ins with mundane ID 0) are excluded.</p>
 
 </div>

@@ -1554,13 +1554,15 @@ class Controller_Admin extends Controller {
 			: date("Y-m-d");
 		$week_count = max(1, ceil((strtotime($end_date) - strtotime($start_date)) / (7 * 86400)));
 		$native_populace = !empty($this->request->NativePopulace);
-		$result = $this->Admin->get_top_parks_by_attendance($limit, $start_date, $end_date, $native_populace);
+		$waivered = !empty($this->request->Waivered);
+		$result = $this->Admin->get_top_parks_by_attendance($limit, $start_date, $end_date, $native_populace, $waivered);
 		$this->data['TopParks'] = $result['TopParksSummary'];
 		$this->data['StartDate'] = $start_date;
 		$this->data['EndDate'] = $end_date;
 		$this->data['WeekCount'] = $week_count;
 		$this->data['Limit'] = $limit;
 		$this->data['NativePopulace'] = $native_populace;
+		$this->data['Waivered'] = $waivered;
 	}
 
 	public function resetwaivers($params = null) {
