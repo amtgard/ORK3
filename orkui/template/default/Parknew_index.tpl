@@ -813,6 +813,27 @@
 	<!-- ---- Sidebar ---- -->
 	<aside class="pk-sidebar">
 
+		<!-- Officers -->
+		<?php if (!empty($officerList)): ?>
+		<div class="pk-card">
+			<h4><i class="fas fa-crown"></i> Officers</h4>
+			<ul class="pk-officer-list">
+				<?php foreach ($officerList as $o): ?>
+				<li>
+					<span class="pk-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="pk-officer-name">
+						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
+							<a href="<?= UIR ?>Player/index/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+						<?php else: ?>
+							<em style="color:#a0aec0">Vacant</em>
+						<?php endif; ?>
+					</span>
+				</li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+		<?php endif; ?>
+
 		<!-- Quick Links -->
 		<div class="pk-card">
 			<h4><i class="fas fa-link"></i> Quick Links</h4>
@@ -847,27 +868,6 @@
 				<?php endif; ?>
 			</ul>
 		</div>
-
-		<!-- Officers -->
-		<?php if (!empty($officerList)): ?>
-		<div class="pk-card">
-			<h4><i class="fas fa-crown"></i> Officers</h4>
-			<ul class="pk-officer-list">
-				<?php foreach ($officerList as $o): ?>
-				<li>
-					<span class="pk-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
-					<span class="pk-officer-name">
-						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-							<a href="<?= UIR ?>Player/index/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
-						<?php else: ?>
-							<em style="color:#a0aec0">Vacant</em>
-						<?php endif; ?>
-					</span>
-				</li>
-				<?php endforeach; ?>
-			</ul>
-		</div>
-		<?php endif; ?>
 
 		<!-- Description -->
 		<?php if (!empty($description)): ?>
