@@ -224,21 +224,13 @@
 	border-radius: 0;
 }
 
-/* Officer rows in sidebar */
-.kn-officer-row {
-	display: flex;
-	justify-content: space-between;
-	align-items: baseline;
-	padding: 5px 0;
-	border-bottom: 1px dotted #f0f0f0;
-	font-size: 13px;
-}
-.kn-officer-row:last-child { border-bottom: none; }
-.kn-officer-label { color: #718096; flex-shrink: 0; margin-right: 8px; white-space: nowrap; }
-.kn-officer-value { color: #2d3748; font-weight: 500; text-align: right; }
-.kn-officer-value a { color: #2b6cb0; text-decoration: none; }
-.kn-officer-value a:hover { text-decoration: underline; }
-.kn-officer-vacant { color: #a0aec0; font-style: italic; font-weight: 400; }
+/* Officer list in sidebar */
+.kn-officer-list { list-style: none; margin: 0; padding: 0; }
+.kn-officer-list li { font-size: 13px; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+.kn-officer-list li:last-child { border-bottom: none; }
+.kn-officer-role { font-size: 11px; color: #718096; display: block; }
+.kn-officer-name a { color: #2b6cb0; text-decoration: none; }
+.kn-officer-name a:hover { text-decoration: underline; }
 
 /* Link list (Quick Links sidebar) */
 .kn-link-list { list-style: none; margin: 0; padding: 0; }
@@ -717,25 +709,25 @@
 	<div class="kn-sidebar">
 
 		<!-- Officers -->
+		<?php if (count($officerList) > 0): ?>
 		<div class="kn-card">
 			<h4><i class="fas fa-crown"></i> Officers</h4>
-			<?php if (count($officerList) > 0): ?>
+			<ul class="kn-officer-list">
 				<?php foreach ($officerList as $o): ?>
-					<div class="kn-officer-row">
-						<span class="kn-officer-label"><?= htmlspecialchars($o['OfficerRole']) ?></span>
-						<span class="kn-officer-value">
-							<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-								<a href="<?= UIR ?>Player/index/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
-							<?php else: ?>
-								<span class="kn-officer-vacant">Vacant</span>
-							<?php endif; ?>
-						</span>
-					</div>
+				<li>
+					<span class="kn-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="kn-officer-name">
+						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
+							<a href="<?= UIR ?>Player/index/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+						<?php else: ?>
+							<em style="color:#a0aec0">Vacant</em>
+						<?php endif; ?>
+					</span>
+				</li>
 				<?php endforeach; ?>
-			<?php else: ?>
-				<div class="kn-empty">No officers listed</div>
-			<?php endif; ?>
+			</ul>
 		</div>
+		<?php endif; ?>
 
 		<!-- Quick Links -->
 		<div class="kn-card">
