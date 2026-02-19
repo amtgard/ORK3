@@ -102,7 +102,7 @@
 			$('#qa-player-name').val(row.data('persona'));
 			$('#qa-class-id').val(row.find('.qa-class').val());
 			$('#qa-credits').val(row.find('.qa-credits').val());
-			$('#quick-add-form').submit();
+			document.getElementById('quick-add-form').submit();
 		});
 
 		var playerAC = $( "#PlayerName" ).autocomplete({
@@ -181,6 +181,9 @@
 		};
 	});
 </script>
+<?php if (strlen($Error) > 0) : ?>
+<div class='error-message'><?=$Error ?></div>
+<?php endif ?>
 <div class='info-container' id='event-editor'>
 	<h3>Add Attendance to <?=$Session->park_name ?></h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Attendance/park/<?=$Id ?>/new'>
