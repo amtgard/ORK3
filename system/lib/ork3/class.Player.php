@@ -339,7 +339,7 @@ class Player extends Ork3 {
 		if (valid_id($request['AwardsId'])) {
 			$player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
 		}
-		$sql = "select distinct awards.*, a.*, ka.name as kingdom_awardname, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona, bwm.persona as entered_by_persona, bwm.mundane_id as entered_by_id
+		$sql = "select distinct awards.*, a.*, ka.name as kingdom_awardname, ka.kingdom_id as kingdom_award_kingdom_id, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona, bwm.persona as entered_by_persona, bwm.mundane_id as entered_by_id
 					from " . DB_PREFIX . "awards awards
 						left join " . DB_PREFIX . "kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
@@ -372,7 +372,8 @@ class Player extends Ork3 {
 						'KingdomId' => $r->kingdom_id,
 						'EventId' => $r->at_event_id,
 						'Name' => $r->name,
-						'KingdomAwardName' => $r->kingdom_awardname,
+						'KingdomAwardKingdomId' => $r->kingdom_award_kingdom_id,
+					'KingdomAwardName' => $r->kingdom_awardname,
 						'CustomAwardName' => $r->custom_name,
 						'IsLadder' => $r->is_ladder,
 						'IsTitle' => $r->is_title,

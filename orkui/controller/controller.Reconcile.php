@@ -80,7 +80,17 @@ class Controller_Reconcile extends Controller {
 
 		$this->data['Player'] = $player;
 		$this->data['Details'] = $details;
-		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($kingdom_id, 'Awards');
+		$award_kingdom_ids = array($kingdom_id);
+		foreach ((array)$details['Awards'] as $a) {
+			if ($a['IsHistorical'] && valid_id($a['KingdomAwardKingdomId'])) {
+				$award_kingdom_ids[] = $a['KingdomAwardKingdomId'];
+			}
+		}
+		$award_options = '';
+		foreach (array_unique($award_kingdom_ids) as $kid) {
+			$award_options .= $this->Award->fetch_award_option_list($kid, 'Awards');
+		}
+		$this->data['AwardOptions'] = $award_options;
 		$this->data['KingdomId'] = $kingdom_id;
 
 		$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$mundane_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
