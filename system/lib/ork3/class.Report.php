@@ -1137,6 +1137,10 @@ class Report  extends Ork3 {
 		$escaped_end = mysql_real_escape_string($request['EndDate']);
 		$escaped_limit = intval($request['Limit']);
 		$native_populace = $request['NativePopulace'] ? "m.park_id = a.park_id and" : "";
+		$waivered = $request['Waivered'] ? "m.waivered = 1 and" : "";
+		$mundane_join = (!empty($native_populace) || !empty($waivered))
+			? "left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id"
+			: "";
 
 		$sql = "select
 					count(mundanesbyweek.mundane_id) attendance_count,
@@ -1151,9 +1155,10 @@ class Report  extends Ork3 {
 							(select
 									a.mundane_id, a.date_week3 as week, a.park_id
 								from " . DB_PREFIX . "attendance a
-									left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
+									$mundane_join
 								where
 									$native_populace
+									$waivered
 									date >= '$escaped_start'
 									and date <= '$escaped_end'
 									and a.mundane_id > 0
