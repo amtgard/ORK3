@@ -18,7 +18,6 @@ services:
   ork3db:
     image: mariadb:latest
     restart: always
-    command: --sql-mode=''
     environment:
       MARIADB_DATABASE: 'ork'
       # So you don't have to use root, but you can if you like
