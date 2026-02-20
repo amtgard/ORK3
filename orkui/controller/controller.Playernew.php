@@ -123,6 +123,16 @@ class Controller_Playernew extends Controller {
 		}
 		$this->data['OfficerRoles'] = $officerRoles;
 
+		// Check if this player is a top-level ORK Administrator
+		$adminCheck = $DB->DataSet(
+			"SELECT 1 FROM ork_authorization
+			 WHERE mundane_id = " . (int)$id . "
+			   AND role = 'admin'
+			   AND park_id = 0 AND kingdom_id = 0 AND event_id = 0 AND unit_id = 0
+			 LIMIT 1"
+		);
+		$this->data['IsOrkAdmin'] = ($adminCheck && $adminCheck->Size() > 0);
+
 		// Pre-compute summary stats
 		$this->data['Stats'] = array(
 			'TotalAttendance' => is_array($this->data['Details']['Attendance']) ? count($this->data['Details']['Attendance']) : 0,

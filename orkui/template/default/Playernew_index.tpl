@@ -764,6 +764,9 @@
 						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>
 					<?php endforeach; ?>
 				<?php endif; ?>
+				<?php if ($IsOrkAdmin): ?>
+					<span class="pn-badge pn-badge-purple"><i class="fas fa-cog"></i> ORK Administrator</span>
+				<?php endif; ?>
 			</div>
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
