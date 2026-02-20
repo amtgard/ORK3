@@ -80,6 +80,15 @@ class Controller
 
 	public function index( $action = null )
 	{
+		// Before clearing navigation state, remember the user's last-visited kingdom
+		// so the home page can pin it. Written to a separate key that survives clearing.
+		if ( $this->data['LoggedIn'] && isset( $this->session->kingdom_id ) ) {
+			$this->session->user_kingdom_id = (int) $this->session->kingdom_id;
+		}
+		$this->data['UserKingdomId'] = isset( $this->session->user_kingdom_id )
+			? (int) $this->session->user_kingdom_id
+			: 0;
+
 		unset( $this->session->kingdom_id );
 		unset( $this->session->park_id );
 		unset( $this->session->kingdom_name );

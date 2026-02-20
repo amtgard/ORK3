@@ -95,6 +95,7 @@ class Controller_Parknew extends Controller
 			LEFT JOIN ork_officer o ON o.mundane_id = m.mundane_id AND o.park_id = {$pid}
 			WHERE m.park_id = {$pid}
 			  AND m.suspended = 0
+			  AND m.active = 1
 			GROUP BY m.mundane_id
 			ORDER BY m.persona";
 		$rosterResult = $DB->DataSet($rosterSql);
