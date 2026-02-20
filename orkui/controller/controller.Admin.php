@@ -927,6 +927,21 @@ class Controller_Admin extends Controller {
 								'EventId' => valid_id($this->request->Admin_player->EventId)?$this->request->Admin_player->EventId:0
 							));
 						break;
+					case 'reconcileaward':
+						$r = $this->Player->reconcile_player_award(array(
+								'Token' => $this->session->token,
+								'AwardsId' => $roastbeef,
+								'KingdomAwardId' => $this->request->Admin_player->KingdomAwardId,
+								'CustomName' => $this->request->Admin_player->CustomName,
+								'Rank' => $this->request->Admin_player->Rank,
+								'Date' => $this->request->Admin_player->Date,
+								'GivenById' => $this->request->Admin_player->GivenById,
+								'Note' => $this->request->Admin_player->Note,
+								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
+								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
+								'EventId' => valid_id($this->request->Admin_player->EventId)?$this->request->Admin_player->EventId:0
+							));
+						break;
 					case 'quitunit':
 						$r = $this->Unit->retire_unit_member( array ('UnitId' => $id, 'UnitMundaneId' => $roastbeef, 'Token' => $this->session->token) );
 						break;

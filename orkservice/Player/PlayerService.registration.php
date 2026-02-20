@@ -108,6 +108,20 @@ $server->register(
 	);
 
 $server->register(
+		'Player.ReconcileAward',
+		array('ReconcileAwardRequest'=>'tns:ReconcileAwardRequest'),
+		array('return' => 'tns:StatusType'),
+		$namespace
+	);
+
+$server->register(
+		'Player.AutoAssignRanks',
+		array('AutoAssignRanksRequest'=>'tns:AutoAssignRanksRequest'),
+		array('return' => 'tns:StatusType'),
+		$namespace
+	);
+
+$server->register(
 		'Player.ResetWaivers',
 		array('ResetWaiversRequest'=>'tns:ResetWaiversRequest'),
 		array('return' => 'tns:StatusType'),

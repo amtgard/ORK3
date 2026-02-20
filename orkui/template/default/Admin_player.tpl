@@ -330,6 +330,47 @@
 		Are you sure you want to remove this player from the unit?
 	</div>
 </div>
+<div id="reconcile-award-dialog" title="Reconcile Historical Award" style="display:none;">
+	<form id="reconcile-form" class="form-container" method="post" action="" style="margin:0;">
+		<div>
+			<span>Award:</span>
+			<span><select name="KingdomAwardId" id="ReconcileAwardId" style="min-width:200px;">
+				<option value=""></option>
+<?=$AwardOptions ?>
+			</select></span>
+		</div>
+		<div>
+			<span>Rank:</span>
+			<span><input type="text" class="numeric-field" style="float:none;width:50px;" name="Rank" id="ReconcileRank" /></span>
+		</div>
+		<div>
+			<span>Date:</span>
+			<span><span id="ReconcileDateDisplay" style="font-style:italic;color:#666;"></span></span>
+		</div>
+		<div>
+			<span>Given By:</span>
+			<span><input type="text" name="GivenByText" id="ReconcileGivenBy" style="width:250px;" /></span>
+		</div>
+		<div>
+			<span>Given At:</span>
+			<span><input type="text" name="GivenAtText" id="ReconcileGivenAt" style="width:250px;" /></span>
+		</div>
+		<div>
+			<span>Note:</span>
+			<span><input type="text" name="Note" id="ReconcileNote" maxlength="400" style="width:250px;" /></span>
+		</div>
+		<div>
+			<span>Original Note:</span>
+			<span id="ReconcileOriginalNote" style="color:#888;font-style:italic;"></span>
+		</div>
+		<input type="hidden" id="ReconcileAwardsId" name="AwardsId" value="" />
+		<input type="hidden" id="ReconcileGivenById" name="GivenById" value="" />
+		<input type="hidden" id="ReconcileParkId" name="ParkId" value="" />
+		<input type="hidden" id="ReconcileKingdomId" name="KingdomId" value="" />
+		<input type="hidden" id="ReconcileEventId" name="EventId" value="" />
+		<input type="hidden" id="ReconcileHiddenDate" name="Date" value="" />
+	</form>
+</div>
 <script type="text/javascript">
 	$(document).ready(function() {
 		$(".confirm-revoke-dues").click(function(e) {
@@ -747,10 +788,113 @@
 				$( '#EventId' ).val(data['EventId']);
 			});
 	}
+
+	function OpenReconcileDialog(awardsId, awardDate, currentNote, currentKingdomAwardId, currentRank) {
+		$('#ReconcileAwardsId').val(awardsId);
+		$('#ReconcileHiddenDate').val(awardDate);
+		$('#ReconcileDateDisplay').text(awardDate);
+		$('#ReconcileAwardId').val(currentKingdomAwardId);
+		$('#ReconcileRank').val(currentRank > 0 ? currentRank : '');
+		$('#ReconcileNote').val(currentNote);
+		$('#ReconcileOriginalNote').text(currentNote);
+		$('#ReconcileGivenBy').val('');
+		$('#ReconcileGivenById').val('');
+		$('#ReconcileGivenAt').val('');
+		$('#ReconcileParkId').val('');
+		$('#ReconcileKingdomId').val('');
+		$('#ReconcileEventId').val('');
+		$('#reconcile-form').attr('action', '<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/reconcileaward/' + awardsId);
+
+		$('#reconcile-award-dialog').dialog({
+			width: 560,
+			modal: true,
+			buttons: {
+				'Save': function() {
+					$('#reconcile-form').submit();
+					$(this).dialog('close');
+				},
+				'Cancel': function() {
+					$(this).dialog('close');
+				}
+			}
+		});
+	}
+
+	$(document).ready(function() {
+		var reconcileGivenBySelected = false;
+
+		$('#ReconcileGivenBy').autocomplete({
+			minLength: 1,
+			source: function(request, response) {
+				$.getJSON(
+					"<?=HTTP_SERVICE ?>Search/SearchService.php",
+					{ Action: 'Search/Player', type: 'all', search: request.term, limit: 6 },
+					function(data) {
+						var suggestions = [];
+						$.each(data, function(i, val) {
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId, display: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')'});
+						});
+						response(suggestions);
+					}
+				);
+			},
+			delay: 250,
+			focus: function(event, ui) {
+				$('#ReconcileGivenBy').val(ui.item.display);
+				return false;
+			},
+			select: function(e, ui) {
+				$('#ReconcileGivenBy').val(ui.item.display);
+				$('#ReconcileGivenById').val(ui.item.value);
+				reconcileGivenBySelected = true;
+				return false;
+			},
+			change: function(e, ui) {
+				if (!reconcileGivenBySelected) {
+					$('#ReconcileGivenById').val('');
+				}
+				reconcileGivenBySelected = false;
+				return false;
+			}
+		});
+
+		$('#ReconcileGivenAt').autocomplete({
+			source: function(request, response) {
+				$.getJSON(
+					"<?=HTTP_SERVICE ?>Search/SearchService.php",
+					{ Action: 'Search/Location', type: 'all', name: request.term, date: $('#ReconcileHiddenDate').val(), limit: 8 },
+					function(data) {
+						var suggestions = [];
+						$.each(data, function(i, val) {
+							suggestions.push({label: val.LocationName, value: array2json(val), shortName: val.ShortName});
+						});
+						response(suggestions);
+					}
+				);
+			},
+			delay: 250,
+			focus: function(event, ui) {
+				var details = eval('(' + ui.item.value + ')');
+				$('#ReconcileGivenAt').val(details['ShortName']);
+				$('#ReconcileParkId').val(details['ParkId']);
+				$('#ReconcileKingdomId').val(details['KingdomId']);
+				$('#ReconcileEventId').val(details['EventId']);
+				return false;
+			},
+			select: function(e, ui) {
+				var details = eval('(' + ui.item.value + ')');
+				$('#ReconcileGivenAt').val(details['ShortName']);
+				$('#ReconcileParkId').val(details['ParkId']);
+				$('#ReconcileKingdomId').val(details['KingdomId']);
+				$('#ReconcileEventId').val(details['EventId']);
+				return false;
+			}
+		});
+	});
 </script>
 
 <div class='info-container'>
-	<h3>Awards</h3>
+	<h3>Awards<?php if (!empty(array_filter((array)$Details['Awards'], function($a){ return $a['IsHistorical']; }))): ?> <a href='<?=UIR ?>Reconcile/index/<?=$Player['MundaneId'] ?>' style='font-size:0.7em;font-weight:normal;margin-left:12px;'>[Bulk Reconcile Historical Awards &rarr;]</a><?php endif ?></h3>
 	<div class='info-container skip-fold'>
 		<div style='padding: 16px 0'>Strip <b>all Awards &amp; Titles</b> or choose from below. Details will be recorded for posterity.</div>
 		<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeallawards/' id='burn-it-all'>
@@ -773,6 +917,7 @@
 				<th>Given By</th>
 				<th>Given At</th>
 				<th>Note</th>
+				<th>Reconcile</th>
 				<th class='deletion'>&times;</th>
 				<th>Strip</th>
 			</tr>
@@ -781,13 +926,14 @@
 <?php if (!is_array($Details['Awards'])) $Details['Awards'] = array(); ?>
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
 <?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
-			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
+			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''<?=$detail['IsHistorical']?" style='background-color:#fffbe6;'":'' ?>>
 				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='award-date'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
 				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
 				<td class='award-note'><?=$detail['Note'] ?></td>
+				<td><?php if ($detail['IsHistorical']): ?><button type='button' class='reconcile-award-btn' onclick='event.stopPropagation(); OpenReconcileDialog(<?=$detail['AwardsId'] ?>, <?=json_encode($detail['Date']) ?>, <?=json_encode($detail['Note']) ?>, <?=$detail['KingdomAwardId'] ?>, <?=intval($detail['Rank']) ?>)'>Reconcile</button><?php endif ?></td>
 				<td class='deletion'><a class="confirm-delete-award" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='confirm-strip-award revocation'>Strip</a></td>
 			</tr>
