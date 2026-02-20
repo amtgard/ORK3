@@ -191,6 +191,14 @@
 	border-right: 1px solid #e2e8f0;
 }
 .pk-stat-card:last-child { border-right: none; }
+.pk-stat-card-link {
+	cursor: pointer;
+	transition: background 0.15s, transform 0.12s;
+}
+.pk-stat-card-link:hover {
+	background: #ebf8ff;
+	transform: translateY(-2px);
+}
 .pk-stat-icon { font-size: 13px; color: #a0aec0; margin-bottom: 3px; }
 .pk-stat-value { font-size: 22px; font-weight: 700; color: #2b6cb0; line-height: 1.1; }
 .pk-stat-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
@@ -482,6 +490,30 @@
 	gap: 8px;
 }
 .pk-players-toolbar-left { font-size: 13px; color: #718096; }
+.pk-players-toolbar-right { display: flex; align-items: center; gap: 8px; }
+.pk-player-search-wrap {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+.pk-player-search-icon {
+	position: absolute;
+	left: 8px;
+	color: #a0aec0;
+	font-size: 12px;
+	pointer-events: none;
+}
+.pk-player-search-input {
+	border: 1px solid #e2e8f0;
+	border-radius: 5px;
+	padding: 5px 10px 5px 26px;
+	font-size: 13px;
+	width: 180px;
+	outline: none;
+	transition: border-color 0.15s;
+}
+.pk-player-search-input:focus { border-color: #bee3f8; }
+.pk-hoa-section.pk-search-hidden { display: none; }
 .pk-view-toggle {
 	display: flex;
 	border: 1px solid #e2e8f0;
@@ -707,7 +739,7 @@
 		<div class="pk-hero-left">
 			<?php if ($hasHeraldry): ?>
 			<div class="pk-heraldry-frame">
-				<img src="<?= htmlspecialchars($heraldryUrl) ?>"
+				<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>"
 				     alt="<?= htmlspecialchars($park_name) ?> heraldry"
 				     crossorigin="anonymous"
 				     onload="pkApplyHeroColor(this)">
@@ -736,18 +768,6 @@
 						<span class="pk-vacant">Vacant</span>
 					<?php endif; ?>
 				<?php endif; ?>
-				<?php if ($monarch && $regent): ?>
-					<span class="pk-officers-sep">|</span>
-				<?php endif; ?>
-				<?php if ($regent): ?>
-					<i class="fas fa-star" style="font-size:10px;opacity:0.6;margin-right:3px"></i>
-					Regent:&nbsp;
-					<?php if (!empty($regent['MundaneId']) && $regent['MundaneId'] > 0): ?>
-						<a href="<?= UIR ?>Player/index/<?= $regent['MundaneId'] ?>"><?= htmlspecialchars($regent['Persona']) ?></a>
-					<?php else: ?>
-						<span class="pk-vacant">Vacant</span>
-					<?php endif; ?>
-				<?php endif; ?>
 			</div>
 		</div>
 
@@ -760,9 +780,6 @@
 					</a>
 					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Award/park/<?= $park_id ?>">
 						<i class="fas fa-medal"></i> Enter Awards
-					</a>
-					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Attendance/behold/<?= $park_id ?>">
-						<i class="fas fa-eye"></i> Behold!
 					</a>
 				<?php endif; ?>
 				<a class="pk-btn <?= $LoggedIn ? 'pk-btn-outline' : 'pk-btn-white' ?>" href="<?= UIR ?>Search/park/<?= $park_id ?>">
@@ -783,17 +800,17 @@
      ZONE 2: Stats Row
      ============================================= -->
 <div class="pk-stats-row">
-	<div class="pk-stat-card">
+	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('schedule')">
 		<div class="pk-stat-icon"><i class="fas fa-calendar-alt"></i></div>
 		<div class="pk-stat-value"><?= count($parkDayList) ?></div>
 		<div class="pk-stat-label">Park Day<?= count($parkDayList) != 1 ? 's' : '' ?></div>
 	</div>
-	<div class="pk-stat-card">
+	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('events')">
 		<div class="pk-stat-icon"><i class="fas fa-flag"></i></div>
 		<div class="pk-stat-value"><?= count($eventList) ?></div>
 		<div class="pk-stat-label">Event<?= count($eventList) != 1 ? 's' : '' ?></div>
 	</div>
-	<div class="pk-stat-card">
+	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('events')">
 		<div class="pk-stat-icon"><i class="fas fa-trophy"></i></div>
 		<div class="pk-stat-value"><?= count($tournamentList) ?></div>
 		<div class="pk-stat-label">Tournament<?= count($tournamentList) != 1 ? 's' : '' ?></div>
@@ -846,13 +863,15 @@
 					<span class="pk-link-icon"><i class="fas fa-image"></i></span>
 					<a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Heraldry</a>
 				</li>
+				<?php if ($LoggedIn): ?>
+				<li>
+					<span class="pk-link-icon"><i class="fas fa-eye"></i></span>
+					<a href="<?= UIR ?>Attendance/behold/<?= $park_id ?>">Behold!</a>
+				</li>
+				<?php endif; ?>
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-users"></i></span>
 					<a href="<?= UIR ?>Unit/unitlist&ParkId=<?= $park_id ?>">Companies &amp; Households</a>
-				</li>
-				<li>
-					<span class="pk-link-icon"><i class="fas fa-coins"></i></span>
-					<a href="<?= UIR ?>Treasury/park/<?= $park_id ?>">Treasury</a>
 				</li>
 				<?php if (!empty($websiteUrl)): ?>
 				<li>
@@ -894,10 +913,6 @@
 				<li data-pktab="events" class="<?= $firstTab === 'events' ? 'pk-tab-active' : '' ?>">
 					<i class="fas fa-flag"></i> Events
 					<span class="pk-tab-count">(<?= count($eventList) ?>)</span>
-				</li>
-				<li data-pktab="tournaments">
-					<i class="fas fa-trophy"></i> Tournaments
-					<span class="pk-tab-count">(<?= count($tournamentList) ?>)</span>
 				</li>
 				<li data-pktab="players">
 					<i class="fas fa-users"></i> Players
@@ -1020,10 +1035,8 @@
 				<?php else: ?>
 					<div class="pk-empty">No events found</div>
 				<?php endif; ?>
-			</div>
 
-			<!-- Tournaments Tab -->
-			<div class="pk-tab-panel" id="pk-tab-tournaments" style="display:none">
+				<h4 style="margin:20px 0 10px;font-size:14px;font-weight:700;color:#4a5568;border-top:1px solid #e2e8f0;padding-top:16px;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
 				<?php if (count($tournamentList) > 0): ?>
 					<table class="pk-table" id="pk-tournaments-table">
 						<thead>
@@ -1051,6 +1064,7 @@
 				<?php endif; ?>
 			</div>
 
+
 			<!-- Players Tab -->
 			<div class="pk-tab-panel" id="pk-tab-players" style="display:none">
 				<?php if (count($allPlayers) > 0): ?>
@@ -1058,13 +1072,19 @@
 						<span class="pk-players-toolbar-left">
 							<?= count($playerPeriods[0] ?? []) ?> active member<?= count($playerPeriods[0] ?? []) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($allPlayers) > count($playerPeriods[0] ?? [])): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
 						</span>
-						<div class="pk-view-toggle">
-							<button class="pk-view-btn pk-view-active" data-pkview="cards">
-								<i class="fas fa-th-large"></i> Cards
-							</button>
-							<button class="pk-view-btn" data-pkview="list">
-								<i class="fas fa-list"></i> List
-							</button>
+						<div class="pk-players-toolbar-right">
+							<div class="pk-player-search-wrap">
+								<i class="fas fa-search pk-player-search-icon"></i>
+								<input type="text" id="pk-player-search" class="pk-player-search-input" placeholder="Search all playersâ¦" autocomplete="off">
+							</div>
+							<div class="pk-view-toggle">
+								<button class="pk-view-btn pk-view-active" data-pkview="cards">
+									<i class="fas fa-th-large"></i> Cards
+								</button>
+								<button class="pk-view-btn" data-pkview="list">
+									<i class="fas fa-list"></i> List
+								</button>
+							</div>
 						</div>
 					</div>
 
@@ -1599,6 +1619,26 @@ $(document).ready(function() {
 		var total = $table.data('pk-total') || 1;
 		var page = Math.min(total, ($table.data('pk-page') || 1) + 1);
 		pkPaginate($table, page);
+	});
+
+	// ---- Player search (filters all .pk-hoa-card across all periods) ----
+	$('#pk-player-search').on('input', function() {
+		var q = $(this).val().trim().toLowerCase();
+		if (q === '') {
+			// Restore: show all sections and cards
+			$('.pk-hoa-section').removeClass('pk-search-hidden');
+			$('.pk-hoa-card').show();
+		} else {
+			$('.pk-hoa-card').each(function() {
+				var name = $(this).find('.pk-hoa-name').text().toLowerCase();
+				$(this).toggle(name.indexOf(q) !== -1);
+			});
+			// Hide period section headings that have no visible cards
+			$('.pk-hoa-section').each(function() {
+				var hasVisible = $(this).find('.pk-hoa-card:visible').length > 0;
+				$(this).toggleClass('pk-search-hidden', !hasVisible);
+			});
+		}
 	});
 
 	// ---- Players view toggle (cards / list) ----

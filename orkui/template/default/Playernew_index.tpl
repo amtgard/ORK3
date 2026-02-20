@@ -203,6 +203,15 @@
 	text-align: center;
 	box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
+.pn-stat-card-link {
+	cursor: pointer;
+	transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.pn-stat-card-link:hover {
+	border-color: #bee3f8;
+	box-shadow: 0 3px 10px rgba(0,0,0,0.10);
+	transform: translateY(-2px);
+}
 .pn-stat-icon {
 	font-size: 16px;
 	color: #a0aec0;
@@ -708,7 +717,7 @@
 	<div class="pn-hero-bg" style="background-image: url('<?= $heraldryUrl ?>')"></div>
 	<div class="pn-hero-content">
 		<div class="pn-avatar">
-			<img src="<?= $imageUrl ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
+			<img class="heraldry-img" src="<?= $imageUrl ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
 		</div>
 		<div class="pn-hero-info">
 			<h1 class="pn-persona">
@@ -786,22 +795,22 @@
      ZONE 2: Dashboard Stats
      ============================================= -->
 <div class="pn-stats-row">
-	<div class="pn-stat-card">
+	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('attendance')">
 		<div class="pn-stat-icon"><i class="fas fa-calendar-check"></i></div>
 		<div class="pn-stat-number"><?= $Stats['TotalAttendance'] ?></div>
 		<div class="pn-stat-label">Attendance</div>
 	</div>
-	<div class="pn-stat-card">
+	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('awards')">
 		<div class="pn-stat-icon"><i class="fas fa-medal"></i></div>
 		<div class="pn-stat-number"><?= $Stats['TotalAwards'] ?></div>
 		<div class="pn-stat-label">Awards</div>
 	</div>
-	<div class="pn-stat-card">
+	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('titles')">
 		<div class="pn-stat-icon"><i class="fas fa-crown"></i></div>
 		<div class="pn-stat-number"><?= $Stats['TotalTitles'] ?></div>
 		<div class="pn-stat-label">Titles</div>
 	</div>
-	<div class="pn-stat-card">
+	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('classes')">
 		<div class="pn-stat-icon"><i class="fas fa-shield-alt"></i></div>
 		<div class="pn-stat-number"><?= $Stats['HighestClassLevel'] ?></div>
 		<div class="pn-stat-label">Highest Class</div>
@@ -853,7 +862,7 @@
 		<div class="pn-card">
 			<h4><i class="fas fa-image"></i> Heraldry</h4>
 			<div style="text-align: center;">
-				<img src="<?= $heraldryUrl ?>" alt="Heraldry" style="max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain;" />
+				<img class="heraldry-img" src="<?= $heraldryUrl ?>" alt="Heraldry" style="max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain;" />
 			</div>
 		</div>
 
@@ -1366,15 +1375,19 @@ function pnSortDesc($table, colIndex, sortType) {
 	$.each(rows, function(i, row) { $tbody.append(row); });
 }
 
+function pnActivateTab(tab) {
+	$('.pn-tab-nav li').removeClass('pn-tab-active');
+	$('.pn-tab-nav li[data-tab="' + tab + '"]').addClass('pn-tab-active');
+	$('.pn-tab-panel').hide();
+	$('#pn-tab-' + tab).show();
+	$('html, body').animate({ scrollTop: $('.pn-tabs').offset().top - 20 }, 250);
+}
+
 $(document).ready(function() {
 
 	// ---- Tab Switching ----
 	$('.pn-tab-nav li').on('click', function() {
-		var tabId = $(this).data('tab');
-		$('.pn-tab-nav li').removeClass('pn-tab-active');
-		$(this).addClass('pn-tab-active');
-		$('.pn-tab-panel').hide();
-		$('#pn-tab-' + tabId).show();
+		pnActivateTab($(this).data('tab'));
 	});
 
 	// ---- Class Level Calculation ----
