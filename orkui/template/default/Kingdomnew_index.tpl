@@ -183,6 +183,10 @@
 .kn-btn-white   { background: #fff; color: #1a4731; }
 .kn-btn-outline { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
 .kn-btn-primary { background: #276749; color: #fff; }
+.kn-btn-primary:hover:not(:disabled) { opacity: 0.85; }
+.kn-btn-secondary { background: #edf2f7; color: #4a5568; }
+.kn-btn-secondary:hover:not(:disabled) { background: #e2e8f0; }
+.kn-btn:disabled, .kn-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 
 /* Stats Row */
 .kn-stats-row {
@@ -736,6 +740,48 @@
 }
 .kn-load-more-btn:hover { border-color: #276749; color: #276749; }
 .kn-load-more-hint { display: block; font-size: 11px; color: #a0aec0; margin-top: 6px; }
+/* ---- Award entry modal (kn-award-*) ---- */
+.kn-award-type-row { display:flex; gap:8px; margin-bottom:16px; }
+.kn-award-type-btn { flex:1; padding:8px 0; border:2px solid #e2e8f0; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#4a5568; cursor:pointer; transition:all 0.15s; text-align:center; }
+.kn-award-type-btn.kn-active { border-color:#2c5282; background:#ebf4ff; color:#2c5282; }
+.kn-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.kn-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:all 0.12s; user-select:none; }
+.kn-rank-pill.kn-rank-held { background:#ebf4ff; border-color:#90cdf4; color:#2b6cb0; }
+.kn-rank-pill.kn-rank-suggested { border-color:#68d391; }
+.kn-rank-pill.kn-rank-selected { background:#2c5282; border-color:#2c5282; color:#fff; }
+.kn-officer-chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
+.kn-officer-chip { padding:4px 10px; background:#edf2f7; border:1px solid #e2e8f0; border-radius:14px; font-size:12px; color:#2d3748; cursor:pointer; }
+.kn-officer-chip.kn-selected { background:#ebf4ff; border-color:#90cdf4; color:#2b6cb0; font-weight:600; }
+.kn-ac-results { margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; max-height:140px; overflow-y:auto; display:none; }
+.kn-ac-results.kn-ac-open { display:block; }
+.kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
+.kn-ac-item:hover { background:#ebf4ff; color:#2b6cb0; }
+.kn-award-success { background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#276749; font-size:13px; }
+.kn-btn-ghost { background:transparent; border:1px solid transparent; color:#4a5568; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
+.kn-btn-ghost:hover { background:rgba(255,255,255,0.15); }
+.kn-badge-ladder { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#744210; }
+/* Reuse modal structure for kn- award modal */
+#kn-award-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#kn-award-overlay.kn-open { opacity:1; pointer-events:all; }
+#kn-award-overlay .kn-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-award-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#kn-award-overlay .kn-modal-title { font-size:16px; font-weight:700; color:#1a202c; margin:0; }
+#kn-award-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#kn-award-overlay .kn-modal-close-btn:hover { color:#4a5568; }
+#kn-award-overlay .kn-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#kn-award-overlay .kn-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+#kn-award-overlay .kn-acct-field { margin-bottom:14px; }
+#kn-award-overlay .kn-acct-field label { display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em; }
+#kn-award-overlay .kn-acct-field input[type=text],
+#kn-award-overlay .kn-acct-field input[type=date],
+#kn-award-overlay .kn-acct-field select,
+#kn-award-overlay .kn-acct-field textarea { width:100%; padding:8px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; }
+#kn-award-overlay .kn-acct-field input:focus,
+#kn-award-overlay .kn-acct-field select:focus,
+#kn-award-overlay .kn-acct-field textarea:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
+#kn-award-overlay .kn-form-error { display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px; }
+#kn-award-overlay .kn-char-count { font-size:11px; color:#a0aec0; margin-top:3px; display:block; }
+#kn-award-overlay .kn-award-info-line { font-size:11px; color:#718096; margin-top:4px; min-height:16px; }
 </style>
 
 <!-- =============================================
@@ -774,9 +820,9 @@
 				<i class="fas fa-search"></i> Search Players
 			</a>
 			<?php if ($LoggedIn): ?>
-				<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Award/kingdom/<?= $kingdom_id ?>">
+				<button class="kn-btn kn-btn-outline" onclick="knOpenAwardModal()">
 					<i class="fas fa-medal"></i> Enter Awards
-				</a>
+				</button>
 			<?php endif; ?>
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
 				<i class="fas fa-map"></i> Atlas
@@ -1016,6 +1062,19 @@
 
 			<!-- Events Tab -->
 			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
+				<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<div style="display:flex;align-items:center;gap:8px;">
+						<button id="kn-park-toggle" onclick="knToggleParkItems(this)" style="display:inline-flex;align-items:center;gap:5px;border:1px solid #cbd5e0;background:#fff;border-radius:5px;padding:5px 10px;font-size:12px;color:#718096;cursor:pointer;font-weight:500;">
+							<i class="fas fa-map-marker-alt"></i> Park Events &amp; Tournaments <span id="kn-park-toggle-label" style="font-weight:700;color:#a0aec0">OFF</span>
+						</button>
+						<?php if ($CanManageKingdom): ?>
+						<a href="<?= UIR ?>Admin/manageevent&KingdomId=<?= $kingdom_id ?>" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
+							<i class="fas fa-plus"></i> Add Event
+						</a>
+						<?php endif; ?>
+					</div>
+				</div>
 				<?php if (count($eventList) > 0): ?>
 					<table class="kn-table kn-sortable" id="kn-events-table">
 						<thead>
@@ -1027,7 +1086,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-								<tr class="kn-row-link" onclick="window.location.href='<?= UIR ?>Event/index/<?= $event['EventId'] ?>'">
+								<tr class="kn-row-link<?= $event['_IsParkEvent'] ? ' kn-park-row' : '' ?>" style="<?= $event['_IsParkEvent'] ? 'display:none' : '' ?>" onclick="window.location.href='<?= UIR ?><?= $event['NextDetailId'] ? 'Eventnew/index/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Eventtemplatenew/index/' . $event['EventId'] ?>'">
 									<td class="kn-col-nowrap">
 										<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
 											? date("M j, Y", strtotime($event['NextDate']))
@@ -1038,7 +1097,7 @@
 											src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
-										<a href="<?= UIR ?>Event/index/<?= $event['EventId'] ?>"><?= htmlspecialchars($event['Name']) ?></a>
+										<a href="<?= UIR ?><?= $event['NextDetailId'] ? 'Eventnew/index/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Eventtemplatenew/index/' . $event['EventId'] ?>"><?= htmlspecialchars($event['Name']) ?></a>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
 								</tr>
@@ -1049,7 +1108,14 @@
 					<div class="kn-empty">No upcoming events</div>
 				<?php endif; ?>
 
-				<h4 style="margin:20px 0 10px;font-size:14px;font-weight:700;color:#4a5568;border-top:1px solid #e2e8f0;padding-top:16px;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
+				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid #e2e8f0;padding-top:16px;">
+					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
+					<?php if ($CanManageKingdom): ?>
+					<a href="<?= UIR ?>Tournament/create&KingdomId=<?= $kingdom_id ?>" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
+						<i class="fas fa-plus"></i> Add Tournament
+					</a>
+					<?php endif; ?>
+				</div>
 				<?php if (count($tournamentList) > 0): ?>
 					<table class="kn-table kn-sortable" id="kn-tournaments-table">
 						<thead>
@@ -1062,7 +1128,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($tournamentList as $t): ?>
-								<tr class="kn-row-link" onclick="window.location.href='<?= UIR ?>Tournament/worksheet/<?= $t['TournamentId'] ?>'">
+								<tr class="kn-row-link<?= (int)($t['ParkId'] ?? 0) > 0 ? ' kn-park-row' : '' ?>" style="<?= (int)($t['ParkId'] ?? 0) > 0 ? 'display:none' : '' ?>" onclick="window.location.href='<?= UIR ?>Tournament/worksheet/<?= $t['TournamentId'] ?>'">
 									<td class="kn-col-nowrap"><?= date("M j, Y", strtotime($t['DateTime'])) ?></td>
 									<td>
 										<a href="<?= UIR ?>Tournament/worksheet/<?= $t['TournamentId'] ?>"><?= htmlspecialchars($t['Name']) ?></a>
@@ -1594,11 +1660,24 @@ function knPageRange(current, total) {
 	return pages;
 }
 
+function knToggleParkItems(btn) {
+	var isOn = !$('#kn-events-table').data('show-park');
+	$('#kn-events-table').data('show-park', isOn);
+	$('#kn-tournaments-table').data('show-park', isOn);
+	knPaginate($('#kn-events-table'), 1);
+	knPaginate($('#kn-tournaments-table'), 1);
+	$(btn).css({ background: isOn ? '#276749' : '#fff', color: isOn ? '#fff' : '#718096', 'border-color': isOn ? '#276749' : '#cbd5e0' });
+	$('#kn-park-toggle-label').text(isOn ? 'ON' : 'OFF').css('color', isOn ? 'rgba(255,255,255,0.75)' : '#a0aec0');
+}
+
 function knPaginate($table, page) {
 	var pageSize = 25;
-	var $rows = $table.find('tbody tr');
+	// Enforce park-row visibility before counting
+	var showPark = !!$table.data('show-park');
+	$table.find('tbody tr.kn-park-row').css('display', showPark ? '' : 'none');
+	var $rows = $table.find('tbody tr').filter(function() { return $(this).css('display') !== 'none'; });
 	var total = $rows.length;
-	if (total === 0) return;
+	if (total === 0) { $table.next('.kn-pagination').empty().hide(); return; }
 	var totalPages = Math.max(1, Math.ceil(total / pageSize));
 	page = Math.max(1, Math.min(page, totalPages));
 	$table.data('kn-page', page);
@@ -1799,3 +1878,444 @@ $(document).ready(function() {
 
 });
 </script>
+<?php if ($LoggedIn): ?>
+<div id="kn-award-overlay">
+	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title" id="kn-award-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award</h3>
+			<button class="kn-modal-close-btn" id="kn-award-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body" id="kn-award-modal-body">
+			<div class="kn-award-success" id="kn-award-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Award saved!
+			</div>
+			<div class="kn-form-error" id="kn-award-error"></div>
+
+			<!-- Award Type Toggle -->
+			<div class="kn-award-type-row">
+				<button type="button" class="kn-award-type-btn kn-active" id="kn-award-type-awards">
+					<i class="fas fa-medal" style="margin-right:5px"></i>Awards
+				</button>
+				<button type="button" class="kn-award-type-btn" id="kn-award-type-officers">
+					<i class="fas fa-crown" style="margin-right:5px"></i>Officer Titles
+				</button>
+			</div>
+
+			<!-- Player search -->
+			<div class="kn-acct-field">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-award-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="kn-award-player-id" value="" />
+				<div class="kn-ac-results" id="kn-award-player-results"></div>
+			</div>
+
+			<!-- Award Select -->
+			<div class="kn-acct-field">
+				<label for="kn-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<select id="kn-award-select" name="KingdomAwardId">
+					<option value="">Select award...</option>
+					<?= $AwardOptions ?>
+				</select>
+				<div class="kn-award-info-line" id="kn-award-info-line"></div>
+			</div>
+
+			<!-- Custom Award Name -->
+			<div class="kn-acct-field" id="kn-award-custom-row" style="display:none">
+				<label for="kn-award-custom-name">Custom Award Name</label>
+				<input type="text" id="kn-award-custom-name" maxlength="64" placeholder="Enter custom award name..." />
+			</div>
+
+			<!-- Rank Picker -->
+			<div class="kn-acct-field" id="kn-award-rank-row" style="display:none">
+				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
+				<div class="kn-rank-pills-wrap" id="kn-rank-pills"></div>
+				<input type="hidden" id="kn-award-rank-val" value="" />
+			</div>
+
+			<!-- Date -->
+			<div class="kn-acct-field">
+				<label for="kn-award-date">Date <span style="color:#e53e3e">*</span></label>
+				<input type="date" id="kn-award-date" />
+			</div>
+
+			<!-- Given By -->
+			<div class="kn-acct-field">
+				<label>Given By <span style="color:#e53e3e">*</span></label>
+				<?php if (!empty($PreloadOfficers)): ?>
+				<div class="kn-officer-chips" id="kn-award-officer-chips">
+					<?php foreach ($PreloadOfficers as $officer): ?>
+					<button type="button" class="kn-officer-chip"
+					        data-id="<?= (int)$officer['MundaneId'] ?>"
+					        data-name="<?= htmlspecialchars($officer['Persona']) ?>">
+						<?= htmlspecialchars($officer['Persona']) ?> <span>(<?= htmlspecialchars($officer['Role']) ?>)</span>
+					</button>
+					<?php endforeach; ?>
+				</div>
+				<?php endif; ?>
+				<input type="text" id="kn-award-givenby-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="kn-award-givenby-id" value="" />
+				<div class="kn-ac-results" id="kn-award-givenby-results"></div>
+			</div>
+
+			<!-- Given At -->
+			<div class="kn-acct-field">
+				<label>Given At <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<input type="text" id="kn-award-givenat-text"
+				       placeholder="Search park, kingdom, or event..."
+				       autocomplete="off"
+				       value="<?= htmlspecialchars($kingdom_name ?? '') ?>" />
+				<div class="kn-ac-results" id="kn-award-givenat-results"></div>
+				<input type="hidden" id="kn-award-park-id" value="0" />
+				<input type="hidden" id="kn-award-kingdom-id" value="<?= (int)$kingdom_id ?>" />
+				<input type="hidden" id="kn-award-event-id" value="0" />
+			</div>
+
+			<!-- Note -->
+			<div class="kn-acct-field">
+				<label for="kn-award-note">Note <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<textarea id="kn-award-note" rows="3" maxlength="400" placeholder="What was this award given for?"></textarea>
+				<span class="kn-char-count" id="kn-award-char-count">400 characters remaining</span>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn-ghost" id="kn-award-cancel">Close</button>
+			<div style="display:flex;gap:8px">
+				<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
+					<i class="fas fa-plus"></i> Add + Same Player
+				</button>
+				<button class="kn-btn kn-btn-primary" id="kn-award-save-new" disabled>
+					<i class="fas fa-plus"></i> Add + New Player
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var UIR_JS     = <?= json_encode(UIR) ?>;
+	var SEARCH_URL = '<?= HTTP_SERVICE ?>Search/SearchService.php';
+	var KINGDOM_ID = <?= (int)$kingdom_id ?>;
+	var awardOptHTML   = <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>;
+	var officerOptHTML = <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>;
+	var currentType = 'awards';
+	var givenByTimer, givenAtTimer, playerTimer;
+
+	function gid(id) { return document.getElementById(id); }
+
+	function checkRequired() {
+		var ok = !!gid('kn-award-player-id').value
+		      && !!gid('kn-award-select').value
+		      && !!gid('kn-award-givenby-id').value
+		      && !!gid('kn-award-date').value;
+		gid('kn-award-save-new').disabled  = !ok;
+		gid('kn-award-save-same').disabled = !ok;
+	}
+
+	function setAwardType(type) {
+		currentType = type;
+		var isOfficer = type === 'officers';
+		gid('kn-award-modal-title').innerHTML = isOfficer
+			? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
+			: '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
+		gid('kn-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+		gid('kn-award-rank-row').style.display   = 'none';
+		gid('kn-award-rank-val').value           = '';
+		gid('kn-award-info-line').innerHTML      = '';
+		gid('kn-award-type-awards').classList.toggle('kn-active', !isOfficer);
+		gid('kn-award-type-officers').classList.toggle('kn-active', isOfficer);
+		checkRequired();
+	}
+
+	gid('kn-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
+	gid('kn-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+
+	function buildRankPills(awardId) {
+		var row   = gid('kn-award-rank-row');
+		var wrap  = gid('kn-rank-pills');
+		var input = gid('kn-award-rank-val');
+		wrap.innerHTML = '';
+		input.value = '';
+		row.style.display = 'none';
+		if (!awardId) return;
+		var opt = gid('kn-award-select').querySelector('option[value="' + awardId + '"]');
+		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
+		row.style.display = '';
+		for (var r = 1; r <= 10; r++) {
+			var pill = document.createElement('button');
+			pill.type      = 'button';
+			pill.className = 'kn-rank-pill';
+			pill.textContent = r;
+			pill.dataset.rank = r;
+			pill.addEventListener('click', (function(rank, el) {
+				return function() {
+					document.querySelectorAll('#kn-rank-pills .kn-rank-pill').forEach(function(p) { p.classList.remove('kn-rank-selected'); });
+					el.classList.add('kn-rank-selected');
+					input.value = rank;
+				};
+			})(r, pill));
+			wrap.appendChild(pill);
+		}
+	}
+
+	gid('kn-award-select').addEventListener('change', function() {
+		var awardId = this.value;
+		var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
+		gid('kn-award-custom-row').style.display = isCustom ? '' : 'none';
+		buildRankPills(awardId);
+		var infoEl = gid('kn-award-info-line');
+		if (awardId) {
+			var opt = this.querySelector('option[value="' + awardId + '"]');
+			infoEl.innerHTML = opt && opt.getAttribute('data-is-ladder') === '1'
+				? '<span class="kn-badge-ladder"><i class="fas fa-layer-group"></i> Ladder Award</span>'
+				: '';
+		} else { infoEl.innerHTML = ''; }
+		checkRequired();
+	});
+
+	// Player search autocomplete
+	gid('kn-award-player-text').addEventListener('input', function() {
+		gid('kn-award-player-id').value = '';
+		checkRequired();
+		var term = this.value.trim();
+		if (term.length < 2) { gid('kn-award-player-results').classList.remove('kn-ac-open'); return; }
+		clearTimeout(playerTimer);
+		playerTimer = setTimeout(function() {
+			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=8';
+			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+				var el = gid('kn-award-player-results');
+				el.innerHTML = (data && data.length)
+					? data.map(function(p) {
+						return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+					}).join('')
+					: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+				el.classList.add('kn-ac-open');
+			}).catch(function() {});
+		}, 250);
+	});
+	gid('kn-award-player-results').addEventListener('click', function(e) {
+		var item = e.target.closest('.kn-ac-item[data-id]');
+		if (!item) return;
+		gid('kn-award-player-text').value = decodeURIComponent(item.dataset.name);
+		gid('kn-award-player-id').value   = item.dataset.id;
+		this.classList.remove('kn-ac-open');
+		checkRequired();
+	});
+
+	// Given By — officer chips + search
+	<?php if (!empty($PreloadOfficers)): ?>
+	document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(c) { c.classList.remove('kn-selected'); });
+			this.classList.add('kn-selected');
+			gid('kn-award-givenby-text').value = this.dataset.name;
+			gid('kn-award-givenby-id').value   = this.dataset.id;
+			gid('kn-award-givenby-results').classList.remove('kn-ac-open');
+			checkRequired();
+		});
+	});
+	<?php endif; ?>
+	gid('kn-award-givenby-text').addEventListener('input', function() {
+		gid('kn-award-givenby-id').value = '';
+		document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(c) { c.classList.remove('kn-selected'); });
+		checkRequired();
+		var term = this.value.trim();
+		if (term.length < 2) { gid('kn-award-givenby-results').classList.remove('kn-ac-open'); return; }
+		clearTimeout(givenByTimer);
+		givenByTimer = setTimeout(function() {
+			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+				var el = gid('kn-award-givenby-results');
+				el.innerHTML = (data && data.length)
+					? data.map(function(p) {
+						return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+					}).join('')
+					: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
+				el.classList.add('kn-ac-open');
+			}).catch(function() {});
+		}, 250);
+	});
+	gid('kn-award-givenby-results').addEventListener('click', function(e) {
+		var item = e.target.closest('.kn-ac-item[data-id]');
+		if (!item) return;
+		gid('kn-award-givenby-text').value = decodeURIComponent(item.dataset.name);
+		gid('kn-award-givenby-id').value   = item.dataset.id;
+		this.classList.remove('kn-ac-open');
+		checkRequired();
+	});
+
+	// Given At — location search
+	gid('kn-award-givenat-text').addEventListener('input', function() {
+		var term = this.value.trim();
+		if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
+		clearTimeout(givenAtTimer);
+		givenAtTimer = setTimeout(function() {
+			var url = SEARCH_URL + '?Action=Search%2FLocation&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+				var el = gid('kn-award-givenat-results');
+				el.innerHTML = (data && data.length)
+					? data.map(function(loc) {
+						return '<div class="kn-ac-item" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
+							+ (loc.LocationName || loc.ShortName || '') + '</div>';
+					}).join('')
+					: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No locations found</div>';
+				el.classList.add('kn-ac-open');
+			}).catch(function() {});
+		}, 250);
+	});
+	gid('kn-award-givenat-results').addEventListener('click', function(e) {
+		var item = e.target.closest('.kn-ac-item');
+		if (!item || !item.dataset.name) return;
+		gid('kn-award-givenat-text').value    = decodeURIComponent(item.dataset.name);
+		gid('kn-award-park-id').value         = item.dataset.pid || '0';
+		gid('kn-award-kingdom-id').value      = item.dataset.kid || '0';
+		gid('kn-award-event-id').value        = item.dataset.eid || '0';
+		this.classList.remove('kn-ac-open');
+	});
+
+	// Note char counter
+	gid('kn-award-note').addEventListener('input', function() {
+		var rem = 400 - this.value.length;
+		var el  = gid('kn-award-char-count');
+		el.textContent = rem + ' character' + (rem !== 1 ? 's' : '') + ' remaining';
+	});
+
+	gid('kn-award-select').addEventListener('change', checkRequired);
+	gid('kn-award-date').addEventListener('change', checkRequired);
+	gid('kn-award-date').addEventListener('input',  checkRequired);
+
+	// ---- Open / Close ----
+	window.knOpenAwardModal = function() {
+		var today = new Date();
+		gid('kn-award-error').style.display      = 'none';
+		gid('kn-award-error').textContent        = '';
+		gid('kn-award-success').style.display    = 'none';
+		gid('kn-award-player-text').value        = '';
+		gid('kn-award-player-id').value          = '';
+		gid('kn-award-player-results').classList.remove('kn-ac-open');
+		gid('kn-award-note').value               = '';
+		gid('kn-award-char-count').textContent   = '400 characters remaining';
+		gid('kn-award-givenby-text').value       = '';
+		gid('kn-award-givenby-id').value         = '';
+		gid('kn-award-givenby-results').classList.remove('kn-ac-open');
+		gid('kn-award-givenat-text').value       = <?= json_encode($kingdom_name ?? '') ?>;
+		gid('kn-award-park-id').value            = '0';
+		gid('kn-award-kingdom-id').value         = '<?= (int)$kingdom_id ?>';
+		gid('kn-award-event-id').value           = '0';
+		gid('kn-award-givenat-results').classList.remove('kn-ac-open');
+		gid('kn-award-custom-name').value        = '';
+		gid('kn-award-custom-row').style.display = 'none';
+		gid('kn-award-rank-row').style.display   = 'none';
+		gid('kn-award-rank-val').value           = '';
+		gid('kn-award-info-line').innerHTML      = '';
+		document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(c) { c.classList.remove('kn-selected'); });
+		gid('kn-award-date').value = today.getFullYear() + '-'
+			+ String(today.getMonth() + 1).padStart(2, '0') + '-'
+			+ String(today.getDate()).padStart(2, '0');
+		setAwardType('awards');
+		checkRequired();
+		gid('kn-award-overlay').classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+		gid('kn-award-player-text').focus();
+	};
+	window.knCloseAwardModal = function() {
+		gid('kn-award-overlay').classList.remove('kn-open');
+		document.body.style.overflow = '';
+	};
+
+	gid('kn-award-close-btn').addEventListener('click', knCloseAwardModal);
+	gid('kn-award-cancel').addEventListener('click',    knCloseAwardModal);
+	gid('kn-award-overlay').addEventListener('click', function(e) {
+		if (e.target === this) knCloseAwardModal();
+	});
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && gid('kn-award-overlay').classList.contains('kn-open'))
+			knCloseAwardModal();
+	});
+
+	// ---- Save helpers ----
+	var knSuccessTimer = null;
+	function knShowSuccess() {
+		var el = gid('kn-award-success');
+		el.style.display = '';
+		clearTimeout(knSuccessTimer);
+		knSuccessTimer = setTimeout(function() { el.style.display = 'none'; }, 3000);
+	}
+	function knClearPlayer() {
+		gid('kn-award-player-text').value = '';
+		gid('kn-award-player-id').value   = '';
+		gid('kn-award-player-results').classList.remove('kn-ac-open');
+	}
+	function knClearAward() {
+		gid('kn-award-select').value             = '';
+		gid('kn-award-rank-val').value           = '';
+		gid('kn-award-rank-row').style.display   = 'none';
+		gid('kn-rank-pills').innerHTML           = '';
+		gid('kn-award-note').value               = '';
+		gid('kn-award-char-count').textContent   = '400 characters remaining';
+		gid('kn-award-info-line').innerHTML      = '';
+		gid('kn-award-custom-name').value        = '';
+		gid('kn-award-custom-row').style.display = 'none';
+		checkRequired();
+	}
+	function knDoSave(onSuccess) {
+		var errEl    = gid('kn-award-error');
+		var playerId = gid('kn-award-player-id').value;
+		var awardId  = gid('kn-award-select').value;
+		var giverId  = gid('kn-award-givenby-id').value;
+		var date     = gid('kn-award-date').value;
+
+		errEl.style.display = 'none';
+		if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = ''; return; }
+		if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = ''; return; }
+		if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = ''; return; }
+		if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = ''; return; }
+
+		var fd = new FormData();
+		fd.append('KingdomAwardId', awardId);
+		fd.append('GivenById',      giverId);
+		fd.append('Date',           date);
+		fd.append('ParkId',         gid('kn-award-park-id').value    || '0');
+		fd.append('KingdomId',      gid('kn-award-kingdom-id').value || '0');
+		fd.append('EventId',        gid('kn-award-event-id').value   || '0');
+		fd.append('Note',           gid('kn-award-note').value       || '');
+		var rank = gid('kn-award-rank-val').value;
+		if (rank) fd.append('Rank', rank);
+		var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
+		if (customName) fd.append('AwardName', customName);
+
+		var btnNew  = gid('kn-award-save-new');
+		var btnSame = gid('kn-award-save-same');
+		btnNew.disabled = btnSame.disabled = true;
+		btnNew.innerHTML  = '<i class="fas fa-spinner fa-spin"></i>';
+		btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+		var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
+		fetch(saveUrl, { method: 'POST', body: fd })
+			.then(function(resp) {
+				if (!resp.ok) throw new Error('Server returned ' + resp.status);
+				onSuccess();
+			})
+			.catch(function(err) {
+				errEl.textContent = 'Save failed: ' + err.message;
+				errEl.style.display = '';
+			})
+			.finally(function() {
+				btnNew.innerHTML  = '<i class="fas fa-plus"></i> Add + New Player';
+				btnSame.innerHTML = '<i class="fas fa-plus"></i> Add + Same Player';
+				checkRequired();
+			});
+	}
+
+	// "Add + New Player" — clear player + award/rank/note, keep date/giver/location
+	gid('kn-award-save-new').addEventListener('click', function() {
+		knDoSave(function() { knShowSuccess(); knClearPlayer(); knClearAward(); gid('kn-award-player-text').focus(); });
+	});
+	// "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
+	gid('kn-award-save-same').addEventListener('click', function() {
+		knDoSave(function() { knShowSuccess(); knClearAward(); gid('kn-award-select').focus(); });
+	});
+})();
+</script>
+<?php endif; ?>

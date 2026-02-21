@@ -1380,9 +1380,15 @@ class Player extends Ork3 {
 			$dues->park_id = $request['ParkId'];
 			$dues->kingdom_id = $request['KingdomId'];
 			$dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
-			// TODO: create private function that determins DuesUntil based on kingdom configured terms
-			$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
-			$dues->terms = $request['Terms'];
+			if (!empty($request['Months'])) {
+				// Direct month entry — bypass kingdom period config
+				$months = max(1, (int)$request['Months']);
+				$dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $months . ' months'));
+				$dues->terms = $months;
+			} else {
+				$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
+				$dues->terms = $request['Terms'];
+			}
 			$dues->dues_for_life = $request['DuesForLife'];
 			$dues->save();
 

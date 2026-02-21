@@ -5,6 +5,7 @@ class Controller_Kingdomnew extends Controller {
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
 		$this->load_model('Kingdom');
+		$this->load_model('Award');
 		$id = preg_replace('/[^0-9]/', '', $id);
 
 		if ($id != $this->session->kingdom_id) {
@@ -50,19 +51,61 @@ class Controller_Kingdomnew extends Controller {
 		$this->load_model('Reports');
 		$this->data['park_summary']        = $this->Kingdom->get_park_summary($kingdom_id);
 		$this->data['principalities']      = $this->Kingdom->get_principalities($kingdom_id);
-		$this->data['event_summary']       = $this->Kingdom->get_kingdom_events($kingdom_id);
 		$this->data['kingdom_info']        = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
 		$this->data['kingdom_officers']    = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
 		$this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
+
+		$this->data['AwardOptions']   = $this->Award->fetch_award_option_list($kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($kingdom_id, 'Officers');
+		$preloadOfficers = [];
+		foreach ($this->data['kingdom_officers']['Officers'] ?? [] as $o) {
+			if (in_array($o['OfficerRole'], ['Monarch', 'Regent']) && (int)$o['MundaneId'] > 0)
+				$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => $o['OfficerRole']];
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
 		$this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $kingdom_id);
 		$rawParks = $this->Kingdom->GetParks(['KingdomId' => $kingdom_id]);
 		$this->data['map_parks'] = is_array($rawParks['Parks'])
 			? array_values(array_filter($rawParks['Parks'], function($p) { return $p['Active'] == 'Active'; }))
 			: [];
 
-		// Per-park distinct player counts over the past 12 months
 		global $DB;
 		$kid = (int)$kingdom_id;
+
+		// All upcoming events for this kingdom (kingdom-level + park-level), no service limit
+		$evtSql = "
+			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry
+			FROM ork_event e
+			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			LEFT JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id AND cd.current = 1
+			WHERE e.kingdom_id = {$kid}
+			  AND (cd.current = 1 OR cd.current IS NULL)
+			  AND cd.event_start IS NOT NULL
+			  AND cd.event_start > DATE_SUB(NOW(), INTERVAL 7 DAY)
+			ORDER BY cd.event_start, p.name, e.name";
+		$evtResult = $DB->DataSet($evtSql);
+		$eventSummary = [];
+		$evtSeen = [];
+		if ($evtResult && $evtResult->Size() > 0) {
+			while ($evtResult->Next()) {
+				$eid = (int)$evtResult->event_id;
+				if (!isset($evtSeen[$eid])) {
+					$evtSeen[$eid] = true;
+					$eventSummary[] = [
+						'EventId'      => $eid,
+						'Name'         => $evtResult->name,
+						'ParkName'     => $evtResult->park_name,
+						'NextDate'     => $evtResult->event_start,
+						'NextDetailId' => (int)$evtResult->next_detail_id,
+						'HasHeraldry'  => (int)$evtResult->has_heraldry,
+						'_IsParkEvent' => (int)$evtResult->park_id > 0,
+					];
+				}
+			}
+		}
+		$this->data['event_summary'] = $eventSummary;
+
+		// Per-park distinct player counts over the past 12 months
 		$pcSql = "
 			SELECT
 				a.park_id,
@@ -136,6 +179,10 @@ class Controller_Kingdomnew extends Controller {
 			}
 		}
 		$this->data['kingdom_players'] = $kingdomPlayers;
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$this->data['CanManageKingdom'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 	}
 
 }

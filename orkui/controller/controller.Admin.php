@@ -946,6 +946,7 @@ class Controller_Admin extends Controller {
 								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
 								'DuesFrom' => $this->request->Admin_player->DuesFrom,
 								'Terms' => $this->request->Admin_player->Terms,
+								'Months' => $this->request->Admin_player->Months,
 								'DuesForLife' => $this->request->Admin_player->DuesForLife
 							));
 						break;
