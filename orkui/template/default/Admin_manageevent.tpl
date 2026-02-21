@@ -357,7 +357,7 @@
 	    <div style='max-width: 350px;' id='create-warning'>
 	        <h3>Are you sure?</h3>
 	        
-	        Are you sure you need a new event?  This is very uncommon.  Your common Park and Kingdom events (such as Midreign and Crown Quals) already exist! Do a search for your Park or Kingdom's existing events and add an event date to them.
+	        Are you sure you need a new event template?  This is very uncommon.  Your common Park and Kingdom event templates (such as Midreign and Crown Quals) already exist! Do a search for your Park or Kingdom's existing event templates and add a scheduled date to them.
 	        
 	        <p>
 	        
@@ -397,12 +397,12 @@
 		</div>
 <?php endif ?>
 		<div>
-			<span>Event Name:</span>
+			<span>Template Name:</span>
 			<span><input type='text' class='name-field' value='<?=$Admin_manageevent['CreateEventName'] ?>' name='CreateEventName' id='CreateEventName' /></span>
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' value='Create Event' name='Create Event' /></span>
+			<span><input type='submit' value='Create Event Template' name='Create Event' /></span>
 		</div>
 		<input type='hidden' name='CreateUnitId' id='CreateUnitId' value='<?=(isset($CreateUnitId)?$CreateUnitId:$Admin_manageevent['CreateUnitId']) ?>' />
 		<input type='hidden' name='CreateKingdomId' id='CreateKingdomId' value='<?=(isset($this->__session->kingdom_id)?$this->__session->kingdom_id:$Admin_manageevent['CreateKingdomId']) ?>' />
@@ -431,7 +431,7 @@
 			<span><input type='text' value='<?=$Admin_manageevent['PlayerName'] ?>' name='PlayerName' id='PlayerName' /></span>
 		</div>
 		<div>
-			<span>Event:</span>
+			<span>Template Name:</span>
 			<span><input type='text' value='<?=$Admin_manageevent['EventName'] ?>' name='EventName' id='EventName' /></span>
 		</div>
 		<input type='hidden' name='KingdomId' id='KingdomId' value='<?=(isset($this->__session->kingdom_id)?$this->__session->kingdom_id:$Admin_manageevent['KingdomId']) ?>' />
@@ -442,7 +442,7 @@
 </div>
 
 <div class='info-container'>
-	<h3>Events</h3>
+	<h3>Event Templates</h3>
 	<table class='information-table action-table' id='EventListTable'>
 		<thead>
 			<tr>
@@ -450,7 +450,7 @@
 				<th>Park</th>
 				<th>Unit</th>
 				<th>Player</th>
-				<th>Event</th>
+				<th>Template Name</th>
 			</tr>
 		</thead>
 		<tbody>

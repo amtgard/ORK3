@@ -9,7 +9,7 @@
 		<meta name=viewport content="user-scalable=no,width=device-width,minimum-scale=1" />
 		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css" rel="stylesheet" />
-		
+
     	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.2/css/all.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous">
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
 		<!-- Google tag (gtag.js) -->
@@ -32,57 +32,237 @@
 
 		</div>
 
-	
 	<a id="simple-menu" href="#sidr">Menu</a>
-	<div id='newmenu'>
-	<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
-			<div id='navmenu'>
-				<ul>
-	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
-	<?php endforeach; ?>
-				</ul>
+
+	<nav id='newmenu'>
+		<!-- Left: breadcrumb navigation -->
+		<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
+		<div id='navmenu'>
+			<ul>
+<?php foreach ($menu as $k => $item) : ?>
+				<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
+<?php endforeach; ?>
+			</ul>
+		</div>
+		<?php else : ?>
+		<div id='navmenu'></div>
+		<?php endif; ?>
+
+		<!-- Right: controls -->
+		<div id='controls'>
+			<!-- Universal search -->
+			<div id='nav-search-wrap'>
+				<a class='nav-icon-btn' id='nav-search-toggle' onclick='nsToggle(this)' title='Search'><i class='fas fa-search'></i></a>
+				<div id='nav-search-input-wrap'>
+					<input id='UniversalSearch' placeholder='Search players, parks, kingdoms&hellip;' class='nav-search-input' autocomplete='off' />
+					<div id='nav-search-dropdown'></div>
+				</div>
 			</div>
-	<?php endif; ?>
-			<div id='controls'>
-				<ul>
-					<li><a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target="_blank" style='border-right: 1px solid #666; padding-right: 6px;'>Documentation</a></li>
-	<?php if ($this->__session->token == null) : ?>
-					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
-	<?php else : ?>
-					<li>Logged in as <a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
-					<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"' >Logout</button></li>
-	<?php endif; ?>
-          <li class='search-switch search-switch-on'><a onclick="$('.search-switch').toggle('slow').css('display', 'table-cell');">Search</a></li>
-					<li class='search-switch search-switch-off'><input id='PlayerSearch' placeholder="Players" /></li>
-					<li class='search-switch search-switch-off'><input id='ParkSearch' placeholder="Parks" /></li>
-				</ul>
+
+			<!-- Documentation -->
+			<a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target='_blank' class='nav-icon-btn' title='Documentation'><i class='fas fa-book'></i></a>
+
+<?php if ($this->__session->token == null) : ?>
+			<a href='<?=UIR;?>Login' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
+<?php else : ?>
+<?php $__navUid = (int)$this->__session->user_id; ?>
+			<div class='nav-dropdown-wrap' id='nav-avatar-wrap'>
+				<button class='nav-avatar-btn' onclick="document.getElementById('nav-avatar-wrap').classList.toggle('open')">
+					<span class='nav-avatar-img-wrap'>
+						<img class='nav-avatar-img'
+							src='<?=HTTP_ASSETS?>players/<?=$__navUid?>.jpg'
+							onerror="this.onerror=null;this.src='<?=HTTP_ASSETS?>heraldry/player/<?=$__navUid?>.gif';this.onerror=function(){this.style.display='none';this.nextElementSibling.style.display='inline-block';};"
+							alt=''
+						/><i class='fas fa-user-circle nav-avatar-fallback-icon'></i>
+					</span>
+					<span class='nav-username'><?=htmlspecialchars($this->__session->user_name)?></span>
+					<i class='fas fa-chevron-down nav-chevron'></i>
+				</button>
+				<div class='nav-dropdown-menu'>
+					<a href='<?=UIR?>Playernew/index/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
+					<a href='<?=UIR?>Admin/player/<?=$__navUid?>'><i class='fas fa-edit'></i> Edit Profile</a>
+					<div class='nav-dropdown-divider'></div>
+					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
+				</div>
 			</div>
-	</div>
+<?php endif; ?>
+		</div>
+	</nav>
 
 	<div id="sidr">
-		<!-- Your content -->
 		<ul>
-				<ul>
-          <li><a href='https://www.facebook.com/mORKmobile/posts/2275859462673190'>Get the ORK Mobile!</a></li>
-	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a></li>
-	<?php endforeach; ?>
-	<?php if ($this->__session->token == null) : ?>
-					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
-	<?php else : ?>
-					<li><a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
-					<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"' >Logout</button></li>
-	<?php endif; ?>
-				</ul>
+			<ul>
+				<li><a href='https://www.facebook.com/mORKmobile/posts/2275859462673190'>Get the ORK Mobile!</a></li>
+<?php foreach ($menu as $k => $item) : ?>
+				<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a></li>
+<?php endforeach; ?>
+<?php if ($this->__session->token == null) : ?>
+				<li><a href='<?=UIR;?>Login'>Login</a></li>
+<?php else : ?>
+<?php $__sideUid = (int)$this->__session->user_id; ?>
+				<li><a href='<?=UIR;?>Playernew/index/<?=$__sideUid?>'><?=htmlspecialchars($this->__session->user_name)?></a></li>
+				<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"'>Logout</button></li>
+<?php endif; ?>
+			</ul>
 		</ul>
 	</div>
 
 	<script>
-		$(document).ready(function() {
-			$('#simple-menu').sidr();
+	// ---- Search toggle ----
+	function nsToggle(btn) {
+		var sw = document.getElementById('nav-search-wrap');
+		var isOpen = sw.classList.toggle('nav-search-open');
+		btn.classList.toggle('active');
+		if (isOpen) {
+			setTimeout(function(){ var el = document.getElementById('UniversalSearch'); if (el) el.focus(); }, 50);
+		} else {
+			var el = document.getElementById('UniversalSearch');
+			if (el) el.value = '';
+			var dd = document.getElementById('nav-search-dropdown');
+			if (dd) { dd.className = ''; dd.innerHTML = ''; }
+		}
+	}
+
+	$(document).ready(function() {
+		// ---- Sidr mobile menu ----
+		$('#simple-menu').sidr();
+
+		// ---- Avatar dropdown: close on outside click ----
+		$(document).on('click.avatarDropdown', function(e) {
+			var wrap = document.getElementById('nav-avatar-wrap');
+			if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
 		});
+
+		// ---- Universal search ----
+		var nsTimer = null;
+		var svcUrl = '../orkservice/Search/SearchService.php';
+
+		function nsEsc(str) {
+			return $('<span>').text(str || '').html();
+		}
+
+		function nsSearch(term) {
+			var $dd = $('#nav-search-dropdown');
+			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
+
+			var res = { players: [], parks: [], kingdoms: [], units: [] };
+			var pending = 4;
+
+			function finish() {
+				if (--pending === 0) nsRender(res);
+			}
+
+			$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: term, limit: 4 },
+				function(d) { res.players = Array.isArray(d) ? d : []; }).always(finish);
+			$.getJSON(svcUrl, { Action: 'Search/Park', name: term, limit: 4 },
+				function(d) { res.parks = Array.isArray(d) ? d : []; }).always(finish);
+			$.getJSON(svcUrl, { Action: 'Search/Kingdom', name: term, limit: 3 },
+				function(d) { res.kingdoms = Array.isArray(d) ? d : []; }).always(finish);
+			$.getJSON(svcUrl, { Action: 'Search/Unit', name: term, limit: 3 },
+				function(d) { res.units = Array.isArray(d) ? d : []; }).always(finish);
+		}
+
+		function nsRender(res) {
+			var $dd = $('#nav-search-dropdown');
+			var html = '';
+			var sep = false;
+
+			if (res.players.length) {
+				html += '<div class="nsdd-section-header"><i class="fas fa-user fa-fw"></i>&ensp;Players</div>';
+				$.each(res.players.slice(0, 4), function(i, p) {
+					var lbl = (p.Persona && p.Persona.length) ? nsEsc(p.Persona) : '<em class="nsdd-no-value">No Persona</em>';
+					var sub = nsEsc((p.KAbbr || '') + ' \u00b7 ' + (p.ParkName || p.PAbbr || ''));
+					html += '<a class="nsdd-item" href="?Route=Player/index/' + p.MundaneId + '">' +
+						'<span class="nsdd-item-icon"><i class="fas fa-user fa-fw"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + lbl + '</div>' +
+						'<div class="nsdd-item-sub">' + sub + '</div></span></a>';
+				});
+				sep = true;
+			}
+
+			if (res.parks.length) {
+				if (sep) html += '<div class="nsdd-divider"></div>';
+				html += '<div class="nsdd-section-header"><i class="fas fa-tree fa-fw"></i>&ensp;Parks</div>';
+				$.each(res.parks.slice(0, 3), function(i, p) {
+					html += '<a class="nsdd-item" href="?Route=Park/index/' + p.ParkId + '">' +
+						'<span class="nsdd-item-icon"><i class="fas fa-tree fa-fw"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(p.Name) + '</div></span></a>';
+				});
+				sep = true;
+			}
+
+			if (res.kingdoms.length) {
+				if (sep) html += '<div class="nsdd-divider"></div>';
+				html += '<div class="nsdd-section-header"><i class="fas fa-crown fa-fw"></i>&ensp;Kingdoms</div>';
+				$.each(res.kingdoms.slice(0, 2), function(i, k) {
+					html += '<a class="nsdd-item" href="?Route=Kingdom/index/' + k.KingdomId + '">' +
+						'<span class="nsdd-item-icon"><i class="fas fa-crown fa-fw"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(k.Name) + '</div></span></a>';
+				});
+				sep = true;
+			}
+
+			if (res.units.length) {
+				if (sep) html += '<div class="nsdd-divider"></div>';
+				html += '<div class="nsdd-section-header"><i class="fas fa-shield-alt fa-fw"></i>&ensp;Companies &amp; Households</div>';
+				$.each(res.units.slice(0, 3), function(i, u) {
+					var icon = (u.Type === 'Household') ? 'fas fa-home fa-fw' : 'fas fa-shield-alt fa-fw';
+					html += '<a class="nsdd-item" href="?Route=Unit/index/' + u.UnitId + '">' +
+						'<span class="nsdd-item-icon"><i class="' + icon + '"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(u.Name) + '</div>' +
+						'<div class="nsdd-item-sub">' + nsEsc(u.Type || '') + '</div></span></a>';
+				});
+			}
+
+			if (!html) {
+				html = '<div class="nsdd-empty">No results found</div>';
+			}
+
+			$dd.html(html);
+		}
+
+		$('#UniversalSearch').on('input', function() {
+			var term = $.trim($(this).val());
+			clearTimeout(nsTimer);
+			if (term.length < 2) {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+				return;
+			}
+			nsTimer = setTimeout(function() { nsSearch(term); }, 350);
+		}).on('keydown', function(e) {
+			if (e.key === 'Escape') {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+				document.getElementById('nav-search-wrap').classList.remove('nav-search-open');
+				document.getElementById('nav-search-toggle').classList.remove('active');
+				$(this).blur();
+			} else if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				$('#nav-search-dropdown .nsdd-item').first().focus();
+			}
+		});
+
+		$('#nav-search-dropdown').on('keydown', '.nsdd-item', function(e) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				$(this).nextAll('.nsdd-item').first().focus();
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				var $prev = $(this).prevAll('.nsdd-item').first();
+				if ($prev.length) $prev.focus(); else $('#UniversalSearch').focus();
+			} else if (e.key === 'Escape') {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+				$('#UniversalSearch').focus();
+			}
+		});
+
+		// Close search dropdown on outside click
+		$(document).on('click.searchDropdown', function(e) {
+			if (!$(e.target).closest('#nav-search-wrap').length) {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+			}
+		});
+	});
 	</script>
-	
+
 	</body>
 </html>
