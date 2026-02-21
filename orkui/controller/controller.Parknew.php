@@ -6,6 +6,7 @@ class Controller_Parknew extends Controller
 	{
 		parent::__construct( $call, $id );
 		$this->load_model('Park');
+		$this->load_model('Award');
 		$id = preg_replace('/[^0-9]/', '', $id);
 
 		if ( $id != $this->session->park_id ) {
@@ -65,6 +66,15 @@ class Controller_Parknew extends Controller
 		$this->data['park_officers']    = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
 		$this->data['park_tournaments'] = $this->Reports->get_tournaments( null, null, $park_id );
 
+		$this->data['AwardOptions']   = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
+		$preloadOfficers = [];
+		foreach ($this->data['park_officers']['Officers'] ?? [] as $o) {
+			if (in_array($o['OfficerRole'], ['Monarch', 'Regent']) && (int)$o['MundaneId'] > 0)
+				$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => $o['OfficerRole']];
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
+
 		// All park members who have ever signed in here; signin_count = past-6-months only
 		global $DB;
 		$pid = (int)$park_id;
@@ -115,6 +125,10 @@ class Controller_Parknew extends Controller
 			}
 		}
 		$this->data['park_players'] = $parkPlayers;
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$this->data['CanManagePark'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
 	}
 }
 

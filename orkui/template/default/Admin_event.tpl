@@ -253,7 +253,7 @@
 </div>
 
 <div class='info-container' id='event-editor'>
-	<h3>Update or Schedule Event Date Details</h3>
+	<h3>Schedule a Date &mdash; Add or Edit Scheduled Instance</h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/event/<?=$EventDetails['EventInfo'][0]['EventId'] ?>/new'>
 		<div>
 			<span>Start:</span>
@@ -316,7 +316,7 @@
 </div>
 
 <div class='info-container'>
-	<h3>Edit Past <?=$EventDetails['Name'] ?></h3>
+	<h3>Scheduled Dates &mdash; <?=$EventDetails['Name'] ?></h3>
 	<table class='information-table action-table' id='EventListTable'>
 		<thead>
 			<tr>

@@ -141,7 +141,7 @@ class SearchService extends Ork3 {
 			return $cache;
 		
     	$limit = min($limit, 50);
-		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
+		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
@@ -178,6 +178,7 @@ class SearchService extends Ork3 {
 						'Persona' => $d->persona,
 						'UnitName' => $d->unit_name,
 						'NextDate' => $d->event_start,
+						'NextDetailId' => $d->next_detail_id,
 						'ShortDescription' => $d->short_description,
 						'HasHeraldry' => $d->has_heraldry
 					);

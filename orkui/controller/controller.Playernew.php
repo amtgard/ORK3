@@ -74,6 +74,13 @@ class Controller_Playernew extends Controller {
 							'RequestedBy'       => $this->session->user_id
 						));
 						break;
+					case 'quitunit':
+						$r = $this->Unit->retire_unit_member(array(
+							'UnitMundaneId' => $roastbeef,
+							'UnitId'        => $id,
+							'Token'         => $this->session->token
+						));
+						break;
 				}
 				if ($r['Status'] == 0) {
 					$this->data['Message'] = $r['Detail'] ? $r['Detail'] : 'Updated successfully.';
@@ -90,6 +97,7 @@ class Controller_Playernew extends Controller {
 		$this->data['LoggedIn'] = isset($this->session->user_id);
 		$this->data['KingdomId'] = $this->session->kingdom_id;
 		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player'] = $this->Player->fetch_player($id);
 		$this->data['Player']['LastSignInDate'] = $this->Player->get_latest_attendance_date($id);
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
@@ -101,6 +109,7 @@ class Controller_Playernew extends Controller {
 
 		// Current officer positions for this player
 		global $DB;
+		$playerParkId = (int)$this->data['Player']['ParkId'];
 		$officerSql = "SELECT o.role, o.park_id,
 			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park') ELSE 'Kingdom' END AS entity_type,
 			CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
@@ -109,6 +118,7 @@ class Controller_Playernew extends Controller {
 			LEFT JOIN ork_park p ON o.park_id = p.park_id AND o.park_id > 0
 			LEFT JOIN ork_parktitle pt ON p.parktitle_id = pt.parktitle_id
 			WHERE o.mundane_id = " . (int)$id . "
+			  AND (o.park_id = $playerParkId OR o.park_id = 0)
 			ORDER BY o.park_id DESC, o.role";
 		$officerResult = $DB->DataSet($officerSql);
 		$officerRoles = array();

@@ -177,6 +177,11 @@
 .pk-btn-white:hover { background: #f0f0f0; color: #2d3748; }
 .pk-btn-outline { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3); }
 .pk-btn-outline:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.pk-btn-primary { background: #2c5282; color: #fff; }
+.pk-btn-primary:hover:not(:disabled) { background: #2a4a7f; }
+.pk-btn-secondary { background: #edf2f7; color: #4a5568; }
+.pk-btn-secondary:hover:not(:disabled) { background: #e2e8f0; }
+.pk-btn:disabled, .pk-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 
 /* ---- Stats row ---- */
 .pk-stats-row {
@@ -726,6 +731,48 @@
 	line-height: 1.3;
 	word-break: break-word;
 }
+/* ---- Award entry modal (pk-award-*) ---- */
+.pk-award-type-row { display:flex; gap:8px; margin-bottom:16px; }
+.pk-award-type-btn { flex:1; padding:8px 0; border:2px solid #e2e8f0; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#4a5568; cursor:pointer; transition:all 0.15s; text-align:center; }
+.pk-award-type-btn.pk-active { border-color:#2c5282; background:#ebf4ff; color:#2c5282; }
+.pk-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.pk-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:all 0.12s; user-select:none; }
+.pk-rank-pill.pk-rank-held { background:#ebf4ff; border-color:#90cdf4; color:#2b6cb0; }
+.pk-rank-pill.pk-rank-suggested { border-color:#68d391; }
+.pk-rank-pill.pk-rank-selected { background:#2c5282; border-color:#2c5282; color:#fff; }
+.pk-officer-chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
+.pk-officer-chip { padding:4px 10px; background:#edf2f7; border:1px solid #e2e8f0; border-radius:14px; font-size:12px; color:#2d3748; cursor:pointer; }
+.pk-officer-chip.pk-selected { background:#ebf4ff; border-color:#90cdf4; color:#2b6cb0; font-weight:600; }
+.pk-ac-results { margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; max-height:140px; overflow-y:auto; display:none; }
+.pk-ac-results.pk-ac-open { display:block; }
+.pk-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
+.pk-ac-item:hover { background:#ebf4ff; color:#2b6cb0; }
+.pk-award-success { background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#276749; font-size:13px; }
+.pk-btn-ghost { background:transparent; border:1px solid transparent; color:#4a5568; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
+.pk-btn-ghost:hover { background:rgba(255,255,255,0.15); }
+.pk-badge-ladder { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#744210; }
+/* Reuse pn- overlay/modal styles for pk- award modal */
+#pk-award-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#pk-award-overlay.pk-open { opacity:1; pointer-events:all; }
+#pk-award-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-award-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#pk-award-overlay .pk-modal-title { font-size:16px; font-weight:700; color:#1a202c; margin:0; }
+#pk-award-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#pk-award-overlay .pk-modal-close-btn:hover { color:#4a5568; }
+#pk-award-overlay .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#pk-award-overlay .pk-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+#pk-award-overlay .pk-acct-field { margin-bottom:14px; }
+#pk-award-overlay .pk-acct-field label { display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em; }
+#pk-award-overlay .pk-acct-field input[type=text],
+#pk-award-overlay .pk-acct-field input[type=date],
+#pk-award-overlay .pk-acct-field select,
+#pk-award-overlay .pk-acct-field textarea { width:100%; padding:8px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; }
+#pk-award-overlay .pk-acct-field input:focus,
+#pk-award-overlay .pk-acct-field select:focus,
+#pk-award-overlay .pk-acct-field textarea:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
+#pk-award-overlay .pk-form-error { display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px; }
+#pk-award-overlay .pk-char-count { font-size:11px; color:#a0aec0; margin-top:3px; display:block; }
+#pk-award-overlay .pk-award-info-line { font-size:11px; color:#718096; margin-top:4px; min-height:16px; }
 </style>
 
 <!-- =============================================
@@ -778,9 +825,9 @@
 					<a class="pk-btn pk-btn-white" href="<?= UIR ?>Attendance/park/<?= $park_id ?>">
 						<i class="fas fa-clipboard-check"></i> Enter Attendance
 					</a>
-					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Award/park/<?= $park_id ?>">
+					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
-					</a>
+					</button>
 				<?php endif; ?>
 				<a class="pk-btn <?= $LoggedIn ? 'pk-btn-outline' : 'pk-btn-white' ?>" href="<?= UIR ?>Search/park/<?= $park_id ?>">
 					<i class="fas fa-search"></i> Search Players
@@ -1002,6 +1049,14 @@
 
 			<!-- Events Tab -->
 			<div class="pk-tab-panel" id="pk-tab-events" <?= $firstTab !== 'events' ? 'style="display:none"' : '' ?>>
+				<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<?php if ($CanManagePark): ?>
+					<a href="<?= UIR ?>Admin/manageevent&ParkId=<?= $park_id ?>" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
+						<i class="fas fa-plus"></i> Add Event
+					</a>
+					<?php endif; ?>
+				</div>
 				<?php if (count($eventList) > 0): ?>
 					<table class="pk-table" id="pk-events-table">
 						<thead>
@@ -1012,7 +1067,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-							<tr onclick='window.location.href="<?= UIR ?>Event/index/<?= $event['EventId'] ?>"'>
+							<tr onclick='window.location.href="<?= UIR ?><?= $event['NextDetailId'] ? 'Eventnew/index/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Eventtemplatenew/index/' . $event['EventId'] ?>"'>
 								<td>
 									<div class="pk-tiny-heraldry">
 										<?php if ($event['HasHeraldry'] == 1): ?>
@@ -1036,7 +1091,14 @@
 					<div class="pk-empty">No events found</div>
 				<?php endif; ?>
 
-				<h4 style="margin:20px 0 10px;font-size:14px;font-weight:700;color:#4a5568;border-top:1px solid #e2e8f0;padding-top:16px;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
+				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid #e2e8f0;padding-top:16px;">
+					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
+					<?php if ($CanManagePark): ?>
+					<a href="<?= UIR ?>Tournament/create&KingdomId=<?= $kingdom_id ?>" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
+						<i class="fas fa-plus"></i> Add Tournament
+					</a>
+					<?php endif; ?>
+				</div>
 				<?php if (count($tournamentList) > 0): ?>
 					<table class="pk-table" id="pk-tournaments-table">
 						<thead>
@@ -1670,3 +1732,445 @@ $(document).ready(function() {
 
 });
 </script>
+<?php if ($LoggedIn): ?>
+<div id="pk-award-overlay">
+	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title" id="pk-award-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award</h3>
+			<button class="pk-modal-close-btn" id="pk-award-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body" id="pk-award-modal-body">
+			<div class="pk-award-success" id="pk-award-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Award saved!
+			</div>
+			<div class="pk-form-error" id="pk-award-error"></div>
+
+			<!-- Award Type Toggle -->
+			<div class="pk-award-type-row">
+				<button type="button" class="pk-award-type-btn pk-active" id="pk-award-type-awards">
+					<i class="fas fa-medal" style="margin-right:5px"></i>Awards
+				</button>
+				<button type="button" class="pk-award-type-btn" id="pk-award-type-officers">
+					<i class="fas fa-crown" style="margin-right:5px"></i>Officer Titles
+				</button>
+			</div>
+
+			<!-- Player search -->
+			<div class="pk-acct-field">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-award-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="pk-award-player-id" value="" />
+				<div class="pk-ac-results" id="pk-award-player-results"></div>
+			</div>
+
+			<!-- Award Select -->
+			<div class="pk-acct-field">
+				<label for="pk-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<select id="pk-award-select" name="KingdomAwardId">
+					<option value="">Select award...</option>
+					<?= $AwardOptions ?>
+				</select>
+				<div class="pk-award-info-line" id="pk-award-info-line"></div>
+			</div>
+
+			<!-- Custom Award Name -->
+			<div class="pk-acct-field" id="pk-award-custom-row" style="display:none">
+				<label for="pk-award-custom-name">Custom Award Name</label>
+				<input type="text" id="pk-award-custom-name" maxlength="64" placeholder="Enter custom award name..." />
+			</div>
+
+			<!-- Rank Picker -->
+			<div class="pk-acct-field" id="pk-award-rank-row" style="display:none">
+				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
+				<div class="pk-rank-pills-wrap" id="pk-rank-pills"></div>
+				<input type="hidden" id="pk-award-rank-val" value="" />
+			</div>
+
+			<!-- Date -->
+			<div class="pk-acct-field">
+				<label for="pk-award-date">Date <span style="color:#e53e3e">*</span></label>
+				<input type="date" id="pk-award-date" />
+			</div>
+
+			<!-- Given By -->
+			<div class="pk-acct-field">
+				<label>Given By <span style="color:#e53e3e">*</span></label>
+				<?php if (!empty($PreloadOfficers)): ?>
+				<div class="pk-officer-chips" id="pk-award-officer-chips">
+					<?php foreach ($PreloadOfficers as $officer): ?>
+					<button type="button" class="pk-officer-chip"
+					        data-id="<?= (int)$officer['MundaneId'] ?>"
+					        data-name="<?= htmlspecialchars($officer['Persona']) ?>">
+						<?= htmlspecialchars($officer['Persona']) ?> <span>(<?= htmlspecialchars($officer['Role']) ?>)</span>
+					</button>
+					<?php endforeach; ?>
+				</div>
+				<?php endif; ?>
+				<input type="text" id="pk-award-givenby-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="pk-award-givenby-id" value="" />
+				<div class="pk-ac-results" id="pk-award-givenby-results"></div>
+			</div>
+
+			<!-- Given At -->
+			<div class="pk-acct-field">
+				<label>Given At <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<input type="text" id="pk-award-givenat-text"
+				       placeholder="Search park, kingdom, or event..."
+				       autocomplete="off"
+				       value="<?= htmlspecialchars($park_name ?? '') ?>" />
+				<div class="pk-ac-results" id="pk-award-givenat-results"></div>
+				<input type="hidden" id="pk-award-park-id" value="<?= (int)$park_id ?>" />
+				<input type="hidden" id="pk-award-kingdom-id" value="0" />
+				<input type="hidden" id="pk-award-event-id" value="0" />
+			</div>
+
+			<!-- Note -->
+			<div class="pk-acct-field">
+				<label for="pk-award-note">Note <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<textarea id="pk-award-note" rows="3" maxlength="400" placeholder="What was this award given for?"></textarea>
+				<span class="pk-char-count" id="pk-award-char-count">400 characters remaining</span>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn-ghost" id="pk-award-cancel">Close</button>
+			<div style="display:flex;gap:8px">
+				<button class="pk-btn pk-btn-secondary" id="pk-award-save-same" disabled>
+					<i class="fas fa-plus"></i> Add + Same Player
+				</button>
+				<button class="pk-btn pk-btn-primary" id="pk-award-save-new" disabled>
+					<i class="fas fa-plus"></i> Add + New Player
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var UIR_JS     = <?= json_encode(UIR) ?>;
+	var SEARCH_URL = '<?= HTTP_SERVICE ?>Search/SearchService.php';
+	var KINGDOM_ID = <?= (int)$kingdom_id ?>;
+	var PARK_ID    = <?= (int)$park_id ?>;
+	var awardOptHTML   = <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>;
+	var officerOptHTML = <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>;
+	var currentType = 'awards';
+	var givenByTimer, givenAtTimer, playerTimer;
+
+	function gid(id) { return document.getElementById(id); }
+
+	function checkRequired() {
+		var ok = !!gid('pk-award-player-id').value
+		      && !!gid('pk-award-select').value
+		      && !!gid('pk-award-givenby-id').value
+		      && !!gid('pk-award-date').value;
+		gid('pk-award-save-new').disabled  = !ok;
+		gid('pk-award-save-same').disabled = !ok;
+	}
+
+	function setAwardType(type) {
+		currentType = type;
+		var isOfficer = type === 'officers';
+		gid('pk-award-modal-title').innerHTML = isOfficer
+			? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
+			: '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
+		gid('pk-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+		gid('pk-award-rank-row').style.display   = 'none';
+		gid('pk-award-rank-val').value           = '';
+		gid('pk-award-info-line').innerHTML      = '';
+		gid('pk-award-type-awards').classList.toggle('pk-active', !isOfficer);
+		gid('pk-award-type-officers').classList.toggle('pk-active', isOfficer);
+		checkRequired();
+	}
+
+	gid('pk-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
+	gid('pk-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+
+	function buildRankPills(awardId) {
+		var row   = gid('pk-award-rank-row');
+		var wrap  = gid('pk-rank-pills');
+		var input = gid('pk-award-rank-val');
+		wrap.innerHTML = '';
+		input.value = '';
+		row.style.display = 'none';
+		if (!awardId) return;
+		var opt = gid('pk-award-select').querySelector('option[value="' + awardId + '"]');
+		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
+		row.style.display = '';
+		for (var r = 1; r <= 10; r++) {
+			var pill = document.createElement('button');
+			pill.type      = 'button';
+			pill.className = 'pk-rank-pill';
+			pill.textContent = r;
+			pill.dataset.rank = r;
+			pill.addEventListener('click', (function(rank, el) {
+				return function() {
+					document.querySelectorAll('#pk-rank-pills .pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
+					el.classList.add('pk-rank-selected');
+					input.value = rank;
+				};
+			})(r, pill));
+			wrap.appendChild(pill);
+		}
+	}
+
+	gid('pk-award-select').addEventListener('change', function() {
+		var awardId = this.value;
+		var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
+		gid('pk-award-custom-row').style.display = isCustom ? '' : 'none';
+		buildRankPills(awardId);
+		var infoEl = gid('pk-award-info-line');
+		if (awardId) {
+			var opt = this.querySelector('option[value="' + awardId + '"]');
+			infoEl.innerHTML = opt && opt.getAttribute('data-is-ladder') === '1'
+				? '<span class="pk-badge-ladder"><i class="fas fa-layer-group"></i> Ladder Award</span>'
+				: '';
+		} else { infoEl.innerHTML = ''; }
+		checkRequired();
+	});
+
+	// Player search autocomplete
+	gid('pk-award-player-text').addEventListener('input', function() {
+		gid('pk-award-player-id').value = '';
+		checkRequired();
+		var term = this.value.trim();
+		if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
+		clearTimeout(playerTimer);
+		playerTimer = setTimeout(function() {
+			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=8';
+			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+				var el = gid('pk-award-player-results');
+				el.innerHTML = (data && data.length)
+					? data.map(function(p) {
+						return '<div class="pk-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+					}).join('')
+					: '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+				el.classList.add('pk-ac-open');
+			}).catch(function() {});
+		}, 250);
+	});
+	gid('pk-award-player-results').addEventListener('click', function(e) {
+		var item = e.target.closest('.pk-ac-item[data-id]');
+		if (!item) return;
+		gid('pk-award-player-text').value = decodeURIComponent(item.dataset.name);
+		gid('pk-award-player-id').value   = item.dataset.id;
+		this.classList.remove('pk-ac-open');
+		checkRequired();
+	});
+
+	// Given By — officer chips + search
+	<?php if (!empty($PreloadOfficers)): ?>
+	document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(c) { c.classList.remove('pk-selected'); });
+			this.classList.add('pk-selected');
+			gid('pk-award-givenby-text').value = this.dataset.name;
+			gid('pk-award-givenby-id').value   = this.dataset.id;
+			gid('pk-award-givenby-results').classList.remove('pk-ac-open');
+			checkRequired();
+		});
+	});
+	<?php endif; ?>
+	gid('pk-award-givenby-text').addEventListener('input', function() {
+		gid('pk-award-givenby-id').value = '';
+		document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(c) { c.classList.remove('pk-selected'); });
+		checkRequired();
+		var term = this.value.trim();
+		if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
+		clearTimeout(givenByTimer);
+		givenByTimer = setTimeout(function() {
+			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+				var el = gid('pk-award-givenby-results');
+				el.innerHTML = (data && data.length)
+					? data.map(function(p) {
+						return '<div class="pk-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+					}).join('')
+					: '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
+				el.classList.add('pk-ac-open');
+			}).catch(function() {});
+		}, 250);
+	});
+	gid('pk-award-givenby-results').addEventListener('click', function(e) {
+		var item = e.target.closest('.pk-ac-item[data-id]');
+		if (!item) return;
+		gid('pk-award-givenby-text').value = decodeURIComponent(item.dataset.name);
+		gid('pk-award-givenby-id').value   = item.dataset.id;
+		this.classList.remove('pk-ac-open');
+		checkRequired();
+	});
+
+	// Given At — location search
+	gid('pk-award-givenat-text').addEventListener('input', function() {
+		var term = this.value.trim();
+		if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
+		clearTimeout(givenAtTimer);
+		givenAtTimer = setTimeout(function() {
+			var url = SEARCH_URL + '?Action=Search%2FLocation&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+				var el = gid('pk-award-givenat-results');
+				el.innerHTML = (data && data.length)
+					? data.map(function(loc) {
+						return '<div class="pk-ac-item" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
+							+ (loc.LocationName || loc.ShortName || '') + '</div>';
+					}).join('')
+					: '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No locations found</div>';
+				el.classList.add('pk-ac-open');
+			}).catch(function() {});
+		}, 250);
+	});
+	gid('pk-award-givenat-results').addEventListener('click', function(e) {
+		var item = e.target.closest('.pk-ac-item');
+		if (!item || !item.dataset.name) return;
+		gid('pk-award-givenat-text').value    = decodeURIComponent(item.dataset.name);
+		gid('pk-award-park-id').value         = item.dataset.pid || '0';
+		gid('pk-award-kingdom-id').value      = item.dataset.kid || '0';
+		gid('pk-award-event-id').value        = item.dataset.eid || '0';
+		this.classList.remove('pk-ac-open');
+	});
+
+	// Note char counter
+	gid('pk-award-note').addEventListener('input', function() {
+		var rem = 400 - this.value.length;
+		var el  = gid('pk-award-char-count');
+		el.textContent = rem + ' character' + (rem !== 1 ? 's' : '') + ' remaining';
+	});
+
+	gid('pk-award-select').addEventListener('change', checkRequired);
+	gid('pk-award-date').addEventListener('change', checkRequired);
+	gid('pk-award-date').addEventListener('input',  checkRequired);
+
+	// ---- Open / Close ----
+	window.pkOpenAwardModal = function() {
+		var today = new Date();
+		gid('pk-award-error').style.display      = 'none';
+		gid('pk-award-error').textContent        = '';
+		gid('pk-award-success').style.display    = 'none';
+		gid('pk-award-player-text').value        = '';
+		gid('pk-award-player-id').value          = '';
+		gid('pk-award-player-results').classList.remove('pk-ac-open');
+		gid('pk-award-note').value               = '';
+		gid('pk-award-char-count').textContent   = '400 characters remaining';
+		gid('pk-award-givenby-text').value       = '';
+		gid('pk-award-givenby-id').value         = '';
+		gid('pk-award-givenby-results').classList.remove('pk-ac-open');
+		gid('pk-award-givenat-text').value       = <?= json_encode($park_name ?? '') ?>;
+		gid('pk-award-park-id').value            = '<?= (int)$park_id ?>';
+		gid('pk-award-kingdom-id').value         = '0';
+		gid('pk-award-event-id').value           = '0';
+		gid('pk-award-givenat-results').classList.remove('pk-ac-open');
+		gid('pk-award-custom-name').value        = '';
+		gid('pk-award-custom-row').style.display = 'none';
+		gid('pk-award-rank-row').style.display   = 'none';
+		gid('pk-award-rank-val').value           = '';
+		gid('pk-award-info-line').innerHTML      = '';
+		document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(c) { c.classList.remove('pk-selected'); });
+		gid('pk-award-date').value = today.getFullYear() + '-'
+			+ String(today.getMonth() + 1).padStart(2, '0') + '-'
+			+ String(today.getDate()).padStart(2, '0');
+		setAwardType('awards');
+		checkRequired();
+		gid('pk-award-overlay').classList.add('pk-open');
+		document.body.style.overflow = 'hidden';
+		gid('pk-award-player-text').focus();
+	};
+	window.pkCloseAwardModal = function() {
+		gid('pk-award-overlay').classList.remove('pk-open');
+		document.body.style.overflow = '';
+	};
+
+	gid('pk-award-close-btn').addEventListener('click', pkCloseAwardModal);
+	gid('pk-award-cancel').addEventListener('click',    pkCloseAwardModal);
+	gid('pk-award-overlay').addEventListener('click', function(e) {
+		if (e.target === this) pkCloseAwardModal();
+	});
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && gid('pk-award-overlay').classList.contains('pk-open'))
+			pkCloseAwardModal();
+	});
+
+	// ---- Save helpers ----
+	var pkSuccessTimer = null;
+	function pkShowSuccess() {
+		var el = gid('pk-award-success');
+		el.style.display = '';
+		clearTimeout(pkSuccessTimer);
+		pkSuccessTimer = setTimeout(function() { el.style.display = 'none'; }, 3000);
+	}
+	function pkClearPlayer() {
+		gid('pk-award-player-text').value = '';
+		gid('pk-award-player-id').value   = '';
+		gid('pk-award-player-results').classList.remove('pk-ac-open');
+	}
+	function pkClearAward() {
+		gid('pk-award-select').value             = '';
+		gid('pk-award-rank-val').value           = '';
+		gid('pk-award-rank-row').style.display   = 'none';
+		gid('pk-rank-pills').innerHTML           = '';
+		gid('pk-award-note').value               = '';
+		gid('pk-award-char-count').textContent   = '400 characters remaining';
+		gid('pk-award-info-line').innerHTML      = '';
+		gid('pk-award-custom-name').value        = '';
+		gid('pk-award-custom-row').style.display = 'none';
+		checkRequired();
+	}
+	function pkDoSave(onSuccess) {
+		var errEl    = gid('pk-award-error');
+		var playerId = gid('pk-award-player-id').value;
+		var awardId  = gid('pk-award-select').value;
+		var giverId  = gid('pk-award-givenby-id').value;
+		var date     = gid('pk-award-date').value;
+
+		errEl.style.display = 'none';
+		if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = ''; return; }
+		if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = ''; return; }
+		if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = ''; return; }
+		if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = ''; return; }
+
+		var fd = new FormData();
+		fd.append('KingdomAwardId', awardId);
+		fd.append('GivenById',      giverId);
+		fd.append('Date',           date);
+		fd.append('ParkId',         gid('pk-award-park-id').value    || '0');
+		fd.append('KingdomId',      gid('pk-award-kingdom-id').value || '0');
+		fd.append('EventId',        gid('pk-award-event-id').value   || '0');
+		fd.append('Note',           gid('pk-award-note').value       || '');
+		var rank = gid('pk-award-rank-val').value;
+		if (rank) fd.append('Rank', rank);
+		var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
+		if (customName) fd.append('AwardName', customName);
+
+		var btnNew  = gid('pk-award-save-new');
+		var btnSame = gid('pk-award-save-same');
+		btnNew.disabled = btnSame.disabled = true;
+		btnNew.innerHTML  = '<i class="fas fa-spinner fa-spin"></i>';
+		btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+		var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
+		fetch(saveUrl, { method: 'POST', body: fd })
+			.then(function(resp) {
+				if (!resp.ok) throw new Error('Server returned ' + resp.status);
+				onSuccess();
+			})
+			.catch(function(err) {
+				errEl.textContent = 'Save failed: ' + err.message;
+				errEl.style.display = '';
+			})
+			.finally(function() {
+				btnNew.innerHTML  = '<i class="fas fa-plus"></i> Add + New Player';
+				btnSame.innerHTML = '<i class="fas fa-plus"></i> Add + Same Player';
+				checkRequired();
+			});
+	}
+
+	// "Add + New Player" — clear player + award/rank/note, keep date/giver/location
+	gid('pk-award-save-new').addEventListener('click', function() {
+		pkDoSave(function() { pkShowSuccess(); pkClearPlayer(); pkClearAward(); gid('pk-award-player-text').focus(); });
+	});
+	// "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
+	gid('pk-award-save-same').addEventListener('click', function() {
+		pkDoSave(function() { pkShowSuccess(); pkClearAward(); gid('pk-award-select').focus(); });
+	});
+})();
+</script>
+<?php endif; ?>

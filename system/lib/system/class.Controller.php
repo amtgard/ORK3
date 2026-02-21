@@ -80,14 +80,22 @@ class Controller
 
 	public function index( $action = null )
 	{
-		// Before clearing navigation state, remember the user's last-visited kingdom
-		// so the home page can pin it. Written to a separate key that survives clearing.
-		if ( $this->data['LoggedIn'] && isset( $this->session->kingdom_id ) ) {
-			$this->session->user_kingdom_id = (int) $this->session->kingdom_id;
+		// Determine the logged-in user's home kingdom from their profile in the DB.
+		// Fall back to the session-cached value only when not logged in.
+		if ( $this->data['LoggedIn'] && isset( $this->session->user_id ) ) {
+			global $DB;
+			$uid = (int) $this->session->user_id;
+			$hkRow = $DB->DataSet(
+				"SELECT p.kingdom_id FROM ork_mundane m
+				 INNER JOIN ork_park p ON p.park_id = m.park_id
+				 WHERE m.mundane_id = {$uid} LIMIT 1"
+			);
+			$this->data['UserKingdomId'] = ($hkRow && $hkRow->Size() > 0 && $hkRow->Next())
+				? (int) $hkRow->kingdom_id
+				: 0;
+		} else {
+			$this->data['UserKingdomId'] = 0;
 		}
-		$this->data['UserKingdomId'] = isset( $this->session->user_kingdom_id )
-			? (int) $this->session->user_kingdom_id
-			: 0;
 
 		unset( $this->session->kingdom_id );
 		unset( $this->session->park_id );
