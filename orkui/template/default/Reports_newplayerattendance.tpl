@@ -84,7 +84,7 @@
 			</tr>
 <?php endforeach; ?>
 <?php if (count($summary) > 1): ?>
-			<tr style="background-color:#eee; color:#999; text-shadow:0px 2px 3px #fff; font-weight:bold; font-size:11pt; font-family:'Gill Sans MT','lucida sans unicode',helvetica,arial;">
+			<tr class="static" style="background-color:#eee; color:#999; text-shadow:0px 2px 3px #fff; font-weight:bold; font-size:11pt; font-family:'Gill Sans MT','lucida sans unicode',helvetica,arial;">
 				<td>Total</td>
 				<td></td>
 				<td class="data-column"><?=$totals['NewPlayers']?></td>
@@ -163,10 +163,24 @@ $(function() {
 	$('.datepicker').datepicker({dateFormat: 'yy-mm-dd'});
 	$('.information-table').tablesorter({
 		theme: 'jui',
-		widgets: ['zebra', 'print'],
+		widgets: ['zebra', 'print', 'staticRow'],
 		widgetOptions: {
 			zebra: ['normal-row', 'alt-row']
 		}
+	});
+
+	$('.print.button').click(function(e) {
+		e.preventDefault();
+		var $table = $(this).closest('.info-container').find('table.information-table');
+		var config = $table.data('tablesorter');
+		if (config) {
+			$.tablesorter.printTable.process(config, config.widgetOptions);
+		}
+	});
+
+	$('.download.button').click(function(e) {
+		e.preventDefault();
+		$(this).closest('.info-container').find('table.information-table').table2csv({filename: 'New Player Attendance'});
 	});
 });
 </script>

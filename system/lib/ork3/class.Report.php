@@ -1706,12 +1706,18 @@ class Report  extends Ork3 {
 		$end_date       = mysql_real_escape_string($request['EndDate']);
 		$include_detail = !empty($request['IncludePlayerDetails']);
 
-		// Build the WHERE clause for the kingdom/park scope.
-		// The "first park" is determined by joining ork_park to check its kingdom.
+		// Scope for the detail query's inner subquery (uses fp/pk aliases).
 		if ($park_id > 0) {
 			$scope_where = "AND fp.park_id = $park_id";
 		} else {
 			$scope_where = "AND pk.kingdom_id = $kingdom_id";
+		}
+
+		// Park scope applied to the outer parks table in the summary query.
+		if ($park_id > 0) {
+			$park_scope_where = "AND p.park_id = $park_id";
+		} else {
+			$park_scope_where = "AND p.kingdom_id = $kingdom_id";
 		}
 
 		// Visit counts: only count visits at parks within the target kingdom during the range.
@@ -1721,15 +1727,16 @@ class Report  extends Ork3 {
 			$visit_scope = "AND a_range.kingdom_id = $kingdom_id";
 		}
 
-		// Summary query: new players, returning players, and total visits — grouped by first park.
+		// Summary query: all active parks with new player stats; parks with no new players show zeros.
 		$sql_summary = "SELECT
 				p.park_id,
 				p.name AS park_name,
 				COUNT(DISTINCT np.mundane_id) AS new_players,
 				SUM(CASE WHEN vc.visit_count >= 2 THEN 1 ELSE 0 END) AS returning_players,
 				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
-			FROM (
-				-- New players: global first sign-in is in range and was at a park in the scope.
+			FROM " . DB_PREFIX . "park p
+			LEFT JOIN (
+				-- New players: global first sign-in is in range.
 				SELECT fd.mundane_id, MIN(a2.park_id) AS first_park_id
 				FROM (
 					SELECT mundane_id, MIN(date) AS min_date
@@ -1742,16 +1749,12 @@ class Report  extends Ork3 {
 					AND a2.date = fd.min_date
 					AND a2.mundane_id > 0
 					AND a2.park_id > 0
-				INNER JOIN " . DB_PREFIX . "park fp ON fp.park_id = a2.park_id
-				LEFT JOIN " . DB_PREFIX . "kingdom pk ON pk.kingdom_id = fp.kingdom_id
 				WHERE fd.min_date >= '$start_date'
 				  AND fd.min_date <= '$end_date'
-				  $scope_where
 				GROUP BY fd.mundane_id
-			) np
-			INNER JOIN " . DB_PREFIX . "park p ON p.park_id = np.first_park_id
-			INNER JOIN (
-				-- Count visits in range per new player (within kingdom scope).
+			) np ON np.first_park_id = p.park_id
+			LEFT JOIN (
+				-- Count visits in range per new player (within kingdom/park scope).
 				SELECT a_range.mundane_id, COUNT(*) AS visit_count
 				FROM " . DB_PREFIX . "attendance a_range
 				WHERE a_range.date >= '$start_date'
@@ -1760,8 +1763,11 @@ class Report  extends Ork3 {
 				  $visit_scope
 				GROUP BY a_range.mundane_id
 			) vc ON vc.mundane_id = np.mundane_id
-			GROUP BY np.first_park_id, p.park_id, p.name
-			HAVING COUNT(DISTINCT np.mundane_id) > 0 AND p.name IS NOT NULL AND p.name != ''
+			WHERE p.active = 'Active'
+			  AND p.name IS NOT NULL
+			  AND p.name != ''
+			  $park_scope_where
+			GROUP BY p.park_id, p.name
 			ORDER BY p.name";
 
 		$r = $this->db->query($sql_summary);
@@ -1773,8 +1779,8 @@ class Report  extends Ork3 {
 
 		if ($r !== false && $r->size() > 0) {
 			do {
+				if (empty($r->park_name)) continue;
 				$new   = intval($r->new_players);
-				if ($new === 0 || empty($r->park_name)) continue;
 				$ret   = intval($r->returning_players);
 				$visits = intval($r->new_player_visits);
 				$response['Summary'][] = array(
@@ -1840,6 +1846,7 @@ class Report  extends Ork3 {
 			$rd = $this->db->query($sql_detail);
 			if ($rd !== false && $rd->size() > 0) {
 				do {
+					if (empty($rd->park_name) || empty($rd->persona)) continue;
 					$response['PlayerDetails'][] = array(
 						'ParkId'          => $rd->park_id,
 						'ParkName'        => $rd->park_name,
