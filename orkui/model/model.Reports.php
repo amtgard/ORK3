@@ -220,6 +220,17 @@ class Model_Reports extends Model {
 		return false;
 	}
 
+	function new_player_attendance($request) {
+		$r = $this->Report->GetNewPlayerAttendance($request);
+		if ($r['Status']['Status'] == 0) {
+			return array(
+				'Summary'       => $r['Summary'],
+				'PlayerDetails' => $r['PlayerDetails']
+			);
+		}
+		return false;
+	}
+
 	function get_kingdom_parks($kingdom_id) {
 		$kingdom = new APIModel('Kingdom');
 		$r = $kingdom->GetParks(array('KingdomId' => $kingdom_id));

@@ -1695,6 +1695,168 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cache_key, $response);
 	}
 
+	public function GetNewPlayerAttendance($request) {
+		$cache_key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false)
+			return $cache;
+
+		$kingdom_id     = intval($request['KingdomId']);
+		$park_id        = intval($request['ParkId']);
+		$start_date     = mysql_real_escape_string($request['StartDate']);
+		$end_date       = mysql_real_escape_string($request['EndDate']);
+		$include_detail = !empty($request['IncludePlayerDetails']);
+
+		// Build the WHERE clause for the kingdom/park scope.
+		// The "first park" is determined by joining ork_park to check its kingdom.
+		if ($park_id > 0) {
+			$scope_where = "AND fp.park_id = $park_id";
+		} else {
+			$scope_where = "AND pk.kingdom_id = $kingdom_id";
+		}
+
+		// Visit counts: only count visits at parks within the target kingdom during the range.
+		if ($park_id > 0) {
+			$visit_scope = "AND a_range.park_id = $park_id";
+		} else {
+			$visit_scope = "AND a_range.kingdom_id = $kingdom_id";
+		}
+
+		// Summary query: new players, returning players, and total visits — grouped by first park.
+		$sql_summary = "SELECT
+				p.park_id,
+				p.name AS park_name,
+				COUNT(DISTINCT np.mundane_id) AS new_players,
+				SUM(CASE WHEN vc.visit_count >= 2 THEN 1 ELSE 0 END) AS returning_players,
+				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
+			FROM (
+				-- New players: global first sign-in is in range and was at a park in the scope.
+				SELECT fd.mundane_id, MIN(a2.park_id) AS first_park_id
+				FROM (
+					SELECT mundane_id, MIN(date) AS min_date
+					FROM " . DB_PREFIX . "attendance
+					WHERE mundane_id > 0
+					GROUP BY mundane_id
+				) fd
+				INNER JOIN " . DB_PREFIX . "attendance a2
+					ON a2.mundane_id = fd.mundane_id
+					AND a2.date = fd.min_date
+					AND a2.mundane_id > 0
+					AND a2.park_id > 0
+				INNER JOIN " . DB_PREFIX . "park fp ON fp.park_id = a2.park_id
+				LEFT JOIN " . DB_PREFIX . "kingdom pk ON pk.kingdom_id = fp.kingdom_id
+				WHERE fd.min_date >= '$start_date'
+				  AND fd.min_date <= '$end_date'
+				  $scope_where
+				GROUP BY fd.mundane_id
+			) np
+			INNER JOIN " . DB_PREFIX . "park p ON p.park_id = np.first_park_id
+			INNER JOIN (
+				-- Count visits in range per new player (within kingdom scope).
+				SELECT a_range.mundane_id, COUNT(*) AS visit_count
+				FROM " . DB_PREFIX . "attendance a_range
+				WHERE a_range.date >= '$start_date'
+				  AND a_range.date <= '$end_date'
+				  AND a_range.mundane_id > 0
+				  $visit_scope
+				GROUP BY a_range.mundane_id
+			) vc ON vc.mundane_id = np.mundane_id
+			GROUP BY np.first_park_id, p.park_id, p.name
+			HAVING COUNT(DISTINCT np.mundane_id) > 0 AND p.name IS NOT NULL AND p.name != ''
+			ORDER BY p.name";
+
+		$r = $this->db->query($sql_summary);
+		$response = array(
+			'Status'        => Success(),
+			'Summary'       => array(),
+			'PlayerDetails' => array()
+		);
+
+		if ($r !== false && $r->size() > 0) {
+			do {
+				$new   = intval($r->new_players);
+				if ($new === 0 || empty($r->park_name)) continue;
+				$ret   = intval($r->returning_players);
+				$visits = intval($r->new_player_visits);
+				$response['Summary'][] = array(
+					'ParkId'                => $r->park_id,
+					'ParkName'              => $r->park_name,
+					'NewPlayers'            => $new,
+					'ReturningPlayers'      => $ret,
+					'ReturnPct'             => $new > 0 ? round(($ret / $new) * 100, 1) : 0,
+					'NewPlayerVisits'       => $visits,
+					'AvgVisitsPerNewPlayer' => $new > 0 ? round($visits / $new, 2) : 0
+				);
+			} while ($r->next());
+		}
+
+		if ($include_detail) {
+			$sql_detail = "SELECT
+					p.park_id,
+					p.name AS park_name,
+					np.mundane_id,
+					m.persona,
+					np.first_signin_date,
+					vc.visit_count AS visits_in_period,
+					ls.last_signin_date
+				FROM (
+					SELECT fd.mundane_id, fd.min_date AS first_signin_date, MIN(a2.park_id) AS first_park_id
+					FROM (
+						SELECT mundane_id, MIN(date) AS min_date
+						FROM " . DB_PREFIX . "attendance
+						WHERE mundane_id > 0
+						GROUP BY mundane_id
+					) fd
+					INNER JOIN " . DB_PREFIX . "attendance a2
+						ON a2.mundane_id = fd.mundane_id
+						AND a2.date = fd.min_date
+						AND a2.mundane_id > 0
+						AND a2.park_id > 0
+					INNER JOIN " . DB_PREFIX . "park fp ON fp.park_id = a2.park_id
+					LEFT JOIN " . DB_PREFIX . "kingdom pk ON pk.kingdom_id = fp.kingdom_id
+					WHERE fd.min_date >= '$start_date'
+					  AND fd.min_date <= '$end_date'
+					  $scope_where
+					GROUP BY fd.mundane_id, fd.min_date
+				) np
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = np.first_park_id
+				INNER JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = np.mundane_id
+				INNER JOIN (
+					SELECT a_range.mundane_id, COUNT(*) AS visit_count
+					FROM " . DB_PREFIX . "attendance a_range
+					WHERE a_range.date >= '$start_date'
+					  AND a_range.date <= '$end_date'
+					  AND a_range.mundane_id > 0
+					  $visit_scope
+					GROUP BY a_range.mundane_id
+				) vc ON vc.mundane_id = np.mundane_id
+				INNER JOIN (
+					SELECT mundane_id, MAX(date) AS last_signin_date
+					FROM " . DB_PREFIX . "attendance
+					WHERE mundane_id > 0
+					GROUP BY mundane_id
+				) ls ON ls.mundane_id = np.mundane_id
+				ORDER BY p.name, m.persona";
+
+			$rd = $this->db->query($sql_detail);
+			if ($rd !== false && $rd->size() > 0) {
+				do {
+					$response['PlayerDetails'][] = array(
+						'ParkId'          => $rd->park_id,
+						'ParkName'        => $rd->park_name,
+						'MundaneId'       => $rd->mundane_id,
+						'Persona'         => $rd->persona,
+						'FirstSignInDate' => $rd->first_signin_date,
+						'VisitsInPeriod'  => $rd->visits_in_period,
+						'LastSignInDate'  => $rd->last_signin_date
+					);
+				} while ($rd->next());
+			}
+		}
+
+		logtrace("Report->GetNewPlayerAttendance()", array($this->db->lastSql, $request));
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cache_key, $response);
+	}
+
 	public function ParkAttendanceSinglePark($request) {
 		$key = Ork3::$Lib->ghettocache->key($request);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
