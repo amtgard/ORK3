@@ -400,6 +400,56 @@ class Controller_Reports extends Controller {
 		return array(date('Y-m-d', $st), date('Y-m-d', $et));
 	}
 
+	public function new_player_attendance($params = null) {
+		$this->template = 'Reports_newplayerattendance.tpl';
+		$this->data['page_title'] = "New Player Attendance";
+
+		$kingdom_id = $this->session->kingdom_id;
+		if (!valid_id($kingdom_id)) {
+			$this->data['no_kingdom'] = true;
+			return;
+		}
+
+		$this->data['kingdom_id'] = $kingdom_id;
+		$parks = $this->Reports->get_kingdom_parks($kingdom_id);
+		if (is_array($parks)) {
+			usort($parks, function($a, $b) { return strcasecmp($a['Name'], $b['Name']); });
+		}
+		$this->data['parks'] = $parks;
+
+		// Only run report on form submission.
+		if (!isset($this->request->RunReport)) return;
+
+		$park_id         = intval($this->request->ParkId);
+		$show_details    = !empty($this->request->ShowPlayerDetails);
+		$start_date      = isset($this->request->StartDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->StartDate)
+							? $this->request->StartDate : date('Y-m-d', strtotime('-3 months'));
+		$end_date        = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
+							? $this->request->EndDate : date('Y-m-d');
+
+		$form = array(
+			'KingdomId'         => $kingdom_id,
+			'ParkId'            => $park_id,
+			'StartDate'         => $start_date,
+			'EndDate'           => $end_date,
+			'ShowPlayerDetails' => $show_details ? 1 : 0
+		);
+		$this->data['form'] = $form;
+
+		$result = $this->Reports->new_player_attendance(array(
+			'KingdomId'            => $kingdom_id,
+			'ParkId'               => $park_id,
+			'StartDate'            => $start_date,
+			'EndDate'              => $end_date,
+			'IncludePlayerDetails' => $show_details
+		));
+
+		if (is_array($result)) {
+			$this->data['summary']        = $result['Summary'];
+			$this->data['player_details'] = $result['PlayerDetails'];
+		}
+	}
+
 	public function park_attendance_explorer($params = null) {
 		$this->template = 'Reports_parkattendanceexplorer.tpl';
 		$this->data['page_title'] = "Park Attendance Explorer";
