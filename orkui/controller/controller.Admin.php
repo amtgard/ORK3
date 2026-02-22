@@ -1543,6 +1543,28 @@ class Controller_Admin extends Controller {
 		$this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
 	}
 
+	public function new_player_attendance() {
+		$this->template = 'Admin_newplayerattendance.tpl';
+		$this->load_model('Admin');
+
+		$start_date = isset($this->request->StartDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->StartDate)
+			? $this->request->StartDate
+			: date('Y-m-d', strtotime('-3 months'));
+		$end_date = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
+			? $this->request->EndDate
+			: date('Y-m-d');
+
+		$this->data['form'] = array('StartDate' => $start_date, 'EndDate' => $end_date);
+		$this->data['page_title'] = 'New Player Attendance';
+
+		if (!isset($this->request->RunReport)) return;
+
+		$result = $this->Admin->get_new_player_attendance_by_kingdom($start_date, $end_date);
+		if (is_array($result)) {
+			$this->data['summary'] = $result['Summary'];
+		}
+	}
+
 	public function topparks($limit = null) {
 		$this->load_model('Admin');
 		$limit = intval($limit) > 0 ? intval($limit) : 25;
