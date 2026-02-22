@@ -83,20 +83,18 @@
 				<td class="data-column"><?=number_format($row['AvgVisitsPerNewPlayer'], 2)?></td>
 			</tr>
 <?php endforeach; ?>
-		</tbody>
 <?php if (count($summary) > 1): ?>
-		<tfoot>
-			<tr style="text-align:center; font-size:1.15em;">
-				<td style="text-align:left;"><strong>Total</strong></td>
+			<tr style="background-color:#eee; color:#999; text-shadow:0px 2px 3px #fff; font-weight:bold; font-size:11pt; font-family:'Gill Sans MT','lucida sans unicode',helvetica,arial;">
+				<td>Total</td>
 				<td></td>
-				<td><strong><?=$totals['NewPlayers']?></strong></td>
-				<td><strong><?=$totals['ReturningPlayers']?></strong></td>
-				<td><strong><?=$totals['ReturnPct']?>%</strong></td>
-				<td><strong><?=$totals['NewPlayerVisits']?></strong></td>
-				<td><strong><?=number_format($totals['AvgVisitsPerNewPlayer'], 2)?></strong></td>
+				<td class="data-column"><?=$totals['NewPlayers']?></td>
+				<td class="data-column"><?=$totals['ReturningPlayers']?></td>
+				<td class="data-column"><?=$totals['ReturnPct']?>%</td>
+				<td class="data-column"><?=$totals['NewPlayerVisits']?></td>
+				<td class="data-column"><?=number_format($totals['AvgVisitsPerNewPlayer'], 2)?></td>
 			</tr>
-		</tfoot>
 <?php endif; ?>
+		</tbody>
 	</table>
 </div>
 <?php elseif (isset($summary)): ?>
