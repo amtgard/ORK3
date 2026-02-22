@@ -21,6 +21,10 @@ class Model_Admin extends Model {
 		return $this->Report->GetTopParksByAttendance(array('Limit'=>$limit, 'StartDate'=>$start_date, 'EndDate'=>$end_date, 'NativePopulace'=>$native_populace, 'Waivered'=>$waivered));
 	}
 
+	function get_new_player_attendance_by_kingdom($start_date, $end_date) {
+		return $this->Report->GetNewPlayerAttendanceByKingdom(array('StartDate'=>$start_date, 'EndDate'=>$end_date));
+	}
+
 }
 
 ?>
