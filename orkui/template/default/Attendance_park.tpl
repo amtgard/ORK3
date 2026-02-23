@@ -90,19 +90,73 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
-		// Quick Add row submit
+		// Quick Add row submit via AJAX
 		$('#quick-add-table').on('click', '.qa-add-btn', function() {
-			var row = $(this).closest('tr');
-			$('#qa-date').val($('#AttendanceDate').val());
-			$('#qa-mundane-id').val(row.data('mundane-id'));
-			$('#qa-kingdom-id').val(row.data('kingdom-id'));
-			$('#qa-kingdom-name').val(row.data('kingdom-name'));
-			$('#qa-park-id').val(row.data('park-id'));
-			$('#qa-park-name').val(row.data('park-name'));
-			$('#qa-player-name').val(row.data('persona'));
-			$('#qa-class-id').val(row.find('.qa-class').val());
-			$('#qa-credits').val(row.find('.qa-credits').val());
-			document.getElementById('quick-add-form').submit();
+			var btn = $(this);
+			var row = btn.closest('tr');
+			var mundaneId   = parseInt(row.data('mundane-id'));
+			var kingdomId   = row.data('kingdom-id');
+			var kingdomName = row.data('kingdom-name');
+			var parkId      = row.data('park-id');
+			var parkName    = row.data('park-name');
+			var persona     = row.data('persona');
+			var classId     = row.find('.qa-class').val();
+			var className   = row.find('.qa-class option:selected').text();
+			var credits     = row.find('.qa-credits').val();
+			var date        = $('#AttendanceDate').val();
+			btn.prop('disabled', true).val('...');
+			$.ajax({
+				url: '<?=UIR ?>AttendanceAjax/park/<?=$Id ?>/add',
+				type: 'POST',
+				data: {
+					AttendanceDate: date,
+					MundaneId: mundaneId,
+					KingdomId: kingdomId,
+					ParkId: parkId,
+					ClassId: classId,
+					Credits: credits
+				},
+				dataType: 'json',
+				success: function(resp) {
+					if (resp.status === 0) {
+						row.hide();
+						var delCell = '<td class="deletion"><a href="<?=UIR ?>Attendance/park/<?=$Id ?>/delete/' + resp.attendanceId + '&AttendanceDate=' + encodeURIComponent(date) + '">&times;</a></td>';
+						$('#EventListTable tbody').append(
+							$('<tr>').attr('data-mundane-id', mundaneId).html(
+								'<td><a href="<?=UIR ?>Kingdom/index/' + kingdomId + '">' + $('<span>').text(kingdomName).html() + '</a></td>' +
+								'<td><a href="<?=UIR ?>Park/index/' + parkId + '">' + $('<span>').text(parkName).html() + '</a></td>' +
+								'<td><a href="<?=UIR ?>Player/index/' + mundaneId + '">' + $('<span>').text(persona).html() + '</a></td>' +
+								'<td></td>' +
+								'<td>' + $('<span>').text(className).html() + '</td>' +
+								'<td class="data-column">' + credits + '</td>' +
+								'<td class="data-column"></td>' +
+								delCell
+							)
+						);
+					} else {
+						btn.prop('disabled', false).val('Add');
+						alert(resp.error || 'Failed to add attendance.');
+					}
+				},
+				error: function() {
+					btn.prop('disabled', false).val('Add');
+					alert('Request failed. Please try again.');
+				}
+			});
+		});
+		// Re-show all quick-add rows when the date changes
+		$('#AttendanceDate').on('change', function() {
+			$('#quick-add-table tbody tr').show();
+		});
+		// On load: hide quick-add rows for players already in today's attendance
+		var attendedIds = {};
+		$('#EventListTable tbody tr[data-mundane-id]').each(function() {
+			var mId = parseInt($(this).data('mundane-id'));
+			if (mId > 0) attendedIds[mId] = true;
+		});
+		$('#quick-add-table tbody tr').each(function() {
+			var mId = parseInt($(this).data('mundane-id'));
+			if (mId > 0 && attendedIds[mId]) $(this).hide();
 		});
 
 		var playerAC = $( "#PlayerName" ).autocomplete({
@@ -248,7 +302,7 @@
 		<tbody>
 <?php if (!is_array($AttendanceReport['Attendance'])) $AttendanceReport['Attendance'] = array(); ?>
 <?php foreach ($AttendanceReport['Attendance'] as $key => $detail) : ?>
-			<tr>
+			<tr data-mundane-id='<?=$detail['MundaneId'] ?>'>
 				<td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
 				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
     <?php if ($detail['MundaneId']==0) : ?>
@@ -271,17 +325,6 @@
 </div>
 
 <?php if ($LoggedIn && !empty($RecentAttendees['Attendees'])) : ?>
-<form id='quick-add-form' method='post' action='<?=UIR ?>Attendance/park/<?=$Id ?>/new' style='display:none'>
-	<input type='hidden' id='qa-date' name='AttendanceDate' />
-	<input type='hidden' id='qa-kingdom-id' name='KingdomId' />
-	<input type='hidden' id='qa-kingdom-name' name='KingdomName' />
-	<input type='hidden' id='qa-park-id' name='ParkId' />
-	<input type='hidden' id='qa-park-name' name='ParkName' />
-	<input type='hidden' id='qa-mundane-id' name='MundaneId' />
-	<input type='hidden' id='qa-player-name' name='PlayerName' />
-	<input type='hidden' id='qa-class-id' name='ClassId' />
-	<input type='hidden' id='qa-credits' name='Credits' />
-</form>
 <div class='info-container'>
 	<h3>Quick Add &mdash; Recent Attendees</h3>
 	<table class='information-table' id='quick-add-table'>
