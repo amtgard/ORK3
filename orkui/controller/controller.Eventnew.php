@@ -5,6 +5,7 @@ class Controller_Eventnew extends Controller
 	public function __construct( $call = null, $id = null )
 	{
 		parent::__construct( $call, $id );
+		$this->template = '../revised-frontend/Eventnew_index.tpl';
 		$this->load_model('Attendance');
 		$this->load_model('Reports');
 		$this->load_model('Event');

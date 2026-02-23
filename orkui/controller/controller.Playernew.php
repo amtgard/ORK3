@@ -4,6 +4,7 @@ class Controller_Playernew extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
+		$this->template = '../revised-frontend/Playernew_index.tpl';
 
 		$this->load_model('Player');
 		$this->load_model('Park');

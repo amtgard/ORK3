@@ -5,6 +5,7 @@ class Controller_Eventcreate extends Controller
 	public function __construct( $call = null, $id = null )
 	{
 		parent::__construct( $call, $id );
+		$this->template = '../revised-frontend/Eventcreate_index.tpl';
 		$this->load_model('Event');
 		$this->load_model('Attendance');
 
