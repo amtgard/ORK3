@@ -5,6 +5,7 @@ class Controller_Parknew extends Controller
 	public function __construct( $call = null, $id = null )
 	{
 		parent::__construct( $call, $id );
+		$this->template = '../revised-frontend/Parknew_index.tpl';
 		$this->load_model('Park');
 		$this->load_model('Award');
 		$id = preg_replace('/[^0-9]/', '', $id);

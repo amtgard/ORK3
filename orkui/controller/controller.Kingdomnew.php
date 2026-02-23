@@ -4,6 +4,7 @@ class Controller_Kingdomnew extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
+		$this->template = '../revised-frontend/Kingdomnew_index.tpl';
 		$this->load_model('Kingdom');
 		$this->load_model('Award');
 		$id = preg_replace('/[^0-9]/', '', $id);
