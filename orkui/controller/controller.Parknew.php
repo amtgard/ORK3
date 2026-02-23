@@ -60,7 +60,6 @@ class Controller_Parknew extends Controller
 	{
 		$park_id = preg_replace('/[^0-9]/', '', $park_id);
 		$this->load_model('Reports');
-		$this->data['event_summary']    = $this->Park->get_park_events( $park_id );
 		$this->data['park_days']        = $this->Park->get_park_parkdays( $park_id );
 		$this->data['park_info']        = $this->Park->get_park_details( $park_id );
 		$this->data['park_officers']    = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
@@ -75,9 +74,37 @@ class Controller_Parknew extends Controller
 		}
 		$this->data['PreloadOfficers'] = $preloadOfficers;
 
-		// All park members who have ever signed in here; signin_count = past-6-months only
 		global $DB;
 		$pid = (int)$park_id;
+
+		// Park events: show upcoming/recent occurrences only (date-based, no current flag).
+		$evtSql = "
+			SELECT e.event_id, e.name, p.name AS park_name,
+			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry
+			FROM ork_event e
+			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			WHERE e.park_id = {$pid}
+			  AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+			ORDER BY cd.event_start, e.name";
+		$evtResult = $DB->DataSet($evtSql);
+		$eventSummary = [];
+		$evtSeen = [];
+		while ($evtResult && $evtResult->Next()) {
+			$eid = (int)$evtResult->event_id;
+			if (!isset($evtSeen[$eid])) {
+				$evtSeen[$eid] = true;
+				$eventSummary[] = [
+					'EventId'      => $eid,
+					'Name'         => $evtResult->name,
+					'ParkName'     => $evtResult->park_name,
+					'NextDate'     => $evtResult->event_start,
+					'NextDetailId' => (int)$evtResult->next_detail_id,
+					'HasHeraldry'  => (int)$evtResult->has_heraldry,
+				];
+			}
+		}
+		$this->data['event_summary'] = $eventSummary;
 		$rosterSql = "
 			SELECT
 				m.mundane_id,

@@ -130,6 +130,16 @@ class Controller_Eventnew extends Controller
 		}
 
 		$this->data['EventDetail']      = $this->Attendance->get_eventdetail_info($detail_id);
+
+		// Look up the name of the park where this occurrence is being held
+		$atParkId = (int)($this->data['EventDetail']['AtParkId'] ?? 0);
+		if ($atParkId > 0) {
+			global $DB;
+			$row = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE park_id = " . $atParkId . " LIMIT 1");
+			$this->data['AtParkName'] = ($row && $row->Size() > 0 && $row->Next()) ? $row->name : '';
+		} else {
+			$this->data['AtParkName'] = '';
+		}
 		$this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
 		$classes                        = $this->Attendance->get_classes();
 		$this->data['Classes']          = $classes['Classes'];

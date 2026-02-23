@@ -55,6 +55,18 @@
 	$totalHeraldry = array_sum(array_map('count', $heraldryPeriods));
 
 	$firstTab = count($parkDayList) > 0 ? 'schedule' : 'events';
+
+	// Pre-compute FullCalendar event data
+	$pkCalEvents = [];
+	foreach ($eventList as $ev) {
+		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
+		$pkCalEvents[] = [
+			'title' => $ev['Name'],
+			'start' => $ev['NextDate'],
+			'url'   => UIR . ($ev['NextDetailId'] ? 'Eventnew/index/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Eventtemplatenew/index/' . $ev['EventId']),
+			'color' => '#2b6cb0',
+		];
+	}
 ?>
 
 <style type="text/css">
@@ -773,6 +785,27 @@
 #pk-award-overlay .pk-form-error { display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px; }
 #pk-award-overlay .pk-char-count { font-size:11px; color:#a0aec0; margin-top:3px; display:block; }
 #pk-award-overlay .pk-award-info-line { font-size:11px; color:#718096; margin-top:4px; min-height:16px; }
+
+/* ---- Events calendar container ---- */
+#pk-events-cal {
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	padding: 14px 12px 10px;
+	margin-bottom: 4px;
+}
+/* FullCalendar overrides to match park blue theme */
+#pk-events-cal .fc .fc-button-primary { background-color: #2b6cb0; border-color: #2b6cb0; }
+#pk-events-cal .fc .fc-button-primary:hover { background-color: #2c5282; border-color: #2c5282; }
+#pk-events-cal .fc .fc-button-primary:not(:disabled):active,
+#pk-events-cal .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: #1a365d; border-color: #1a365d; }
+#pk-events-cal .fc .fc-toolbar-title { font-size: 15px; font-weight: 700; color: #2d3748; }
+#pk-events-cal .fc .fc-col-header-cell-cushion { font-size: 12px; color: #718096; text-decoration: none; }
+#pk-events-cal .fc .fc-daygrid-day-number { font-size: 12px; color: #4a5568; text-decoration: none; }
+#pk-events-cal .fc .fc-daygrid-event { font-size: 11px; border-radius: 3px; }
+#pk-events-cal .fc .fc-list-event-title a { color: #2b6cb0; text-decoration: none; }
+#pk-events-cal .fc .fc-list-event-title a:hover { text-decoration: underline; }
+#pk-events-cal .fc-event:focus, #pk-events-cal .fc-event:hover { cursor: pointer; }
 </style>
 
 <!-- =============================================
@@ -1051,12 +1084,22 @@
 			<div class="pk-tab-panel" id="pk-tab-events" <?= $firstTab !== 'events' ? 'style="display:none"' : '' ?>>
 				<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
-					<?php if ($CanManagePark): ?>
-					<a href="<?= UIR ?>Admin/manageevent&ParkId=<?= $park_id ?>" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
-						<i class="fas fa-plus"></i> Add Event
-					</a>
-					<?php endif; ?>
+					<div style="display:flex;align-items:center;gap:8px;">
+						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
+						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
+						<?php if ($CanManagePark): ?>
+						<button onclick="pkOpenEventModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
+							<i class="fas fa-plus"></i> Add Event
+						</button>
+						<?php endif; ?>
+					</div>
 				</div>
+
+				<!-- Calendar view (lazy-loaded FullCalendar) -->
+				<div id="pk-events-cal" style="display:none"></div>
+
+				<!-- List view -->
+				<div id="pk-events-list-view">
 				<?php if (count($eventList) > 0): ?>
 					<table class="pk-table" id="pk-events-table">
 						<thead>
@@ -1090,6 +1133,7 @@
 				<?php else: ?>
 					<div class="pk-empty">No events found</div>
 				<?php endif; ?>
+				</div><!-- /pk-events-list-view -->
 
 				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid #e2e8f0;padding-top:16px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
@@ -1443,6 +1487,69 @@
      ============================================= -->
 <script type="text/javascript">
 
+// ---- Events calendar data (server-rendered) ----
+var pkCalEvents = <?= json_encode(array_values($pkCalEvents), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+var pkCalLoaded = false;
+var pkCalendar  = null;
+
+function pkSetEventsView(view) {
+	if (view === 'calendar') {
+		$('#pk-events-list-view').hide();
+		$('#pk-events-cal').show();
+		$('#pk-ev-view-cal').addClass('pk-view-active');
+		$('#pk-ev-view-list').removeClass('pk-view-active');
+		pkInitCalendar();
+	} else {
+		$('#pk-events-cal').hide();
+		$('#pk-events-list-view').show();
+		$('#pk-ev-view-list').addClass('pk-view-active');
+		$('#pk-ev-view-cal').removeClass('pk-view-active');
+	}
+	try { localStorage.setItem('pk_events_view', view); } catch(e) {}
+}
+
+function pkInitCalendar() {
+	if (pkCalendar) {
+		pkCalendar.updateSize();
+		return;
+	}
+	if (pkCalLoaded) return;
+	pkCalLoaded = true;
+
+	var link = document.createElement('link');
+	link.rel = 'stylesheet';
+	link.href = 'https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css';
+	document.head.appendChild(link);
+
+	var script = document.createElement('script');
+	script.src = 'https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js';
+	script.onload = function() { pkRenderCalendar(); };
+	document.head.appendChild(script);
+}
+
+function pkRenderCalendar() {
+	var el = document.getElementById('pk-events-cal');
+	if (!el || typeof FullCalendar === 'undefined') return;
+
+	pkCalendar = new FullCalendar.Calendar(el, {
+		initialView: 'dayGridMonth',
+		headerToolbar: {
+			left:   'prev,next today',
+			center: 'title',
+			right:  'dayGridMonth,listMonth'
+		},
+		height: 'auto',
+		events: pkCalEvents.map(function(e) {
+			return { title: e.title, start: e.start, url: e.url, color: e.color };
+		}),
+		eventClick: function(info) {
+			info.jsEvent.preventDefault();
+			if (info.event.url) window.location.href = info.event.url;
+		}
+	});
+	pkCalendar.render();
+}
+
 // ---- Player avatar image fallback ----
 // Called onerror on player images; hides the img and shows the initial letter instead.
 function pkAvatarFallback(img, initial) {
@@ -1546,6 +1653,9 @@ function pkActivateTab(tab) {
 	$('.pk-tab-nav li[data-pktab="' + tab + '"]').addClass('pk-tab-active');
 	$('.pk-tab-panel').hide();
 	$('#pk-tab-' + tab).show();
+	if (tab === 'events' && pkCalendar) {
+		pkCalendar.updateSize();
+	}
 	$('html, body').animate({ scrollTop: $('.pk-tabs').offset().top - 20 }, 250);
 }
 
@@ -1649,6 +1759,15 @@ $(document).ready(function() {
 	$('.pk-tab-nav li').on('click', function() {
 		pkActivateTab($(this).attr('data-pktab'));
 	});
+
+	// ---- Events view toggle (list / calendar) ----
+	$('#pk-ev-view-list').on('click', function() { pkSetEventsView('list'); });
+	$('#pk-ev-view-cal').on('click',  function() { pkSetEventsView('calendar'); });
+	try {
+		pkSetEventsView(localStorage.getItem('pk_events_view') || 'list');
+	} catch(e) {
+		pkSetEventsView('list');
+	}
 
 	// ---- Sortable table headers ----
 	$('.pk-table thead th').on('click', function() {
@@ -2170,6 +2289,152 @@ $(document).ready(function() {
 	// "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
 	gid('pk-award-save-same').addEventListener('click', function() {
 		pkDoSave(function() { pkShowSuccess(); pkClearAward(); gid('pk-award-select').focus(); });
+	});
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($CanManagePark ?? false): ?>
+<style>
+.pk-emod-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.5);
+	z-index: 1100;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+.pk-emod-overlay.pk-emod-open { display: flex; }
+.pk-emod-box {
+	background: #fff;
+	border-radius: 10px;
+	width: 100%;
+	max-width: 460px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+	overflow: hidden;
+}
+.pk-emod-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	border-bottom: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.pk-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
+.pk-emod-close {
+	background: none; border: none; font-size: 20px; cursor: pointer;
+	color: #718096; padding: 2px 6px; border-radius: 4px; line-height: 1;
+}
+.pk-emod-close:hover { background: #e2e8f0; color: #2d3748; }
+.pk-emod-body { padding: 20px; }
+.pk-emod-hint { font-size: 13px; color: #718096; margin: 0 0 14px 0; }
+.pk-emod-label { font-size: 11px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 5px; }
+.pk-emod-select {
+	width: 100%;
+	padding: 9px 10px;
+	border: 1px solid #cbd5e0;
+	border-radius: 5px;
+	font-size: 13px;
+	background: #fff;
+	color: #2d3748;
+	box-sizing: border-box;
+}
+.pk-emod-select:focus { outline: none; border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(66,153,225,0.15); }
+.pk-emod-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.pk-emod-btn-cancel { background: #e2e8f0; color: #4a5568; border: none; border-radius: 5px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.pk-emod-btn-cancel:hover { background: #cbd5e0; }
+.pk-emod-btn-go { background: #276749; color: #fff; border: none; border-radius: 5px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.pk-emod-btn-go:hover { background: #22543d; }
+.pk-emod-btn-go:disabled { opacity: 0.5; cursor: default; }
+</style>
+
+<div class="pk-emod-overlay" id="pk-event-modal">
+	<div class="pk-emod-box">
+		<div class="pk-emod-header">
+			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Add New Occurrence</h3>
+			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
+		</div>
+		<div class="pk-emod-body">
+			<p class="pk-emod-hint">Select a template to get started. You'll configure the dates, location, and details on the next page.</p>
+			<label class="pk-emod-label">Event Template</label>
+			<select class="pk-emod-select" id="pk-template-select">
+				<option value="">Loading templates…</option>
+			</select>
+		</div>
+		<div class="pk-emod-footer">
+			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
+			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkGoToEventCreate()" disabled>
+				Continue <i class="fas fa-arrow-right"></i>
+			</button>
+		</div>
+	</div>
+</div>
+
+<script>
+(function() {
+	var pkEventKingdomId = <?= (int)$kingdom_id ?>;
+	var pkEventParkId    = <?= (int)$park_id ?>;
+	var pkEventUIR = '<?= UIR ?>';
+
+	window.pkOpenEventModal = function() {
+		var sel = document.getElementById('pk-template-select');
+		var btn = document.getElementById('pk-emod-go-btn');
+		sel.innerHTML = '<option value="">Loading…</option>';
+		btn.disabled = true;
+
+		$.getJSON('<?= HTTP_SERVICE ?>Search/SearchService.php',
+			{ Action: 'Search/Event', kingdom_id: pkEventKingdomId, limit: 50 },
+			function(data) {
+				if (!data || !data.length) {
+					sel.innerHTML = '<option value="">No templates found for this kingdom</option>';
+					return;
+				}
+				sel.innerHTML = '<option value="">— Select a template —</option>';
+				$.each(data, function(i, v) {
+					var label = v.Name + (v.ParkName ? ' (' + v.ParkName + ')' : '');
+					var opt = document.createElement('option');
+					opt.value = v.EventId;
+					opt.textContent = label;
+					sel.appendChild(opt);
+				});
+			}
+		).fail(function() {
+			sel.innerHTML = '<option value="">Error loading templates</option>';
+		});
+
+		sel.addEventListener('change', function() {
+			btn.disabled = !this.value;
+		});
+
+		document.getElementById('pk-event-modal').classList.add('pk-emod-open');
+		document.body.style.overflow = 'hidden';
+	};
+
+	window.pkCloseEventModal = function() {
+		document.getElementById('pk-event-modal').classList.remove('pk-emod-open');
+		document.body.style.overflow = '';
+	};
+
+	window.pkGoToEventCreate = function() {
+		var v = document.getElementById('pk-template-select').value;
+		if (v) window.location.href = pkEventUIR + 'Eventcreate/index/' + v + '/' + pkEventParkId;
+	};
+
+	document.getElementById('pk-event-modal').addEventListener('click', function(e) {
+		if (e.target === this) pkCloseEventModal();
+	});
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape') pkCloseEventModal();
 	});
 })();
 </script>

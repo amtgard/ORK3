@@ -29,6 +29,28 @@
 
 	// Owner label for stats card
 	$ownerLabel = $parkName ?: $kingdomName ?: $unitName ?: $persona ?: '—';
+
+	// FullCalendar event objects (all occurrences)
+	$enCalEvents = [];
+	$now = time();
+	foreach ( array_merge($upcomingList, $pastList) as $cd ) {
+		$start   = date('Y-m-d', strtotime($cd['EventStart']));
+		$end     = !empty($cd['EventEnd']) ? date('Y-m-d', strtotime($cd['EventEnd'])) : null;
+		$isFuture = strtotime($cd['EventStart']) >= $now;
+		$loc     = htmlspecialchars($cd['_LocationDisplay'] ?? '');
+		$enCalEvents[] = [
+			'id'              => (int)$cd['EventCalendarDetailId'],
+			'title'           => $loc ?: date('M j, Y', strtotime($cd['EventStart'])),
+			'start'           => $start,
+			'end'             => $end,
+			'url'             => UIR . 'Eventnew/index/' . $eventId . '/' . $cd['EventCalendarDetailId'],
+			'backgroundColor' => $isFuture ? '#2b6cb0' : '#a0aec0',
+			'borderColor'     => $isFuture ? '#2c5282' : '#718096',
+			'textColor'       => '#ffffff',
+		];
+	}
+	$enCalJson    = json_encode($enCalEvents, JSON_HEX_TAG | JSON_HEX_AMP);
+	$enCalInitDate = $nextDate ? date('Y-m-d', strtotime($nextDate)) : date('Y-m-d');
 ?>
 
 <style type="text/css">
@@ -273,15 +295,6 @@
 .en-table .en-past-row td { color: #a0aec0; }
 .en-date-col { white-space: nowrap; }
 .en-price-col { white-space: nowrap; color: #276749; font-weight: 600; }
-.en-current-badge {
-	display: inline-block;
-	background: #c6f6d5;
-	color: #276749;
-	font-size: 10px;
-	padding: 1px 7px;
-	border-radius: 10px;
-	font-weight: 600;
-}
 
 /* ---- Sub-section headers ---- */
 .en-sub-header {
@@ -330,6 +343,25 @@
 	font-size: 12px;
 }
 .en-attend-link:hover { text-decoration: underline; }
+
+/* ---- FullCalendar container ---- */
+#en-calendar {
+	min-height: 420px;
+}
+/* Override FullCalendar defaults to match site style */
+.fc .fc-toolbar-title { font-size: 16px; font-weight: 700; color: #2d3748; }
+.fc .fc-button {
+	background: #2b6cb0;
+	border-color: #2c5282;
+	font-size: 12px;
+	padding: 4px 10px;
+}
+.fc .fc-button:hover { background: #2c5282; }
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active { background: #1a365d; border-color: #1a365d; }
+.fc .fc-daygrid-event { font-size: 11px; padding: 1px 3px; }
+.fc .fc-event-title { font-weight: 600; }
+.fc-event { cursor: pointer; }
 </style>
 
 <?php // ---- HERO ---- ?>
@@ -380,10 +412,10 @@
 				<i class="fas fa-list-alt"></i> Attendance Report
 			</a>
 			<?php if ($canManage): ?>
-			<a class="en-btn en-btn-outline"
-				href="<?= UIR ?>Admin/event/<?= $eventId ?>">
-				<i class="fas fa-calendar-plus"></i> Schedule Date
-			</a>
+			<button class="en-btn en-btn-outline" onclick="enOpenCreateModal()"
+				style="border:none;cursor:pointer;">
+				<i class="fas fa-calendar-plus"></i> Add Occurrence
+			</button>
 			<?php endif; ?>
 			<?php if ($loggedIn): ?>
 			<a class="en-btn en-btn-outline"
@@ -486,10 +518,13 @@
 	<div class="en-main">
 		<div class="en-tabs">
 
-			<ul class="en-tab-nav">
-				<li class="en-tab-active" data-tab="en-tab-dates">
+			<ul class="en-tab-nav" id="en-tab-nav">
+				<li class="en-tab-active" data-tab="en-tab-dates" onclick="enTab(this)">
 					<i class="fas fa-calendar-check"></i> Scheduled Dates
 					<span class="en-tab-count"><?= $totalDates ?></span>
+				</li>
+				<li data-tab="en-tab-calendar" onclick="enTab(this)">
+					<i class="fas fa-calendar-alt"></i> Calendar
 				</li>
 			</ul>
 
@@ -500,10 +535,10 @@
 				<div class="en-sub-header">
 					<h4><i class="fas fa-clock"></i> Upcoming</h4>
 					<?php if ($canManage): ?>
-					<a href="<?= UIR ?>Admin/event/<?= $eventId ?>"
-						style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
-						<i class="fas fa-plus"></i> Add Scheduled Date
-					</a>
+					<button onclick="enOpenCreateModal()"
+						style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
+						<i class="fas fa-plus"></i> Add Occurrence
+					</button>
 					<?php endif; ?>
 				</div>
 
@@ -523,9 +558,6 @@
 						<tr>
 							<td class="en-date-col">
 								<?= date('M j, Y', strtotime($cd['EventStart'])) ?>
-								<?php if ($cd['Current'] == 1): ?>
-									<span class="en-current-badge">Current</span>
-								<?php endif; ?>
 							</td>
 							<td class="en-date-col">
 								<?= $cd['EventEnd'] ? date('M j, Y', strtotime($cd['EventEnd'])) : '—' ?>
@@ -628,15 +660,69 @@
 				</div>
 				<?php endif; ?>
 
-			</div><!-- /.en-tab-panel -->
+			</div><!-- /.en-tab-panel #en-tab-dates -->
+
+			<?php // ---- Calendar Tab ---- ?>
+			<div class="en-tab-panel" id="en-tab-calendar" style="display:none">
+				<div id="en-calendar"></div>
+			</div><!-- /.en-tab-panel #en-tab-calendar -->
 
 		</div><!-- /.en-tabs -->
 	</div><!-- /.en-main -->
 
 </div><!-- /.en-layout -->
 
+<script src="<?= HTTP_TEMPLATE ?>default/script/js/fullcalendar/core.global.min.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>default/script/js/fullcalendar/daygrid.global.min.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>default/script/js/fullcalendar/interaction.global.min.js"></script>
+
 <script>
 (function() {
+	// ---- Tab switching ----
+	var calendarInstance = null;
+	window.enTab = function(el) {
+		var tabId = el.getAttribute('data-tab');
+		// Update nav
+		var navItems = document.querySelectorAll('#en-tab-nav li');
+		navItems.forEach(function(li) { li.classList.remove('en-tab-active'); });
+		el.classList.add('en-tab-active');
+		// Show/hide panels
+		var panels = document.querySelectorAll('.en-tab-panel');
+		panels.forEach(function(p) { p.style.display = 'none'; });
+		var target = document.getElementById(tabId);
+		if (target) target.style.display = '';
+		// Init calendar lazily on first show
+		if (tabId === 'en-tab-calendar' && !calendarInstance) {
+			enInitCalendar();
+		}
+	};
+
+	// ---- FullCalendar init ----
+	function enInitCalendar() {
+		var el = document.getElementById('en-calendar');
+		if (!el || typeof FullCalendar === 'undefined') return;
+		calendarInstance = new FullCalendar.Calendar(el, {
+			initialView: 'dayGridMonth',
+			initialDate: '<?= $enCalInitDate ?>',
+			headerToolbar: {
+				left:   'prev,next today',
+				center: 'title',
+				right:  'dayGridMonth,listMonth'
+			},
+			events: <?= $enCalJson ?>,
+			eventClick: function(info) {
+				info.jsEvent.preventDefault();
+				if (info.event.url) window.location.href = info.event.url;
+			},
+			eventDidMount: function(info) {
+				info.el.title = info.event.title;
+			},
+			height: 'auto',
+			fixedWeekCount: false
+		});
+		calendarInstance.render();
+	}
+
 	// ---- Past dates toggle ----
 	window.enTogglePast = function(btn) {
 		var section  = document.getElementById('en-past-section');
@@ -687,5 +773,148 @@
 		else { img.addEventListener('load', extract); }
 	}
 	enApplyHeroColor();
+
+	// ---- Create Occurrence modal ----
+	window.enOpenCreateModal = function() {
+		var overlay = document.getElementById('en-create-modal');
+		if (overlay) overlay.classList.add('en-cmod-open');
+		document.body.style.overflow = 'hidden';
+	};
+	window.enCloseCreateModal = function() {
+		var overlay = document.getElementById('en-create-modal');
+		if (overlay) overlay.classList.remove('en-cmod-open');
+		document.body.style.overflow = '';
+	};
+	// Close on backdrop click
+	document.addEventListener('click', function(e) {
+		var overlay = document.getElementById('en-create-modal');
+		if (overlay && overlay.classList.contains('en-cmod-open') && e.target === overlay) {
+			enCloseCreateModal();
+		}
+	});
+	// Close on Escape
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape') enCloseCreateModal();
+	});
 })();
 </script>
+
+<?php if ($canManage): ?>
+<style>
+.en-cmod-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.45);
+	z-index: 9000;
+	align-items: center;
+	justify-content: center;
+}
+.en-cmod-overlay.en-cmod-open { display: flex; }
+.en-cmod-box {
+	background: #fff;
+	border-radius: 10px;
+	width: 420px;
+	max-width: calc(100vw - 32px);
+	box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+	display: flex;
+	flex-direction: column;
+}
+.en-cmod-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 18px 20px 14px;
+	border-bottom: 1px solid #e2e8f0;
+}
+.en-cmod-header h3 {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 700;
+	color: #1a202c;
+}
+.en-cmod-close {
+	background: none;
+	border: none;
+	font-size: 18px;
+	color: #a0aec0;
+	cursor: pointer;
+	line-height: 1;
+	padding: 2px 4px;
+}
+.en-cmod-close:hover { color: #4a5568; }
+.en-cmod-body {
+	padding: 20px;
+}
+.en-cmod-event-name {
+	font-size: 17px;
+	font-weight: 700;
+	color: #2b6cb0;
+	margin: 0 0 10px 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.en-cmod-body p {
+	font-size: 13px;
+	color: #4a5568;
+	margin: 0;
+	line-height: 1.55;
+}
+.en-cmod-footer {
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+}
+.en-cmod-btn-cancel {
+	padding: 8px 16px;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 600;
+	border: 1px solid #e2e8f0;
+	background: #f7fafc;
+	color: #4a5568;
+	cursor: pointer;
+}
+.en-cmod-btn-cancel:hover { background: #edf2f7; }
+.en-cmod-btn-go {
+	padding: 8px 18px;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 600;
+	border: none;
+	background: #276749;
+	color: #fff;
+	cursor: pointer;
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+.en-cmod-btn-go:hover { background: #22543d; }
+</style>
+
+<div class="en-cmod-overlay" id="en-create-modal">
+	<div class="en-cmod-box">
+		<div class="en-cmod-header">
+			<h3><i class="fas fa-calendar-plus" style="color:#276749;margin-right:8px"></i>Add New Occurrence</h3>
+			<button class="en-cmod-close" onclick="enCloseCreateModal()">&times;</button>
+		</div>
+		<div class="en-cmod-body">
+			<p class="en-cmod-event-name">
+				<i class="fas fa-layer-group" style="color:#a0aec0;font-size:14px"></i>
+				<?= $eventName ?>
+			</p>
+			<p>Create a new scheduled occurrence for this event template. You'll configure the dates, location, pricing, and other details on the next page.</p>
+		</div>
+		<div class="en-cmod-footer">
+			<button class="en-cmod-btn-cancel" onclick="enCloseCreateModal()">Cancel</button>
+			<a class="en-cmod-btn-go" href="<?= UIR ?>Eventcreate/index/<?= $eventId ?>">
+				Continue <i class="fas fa-arrow-right"></i>
+			</a>
+		</div>
+	</div>
+</div>
+<?php endif; ?>

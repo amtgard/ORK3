@@ -173,7 +173,9 @@ class SearchService extends Ork3 {
 				$r[] = array(
 						'EventId' => $d->event_id,
 						'Name' => $d->name,
+						'KingdomId' => $d->kingdom_id,
 						'KingdomName' => $d->kingdom_name,
+						'ParkId' => $d->park_id,
 						'ParkName' => $d->park_name,
 						'Persona' => $d->persona,
 						'UnitName' => $d->unit_name,

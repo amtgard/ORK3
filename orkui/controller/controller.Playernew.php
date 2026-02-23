@@ -66,14 +66,29 @@ class Controller_Playernew extends Controller {
 							'Rank'           => $this->request->Playernew_index->Rank,
 							'Reason'         => $this->request->Playernew_index->Reason
 						));
-						break;
+						$this->request->clear('Playernew_index');
+						if ($r['Status'] == 0) {
+							header('Location: ' . UIR . "Playernew/index/{$id}");
+						} else if ($r['Status'] == 5) {
+							header('Location: ' . UIR . "Login/login/Playernew/index/$id");
+						} else {
+							$msg = urlencode($r['Error'] . ': ' . $r['Detail']);
+							header('Location: ' . UIR . "Playernew/index/{$id}&rec_error={$msg}");
+						}
+						exit;
 					case 'deleterecommendation':
 						$r = $this->Player->delete_player_recommendation(array(
 							'Token'             => $this->session->token,
 							'RecommendationsId' => $roastbeef,
 							'RequestedBy'       => $this->session->user_id
 						));
-						break;
+						$this->request->clear('Playernew_index');
+						if ($r['Status'] == 5) {
+							header('Location: ' . UIR . "Login/login/Playernew/index/$id");
+						} else {
+							header('Location: ' . UIR . "Playernew/index/{$id}");
+						}
+						exit;
 					case 'quitunit':
 						$r = $this->Unit->retire_unit_member(array(
 							'UnitMundaneId' => $roastbeef,
