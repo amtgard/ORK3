@@ -207,7 +207,7 @@ class Model_Reports extends Model {
 	function park_attendance_all_parks($request) {
 		$r = $this->Report->ParkAttendanceAllParks($request);
 		if ($r['Status']['Status'] == 0) {
-			return $r['Attendance'];
+			return array('Attendance' => $r['Attendance'], 'Summary' => $r['Summary'] ?? array());
 		}
 		return false;
 	}

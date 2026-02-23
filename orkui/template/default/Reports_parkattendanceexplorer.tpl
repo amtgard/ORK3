@@ -210,8 +210,10 @@
 				within that specific period. These values are calculated per-period, so a member who signed in 3 times in Q1 but only once in Q2
 				would count toward 2+ and 3+ in Q1 but not in Q2. These numbers are useful for determining insurance needs and park activity levels.</li>
 		</ul>
-		<p>A <strong>Kingdom Totals</strong> row appears at the bottom, summing the values across all parks. Note that Unique Players and Unique Members
-			in the totals row are sums of per-park counts, so a player who visited multiple parks may be counted more than once in the kingdom total.</p>
+		<p>A <strong>Kingdom Totals</strong> row appears at the bottom. <strong>Total Sign-Ins</strong> is the sum of all per-park counts.
+			<strong>Unique Players</strong> and <strong>Unique Members</strong> are true kingdom-wide distinct counts, so a player who visited
+			multiple parks is counted only once. <strong>Members 2+/3+/4+</strong> are summed from per-park per-period values, so a member who
+			met the threshold in multiple periods contributes once per qualifying period.</p>
 
 		<h4>Individual Park View</h4>
 		<p>Shows one row per player with the following columns:</p>
