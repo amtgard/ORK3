@@ -50,7 +50,7 @@
 		$knCalEvents[] = [
 			'title'  => $ev['Name'],
 			'start'  => $ev['NextDate'],
-			'url'    => UIR . ($ev['NextDetailId'] ? 'Eventnew/index/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Eventtemplatenew/index/' . $ev['EventId']),
+			'url'    => UIR . ($ev['NextDetailId'] ? 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Event/template/' . $ev['EventId']),
 			'isPark' => (bool)$ev['_IsParkEvent'],
 			'color'  => $ev['_IsParkEvent'] ? '#718096' : '#276749',
 		];
@@ -1127,7 +1127,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-								<tr class="kn-row-link<?= $event['_IsParkEvent'] ? ' kn-park-row' : '' ?>" style="<?= $event['_IsParkEvent'] ? 'display:none' : '' ?>" onclick="window.location.href='<?= UIR ?><?= $event['NextDetailId'] ? 'Eventnew/index/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Eventtemplatenew/index/' . $event['EventId'] ?>'">
+								<tr class="kn-row-link<?= $event['_IsParkEvent'] ? ' kn-park-row' : '' ?>" style="<?= $event['_IsParkEvent'] ? 'display:none' : '' ?>" onclick="window.location.href='<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>'">
 									<td class="kn-col-nowrap">
 										<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
 											? date("M j, Y", strtotime($event['NextDate']))
@@ -1138,7 +1138,7 @@
 											src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
-										<a href="<?= UIR ?><?= $event['NextDetailId'] ? 'Eventnew/index/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Eventtemplatenew/index/' . $event['EventId'] ?>"><?= htmlspecialchars($event['Name']) ?></a>
+										<a href="<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>"><?= htmlspecialchars($event['Name']) ?></a>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
 								</tr>
@@ -2587,7 +2587,7 @@ $(document).ready(function() {
 
 	window.knGoToEventCreate = function() {
 		var v = document.getElementById('kn-template-select').value;
-		if (v) window.location.href = knEventUIR + 'Eventcreate/index/' + v;
+		if (v) window.location.href = knEventUIR + 'Event/create/' + v;
 	};
 
 	document.getElementById('kn-event-modal').addEventListener('click', function(e) {

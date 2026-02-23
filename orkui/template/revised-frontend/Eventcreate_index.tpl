@@ -290,14 +290,14 @@
 			<div class="ec-banner-label"><i class="fas fa-plus-circle" style="margin-right:4px"></i>New Scheduled Occurrence</div>
 			<h1 class="ec-banner-name"><?= $eventName ?></h1>
 			<div class="ec-banner-crumb">
-				<a href="<?= UIR ?>Eventtemplatenew/index/<?= $eventId ?>"><?= $eventName ?></a>
+				<a href="<?= UIR ?>Event/template/<?= $eventId ?>"><?= $eventName ?></a>
 				<?php if ($kingdomId): ?>
 					<span>›</span>
-					<a href="<?= UIR ?>Kingdomnew/index/<?= $kingdomId ?>"><?= $kingdomName ?></a>
+					<a href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"><?= $kingdomName ?></a>
 				<?php endif; ?>
 				<?php if ($parkId): ?>
 					<span>›</span>
-					<a href="<?= UIR ?>Parknew/index/<?= $parkId ?>"><?= $parkName ?></a>
+					<a href="<?= UIR ?>Park/profile/<?= $parkId ?>"><?= $parkName ?></a>
 				<?php endif; ?>
 			</div>
 		</div>
@@ -312,7 +312,7 @@
 		</div>
 		<?php endif; ?>
 
-		<form method="post" action="<?= UIR ?>Eventcreate/index/<?= $eventId ?>" id="ec-form">
+		<form method="post" action="<?= UIR ?>Event/create/<?= $eventId ?>" id="ec-form">
 
 			<?php // ---- Section: Dates & Pricing ---- ?>
 			<div class="ec-section">
@@ -437,7 +437,7 @@
 					You can edit any of these details after creation.
 				</div>
 				<div class="ec-action-bar-right">
-					<a class="ec-btn-cancel" href="<?= UIR ?>Eventtemplatenew/index/<?= $eventId ?>">
+					<a class="ec-btn-cancel" href="<?= UIR ?>Event/template/<?= $eventId ?>">
 						Cancel
 					</a>
 					<button type="submit" class="ec-btn-submit" id="ec-submit-btn">

@@ -63,7 +63,7 @@
 		$pkCalEvents[] = [
 			'title' => $ev['Name'],
 			'start' => $ev['NextDate'],
-			'url'   => UIR . ($ev['NextDetailId'] ? 'Eventnew/index/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Eventtemplatenew/index/' . $ev['EventId']),
+			'url'   => UIR . ($ev['NextDetailId'] ? 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Event/template/' . $ev['EventId']),
 			'color' => '#2b6cb0',
 		];
 	}
@@ -1110,7 +1110,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-							<tr onclick='window.location.href="<?= UIR ?><?= $event['NextDetailId'] ? 'Eventnew/index/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Eventtemplatenew/index/' . $event['EventId'] ?>"'>
+							<tr onclick='window.location.href="<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>"'>
 								<td>
 									<div class="pk-tiny-heraldry">
 										<?php if ($event['HasHeraldry'] == 1): ?>
@@ -2427,7 +2427,7 @@ $(document).ready(function() {
 
 	window.pkGoToEventCreate = function() {
 		var v = document.getElementById('pk-template-select').value;
-		if (v) window.location.href = pkEventUIR + 'Eventcreate/index/' + v + '/' + pkEventParkId;
+		if (v) window.location.href = pkEventUIR + 'Event/create/' + v + '/' + pkEventParkId;
 	};
 
 	document.getElementById('pk-event-modal').addEventListener('click', function(e) {

@@ -556,10 +556,10 @@
 			</div>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
-				<a href="<?= UIR ?>Eventtemplatenew/index/<?= $eventId ?>"><?= $eventName ?></a>
+				<a href="<?= UIR ?>Event/template/<?= $eventId ?>"><?= $eventName ?></a>
 				<?php if ($kingdomId): ?>
 					<span class="ev-owner-sep">›</span>
-					<a href="<?= UIR ?>Kingdomnew/index/<?= $kingdomId ?>"><?= $kingdomName ?></a>
+					<a href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"><?= $kingdomName ?></a>
 				<?php endif; ?>
 				<?php
 					$breadcrumbParkId   = $atParkId   ?: $parkId;
@@ -567,7 +567,7 @@
 				?>
 				<?php if ($breadcrumbParkId): ?>
 					<span class="ev-owner-sep">›</span>
-					<a href="<?= UIR ?>Parknew/index/<?= $breadcrumbParkId ?>"><?= $breadcrumbParkName ?></a>
+					<a href="<?= UIR ?>Park/profile/<?= $breadcrumbParkId ?>"><?= $breadcrumbParkName ?></a>
 				<?php endif; ?>
 			</div>
 		</div>
@@ -578,7 +578,7 @@
 				<i class="fas fa-list-alt"></i> Attendance Report
 			</a>
 			<a class="ev-btn ev-btn-outline"
-				href="<?= UIR ?>Eventtemplatenew/index/<?= $eventId ?>">
+				href="<?= UIR ?>Event/template/<?= $eventId ?>">
 				<i class="fas fa-layer-group"></i> Event Template
 			</a>
 			<?php if ($CanManageEvent ?? false): ?>
@@ -722,7 +722,7 @@
 				</li>
 				<li>
 					<span class="ev-link-icon"><i class="fas fa-layer-group"></i></span>
-					<a href="<?= UIR ?>Eventtemplatenew/index/<?= $eventId ?>">Event Template</a>
+					<a href="<?= UIR ?>Event/template/<?= $eventId ?>">Event Template</a>
 				</li>
 				<?php if ($loggedIn): ?>
 				<li>
@@ -775,7 +775,7 @@
 				<?php if ($loggedIn): ?>
 				<div class="ev-att-form">
 					<h4><i class="fas fa-plus-circle" style="margin-right:6px;color:#276749"></i>Add Attendance</h4>
-					<form method="post" action="<?= UIR ?>Eventnew/index/<?= $eventId ?>/<?= $detailId ?>/new">
+					<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/new">
 						<div class="ev-form-row">
 							<div class="ev-form-field">
 								<label>Kingdom</label>
@@ -848,15 +848,15 @@
 					<tbody>
 						<?php foreach ($attendanceList as $att): ?>
 						<tr>
-							<td><a href="<?= UIR ?>Playernew/index/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a></td>
-							<td><a href="<?= UIR ?>Kingdomnew/index/<?= (int)$att['KingdomId'] ?>"><?= htmlspecialchars($att['KingdomName']) ?></a></td>
-							<td><a href="<?= UIR ?>Parknew/index/<?= (int)$att['ParkId'] ?>"><?= htmlspecialchars($att['ParkName']) ?></a></td>
+							<td><a href="<?= UIR ?>Player/profile/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a></td>
+							<td><a href="<?= UIR ?>Kingdom/profile/<?= (int)$att['KingdomId'] ?>"><?= htmlspecialchars($att['KingdomName']) ?></a></td>
+							<td><a href="<?= UIR ?>Park/profile/<?= (int)$att['ParkId'] ?>"><?= htmlspecialchars($att['ParkName']) ?></a></td>
 							<td><?= htmlspecialchars($att['ClassName']) ?></td>
 							<td><?= htmlspecialchars($att['Credits']) ?></td>
 							<?php if ($loggedIn): ?>
 							<td class="ev-del-cell">
 								<a class="ev-del-link" title="Remove"
-									href="<?= UIR ?>Eventnew/index/<?= $eventId ?>/<?= $detailId ?>/delete/<?= (int)$att['AttendanceId'] ?>"
+									href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/delete/<?= (int)$att['AttendanceId'] ?>"
 									onclick="return confirm('Remove this attendance record?')">×</a>
 							</td>
 							<?php endif; ?>
@@ -914,7 +914,7 @@
 			<h3><i class="fas fa-pencil-alt" style="margin-right:8px"></i>Edit Event Details</h3>
 			<button class="ev-modal-close" type="button" onclick="evCloseEditModal()">&times;</button>
 		</div>
-		<form method="post" action="<?= UIR ?>Eventnew/index/<?= $eventId ?>/<?= $detailId ?>/edit">
+		<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/edit">
 			<div class="ev-modal-body">
 
 				<div class="ev-modal-section">

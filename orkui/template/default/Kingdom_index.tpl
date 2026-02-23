@@ -1,5 +1,5 @@
 <div id='kingdomnew-preview-banner' style='display:block;width:calc(100% - 44px);background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:10px 16px;margin:10px;font-size:0.95em;color:#1a5276;'>
-	Want a sneak preview of our new, enhanced kingdom profile? <a href='<?=UIR ?>Kingdomnew/index/<?=$kingdom_id ?>'>Check it out here</a>. Note: Clicking any link will return you to the regular design.
+	Want a sneak preview of our new, enhanced kingdom profile? <a href='<?=UIR ?>Kingdom/profile/<?=$kingdom_id ?>'>Check it out here</a>. Note: Clicking any link will return you to the regular design.
 </div>
 
 <div class='info-container'>
