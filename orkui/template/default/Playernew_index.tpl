@@ -1,6 +1,7 @@
 <?php
 	$passwordExpired = strtotime($Player['PasswordExpires']) - time() <= 0;
 	$passwordExpiring = $passwordExpired ? 'Expired' : date('Y-m-j', strtotime($Player['PasswordExpires']));
+	$recError = isset($_GET['rec_error']) ? htmlspecialchars(urldecode($_GET['rec_error'])) : '';
 
 	$can_delete_recommendation = false;
 	if($this->__session->user_id) {
@@ -2202,11 +2203,8 @@
 		<div class="pn-modal-footer" style="display:flex;align-items:center;justify-content:space-between">
 			<button class="pn-btn pn-btn-ghost" id="pn-award-cancel">Close</button>
 			<div style="display:flex;gap:8px">
-				<button class="pn-btn pn-btn-secondary" id="pn-award-save-same" disabled>
-					<i class="fas fa-plus"></i> Add + Same Player
-				</button>
-				<button class="pn-btn pn-btn-primary" id="pn-award-save-new" disabled>
-					<i class="fas fa-plus"></i> Add + New Player
+				<button class="pn-btn pn-btn-primary" id="pn-award-save-same" disabled>
+					<i class="fas fa-plus"></i> Add Award
 				</button>
 			</div>
 		</div>
@@ -2225,7 +2223,7 @@
 			<button class="pn-modal-close-btn" id="pn-modal-close-btn" type="button">&times;</button>
 		</div>
 		<div class="pn-modal-body">
-			<div class="pn-form-error" id="pn-rec-error"></div>
+			<div class="pn-form-error" id="pn-rec-error"><?= $recError ?></div>
 			<form id="pn-recommend-form" method="post" action="<?= UIR ?>Playernew/index/<?= $Player['MundaneId'] ?>/addrecommendation">
 				<div class="pn-rec-field">
 					<label for="pn-rec-award">Award <span style="color:#e53e3e">*</span></label>
@@ -2429,13 +2427,20 @@ $(document).ready(function() {
 	function pnCloseModal() {
 		$('#pn-rec-overlay').removeClass('pn-open');
 		$('body').css('overflow', '');
-		$('#pn-rec-error').hide().text('');
+		$('#pn-rec-error').hide().empty();
 	}
 
 	$('#pn-recommend-btn').on('click', function(e) {
 		e.preventDefault();
 		pnOpenModal();
 	});
+	// Auto-open modal and show error if redirected back after a failed submission
+	<?php if ($recError): ?>
+	(function() {
+		$('#pn-rec-error').show();
+		pnOpenModal();
+	})();
+	<?php endif; ?>
 	$('#pn-modal-close-btn, #pn-rec-cancel').on('click', function() {
 		pnCloseModal();
 	});
@@ -3130,7 +3135,6 @@ $(document).ready(function() {
 			gid('pn-award-modal-title').innerHTML = isOfficer
 				? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
 				: '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
-			gid('pn-award-save-label').textContent = isOfficer ? 'Add Title' : 'Add Award';
 			gid('pn-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
 			gid('pn-award-rank-row').style.display   = 'none';
 			gid('pn-award-custom-row').style.display  = 'none';
@@ -3304,7 +3308,6 @@ $(document).ready(function() {
 		// ---- Required field check ----
 		function checkRequired() {
 			var ok = !!gid('pn-award-select').value && !!gid('pn-award-givenby-id').value && !!gid('pn-award-date').value;
-			gid('pn-award-save-new').disabled  = !ok;
 			gid('pn-award-save-same').disabled = !ok;
 		}
 		gid('pn-award-select').addEventListener('change', checkRequired);
@@ -3406,10 +3409,8 @@ $(document).ready(function() {
 			var customName = gid('pn-award-custom-name').value.trim();
 			if (customName) fd.append('AwardName', customName);
 
-			var btnNew  = gid('pn-award-save-new');
 			var btnSame = gid('pn-award-save-same');
-			btnNew.disabled = btnSame.disabled = true;
-			btnNew.innerHTML  = '<i class="fas fa-spinner fa-spin"></i>';
+			btnSame.disabled = true;
 			btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
 			fetch(AWARD_URL, { method: 'POST', body: fd })
@@ -3422,16 +3423,11 @@ $(document).ready(function() {
 					errEl.style.display = '';
 				})
 				.finally(function() {
-					btnNew.innerHTML  = '<i class="fas fa-plus"></i> Add + New Player';
-					btnSame.innerHTML = '<i class="fas fa-plus"></i> Add + Same Player';
+					btnSame.innerHTML = '<i class="fas fa-plus"></i> Add Award';
 					checkRequired();
 				});
 		}
-		// "Add + New Player" — clear award/rank/note, keep date/giver/location
-		gid('pn-award-save-new').addEventListener('click', function() {
-			pnDoSave(function() { pnShowSuccess(); pnClearAward(); });
-		});
-		// "Add + Same Player" — clear award/rank/note, keep player+date+giver+location
+		// Save: add award and stay in modal for another
 		gid('pn-award-save-same').addEventListener('click', function() {
 			pnDoSave(function() { pnShowSuccess(); pnClearAward(); });
 		});

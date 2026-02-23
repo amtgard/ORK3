@@ -131,6 +131,7 @@ $server->wsdl->addComplexType(
 		array(
 				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
 				'EventId'=>array('name'=>'EventId','type'=>'xsd:int'),
+				'AtParkId'=>array('name'=>'AtParkId','type'=>'xsd:int'),
 				'Current'=>array('name'=>'Current','type'=>'xsd:int'),
 				'Price'=>array('name'=>'Price','type'=>'xsd:double'),
 				'EventStart'=>array('name'=>'EventStart','type'=>'xsd:dateTime'),

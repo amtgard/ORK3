@@ -16,6 +16,8 @@
 	$kingdomName = htmlspecialchars($info['KingdomName'] ?? '');
 	$parkId      = (int)($info['ParkId']    ?? 0);
 	$parkName    = htmlspecialchars($info['ParkName']    ?? '');
+	$atParkId    = (int)($cd['AtParkId']   ?? 0);
+	$atParkName  = htmlspecialchars($AtParkName         ?? '');
 	$unitId      = (int)($info['UnitId']    ?? 0);
 	$unitName    = htmlspecialchars($info['Unit']        ?? '');
 	$mundaneId   = (int)($info['MundaneId'] ?? 0);
@@ -34,8 +36,6 @@
 	$websiteName = $cd['UrlName'] ?? '';
 	$mapUrlName  = $cd['MapUrlName'] ?? '';
 	$mapUrl      = $cd['MapUrl']     ?? '';
-	$isCurrent   = ($cd['Current'] ?? 0) == 1;
-
 	$city     = $cd['City']     ?? '';
 	$province = $cd['Province'] ?? '';
 	$country  = $cd['Country']  ?? '';
@@ -153,7 +153,7 @@
 }
 .ev-badge-green  { background: #c6f6d5; color: #276749; }
 .ev-badge-gray   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
-.ev-badge-yellow { background: #fefcbf; color: #744210; }
+
 .ev-owner-inline {
 	color: rgba(255,255,255,0.85);
 	font-size: 13px;
@@ -287,16 +287,7 @@
 	text-decoration: none;
 }
 .ev-map-btn:hover { background: #bee3f8; }
-.ev-current-pill {
-	display: inline-block;
-	background: #c6f6d5;
-	color: #276749;
-	font-size: 10px;
-	padding: 1px 7px;
-	border-radius: 10px;
-	font-weight: 600;
-	margin-left: 4px;
-}
+
 
 /* ---- Tabs ---- */
 .ev-tabs { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
@@ -501,15 +492,6 @@
 .ev-modal-field input:focus,
 .ev-modal-field textarea:focus { outline: none; border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(66,153,225,0.15); }
 .ev-modal-field textarea { resize: vertical; min-height: 80px; font-family: inherit; }
-.ev-modal-check-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 13px;
-	color: #2d3748;
-	margin-bottom: 10px;
-}
-.ev-modal-check-row input[type="checkbox"] { width: 15px; height: 15px; }
 .ev-modal-footer {
 	display: flex;
 	justify-content: flex-end;
@@ -571,11 +553,6 @@
 				<span class="ev-badge <?= $isUpcoming ? 'ev-badge-green' : 'ev-badge-gray' ?>">
 					<?= $isUpcoming ? '<i class="fas fa-clock"></i> Upcoming' : '<i class="fas fa-history"></i> Past' ?>
 				</span>
-				<?php if ($isCurrent): ?>
-				<span class="ev-badge ev-badge-yellow">
-					<i class="fas fa-star"></i> Current
-				</span>
-				<?php endif; ?>
 			</div>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
@@ -584,9 +561,13 @@
 					<span class="ev-owner-sep">›</span>
 					<a href="<?= UIR ?>Kingdomnew/index/<?= $kingdomId ?>"><?= $kingdomName ?></a>
 				<?php endif; ?>
-				<?php if ($parkId): ?>
+				<?php
+					$breadcrumbParkId   = $atParkId   ?: $parkId;
+					$breadcrumbParkName = $atParkId ? $atParkName : $parkName;
+				?>
+				<?php if ($breadcrumbParkId): ?>
 					<span class="ev-owner-sep">›</span>
-					<a href="<?= UIR ?>Parknew/index/<?= $parkId ?>"><?= $parkName ?></a>
+					<a href="<?= UIR ?>Parknew/index/<?= $breadcrumbParkId ?>"><?= $breadcrumbParkName ?></a>
 				<?php endif; ?>
 			</div>
 		</div>
@@ -954,11 +935,6 @@
 							<input type="number" name="Price" min="0" step="0.01"
 								value="<?= number_format($price, 2) ?>">
 						</div>
-					</div>
-					<div class="ev-modal-check-row">
-						<input type="checkbox" name="Current" id="ev-edit-current" value="1"
-							<?= $isCurrent ? 'checked' : '' ?>>
-						<label for="ev-edit-current">Mark as Current (active/upcoming occurrence)</label>
 					</div>
 				</div>
 

@@ -77,11 +77,9 @@ class Controller_Kingdomnew extends Controller {
 			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
-			LEFT JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id AND cd.current = 1
+			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 			WHERE e.kingdom_id = {$kid}
-			  AND (cd.current = 1 OR cd.current IS NULL)
-			  AND cd.event_start IS NOT NULL
-			  AND cd.event_start > DATE_SUB(NOW(), INTERVAL 7 DAY)
+			  AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 			ORDER BY cd.event_start, p.name, e.name";
 		$evtResult = $DB->DataSet($evtSql);
 		$eventSummary = [];

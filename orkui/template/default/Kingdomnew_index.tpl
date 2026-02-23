@@ -43,6 +43,19 @@
 	}
 	ksort($knPlayerPeriods);
 
+	// Pre-compute FullCalendar event data
+	$knCalEvents = [];
+	foreach ($eventList as $ev) {
+		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
+		$knCalEvents[] = [
+			'title'  => $ev['Name'],
+			'start'  => $ev['NextDate'],
+			'url'    => UIR . ($ev['NextDetailId'] ? 'Eventnew/index/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Eventtemplatenew/index/' . $ev['EventId']),
+			'isPark' => (bool)$ev['_IsParkEvent'],
+			'color'  => $ev['_IsParkEvent'] ? '#718096' : '#276749',
+		];
+	}
+
 	// Pre-compute map location data (server-side; embedded as JSON for lazy map init)
 	$knMapLocations = [];
 	foreach ((array)$map_parks as $p) {
@@ -782,6 +795,27 @@
 #kn-award-overlay .kn-form-error { display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px; }
 #kn-award-overlay .kn-char-count { font-size:11px; color:#a0aec0; margin-top:3px; display:block; }
 #kn-award-overlay .kn-award-info-line { font-size:11px; color:#718096; margin-top:4px; min-height:16px; }
+
+/* ---- Events calendar container ---- */
+#kn-events-cal {
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	padding: 14px 12px 10px;
+	margin-bottom: 4px;
+}
+/* FullCalendar overrides to match site green theme */
+#kn-events-cal .fc .fc-button-primary { background-color: #276749; border-color: #276749; }
+#kn-events-cal .fc .fc-button-primary:hover { background-color: #22543d; border-color: #22543d; }
+#kn-events-cal .fc .fc-button-primary:not(:disabled):active,
+#kn-events-cal .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: #1a4231; border-color: #1a4231; }
+#kn-events-cal .fc .fc-toolbar-title { font-size: 15px; font-weight: 700; color: #2d3748; }
+#kn-events-cal .fc .fc-col-header-cell-cushion { font-size: 12px; color: #718096; text-decoration: none; }
+#kn-events-cal .fc .fc-daygrid-day-number { font-size: 12px; color: #4a5568; text-decoration: none; }
+#kn-events-cal .fc .fc-daygrid-event { font-size: 11px; border-radius: 3px; }
+#kn-events-cal .fc .fc-list-event-title a { color: #2b6cb0; text-decoration: none; }
+#kn-events-cal .fc .fc-list-event-title a:hover { text-decoration: underline; }
+#kn-events-cal .fc-event:focus, #kn-events-cal .fc-event:hover { cursor: pointer; }
 </style>
 
 <!-- =============================================
@@ -1065,16 +1099,23 @@
 				<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;">
+						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
+						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
 						<button id="kn-park-toggle" onclick="knToggleParkItems(this)" style="display:inline-flex;align-items:center;gap:5px;border:1px solid #cbd5e0;background:#fff;border-radius:5px;padding:5px 10px;font-size:12px;color:#718096;cursor:pointer;font-weight:500;">
 							<i class="fas fa-map-marker-alt"></i> Park Events &amp; Tournaments <span id="kn-park-toggle-label" style="font-weight:700;color:#a0aec0">OFF</span>
 						</button>
 						<?php if ($CanManageKingdom): ?>
-						<a href="<?= UIR ?>Admin/manageevent&KingdomId=<?= $kingdom_id ?>" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
+						<button onclick="knOpenEventModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
-						</a>
+						</button>
 						<?php endif; ?>
 					</div>
 				</div>
+				<!-- Calendar view (lazy-loaded FullCalendar) -->
+				<div id="kn-events-cal" style="display:none"></div>
+
+				<!-- List view -->
+				<div id="kn-events-list-view">
 				<?php if (count($eventList) > 0): ?>
 					<table class="kn-table kn-sortable" id="kn-events-table">
 						<thead>
@@ -1107,6 +1148,7 @@
 				<?php else: ?>
 					<div class="kn-empty">No upcoming events</div>
 				<?php endif; ?>
+				</div><!-- /kn-events-list-view -->
 
 				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid #e2e8f0;padding-top:16px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
@@ -1483,6 +1525,78 @@
 var knMapLocations = <?= json_encode(array_values($knMapLocations), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 var knMapLoaded    = false;
 
+// ---- Events calendar data (server-rendered) ----
+var knCalEvents  = <?= json_encode(array_values($knCalEvents), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+var knCalLoaded  = false;
+var knCalendar   = null;
+var knCalShowPark = false; // mirrors the park-toggle button state
+
+function knSetEventsView(view) {
+	if (view === 'calendar') {
+		$('#kn-events-list-view').hide();
+		$('#kn-events-cal').show();
+		$('#kn-ev-view-cal').addClass('kn-view-active');
+		$('#kn-ev-view-list').removeClass('kn-view-active');
+		$('#kn-park-toggle').hide();
+		knInitCalendar();
+	} else {
+		$('#kn-events-cal').hide();
+		$('#kn-events-list-view').show();
+		$('#kn-ev-view-list').addClass('kn-view-active');
+		$('#kn-ev-view-cal').removeClass('kn-view-active');
+		$('#kn-park-toggle').show();
+	}
+	try { localStorage.setItem('kn_events_view', view); } catch(e) {}
+}
+
+function knInitCalendar() {
+	if (knCalendar) {
+		knCalendar.updateSize(); // fix sizing after hidden-tab init
+		return;
+	}
+	if (knCalLoaded) return; // JS loading in progress
+	knCalLoaded = true;
+
+	// Lazy-load FullCalendar CSS + JS from CDN
+	var link = document.createElement('link');
+	link.rel = 'stylesheet';
+	link.href = 'https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css';
+	document.head.appendChild(link);
+
+	var script = document.createElement('script');
+	script.src = 'https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js';
+	script.onload = function() { knRenderCalendar(); };
+	document.head.appendChild(script);
+}
+
+function knRenderCalendar() {
+	var el = document.getElementById('kn-events-cal');
+	if (!el || typeof FullCalendar === 'undefined') return;
+
+	// Build event list, filtering park events per current toggle state
+	var events = knCalEvents.filter(function(e) {
+		return !e.isPark || knCalShowPark;
+	}).map(function(e) {
+		return { title: e.title, start: e.start, url: e.url, color: e.color };
+	});
+
+	knCalendar = new FullCalendar.Calendar(el, {
+		initialView: 'dayGridMonth',
+		headerToolbar: {
+			left:   'prev,next today',
+			center: 'title',
+			right:  'dayGridMonth,listMonth'
+		},
+		height: 'auto',
+		events: events,
+		eventClick: function(info) {
+			info.jsEvent.preventDefault();
+			if (info.event.url) window.location.href = info.event.url;
+		}
+	});
+	knCalendar.render();
+}
+
 // Defined globally so Google Maps API callback can find it
 window.knInitMap = async function() {
 	if (!document.getElementById('kn-map')) return;
@@ -1587,6 +1701,9 @@ function knActivateTab(tab) {
 		s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=knInitMap&v=weekly&libraries=marker';
 		document.head.appendChild(s);
 	}
+	if (tab === 'events' && knCalendar) {
+		knCalendar.updateSize();
+	}
 	$('html, body').animate({ scrollTop: $('.kn-tabs').offset().top - 20 }, 250);
 }
 
@@ -1668,6 +1785,14 @@ function knToggleParkItems(btn) {
 	knPaginate($('#kn-tournaments-table'), 1);
 	$(btn).css({ background: isOn ? '#276749' : '#fff', color: isOn ? '#fff' : '#718096', 'border-color': isOn ? '#276749' : '#cbd5e0' });
 	$('#kn-park-toggle-label').text(isOn ? 'ON' : 'OFF').css('color', isOn ? 'rgba(255,255,255,0.75)' : '#a0aec0');
+	// Keep calendar park-event state in sync
+	knCalShowPark = isOn;
+	if (knCalendar) {
+		var filteredEvents = knCalEvents.filter(function(e) { return !e.isPark || knCalShowPark; })
+			.map(function(e) { return { title: e.title, start: e.start, url: e.url, color: e.color }; });
+		knCalendar.removeAllEvents();
+		knCalendar.addEventSource(filteredEvents);
+	}
 }
 
 function knPaginate($table, page) {
@@ -1781,6 +1906,16 @@ $(document).ready(function() {
 		knSetParksView(localStorage.getItem('kn_parks_view') || 'tiles');
 	} catch(e) {
 		knSetParksView('tiles');
+	}
+
+	// ---- Events view toggle (list / calendar) ----
+	$('#kn-ev-view-list').on('click', function() { knSetEventsView('list'); });
+	$('#kn-ev-view-cal').on('click',  function() { knSetEventsView('calendar'); });
+	// Restore preference, defaulting to list
+	try {
+		knSetEventsView(localStorage.getItem('kn_events_view') || 'list');
+	} catch(e) {
+		knSetEventsView('list');
 	}
 
 	// ---- Sortable tables ----
@@ -2315,6 +2450,151 @@ $(document).ready(function() {
 	// "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
 	gid('kn-award-save-same').addEventListener('click', function() {
 		knDoSave(function() { knShowSuccess(); knClearAward(); gid('kn-award-select').focus(); });
+	});
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($CanManageKingdom ?? false): ?>
+<style>
+.kn-emod-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.5);
+	z-index: 1100;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+.kn-emod-overlay.kn-emod-open { display: flex; }
+.kn-emod-box {
+	background: #fff;
+	border-radius: 10px;
+	width: 100%;
+	max-width: 460px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+	overflow: hidden;
+}
+.kn-emod-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	border-bottom: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.kn-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
+.kn-emod-close {
+	background: none; border: none; font-size: 20px; cursor: pointer;
+	color: #718096; padding: 2px 6px; border-radius: 4px; line-height: 1;
+}
+.kn-emod-close:hover { background: #e2e8f0; color: #2d3748; }
+.kn-emod-body { padding: 20px; }
+.kn-emod-hint { font-size: 13px; color: #718096; margin: 0 0 14px 0; }
+.kn-emod-label { font-size: 11px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 5px; }
+.kn-emod-select {
+	width: 100%;
+	padding: 9px 10px;
+	border: 1px solid #cbd5e0;
+	border-radius: 5px;
+	font-size: 13px;
+	background: #fff;
+	color: #2d3748;
+	box-sizing: border-box;
+}
+.kn-emod-select:focus { outline: none; border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(66,153,225,0.15); }
+.kn-emod-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.kn-emod-btn-cancel { background: #e2e8f0; color: #4a5568; border: none; border-radius: 5px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.kn-emod-btn-cancel:hover { background: #cbd5e0; }
+.kn-emod-btn-go { background: #276749; color: #fff; border: none; border-radius: 5px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.kn-emod-btn-go:hover { background: #22543d; }
+.kn-emod-btn-go:disabled { opacity: 0.5; cursor: default; }
+</style>
+
+<div class="kn-emod-overlay" id="kn-event-modal">
+	<div class="kn-emod-box">
+		<div class="kn-emod-header">
+			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Add New Occurrence</h3>
+			<button class="kn-emod-close" onclick="knCloseEventModal()">&times;</button>
+		</div>
+		<div class="kn-emod-body">
+			<p class="kn-emod-hint">Select a template to get started. You'll configure the dates, location, and details on the next page.</p>
+			<label class="kn-emod-label">Event Template</label>
+			<select class="kn-emod-select" id="kn-template-select">
+				<option value="">Loading templates…</option>
+			</select>
+		</div>
+		<div class="kn-emod-footer">
+			<button class="kn-emod-btn-cancel" onclick="knCloseEventModal()">Cancel</button>
+			<button class="kn-emod-btn-go" id="kn-emod-go-btn" onclick="knGoToEventCreate()" disabled>
+				Continue <i class="fas fa-arrow-right"></i>
+			</button>
+		</div>
+	</div>
+</div>
+
+<script>
+(function() {
+	var knEventKingdomId = <?= (int)$kingdom_id ?>;
+	var knEventUIR = '<?= UIR ?>';
+
+	window.knOpenEventModal = function() {
+		var sel = document.getElementById('kn-template-select');
+		var btn = document.getElementById('kn-emod-go-btn');
+		sel.innerHTML = '<option value="">Loading…</option>';
+		btn.disabled = true;
+
+		$.getJSON('<?= HTTP_SERVICE ?>Search/SearchService.php',
+			{ Action: 'Search/Event', kingdom_id: knEventKingdomId, limit: 50 },
+			function(data) {
+				if (!data || !data.length) {
+					sel.innerHTML = '<option value="">No templates found for this kingdom</option>';
+					return;
+				}
+				sel.innerHTML = '<option value="">— Select a template —</option>';
+				$.each(data, function(i, v) {
+					var label = v.Name + (v.ParkName ? ' (' + v.ParkName + ')' : '');
+					var opt = document.createElement('option');
+					opt.value = v.EventId;
+					opt.textContent = label;
+					sel.appendChild(opt);
+				});
+			}
+		).fail(function() {
+			sel.innerHTML = '<option value="">Error loading templates</option>';
+		});
+
+		sel.addEventListener('change', function() {
+			btn.disabled = !this.value;
+		});
+
+		document.getElementById('kn-event-modal').classList.add('kn-emod-open');
+		document.body.style.overflow = 'hidden';
+	};
+
+	window.knCloseEventModal = function() {
+		document.getElementById('kn-event-modal').classList.remove('kn-emod-open');
+		document.body.style.overflow = '';
+	};
+
+	window.knGoToEventCreate = function() {
+		var v = document.getElementById('kn-template-select').value;
+		if (v) window.location.href = knEventUIR + 'Eventcreate/index/' + v;
+	};
+
+	document.getElementById('kn-event-modal').addEventListener('click', function(e) {
+		if (e.target === this) knCloseEventModal();
+	});
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape') knCloseEventModal();
 	});
 })();
 </script>
