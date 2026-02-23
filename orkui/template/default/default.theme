@@ -79,7 +79,7 @@
 					<i class='fas fa-chevron-down nav-chevron'></i>
 				</button>
 				<div class='nav-dropdown-menu'>
-					<a href='<?=UIR?>Playernew/index/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
+					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
 					<a href='<?=UIR?>Admin/player/<?=$__navUid?>'><i class='fas fa-edit'></i> Edit Profile</a>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
@@ -100,7 +100,7 @@
 				<li><a href='<?=UIR;?>Login'>Login</a></li>
 <?php else : ?>
 <?php $__sideUid = (int)$this->__session->user_id; ?>
-				<li><a href='<?=UIR;?>Playernew/index/<?=$__sideUid?>'><?=htmlspecialchars($this->__session->user_name)?></a></li>
+				<li><a href='<?=UIR;?>Player/profile/<?=$__sideUid?>'><?=htmlspecialchars($this->__session->user_name)?></a></li>
 				<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"'>Logout</button></li>
 <?php endif; ?>
 			</ul>

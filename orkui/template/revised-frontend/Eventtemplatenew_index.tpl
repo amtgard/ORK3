@@ -43,7 +43,7 @@
 			'title'           => $loc ?: date('M j, Y', strtotime($cd['EventStart'])),
 			'start'           => $start,
 			'end'             => $end,
-			'url'             => UIR . 'Eventnew/index/' . $eventId . '/' . $cd['EventCalendarDetailId'],
+			'url'             => UIR . 'Event/detail/' . $eventId . '/' . $cd['EventCalendarDetailId'],
 			'backgroundColor' => $isFuture ? '#2b6cb0' : '#a0aec0',
 			'borderColor'     => $isFuture ? '#2c5282' : '#718096',
 			'textColor'       => '#ffffff',
@@ -391,13 +391,13 @@
 			<div class="en-owner-inline">
 				<?php if ($kingdomId): ?>
 					<i class="fas fa-crown" style="font-size:10px;opacity:0.6;margin-right:3px"></i>
-					<a href="<?= UIR ?>Kingdomnew/index/<?= $kingdomId ?>"><?= $kingdomName ?></a>
+					<a href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"><?= $kingdomName ?></a>
 				<?php endif; ?>
 				<?php if ($kingdomId && $parkId): ?>
 					<span class="en-owner-sep">›</span>
 				<?php endif; ?>
 				<?php if ($parkId): ?>
-					<a href="<?= UIR ?>Parknew/index/<?= $parkId ?>"><?= $parkName ?></a>
+					<a href="<?= UIR ?>Park/profile/<?= $parkId ?>"><?= $parkName ?></a>
 				<?php endif; ?>
 				<?php if ($unitId): ?>
 					<?php if ($kingdomId || $parkId): ?><span class="en-owner-sep">›</span><?php endif; ?>
@@ -471,13 +471,13 @@
 				<?php if ($kingdomId): ?>
 				<li>
 					<span class="en-link-icon"><i class="fas fa-crown"></i></span>
-					<a href="<?= UIR ?>Kingdomnew/index/<?= $kingdomId ?>"><?= $kingdomName ?></a>
+					<a href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"><?= $kingdomName ?></a>
 				</li>
 				<?php endif; ?>
 				<?php if ($parkId): ?>
 				<li>
 					<span class="en-link-icon"><i class="fas fa-map-marker-alt"></i></span>
-					<a href="<?= UIR ?>Parknew/index/<?= $parkId ?>"><?= $parkName ?></a>
+					<a href="<?= UIR ?>Park/profile/<?= $parkId ?>"><?= $parkName ?></a>
 				</li>
 				<?php endif; ?>
 				<?php if ($unitId): ?>
@@ -489,7 +489,7 @@
 				<?php if ($mundaneId): ?>
 				<li>
 					<span class="en-link-icon"><i class="fas fa-user"></i></span>
-					<a href="<?= UIR ?>Playernew/index/<?= $mundaneId ?>"><?= $persona ?></a>
+					<a href="<?= UIR ?>Player/profile/<?= $mundaneId ?>"><?= $persona ?></a>
 				</li>
 				<?php endif; ?>
 			</ul>
@@ -577,7 +577,7 @@
 							</td>
 							<td style="white-space:nowrap">
 								<a class="en-attend-link"
-									href="<?= UIR ?>Eventnew/index/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
+									href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
 									<i class="fas fa-info-circle"></i> Details
 								</a>
 								&nbsp;
@@ -644,7 +644,7 @@
 								</td>
 								<td style="white-space:nowrap">
 									<a class="en-attend-link"
-										href="<?= UIR ?>Eventnew/index/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
+										href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
 										<i class="fas fa-info-circle"></i> Details
 									</a>
 									&nbsp;
@@ -911,7 +911,7 @@
 		</div>
 		<div class="en-cmod-footer">
 			<button class="en-cmod-btn-cancel" onclick="enCloseCreateModal()">Cancel</button>
-			<a class="en-cmod-btn-go" href="<?= UIR ?>Eventcreate/index/<?= $eventId ?>">
+			<a class="en-cmod-btn-go" href="<?= UIR ?>Event/create/<?= $eventId ?>">
 				Continue <i class="fas fa-arrow-right"></i>
 			</a>
 		</div>

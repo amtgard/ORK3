@@ -452,7 +452,7 @@
 	</div>
 	<div class="hm-kingdoms-grid">
 		<?php foreach ($hmKingdoms as $k): ?>
-		<a class="hm-kingdom-card<?= !empty($k['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdomnew/index/<?= (int)$k['KingdomId'] ?>">
+		<a class="hm-kingdom-card<?= !empty($k['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$k['KingdomId'] ?>">
 			<div class="hm-card-heraldry-wrap">
 				<?php if (!empty($k['_pinned'])): ?><span class="hm-pin-badge">Your Kingdom</span><?php endif; ?>
 				<img class="hm-card-heraldry"
@@ -488,7 +488,7 @@
 	</div>
 	<div class="hm-prinz-grid">
 		<?php foreach ($hmPrinz as $p): ?>
-		<a class="hm-prinz-card" href="<?= UIR ?>Kingdomnew/index/<?= (int)$p['KingdomId'] ?>">
+		<a class="hm-prinz-card" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
 			<img class="hm-prinz-heraldry"
 			     src="<?= htmlspecialchars($p['_heraldry']) ?>"
 			     onerror="this.style.display='none'"

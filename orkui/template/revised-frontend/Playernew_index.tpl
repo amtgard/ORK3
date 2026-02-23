@@ -1394,7 +1394,7 @@
 							<a class="pn-delete-link pn-confirm-quit-unit" href="#" title="Leave unit">&times;</a>
 							<span class="pn-delete-confirm">
 								Leave?&nbsp;
-								<button class="pn-delete-yes" data-href="<?= UIR ?>Playernew/index/<?= (int)$Player['MundaneId'] ?>/quitunit/<?= $unit['UnitMundaneId'] ?>">Yes</button>
+								<button class="pn-delete-yes" data-href="<?= UIR ?>Player/profile/<?= (int)$Player['MundaneId'] ?>/quitunit/<?= $unit['UnitMundaneId'] ?>">Yes</button>
 								&nbsp;<button class="pn-delete-no">No</button>
 							</span>
 						</span>
@@ -1682,7 +1682,7 @@
 												<a class="pn-delete-link pn-confirm-delete-rec" href="#"><i class="fas fa-trash-alt"></i> Delete</a>
 												<span class="pn-delete-confirm">
 													Delete?&nbsp;
-													<button class="pn-delete-yes" data-href="<?= UIR ?>Playernew/index/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">Yes</button>
+													<button class="pn-delete-yes" data-href="<?= UIR ?>Player/profile/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">Yes</button>
 													&nbsp;<button class="pn-delete-no">No</button>
 												</span>
 											</span>
@@ -2224,7 +2224,7 @@
 		</div>
 		<div class="pn-modal-body">
 			<div class="pn-form-error" id="pn-rec-error"><?= $recError ?></div>
-			<form id="pn-recommend-form" method="post" action="<?= UIR ?>Playernew/index/<?= $Player['MundaneId'] ?>/addrecommendation">
+			<form id="pn-recommend-form" method="post" action="<?= UIR ?>Player/profile/<?= $Player['MundaneId'] ?>/addrecommendation">
 				<div class="pn-rec-field">
 					<label for="pn-rec-award">Award <span style="color:#e53e3e">*</span></label>
 					<select name="KingdomAwardId" id="pn-rec-award">
