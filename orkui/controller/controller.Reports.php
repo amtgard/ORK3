@@ -544,24 +544,25 @@ class Controller_Reports extends Controller {
 			$this->data['mode'] = 'all_parks';
 
 			if (is_array($result)) {
-				$this->data['attendance'] = $result;
+				$attendance = $result['Attendance'];
+				$kingdom_summary = $result['Summary'];
+				$this->data['attendance'] = $attendance;
 
-				// Compute kingdom summary
+				// Compute kingdom summary row; UniquePlayers/UniqueMembers come from the
+				// server-side distinct query to avoid double-counting cross-park visitors.
 				$summary = array(
 					'TotalSignins' => 0,
-					'UniquePlayers' => 0,
-					'UniqueMembers' => 0,
+					'UniquePlayers' => (int)($kingdom_summary['UniquePlayers'] ?? 0),
+					'UniqueMembers' => (int)($kingdom_summary['UniqueMembers'] ?? 0),
 					'Members2Plus' => 0,
 					'Members3Plus' => 0,
 					'Members4Plus' => 0,
 					'WeeksInPeriod' => 0,
 					'MonthsInPeriod' => 0,
-					'RowCount' => count($result)
+					'RowCount' => count($attendance)
 				);
-				foreach ($result as $row) {
+				foreach ($attendance as $row) {
 					$summary['TotalSignins'] += $row['TotalSignins'];
-					$summary['UniquePlayers'] += $row['UniquePlayers'];
-					$summary['UniqueMembers'] += $row['UniqueMembers'];
 					$summary['Members2Plus'] += $row['Members2Plus'];
 					$summary['Members3Plus'] += $row['Members3Plus'];
 					$summary['Members4Plus'] += $row['Members4Plus'];

@@ -1691,6 +1691,26 @@ class Report  extends Ork3 {
 		}
 		unset($row);
 
+		// Summary query: kingdom-wide distinct player/member counts (avoids per-park summation double-counting visitors)
+		$sql_summary = "SELECT
+					COUNT(DISTINCT a.mundane_id) as unique_players,
+					COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END) as unique_members
+				FROM " . DB_PREFIX . "attendance a
+					INNER JOIN " . DB_PREFIX . "park p ON a.park_id = p.park_id
+					LEFT JOIN " . DB_PREFIX . "mundane m ON a.mundane_id = m.mundane_id
+				WHERE a.kingdom_id = '$kingdom_id'
+					AND a.date >= '$start_date'
+					AND a.date <= '$end_date'
+					AND a.park_id > 0
+					AND p.active = 'Active'";
+
+		$r_summary = $this->db->query($sql_summary);
+		$response['Summary'] = array('UniquePlayers' => 0, 'UniqueMembers' => 0);
+		if ($r_summary !== false && $r_summary->size() > 0) {
+			$response['Summary']['UniquePlayers'] = (int)$r_summary->unique_players;
+			$response['Summary']['UniqueMembers'] = (int)$r_summary->unique_members;
+		}
+
 		logtrace("Report->ParkAttendanceAllParks()", array($this->db->lastSql, $request));
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cache_key, $response);
 	}
@@ -1977,7 +1997,7 @@ class Report  extends Ork3 {
 					m.persona,
 					m.waivered,
 					$period_expr as period_label,
-					COUNT(*) as signin_count,
+					COUNT(DISTINCT a.attendance_id) as signin_count,
 					MAX(d.dues_until) as dues_until,
 					MAX(d.dues_for_life) as dues_for_life
 				FROM " . DB_PREFIX . "attendance a
