@@ -250,7 +250,7 @@ $(function() {
 			});
 	});
 	$('.name-field').change(function() {
-		var words = new RegExp(/^[a-zA-Z '\-,_\.]*$/);
+		var words = new RegExp(/^[\p{L} '\-,_\.]*$/u);
 		if (!words.test($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
@@ -274,7 +274,7 @@ $(function() {
 		}
 	});
 	$('.most-emails-field').change(function() {
-		var words = new RegExp("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+$");
+		var words = new RegExp(/^[\p{L}0-9._%+-]+@[\p{L}0-9.-]+$/u);
 		if (!words.test($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
