@@ -14086,8 +14086,7 @@ $(function() {
 			});
 	});
 	$('.name-field').change(function() {
-		var words = new RegExp(/^[\p{L} '\-,_\.]*$/u);
-		if (!words.test($(this).val())) {
+		if (!isValidName($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
 				$( this ).css('border-color', 'red');
@@ -14098,8 +14097,7 @@ $(function() {
 		}
 	});
 	$('.alphanumeric-field').change(function() {
-		var words = new RegExp("^[a-zA-Z]+[a-zA-Z0-9]*$");
-		if (!words.test($(this).val())) {
+		if (!isValidUsername($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
 				$( this ).css('border-color', 'red');
@@ -14110,8 +14108,7 @@ $(function() {
 		}
 	});
 	$('.most-emails-field').change(function() {
-		var words = new RegExp(/^[\p{L}0-9._%+-]+@[\p{L}0-9.-]+$/u);
-		if (!words.test($(this).val())) {
+		if (!isValidEmail($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
 				$( this ).css('border-color', 'red');
