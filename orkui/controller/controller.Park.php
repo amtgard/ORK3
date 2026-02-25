@@ -60,6 +60,7 @@ class Controller_Park extends Controller
 		$this->template = '../revised-frontend/Parknew_index.tpl';
 		$park_id = preg_replace('/[^0-9]/', '', $park_id);
 		$this->load_model('Award');
+		$this->load_model('Attendance');
 		$this->load_model('Reports');
 
 		$this->data['kingdom_name'] = $this->session->kingdom_name;
@@ -85,6 +86,14 @@ class Controller_Park extends Controller
 				$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => $o['OfficerRole']];
 		}
 		$this->data['PreloadOfficers'] = $preloadOfficers;
+
+		$classesResult = $this->Attendance->get_classes();
+		$this->data['Classes'] = array_map(function($c) {
+			return ['ClassId' => $c['ClassId'], 'ClassName' => $c['Name']];
+		}, $classesResult['Classes'] ?? []);
+
+		$recentResult = $this->Attendance->get_recent_attendees($park_id);
+		$this->data['RecentAttendees'] = $recentResult['Attendees'] ?? [];
 
 		global $DB;
 		$pid = (int)$park_id;
