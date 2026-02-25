@@ -1481,6 +1481,38 @@ class Report  extends Ork3 {
 		}
         return $response;
 	}
+
+	public function RecentParkAttendees($request) {
+		$park_id = intval($request['ParkId']);
+		if (!valid_id($park_id)) return ['Status' => InvalidParameter(), 'Attendees' => []];
+		$sql = "SELECT a.mundane_id, m.persona,
+					MAX(a.date) AS last_signin,
+					SUBSTRING_INDEX(GROUP_CONCAT(a.class_id ORDER BY a.date DESC, a.attendance_id DESC SEPARATOR ','), ',', 1) AS class_id,
+					SUBSTRING_INDEX(GROUP_CONCAT(c.name    ORDER BY a.date DESC, a.attendance_id DESC SEPARATOR ','), ',', 1) AS class_name
+				FROM ork_attendance a
+				JOIN ork_mundane m  ON m.mundane_id = a.mundane_id
+				LEFT JOIN ork_class c  ON c.class_id = a.class_id
+				WHERE a.park_id = $park_id
+				  AND a.date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+				  AND a.mundane_id > 0
+				  AND m.mundane_id IS NOT NULL
+				GROUP BY a.mundane_id, m.persona
+				ORDER BY m.persona";
+		$r = $this->db->query($sql);
+		$attendees = [];
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$attendees[] = [
+					'MundaneId'  => (int)$r->mundane_id,
+					'Persona'    => $r->persona,
+					'ClassId'    => (int)$r->class_id,
+					'ClassName'  => $r->class_name,
+					'LastSignIn' => $r->last_signin,
+				];
+			}
+		}
+		return ['Status' => Success(), 'Attendees' => $attendees];
+	}
 }
 
 ?>

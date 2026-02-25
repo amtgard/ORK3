@@ -97,6 +97,18 @@ class Controller_Kingdom extends Controller {
 		$this->data['map_parks'] = is_array($rawParks['Parks'])
 			? array_values(array_filter($rawParks['Parks'], function($p) { return $p['Active'] == 'Active'; }))
 			: [];
+		$this->data['park_edit_lookup'] = [];
+		if (is_array($rawParks['Parks'])) {
+			foreach ($rawParks['Parks'] as $p) {
+				$this->data['park_edit_lookup'][(int)$p['ParkId']] = [
+					'ParkId'       => (int)$p['ParkId'],
+					'Name'         => $p['Name'],
+					'Abbreviation' => $p['Abbreviation'] ?? '',
+					'ParkTitleId'  => (int)($p['ParkTitleId'] ?? 0),
+					'Active'       => $p['Active'],
+				];
+			}
+		}
 
 		global $DB;
 		$kid = (int)$kingdom_id;
@@ -206,6 +218,46 @@ class Controller_Kingdom extends Controller {
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+
+		$this->data['ParkTitleId_options'] = [];
+		$this->data['AdminInfo']           = [];
+		$this->data['AdminConfig']         = [];
+		$this->data['AdminParkTitles']     = [];
+		$this->data['AdminAwards']         = [];
+		if ($this->data['CanManageKingdom']) {
+			$kd = $this->Kingdom->get_kingdom_details($kingdom_id);
+			foreach ($kd['ParkTitles'] ?? [] as $pt) {
+				$this->data['ParkTitleId_options'][$pt['ParkTitleId']] = $pt['Title'];
+			}
+
+			$this->data['AdminInfo'] = [
+				'Name'         => $kd['KingdomInfo']['KingdomName']  ?? '',
+				'Abbreviation' => $kd['KingdomInfo']['Abbreviation'] ?? '',
+			];
+
+			$adminConfig = [];
+			foreach ($kd['KingdomConfiguration'] ?? [] as $cfg) {
+				if (!empty($cfg['UserSetting'])) {
+					$adminConfig[] = $cfg;
+				}
+			}
+			$this->data['AdminConfig']     = $adminConfig;
+			$this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
+
+			$rawAwards   = $kd['Awards']['Awards'] ?? [];
+			$adminAwards = [];
+			foreach ($rawAwards as $kawId => $aw) {
+				$adminAwards[] = [
+					'KingdomAwardId'   => (int)$kawId,
+					'KingdomAwardName' => $aw['KingdomAwardName']  ?? '',
+					'ReignLimit'       => (int)($aw['ReignLimit']  ?? 0),
+					'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),
+					'IsTitle'          => (int)($aw['IsTitle']     ?? 0),
+					'TitleClass'       => (int)($aw['TitleClass']  ?? 0),
+				];
+			}
+			$this->data['AdminAwards'] = $adminAwards;
+		}
 	}
 
 }
