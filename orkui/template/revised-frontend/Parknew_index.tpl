@@ -133,6 +133,7 @@
 						<i class="fas fa-cog"></i> Admin
 					</a>
 				<?php endif; ?>
+
 			</div>
 		</div>
 
@@ -174,9 +175,16 @@
 	<aside class="pk-sidebar">
 
 		<!-- Officers -->
-		<?php if (!empty($officerList)): ?>
+		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4><i class="fas fa-crown"></i> Officers</h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+				<span><i class="fas fa-crown"></i> Officers</span>
+				<?php if (!empty($CanManagePark)): ?>
+				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" title="Edit officers">
+					<i class="fas fa-pencil-alt"></i>
+				</button>
+				<?php endif; ?>
+			</h4>
 			<ul class="pk-officer-list">
 				<?php foreach ($officerList as $o): ?>
 				<li>
@@ -190,13 +198,21 @@
 					</span>
 				</li>
 				<?php endforeach; ?>
+				<?php if (empty($officerList)): ?>
+				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php endif; ?>
 			</ul>
 		</div>
 		<?php endif; ?>
 
 		<!-- Quick Links -->
 		<div class="pk-card">
-			<h4><i class="fas fa-link"></i> Quick Links</h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+				<span><i class="fas fa-link"></i> Quick Links</span>
+				<?php if (!empty($CanManagePark)): ?>
+				<button onclick="pkOpenEditDetailsModal()" class="pk-edit-details-btn" title="Edit park details"><i class="fas fa-pencil-alt"></i></button>
+				<?php endif; ?>
+			</h4>
 			<ul class="pk-link-list">
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-search"></i></span>
@@ -275,6 +291,13 @@
 			<!-- Schedule Tab -->
 			<div class="pk-tab-panel" id="pk-tab-schedule" <?= $firstTab !== 'schedule' ? 'style="display:none"' : '' ?>>
 				<?php if (count($parkDayList) > 0): ?>
+					<?php if (!empty($CanManagePark)): ?>
+					<div class="pk-tab-toolbar">
+						<button class="pk-btn pk-btn-primary pk-btn-sm" onclick="pkOpenAddDayModal()">
+							<i class="fas fa-plus"></i> Add Park Day
+						</button>
+					</div>
+					<?php endif; ?>
 					<div class="pk-schedule-header">
 						<?php if ($parkMapUrl): ?>
 							<a class="pk-map-link" href="<?= $parkMapUrl ?>" target="_blank" rel="noopener">
@@ -319,6 +342,9 @@
 							}
 						?>
 						<div class="pk-schedule-card">
+				<?php if (!empty($CanManagePark)): ?>
+				<button class="pk-schedule-card-del" data-park-day-id="<?= (int)$day['ParkDayId'] ?>" title="Remove park day">&times;</button>
+				<?php endif; ?>
 							<div class="pk-schedule-icon <?= $iconCls ?>">
 								<i class="fas <?= $iconFa ?>"></i>
 							</div>
@@ -339,6 +365,13 @@
 						<?php endforeach; ?>
 					</div>
 				<?php else: ?>
+					<?php if (!empty($CanManagePark)): ?>
+					<div class="pk-tab-toolbar">
+						<button class="pk-btn pk-btn-primary pk-btn-sm" onclick="pkOpenAddDayModal()">
+							<i class="fas fa-plus"></i> Add Park Day
+						</button>
+					</div>
+					<?php endif; ?>
 					<div class="pk-empty">No park days scheduled</div>
 				<?php endif; ?>
 			</div>
@@ -454,6 +487,11 @@
 									<i class="fas fa-list"></i> List
 								</button>
 							</div>
+							<?php if ($CanManagePark ?? false): ?>
+							<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()">
+								<i class="fas fa-user-plus"></i> Add Player
+							</button>
+							<?php endif; ?>
 						</div>
 					</div>
 
@@ -762,6 +800,19 @@ var PkConfig = {
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	classes:         <?= json_encode(array_values($Classes         ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	recentAttendees: <?= json_encode(array_values($RecentAttendees ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	officerList:     <?= json_encode(!empty($CanManagePark) ? array_map(function($o) {
+		return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
+	}, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	parkDetails: {
+		url:         <?= json_encode($parkInfo['Url']         ?? '') ?>,
+		address:     <?= json_encode($parkInfo['Address']     ?? '') ?>,
+		city:        <?= json_encode($parkInfo['City']        ?? '') ?>,
+		province:    <?= json_encode($parkInfo['Province']    ?? '') ?>,
+		postalCode:  <?= json_encode($parkInfo['PostalCode']  ?? '') ?>,
+		mapUrl:      <?= json_encode($parkInfo['MapUrl']      ?? '') ?>,
+		description: <?= json_encode($parkInfo['Description'] ?? '') ?>,
+		directions:  <?= json_encode($parkInfo['Directions']  ?? '') ?>,
+	},
 };
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
@@ -991,4 +1042,297 @@ var PkConfig = {
 	</div>
 </div>
 
+<?php endif; ?>
+
+<?php if ($CanManagePark ?? false): ?>
+<!-- Add Player Modal -->
+<div id="pk-addplayer-overlay">
+	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Add Player</h3>
+			<button class="pk-modal-close-btn" id="pk-addplayer-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-addplayer-feedback" class="plr-feedback" style="display:none"></div>
+			<div class="plr-field-row">
+				<div class="plr-field plr-field-grow">
+					<label>Persona <span class="plr-req">*</span></label>
+					<input type="text" id="pk-addplayer-persona" placeholder="In-game name">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field">
+					<label>First Name</label>
+					<input type="text" id="pk-addplayer-given" placeholder="Given name">
+				</div>
+				<div class="plr-field">
+					<label>Last Name</label>
+					<input type="text" id="pk-addplayer-surname" placeholder="Surname">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field plr-field-grow">
+					<label>Email</label>
+					<input type="email" id="pk-addplayer-email" placeholder="email@example.com">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field">
+					<label>Username <span class="plr-req">*</span></label>
+					<input type="text" id="pk-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">
+				</div>
+				<div class="plr-field">
+					<label>Password <span class="plr-req">*</span></label>
+					<input type="password" id="pk-addplayer-password" placeholder="password" autocomplete="new-password">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field">
+					<label>Restricted</label>
+					<div class="plr-radio-row">
+						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="0" checked> No</label>
+						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="1"> Yes</label>
+					</div>
+				</div>
+				<div class="plr-field">
+					<label>Waivered</label>
+					<div class="plr-radio-row">
+						<label class="plr-radio"><input type="radio" name="pk-addplayer-waivered" value="0" checked> No</label>
+						<label class="plr-radio"><input type="radio" name="pk-addplayer-waivered" value="1"> Yes</label>
+					</div>
+				</div>
+			</div>
+			<div class="plr-field-row" id="pk-addplayer-waiver-row" style="display:none">
+				<div class="plr-field plr-field-grow">
+					<label>Waiver File <span class="plr-hint">(PDF, PNG, JPG, or GIF)</span></label>
+					<input type="file" id="pk-addplayer-waiver" accept=".pdf,image/png,image/jpeg,image/gif">
+				</div>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-ghost" id="pk-addplayer-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-addplayer-submit">
+				<i class="fas fa-user-plus"></i> Create Player
+			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<!-- =============================================
+     Parknew: Edit Officers Modal
+     ============================================= -->
+<?php if (!empty($CanManagePark)): ?>
+<div id="pk-editoff-overlay">
+	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-crown" style="margin-right:8px;color:#2c5282"></i>Edit Officers</h3>
+			<button class="pk-modal-close-btn" id="pk-editoff-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-editoff-feedback" class="pk-editoff-feedback" style="display:none"></div>
+			<p class="pk-editoff-hint">Search for a player to assign to each role, or click Vacate to remove the current officer.</p>
+			<div id="pk-editoff-rows"></div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-ghost" id="pk-editoff-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-editoff-submit"><i class="fas fa-save"></i> Save Officers</button>
+		</div>
+	</div>
+</div>
+
+<!-- =============================================
+     Parknew: Add Park Day Modal
+     ============================================= -->
+<div id="pk-addday-overlay">
+	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#2c5282"></i>Add Park Day</h3>
+			<button class="pk-modal-close-btn" id="pk-addday-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-addday-feedback" class="pk-addday-feedback" style="display:none"></div>
+
+			<div class="pk-addday-field">
+				<label>Purpose</label>
+				<div class="pk-seg-group">
+					<button type="button" class="pk-seg-btn pk-seg-active" data-group="purpose" data-val="fighter-practice">Fighter Practice</button>
+					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="arts-day">A&amp;S Day</button>
+					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="other">Other</button>
+				</div>
+				<input type="hidden" id="pk-addday-purpose" value="fighter-practice" />
+			</div>
+
+			<div class="pk-addday-field">
+				<label>Recurrence</label>
+				<div class="pk-seg-group">
+					<button type="button" class="pk-seg-btn pk-seg-active" data-group="recurrence" data-val="weekly">Weekly</button>
+					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="week-of-month">Week of Month</button>
+					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="monthly">Monthly</button>
+				</div>
+				<input type="hidden" id="pk-addday-recurrence" value="weekly" />
+			</div>
+
+			<div class="pk-addday-field" id="pk-addday-weekday-row">
+				<label for="pk-addday-weekday">Day of Week</label>
+				<select id="pk-addday-weekday">
+					<option value="Monday">Monday</option>
+					<option value="Tuesday">Tuesday</option>
+					<option value="Wednesday">Wednesday</option>
+					<option value="Thursday">Thursday</option>
+					<option value="Friday">Friday</option>
+					<option value="Saturday">Saturday</option>
+					<option value="Sunday">Sunday</option>
+				</select>
+			</div>
+
+			<div class="pk-addday-field" id="pk-addday-weekof-row" style="display:none">
+				<label for="pk-addday-weekof">Week of Month</label>
+				<select id="pk-addday-weekof">
+					<option value="1">1st</option>
+					<option value="2">2nd</option>
+					<option value="3">3rd</option>
+					<option value="4">4th</option>
+					<option value="5">5th</option>
+				</select>
+			</div>
+
+			<div class="pk-addday-field" id="pk-addday-monthday-row" style="display:none">
+				<label for="pk-addday-monthday">Day of Month</label>
+				<select id="pk-addday-monthday">
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+					<option value="4">4</option>
+					<option value="5">5</option>
+					<option value="6">6</option>
+					<option value="7">7</option>
+					<option value="8">8</option>
+					<option value="9">9</option>
+					<option value="10">10</option>
+					<option value="11">11</option>
+					<option value="12">12</option>
+					<option value="13">13</option>
+					<option value="14">14</option>
+					<option value="15">15</option>
+					<option value="16">16</option>
+					<option value="17">17</option>
+					<option value="18">18</option>
+					<option value="19">19</option>
+					<option value="20">20</option>
+					<option value="21">21</option>
+					<option value="22">22</option>
+					<option value="23">23</option>
+					<option value="24">24</option>
+					<option value="25">25</option>
+					<option value="26">26</option>
+					<option value="27">27</option>
+					<option value="28">28</option>
+					<option value="29">29</option>
+					<option value="30">30</option>
+					<option value="31">31</option>
+				</select>
+			</div>
+
+			<div class="pk-addday-field">
+				<label for="pk-addday-time">Time <span style="color:#e53e3e">*</span></label>
+				<input type="time" id="pk-addday-time" />
+			</div>
+
+			<div class="pk-addday-field">
+				<label for="pk-addday-desc">Description <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<input type="text" id="pk-addday-desc" maxlength="200" placeholder="e.g. Amtgard, practice, etc." />
+			</div>
+
+			<div class="pk-addday-field">
+				<label>Location</label>
+				<div class="pk-addday-loc-radio">
+					<label><input type="radio" name="pk-addday-altloc" value="0" checked /> Use Park's Location</label>
+					<label><input type="radio" name="pk-addday-altloc" value="1" /> Use Alternate Location</label>
+				</div>
+			</div>
+
+			<div id="pk-addday-altloc-block" style="display:none">
+				<div class="pk-addday-field">
+					<label for="pk-addday-address">Address</label>
+					<input type="text" id="pk-addday-address" maxlength="100" />
+				</div>
+				<div class="pk-addday-field-row">
+					<div class="pk-addday-field">
+						<label for="pk-addday-city">City</label>
+						<input type="text" id="pk-addday-city" maxlength="60" />
+					</div>
+					<div class="pk-addday-field">
+						<label for="pk-addday-province">State / Province</label>
+						<input type="text" id="pk-addday-province" maxlength="40" />
+					</div>
+					<div class="pk-addday-field pk-addday-field-sm">
+						<label for="pk-addday-postal">Postal Code</label>
+						<input type="text" id="pk-addday-postal" maxlength="12" />
+					</div>
+				</div>
+			</div>
+
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-ghost" id="pk-addday-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-addday-submit"><i class="fas fa-calendar-plus"></i> Add Park Day</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($CanManagePark)): ?>
+<!-- Edit Park Details Modal -->
+<div id="pk-editdetails-overlay">
+	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-globe" style="margin-right:8px;color:#2c5282"></i>Edit Park Details</h3>
+			<button class="pk-modal-close-btn" id="pk-editdetails-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-editdetails-feedback" style="display:none"></div>
+			<div class="pk-addday-field">
+				<label for="pk-editdetails-url">Website URL</label>
+				<input type="url" id="pk-editdetails-url" placeholder="https://example.com" />
+			</div>
+			<div class="pk-addday-field">
+				<label for="pk-editdetails-address">Street Address</label>
+				<input type="text" id="pk-editdetails-address" placeholder="123 Main St" />
+			</div>
+			<div class="pk-editdetails-two-col">
+				<div class="pk-addday-field">
+					<label for="pk-editdetails-city">City</label>
+					<input type="text" id="pk-editdetails-city" placeholder="City" />
+				</div>
+				<div class="pk-addday-field">
+					<label for="pk-editdetails-province">Province / State</label>
+					<input type="text" id="pk-editdetails-province" placeholder="State / Province" />
+				</div>
+			</div>
+			<div class="pk-editdetails-two-col">
+				<div class="pk-addday-field">
+					<label for="pk-editdetails-postalcode">Postal Code</label>
+					<input type="text" id="pk-editdetails-postalcode" placeholder="Zip / Postal Code" />
+				</div>
+				<div class="pk-addday-field">
+					<label for="pk-editdetails-mapurl">Map URL</label>
+					<input type="url" id="pk-editdetails-mapurl" placeholder="Google Maps link..." />
+				</div>
+			</div>
+			<div class="pk-addday-field">
+				<label for="pk-editdetails-description">Description</label>
+				<textarea id="pk-editdetails-description" rows="4" placeholder="About this park..."></textarea>
+			</div>
+			<div class="pk-addday-field">
+				<label for="pk-editdetails-directions">Directions</label>
+				<textarea id="pk-editdetails-directions" rows="3" placeholder="How to find us..."></textarea>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-ghost" id="pk-editdetails-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-editdetails-submit"><i class="fas fa-save"></i> Save Details</button>
+		</div>
+	</div>
+</div>
 <?php endif; ?>

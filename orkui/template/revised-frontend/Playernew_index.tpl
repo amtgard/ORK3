@@ -123,6 +123,9 @@
 			<?php if ($LoggedIn): ?>
 				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
 				<a class="pn-btn pn-btn-outline" href="<?= UIR ?>Admin/player/<?= $Player['MundaneId'] ?>"><i class="fas fa-cog"></i> Admin Panel</a>
+				<?php if ($canEditAdmin): ?>
+				<button class="pn-btn pn-btn-ghost pn-hero-btn" onclick="pnOpenMovePlayerModal()"><i class="fas fa-arrows-alt"></i> Move</button>
+				<?php endif; ?>
 			<?php endif; ?>
 		</div>
 	</div>
@@ -449,6 +452,38 @@
 								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; else echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ', ' . $detail['KingdomName'] : $detail['KingdomName']; ?></td>
 								<td><?= $detail['Note'] ?></td>
 								<td><a href="<?= UIR ?>Player/index/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+								<?php if ($canEditAdmin): ?>
+								<td class="pn-award-actions-cell">
+									<?php $awardData = json_encode([
+										'AwardsId'   => (int)$detail['AwardsId'],
+										'displayName'=> ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
+										'Name'       => $detail['Name'],
+										'IsLadder'   => (int)$detail['IsLadder'],
+										'Rank'       => (int)$detail['Rank'],
+										'Date'       => $detail['Date'],
+										'GivenBy'    => $detail['GivenBy'],
+										'GivenById'  => (int)$detail['GivenById'],
+										'Note'       => $detail['Note'],
+										'ParkId'     => (int)$detail['ParkId'],
+										'ParkName'   => $detail['ParkName'],
+										'KingdomId'  => (int)$detail['KingdomId'],
+										'KingdomName'=> $detail['KingdomName'],
+										'EventId'    => (int)$detail['EventId'],
+										'EventName'  => $detail['EventName'],
+									], JSON_HEX_QUOT | JSON_HEX_APOS); ?>
+									<button class="pn-award-action-btn pn-award-edit-btn"
+									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+									        data-award="<?= htmlspecialchars($awardData, ENT_QUOTES) ?>"
+									        title="Edit award"><i class="fas fa-pencil-alt"></i></button>
+									<button class="pn-award-action-btn pn-award-del-btn"
+									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+									        title="Delete award"><i class="fas fa-trash"></i></button>
+									<button class="pn-award-action-btn pn-award-revoke-btn"
+									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+									        data-award="<?= htmlspecialchars($awardData, ENT_QUOTES) ?>"
+									        title="Revoke award"><i class="fas fa-ban"></i></button>
+								</td>
+								<?php endif; ?>
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
@@ -482,6 +517,7 @@
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
+								<?php if ($canEditAdmin): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -604,6 +640,11 @@
 			<!-- Historical Imports Tab -->
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
 				<?php $notesList = is_array($Notes) ? $Notes : array(); ?>
+				<?php if ($canEditAdmin): ?>
+				<div class="pn-notes-toolbar">
+					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAddNoteModal()"><i class="fas fa-plus"></i> Add Note</button>
+				</div>
+				<?php endif; ?>
 				<?php if (count($notesList) > 0): ?>
 					<table class="pn-table" id="pn-history-table">
 						<thead>
@@ -611,20 +652,24 @@
 								<th>Note</th>
 								<th>Description</th>
 								<th>Date</th>
+								<?php if ($canEditAdmin): ?><th style="width:30px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($notesList as $note): ?>
-								<tr>
+								<tr data-notes-id="<?= (int)($note['NotesId'] ?? 0) ?>">
 									<td><?= $note['Note'] ?></td>
 									<td><?= $note['Description'] ?></td>
 									<td class="pn-col-nowrap"><?= $note['Date'] . (strtotime($note['DateComplete']) > 0 ? (' - ' . $note['DateComplete']) : '') ?></td>
+									<?php if ($canEditAdmin): ?>
+									<td><button class="pn-note-del-btn" data-notes-id="<?= (int)($note['NotesId'] ?? 0) ?>" title="Delete note"><i class="fas fa-times"></i></button></td>
+									<?php endif; ?>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
 					</table>
 				<?php else: ?>
-					<div class="pn-empty">No historical imports</div>
+					<div class="pn-empty" id="pn-history-empty">No historical imports</div>
 				<?php endif; ?>
 			</div>
 
@@ -891,13 +936,14 @@
 				<div class="pn-dues-modal-current-title"><i class="fas fa-history" style="margin-right:5px"></i>Current Active Dues</div>
 				<?php if (is_array($Dues) && count($Dues) > 0): ?>
 				<table class="pn-dues-modal-table">
-					<thead><tr><th>Park</th><th>Paid Through</th><th>Lifetime</th></tr></thead>
+					<thead><tr><th>Park</th><th>Paid Through</th><th>Lifetime</th><?php if ($canEditAdmin): ?><th></th><?php endif; ?></tr></thead>
 					<tbody>
 					<?php foreach ($Dues as $d): ?>
 						<tr>
 							<td><?= htmlspecialchars($d['ParkName']) ?></td>
 							<td><?= $d['DuesForLife'] == 1 ? '<span class="pn-dues-life">Lifetime</span>' : htmlspecialchars($d['DuesUntil']) ?></td>
 							<td><?= $d['DuesForLife'] == 1 ? 'Yes' : 'No' ?></td>
+							<?php if ($canEditAdmin): ?><td><button class="pn-dues-revoke-btn" data-dues-id="<?= (int)$d['DuesId'] ?>">Revoke</button></td><?php endif; ?>
 						</tr>
 					<?php endforeach; ?>
 					</tbody>
@@ -1116,6 +1162,74 @@
 <?php endif; ?>
 
 <!-- =============================================
+     Award Edit Modal
+     ============================================= -->
+<?php if ($canEditAdmin): ?>
+<div class="pn-overlay" id="pn-award-edit-overlay">
+	<div class="pn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2c5282"></i>Edit Award</h3>
+			<button class="pn-modal-close-btn" id="pn-edit-award-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-edit-award-feedback" style="display:none"></div>
+
+			<div class="pn-acct-field">
+				<label>Award</label>
+				<div class="pn-edit-award-name-display" id="pn-edit-award-name"></div>
+			</div>
+
+			<div class="pn-acct-field" id="pn-edit-rank-row" style="display:none">
+				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select</span></label>
+				<div class="pn-rank-pills-wrap" id="pn-edit-rank-pills"></div>
+				<input type="hidden" id="pn-edit-rank-val" value="" />
+			</div>
+
+			<div class="pn-acct-field">
+				<label for="pn-edit-award-date">Date <span style="color:#e53e3e">*</span></label>
+				<input type="date" id="pn-edit-award-date" />
+			</div>
+
+			<div class="pn-acct-field">
+				<label>Given By <span style="color:#e53e3e">*</span></label>
+				<?php if (!empty($PreloadOfficers)): ?>
+				<div class="pn-officer-chips" id="pn-edit-award-officer-chips">
+					<?php foreach ($PreloadOfficers as $officer): ?>
+					<button type="button" class="pn-officer-chip"
+					        data-id="<?= (int)$officer['MundaneId'] ?>"
+					        data-name="<?= htmlspecialchars($officer['Persona']) ?>">
+						<?= htmlspecialchars($officer['Persona']) ?> <span>(<?= htmlspecialchars($officer['Role']) ?>)</span>
+					</button>
+					<?php endforeach; ?>
+				</div>
+				<?php endif; ?>
+				<input type="text" id="pn-edit-givenby-text" placeholder="Or search by persona…" autocomplete="off" />
+				<input type="hidden" id="pn-edit-givenby-id" value="" />
+			</div>
+
+			<div class="pn-acct-field">
+				<label>Given At <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<input type="text" id="pn-edit-givenat-text" placeholder="Search park, kingdom, or event…" autocomplete="off" />
+				<input type="hidden" id="pn-edit-park-id"    value="" />
+				<input type="hidden" id="pn-edit-kingdom-id" value="" />
+				<input type="hidden" id="pn-edit-event-id"   value="" />
+			</div>
+
+			<div class="pn-acct-field">
+				<label for="pn-edit-award-note">Note <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<textarea id="pn-edit-award-note" rows="3" maxlength="400" placeholder="What was this award given for?"></textarea>
+				<span class="pn-char-count" id="pn-edit-award-char-count">400 characters remaining</span>
+			</div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-ghost" id="pn-edit-award-cancel">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-edit-award-save"><i class="fas fa-save"></i> Save Changes</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<!-- =============================================
      Recommendation Modal
      ============================================= -->
 <?php if ($LoggedIn): ?>
@@ -1201,6 +1315,96 @@ var PnConfig = {
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
+	playerParkName: <?= json_encode($Player['Park'] ?? $Player['ParkName'] ?? '') ?>,
 };
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
+
+<?php if ($canEditAdmin): ?>
+<!-- Revoke Award Modal -->
+<div class="pn-overlay" id="pn-award-revoke-overlay">
+	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-ban" style="margin-right:8px;color:#b7791f"></i>Revoke Award</h3>
+			<button class="pn-modal-close-btn" id="pn-revoke-award-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-revoke-award-feedback" style="display:none"></div>
+			<div class="pn-revoke-award-name" id="pn-revoke-award-name"></div>
+			<div class="pn-acct-field">
+				<label for="pn-revoke-reason">Revocation Reason <span style="color:#e53e3e">*</span></label>
+				<textarea id="pn-revoke-reason" rows="3" maxlength="300" placeholder="Why is this award being revoked?"></textarea>
+				<span class="pn-char-count" id="pn-revoke-char-count">300 characters remaining</span>
+			</div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-revoke-award-cancel">Cancel</button>
+			<button class="pn-btn" id="pn-revoke-award-save" style="background:#c53030;color:#fff;"><i class="fas fa-ban"></i> Revoke Award</button>
+		</div>
+	</div>
+</div>
+
+<!-- Add Note Modal -->
+<div class="pn-overlay" id="pn-addnote-overlay">
+	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-sticky-note" style="margin-right:8px;color:#2c5282"></i>Add Note</h3>
+			<button class="pn-modal-close-btn" id="pn-addnote-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-addnote-feedback" style="display:none"></div>
+			<div class="pn-acct-field">
+				<label for="pn-note-title">Note Title <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pn-note-title" maxlength="200" placeholder="e.g. Promotion, Warning, Waypoint Import" />
+			</div>
+			<div class="pn-acct-field">
+				<label for="pn-note-desc">Description</label>
+				<textarea id="pn-note-desc" rows="3" maxlength="1000" placeholder="Optional additional details..."></textarea>
+			</div>
+			<div style="display:flex;gap:12px;">
+				<div class="pn-acct-field" style="flex:1">
+					<label for="pn-note-date">Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="pn-note-date" />
+				</div>
+				<div class="pn-acct-field" style="flex:1">
+					<label for="pn-note-date-complete">Date Complete</label>
+					<input type="date" id="pn-note-date-complete" />
+				</div>
+			</div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-addnote-cancel">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-addnote-save"><i class="fas fa-save"></i> Add Note</button>
+		</div>
+	</div>
+</div>
+
+<!-- Move Player Modal -->
+<div class="pn-overlay" id="pn-moveplayer-overlay">
+	<div class="pn-modal-box" style="width:440px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-arrows-alt" style="margin-right:8px;color:#2c5282"></i>Move Player</h3>
+			<button class="pn-modal-close-btn" id="pn-moveplayer-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-moveplayer-feedback" style="display:none"></div>
+			<div class="pn-move-current-park">
+				<strong>Current park:</strong> <span id="pn-move-current-park-name"></span>
+			</div>
+			<div class="pn-acct-field">
+				<label for="pn-move-park-text">New Park <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pn-move-park-text" placeholder="Search for a park..." autocomplete="off" />
+				<input type="hidden" id="pn-move-park-id" value="0" />
+			</div>
+			<div class="pn-move-warning">
+				<i class="fas fa-exclamation-triangle"></i>
+				This will change the player&rsquo;s home park and reset their Park Member Since date.
+			</div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-move-cancel">Cancel</button>
+			<button class="pn-btn" id="pn-move-submit" disabled style="background:#c53030;color:#fff;"><i class="fas fa-arrows-alt"></i> Move Player</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>

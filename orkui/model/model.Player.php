@@ -45,6 +45,10 @@ class Model_Player extends Model {
 	function revoke_player_award($request) {
 		return $this->Player->RevokeAward($request);
 	}
+
+	function add_note($request) {
+		return $this->Player->AddNote($request);
+	}
 	
 	function revoke_all_awards($request) {
 		return $this->Player->RevokeAllAwards($request);
@@ -82,12 +86,9 @@ class Model_Player extends Model {
 		$r = $this->Player->SetBan($request);
 		return $r;
 	}
-	/*
 	function create_player($request) {
-		$r = $this->Player->CreatePlayer($request);
-		return $r;
+		return $this->Player->CreatePlayer($request);
 	}
-	*/
 	function move_player($request) {
 		$r = $this->Player->MovePlayer($request);
 		return $r;

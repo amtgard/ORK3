@@ -3969,4 +3969,158 @@
 .kn-admin-add-award-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; }
 .kn-admin-award-row-fields { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
 .kn-admin-award-row-fields .kn-admin-field { margin-bottom:0; }
+
+/* ---- Add Player Modal (plr- shared, kn-addplayer / pk-addplayer overlays) ---- */
+#kn-addplayer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#kn-addplayer-overlay.kn-addplayer-open { opacity:1; pointer-events:all; }
+#kn-addplayer-overlay .kn-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-addplayer-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#kn-addplayer-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#kn-addplayer-overlay .kn-modal-close-btn:hover { color:#4a5568; }
+#kn-addplayer-overlay .kn-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#kn-addplayer-overlay .kn-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+#pk-addplayer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#pk-addplayer-overlay.pk-addplayer-open { opacity:1; pointer-events:all; }
+#pk-addplayer-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addplayer-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#pk-addplayer-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#pk-addplayer-overlay .pk-modal-close-btn:hover { color:#4a5568; }
+#pk-addplayer-overlay .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#pk-addplayer-overlay .pk-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.plr-feedback { padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; }
+.plr-ok  { background:#f0fff4; border:1px solid #c6f6d5; color:#276749; }
+.plr-err { background:#fff5f5; border:1px solid #fed7d7; color:#c53030; }
+.plr-field-row { display:flex; gap:12px; margin-bottom:12px; }
+.plr-field { display:flex; flex-direction:column; gap:4px; flex:1; }
+.plr-field-grow { flex:2; }
+.plr-field > label { font-size:11px; font-weight:700; color:#718096; text-transform:uppercase; letter-spacing:0.04em; }
+.plr-field input[type=text],
+.plr-field input[type=email],
+.plr-field input[type=password],
+.plr-field select { padding:8px 10px; border:1px solid #cbd5e0; border-radius:5px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; width:100%; }
+.plr-field input:focus, .plr-field select:focus { outline:none; border-color:#63b3ed; box-shadow:0 0 0 2px rgba(66,153,225,0.15); }
+.plr-req { color:#e53e3e; }
+.plr-hint { font-size:10px; color:#a0aec0; font-weight:400; text-transform:none; letter-spacing:0; }
+.plr-radio-row { display:flex; gap:16px; padding:6px 0; }
+.plr-radio { display:flex; align-items:center; gap:5px; font-size:13px; color:#2d3748; cursor:pointer; font-weight:400; text-transform:none; letter-spacing:0; }
+.plr-radio input[type=radio] { margin:0; cursor:pointer; }
+.plr-add-btn { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; background:#276749; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+.plr-add-btn:hover { background:#22543d; }
 .kn-admin-award-row-fields .kn-admin-field label { font-size:10px; }
+
+/* ==============================================
+   Award Edit + Delete Actions (pn-)
+   ============================================== */
+.pn-award-action-btn { background:none; border:none; padding:3px 6px; border-radius:4px; cursor:pointer; color:#a0aec0; font-size:12px; transition:color 0.15s, background 0.15s; }
+.pn-award-action-btn:hover { color:#4a5568; background:#f7fafc; }
+.pn-award-action-btn.pn-award-edit-btn:hover { color:#2b6cb0; }
+.pn-award-action-btn.pn-award-del-btn:hover  { color:#e53e3e; }
+.pn-awards-action-col { white-space:nowrap; text-align:right; }
+.pn-edit-award-name-display { font-size:14px; font-weight:600; color:#2d3748; padding:8px 10px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; min-height:36px; }
+.pn-award-edit-success { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 12px; color:#276749; font-size:13px; margin-bottom:12px; }
+
+/* Dues revoke button */
+.pn-dues-revoke-btn { padding:3px 9px; background:none; border:1px solid #e53e3e; color:#e53e3e; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; line-height:1.6; }
+.pn-dues-revoke-btn:hover { background:#fff5f5; }
+.pn-dues-revoke-btn:disabled { opacity:0.5; cursor:default; }
+
+/* ==============================================
+   Park Officers Edit Modal (pk-editoff-)
+   ============================================== */
+.pk-edit-officers-btn { background:none; border:none; color:#a0aec0; cursor:pointer; padding:2px 6px; border-radius:4px; font-size:13px; line-height:1; }
+.pk-edit-officers-btn:hover { color:#2b6cb0; background:#ebf4ff; }
+#pk-editoff-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#pk-editoff-overlay.pk-open { opacity:1; pointer-events:all; }
+#pk-editoff-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-editoff-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#pk-editoff-overlay .pk-modal-title { font-size:16px; font-weight:700; color:#1a202c; margin:0; }
+#pk-editoff-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#pk-editoff-overlay .pk-modal-close-btn:hover { color:#4a5568; }
+#pk-editoff-overlay .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#pk-editoff-overlay .pk-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.pk-editoff-hint { font-size:12px; color:#718096; margin:0 0 14px; line-height:1.5; }
+.pk-editoff-feedback { padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; }
+.pk-editoff-ok  { background:#f0fff4; border:1px solid #c6f6d5; color:#276749; }
+.pk-editoff-err { background:#fff5f5; border:1px solid #fed7d7; color:#c53030; }
+.pk-editoff-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #f0f4f8; }
+.pk-editoff-row:last-child { border-bottom:none; }
+.pk-editoff-role-label { width:110px; flex-shrink:0; font-size:11px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.04em; }
+.pk-editoff-player-wrap { flex:1; min-width:0; }
+.pk-editoff-name-input { width:100%; padding:7px 9px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; }
+.pk-editoff-name-input:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
+.pk-editoff-vacate-btn { padding:5px 10px; background:none; border:1px solid #e53e3e; color:#e53e3e; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+.pk-editoff-vacate-btn:hover { background:#fff5f5; }
+.pk-editoff-vacate-btn:disabled { opacity:0.5; cursor:default; }
+
+/* ==============================================
+   Add Park Day Modal (pk-addday-)
+   ============================================== */
+#pk-addday-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#pk-addday-overlay.pk-open { opacity:1; pointer-events:all; }
+#pk-addday-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addday-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#pk-addday-overlay .pk-modal-title { font-size:16px; font-weight:700; color:#1a202c; margin:0; }
+#pk-addday-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#pk-addday-overlay .pk-modal-close-btn:hover { color:#4a5568; }
+#pk-addday-overlay .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#pk-addday-overlay .pk-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.pk-addday-feedback { padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; }
+.pk-addday-ok  { background:#f0fff4; border:1px solid #c6f6d5; color:#276749; }
+.pk-addday-err { background:#fff5f5; border:1px solid #fed7d7; color:#c53030; }
+.pk-addday-field { display:flex; flex-direction:column; gap:4px; margin-bottom:13px; }
+.pk-addday-field label { font-size:11px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.04em; }
+.pk-addday-field input[type=text],
+.pk-addday-field input[type=time],
+.pk-addday-field select { padding:7px 9px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; width:100%; }
+.pk-addday-field input:focus, .pk-addday-field select:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
+.pk-addday-two-col { display:flex; gap:12px; }
+.pk-addday-two-col .pk-addday-field { flex:1; }
+/* Segmented button group */
+.pk-seg-group { display:flex; gap:0; border:1.5px solid #e2e8f0; border-radius:6px; overflow:hidden; margin-top:2px; }
+.pk-seg-btn { flex:1; padding:7px 6px; background:#fff; border:none; font-size:12px; font-weight:600; color:#718096; cursor:pointer; transition:background 0.15s, color 0.15s; text-align:center; line-height:1.3; }
+.pk-seg-btn + .pk-seg-btn { border-left:1px solid #e2e8f0; }
+.pk-seg-btn:hover { background:#f7fafc; color:#4a5568; }
+.pk-seg-btn.pk-seg-active { background:#2b6cb0; color:#fff; }
+/* Schedule card delete button */
+.pk-schedule-card { position:relative; }
+.pk-schedule-card-del { position:absolute; top:6px; right:6px; width:22px; height:22px; background:rgba(255,255,255,0.9); border:1px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; color:#a0aec0; line-height:1; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
+.pk-schedule-card-del:hover { background:#fff5f5; border-color:#fc8181; color:#e53e3e; }
+
+/* ============================================================
+   Batch 2 Admin Features
+   ============================================================ */
+
+/* ---- Revoke Award button (Playernew) ---- */
+.pn-award-revoke-btn { background:none; border:1px solid transparent; color:#b7791f; cursor:pointer; width:26px; height:26px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; transition:background 0.15s, border-color 0.15s; padding:0; }
+.pn-award-revoke-btn:hover { background:#fffff0; border-color:#f6e05e; color:#975a16; }
+
+/* ---- Revoke Award modal (Playernew) ---- */
+#pn-award-revoke-overlay .pn-modal-box { width:420px; max-width:calc(100vw - 40px); }
+.pn-revoke-award-name { font-size:14px; font-weight:600; color:#2d3748; margin-bottom:12px; padding:8px 12px; background:#fffff0; border:1px solid #f6e05e; border-radius:6px; }
+
+/* ---- Add Note modal (Playernew) ---- */
+#pn-addnote-overlay .pn-modal-box { width:480px; max-width:calc(100vw - 40px); }
+.pn-notes-toolbar { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.pn-note-del-btn { background:none; border:1px solid transparent; color:#a0aec0; cursor:pointer; width:24px; height:24px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
+.pn-note-del-btn:hover { background:#fff5f5; border-color:#fc8181; color:#e53e3e; }
+
+/* ---- Move Player modal (Playernew) ---- */
+#pn-moveplayer-overlay .pn-modal-box { width:440px; max-width:calc(100vw - 40px); }
+.pn-move-current-park { font-size:13px; color:#4a5568; padding:8px 12px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:14px; }
+.pn-move-current-park strong { color:#2d3748; }
+.pn-move-warning { font-size:12px; color:#744210; background:#fffbeb; border:1px solid #f6e05e; border-radius:6px; padding:8px 12px; margin-top:12px; line-height:1.5; }
+
+/* ---- Edit Park Details button + modal (Parknew) ---- */
+.pk-edit-details-btn { background:none; border:none; color:#a0aec0; cursor:pointer; padding:2px 6px; border-radius:4px; font-size:13px; line-height:1; }
+.pk-edit-details-btn:hover { color:#2b6cb0; background:#ebf4ff; }
+#pk-editdetails-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#pk-editdetails-overlay.pk-open { opacity:1; pointer-events:all; }
+#pk-editdetails-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:540px; max-width:calc(100vw - 40px); }
+#pk-editdetails-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#pk-editdetails-overlay .pk-modal-title { font-size:16px; font-weight:700; color:#1a202c; margin:0; }
+#pk-editdetails-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#pk-editdetails-overlay .pk-modal-close-btn:hover { color:#4a5568; }
+#pk-editdetails-overlay .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#pk-editdetails-overlay .pk-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.pk-editdetails-two-col { display:flex; gap:12px; }
+.pk-editdetails-two-col .pk-addday-field { flex:1; }
