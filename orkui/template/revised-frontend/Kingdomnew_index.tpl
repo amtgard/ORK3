@@ -620,6 +620,11 @@
 								<i class="fas fa-list"></i> List
 							</button>
 						</div>
+						<?php if ($CanManageKingdom ?? false): ?>
+						<button class="plr-add-btn" onclick="knOpenAddPlayerModal()">
+							<i class="fas fa-user-plus"></i> Add Player
+						</button>
+						<?php endif; ?>
 					</div>
 				</div>
 
@@ -1257,4 +1262,87 @@ var KnConfig = {
 	</div>
 </div>
 
+<?php endif; ?>
+
+<?php if ($CanManageKingdom ?? false): ?>
+<!-- Add Player Modal -->
+<div id="kn-addplayer-overlay">
+	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Add Player</h3>
+			<button class="kn-modal-close-btn" id="kn-addplayer-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div id="kn-addplayer-feedback" class="plr-feedback" style="display:none"></div>
+			<div class="plr-field-row">
+				<div class="plr-field plr-field-grow">
+					<label>Park <span class="plr-req">*</span></label>
+					<select id="kn-addplayer-park">
+						<option value="">— select park —</option>
+					</select>
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field plr-field-grow">
+					<label>Persona <span class="plr-req">*</span></label>
+					<input type="text" id="kn-addplayer-persona" placeholder="In-game name">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field">
+					<label>First Name</label>
+					<input type="text" id="kn-addplayer-given" placeholder="Given name">
+				</div>
+				<div class="plr-field">
+					<label>Last Name</label>
+					<input type="text" id="kn-addplayer-surname" placeholder="Surname">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field plr-field-grow">
+					<label>Email</label>
+					<input type="email" id="kn-addplayer-email" placeholder="email@example.com">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field">
+					<label>Username <span class="plr-req">*</span></label>
+					<input type="text" id="kn-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">
+				</div>
+				<div class="plr-field">
+					<label>Password <span class="plr-req">*</span></label>
+					<input type="password" id="kn-addplayer-password" placeholder="password" autocomplete="new-password">
+				</div>
+			</div>
+			<div class="plr-field-row">
+				<div class="plr-field">
+					<label>Restricted</label>
+					<div class="plr-radio-row">
+						<label class="plr-radio"><input type="radio" name="kn-addplayer-restricted" value="0" checked> No</label>
+						<label class="plr-radio"><input type="radio" name="kn-addplayer-restricted" value="1"> Yes</label>
+					</div>
+				</div>
+				<div class="plr-field">
+					<label>Waivered</label>
+					<div class="plr-radio-row">
+						<label class="plr-radio"><input type="radio" name="kn-addplayer-waivered" value="0" checked> No</label>
+						<label class="plr-radio"><input type="radio" name="kn-addplayer-waivered" value="1"> Yes</label>
+					</div>
+				</div>
+			</div>
+			<div class="plr-field-row" id="kn-addplayer-waiver-row" style="display:none">
+				<div class="plr-field plr-field-grow">
+					<label>Waiver File <span class="plr-hint">(PDF, PNG, JPG, or GIF)</span></label>
+					<input type="file" id="kn-addplayer-waiver" accept=".pdf,image/png,image/jpeg,image/gif">
+				</div>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn-ghost" id="kn-addplayer-cancel">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-addplayer-submit">
+				<i class="fas fa-user-plus"></i> Create Player
+			</button>
+		</div>
+	</div>
+</div>
 <?php endif; ?>
