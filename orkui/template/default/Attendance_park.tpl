@@ -90,6 +90,75 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
+		// Quick Add row submit via AJAX
+		$('#quick-add-table').on('click', '.qa-add-btn', function() {
+			var btn = $(this);
+			var row = btn.closest('tr');
+			var mundaneId   = parseInt(row.data('mundane-id'));
+			var kingdomId   = row.data('kingdom-id');
+			var kingdomName = row.data('kingdom-name');
+			var parkId      = row.data('park-id');
+			var parkName    = row.data('park-name');
+			var persona     = row.data('persona');
+			var classId     = row.find('.qa-class').val();
+			var className   = row.find('.qa-class option:selected').text();
+			var credits     = row.find('.qa-credits').val();
+			var date        = $('#AttendanceDate').val();
+			btn.prop('disabled', true).val('...');
+			$.ajax({
+				url: '<?=UIR ?>AttendanceAjax/park/<?=$Id ?>/add',
+				type: 'POST',
+				data: {
+					AttendanceDate: date,
+					MundaneId: mundaneId,
+					KingdomId: kingdomId,
+					ParkId: parkId,
+					ClassId: classId,
+					Credits: credits
+				},
+				dataType: 'json',
+				success: function(resp) {
+					if (resp.status === 0) {
+						row.hide();
+						var delCell = '<td class="deletion"><a href="<?=UIR ?>Attendance/park/<?=$Id ?>/delete/' + resp.attendanceId + '&AttendanceDate=' + encodeURIComponent(date) + '">&times;</a></td>';
+						$('#EventListTable tbody').append(
+							$('<tr>').attr('data-mundane-id', mundaneId).html(
+								'<td><a href="<?=UIR ?>Kingdom/index/' + kingdomId + '">' + $('<span>').text(kingdomName).html() + '</a></td>' +
+								'<td><a href="<?=UIR ?>Park/index/' + parkId + '">' + $('<span>').text(parkName).html() + '</a></td>' +
+								'<td><a href="<?=UIR ?>Player/index/' + mundaneId + '">' + $('<span>').text(persona).html() + '</a></td>' +
+								'<td></td>' +
+								'<td>' + $('<span>').text(className).html() + '</td>' +
+								'<td class="data-column">' + credits + '</td>' +
+								'<td class="data-column"></td>' +
+								delCell
+							)
+						);
+					} else {
+						btn.prop('disabled', false).val('Add');
+						alert(resp.error || 'Failed to add attendance.');
+					}
+				},
+				error: function() {
+					btn.prop('disabled', false).val('Add');
+					alert('Request failed. Please try again.');
+				}
+			});
+		});
+		// Re-show all quick-add rows when the date changes
+		$('#AttendanceDate').on('change', function() {
+			$('#quick-add-table tbody tr').show();
+		});
+		// On load: hide quick-add rows for players already in today's attendance
+		var attendedIds = {};
+		$('#EventListTable tbody tr[data-mundane-id]').each(function() {
+			var mId = parseInt($(this).data('mundane-id'));
+			if (mId > 0) attendedIds[mId] = true;
+		});
+		$('#quick-add-table tbody tr').each(function() {
+			var mId = parseInt($(this).data('mundane-id'));
+			if (mId > 0 && attendedIds[mId]) $(this).hide();
+		});
+
 		var playerAC = $( "#PlayerName" ).autocomplete({
 			source: function( request, response ) {
 				var park_id = $('#ParkId').val();
@@ -166,6 +235,9 @@
 		};
 	});
 </script>
+<?php if (strlen($Error) > 0) : ?>
+<div class='error-message'><?=$Error ?></div>
+<?php endif ?>
 <div class='info-container' id='event-editor'>
 	<h3>Add Attendance to <?=$Session->park_name ?></h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Attendance/park/<?=$Id ?>/new'>
@@ -220,6 +292,7 @@
 				<th>Kingdom</th>
 				<th>Park</th>
 				<th>Player</th>
+				<th>Home Park</th>
 				<th>Class</th>
 				<th>Credits</th>
 				<th>Entered By</th>
@@ -229,13 +302,15 @@
 		<tbody>
 <?php if (!is_array($AttendanceReport['Attendance'])) $AttendanceReport['Attendance'] = array(); ?>
 <?php foreach ($AttendanceReport['Attendance'] as $key => $detail) : ?>
-			<tr>
+			<tr data-mundane-id='<?=$detail['MundaneId'] ?>'>
 				<td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
 				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
     <?php if ($detail['MundaneId']==0) : ?>
 				<td class='form-informational-field'><?=$detail['AttendancePersona'] ?> (<?=$detail['Note'] ?>)</td>
+				<td></td>
     <?php else : ?>
     			<td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
+				<td><a href='<?=UIR ?>Park/index/<?=$detail['FromParkId'] ?>'><?=html_encode($detail['FromParkName']) ?></a></td>
     <?php endif ; ?>
 				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>
@@ -248,3 +323,46 @@
 		</tbody>
 	</table>
 </div>
+
+<?php if ($LoggedIn && !empty($RecentAttendees['Attendees'])) : ?>
+<div class='info-container'>
+	<h3>Quick Add &mdash; Recent Attendees</h3>
+	<table class='information-table' id='quick-add-table'>
+		<thead>
+			<tr>
+				<th>Kingdom</th>
+				<th>Park</th>
+				<th>Player</th>
+				<th>Last Sign-In</th>
+				<th>Class</th>
+				<th>Credits</th>
+				<th>Add</th>
+			</tr>
+		</thead>
+		<tbody>
+<?php foreach ($RecentAttendees['Attendees'] as $attendee) : ?>
+			<tr	data-mundane-id='<?=$attendee['MundaneId'] ?>'
+				data-kingdom-id='<?=$attendee['KingdomId'] ?>'
+				data-kingdom-name='<?=html_encode($attendee['KingdomName']) ?>'
+				data-park-id='<?=$attendee['ParkId'] ?>'
+				data-park-name='<?=html_encode($attendee['ParkName']) ?>'
+				data-persona='<?=html_encode($attendee['Persona']) ?>'>
+				<td><a href='<?=UIR ?>Kingdom/index/<?=$attendee['KingdomId'] ?>'><?=html_encode($attendee['KingdomName']) ?></a></td>
+				<td><a href='<?=UIR ?>Park/index/<?=$attendee['ParkId'] ?>'><?=html_encode($attendee['ParkName']) ?></a></td>
+				<td><a href='<?=UIR ?>Player/index/<?=$attendee['MundaneId'] ?>'><?=html_encode($attendee['Persona']) ?></a></td>
+				<td class='data-column'><?=$attendee['LastSignIn'] ?></td>
+				<td>
+					<select class='qa-class'>
+<?php foreach ($Classes['Classes'] as $class) : ?>
+						<option value='<?=$class['ClassId'] ?>'<?=$class['ClassId']==$attendee['ClassId']?' selected':'' ?>><?=$class['Name'] ?></option>
+<?php endforeach ?>
+					</select>
+				</td>
+				<td><input type='text' class='qa-credits numeric-field remove-float' value='1' size='3' /></td>
+				<td><input type='button' class='qa-add-btn' value='Add' /></td>
+			</tr>
+<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+<?php endif ?>

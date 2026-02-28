@@ -32,6 +32,10 @@ class Model_Attendance extends Model {
 		return $this->Attendance->RemoveAttendance(array('Token'=>$token, 'AttendanceId' => $attendance_id ));
 	}
 	
+	function get_recent_attendees($park_id) {
+		return $this->Report->RecentParkAttendees(array('ParkId' => $park_id));
+	}
+
 	function get_attendance_for_date($park_id, $date) {
 		if (valid_id($park_id))
 			return $this->Report->AttendanceForDate(array( 'ParkId' => $park_id, 'Date' => $date ));

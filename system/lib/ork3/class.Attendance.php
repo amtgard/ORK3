@@ -73,14 +73,20 @@ class Attendance  extends Ork3 {
         
 		$this->attendance->clear();
 		$this->attendance->mundane_id = $request['MundaneId'];
-        $this->attendance->persona = $request['Persona'];
+        $this->attendance->persona = $request['Persona'] ?? '';
 		$this->attendance->class_id = $request['ClassId'];
 		$this->attendance->date = $request['Date'];
 		$this->attendance->credits = $request['Credits'];
-        $this->attendance->note = $request['Note'];
-    	$this->attendance->flavor = $request['Flavor'];
+        $this->attendance->note = $request['Note'] ?? '';
+    	$this->attendance->flavor = $request['Flavor'] ?? '';
 		$this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$this->attendance->entered_at = date("Y-m-d H:i:s");
+		$this->attendance->event_id = 0;
+		$this->attendance->event_calendardetail_id = 0;
+		$this->attendance->date_year = 0;
+		$this->attendance->date_month = 0;
+		$this->attendance->date_week3 = 0;
+		$this->attendance->date_week6 = 0;
 		
 		switch ($type) {
 			case AUTH_PARK:
