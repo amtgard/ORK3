@@ -27,12 +27,12 @@ define( 'CFG_EDIT', 'Edit' );
 
 function html_encode( $string )
 {
-	return htmlentities( $string, ENT_QUOTES | ENT_HTML5, "ISO-8859-1", false );
+	return htmlentities( $string, ENT_QUOTES | ENT_HTML5, "UTF-8", false );
 }
 
 function html_decode( $string )
 {
-	return html_entity_decode( $string, ENT_QUOTES | ENT_HTML5, "ISO-8859-1" );
+	return html_entity_decode( $string, ENT_QUOTES | ENT_HTML5, "UTF-8" );
 }
 
 function trimlen( $text )
