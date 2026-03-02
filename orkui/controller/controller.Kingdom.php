@@ -126,7 +126,8 @@ class Controller_Kingdom extends Controller {
 		$kid = (int)$kingdom_id;
 
 		$evtSql = "
-			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr, cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry
+			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr, cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
+			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id) AS rsvp_count
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
@@ -149,6 +150,7 @@ class Controller_Kingdom extends Controller {
 						'NextDetailId' => (int)$evtResult->next_detail_id,
 						'HasHeraldry'  => (int)$evtResult->has_heraldry,
 						'ParkAbbr'     => $evtResult->park_abbr,
+						'RsvpCount'    => (int)$evtResult->rsvp_count,
 						'_IsParkEvent' => (int)$evtResult->park_id > 0,
 					];
 				}

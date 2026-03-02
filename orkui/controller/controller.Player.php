@@ -41,13 +41,22 @@ class Controller_Player extends Controller {
 
 	public function index($id = null) {
 		$this->load_model('Unit');
-
+		$this->load_model('Event');
+		
 		$params = explode('/',$id);
 		$id = $params[0];
 		if (count($params) > 1)
 			$action = $params[1];
 		if (count($params) > 2)
 			$roastbeef = $params[2];
+				
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+		if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
+			$this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
+			header('Location: ' . UIR . 'Player/index/' . $id);
+			return;
+		}
 
 		if (strlen($action) > 0) {
 			$this->request->save('Player_index', true);
@@ -214,17 +223,29 @@ class Controller_Player extends Controller {
 		}
 		$this->data['PreloadOfficers'] = $preloadOfficers;
 
+		$this->data['UpcomingRsvps'] = $this->Event->get_upcoming_rsvps((int)$id);
+		$this->data['IsOwnProfile'] = $uid === (int)$id;
+
 	}
 
 	public function profile( $id = null ) {
 		$this->template = '../revised-frontend/Playernew_index.tpl';
 		$this->load_model('Unit');
 		$this->load_model('Kingdom');
+		$this->load_model('Event');
 
 		$params    = explode('/', $id);
 		$id        = $params[0];
 		$action    = $params[1] ?? '';
 		$roastbeef = $params[2] ?? '';
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+		if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
+			$this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
+			header('Location: ' . UIR . 'Player/profile/' . $id);
+			return;
+		}
 
 		$this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name];
 		$this->data['menu']['park']    = ['url' => UIR . 'Park/profile/'    . $this->session->park_id,    'display' => $this->session->park_name];
@@ -383,6 +404,9 @@ class Controller_Player extends Controller {
 			}
 		}
 		$this->data['PreloadOfficers'] = $preloadOfficers;
+
+		$this->data['UpcomingRsvps'] = $this->Event->get_upcoming_rsvps((int)$id);
+		$this->data['IsOwnProfile']  = $uid === (int)$id;
 	}
 
 }

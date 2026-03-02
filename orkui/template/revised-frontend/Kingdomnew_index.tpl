@@ -404,6 +404,7 @@
 								<th data-sorttype="date">Next Date</th>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="text">Park</th>
+								<th data-sorttype="numeric">RSVPs</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -422,6 +423,7 @@
 										<a href="<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>"><?= htmlspecialchars($event['Name']) ?></a>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
+									<td style="text-align:center"><?= (int)($event['RsvpCount'] ?? 0) ?></td>
 								</tr>
 							<?php endforeach; ?>
 						<?php foreach ($kingdom_park_days ?? [] as $day): ?>

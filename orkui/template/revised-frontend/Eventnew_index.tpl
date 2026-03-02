@@ -63,6 +63,11 @@
 	$defaultParkId      = $DefaultParkId            ?? 0;
 	$defaultCredits     = $DefaultAttendanceCredits ?? 1;
 
+	$rsvpCount     = (int)($RsvpCount     ?? 0);
+	$userAttending = (bool)($UserAttending ?? false);
+	$rsvpList      = $RsvpList ?? [];
+	$canManage     = $CanManageEvent ?? false;
+
 	// Date badge label
 	$startLabel = $eventStart ? date('M j, Y', strtotime($eventStart)) : '';
 	$endLabel   = $eventEnd   ? date('M j, Y', strtotime($eventEnd))   : '';
@@ -132,6 +137,14 @@
 			<button class="ev-btn ev-btn-outline" type="button" onclick="evOpenEditModal()">
 				<i class="fas fa-pencil-alt"></i> Edit Details
 			</button>
+			<?php endif; ?>
+			<?php if ($loggedIn && $isUpcoming): ?>
+			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0">
+				<button type="submit" class="ev-btn <?= $userAttending ? 'ev-btn-secondary' : 'ev-btn-outline' ?>">
+					<i class="fas <?= $userAttending ? 'fa-times-circle' : 'fa-check-circle' ?>"></i>
+					<?= $userAttending ? 'Cancel RSVP' : 'RSVP' ?>
+				</button>
+			</form>
 			<?php endif; ?>
 			<?php if ($loggedIn): ?>
 			<a class="ev-btn ev-btn-outline"
@@ -303,6 +316,10 @@
 					<i class="fas fa-trophy"></i> Tournaments
 					<span class="ev-tab-count"><?= $tourneyCount ?></span>
 				</li>
+				<li data-tab="ev-tab-rsvp" onclick="evShowTab(this,'ev-tab-rsvp')">
+					<i class="fas fa-calendar-check"></i> RSVPs
+					<span class="ev-tab-count"><?= $rsvpCount ?></span>
+				</li>
 			</ul>
 
 			<?php // ---- Details Tab ---- ?>
@@ -445,6 +462,38 @@
 				<?php else: ?>
 				<div class="ev-empty">
 					<i class="fas fa-trophy" style="margin-right:6px"></i>No tournaments recorded
+				</div>
+				<?php endif; ?>
+			</div><!-- /.ev-tab-panel -->
+
+			<?php // ---- RSVPs Tab ---- ?>
+			<div class="ev-tab-panel" id="ev-tab-rsvp">
+				<p style="font-size:.95em;color:#4a5568;margin:0 0 12px">
+					<i class="fas fa-users" style="margin-right:5px;color:#276749"></i>
+					<strong><?= $rsvpCount ?></strong> <?= $rsvpCount === 1 ? 'RSVP' : 'RSVPs' ?>
+				</p>
+				<?php if ($canManage): ?>
+					<?php if (count($rsvpList) > 0): ?>
+					<table class="ev-table">
+						<thead>
+							<tr><th>Player</th></tr>
+						</thead>
+						<tbody>
+							<?php foreach ($rsvpList as $attendee): ?>
+							<tr>
+								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a></td>
+							</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+					<?php else: ?>
+					<div class="ev-empty">
+						<i class="fas fa-calendar-check" style="margin-right:6px"></i>No RSVPs yet
+					</div>
+					<?php endif; ?>
+				<?php elseif ($rsvpCount === 0): ?>
+				<div class="ev-empty">
+					<i class="fas fa-calendar-check" style="margin-right:6px"></i>No RSVPs yet
 				</div>
 				<?php endif; ?>
 			</div><!-- /.ev-tab-panel -->

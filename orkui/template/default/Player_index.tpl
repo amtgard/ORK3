@@ -161,6 +161,39 @@
   </form>
 </div>
 
+<?php if (count($UpcomingRsvps) > 0) : ?>
+<div class='info-container'>
+	<h3>Event RSVPs</h3>
+	<table class='information-table' id='UpcomingRsvpTable'>
+		<thead>
+			<tr>
+				<th>Event</th>
+				<th>Start</th>
+				<th>End</th>
+				<?php if ($IsOwnProfile) : ?><th></th><?php endif ?>
+			</tr>
+		</thead>
+		<tbody>
+			<?php foreach ($UpcomingRsvps as $rsvp) : ?>
+			<tr>
+				<td><a href='<?=UIR ?>Event/index/<?=$rsvp['EventId'] ?>'><?=$rsvp['EventName'] ?></a></td>
+				<td><?=date('Y-m-d', strtotime($rsvp['EventStart'])) ?></td>
+				<td><?=date('Y-m-d', strtotime($rsvp['EventEnd'])) ?></td>
+				<?php if ($IsOwnProfile) : ?>
+				<td>
+					<form method='post' action='<?=UIR ?>Player/index/<?=$Player['MundaneId'] ?>'>
+						<input type='hidden' name='cancel_rsvp_detail_id' value='<?=$rsvp['EventCalendarDetailId'] ?>'>
+						<button type='submit' class='btn btn-attending'>Cancel RSVP</button>
+					</form>
+				</td>
+				<?php endif ?>
+			</tr>
+			<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+<?php endif ?>
+
 <div class='info-container'>
     <h3>Dues</h3>
 	<table class='information-table form-container' id='DuesTable'>

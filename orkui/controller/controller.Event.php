@@ -38,6 +38,30 @@ class Controller_Event extends Controller {
 		if ($this->request->exists('Admin_event')) {
 			$this->data['Admin_event'] = $this->request->Admin_event->Request;
 		}
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+		if ($uid > 0 && isset($this->request->rsvp_detail_id)) {
+			$detail_id = (int)$this->request->rsvp_detail_id;
+			$this->Event->toggle_rsvp($detail_id, $uid);
+			header('Location: ' . UIR . 'Event/index/' . $event_id);
+			return;
+		}
+
+		$can_manage = $uid > 0 && valid_id($event_id)
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+		$this->data['CanManageEvent'] = $can_manage;
+
+		$rsvp_data = [];
+		foreach ($this->data['EventDetails']['CalendarEventDetails'] ?? [] as $detail) {
+			$detail_id = $detail['EventCalendarDetailId'];
+			$rsvp_data[$detail_id] = [
+				'Count'         => $this->Event->get_rsvp_count($detail_id),
+				'UserAttending' => $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false,
+				'List'          => $can_manage ? $this->Event->get_rsvp_list($detail_id) : [],
+			];
+		}
+		$this->data['RsvpData'] = $rsvp_data;
 	}
 
 	public function template( $event_id = null ) {
@@ -104,6 +128,30 @@ class Controller_Event extends Controller {
 		usort( $upcoming, fn($a, $b) => strtotime($a['EventStart']) - strtotime($b['EventStart']) );
 		usort( $past,     fn($a, $b) => strtotime($b['EventStart']) - strtotime($a['EventStart']) );
 
+		// Attach RSVP counts to all occurrences in a single batch query
+		$allCds = array_merge($upcoming, $past);
+		if (!empty($allCds)) {
+			$detailIds = array_map(fn($cd) => (int)$cd['EventCalendarDetailId'], $allCds);
+			$idList    = implode(',', $detailIds);
+			global $DB;
+			$DB->Clear();
+			$rsvpResult = $DB->DataSet("SELECT event_calendardetail_id, COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id IN ($idList) GROUP BY event_calendardetail_id");
+			$rsvpCounts = [];
+			if ($rsvpResult) {
+				while ($rsvpResult->Next()) {
+					$rsvpCounts[(int)$rsvpResult->event_calendardetail_id] = (int)$rsvpResult->cnt;
+				}
+			}
+			foreach ($upcoming as &$cd) {
+				$cd['_RsvpCount'] = $rsvpCounts[(int)$cd['EventCalendarDetailId']] ?? 0;
+			}
+			unset($cd);
+			foreach ($past as &$cd) {
+				$cd['_RsvpCount'] = $rsvpCounts[(int)$cd['EventCalendarDetailId']] ?? 0;
+			}
+			unset($cd);
+		}
+
 		$this->data['Upcoming']   = $upcoming;
 		$this->data['Past']       = $past;
 		$this->data['TotalDates'] = count( $details['CalendarEventDetails'] ?? [] );
@@ -166,6 +214,12 @@ class Controller_Event extends Controller {
 		$this->data['DefaultParkId']      = $this->session->park_id      ?? 0;
 		$this->data['DefaultKingdomName'] = $this->session->kingdom_name ?? '';
 		$this->data['DefaultKingdomId']   = $this->session->kingdom_id   ?? 0;
+
+		if ( $action === 'rsvp' && $uid > 0 ) {
+			$this->Event->toggle_rsvp($detail_id, $uid);
+			header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
+			return;
+		}
 
 		if ( strlen($action) > 0 && $uid > 0 ) {
 
@@ -268,6 +322,10 @@ class Controller_Event extends Controller {
 
 		$this->data['CanManageEvent'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+
+		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
+		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
+		$this->data['RsvpList']      = $this->data['CanManageEvent'] ? $this->Event->get_rsvp_list($detail_id) : [];
 	}
 
 	public function create( $p = null ) {

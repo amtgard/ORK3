@@ -100,7 +100,8 @@ class Controller_Park extends Controller
 
 		$evtSql = "
 			SELECT e.event_id, e.name, p.name AS park_name,
-			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry
+			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
+			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id) AS rsvp_count
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
@@ -122,6 +123,7 @@ class Controller_Park extends Controller
 					'NextEndDate'  => $evtResult->event_end,
 					'NextDetailId' => (int)$evtResult->next_detail_id,
 					'HasHeraldry'  => (int)$evtResult->has_heraldry,
+					'RsvpCount'    => (int)$evtResult->rsvp_count,
 				];
 			}
 		}

@@ -316,14 +316,26 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+.hm-event-right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 4px;
+	flex-shrink: 0;
+}
 .hm-event-date {
 	font-size: 12px;
 	font-weight: 600;
 	color: #4a5568;
-	flex-shrink: 0;
 	background: #edf2f7;
 	border-radius: 4px;
 	padding: 3px 8px;
+	white-space: nowrap;
+}
+.hm-event-rsvp {
+	font-size: 11px;
+	color: #276749;
+	font-weight: 600;
 	white-space: nowrap;
 }
 
@@ -528,9 +540,14 @@
 					<div class="hm-event-name"><?= htmlspecialchars($event['Name']) ?></div>
 					<div class="hm-event-meta"><?= htmlspecialchars($event['KingdomName']) ?> &mdash; <?= htmlspecialchars($event['ParkName']) ?></div>
 				</div>
+				<div class="hm-event-right">
 				<?php if (!empty($event['NextDate']) && $event['NextDate'] !== '0'): ?>
 				<div class="hm-event-date"><?= date('M j', strtotime($event['NextDate'])) ?></div>
 				<?php endif; ?>
+				<?php if (!empty($event['RsvpCount'])): ?>
+				<div class="hm-event-rsvp"><?= (int)$event['RsvpCount'] ?> RSVP<?= $event['RsvpCount'] != 1 ? 's' : '' ?></div>
+				<?php endif; ?>
+			</div>
 			</a>
 			<?php endforeach; ?>
 		</div>

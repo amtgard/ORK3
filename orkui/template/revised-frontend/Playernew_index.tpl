@@ -284,6 +284,38 @@
 			<?php endif; ?>
 		</div>
 
+		<!-- Event RSVPs -->
+		<?php if (!empty($UpcomingRsvps)): ?>
+		<div class="pn-card">
+			<h4><i class="fas fa-calendar-check"></i> Event RSVPs</h4>
+			<table class="pn-mini-table">
+				<thead>
+					<tr>
+						<th>Event</th>
+						<th>Date</th>
+						<?php if (!empty($IsOwnProfile)): ?><th></th><?php endif; ?>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ($UpcomingRsvps as $rsvp): ?>
+					<tr>
+						<td><a href="<?= UIR ?>Event/detail/<?= $rsvp['EventId'] ?>/<?= $rsvp['EventCalendarDetailId'] ?>"><?= htmlspecialchars($rsvp['EventName']) ?></a></td>
+						<td><?= date('Y-m-d', strtotime($rsvp['EventStart'])) ?></td>
+						<?php if (!empty($IsOwnProfile)): ?>
+						<td>
+							<form method="post" action="<?= UIR ?>Player/profile/<?= $Player['MundaneId'] ?>" style="margin:0">
+								<input type="hidden" name="cancel_rsvp_detail_id" value="<?= $rsvp['EventCalendarDetailId'] ?>">
+								<button type="submit" class="pn-btn pn-btn-sm pn-btn-danger">Cancel RSVP</button>
+							</form>
+						</td>
+						<?php endif; ?>
+					</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php endif; ?>
+
 		<!-- Companies & Households -->
 		<div class="pn-card">
 			<h4><i class="fas fa-users"></i> Companies &amp; Households</h4>

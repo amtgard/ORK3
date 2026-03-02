@@ -241,6 +241,7 @@
 							<th>End</th>
 							<th>Location</th>
 							<th>Price</th>
+							<th>RSVPs</th>
 							<th>Links</th>
 						</tr>
 					</thead>
@@ -266,6 +267,7 @@
 							<td class="en-price-col">
 								<?= $cd['Price'] > 0 ? '$' . number_format((float)$cd['Price'], 2) : '<span style="color:#276749">Free</span>' ?>
 							</td>
+							<td style="text-align:center"><?= (int)($cd['_RsvpCount'] ?? 0) ?: '—' ?></td>
 							<td style="white-space:nowrap">
 								<a class="en-attend-link"
 									href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
@@ -280,7 +282,7 @@
 						</tr>
 						<?php if (!empty(trim($cd['Description'] ?? ''))): ?>
 						<tr>
-							<td colspan="5" style="background:#fafafa;color:#4a5568;font-size:12px;padding:6px 10px;">
+							<td colspan="6" style="background:#fafafa;color:#4a5568;font-size:12px;padding:6px 10px;">
 								<?= nl2br(htmlspecialchars(strip_tags($cd['Description']))) ?>
 							</td>
 						</tr>
@@ -310,6 +312,7 @@
 								<th>End</th>
 								<th>Location</th>
 								<th>Price</th>
+								<th>RSVPs</th>
 								<th>Links</th>
 							</tr>
 						</thead>
@@ -333,6 +336,7 @@
 								<td>
 									<?= $cd['Price'] > 0 ? '$' . number_format((float)$cd['Price'], 2) : 'Free' ?>
 								</td>
+								<td style="text-align:center"><?= (int)($cd['_RsvpCount'] ?? 0) ?: '—' ?></td>
 								<td style="white-space:nowrap">
 									<a class="en-attend-link"
 										href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">

@@ -409,6 +409,7 @@
 							<tr>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="date">Next Date</th>
+								<th data-sorttype="numeric">RSVPs</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -428,6 +429,7 @@
 								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
 									<?= 0 == $event['NextDate'] ? '' : date('M. j, Y', strtotime($event['NextDate'])) ?>
 								</td>
+								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpCount'] ?? 0) ?></td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
