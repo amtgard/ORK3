@@ -792,7 +792,7 @@ var PkConfig = {
 	httpService:    '<?= HTTP_SERVICE ?>',
 	parkId:         <?= (int)($park_id ?? 0) ?>,
 	parkName:       <?= json_encode($park_name ?? '') ?>,
-	kingdomId:      <?= (int)($park_info['KingdomInfo']['KingdomId'] ?? 0) ?>,
+	kingdomId:      <?= (int)($kingdom_id ?? 0) ?>,
 	canManage:      <?= !empty($CanManagePark) ? 'true' : 'false' ?>,
 	calEvents:      <?= json_encode(array_values($pkCalEvents ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
@@ -1023,20 +1023,21 @@ var PkConfig = {
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
 		<div class="pk-emod-header">
-			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Add New Occurrence</h3>
+			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
 		</div>
 		<div class="pk-emod-body">
-			<p class="pk-emod-hint">Select a template to get started. You'll configure the dates, location, and details on the next page.</p>
-			<label class="pk-emod-label">Event Template</label>
-			<select class="pk-emod-select" id="pk-template-select">
-				<option value="">Loading templates…</option>
-			</select>
+			<div class="pk-emod-field">
+				<label class="pk-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
+				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
+			</div>
+			<p class="pk-emod-hint" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
 		</div>
 		<div class="pk-emod-footer">
 			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
-			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkGoToEventCreate()" disabled>
-				Continue <i class="fas fa-arrow-right"></i>
+			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
+				Create Event <i class="fas fa-arrow-right"></i>
 			</button>
 		</div>
 	</div>

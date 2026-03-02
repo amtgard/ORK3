@@ -1194,32 +1194,41 @@ if (PnConfig.recError) {
    Kingdom Profile (KnConfig)
    =========================== */
 // ---- Map data (server-rendered) ----
-var knMapLocations, knCalEvents;
+var knMapLocations;
 if (typeof KnConfig !== 'undefined') {
 	knMapLocations = KnConfig.mapLocations;
-	knCalEvents    = KnConfig.calEvents;
 }
-var knMapLoaded   = false;
-var knCalLoaded   = false;
-var knCalendar    = null;
-var knCalShowPark = false; // mirrors the park-toggle button state
+var knMapLoaded = false;
+var knCalLoaded = false;
+var knCalendar  = null;
+var knFilters   = { 'kingdom-event': true, 'park-event': true, 'park-day': false };
+var knCalCache  = {}; // raw events keyed by "startISO|endISO" — avoids re-fetching on filter toggle
 
 function knSetEventsView(view) {
 	if (view === 'calendar') {
 		$('#kn-events-list-view').hide();
-		$('#kn-events-cal').show();
+		$('#kn-events-cal-wrap').show();
 		$('#kn-ev-view-cal').addClass('kn-view-active');
 		$('#kn-ev-view-list').removeClass('kn-view-active');
-		$('#kn-park-toggle').hide();
 		knInitCalendar();
 	} else {
-		$('#kn-events-cal').hide();
+		$('#kn-events-cal-wrap').hide();
 		$('#kn-events-list-view').show();
 		$('#kn-ev-view-list').addClass('kn-view-active');
 		$('#kn-ev-view-cal').removeClass('kn-view-active');
-		$('#kn-park-toggle').show();
 	}
 	try { localStorage.setItem('kn_events_view', view); } catch(e) {}
+}
+
+function knToggleFilter(btn, type) {
+	knFilters[type] = !knFilters[type];
+	var isOn = knFilters[type];
+	$(btn).toggleClass('kn-filter-on', isOn);
+	$('#kn-events-table, #kn-tournaments-table').find('tr[data-type="' + type + '"]').css('display', isOn ? '' : 'none');
+	knPaginate($('#kn-events-table'), 1);
+	knPaginate($('#kn-tournaments-table'), 1);
+	// Sync calendar — refetch re-runs our events function which re-applies knFilters from cache (no extra HTTP request)
+	if (knCalendar) knCalendar.refetchEvents();
 }
 
 function knInitCalendar() {
@@ -1246,12 +1255,7 @@ function knRenderCalendar() {
 	var el = document.getElementById('kn-events-cal');
 	if (!el || typeof FullCalendar === 'undefined') return;
 
-	// Build event list, filtering park events per current toggle state
-	var events = knCalEvents.filter(function(e) {
-		return !e.isPark || knCalShowPark;
-	}).map(function(e) {
-		return { title: e.title, start: e.start, url: e.url, color: e.color };
-	});
+	var CALENDAR_URL = KnConfig.uir + 'KingdomAjax/calendar/' + KnConfig.kingdomId;
 
 	knCalendar = new FullCalendar.Calendar(el, {
 		initialView: 'dayGridMonth',
@@ -1261,7 +1265,38 @@ function knRenderCalendar() {
 			right:  'dayGridMonth,listMonth'
 		},
 		height: 'auto',
-		events: events,
+		lazyFetching: true,
+		loading: function(isLoading) {
+			var spinner = document.getElementById('kn-cal-loading');
+			if (spinner) spinner.style.display = isLoading ? 'flex' : 'none';
+		},
+		events: function(fetchInfo, successCallback, failureCallback) {
+			var cacheKey = fetchInfo.startStr + '|' + fetchInfo.endStr;
+			var raw = knCalCache[cacheKey];
+			if (raw) {
+				// Re-apply filter from cache — no HTTP request needed
+				successCallback(raw.filter(function(e) {
+					if (e.type === 'park-day') return knFilters['park-day'];
+					if (e.type === 'park-event') return knFilters['park-event'];
+					return knFilters['kingdom-event'];
+				}));
+				return;
+			}
+			$.getJSON(CALENDAR_URL, { start: fetchInfo.startStr.slice(0, 10), end: fetchInfo.endStr.slice(0, 10) },
+				function(data) {
+					if (data && data.status === 0) {
+						knCalCache[cacheKey] = data.events || [];
+						successCallback((data.events || []).filter(function(e) {
+							if (e.type === 'park-day') return knFilters['park-day'];
+							if (e.type === 'park-event') return knFilters['park-event'];
+							return knFilters['kingdom-event'];
+						}));
+					} else {
+						failureCallback((data && data.error) ? data.error : 'Failed to load events');
+					}
+				}
+			).fail(function() { failureCallback('Network error loading events'); });
+		},
 		eventClick: function(info) {
 			info.jsEvent.preventDefault();
 			if (info.event.url) window.location.href = info.event.url;
@@ -1450,29 +1485,9 @@ function knPageRange(current, total) {
 	return pages;
 }
 
-function knToggleParkItems(btn) {
-	var isOn = !$('#kn-events-table').data('show-park');
-	$('#kn-events-table').data('show-park', isOn);
-	$('#kn-tournaments-table').data('show-park', isOn);
-	knPaginate($('#kn-events-table'), 1);
-	knPaginate($('#kn-tournaments-table'), 1);
-	$(btn).css({ background: isOn ? '#276749' : '#fff', color: isOn ? '#fff' : '#718096', 'border-color': isOn ? '#276749' : '#cbd5e0' });
-	$('#kn-park-toggle-label').text(isOn ? 'ON' : 'OFF').css('color', isOn ? 'rgba(255,255,255,0.75)' : '#a0aec0');
-	// Keep calendar park-event state in sync
-	knCalShowPark = isOn;
-	if (knCalendar) {
-		var filteredEvents = knCalEvents.filter(function(e) { return !e.isPark || knCalShowPark; })
-			.map(function(e) { return { title: e.title, start: e.start, url: e.url, color: e.color }; });
-		knCalendar.removeAllEvents();
-		knCalendar.addEventSource(filteredEvents);
-	}
-}
 
 function knPaginate($table, page) {
 	var pageSize = 25;
-	// Enforce park-row visibility before counting
-	var showPark = !!$table.data('show-park');
-	$table.find('tbody tr.kn-park-row').css('display', showPark ? '' : 'none');
 	var $rows = $table.find('tbody tr').filter(function() { return $(this).css('display') !== 'none'; });
 	var total = $rows.length;
 	if (total === 0) { $table.next('.kn-pagination').empty().hide(); return; }
@@ -1585,6 +1600,11 @@ $(document).ready(function() {
 	// ---- Events view toggle (list / calendar) ----
 	$('#kn-ev-view-list').on('click', function() { knSetEventsView('list'); });
 	$('#kn-ev-view-cal').on('click',  function() { knSetEventsView('calendar'); });
+
+	// ---- Events filter toggles ----
+	$(document).on('click', '.kn-filter-toggle', function() {
+		knToggleFilter(this, $(this).data('filter'));
+	});
 	// Restore preference, defaulting to list
 	try {
 		knSetEventsView(localStorage.getItem('kn_events_view') || 'list');
@@ -2011,41 +2031,23 @@ $(document).ready(function() {
 })();
 (function() {
 	if (typeof KnConfig === 'undefined') return;
-	var knEventKingdomId = KnConfig.kingdomId;
-	var knEventUIR = KnConfig.uir;
+
+	var CREATE_URL = KnConfig.uir + 'EventAjax/create';
+
+	function knEvFeedback(msg) {
+		var el = document.getElementById('kn-emod-feedback');
+		el.textContent = msg; el.style.display = '';
+	}
 
 	window.knOpenEventModal = function() {
-		var sel = document.getElementById('kn-template-select');
-		var btn = document.getElementById('kn-emod-go-btn');
-		sel.innerHTML = '<option value="">Loading…</option>';
-		btn.disabled = true;
-
-		$.getJSON(KnConfig.httpService + 'Search/SearchService.php',
-			{ Action: 'Search/Event', kingdom_id: knEventKingdomId, limit: 50 },
-			function(data) {
-				if (!data || !data.length) {
-					sel.innerHTML = '<option value="">No templates found for this kingdom</option>';
-					return;
-				}
-				sel.innerHTML = '<option value="">— Select a template —</option>';
-				$.each(data, function(i, v) {
-					var label = v.Name + (v.ParkName ? ' (' + v.ParkName + ')' : '');
-					var opt = document.createElement('option');
-					opt.value = v.EventId;
-					opt.textContent = label;
-					sel.appendChild(opt);
-				});
-			}
-		).fail(function() {
-			sel.innerHTML = '<option value="">Error loading templates</option>';
-		});
-
-		sel.addEventListener('change', function() {
-			btn.disabled = !this.value;
-		});
-
+		document.getElementById('kn-event-name').value     = '';
+		document.getElementById('kn-event-park-name').value = '';
+		document.getElementById('kn-event-park-id').value   = '';
+		document.getElementById('kn-emod-feedback').style.display = 'none';
+		document.getElementById('kn-emod-go-btn').disabled  = true;
 		document.getElementById('kn-event-modal').classList.add('kn-emod-open');
 		document.body.style.overflow = 'hidden';
+		setTimeout(function() { document.getElementById('kn-event-name').focus(); }, 50);
 	};
 
 	window.knCloseEventModal = function() {
@@ -2053,20 +2055,53 @@ $(document).ready(function() {
 		document.body.style.overflow = '';
 	};
 
-	window.knGoToEventCreate = function() {
-		var v = document.getElementById('kn-template-select').value;
-		if (v) window.location.href = knEventUIR + 'Event/create/' + v;
+	window.knCreateEvent = function() {
+		var name   = document.getElementById('kn-event-name').value.trim();
+		var parkId = parseInt(document.getElementById('kn-event-park-id').value) || 0;
+		if (!name) return;
+		var btn = document.getElementById('kn-emod-go-btn');
+		btn.disabled = true;
+		$.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId },
+			function(r) {
+				if (r && r.status === 0) {
+					var url = KnConfig.uir + 'Event/create/' + r.eventId;
+					if (parkId > 0) url += '/' + parkId;
+					window.location.href = url;
+				} else {
+					knEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
+					btn.disabled = false;
+				}
+			}, 'json'
+		).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
 	};
 
 	$(document).ready(function() {
+		$('#kn-event-name').on('input', function() {
+			document.getElementById('kn-emod-go-btn').disabled = !this.value.trim();
+		}).on('keydown', function(e) {
+			if (e.key === 'Enter' && !document.getElementById('kn-emod-go-btn').disabled) knCreateEvent();
+		});
+
+		$('#kn-event-park-name').autocomplete({
+			source: function(req, res) {
+				$.getJSON(KnConfig.httpService + 'Search/SearchService.php',
+					{ Action: 'Search/Park', name: req.term, kingdom_id: KnConfig.kingdomId, limit: 8 },
+					function(data) { res($.map(data || [], function(v) { return { label: v.Name, value: v.ParkId }; })); }
+				);
+			},
+			focus:  function(e, ui) { $('#kn-event-park-name').val(ui.item.label); return false; },
+			select: function(e, ui) { $('#kn-event-park-name').val(ui.item.label); $('#kn-event-park-id').val(ui.item.value); return false; },
+			change: function(e, ui) { if (!ui.item) $('#kn-event-park-id').val(''); return false; },
+			delay: 250, minLength: 2
+		});
+
 		var knEvtOverlay = document.getElementById('kn-event-modal');
 		if (knEvtOverlay) {
-			knEvtOverlay.addEventListener('click', function(e) {
-				if (e.target === this) knCloseEventModal();
-			});
+			knEvtOverlay.addEventListener('click', function(e) { if (e.target === this) knCloseEventModal(); });
 		}
 		document.addEventListener('keydown', function(e) {
-			if (e.key === 'Escape' && document.getElementById('kn-event-modal')) knCloseEventModal();
+			if (e.key === 'Escape' && document.getElementById('kn-event-modal') &&
+				document.getElementById('kn-event-modal').classList.contains('kn-emod-open')) knCloseEventModal();
 		});
 	});
 })();
@@ -3663,42 +3698,21 @@ $(document).ready(function() {
 })();
 (function() {
 	if (typeof PkConfig === 'undefined') return;
-	var pkEventKingdomId = PkConfig.kingdomId;
-	var pkEventParkId = PkConfig.parkId;
-	var pkEventUIR = PkConfig.uir;
+
+	var CREATE_URL = PkConfig.uir + 'EventAjax/create';
+
+	function pkEvFeedback(msg) {
+		var el = document.getElementById('pk-emod-feedback');
+		el.textContent = msg; el.style.display = '';
+	}
 
 	window.pkOpenEventModal = function() {
-		var sel = document.getElementById('pk-template-select');
-		var btn = document.getElementById('pk-emod-go-btn');
-		sel.innerHTML = '<option value="">Loading…</option>';
-		btn.disabled = true;
-
-		$.getJSON(PkConfig.httpService + 'Search/SearchService.php',
-			{ Action: 'Search/Event', kingdom_id: pkEventKingdomId, limit: 50 },
-			function(data) {
-				if (!data || !data.length) {
-					sel.innerHTML = '<option value="">No templates found for this kingdom</option>';
-					return;
-				}
-				sel.innerHTML = '<option value="">— Select a template —</option>';
-				$.each(data, function(i, v) {
-					var label = v.Name + (v.ParkName ? ' (' + v.ParkName + ')' : '');
-					var opt = document.createElement('option');
-					opt.value = v.EventId;
-					opt.textContent = label;
-					sel.appendChild(opt);
-				});
-			}
-		).fail(function() {
-			sel.innerHTML = '<option value="">Error loading templates</option>';
-		});
-
-		sel.addEventListener('change', function() {
-			btn.disabled = !this.value;
-		});
-
+		document.getElementById('pk-event-name').value = '';
+		document.getElementById('pk-emod-feedback').style.display = 'none';
+		document.getElementById('pk-emod-go-btn').disabled = true;
 		document.getElementById('pk-event-modal').classList.add('pk-emod-open');
 		document.body.style.overflow = 'hidden';
+		setTimeout(function() { document.getElementById('pk-event-name').focus(); }, 50);
 	};
 
 	window.pkCloseEventModal = function() {
@@ -3706,20 +3720,37 @@ $(document).ready(function() {
 		document.body.style.overflow = '';
 	};
 
-	window.pkGoToEventCreate = function() {
-		var v = document.getElementById('pk-template-select').value;
-		if (v) window.location.href = pkEventUIR + 'Event/create/' + v + '/' + pkEventParkId;
+	window.pkCreateEvent = function() {
+		var name = document.getElementById('pk-event-name').value.trim();
+		if (!name) return;
+		var btn = document.getElementById('pk-emod-go-btn');
+		btn.disabled = true;
+		$.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId },
+			function(r) {
+				if (r && r.status === 0) {
+					window.location.href = PkConfig.uir + 'Event/create/' + r.eventId + '/' + PkConfig.parkId;
+				} else {
+					pkEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
+					btn.disabled = false;
+				}
+			}, 'json'
+		).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
 	};
 
 	$(document).ready(function() {
+		$('#pk-event-name').on('input', function() {
+			document.getElementById('pk-emod-go-btn').disabled = !this.value.trim();
+		}).on('keydown', function(e) {
+			if (e.key === 'Enter' && !document.getElementById('pk-emod-go-btn').disabled) pkCreateEvent();
+		});
+
 		var pkEvtOverlay = document.getElementById('pk-event-modal');
 		if (pkEvtOverlay) {
-			pkEvtOverlay.addEventListener('click', function(e) {
-				if (e.target === this) pkCloseEventModal();
-			});
+			pkEvtOverlay.addEventListener('click', function(e) { if (e.target === this) pkCloseEventModal(); });
 		}
 		document.addEventListener('keydown', function(e) {
-			if (e.key === 'Escape' && document.getElementById('pk-event-modal')) pkCloseEventModal();
+			if (e.key === 'Escape' && document.getElementById('pk-event-modal') &&
+				document.getElementById('pk-event-modal').classList.contains('pk-emod-open')) pkCloseEventModal();
 		});
 	});
 })();

@@ -59,6 +59,26 @@
 				</div>
 			</div>
 
+			<!-- Home Kingdom / Home Park quick-links -->
+<?php if ($this->__session->token != null) : ?>
+<?php
+	global $DB;
+	$__huid = (int)$this->__session->user_id;
+	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name FROM ork_mundane m JOIN ork_park p ON m.park_id = p.park_id JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
+	$__home = ($__homeResult && $__homeResult->Next()) ? ['park_id' => $__homeResult->park_id, 'park_name' => $__homeResult->park_name, 'kingdom_id' => $__homeResult->kingdom_id, 'kingdom_name' => $__homeResult->kingdom_name] : null;
+?>
+<?php if ($__home) : ?>
+			<a href='<?=UIR?>Kingdom/index/<?=(int)$__home['kingdom_id']?>' class='nav-home-btn' title='My Kingdom: <?=htmlspecialchars($__home['kingdom_name'])?>'>
+				<i class='fas fa-chess-rook'></i>
+				<span class='nav-home-label'><?=htmlspecialchars($__home['kingdom_name'])?></span>
+			</a>
+			<a href='<?=UIR?>Park/index/<?=(int)$__home['park_id']?>' class='nav-home-btn' title='My Park: <?=htmlspecialchars($__home['park_name'])?>'>
+				<i class='fas fa-tree'></i>
+				<span class='nav-home-label'><?=htmlspecialchars($__home['park_name'])?></span>
+			</a>
+<?php endif; ?>
+<?php endif; ?>
+
 			<!-- Documentation -->
 			<a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target='_blank' class='nav-icon-btn' title='Documentation'><i class='fas fa-book'></i></a>
 

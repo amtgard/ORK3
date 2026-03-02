@@ -6569,6 +6569,36 @@ p {
     background: rgba(255,255,255,0.12);
     text-decoration: none;
 }
+.nav-home-btn {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    border-radius: 6px;
+    color: #e2e8f0 !important;
+    cursor: pointer;
+    font-size: 14px;
+    text-decoration: none;
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 0 9px;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+.nav-home-btn:hover { background: rgba(255,255,255,0.12); text-decoration: none; }
+.nav-home-label {
+    font-size: 12px;
+    font-weight: 500;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin-left: 0;
+    transition: max-width 0.3s ease, opacity 0.2s ease, margin-left 0.3s ease;
+}
+.nav-home-btn:hover .nav-home-label {
+    max-width: 260px;
+    opacity: 1;
+    margin-left: 6px;
+}
 #nav-search-wrap {
     display: flex;
     align-items: center;

@@ -138,7 +138,7 @@
 			}
 		});
 <?php endif ?>	
-<?php if (!isset($this->__session->park_id)) : ?>
+<?php if (!valid_id($this->__session->park_id)) : ?>
 		$( "#ParkName" ).autocomplete({
 			source: function( request, response ) {
 				kingdom_id = $('#KingdomId').val();
@@ -180,13 +180,11 @@
 		});
 		$( "#CreateParkName" ).autocomplete({
 			source: function( request, response ) {
-				kingdom_id = $('#CreateKingdomId').val();
 				$.getJSON(
 					"<?=HTTP_SERVICE ?>Search/SearchService.php",
 					{
 						Action: 'Search/Park',
 						name: request.term,
-						kingdom_id: <?=((isset($this->__session->kingdom_id) || isset($this->__session->park_id))?$this->__session->kingdom_id:"kingdom_id") ?>,
 						limit: 6
 					},
 					function( data ) {
@@ -384,8 +382,8 @@
 			<span><input type='text' value='<?=$Admin_manageevent['CreateKingdomName'] ?>' name='CreateKingdomName' id='CreateKingdomName' /></span>
 		</div>
 <?php endif ?>
-<?php if (!isset($this->__session->park_id)) : ?>
-		<div class='kingdom-park-event'
+<?php if (!valid_id($this->__session->park_id)) : ?>
+		<div class='kingdom-park-event'>
 			<span>Park:</span>
 			<span><input type='text' value='<?=$Admin_manageevent['CreateParkName'] ?>' name='CreateParkName' id='CreateParkName' /></span>
 		</div>
@@ -407,7 +405,7 @@
 		<input type='hidden' name='CreateUnitId' id='CreateUnitId' value='<?=(isset($CreateUnitId)?$CreateUnitId:$Admin_manageevent['CreateUnitId']) ?>' />
 		<input type='hidden' name='CreateKingdomId' id='CreateKingdomId' value='<?=(isset($this->__session->kingdom_id)?$this->__session->kingdom_id:$Admin_manageevent['CreateKingdomId']) ?>' />
 		<input type='hidden' name='CreateMundaneId' id='CreateMundaneId' value='<?=isset($CreateMundaneId)?$CreateMundaneId:$Admin_manageevent['CreateMundaneId'] ?>' />
-		<input type='hidden' name='CreateParkId' id='CreateParkId' value='<?=(isset($this->__session->park_id)?$this->__session->park_id:$Admin_manageevent['CreateParkId']) ?>' />
+		<input type='hidden' name='CreateParkId' id='CreateParkId' value='<?=(valid_id($this->__session->park_id)?$this->__session->park_id:$Admin_manageevent['CreateParkId']) ?>' />
 	</form>
 </div>
 
@@ -420,7 +418,7 @@
 			<span><input type='text' value='<?=$Admin_manageevent['KingdomName'] ?>' name='KingdomName' id='KingdomName' /></span>
 		</div>
 <?php endif ?>
-<?php if (!isset($this->__session->park_id)) : ?>
+<?php if (!valid_id($this->__session->park_id)) : ?>
 		<div>
 			<span>Park:</span>
 			<span><input type='text' value='<?=$Admin_manageevent['ParkName'] ?>' name='ParkName' id='ParkName' /></span>

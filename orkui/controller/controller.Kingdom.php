@@ -114,7 +114,7 @@ class Controller_Kingdom extends Controller {
 		$kid = (int)$kingdom_id;
 
 		$evtSql = "
-			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry
+			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr, cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
@@ -136,12 +136,54 @@ class Controller_Kingdom extends Controller {
 						'NextDate'     => $evtResult->event_start,
 						'NextDetailId' => (int)$evtResult->next_detail_id,
 						'HasHeraldry'  => (int)$evtResult->has_heraldry,
+						'ParkAbbr'     => $evtResult->park_abbr,
 						'_IsParkEvent' => (int)$evtResult->park_id > 0,
 					];
 				}
 			}
 		}
 		$this->data['event_summary'] = $eventSummary;
+
+		$pdSql = "
+			SELECT pd.parkday_id, pd.park_id, pd.recurrence, pd.week_day,
+			       pd.week_of_month, pd.month_day, pd.time, pd.purpose, p.name AS park_name, p.abbreviation AS park_abbr
+			FROM ork_parkday pd
+			JOIN ork_park p ON p.park_id = pd.park_id
+			WHERE p.kingdom_id = {$kid}
+			  AND p.active = 'Active'
+			ORDER BY p.name, pd.week_day, pd.time";
+		$pdResult = $DB->DataSet($pdSql);
+		$parkDays = [];
+		if ($pdResult && $pdResult->Size() > 0) {
+			while ($pdResult->Next()) {
+				switch ($pdResult->recurrence) {
+					case 'weekly':       $recText = 'Every ' . $pdResult->week_day; break;
+					case 'week-of-month': $recText = 'Every ' . (int)$pdResult->week_of_month . '. ' . $pdResult->week_day; break;
+					case 'monthly':      $recText = 'Monthly, day ' . (int)$pdResult->month_day; break;
+					default:             $recText = ucfirst($pdResult->recurrence);
+				}
+				switch ($pdResult->purpose) {
+					case 'fighter-practice': $purposeLabel = 'Fighter Practice'; break;
+					case 'arts-day':         $purposeLabel = 'A&S Day'; break;
+					case 'park-day':         $purposeLabel = 'Park Day'; break;
+					default:                 $purposeLabel = ucwords(str_replace('-', ' ', $pdResult->purpose));
+				}
+				$parkDays[] = [
+					'ParkDayId'   => (int)$pdResult->parkday_id,
+					'ParkId'      => (int)$pdResult->park_id,
+					'ParkName'    => $pdResult->park_name,
+					'ParkAbbr'    => $pdResult->park_abbr,
+					'Schedule'    => $recText,
+					'Purpose'     => $purposeLabel,
+					'Time'        => $pdResult->time,
+					'Recurrence'  => $pdResult->recurrence,
+					'WeekDay'     => $pdResult->week_day,
+					'WeekOfMonth' => (int)$pdResult->week_of_month,
+					'MonthDay'    => (int)$pdResult->month_day,
+				];
+			}
+		}
+		$this->data['kingdom_park_days'] = $parkDays;
 
 		$pcSql = "
 			SELECT
