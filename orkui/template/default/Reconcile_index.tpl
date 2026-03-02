@@ -19,6 +19,9 @@ $non_historical_awards = array_filter((array)$Details['Awards'], function($a) {
 		to automatically number ladder awards in chronological order.
 	</p>
 	<p><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>'>&larr; Back to Admin Player Page</a></p>
+	<p style='background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:8px 12px;color:#5d4037;'>
+		You can reconcile as many awards as you like. Any awards unchanged will not be impacted by saving your work.
+	</p>
 </div>
 
 <?php if (empty($historical_awards)) : ?>
@@ -108,7 +111,7 @@ foreach ($historical_awards as $award) {
 		</tbody>
 	</table>
 	<div style='text-align:right;padding:8px 0 4px 0;'>
-		<input type='submit' value='Save All' style='font-size:0.95em;padding:4px 14px;' />
+		<input type='submit' value='Save This Section' style='font-size:0.95em;padding:4px 14px;' />
 	</div>
 </div>
 <?php endforeach ?>
