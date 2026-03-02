@@ -58,6 +58,14 @@ class Model_Player extends Model {
 		return $this->Player->UpdateAward($request);
 	}
 
+	function reconcile_player_award($request) {
+		return $this->Player->ReconcileAward($request);
+	}
+
+	function auto_assign_ranks($request) {
+		return $this->Player->AutoAssignRanks($request);
+	}
+
 	function add_dues($request) {
 		return $this->Player->AddDues($request);
 	}

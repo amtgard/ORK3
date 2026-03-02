@@ -194,6 +194,7 @@ $server->wsdl->addComplexType(
 		'',
 		array(
 				'AwardsId'=>array('name'=>'AwardsId','type'=>'xsd:int'),
+				'KingdomAwardId'=>array('name'=>'KingdomAwardId','type'=>'xsd:int'),
 				'AwardId'=>array('name'=>'AwardId','type'=>'xsd:int'),
 				'MundaneId'=>array('name'=>'MundaneId','type'=>'xsd:int'),
 				'Rank'=>array('name'=>'Rank','type'=>'xsd:int'),
@@ -513,6 +514,44 @@ $server->wsdl->addComplexType(
 				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
 				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
 				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int')
+			)
+	);
+
+/// ReconcileAward()
+
+$server->wsdl->addComplexType(
+		'ReconcileAwardRequest',
+		'complexType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
+				'AwardsId'=>array('name'=>'AwardsId','type'=>'xsd:int'),
+				'KingdomAwardId'=>array('name'=>'KingdomAwardId','type'=>'xsd:int'),
+				'CustomName'=>array('name'=>'CustomName','type'=>'xsd:string'),
+				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int'),
+				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
+				'EventId'=>array('name'=>'EventId','type'=>'xsd:int'),
+				'Rank'=>array('name'=>'Rank','type'=>'xsd:int'),
+				'Date'=>array('name'=>'Date','type'=>'xsd:dateTime'),
+				'GivenById'=>array('name'=>'GivenById','type'=>'xsd:int'),
+				'Note'=>array('name'=>'Note','type'=>'xsd:string')
+			)
+	);
+
+/// AutoAssignRanks()
+
+$server->wsdl->addComplexType(
+		'AutoAssignRanksRequest',
+		'complexType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
+				'MundaneId'=>array('name'=>'MundaneId','type'=>'xsd:int'),
+				'KingdomAwardId'=>array('name'=>'KingdomAwardId','type'=>'xsd:int')
 			)
 	);
 ?>

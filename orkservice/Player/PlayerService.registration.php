@@ -114,4 +114,18 @@ $server->register(
 		$namespace
 	);
 
+$server->register(
+		'Player.ReconcileAward',
+		array('ReconcileAwardRequest'=>'tns:ReconcileAwardRequest'),
+		array('return' => 'tns:StatusType'),
+		$namespace
+	);
+
+$server->register(
+		'Player.AutoAssignRanks',
+		array('AutoAssignRanksRequest'=>'tns:AutoAssignRanksRequest'),
+		array('return' => 'tns:StatusType'),
+		$namespace
+	);
+
 ?>

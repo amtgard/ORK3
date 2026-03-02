@@ -137,6 +137,20 @@ class Controller_Player extends Controller {
 								'EventId' => valid_id($this->request->Player_index->EventId)?$this->request->Player_index->EventId:0
 							));
 						break;
+					case 'reconcileaward':
+						$r = $this->Player->reconcile_player_award(array(
+								'Token' => $this->session->token,
+								'AwardsId' => $roastbeef,
+								'KingdomAwardId' => $this->request->Player_index->KingdomAwardId,
+								'Rank' => $this->request->Player_index->Rank,
+								'Date' => $this->request->Player_index->Date,
+								'GivenById' => $this->request->Player_index->GivenById,
+								'Note' => $this->request->Player_index->Note,
+								'ParkId' => valid_id($this->request->Player_index->ParkId)?$this->request->Player_index->ParkId:0,
+								'KingdomId' => valid_id($this->request->Player_index->KingdomId)?$this->request->Player_index->KingdomId:0,
+								'EventId' => valid_id($this->request->Player_index->EventId)?$this->request->Player_index->EventId:0
+							));
+						break;
 					case 'addrecommendation':
 						$r = $this->Player->add_player_recommendation(array(
 								'Token' => $this->session->token,
