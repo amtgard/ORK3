@@ -308,7 +308,7 @@
 			<?php // ---- Details Tab ---- ?>
 			<div class="ev-tab-panel ev-tab-visible" id="ev-tab-details">
 				<?php if ($hasDescription): ?>
-					<div class="ev-description"><?= $description ?></div>
+					<div class="ev-description"><?= nl2br(htmlspecialchars(rawurldecode($description))) ?></div>
 				<?php else: ?>
 					<div class="ev-empty">
 						<i class="fas fa-file-alt" style="margin-right:6px"></i>No description provided
