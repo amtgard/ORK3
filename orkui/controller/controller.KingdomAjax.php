@@ -252,4 +252,129 @@ class Controller_KingdomAjax extends Controller {
 		}
 		exit;
 	}
+
+	public function calendar($p = null) {
+		header('Content-Type: application/json');
+		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
+
+		if (!valid_id($kingdom_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
+			exit;
+		}
+
+		$start = preg_replace('/[^0-9\-]/', '', substr($_GET['start'] ?? '', 0, 10));
+		$end   = preg_replace('/[^0-9\-]/', '', substr($_GET['end']   ?? '', 0, 10));
+
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid date range']);
+			exit;
+		}
+
+		$kid    = (int)$kingdom_id;
+		global $DB;
+		$events = [];
+
+		// Events in range (all calendar-detail occurrences within window)
+		$evtSql = "
+			SELECT e.event_id, e.name, e.park_id, p.abbreviation AS park_abbr,
+			       cd.event_start, cd.event_calendardetail_id AS detail_id
+			FROM ork_event e
+			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			WHERE e.kingdom_id = {$kid}
+			  AND cd.event_start >= '{$start}'
+			  AND cd.event_start < '{$end}'
+			ORDER BY cd.event_start";
+		$evtResult = $DB->DataSet($evtSql);
+		if ($evtResult && $evtResult->Size() > 0) {
+			while ($evtResult->Next()) {
+				$isPark = (int)$evtResult->park_id > 0;
+				$abbr   = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
+				$eid    = (int)$evtResult->event_id;
+				$did    = (int)$evtResult->detail_id;
+				$events[] = [
+					'title' => $abbr . $evtResult->name,
+					'start' => $evtResult->event_start,
+					'url'   => UIR . ($did ? "Event/detail/{$eid}/{$did}" : "Event/template/{$eid}"),
+					'color' => $isPark ? '#6b46c1' : '#0891b2',
+					'type'  => $isPark ? 'park-event' : 'kingdom-event',
+				];
+			}
+		}
+
+		// Park day recurrences expanded for the requested range
+		$pdSql = "
+			SELECT pd.park_id, pd.recurrence, pd.week_day, pd.week_of_month,
+			       pd.month_day, pd.time, pd.purpose, p.abbreviation AS park_abbr
+			FROM ork_parkday pd
+			JOIN ork_park p ON p.park_id = pd.park_id
+			WHERE p.kingdom_id = {$kid} AND p.active = 'Active'";
+		$pdResult = $DB->DataSet($pdSql);
+		if ($pdResult && $pdResult->Size() > 0) {
+			$dayNames   = ['Sunday'=>0,'Monday'=>1,'Tuesday'=>2,'Wednesday'=>3,'Thursday'=>4,'Friday'=>5,'Saturday'=>6];
+			$rangeStart = new DateTime($start);
+			$rangeEnd   = new DateTime($end);
+			while ($pdResult->Next()) {
+				switch ($pdResult->purpose) {
+					case 'fighter-practice': $purposeLabel = 'Fighter Practice'; break;
+					case 'arts-day':         $purposeLabel = 'A&S Day'; break;
+					case 'park-day':         $purposeLabel = 'Park Day'; break;
+					default:                 $purposeLabel = ucwords(str_replace('-', ' ', $pdResult->purpose));
+				}
+				$abbr    = $pdResult->park_abbr ? $pdResult->park_abbr . ': ' : '';
+				$title   = $abbr . $purposeLabel;
+				$url     = UIR . 'Park/profile/' . (int)$pdResult->park_id;
+				$timeStr = ($pdResult->time && $pdResult->time !== '00:00:00') ? 'T' . $pdResult->time : '';
+				$rec     = $pdResult->recurrence;
+
+				if ($rec === 'weekly') {
+					$targetWd = $dayNames[$pdResult->week_day] ?? -1;
+					if ($targetWd < 0) continue;
+					$cur = clone $rangeStart;
+					while ((int)$cur->format('w') !== $targetWd) { $cur->modify('+1 day'); }
+					while ($cur < $rangeEnd) {
+						$events[] = ['title'=>$title,'start'=>$cur->format('Y-m-d').$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
+						$cur->modify('+7 days');
+					}
+				} elseif ($rec === 'week-of-month') {
+					$targetWd = $dayNames[$pdResult->week_day] ?? -1;
+					$nth = (int)$pdResult->week_of_month;
+					if ($targetWd < 0 || $nth < 1) continue;
+					$curMonth = clone $rangeStart;
+					$curMonth->modify('first day of this month');
+					while ($curMonth < $rangeEnd) {
+						$cnt = 0; $cur = clone $curMonth;
+						$mn  = (int)$curMonth->format('n');
+						while ((int)$cur->format('n') === $mn) {
+							if ((int)$cur->format('w') === $targetWd && ++$cnt === $nth) {
+								if ($cur >= $rangeStart && $cur < $rangeEnd) {
+									$events[] = ['title'=>$title,'start'=>$cur->format('Y-m-d').$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
+								}
+								break;
+							}
+							$cur->modify('+1 day');
+						}
+						$curMonth->modify('first day of next month');
+					}
+				} elseif ($rec === 'monthly') {
+					$dayNum = (int)$pdResult->month_day;
+					if ($dayNum < 1) continue;
+					$curMonth = clone $rangeStart;
+					$curMonth->modify('first day of this month');
+					while ($curMonth < $rangeEnd) {
+						$mEnd = clone $curMonth; $mEnd->modify('last day of this month');
+						$d    = min($dayNum, (int)$mEnd->format('d'));
+						$cur  = new DateTime($curMonth->format('Y-m-') . sprintf('%02d', $d));
+						if ($cur >= $rangeStart && $cur < $rangeEnd) {
+							$events[] = ['title'=>$title,'start'=>$cur->format('Y-m-d').$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
+						}
+						$curMonth->modify('first day of next month');
+					}
+				}
+			}
+		}
+
+		echo json_encode(['status' => 0, 'events' => $events]);
+		exit;
+	}
 }

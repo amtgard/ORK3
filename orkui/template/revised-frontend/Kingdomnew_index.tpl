@@ -43,19 +43,6 @@
 	}
 	ksort($knPlayerPeriods);
 
-	// Pre-compute FullCalendar event data
-	$knCalEvents = [];
-	foreach ($eventList as $ev) {
-		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
-		$knCalEvents[] = [
-			'title'  => $ev['Name'],
-			'start'  => $ev['NextDate'],
-			'url'    => UIR . ($ev['NextDetailId'] ? 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Event/template/' . $ev['EventId']),
-			'isPark' => (bool)$ev['_IsParkEvent'],
-			'color'  => $ev['_IsParkEvent'] ? '#718096' : '#276749',
-		];
-	}
-
 	// Pre-compute map location data (server-side; embedded as JSON for lazy map init)
 	$knMapLocations = [];
 	foreach ((array)$map_parks as $p) {
@@ -382,14 +369,17 @@
 
 			<!-- Events Tab -->
 			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
-				<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
-					<div style="display:flex;align-items:center;gap:8px;">
+					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
-						<button id="kn-park-toggle" onclick="knToggleParkItems(this)" style="display:inline-flex;align-items:center;gap:5px;border:1px solid #cbd5e0;background:#fff;border-radius:5px;padding:5px 10px;font-size:12px;color:#718096;cursor:pointer;font-weight:500;">
-							<i class="fas fa-map-marker-alt"></i> Park Events &amp; Tournaments <span id="kn-park-toggle-label" style="font-weight:700;color:#a0aec0">OFF</span>
-						</button>
+						<div id="kn-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
+							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
+							<button class="kn-filter-toggle kn-filter-on" data-filter="kingdom-event">Kingdom Events</button>
+							<button class="kn-filter-toggle kn-filter-on" data-filter="park-event">Park Events</button>
+							<button class="kn-filter-toggle" data-filter="park-day">Park Days</button>
+						</div>
 						<?php if ($CanManageKingdom): ?>
 						<button onclick="knOpenEventModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
@@ -398,7 +388,12 @@
 					</div>
 				</div>
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
-				<div id="kn-events-cal" style="display:none"></div>
+				<div id="kn-events-cal-wrap" style="position:relative;display:none">
+					<div id="kn-cal-loading" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,0.88);z-index:10;align-items:center;justify-content:center;min-height:120px;">
+						<i class="fas fa-spinner fa-spin" style="font-size:28px;color:#a0aec0"></i>
+					</div>
+					<div id="kn-events-cal"></div>
+				</div>
 
 				<!-- List view -->
 				<div id="kn-events-list-view">
@@ -413,7 +408,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-								<tr class="kn-row-link<?= $event['_IsParkEvent'] ? ' kn-park-row' : '' ?>" style="<?= $event['_IsParkEvent'] ? 'display:none' : '' ?>" onclick="window.location.href='<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>'">
+								<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>" onclick="window.location.href='<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>'">
 									<td class="kn-col-nowrap">
 										<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
 											? date("M j, Y", strtotime($event['NextDate']))
@@ -429,6 +424,17 @@
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
 								</tr>
 							<?php endforeach; ?>
+						<?php foreach ($kingdom_park_days ?? [] as $day): ?>
+							<tr class="kn-row-link" data-type="park-day" style="display:none" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $day['ParkId'] ?>'">
+								<td class="kn-col-nowrap" style="color:#718096;font-style:italic"><?= htmlspecialchars($day['Schedule']) ?></td>
+								<td class="kn-col-nowrap">
+									<i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0"></i>
+									<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:#4a5568;margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
+									<?= htmlspecialchars($day['Purpose']) ?> — <?= date('g:i A', strtotime($day['Time'])) ?>
+								</td>
+								<td><?= htmlspecialchars($day['ParkName']) ?></td>
+							</tr>
+						<?php endforeach; ?>
 						</tbody>
 					</table>
 				<?php else: ?>
@@ -456,7 +462,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($tournamentList as $t): ?>
-								<tr class="kn-row-link<?= (int)($t['ParkId'] ?? 0) > 0 ? ' kn-park-row' : '' ?>" style="<?= (int)($t['ParkId'] ?? 0) > 0 ? 'display:none' : '' ?>" onclick="window.location.href='<?= UIR ?>Tournament/worksheet/<?= $t['TournamentId'] ?>'">
+								<tr class="kn-row-link" data-type="<?= (int)($t['ParkId'] ?? 0) > 0 ? 'park-event' : 'kingdom-event' ?>" onclick="window.location.href='<?= UIR ?>Tournament/worksheet/<?= $t['TournamentId'] ?>'">
 									<td class="kn-col-nowrap"><?= date("M j, Y", strtotime($t['DateTime'])) ?></td>
 									<td>
 										<a href="<?= UIR ?>Tournament/worksheet/<?= $t['TournamentId'] ?>"><?= htmlspecialchars($t['Name']) ?></a>
@@ -838,7 +844,6 @@ var KnConfig = {
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	calEvents:        <?= json_encode(array_values($knCalEvents ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? []) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
@@ -968,20 +973,25 @@ var KnConfig = {
 <div class="kn-emod-overlay" id="kn-event-modal">
 	<div class="kn-emod-box">
 		<div class="kn-emod-header">
-			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Add New Occurrence</h3>
+			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="kn-emod-close" onclick="knCloseEventModal()">&times;</button>
 		</div>
 		<div class="kn-emod-body">
-			<p class="kn-emod-hint">Select a template to get started. You'll configure the dates, location, and details on the next page.</p>
-			<label class="kn-emod-label">Event Template</label>
-			<select class="kn-emod-select" id="kn-template-select">
-				<option value="">Loading templates…</option>
-			</select>
+			<div class="kn-emod-field">
+				<label class="kn-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
+				<input type="text" class="kn-emod-input" id="kn-event-name" autocomplete="off" placeholder="e.g. Summer Midreign">
+			</div>
+			<div class="kn-emod-field" style="margin-top:12px">
+				<label class="kn-emod-label">Host Park <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(optional — leave blank for a kingdom-level event)</span></label>
+				<input type="text" class="kn-emod-input" id="kn-event-park-name" autocomplete="off" placeholder="Search parks…">
+				<input type="hidden" id="kn-event-park-id">
+			</div>
+			<div class="kn-emod-feedback" id="kn-emod-feedback" style="display:none"></div>
 		</div>
 		<div class="kn-emod-footer">
 			<button class="kn-emod-btn-cancel" onclick="knCloseEventModal()">Cancel</button>
-			<button class="kn-emod-btn-go" id="kn-emod-go-btn" onclick="knGoToEventCreate()" disabled>
-				Continue <i class="fas fa-arrow-right"></i>
+			<button class="kn-emod-btn-go" id="kn-emod-go-btn" onclick="knCreateEvent()" disabled>
+				Create Event <i class="fas fa-arrow-right"></i>
 			</button>
 		</div>
 	</div>
