@@ -143,6 +143,10 @@
 		}
 	}
 
+	// User's home kingdom ID for priority sorting (0 = not logged in / unknown)
+	var nsKid = <?= (isset($__home) && $__home) ? (int)$__home['kingdom_id'] : 0 ?>;
+	var nsUir = '<?= UIR ?>';
+
 	$(document).ready(function() {
 		// ---- Sidr mobile menu ----
 		$('#simple-menu').sidr();
@@ -155,7 +159,7 @@
 
 		// ---- Universal search ----
 		var nsTimer = null;
-		var svcUrl = '../orkservice/Search/SearchService.php';
+		var nsXhr   = null;
 
 		function nsEsc(str) {
 			return $('<span>').text(str || '').html();
@@ -164,35 +168,30 @@
 		function nsSearch(term) {
 			var $dd = $('#nav-search-dropdown');
 			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
-
-			var res = { players: [], parks: [], kingdoms: [], units: [] };
-			var pending = 4;
-
-			function finish() {
-				if (--pending === 0) nsRender(res);
-			}
-
-			$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: term, limit: 4 },
-				function(d) { res.players = Array.isArray(d) ? d : []; }).always(finish);
-			$.getJSON(svcUrl, { Action: 'Search/Park', name: term, limit: 4 },
-				function(d) { res.parks = Array.isArray(d) ? d : []; }).always(finish);
-			$.getJSON(svcUrl, { Action: 'Search/Kingdom', name: term, limit: 3 },
-				function(d) { res.kingdoms = Array.isArray(d) ? d : []; }).always(finish);
-			$.getJSON(svcUrl, { Action: 'Search/Unit', name: term, limit: 3 },
-				function(d) { res.units = Array.isArray(d) ? d : []; }).always(finish);
+			if (nsXhr) nsXhr.abort();
+			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid,
+				function(res) { nsRender(res || {}); }
+			).fail(function(xhr) {
+				if (xhr.statusText !== 'abort')
+					$dd.html('<div class="nsdd-empty">Search unavailable</div>');
+			});
 		}
 
 		function nsRender(res) {
 			var $dd = $('#nav-search-dropdown');
 			var html = '';
 			var sep = false;
+			var players  = res.players  || [];
+			var parks    = res.parks    || [];
+			var kingdoms = res.kingdoms || [];
+			var units    = res.units    || [];
 
-			if (res.players.length) {
+			if (players.length) {
 				html += '<div class="nsdd-section-header"><i class="fas fa-user fa-fw"></i>&ensp;Players</div>';
-				$.each(res.players.slice(0, 4), function(i, p) {
-					var lbl = (p.Persona && p.Persona.length) ? nsEsc(p.Persona) : '<em class="nsdd-no-value">No Persona</em>';
-					var sub = nsEsc((p.KAbbr || '') + ' \u00b7 ' + (p.ParkName || p.PAbbr || ''));
-					html += '<a class="nsdd-item" href="?Route=Player/index/' + p.MundaneId + '">' +
+				$.each(players, function(i, p) {
+					var lbl = p.name ? nsEsc(p.name) : '<em class="nsdd-no-value">No Persona</em>';
+					var sub = nsEsc((p.abbr || '') + ' \u00b7 ' + (p.park || ''));
+					html += '<a class="nsdd-item" href="?Route=Player/index/' + p.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-user fa-fw"></i></span>' +
 						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + lbl + '</div>' +
 						'<div class="nsdd-item-sub">' + sub + '</div></span></a>';
@@ -200,37 +199,37 @@
 				sep = true;
 			}
 
-			if (res.parks.length) {
+			if (parks.length) {
 				if (sep) html += '<div class="nsdd-divider"></div>';
 				html += '<div class="nsdd-section-header"><i class="fas fa-tree fa-fw"></i>&ensp;Parks</div>';
-				$.each(res.parks.slice(0, 3), function(i, p) {
-					html += '<a class="nsdd-item" href="?Route=Park/index/' + p.ParkId + '">' +
+				$.each(parks, function(i, p) {
+					html += '<a class="nsdd-item" href="?Route=Park/index/' + p.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-tree fa-fw"></i></span>' +
-						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(p.Name) + '</div></span></a>';
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(p.name) + '</div></span></a>';
 				});
 				sep = true;
 			}
 
-			if (res.kingdoms.length) {
+			if (kingdoms.length) {
 				if (sep) html += '<div class="nsdd-divider"></div>';
 				html += '<div class="nsdd-section-header"><i class="fas fa-crown fa-fw"></i>&ensp;Kingdoms</div>';
-				$.each(res.kingdoms.slice(0, 2), function(i, k) {
-					html += '<a class="nsdd-item" href="?Route=Kingdom/index/' + k.KingdomId + '">' +
+				$.each(kingdoms, function(i, k) {
+					html += '<a class="nsdd-item" href="?Route=Kingdom/index/' + k.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-crown fa-fw"></i></span>' +
-						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(k.Name) + '</div></span></a>';
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(k.name) + '</div></span></a>';
 				});
 				sep = true;
 			}
 
-			if (res.units.length) {
+			if (units.length) {
 				if (sep) html += '<div class="nsdd-divider"></div>';
 				html += '<div class="nsdd-section-header"><i class="fas fa-shield-alt fa-fw"></i>&ensp;Companies &amp; Households</div>';
-				$.each(res.units.slice(0, 3), function(i, u) {
-					var icon = (u.Type === 'Household') ? 'fas fa-home fa-fw' : 'fas fa-shield-alt fa-fw';
-					html += '<a class="nsdd-item" href="?Route=Unit/index/' + u.UnitId + '">' +
+				$.each(units, function(i, u) {
+					var icon = (u.unitType === 'Household') ? 'fas fa-home fa-fw' : 'fas fa-shield-alt fa-fw';
+					html += '<a class="nsdd-item" href="?Route=Unit/index/' + u.id + '">' +
 						'<span class="nsdd-item-icon"><i class="' + icon + '"></i></span>' +
-						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(u.Name) + '</div>' +
-						'<div class="nsdd-item-sub">' + nsEsc(u.Type || '') + '</div></span></a>';
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(u.name) + '</div>' +
+						'<div class="nsdd-item-sub">' + nsEsc(u.unitType || '') + '</div></span></a>';
 				});
 			}
 

@@ -1784,7 +1784,7 @@ $(document).ready(function() {
 		checkRequired();
 	});
 
-	// Player search autocomplete
+	// Player search autocomplete (kingdom members prioritized)
 	gid('kn-award-player-text').addEventListener('input', function() {
 		gid('kn-award-player-id').value = '';
 		checkRequired();
@@ -1792,7 +1792,7 @@ $(document).ready(function() {
 		if (term.length < 2) { gid('kn-award-player-results').classList.remove('kn-ac-open'); return; }
 		clearTimeout(playerTimer);
 		playerTimer = setTimeout(function() {
-			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=8';
+			var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&q=' + encodeURIComponent(term);
 			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
 				var el = gid('kn-award-player-results');
 				el.innerHTML = (data && data.length)
@@ -3060,7 +3060,9 @@ function pkRenderCalendar() {
 		},
 		height: 'auto',
 		events: pkCalEvents.map(function(e) {
-			return { title: e.title, start: e.start, url: e.url, color: e.color };
+			var ev = { title: e.title, start: e.start, url: e.url, color: e.color };
+			if (e.end) ev.end = e.end;
+			return ev;
 		}),
 		eventClick: function(info) {
 			info.jsEvent.preventDefault();
@@ -3451,7 +3453,7 @@ $(document).ready(function() {
 		checkRequired();
 	});
 
-	// Player search autocomplete
+	// Player search autocomplete (park members prioritized, then kingdom, then all)
 	gid('pk-award-player-text').addEventListener('input', function() {
 		gid('pk-award-player-id').value = '';
 		checkRequired();
@@ -3459,7 +3461,7 @@ $(document).ready(function() {
 		if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
 		clearTimeout(playerTimer);
 		playerTimer = setTimeout(function() {
-			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=8';
+			var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&q=' + encodeURIComponent(term);
 			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
 				var el = gid('pk-award-player-results');
 				el.innerHTML = (data && data.length)

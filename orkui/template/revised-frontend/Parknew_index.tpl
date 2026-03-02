@@ -60,12 +60,19 @@
 	$pkCalEvents = [];
 	foreach ($eventList as $ev) {
 		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
-		$pkCalEvents[] = [
+		$calEv = [
 			'title' => $ev['Name'],
 			'start' => $ev['NextDate'],
 			'url'   => UIR . ($ev['NextDetailId'] ? 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Event/template/' . $ev['EventId']),
 			'color' => '#2b6cb0',
 		];
+		$endRaw = $ev['NextEndDate'] ?? '';
+		if ($endRaw && substr($endRaw, 0, 10) > substr($ev['NextDate'], 0, 10)) {
+			$endDt = new DateTime(substr($endRaw, 0, 10));
+			$endDt->modify('+1 day');
+			$calEv['end'] = $endDt->format('Y-m-d');
+		}
+		$pkCalEvents[] = $calEv;
 	}
 ?>
 
@@ -815,7 +822,6 @@ var PkConfig = {
 	},
 };
 </script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
 <?php if ($LoggedIn): ?>
 <div id="pk-award-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
@@ -1337,3 +1343,4 @@ var PkConfig = {
 	</div>
 </div>
 <?php endif; ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
