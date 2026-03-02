@@ -164,6 +164,37 @@ class Controller_PlayerAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'editnote') {
+			$notes_id = (int)($_POST['NotesId']    ?? 0);
+			$note     = trim($_POST['Note']         ?? '');
+			$desc     = trim($_POST['Description']  ?? '');
+			$date     = trim($_POST['Date']         ?? '');
+			$dateComp = trim($_POST['DateComplete'] ?? '');
+			if (!valid_id($notes_id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid note ID.']);
+				exit;
+			}
+			if (!strlen($note)) {
+				echo json_encode(['status' => 1, 'error' => 'Note title is required.']);
+				exit;
+			}
+			if (!strlen($date)) {
+				echo json_encode(['status' => 1, 'error' => 'Date is required.']);
+				exit;
+			}
+			$r = $this->Player->edit_note([
+				'Token'        => $this->session->token,
+				'NotesId'      => $notes_id,
+				'MundaneId'    => $player_id,
+				'Note'         => $note,
+				'Description'  => $desc,
+				'Date'         => $date,
+				'DateComplete' => $dateComp,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'moveplayer') {
 			$dest_park_id = (int)($_POST['ParkId'] ?? 0);
 			if (!valid_id($dest_park_id)) {
@@ -174,6 +205,73 @@ class Controller_PlayerAjax extends Controller {
 				'Token'     => $this->session->token,
 				'MundaneId' => $player_id,
 				'ParkId'    => $dest_park_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'deleteaward') {
+			$awards_id = (int)($_POST['AwardsId'] ?? 0);
+			if (!valid_id($awards_id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid award ID.']);
+				exit;
+			}
+			$r = $this->Player->delete_player_award([
+				'Token'    => $this->session->token,
+				'AwardsId' => $awards_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'removeimage') {
+			$r = $this->Player->remove_image([
+				'Token'     => $this->session->token,
+				'MundaneId' => $player_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'removeheraldry') {
+			$r = $this->Player->remove_heraldry([
+				'Token'     => $this->session->token,
+				'MundaneId' => $player_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'revokeallawards') {
+			$revocation = trim($_POST['Revocation'] ?? '');
+			if (!strlen($revocation)) {
+				echo json_encode(['status' => 1, 'error' => 'Revocation reason is required.']);
+				exit;
+			}
+			$r = $this->Player->revoke_all_awards([
+				'Token'      => $this->session->token,
+				'MundaneId'  => $player_id,
+				'Revocation' => $revocation,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'updateclasses') {
+			$reconcile_raw = $_POST['Reconciled'] ?? [];
+			if (!is_array($reconcile_raw)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid reconciliation data.']);
+				exit;
+			}
+			$reconcile = [];
+			foreach ($reconcile_raw as $class_id => $qty) {
+				$reconcile[] = ['ClassId' => (int)$class_id, 'Quantity' => (int)$qty];
+			}
+			$r = $this->Player->update_class_reconciliation([
+				'Token'     => $this->session->token,
+				'MundaneId' => $player_id,
+				'ParkId'    => (int)($_POST['ParkId'] ?? 0),
+				'Reconcile' => $reconcile,
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])

@@ -538,6 +538,38 @@ if (PnConfig.recError) {
 					showError('Upload failed: ' + err.message);
 				});
 		}
+
+		// Remove button — update label on open, handle click
+		var origOpen = window.pnOpenImgModal;
+		window.pnOpenImgModal = function(type) {
+			origOpen(type);
+			var lbl = gid('pn-img-remove-label');
+			if (lbl) lbl.textContent = (type === 'photo') ? 'Remove Photo' : 'Remove Heraldry';
+		};
+		var removeBtn = gid('pn-img-remove-btn');
+		if (removeBtn) {
+			removeBtn.addEventListener('click', function() {
+				var label = (imgType === 'photo') ? 'player photo' : 'heraldry';
+				if (!confirm('Remove the ' + label + '? This cannot be undone.')) return;
+				removeBtn.disabled = true;
+				var action = (imgType === 'photo') ? 'removeimage' : 'removeheraldry';
+				fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/' + action, { method: 'POST' })
+					.then(function(r) { return r.json(); })
+					.then(function(result) {
+						if (result && result.status === 0) {
+							showStep('pn-img-step-success');
+							setTimeout(function() { window.location.reload(); }, 1400);
+						} else {
+							removeBtn.disabled = false;
+							showError((result && result.error) ? result.error : 'Remove failed.');
+						}
+					})
+					.catch(function() {
+						removeBtn.disabled = false;
+						showError('Request failed.');
+					});
+			});
+		}
 	})();
 
 	// ---- Update Account Modal ----
@@ -1067,6 +1099,33 @@ if (PnConfig.recError) {
 			gid('pn-award-overlay').classList.remove('pn-open');
 			document.body.style.overflow = '';
 		};
+
+		// Pre-populate the award modal from a recommendation row
+		window.pnGiveFromRec = function(rec) {
+			pnOpenAwardModal('awards');
+			var sel = gid('pn-award-select');
+			sel.value = String(rec.KingdomAwardId || '');
+			sel.dispatchEvent(new Event('change'));
+			if (rec.Rank) {
+				setTimeout(function() { selectRankPill(parseInt(rec.Rank)); }, 0);
+			}
+			if (rec.Reason) {
+				var noteEl = gid('pn-award-note');
+				noteEl.value = rec.Reason;
+				var rem = 400 - rec.Reason.length;
+				var cc = gid('pn-award-char-count');
+				if (cc) {
+					cc.textContent = rem + ' characters remaining';
+					cc.classList.toggle('pn-char-warn', rem < 50);
+				}
+			}
+		};
+		document.addEventListener('click', function(e) {
+			var link = e.target.closest ? e.target.closest('.pn-rec-give-link') : null;
+			if (!link) return;
+			e.preventDefault();
+			try { window.pnGiveFromRec(JSON.parse(link.getAttribute('data-rec') || '{}')); } catch (ex) {}
+		});
 
 		gid('pn-award-close-btn').addEventListener('click', pnCloseAwardModal);
 		gid('pn-award-cancel').addEventListener('click',    pnCloseAwardModal);
@@ -4864,8 +4923,10 @@ $(document).ready(function() {
 			var awardsId = $(this).data('awards-id');
 			if (!awardsId || !confirm('Delete this award record? This cannot be undone.')) return;
 			btn.disabled = true;
-			fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/deleteaward/' + awardsId, {
-				method: 'POST'
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deleteaward', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: 'AwardsId=' + encodeURIComponent(awardsId),
 			}).then(function(r) { return r.json(); }).then(function(result) {
 				if (result && result.status === 0) {
 					row.fadeOut(300, function() { row.remove(); });
@@ -5360,19 +5421,36 @@ $(document).ready(function() {
 	});
 })();
 
-// ---- Playernew: Add / Delete Notes ----
+// ---- Playernew: Add / Edit / Delete Notes ----
 (function() {
 	if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
 
 	function gid(id) { return document.getElementById(id); }
 
-	window.pnOpenAddNoteModal = function() {
+	var editNoteId = 0; // 0 = add mode, >0 = edit mode
+
+	window.pnOpenAddNoteModal = function(noteData) {
+		editNoteId = (noteData && noteData.notesId) ? parseInt(noteData.notesId) : 0;
 		var fb = gid('pn-addnote-feedback');
 		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
-		var fields = ['pn-note-title', 'pn-note-desc', 'pn-note-date-complete'];
-		fields.forEach(function(id) { var el = gid(id); if (el) el.value = ''; });
-		var dateEl = gid('pn-note-date');
-		if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+		var titleEl = gid('pn-addnote-modal-title');
+		if (titleEl) titleEl.textContent = editNoteId ? 'Edit Note' : 'Add Note';
+		var saveBtn = gid('pn-addnote-save');
+		if (saveBtn) saveBtn.innerHTML = editNoteId
+			? '<i class="fas fa-save"></i> Save Changes'
+			: '<i class="fas fa-save"></i> Add Note';
+		if (noteData) {
+			var tf = gid('pn-note-title');        if (tf) tf.value = noteData.note || '';
+			var df = gid('pn-note-desc');         if (df) df.value = noteData.desc || '';
+			var dtf = gid('pn-note-date');        if (dtf) dtf.value = noteData.date || '';
+			var dcf = gid('pn-note-date-complete'); if (dcf) dcf.value = noteData.dateComplete || '';
+		} else {
+			['pn-note-title', 'pn-note-desc', 'pn-note-date-complete'].forEach(function(id) {
+				var el = gid(id); if (el) el.value = '';
+			});
+			var dateEl = gid('pn-note-date');
+			if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+		}
 		var overlay = gid('pn-addnote-overlay');
 		if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
 	};
@@ -5389,11 +5467,23 @@ $(document).ready(function() {
 			if ($(e.target).is('#pn-addnote-overlay')) pnCloseAddNoteModal();
 		});
 
-		// Save note
+		// Open edit modal from edit button
+		$(document).on('click', '.pn-note-edit-btn', function() {
+			var btn = this;
+			pnOpenAddNoteModal({
+				notesId:      $(btn).data('notes-id'),
+				note:         $(btn).attr('data-note'),
+				desc:         $(btn).attr('data-desc'),
+				date:         $(btn).attr('data-date'),
+				dateComplete: $(btn).attr('data-date-complete') || '',
+			});
+		});
+
+		// Save note (add or edit)
 		$(document).on('click', '#pn-addnote-save', function() {
-			var title = (gid('pn-note-title') || {}).value || '';
-			var date  = (gid('pn-note-date')  || {}).value || '';
-			var fb    = gid('pn-addnote-feedback');
+			var title    = (gid('pn-note-title') || {}).value || '';
+			var date     = (gid('pn-note-date')  || {}).value || '';
+			var fb       = gid('pn-addnote-feedback');
 			if (!title.trim()) {
 				if (fb) { fb.textContent = 'Note title is required.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
 				return;
@@ -5402,15 +5492,19 @@ $(document).ready(function() {
 				if (fb) { fb.textContent = 'Date is required.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
 				return;
 			}
-			var btn = this;
+			var btn      = this;
+			var isEdit   = editNoteId > 0;
+			var desc     = (gid('pn-note-desc') || {}).value || '';
+			var dateComp = (gid('pn-note-date-complete') || {}).value || '';
 			btn.disabled = true;
-			btn.textContent = 'Saving...';
+			btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 			if (fb) fb.style.display = 'none';
 			var body = 'Note=' + encodeURIComponent(title.trim())
-				+ '&Description=' + encodeURIComponent((gid('pn-note-desc') || {}).value || '')
+				+ '&Description=' + encodeURIComponent(desc)
 				+ '&Date=' + encodeURIComponent(date)
-				+ '&DateComplete=' + encodeURIComponent((gid('pn-note-date-complete') || {}).value || '');
-			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/addnote', {
+				+ '&DateComplete=' + encodeURIComponent(dateComp);
+			if (isEdit) body += '&NotesId=' + encodeURIComponent(editNoteId);
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/' + (isEdit ? 'editnote' : 'addnote'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 				body: body,
@@ -5419,40 +5513,72 @@ $(document).ready(function() {
 			.then(function(data) {
 				if (data.status === 0) {
 					pnCloseAddNoteModal();
-					// Add new row to the notes table
-					var tbody = document.querySelector('#pn-history-table tbody');
-					if (tbody) {
-						var tr = document.createElement('tr');
-						tr.setAttribute('data-notes-id', data.notesId || 0);
-						var dateComp = (gid('pn-note-date-complete') || {}).value || '';
-						var dateDisp = date + (dateComp ? ' - ' + dateComp : '');
-						tr.innerHTML = '<td>' + $('<div>').text(title.trim()).html() + '</td>'
-							+ '<td>' + $('<div>').text((gid('pn-note-desc') || {}).value || '').html() + '</td>'
-							+ '<td class="pn-col-nowrap">' + $('<div>').text(dateDisp).html() + '</td>'
-							+ '<td><button class="pn-note-del-btn" data-notes-id="' + (data.notesId || 0) + '" title="Delete note"><i class="fas fa-times"></i></button></td>';
-						tbody.insertBefore(tr, tbody.firstChild);
-						// Update tab count
-						var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-						if (tabCount) {
-							var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-							tabCount.textContent = '(' + (n + 1) + ')';
+					var dateDisp  = date + (dateComp ? ' - ' + dateComp : '');
+					var safeTitle = $('<div>').text(title.trim()).html();
+					var safeDesc  = $('<div>').text(desc).html();
+					var safeDate  = $('<div>').text(dateDisp).html();
+					if (isEdit) {
+						// Update the existing row in place
+						var row = document.querySelector('tr[data-notes-id="' + editNoteId + '"]');
+						if (row) {
+							var cells = row.cells;
+							if (cells[0]) cells[0].innerHTML = safeTitle;
+							if (cells[1]) cells[1].innerHTML = safeDesc;
+							if (cells[2]) cells[2].innerHTML = safeDate;
+							var eb = row.querySelector('.pn-note-edit-btn');
+							if (eb) {
+								eb.setAttribute('data-note', title.trim());
+								eb.setAttribute('data-desc', desc);
+								eb.setAttribute('data-date', date);
+								eb.setAttribute('data-date-complete', dateComp);
+							}
 						}
-						// Show table if it was hidden (empty state)
-						var table = document.getElementById('pn-history-table');
-						if (table) table.style.display = '';
-						var emptyState = document.getElementById('pn-history-empty');
-						if (emptyState) emptyState.style.display = 'none';
+					} else {
+						// Prepend new row to the table
+						var tbody = document.querySelector('#pn-history-table tbody');
+						if (tbody) {
+							var tr = document.createElement('tr');
+							var newId = data.notesId || 0;
+							tr.setAttribute('data-notes-id', newId);
+							tr.innerHTML = '<td>' + safeTitle + '</td>'
+								+ '<td>' + safeDesc + '</td>'
+								+ '<td class="pn-col-nowrap">' + safeDate + '</td>'
+								+ '<td>'
+								+ '<button class="pn-note-edit-btn"'
+								+ ' data-notes-id="' + newId + '"'
+								+ ' data-note="' + $('<div>').text(title.trim()).html().replace(/"/g, '&quot;') + '"'
+								+ ' data-desc="' + $('<div>').text(desc).html().replace(/"/g, '&quot;') + '"'
+								+ ' data-date="' + $('<div>').text(date).html() + '"'
+								+ ' data-date-complete="' + $('<div>').text(dateComp).html() + '"'
+								+ ' title="Edit note"><i class="fas fa-pencil-alt"></i></button>'
+								+ ' <button class="pn-note-del-btn" data-notes-id="' + newId + '" title="Delete note"><i class="fas fa-times"></i></button>'
+								+ '</td>';
+							tbody.insertBefore(tr, tbody.firstChild);
+							var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
+							if (tabCount) {
+								var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
+								tabCount.textContent = '(' + (n + 1) + ')';
+							}
+							var table = document.getElementById('pn-history-table');
+							if (table) table.style.display = '';
+							var emptyState = document.getElementById('pn-history-empty');
+							if (emptyState) emptyState.style.display = 'none';
+						}
 					}
 				} else {
-					if (fb) { fb.textContent = data.error || 'Error adding note.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					if (fb) { fb.textContent = data.error || 'Error saving note.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
 					btn.disabled = false;
-					btn.textContent = 'Add Note';
+					btn.innerHTML = isEdit
+						? '<i class="fas fa-save"></i> Save Changes'
+						: '<i class="fas fa-save"></i> Add Note';
 				}
 			})
 			.catch(function() {
 				if (fb) { fb.textContent = 'Request failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
 				btn.disabled = false;
-				btn.textContent = 'Add Note';
+				btn.innerHTML = isEdit
+					? '<i class="fas fa-save"></i> Save Changes'
+					: '<i class="fas fa-save"></i> Add Note';
 			});
 		});
 
@@ -5473,7 +5599,6 @@ $(document).ready(function() {
 				if (data.status === 0) {
 					row.fadeOut(300, function() {
 						row.remove();
-						// Update tab count
 						var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
 						if (tabCount) {
 							var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
@@ -5669,6 +5794,189 @@ $(document).ready(function() {
 				if (fb) { fb.textContent = 'Request failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
 				btn.disabled = false;
 				btn.textContent = 'Move Player';
+			});
+		});
+	});
+})();
+
+// ---- Playernew: Revoke All Awards ----
+(function() {
+	if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+
+	function gid(id) { return document.getElementById(id); }
+	var countdownTimer = null;
+
+	function startCountdown() {
+		var btn = gid('pn-revoke-all-save');
+		if (!btn) return;
+		btn.disabled = true;
+		var secs = 5;
+		btn.innerHTML = '<i class="fas fa-ban"></i> Revoke All Awards (' + secs + ')';
+		countdownTimer = setInterval(function() {
+			secs--;
+			if (secs <= 0) {
+				clearInterval(countdownTimer);
+				countdownTimer = null;
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-ban"></i> Revoke All Awards';
+			} else {
+				btn.innerHTML = '<i class="fas fa-ban"></i> Revoke All Awards (' + secs + ')';
+			}
+		}, 1000);
+	}
+
+	function cancelCountdown() {
+		if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+		var btn = gid('pn-revoke-all-save');
+		if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-ban"></i> Revoke All Awards'; }
+	}
+
+	window.pnOpenRevokeAllModal = function() {
+		var fb = gid('pn-revoke-all-feedback');
+		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+		var reason = gid('pn-revoke-all-reason');
+		if (reason) reason.value = '';
+		var counter = gid('pn-revoke-all-char-count');
+		if (counter) counter.textContent = '300 characters remaining';
+		var overlay = gid('pn-revoke-all-overlay');
+		if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
+		startCountdown();
+	};
+
+	function pnCloseRevokeAllModal() {
+		cancelCountdown();
+		var overlay = gid('pn-revoke-all-overlay');
+		if (overlay) { overlay.classList.remove('pn-open'); document.body.style.overflow = ''; }
+	}
+
+	$(document).ready(function() {
+		$(document).on('click', '#pn-revoke-all-close-btn, #pn-revoke-all-cancel', function() { pnCloseRevokeAllModal(); });
+		$(document).on('click', '#pn-revoke-all-overlay', function(e) {
+			if ($(e.target).is('#pn-revoke-all-overlay')) pnCloseRevokeAllModal();
+		});
+		$(document).on('input', '#pn-revoke-all-reason', function() {
+			var el = gid('pn-revoke-all-char-count');
+			if (el) el.textContent = (300 - this.value.length) + ' characters remaining';
+		});
+		$(document).on('click', '#pn-revoke-all-save', function() {
+			var reason = (gid('pn-revoke-all-reason') || {}).value || '';
+			var fb     = gid('pn-revoke-all-feedback');
+			if (!reason.trim()) {
+				if (fb) { fb.textContent = 'Revocation reason is required.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+				return;
+			}
+			var btn = this;
+			btn.disabled = true;
+			btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+			if (fb) fb.style.display = 'none';
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/revokeallawards', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: 'Revocation=' + encodeURIComponent(reason),
+			})
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				if (data.status === 0) {
+					location.reload();
+				} else {
+					if (fb) { fb.textContent = data.error || 'Error revoking awards.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					btn.disabled = false;
+					btn.innerHTML = '<i class="fas fa-ban"></i> Revoke All Awards';
+				}
+			})
+			.catch(function() {
+				if (fb) { fb.textContent = 'Request failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-ban"></i> Revoke All Awards';
+			});
+		});
+	});
+})();
+
+// ---- Playernew: Class Reconciliation ----
+(function() {
+	if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+
+	function gid(id) { return document.getElementById(id); }
+
+	window.pnOpenReconcileModal = function() {
+		var fb = gid('pn-reconcile-feedback');
+		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+		var tbody = gid('pn-reconcile-tbody');
+		if (tbody) {
+			tbody.innerHTML = '';
+			(PnConfig.classList || []).forEach(function(c) {
+				var tr = document.createElement('tr');
+				var tdName = document.createElement('td');
+				tdName.textContent = c.ClassName;
+				tr.appendChild(tdName);
+				var tdBase = document.createElement('td');
+				tdBase.className = 'pn-col-numeric';
+				tdBase.textContent = c.Credits;
+				tr.appendChild(tdBase);
+				var tdAdj = document.createElement('td');
+				tdAdj.className = 'pn-col-numeric';
+				var inp = document.createElement('input');
+				inp.type = 'number'; inp.step = '1'; inp.style.cssText = 'width:64px;padding:3px 6px;border:1px solid #cbd5e0;border-radius:4px;text-align:right;font-size:13px';
+				inp.value = String(c.Reconciled || 0);
+				inp.dataset.classId = c.ClassId;
+				inp.addEventListener('input', function() {
+					var total = (parseFloat(c.Credits) || 0) + (parseInt(this.value) || 0);
+					tr.querySelector('.pn-reconcile-total').textContent = total;
+				});
+				tdAdj.appendChild(inp);
+				tr.appendChild(tdAdj);
+				var tdTotal = document.createElement('td');
+				tdTotal.className = 'pn-col-numeric pn-reconcile-total';
+				tdTotal.textContent = (parseFloat(c.Credits) || 0) + (parseInt(c.Reconciled) || 0);
+				tr.appendChild(tdTotal);
+				tbody.appendChild(tr);
+			});
+		}
+		var overlay = gid('pn-reconcile-overlay');
+		if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
+	};
+
+	function pnCloseReconcileModal() {
+		var overlay = gid('pn-reconcile-overlay');
+		if (overlay) { overlay.classList.remove('pn-open'); document.body.style.overflow = ''; }
+	}
+
+	$(document).ready(function() {
+		$(document).on('click', '#pn-reconcile-close-btn, #pn-reconcile-cancel', function() { pnCloseReconcileModal(); });
+		$(document).on('click', '#pn-reconcile-overlay', function(e) {
+			if ($(e.target).is('#pn-reconcile-overlay')) pnCloseReconcileModal();
+		});
+		$(document).on('click', '#pn-reconcile-save', function() {
+			var btn = this;
+			var fb  = gid('pn-reconcile-feedback');
+			var inputs = document.querySelectorAll('#pn-reconcile-tbody input[type=number]');
+			var params = 'ParkId=' + encodeURIComponent(PnConfig.parkId);
+			inputs.forEach(function(inp) {
+				params += '&Reconciled%5B' + encodeURIComponent(inp.dataset.classId) + '%5D=' + encodeURIComponent(inp.value || '0');
+			});
+			btn.disabled = true;
+			btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+			if (fb) fb.style.display = 'none';
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateclasses', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: params,
+			})
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				if (data.status === 0) {
+					location.reload();
+				} else {
+					if (fb) { fb.textContent = data.error || 'Error saving reconciliation.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					btn.disabled = false;
+					btn.innerHTML = '<i class="fas fa-save"></i> Save';
+				}
+			})
+			.catch(function() {
+				if (fb) { fb.textContent = 'Request failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-save"></i> Save';
 			});
 		});
 	});

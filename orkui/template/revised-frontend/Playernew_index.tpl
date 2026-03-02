@@ -331,7 +331,7 @@
 					<i class="fas fa-star"></i> Recommendations <span class="pn-tab-count">(<?= is_array($AwardRecommendations) ? count($AwardRecommendations) : 0 ?>)</span>
 				</li>
 				<li data-tab="history">
-					<i class="fas fa-history"></i> Historical <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
+					<i class="fas fa-sticky-note"></i> Notes <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
 				</li>
 				<li data-tab="classes">
 					<i class="fas fa-shield-alt"></i> Class Levels <span class="pn-tab-count">(<?= is_array($Details['Classes']) ? count($Details['Classes']) : 0 ?>)</span>
@@ -343,6 +343,7 @@
 				<?php if ($canEditAdmin): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAwardModal('awards')"><i class="fas fa-plus"></i> Add Award</button>
+					<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				</div>
 				<?php endif; ?>
 				<?php
@@ -616,6 +617,11 @@
 									<td><?= htmlspecialchars($rec['Reason']) ?></td>
 									<?php if ($this->__session->user_id): ?>
 										<td>
+											<?php if ($canEditAdmin && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
+												<a class="pn-rec-give-link" href="#"
+													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>"
+												><i class="fas fa-plus"></i> Give</a>
+											<?php endif; ?>
 											<?php if ($can_delete_recommendation || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']): ?>
 												<span class="pn-delete-cell">
 												<a class="pn-delete-link pn-confirm-delete-rec" href="#"><i class="fas fa-trash-alt"></i> Delete</a>
@@ -637,7 +643,7 @@
 				<?php endif; ?>
 			</div>
 
-			<!-- Historical Imports Tab -->
+			<!-- Notes Tab -->
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
 				<?php $notesList = is_array($Notes) ? $Notes : array(); ?>
 				<?php if ($canEditAdmin): ?>
@@ -652,24 +658,33 @@
 								<th>Note</th>
 								<th>Description</th>
 								<th>Date</th>
-								<?php if ($canEditAdmin): ?><th style="width:30px"></th><?php endif; ?>
+								<?php if ($canEditAdmin): ?><th style="width:60px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($notesList as $note): ?>
-								<tr data-notes-id="<?= (int)($note['NotesId'] ?? 0) ?>">
+								<tr data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>">
 									<td><?= $note['Note'] ?></td>
 									<td><?= $note['Description'] ?></td>
 									<td class="pn-col-nowrap"><?= $note['Date'] . (strtotime($note['DateComplete']) > 0 ? (' - ' . $note['DateComplete']) : '') ?></td>
 									<?php if ($canEditAdmin): ?>
-									<td><button class="pn-note-del-btn" data-notes-id="<?= (int)($note['NotesId'] ?? 0) ?>" title="Delete note"><i class="fas fa-times"></i></button></td>
+									<td>
+										<button class="pn-note-edit-btn"
+											data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>"
+											data-note="<?= htmlspecialchars($note['Note'] ?? '', ENT_QUOTES) ?>"
+											data-desc="<?= htmlspecialchars($note['Description'] ?? '', ENT_QUOTES) ?>"
+											data-date="<?= htmlspecialchars($note['Date'] ?? '', ENT_QUOTES) ?>"
+											data-date-complete="<?= htmlspecialchars($note['DateComplete'] ?? '', ENT_QUOTES) ?>"
+											title="Edit note"><i class="fas fa-pencil-alt"></i></button>
+										<button class="pn-note-del-btn" data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>" title="Delete note"><i class="fas fa-times"></i></button>
+									</td>
 									<?php endif; ?>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
 					</table>
 				<?php else: ?>
-					<div class="pn-empty" id="pn-history-empty">No historical imports</div>
+					<div class="pn-empty" id="pn-history-empty">No notes</div>
 				<?php endif; ?>
 			</div>
 
@@ -699,6 +714,11 @@
 					// $pnHeldAwardIds is built in the Awards tab block above
 					$pnHeldAwardIds = isset($pnHeldAwardIds) ? $pnHeldAwardIds : [];
 				?>
+				<?php if ($canEditAdmin): ?>
+				<div class="pn-tab-toolbar">
+					<button class="pn-btn pn-btn-sm pn-btn-secondary" onclick="pnOpenReconcileModal()"><i class="fas fa-sliders-h"></i> Edit Reconciliation</button>
+				</div>
+				<?php endif; ?>
 				<?php if (count($classList) > 0): ?>
 					<table class="pn-table" id="pn-classes-table">
 						<thead>
@@ -759,6 +779,9 @@
 			<input type="file" id="pn-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none;" />
 			<div id="pn-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;"></div>
 			<div class="pn-form-error" id="pn-img-error"></div>
+			<div style="text-align:center;margin-top:10px">
+				<button class="pn-btn" id="pn-img-remove-btn" type="button" style="background:transparent;color:#e53e3e;border:1px solid #feb2b2;font-size:12px;padding:4px 14px;"><i class="fas fa-trash"></i> <span id="pn-img-remove-label">Remove Image</span></button>
+			</div>
 		</div>
 
 		<!-- Step: crop -->
@@ -1311,6 +1334,7 @@ var PnConfig = {
 	canEditImages:  <?= !empty($canEditImages)  ? 'true' : 'false' ?>,
 	canEditAccount: <?= !empty($canEditAccount) ? 'true' : 'false' ?>,
 	canEditAdmin:   <?= !empty($canEditAdmin)   ? 'true' : 'false' ?>,
+	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
@@ -1348,7 +1372,7 @@ var PnConfig = {
 <div class="pn-overlay" id="pn-addnote-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-sticky-note" style="margin-right:8px;color:#2c5282"></i>Add Note</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-sticky-note" style="margin-right:8px;color:#2c5282"></i><span id="pn-addnote-modal-title">Add Note</span></h3>
 			<button class="pn-modal-close-btn" id="pn-addnote-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -1404,6 +1428,64 @@ var PnConfig = {
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-move-cancel">Cancel</button>
 			<button class="pn-btn" id="pn-move-submit" disabled style="background:#c53030;color:#fff;"><i class="fas fa-arrows-alt"></i> Move Player</button>
+		</div>
+	</div>
+</div>
+
+<!-- Revoke All Awards Modal -->
+<div class="pn-overlay" id="pn-revoke-all-overlay">
+	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-ban" style="margin-right:8px;color:#c53030"></i>Revoke All Awards</h3>
+			<button class="pn-modal-close-btn" id="pn-revoke-all-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-revoke-all-feedback" style="display:none"></div>
+			<div class="pn-revoke-all-warning">
+				<i class="fas fa-exclamation-triangle pn-revoke-all-warn-icon"></i>
+				<div>
+					<strong>This cannot be undone.</strong><br>
+					All awards for this player will be permanently revoked.
+				</div>
+			</div>
+			<div class="pn-acct-field">
+				<label for="pn-revoke-all-reason">Revocation Reason <span style="color:#e53e3e">*</span></label>
+				<textarea id="pn-revoke-all-reason" rows="3" maxlength="300" placeholder="Why are all awards being revoked?"></textarea>
+				<span class="pn-char-count" id="pn-revoke-all-char-count">300 characters remaining</span>
+			</div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-revoke-all-cancel">Cancel</button>
+			<button class="pn-btn" id="pn-revoke-all-save" style="background:#c53030;color:#fff;" disabled><i class="fas fa-ban"></i> Revoke All Awards</button>
+		</div>
+	</div>
+</div>
+
+<!-- Class Reconciliation Modal -->
+<div class="pn-overlay" id="pn-reconcile-overlay">
+	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-sliders-h" style="margin-right:8px;color:#2c5282"></i>Edit Class Reconciliation</h3>
+			<button class="pn-modal-close-btn" id="pn-reconcile-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body" style="padding:0">
+			<div id="pn-reconcile-feedback" style="display:none;padding:8px 16px;margin:0"></div>
+			<table class="pn-table" id="pn-reconcile-table" style="margin:0">
+				<thead>
+					<tr>
+						<th>Class</th>
+						<th class="pn-col-numeric">Base Credits</th>
+						<th class="pn-col-numeric">Adjustment</th>
+						<th class="pn-col-numeric">Total</th>
+					</tr>
+				</thead>
+				<tbody id="pn-reconcile-tbody"></tbody>
+			</table>
+			<p style="font-size:11px;color:#a0aec0;padding:8px 16px;margin:0">Adjustment adds or subtracts from attendance-based credits.</p>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-reconcile-cancel">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-reconcile-save"><i class="fas fa-save"></i> Save</button>
 		</div>
 	</div>
 </div>

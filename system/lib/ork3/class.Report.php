@@ -472,7 +472,8 @@ class Report  extends Ork3 {
 						'AwardName' => $r->award_name,
 						'Reason' => $r->reason,
 						'RecommendedByName' => $r->recommended_by_persona,
-						'RecommendedById' => $r->recommended_by_id
+						'RecommendedById' => $r->recommended_by_id,
+						'KingdomAwardId' => (int)$r->ka_kaward_id
 					);
 			}
 			$response['Status'] = Success();

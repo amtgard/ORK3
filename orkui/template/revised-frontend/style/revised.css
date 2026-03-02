@@ -625,6 +625,15 @@
 }
 
 /* Delete link + inline confirm */
+.pn-rec-give-link {
+	color: #2b6cb0;
+	text-decoration: none;
+	font-size: 12px;
+	font-weight: 600;
+	margin-right: 10px;
+	white-space: nowrap;
+}
+.pn-rec-give-link:hover { text-decoration: underline; }
 .pn-delete-link {
 	color: #e53e3e;
 	text-decoration: none;
@@ -4125,6 +4134,17 @@
 .pn-move-current-park { font-size:13px; color:#4a5568; padding:8px 12px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:14px; }
 .pn-move-current-park strong { color:#2d3748; }
 .pn-move-warning { font-size:12px; color:#744210; background:#fffbeb; border:1px solid #f6e05e; border-radius:6px; padding:8px 12px; margin-top:12px; line-height:1.5; }
+
+/* ---- Revoke All Awards modal (Playernew) ---- */
+#pn-revoke-all-overlay .pn-modal-box { width:420px; max-width:calc(100vw - 40px); }
+.pn-revoke-all-warning { display:flex; align-items:flex-start; gap:12px; padding:12px 14px; background:#fff5f5; border:1px solid #feb2b2; border-radius:8px; margin-bottom:16px; font-size:13px; color:#742a2a; line-height:1.5; }
+.pn-revoke-all-warn-icon { font-size:22px; color:#c53030; flex-shrink:0; margin-top:1px; }
+#pn-revoke-all-save:disabled { opacity:0.55; cursor:not-allowed; }
+
+/* ---- Class Reconciliation modal (Playernew) ---- */
+#pn-reconcile-overlay .pn-modal-box { width:500px; max-width:calc(100vw - 40px); }
+#pn-reconcile-table { border-radius:0; }
+#pn-reconcile-table th, #pn-reconcile-table td { padding:8px 12px; }
 
 /* ---- Edit Park Details button + modal (Parknew) ---- */
 .pk-edit-details-btn { background:none; border:none; color:#a0aec0; cursor:pointer; padding:2px 6px; border-radius:4px; font-size:13px; line-height:1; }

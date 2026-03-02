@@ -158,6 +158,26 @@ class Player extends Ork3 {
         return InvalidParameter('A note must be selected.');
     }
 
+	public function EditNote($request) {
+		if (!valid_id($request['NotesId'])) return InvalidParameter('A note must be selected.');
+		$this->notes->clear();
+		$this->notes->mundane_note_id = $request['NotesId'];
+		$this->notes->mundane_id      = $request['MundaneId'];
+		if (!$this->notes->find()) return InvalidParameter('Cannot find Note.');
+		$thePlayer = $this->player_info($this->notes->mundane_id);
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
+				|| $mundane_id == $request['MundaneId'])) {
+			$this->notes->note         = $request['Note'];
+			$this->notes->description  = $request['Description'];
+			$this->notes->date         = date('Y-m-d', strtotime($request['Date']));
+			$this->notes->date_complete = ($request['DateComplete'] ? date('Y-m-d', strtotime($request['DateComplete'])) : '');
+			$this->notes->save();
+			return Success($this->notes->mundane_note_id);
+		}
+		return NoAuthorization();
+	}
+
 	public function SetPlayerReconciledCredits($request) {
 
 		$thePlayer = $this->player_info($request['MundaneId']);

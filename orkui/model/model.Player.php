@@ -11,6 +11,10 @@ class Model_Player extends Model {
     function remove_note($request) {
         return $this->Player->RemoveNote($request);
     }
+
+    function edit_note($request) {
+        return Ork3::$Lib->player->EditNote($request);
+    }
     
     function get_notes($id) {
         return $this->Player->GetNotes(array('MundaneId' => $id));
@@ -114,6 +118,14 @@ class Model_Player extends Model {
 
 	function delete_player_recommendation($request) {
 		return $this->Player->DeleteAwardRecommendation($request);
+	}
+
+	function remove_heraldry($request) {
+		return $this->Player->RemoveHeraldry($request);
+	}
+
+	function remove_image($request) {
+		return $this->Player->RemoveImage($request);
 	}
 
 	function get_latest_attendance_date($mundane_id) {
