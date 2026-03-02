@@ -118,6 +118,59 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'playersearch') {
+			$q = trim($_GET['q'] ?? '');
+			if (strlen($q) < 2) {
+				echo json_encode([]);
+				exit;
+			}
+
+			// Load the park's kingdom_id for priority sorting
+			global $DB;
+			$pidInt = (int)$park_id;
+			$pkRow  = $DB->DataSet("SELECT kingdom_id FROM ork_park WHERE park_id = {$pidInt} LIMIT 1");
+			$kid    = ($pkRow && $pkRow->Next()) ? (int)$pkRow->kingdom_id : 0;
+
+			// Park members first (0), kingdom members second (1), everyone else (2)
+			$pid  = $pidInt;
+			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
+			$kidClause = valid_id($kid) ? "WHEN m.kingdom_id = {$kid} THEN 1" : '';
+			$sql = "
+				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
+				       k.name AS kingdom_name, p.name AS park_name,
+				       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
+				       m.suspended,
+				       CASE WHEN m.park_id = {$pid} THEN 0
+				            {$kidClause}
+				            ELSE 2 END AS sort_priority
+				FROM ork_mundane m
+				LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
+				LEFT JOIN ork_park p ON p.park_id = m.park_id
+				WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+				  AND (m.persona LIKE '%{$term}%'
+				    OR m.given_name LIKE '%{$term}%'
+				    OR m.surname LIKE '%{$term}%'
+				    OR m.username LIKE '%{$term}%')
+				ORDER BY sort_priority, m.persona
+				LIMIT 10";
+			$rs      = $DB->DataSet($sql);
+			$results = [];
+			while ($rs->Next()) {
+				$results[] = [
+					'MundaneId'   => (int)$rs->mundane_id,
+					'Persona'     => $rs->persona,
+					'KingdomId'   => (int)$rs->m_kingdom_id,
+					'ParkId'      => (int)$rs->m_park_id,
+					'KingdomName' => $rs->kingdom_name,
+					'ParkName'    => $rs->park_name,
+					'KAbbr'       => $rs->k_abbr,
+					'PAbbr'       => $rs->p_abbr,
+					'Suspended'   => (int)$rs->suspended,
+				];
+			}
+
+			echo json_encode($results);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

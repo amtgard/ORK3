@@ -277,7 +277,7 @@ class Controller_KingdomAjax extends Controller {
 		// Events in range (all calendar-detail occurrences within window)
 		$evtSql = "
 			SELECT e.event_id, e.name, e.park_id, p.abbreviation AS park_abbr,
-			       cd.event_start, cd.event_calendardetail_id AS detail_id
+			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
@@ -292,13 +292,20 @@ class Controller_KingdomAjax extends Controller {
 				$abbr   = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
 				$eid    = (int)$evtResult->event_id;
 				$did    = (int)$evtResult->detail_id;
-				$events[] = [
+				$ev = [
 					'title' => $abbr . $evtResult->name,
 					'start' => $evtResult->event_start,
 					'url'   => UIR . ($did ? "Event/detail/{$eid}/{$did}" : "Event/template/{$eid}"),
 					'color' => $isPark ? '#6b46c1' : '#0891b2',
 					'type'  => $isPark ? 'park-event' : 'kingdom-event',
 				];
+				$endRaw = $evtResult->event_end ?? '';
+				if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {
+					$endDt = new DateTime(substr($endRaw, 0, 10));
+					$endDt->modify('+1 day');
+					$ev['end'] = $endDt->format('Y-m-d');
+				}
+				$events[] = $ev;
 			}
 		}
 
@@ -375,6 +382,67 @@ class Controller_KingdomAjax extends Controller {
 		}
 
 		echo json_encode(['status' => 0, 'events' => $events]);
+		exit;
+	}
+
+	public function playersearch($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode([]);
+			exit;
+		}
+
+		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
+		if (!valid_id($kingdom_id)) {
+			echo json_encode([]);
+			exit;
+		}
+
+		$q = trim($_GET['q'] ?? '');
+		if (strlen($q) < 2) {
+			echo json_encode([]);
+			exit;
+		}
+
+		global $DB;
+		$kid  = $kingdom_id;
+		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
+
+		$sql = "
+			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,
+			       k.name AS kingdom_name, p.name AS park_name,
+			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
+			       m.suspended,
+			       CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END AS sort_priority
+			FROM ork_mundane m
+			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
+			LEFT JOIN ork_park p ON p.park_id = m.park_id
+			WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+			  AND (m.persona LIKE '%{$term}%'
+			    OR m.given_name LIKE '%{$term}%'
+			    OR m.surname LIKE '%{$term}%'
+			    OR m.username LIKE '%{$term}%')
+			ORDER BY sort_priority, m.persona
+			LIMIT 10";
+
+		$rs      = $DB->DataSet($sql);
+		$results = [];
+		while ($rs->Next()) {
+			$results[] = [
+				'MundaneId'   => (int)$rs->mundane_id,
+				'Persona'     => $rs->persona,
+				'KingdomId'   => (int)$rs->kingdom_id,
+				'ParkId'      => (int)$rs->park_id,
+				'KingdomName' => $rs->kingdom_name,
+				'ParkName'    => $rs->park_name,
+				'KAbbr'       => $rs->k_abbr,
+				'PAbbr'       => $rs->p_abbr,
+				'Suspended'   => (int)$rs->suspended,
+			];
+		}
+
+		echo json_encode($results);
 		exit;
 	}
 }

@@ -853,7 +853,6 @@ var KnConfig = {
 	adminAwards:     <?= json_encode($AdminAwards     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 };
 </script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
 <?php if ($LoggedIn): ?>
 <div id="kn-award-overlay">
 	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
@@ -1356,3 +1355,4 @@ var KnConfig = {
 	</div>
 </div>
 <?php endif; ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
