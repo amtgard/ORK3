@@ -4,8 +4,8 @@
 	$heraldryUrl = $park_info['Heraldry']['Url'] ?? '';
 	$hasHeraldry = !empty($parkInfo['HasHeraldry']);
 	$parkTitle   = trim($parkInfo['ParkTitle']   ?? '');
-	$description = trim($parkInfo['Description'] ?? '');
-	$directions  = trim($parkInfo['Directions']  ?? '');
+	$description = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Description'] ?? ''));
+	$directions  = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Directions']  ?? ''));
 	$websiteUrl  = trim($parkInfo['Url']          ?? '');
 
 	$officerList    = $park_officers['Officers']          ?? [];
@@ -880,8 +880,8 @@ var PkConfig = {
 		province:    <?= json_encode($parkInfo['Province']    ?? '') ?>,
 		postalCode:  <?= json_encode($parkInfo['PostalCode']  ?? '') ?>,
 		mapUrl:      <?= json_encode($parkInfo['MapUrl']      ?? '') ?>,
-		description: <?= json_encode($parkInfo['Description'] ?? '') ?>,
-		directions:  <?= json_encode($parkInfo['Directions']  ?? '') ?>,
+		description: <?= json_encode($description) ?>,
+		directions:  <?= json_encode($directions) ?>,
 	},
 };
 </script>

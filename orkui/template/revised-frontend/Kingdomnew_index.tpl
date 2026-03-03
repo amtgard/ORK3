@@ -56,7 +56,7 @@
 			'lat'  => (float)$latlng->lat,
 			'lng'  => (float)$latlng->lng,
 			'id'   => (int)$p['ParkId'],
-			'info' => $heraldryHtml . '<p>' . nl2br(htmlspecialchars($p['Directions'])) . '</p><h4>Description</h4><p>' . nl2br(htmlspecialchars($p['Description'])) . '</p>',
+			'info' => $heraldryHtml . '<p>' . nl2br(htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Directions']))) . '</p><h4>Description</h4><p>' . nl2br(htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Description']))) . '</p>',
 		];
 	}
 ?>
