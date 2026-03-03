@@ -2042,6 +2042,100 @@ class Report  extends Ork3 {
 		logtrace("Report->ParkAttendanceSinglePark()", array($this->db->lastSql, $request));
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
+
+	public function GetParkDistanceMatrix($request) {
+		$kingdom_id = intval($request['KingdomId']);
+
+		$sql = "SELECT
+					p1.park_id  AS row_id,
+					p1.name     AS row_name,
+					p1.city     AS row_city,
+					p1.province AS row_province,
+					p2.park_id  AS col_id,
+					ROUND(ST_Distance_Sphere(POINT(p1.longitude, p1.latitude), POINT(p2.longitude, p2.latitude)) / 1609.344, 1) AS miles
+				FROM " . DB_PREFIX . "park p1
+				CROSS JOIN " . DB_PREFIX . "park p2
+				WHERE p1.kingdom_id = '$kingdom_id'
+					AND p2.kingdom_id = '$kingdom_id'
+					AND p1.active = 'Active'
+					AND p2.active = 'Active'
+					AND p1.latitude  IS NOT NULL AND p1.latitude  != 0
+					AND p1.longitude IS NOT NULL AND p1.longitude != 0
+					AND p2.latitude  IS NOT NULL AND p2.latitude  != 0
+					AND p2.longitude IS NOT NULL AND p2.longitude != 0
+				ORDER BY p1.name ASC, p2.name ASC";
+
+		$r = $this->db->query($sql);
+
+		$parks  = array();
+		$matrix = array();
+
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$row_id = $r->row_id;
+				$col_id = $r->col_id;
+				if (!isset($parks[$row_id])) {
+					$parks[$row_id] = array(
+						'Name'     => $r->row_name,
+						'City'     => $r->row_city,
+						'Province' => $r->row_province,
+					);
+				}
+				if ($row_id !== $col_id) $matrix[$row_id][$col_id] = floatval($r->miles);
+			}
+		}
+
+		return array('Parks' => $parks, 'Matrix' => $matrix);
+	}
+
+	public function GetClosestParks($request) {
+		$park_id = intval($request['ParkId']);
+
+		$origin_sql = "SELECT latitude, longitude, name FROM " . DB_PREFIX . "park WHERE park_id = '$park_id'";
+		$origin = $this->db->query($origin_sql);
+		if ($origin === false || $origin->size() == 0) return array('Parks' => array(), 'OriginPark' => null);
+
+		$origin->next();
+		$lat = floatval($origin->latitude);
+		$lng = floatval($origin->longitude);
+		$origin_name = $origin->name;
+
+		if ($lat == 0 && $lng == 0) return array('Parks' => array(), 'OriginPark' => $origin_name);
+
+		$sql = "SELECT
+					p.park_id,
+					p.name AS park_name,
+					k.name AS kingdom_name,
+					p.city,
+					p.province,
+					ROUND(ST_Distance_Sphere(POINT(p.longitude, p.latitude), POINT('$lng', '$lat')) / 1609.344, 1) AS miles
+				FROM " . DB_PREFIX . "park p
+				INNER JOIN " . DB_PREFIX . "kingdom k ON p.kingdom_id = k.kingdom_id
+				WHERE p.park_id != '$park_id'
+					AND p.active = 'Active'
+					AND p.latitude IS NOT NULL
+					AND p.longitude IS NOT NULL
+					AND p.latitude != 0
+					AND p.longitude != 0
+				ORDER BY miles ASC
+				LIMIT 25";
+
+		$r = $this->db->query($sql);
+		$response = array('Parks' => array(), 'OriginPark' => $origin_name);
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$response['Parks'][] = array(
+					'ParkId'      => $r->park_id,
+					'ParkName'    => $r->park_name,
+					'KingdomName' => $r->kingdom_name,
+					'City'        => $r->city,
+					'Province'    => $r->province,
+					'Miles'       => $r->miles,
+				);
+			}
+		}
+		return $response;
+	}
 }
 
 ?>

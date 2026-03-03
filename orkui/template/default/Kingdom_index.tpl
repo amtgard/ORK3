@@ -151,6 +151,7 @@ jQuery(document).ready(function($) {
 				<li><a href='<?=UIR ?>Reports/attendance/Kingdom/<?=$kingdom_id ?>/All'>All</a></li>
 				<li><a href='<?=UIR ?>Reports/park_attendance_explorer'>Park Attendance Explorer</a></li>
 				<li><a href='<?=UIR ?>Reports/new_player_attendance'>New Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/park_distance_matrix&KingdomId=<?=$kingdom_id ?>'>Park Distance Matrix</a></li>
 			</ul>
 		</li>
 		<li>

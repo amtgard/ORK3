@@ -148,6 +148,7 @@
 				<li><a href='<?=UIR ?>Reports/attendance/Park/<?=$park_id ?>/All'>All</a></li>
 			</ul>
 		</li>
+		<li><a href='<?=UIR ?>Reports/closest_parks&ParkId=<?=$park_id ?>'>Closest Parks</a></li>
 		<li><a href='' class='unimplemented'>Treasury Report</a></li>
 	</ul>
 </div>
