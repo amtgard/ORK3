@@ -6692,8 +6692,11 @@ p {
     border: 2px solid rgba(255,255,255,0.25);
     display: block;
 }
-.nav-avatar-fallback-icon {
+.nav-avatar-img-wrap .nav-avatar-fallback-icon {
     display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
     font-size: 30px;
     color: rgba(255,255,255,0.6);
     line-height: 1;

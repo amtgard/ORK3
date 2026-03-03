@@ -85,15 +85,23 @@
 <?php if ($this->__session->token == null) : ?>
 			<a href='<?=UIR;?>Login' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
 <?php else : ?>
-<?php $__navUid = (int)$this->__session->user_id; ?>
+<?php
+	$__navUid      = (int)$this->__session->user_id;
+	$__navImgName  = sprintf('%06d', $__navUid);
+	$__navHasPhoto = file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.png') || file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.jpg');
+?>
 			<div class='nav-dropdown-wrap' id='nav-avatar-wrap'>
 				<button class='nav-avatar-btn' onclick="document.getElementById('nav-avatar-wrap').classList.toggle('open')">
 					<span class='nav-avatar-img-wrap'>
+						<?php if ($__navHasPhoto): ?>
 						<img class='nav-avatar-img'
-							src='<?=HTTP_ASSETS?>players/<?=$__navUid?>.jpg'
-							onerror="this.onerror=null;this.src='<?=HTTP_ASSETS?>heraldry/player/<?=$__navUid?>.gif';this.onerror=function(){this.style.display='none';this.nextElementSibling.style.display='inline-block';};"
+							src='<?= HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, $__navImgName) ?>'
+							onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block';"
 							alt=''
 						/><i class='fas fa-user-circle nav-avatar-fallback-icon'></i>
+						<?php else: ?>
+						<i class='fas fa-user-circle nav-avatar-fallback-icon' style='display:inline-block'></i>
+						<?php endif; ?>
 					</span>
 					<span class='nav-username'><?=htmlspecialchars($this->__session->user_name)?></span>
 					<i class='fas fa-chevron-down nav-chevron'></i>
