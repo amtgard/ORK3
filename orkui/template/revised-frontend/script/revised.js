@@ -659,6 +659,16 @@ if (PnConfig.recError) {
 					btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
 				});
 		});
+
+		setupPronounPicker({
+			toggleId: 'pn-pronoun-custom-btn',  panelId: 'pn-pronoun-picker',
+			previewId: 'pn-pronoun-preview',     applyId: 'pn-pronoun-apply',
+			clearId:   'pn-pronoun-clear',       hiddenId: 'pn-pronoun-custom-val',
+			standardSelId: 'pn-acct-pronouns',
+			subjectId: 'pn-p-subject', objectId: 'pn-p-object', possId: 'pn-p-possessive',
+			posspId: 'pn-p-possessivepronoun', reflexId: 'pn-p-reflexive',
+			existingJson: (function() { var el = document.getElementById('pn-pronoun-custom-val'); return el ? el.value : ''; })(),
+		});
 	})();
 
 	// ---- Add Dues Modal ----
@@ -4560,6 +4570,102 @@ $(document).ready(function() {
 	};
 });
 
+// ---- Shared: pronoun picker helper ----
+function setupPronounPicker(cfg) {
+	// cfg: { toggleId, panelId, previewId, applyId, clearId, hiddenId, standardSelId,
+	//        subjectId, objectId, possId, posspId, reflexId, existingJson }
+	var gid = function(id) { return document.getElementById(id); };
+	var toggleBtn   = gid(cfg.toggleId);
+	var panel       = gid(cfg.panelId);
+	var preview     = gid(cfg.previewId);
+	var applyBtn    = gid(cfg.applyId);
+	var clearBtn    = gid(cfg.clearId);
+	var hiddenInput = gid(cfg.hiddenId);
+	var standardSel = gid(cfg.standardSelId);
+	if (!toggleBtn || !panel || !hiddenInput) return;
+
+	function getSelText(selId) {
+		var sel = gid(selId);
+		return sel ? Array.prototype.slice.call(sel.selectedOptions || sel.querySelectorAll('option:checked')).map(function(o) { return o.textContent; }) : [];
+	}
+	function getSelVals(selId) {
+		var sel = gid(selId);
+		return sel ? Array.prototype.slice.call(sel.selectedOptions || sel.querySelectorAll('option:checked')).map(function(o) { return parseInt(o.value, 10); }) : [];
+	}
+	function updatePreview() {
+		var s = getSelText(cfg.subjectId), o = getSelText(cfg.objectId),
+		    p = getSelText(cfg.possId),   pp = getSelText(cfg.posspId), r = getSelText(cfg.reflexId);
+		var any = [s,o,p,pp,r].some(function(a) { return a.length > 0; });
+		if (preview) preview.textContent = any ? s.join('/') + ' [' + o.join('/') + ' ' + p.join('/') + ' ' + pp.join('/') + ' ' + r.join('/') + ']' : '';
+	}
+	function clearSelections() {
+		[cfg.subjectId, cfg.objectId, cfg.possId, cfg.posspId, cfg.reflexId].forEach(function(sid) {
+			var sel = gid(sid);
+			if (sel) Array.prototype.slice.call(sel.options).forEach(function(opt) { opt.selected = false; });
+		});
+		hiddenInput.value = '';
+		if (preview) preview.textContent = '';
+	}
+	function populateFromJson(json) {
+		if (!json) return;
+		var data; try { data = JSON.parse(json); } catch(e) { return; }
+		var mapping = [[cfg.subjectId, data.s],[cfg.objectId, data.o],[cfg.possId, data.p],[cfg.posspId, data.pp],[cfg.reflexId, data.r]];
+		mapping.forEach(function(pair) {
+			var sel = gid(pair[0]), vals = pair[1] || [];
+			if (!sel) return;
+			Array.prototype.slice.call(sel.options).forEach(function(opt) {
+				opt.selected = vals.indexOf(parseInt(opt.value, 10)) !== -1;
+			});
+		});
+		updatePreview();
+	}
+
+	toggleBtn.addEventListener('click', function() {
+		if (panel.style.display === 'none') {
+			if (hiddenInput.value) populateFromJson(hiddenInput.value);
+			panel.style.display = '';
+		} else {
+			panel.style.display = 'none';
+		}
+	});
+
+	if (standardSel) {
+		standardSel.addEventListener('change', function() {
+			if (standardSel.value) clearSelections();
+		});
+	}
+
+	if (applyBtn) applyBtn.addEventListener('click', function() {
+		var s = getSelVals(cfg.subjectId), o = getSelVals(cfg.objectId),
+		    p = getSelVals(cfg.possId),   pp = getSelVals(cfg.posspId), r = getSelVals(cfg.reflexId);
+		var any = [s,o,p,pp,r].some(function(a) { return a.length > 0; });
+		if (any) {
+			hiddenInput.value = JSON.stringify({
+				s:  s.length  ? s  : [0], o:  o.length  ? o  : [0],
+				p:  p.length  ? p  : [0], pp: pp.length ? pp : [0], r: r.length ? r : [0]
+			});
+			if (standardSel) standardSel.value = '';
+			updatePreview();
+		}
+		panel.style.display = 'none';
+	});
+
+	if (clearBtn) clearBtn.addEventListener('click', function() {
+		clearSelections();
+		panel.style.display = 'none';
+	});
+
+	[cfg.subjectId, cfg.objectId, cfg.possId, cfg.posspId, cfg.reflexId].forEach(function(sid) {
+		var sel = gid(sid);
+		if (sel) sel.addEventListener('change', updatePreview);
+	});
+
+	// Pre-populate preview from existing value
+	if (cfg.existingJson) populateFromJson(cfg.existingJson);
+
+	return { reset: function() { clearSelections(); if (standardSel) standardSel.value = ''; } };
+}
+
 // ---- Add Player Modal (Kingdomnew) ----
 (function() {
 	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
@@ -4586,6 +4692,13 @@ $(document).ready(function() {
 		gid('kn-addplayer-waiver-row').style.display = 'none';
 		ov.querySelectorAll('input[type=radio]').forEach(function(r) { if (r.value === '0') r.checked = true; });
 		hideFeedback(gid('kn-addplayer-feedback'));
+		// Reset pronoun fields
+		var knApPronounSel = gid('kn-addplayer-pronounid');
+		if (knApPronounSel) knApPronounSel.value = '';
+		var knApPronounHid = gid('kn-addplayer-pronouncustom');
+		if (knApPronounHid) knApPronounHid.value = '';
+		var knApPronounPanel = gid('kn-addplayer-pronoun-picker');
+		if (knApPronounPanel) knApPronounPanel.style.display = 'none';
 		// Populate park dropdown once
 		var sel = gid('kn-addplayer-park');
 		if (!sel.dataset.built) {
@@ -4657,6 +4770,10 @@ $(document).ready(function() {
 			fd.append('Waivered',   waivered   ? waivered.value   : '0');
 			var waiverFile = gid('kn-addplayer-waiver');
 			if (waiverFile && waiverFile.files[0]) fd.append('Waiver', waiverFile.files[0]);
+			var knApPronounId  = gid('kn-addplayer-pronounid');
+			var knApPronounCus = gid('kn-addplayer-pronouncustom');
+			if (knApPronounId  && knApPronounId.value)  fd.append('PronounId',     knApPronounId.value);
+			if (knApPronounCus && knApPronounCus.value) fd.append('PronounCustom', knApPronounCus.value);
 
 			$.ajax({
 				url:         CREATE_URL + parkId + '/create',
@@ -4679,6 +4796,15 @@ $(document).ready(function() {
 				}
 			});
 		});
+	});
+
+	setupPronounPicker({
+		toggleId: 'kn-addplayer-pronoun-custom-btn', panelId: 'kn-addplayer-pronoun-picker',
+		previewId: 'kn-addplayer-pronoun-preview',   applyId: 'kn-addplayer-pronoun-apply',
+		clearId:   'kn-addplayer-pronoun-clear',     hiddenId: 'kn-addplayer-pronouncustom',
+		standardSelId: 'kn-addplayer-pronounid',
+		subjectId: 'kn-ap-p-subject', objectId: 'kn-ap-p-object', possId: 'kn-ap-p-possessive',
+		posspId: 'kn-ap-p-possessivepronoun', reflexId: 'kn-ap-p-reflexive',
 	});
 })();
 
@@ -4708,6 +4834,13 @@ $(document).ready(function() {
 		gid('pk-addplayer-waiver-row').style.display = 'none';
 		ov.querySelectorAll('input[type=radio]').forEach(function(r) { if (r.value === '0') r.checked = true; });
 		hideFeedback(gid('pk-addplayer-feedback'));
+		// Reset pronoun fields
+		var pkApPronounSel = gid('pk-addplayer-pronounid');
+		if (pkApPronounSel) pkApPronounSel.value = '';
+		var pkApPronounHid = gid('pk-addplayer-pronouncustom');
+		if (pkApPronounHid) pkApPronounHid.value = '';
+		var pkApPronounPanel = gid('pk-addplayer-pronoun-picker');
+		if (pkApPronounPanel) pkApPronounPanel.style.display = 'none';
 		ov.classList.add('pk-addplayer-open');
 		document.body.style.overflow = 'hidden';
 		setTimeout(function() { gid('pk-addplayer-persona').focus(); }, 50);
@@ -4764,6 +4897,10 @@ $(document).ready(function() {
 			fd.append('Waivered',   waivered   ? waivered.value   : '0');
 			var waiverFile = gid('pk-addplayer-waiver');
 			if (waiverFile && waiverFile.files[0]) fd.append('Waiver', waiverFile.files[0]);
+			var pkApPronounId  = gid('pk-addplayer-pronounid');
+			var pkApPronounCus = gid('pk-addplayer-pronouncustom');
+			if (pkApPronounId  && pkApPronounId.value)  fd.append('PronounId',     pkApPronounId.value);
+			if (pkApPronounCus && pkApPronounCus.value) fd.append('PronounCustom', pkApPronounCus.value);
 
 			$.ajax({
 				url:         CREATE_URL,
@@ -4786,6 +4923,15 @@ $(document).ready(function() {
 				}
 			});
 		});
+	});
+
+	setupPronounPicker({
+		toggleId: 'pk-addplayer-pronoun-custom-btn', panelId: 'pk-addplayer-pronoun-picker',
+		previewId: 'pk-addplayer-pronoun-preview',   applyId: 'pk-addplayer-pronoun-apply',
+		clearId:   'pk-addplayer-pronoun-clear',     hiddenId: 'pk-addplayer-pronouncustom',
+		standardSelId: 'pk-addplayer-pronounid',
+		subjectId: 'pk-ap-p-subject', objectId: 'pk-ap-p-object', possId: 'pk-ap-p-possessive',
+		posspId: 'pk-ap-p-possessivepronoun', reflexId: 'pk-ap-p-reflexive',
 	});
 })();
 

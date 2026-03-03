@@ -26,8 +26,10 @@ class Controller_PlayerAjax extends Controller {
 			$email      = trim($_POST['Email']      ?? '');
 			$userName   = trim($_POST['UserName']   ?? '');
 			$password   = $_POST['Password']        ?? '';
-			$restricted = (int)($_POST['Restricted'] ?? 0);
-			$waivered   = (int)($_POST['Waivered']   ?? 0);
+			$restricted    = (int)($_POST['Restricted']   ?? 0);
+			$waivered      = (int)($_POST['Waivered']     ?? 0);
+			$pronounId     = (int)($_POST['PronounId']    ?? 0);
+			$pronounCustom = trim($_POST['PronounCustom'] ?? '');
 
 			if (!strlen($persona)) {
 				echo json_encode(['status' => 1, 'error' => 'Persona is required.']);
@@ -47,20 +49,22 @@ class Controller_PlayerAjax extends Controller {
 			}
 
 			$request = [
-				'Token'      => $this->session->token,
-				'ParkId'     => $park_id,
-				'GivenName'  => $givenName,
-				'Surname'    => $surname,
-				'OtherName'  => '',
-				'UserName'   => $userName,
-				'Persona'    => $persona,
-				'Email'      => $email,
-				'Password'   => $password,
-				'Restricted' => $restricted,
-				'Waivered'   => $waivered,
-				'HasImage'   => 0,
-				'Image'      => '',
-				'IsActive'   => 1,
+				'Token'         => $this->session->token,
+				'ParkId'        => $park_id,
+				'GivenName'     => $givenName,
+				'Surname'       => $surname,
+				'OtherName'     => '',
+				'UserName'      => $userName,
+				'Persona'       => $persona,
+				'Email'         => $email,
+				'Password'      => $password,
+				'Restricted'    => $restricted,
+				'Waivered'      => $waivered,
+				'HasImage'      => 0,
+				'Image'         => '',
+				'IsActive'      => 1,
+				'PronounId'     => $pronounId > 0 ? $pronounId : null,
+				'PronounCustom' => strlen($pronounCustom) ? $pronounCustom : null,
 			];
 
 			if (!empty($_FILES['Waiver']['tmp_name']) && is_uploaded_file($_FILES['Waiver']['tmp_name'])) {

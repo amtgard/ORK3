@@ -4323,3 +4323,46 @@
 }
 .kn-cal-add-btn:hover { opacity: 1; background: rgba(43,108,176,0.12); }
 .fc-daygrid-day:hover .kn-cal-add-btn { display: inline-flex; align-items: center; }
+
+/* ---- Shared: pronoun picker (pn, pk, kn) ---- */
+.pronoun-row { display: flex; align-items: center; gap: 8px; }
+.pronoun-row select { flex: 1; min-width: 0; }
+.pronoun-custom-btn {
+    font-size: 12px; padding: 5px 10px; border-radius: 4px; flex-shrink: 0;
+    border: 1px solid #e2e8f0; background: #f7fafc; color: #4a5568; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.pronoun-custom-btn:hover { background: #edf2f7; border-color: #cbd5e0; }
+.pronoun-picker-panel {
+    margin-top: 8px; padding: 12px; background: #f7fafc;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+}
+.pronoun-picker-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px;
+}
+.pronoun-picker-col label {
+    display: block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: #718096; margin-bottom: 4px;
+}
+.pronoun-picker-col select {
+    width: 100%; font-size: 12px; border: 1.5px solid #e2e8f0; border-radius: 4px;
+    background: #fff; padding: 2px; box-sizing: border-box;
+}
+.pronoun-picker-preview {
+    font-size: 12px; color: #276749; font-weight: 600; min-height: 18px;
+    margin-bottom: 8px; font-style: italic;
+}
+.pronoun-picker-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.pronoun-apply-btn {
+    font-size: 12px; padding: 4px 14px; border-radius: 4px;
+    background: #276749; color: #fff; border: none; cursor: pointer;
+}
+.pronoun-apply-btn:hover { background: #1e4d36; }
+.pronoun-clear-btn {
+    font-size: 12px; padding: 4px 14px; border-radius: 4px;
+    background: none; border: 1px solid #e2e8f0; color: #718096; cursor: pointer;
+}
+.pronoun-clear-btn:hover { background: #edf2f7; border-color: #a0aec0; }
+@media (max-width: 520px) {
+    .pronoun-picker-grid { grid-template-columns: repeat(3, 1fr); }
+}

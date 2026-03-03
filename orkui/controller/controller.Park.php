@@ -62,6 +62,7 @@ class Controller_Park extends Controller
 		$this->load_model('Award');
 		$this->load_model('Attendance');
 		$this->load_model('Reports');
+		$this->load_model('Pronoun');
 
 		$this->data['kingdom_name'] = $this->session->kingdom_name;
 		$this->data['menu']['kingdom'] = [
@@ -181,5 +182,8 @@ class Controller_Park extends Controller
 		$this->data['IsLoggedIn']    = $uid > 0;
 		$this->data['CanManagePark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
+
+		$this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
+		$this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
 	}
 }

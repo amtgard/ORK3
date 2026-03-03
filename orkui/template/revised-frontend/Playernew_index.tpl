@@ -122,7 +122,6 @@
 		<div class="pn-hero-actions">
 			<?php if ($LoggedIn): ?>
 				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
-				<a class="pn-btn pn-btn-outline" href="<?= UIR ?>Admin/player/<?= $Player['MundaneId'] ?>"><i class="fas fa-cog"></i> Admin Panel</a>
 				<?php if ($canEditAdmin): ?>
 				<button class="pn-btn pn-btn-ghost pn-hero-btn" onclick="pnOpenMovePlayerModal()"><i class="fas fa-arrows-alt"></i> Move</button>
 				<?php endif; ?>
@@ -893,12 +892,53 @@
 			</div>
 			<div class="pn-acct-field">
 				<label for="pn-acct-pronouns">Pronouns</label>
-				<select id="pn-acct-pronouns" name="PronounId">
-					<option value="">Choose&hellip;</option>
-					<?= $PronounOptions ?>
-				</select>
-				<input type="hidden" name="PronounCustom" value="<?= htmlspecialchars($Player['PronounCustom'] ?? '') ?>" />
-				<div class="pn-acct-hint">For custom pronouns, use the <a href="<?= UIR ?>Admin/player/<?= (int)$Player['MundaneId'] ?>" style="color:#3182ce">Admin Panel</a></div>
+				<div class="pronoun-row">
+					<select id="pn-acct-pronouns" name="PronounId">
+						<option value="">None / unspecified</option>
+						<?= $PronounOptions ?>
+					</select>
+					<button type="button" class="pronoun-custom-btn" id="pn-pronoun-custom-btn"><i class="fas fa-sliders-h"></i> Custom&hellip;</button>
+				</div>
+				<input type="hidden" name="PronounCustom" id="pn-pronoun-custom-val" value="<?= htmlspecialchars($Player['PronounCustom'] ?? '') ?>" />
+				<div class="pronoun-picker-panel" id="pn-pronoun-picker" style="display:none">
+					<div class="pronoun-picker-preview" id="pn-pronoun-preview"></div>
+					<div class="pronoun-picker-grid">
+						<div class="pronoun-picker-col">
+							<label>Subjective</label>
+							<select multiple id="pn-p-subject" size="4">
+								<?php if (!empty($PronounList['subjective'])): foreach ($PronounList['subjective'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+							</select>
+						</div>
+						<div class="pronoun-picker-col">
+							<label>Objective</label>
+							<select multiple id="pn-p-object" size="4">
+								<?php if (!empty($PronounList['objective'])): foreach ($PronounList['objective'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+							</select>
+						</div>
+						<div class="pronoun-picker-col">
+							<label>Possessive</label>
+							<select multiple id="pn-p-possessive" size="4">
+								<?php if (!empty($PronounList['possessive'])): foreach ($PronounList['possessive'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+							</select>
+						</div>
+						<div class="pronoun-picker-col">
+							<label>Poss.&nbsp;Pronoun</label>
+							<select multiple id="pn-p-possessivepronoun" size="4">
+								<?php if (!empty($PronounList['possessivepronoun'])): foreach ($PronounList['possessivepronoun'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+							</select>
+						</div>
+						<div class="pronoun-picker-col">
+							<label>Reflexive</label>
+							<select multiple id="pn-p-reflexive" size="4">
+								<?php if (!empty($PronounList['reflexive'])): foreach ($PronounList['reflexive'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+							</select>
+						</div>
+					</div>
+					<div class="pronoun-picker-actions">
+						<button type="button" class="pronoun-clear-btn" id="pn-pronoun-clear">Clear</button>
+						<button type="button" class="pronoun-apply-btn" id="pn-pronoun-apply">Apply</button>
+					</div>
+				</div>
 			</div>
 
 			<?php if ($canEditAdmin): ?>

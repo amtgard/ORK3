@@ -1150,6 +1150,58 @@ var PkConfig = {
 				</div>
 			</div>
 			<div class="plr-field-row">
+				<div class="plr-field plr-field-grow">
+					<label>Pronouns</label>
+					<div class="pronoun-row">
+						<select id="pk-addplayer-pronounid">
+							<option value="">None / unspecified</option>
+							<?= $PronounOptionsCreate ?? '' ?>
+						</select>
+						<button type="button" class="pronoun-custom-btn" id="pk-addplayer-pronoun-custom-btn"><i class="fas fa-sliders-h"></i> Custom&hellip;</button>
+					</div>
+					<input type="hidden" id="pk-addplayer-pronouncustom" value="">
+					<div class="pronoun-picker-panel" id="pk-addplayer-pronoun-picker" style="display:none">
+						<div class="pronoun-picker-preview" id="pk-addplayer-pronoun-preview"></div>
+						<div class="pronoun-picker-grid">
+							<div class="pronoun-picker-col">
+								<label>Subjective</label>
+								<select multiple id="pk-ap-p-subject" size="4">
+									<?php if (!empty($PronounList['subjective'])): foreach ($PronounList['subjective'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+								</select>
+							</div>
+							<div class="pronoun-picker-col">
+								<label>Objective</label>
+								<select multiple id="pk-ap-p-object" size="4">
+									<?php if (!empty($PronounList['objective'])): foreach ($PronounList['objective'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+								</select>
+							</div>
+							<div class="pronoun-picker-col">
+								<label>Possessive</label>
+								<select multiple id="pk-ap-p-possessive" size="4">
+									<?php if (!empty($PronounList['possessive'])): foreach ($PronounList['possessive'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+								</select>
+							</div>
+							<div class="pronoun-picker-col">
+								<label>Poss.&nbsp;Pronoun</label>
+								<select multiple id="pk-ap-p-possessivepronoun" size="4">
+									<?php if (!empty($PronounList['possessivepronoun'])): foreach ($PronounList['possessivepronoun'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+								</select>
+							</div>
+							<div class="pronoun-picker-col">
+								<label>Reflexive</label>
+								<select multiple id="pk-ap-p-reflexive" size="4">
+									<?php if (!empty($PronounList['reflexive'])): foreach ($PronounList['reflexive'] as $p): ?><option value="<?= (int)$p['value'] ?>"><?= htmlspecialchars($p['display']) ?></option><?php endforeach; endif; ?>
+								</select>
+							</div>
+						</div>
+						<div class="pronoun-picker-actions">
+							<button type="button" class="pronoun-clear-btn" id="pk-addplayer-pronoun-clear">Clear</button>
+							<button type="button" class="pronoun-apply-btn" id="pk-addplayer-pronoun-apply">Apply</button>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="plr-field-row">
 				<div class="plr-field">
 					<label>Username <span class="plr-req">*</span></label>
 					<input type="text" id="pk-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">

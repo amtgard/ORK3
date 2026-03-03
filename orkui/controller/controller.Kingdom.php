@@ -83,6 +83,7 @@ class Controller_Kingdom extends Controller {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$this->load_model('Award');
 		$this->load_model('Reports');
+		$this->load_model('Pronoun');
 
 		$this->data['menu']['kingdom'] = [
 			'url'     => UIR . 'Kingdom/profile/' . $kingdom_id,
@@ -315,6 +316,9 @@ class Controller_Kingdom extends Controller {
 			}
 			$this->data['AdminAwards'] = $adminAwards;
 		}
+
+		$this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
+		$this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
 	}
 
 }

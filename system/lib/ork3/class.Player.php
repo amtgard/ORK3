@@ -529,6 +529,8 @@ class Player extends Ork3 {
 				$this->mundane->restricted = $request['Restricted']?1:0;
 				$this->mundane->waivered = $request['Waivered']?1:0;
 				$this->mundane->has_image = $request['HasImage']?1:0;
+				if (!empty($request['PronounId']))     $this->mundane->pronoun_id     = (int)$request['PronounId'];
+				if (!empty($request['PronounCustom'])) $this->mundane->pronoun_custom = $request['PronounCustom'];
 				$this->mundane->penalty_box = 0;
 				$this->mundane->active = $request['IsActive'];
 				$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
