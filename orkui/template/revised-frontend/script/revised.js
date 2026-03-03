@@ -1359,6 +1359,25 @@ function knRenderCalendar() {
 		eventClick: function(info) {
 			info.jsEvent.preventDefault();
 			if (info.event.url) window.location.href = info.event.url;
+		},
+		dayCellDidMount: function(info) {
+			if (typeof KnConfig === 'undefined' || !KnConfig.loggedIn) return;
+			var top = info.el.querySelector('.fc-daygrid-day-top');
+			if (!top) return;
+			var btn = document.createElement('button');
+			btn.className = 'kn-cal-add-btn';
+			btn.title = 'Create event';
+			btn.innerHTML = '<i class="fas fa-plus"></i>';
+			btn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				e.preventDefault();
+				var ds = info.dateStr || (function() {
+					var d = info.date;
+					return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+				})();
+				if (window.knOpenEventModal) window.knOpenEventModal(ds);
+			});
+			top.appendChild(btn);
 		}
 	});
 	knCalendar.render();
@@ -2098,13 +2117,26 @@ $(document).ready(function() {
 		el.textContent = msg; el.style.display = '';
 	}
 
-	window.knOpenEventModal = function() {
+	window.knOpenEventModal = function(dateStr) {
+		var modal = document.getElementById('kn-event-modal');
+		modal.dataset.presetDate = dateStr || '';
 		document.getElementById('kn-event-name').value     = '';
 		document.getElementById('kn-event-park-name').value = '';
 		document.getElementById('kn-event-park-id').value   = '';
 		document.getElementById('kn-emod-feedback').style.display = 'none';
 		document.getElementById('kn-emod-go-btn').disabled  = true;
-		document.getElementById('kn-event-modal').classList.add('kn-emod-open');
+		var dateRow  = document.getElementById('kn-emod-date-row');
+		var dateText = document.getElementById('kn-emod-date-text');
+		if (dateRow && dateText) {
+			if (dateStr) {
+				var d = new Date(dateStr + 'T00:00:00');
+				dateText.textContent = d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
+				dateRow.style.display = '';
+			} else {
+				dateRow.style.display = 'none';
+			}
+		}
+		modal.classList.add('kn-emod-open');
 		document.body.style.overflow = 'hidden';
 		setTimeout(function() { document.getElementById('kn-event-name').focus(); }, 50);
 	};
@@ -2123,8 +2155,10 @@ $(document).ready(function() {
 		$.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId },
 			function(r) {
 				if (r && r.status === 0) {
+					var presetDate = document.getElementById('kn-event-modal').dataset.presetDate || '';
 					var url = KnConfig.uir + 'Event/create/' + r.eventId;
 					if (parkId > 0) url += '/' + parkId;
+					if (presetDate) url += '&date=' + encodeURIComponent(presetDate);
 					window.location.href = url;
 				} else {
 					knEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
@@ -3126,6 +3160,25 @@ function pkRenderCalendar() {
 		eventClick: function(info) {
 			info.jsEvent.preventDefault();
 			if (info.event.url) window.location.href = info.event.url;
+		},
+		dayCellDidMount: function(info) {
+			if (typeof PkConfig === 'undefined' || !PkConfig.loggedIn) return;
+			var top = info.el.querySelector('.fc-daygrid-day-top');
+			if (!top) return;
+			var btn = document.createElement('button');
+			btn.className = 'pk-cal-add-btn';
+			btn.title = 'Create event';
+			btn.innerHTML = '<i class="fas fa-plus"></i>';
+			btn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				e.preventDefault();
+				var ds = info.dateStr || (function() {
+					var d = info.date;
+					return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+				})();
+				if (window.pkOpenEventModal) window.pkOpenEventModal(ds);
+			});
+			top.appendChild(btn);
 		}
 	});
 	pkCalendar.render();
@@ -3760,18 +3813,32 @@ $(document).ready(function() {
 (function() {
 	if (typeof PkConfig === 'undefined') return;
 
-	var CREATE_URL = PkConfig.uir + 'EventAjax/create';
+	var CREATE_URL  = PkConfig.uir + 'EventAjax/create';
 
 	function pkEvFeedback(msg) {
 		var el = document.getElementById('pk-emod-feedback');
 		el.textContent = msg; el.style.display = '';
 	}
 
-	window.pkOpenEventModal = function() {
+	window.pkOpenEventModal = function(dateStr) {
+		var modal = document.getElementById('pk-event-modal');
+		modal.dataset.presetDate = dateStr || '';
 		document.getElementById('pk-event-name').value = '';
 		document.getElementById('pk-emod-feedback').style.display = 'none';
 		document.getElementById('pk-emod-go-btn').disabled = true;
-		document.getElementById('pk-event-modal').classList.add('pk-emod-open');
+		// Show date hint when opened from a calendar cell
+		var dateRow  = document.getElementById('pk-emod-date-row');
+		var dateText = document.getElementById('pk-emod-date-text');
+		if (dateRow && dateText) {
+			if (dateStr) {
+				var d = new Date(dateStr + 'T00:00:00');
+				dateText.textContent = d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
+				dateRow.style.display = '';
+			} else {
+				dateRow.style.display = 'none';
+			}
+		}
+		modal.classList.add('pk-emod-open');
 		document.body.style.overflow = 'hidden';
 		setTimeout(function() { document.getElementById('pk-event-name').focus(); }, 50);
 	};
@@ -3789,7 +3856,10 @@ $(document).ready(function() {
 		$.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId },
 			function(r) {
 				if (r && r.status === 0) {
-					window.location.href = PkConfig.uir + 'Event/create/' + r.eventId + '/' + PkConfig.parkId;
+					var presetDate = document.getElementById('pk-event-modal').dataset.presetDate || '';
+					var url = PkConfig.uir + 'Event/create/' + r.eventId + '/' + PkConfig.parkId;
+					if (presetDate) url += '&date=' + encodeURIComponent(presetDate);
+					window.location.href = url;
 				} else {
 					pkEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
 					btn.disabled = false;
@@ -5978,6 +6048,660 @@ $(document).ready(function() {
 				btn.disabled = false;
 				btn.innerHTML = '<i class="fas fa-save"></i> Save';
 			});
+		});
+	});
+})();
+
+// ---- Move Player Modal (Kingdomnew) ----
+(function() {
+	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
+
+	var MOVE_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/moveplayer';
+	var PSEARCH  = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId + '&q=';
+	var PARK_URL = KnConfig.httpService + 'Search/SearchService.php';
+
+	function gid(id) { return document.getElementById(id); }
+	function showFb(msg, ok) {
+		var el = gid('kn-moveplayer-feedback');
+		el.textContent = msg;
+		el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+		el.style.display = '';
+	}
+
+	function closeMovePlayer() {
+		var ov = gid('kn-moveplayer-overlay');
+		if (ov) ov.classList.remove('kn-open');
+		document.body.style.overflow = '';
+	}
+
+	window.knOpenMovePlayerModal = function() {
+		var ov = gid('kn-moveplayer-overlay');
+		if (!ov) return;
+		gid('kn-moveplayer-player-name').value = '';
+		gid('kn-moveplayer-player-id').value   = '';
+		gid('kn-moveplayer-park-name').value   = '';
+		gid('kn-moveplayer-park-id').value     = '';
+		gid('kn-moveplayer-player-results').classList.remove('kn-ac-open');
+		gid('kn-moveplayer-park-results').classList.remove('kn-ac-open');
+		gid('kn-moveplayer-feedback').style.display = 'none';
+		ov.classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() { gid('kn-moveplayer-player-name').focus(); }, 50);
+	};
+
+	var mpPlayerTimer, mpParkTimer;
+
+	$(document).ready(function() {
+		if (!gid('kn-moveplayer-overlay')) return;
+
+		gid('kn-moveplayer-close-btn').addEventListener('click', closeMovePlayer);
+		gid('kn-moveplayer-cancel').addEventListener('click', closeMovePlayer);
+		gid('kn-moveplayer-overlay').addEventListener('click', function(e) {
+			if (e.target === this) closeMovePlayer();
+		});
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && gid('kn-moveplayer-overlay') && gid('kn-moveplayer-overlay').classList.contains('kn-open'))
+				closeMovePlayer();
+		});
+
+		// Player autocomplete
+		gid('kn-moveplayer-player-name').addEventListener('input', function() {
+			gid('kn-moveplayer-player-id').value = '';
+			var term = this.value.trim();
+			if (term.length < 2) { gid('kn-moveplayer-player-results').classList.remove('kn-ac-open'); return; }
+			clearTimeout(mpPlayerTimer);
+			mpPlayerTimer = setTimeout(function() {
+				fetch(PSEARCH + encodeURIComponent(term))
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						var el = gid('kn-moveplayer-player-results');
+						el.innerHTML = (data && data.length)
+							? data.map(function(p) {
+								return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+									+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr || '') + ':' + (p.PAbbr || '') + ')</span></div>';
+							}).join('')
+							: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+						el.classList.add('kn-ac-open');
+					}).catch(function() {});
+			}, 250);
+		});
+		gid('kn-moveplayer-player-results').addEventListener('click', function(e) {
+			var item = e.target.closest('.kn-ac-item[data-id]');
+			if (!item) return;
+			gid('kn-moveplayer-player-name').value = decodeURIComponent(item.dataset.name);
+			gid('kn-moveplayer-player-id').value   = item.dataset.id;
+			this.classList.remove('kn-ac-open');
+		});
+
+		// Park autocomplete (all parks)
+		gid('kn-moveplayer-park-name').addEventListener('input', function() {
+			gid('kn-moveplayer-park-id').value = '';
+			var term = this.value.trim();
+			if (term.length < 2) { gid('kn-moveplayer-park-results').classList.remove('kn-ac-open'); return; }
+			clearTimeout(mpParkTimer);
+			mpParkTimer = setTimeout(function() {
+				$.getJSON(PARK_URL, { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
+					var el = gid('kn-moveplayer-park-results');
+					el.innerHTML = (data && data.length)
+						? data.map(function(p) {
+							return '<div class="kn-ac-item" data-id="' + p.ParkId + '" data-name="' + encodeURIComponent(p.Name) + '">'
+								+ p.Name + '</div>';
+						}).join('')
+						: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
+					el.classList.add('kn-ac-open');
+				});
+			}, 250);
+		});
+		gid('kn-moveplayer-park-results').addEventListener('click', function(e) {
+			var item = e.target.closest('.kn-ac-item[data-id]');
+			if (!item) return;
+			gid('kn-moveplayer-park-name').value = decodeURIComponent(item.dataset.name);
+			gid('kn-moveplayer-park-id').value   = item.dataset.id;
+			this.classList.remove('kn-ac-open');
+		});
+
+		gid('kn-moveplayer-submit').addEventListener('click', function() {
+			var mundaneId = gid('kn-moveplayer-player-id').value;
+			var parkId    = gid('kn-moveplayer-park-id').value;
+			if (!mundaneId) { showFb('Select a player.', false); return; }
+			if (!parkId)    { showFb('Select a destination park.', false); return; }
+			var btn = this;
+			btn.disabled = true;
+			$.post(MOVE_URL, { MundaneId: mundaneId, DestParkId: parkId }, function(r) {
+				btn.disabled = false;
+				if (r && r.status === 0) {
+					showFb('Player moved successfully.', true);
+					setTimeout(closeMovePlayer, 1200);
+				} else {
+					showFb((r && r.error) ? r.error : 'Move failed.', false);
+				}
+			}, 'json').fail(function() {
+				btn.disabled = false;
+				showFb('Request failed. Please try again.', false);
+			});
+		});
+	});
+})();
+
+// ---- Claim Park Modal (Kingdomnew) ----
+(function() {
+	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
+
+	var CLAIM_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/claimpark';
+	var PARK_URL  = KnConfig.httpService + 'Search/SearchService.php';
+
+	function gid(id) { return document.getElementById(id); }
+	function showFb(msg, ok) {
+		var el = gid('kn-claimpark-feedback');
+		el.textContent = msg;
+		el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+		el.style.display = '';
+	}
+
+	function closeClaimPark() {
+		var ov = gid('kn-claimpark-overlay');
+		if (ov) ov.classList.remove('kn-open');
+		document.body.style.overflow = '';
+	}
+
+	window.knOpenClaimParkModal = function() {
+		var ov = gid('kn-claimpark-overlay');
+		if (!ov) return;
+		gid('kn-claimpark-park-name').value = '';
+		gid('kn-claimpark-park-id').value   = '';
+		gid('kn-claimpark-park-results').classList.remove('kn-ac-open');
+		gid('kn-claimpark-feedback').style.display = 'none';
+		ov.classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() { gid('kn-claimpark-park-name').focus(); }, 50);
+	};
+
+	var cpParkTimer;
+
+	$(document).ready(function() {
+		if (!gid('kn-claimpark-overlay')) return;
+
+		gid('kn-claimpark-close-btn').addEventListener('click', closeClaimPark);
+		gid('kn-claimpark-cancel').addEventListener('click', closeClaimPark);
+		gid('kn-claimpark-overlay').addEventListener('click', function(e) {
+			if (e.target === this) closeClaimPark();
+		});
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && gid('kn-claimpark-overlay') && gid('kn-claimpark-overlay').classList.contains('kn-open'))
+				closeClaimPark();
+		});
+
+		// Park autocomplete (all parks, no kingdom filter)
+		gid('kn-claimpark-park-name').addEventListener('input', function() {
+			gid('kn-claimpark-park-id').value = '';
+			var term = this.value.trim();
+			if (term.length < 2) { gid('kn-claimpark-park-results').classList.remove('kn-ac-open'); return; }
+			clearTimeout(cpParkTimer);
+			cpParkTimer = setTimeout(function() {
+				$.getJSON(PARK_URL, { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
+					var el = gid('kn-claimpark-park-results');
+					el.innerHTML = (data && data.length)
+						? data.map(function(p) {
+							return '<div class="kn-ac-item" data-id="' + p.ParkId + '" data-name="' + encodeURIComponent(p.Name) + '">'
+								+ p.Name + '</div>';
+						}).join('')
+						: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
+					el.classList.add('kn-ac-open');
+				});
+			}, 250);
+		});
+		gid('kn-claimpark-park-results').addEventListener('click', function(e) {
+			var item = e.target.closest('.kn-ac-item[data-id]');
+			if (!item) return;
+			gid('kn-claimpark-park-name').value = decodeURIComponent(item.dataset.name);
+			gid('kn-claimpark-park-id').value   = item.dataset.id;
+			this.classList.remove('kn-ac-open');
+		});
+
+		gid('kn-claimpark-submit').addEventListener('click', function() {
+			var parkId = gid('kn-claimpark-park-id').value;
+			if (!parkId) { showFb('Select a park to claim.', false); return; }
+			var btn = this;
+			btn.disabled = true;
+			$.post(CLAIM_URL, { ParkId: parkId, DestKingdomId: KnConfig.kingdomId }, function(r) {
+				btn.disabled = false;
+				if (r && r.status === 0) {
+					showFb('Park claimed successfully.', true);
+					setTimeout(closeClaimPark, 1200);
+				} else {
+					showFb((r && r.error) ? r.error : 'Claim failed.', false);
+				}
+			}, 'json').fail(function() {
+				btn.disabled = false;
+				showFb('Request failed. Please try again.', false);
+			});
+		});
+	});
+})();
+
+// ---- Event Templates Modal (Kingdomnew) ----
+(function() {
+	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
+
+	var TPL_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/geteventtemplates';
+	var CREATE_URL = KnConfig.uir + 'EventAjax/create';
+	var PARK_URL   = KnConfig.httpService + 'Search/SearchService.php';
+	var loaded     = false;
+
+	function gid(id) { return document.getElementById(id); }
+	function showFb(msg, ok) {
+		var el = gid('kn-eventtpl-feedback');
+		el.textContent = msg;
+		el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+		el.style.display = '';
+	}
+
+	function closeEventTpl() {
+		var ov = gid('kn-eventtpl-overlay');
+		if (ov) ov.classList.remove('kn-open');
+		document.body.style.overflow = '';
+	}
+
+	function loadTemplates() {
+		gid('kn-eventtpl-loading').style.display = '';
+		gid('kn-eventtpl-table').style.display   = 'none';
+		gid('kn-eventtpl-empty').style.display   = 'none';
+		$.getJSON(TPL_URL, function(r) {
+			gid('kn-eventtpl-loading').style.display = 'none';
+			if (!r || r.status !== 0) { showFb('Failed to load templates.', false); return; }
+			var tpls = r.templates || [];
+			if (tpls.length === 0) {
+				gid('kn-eventtpl-empty').style.display = '';
+			} else {
+				var tbody = gid('kn-eventtpl-tbody');
+				tbody.innerHTML = tpls.map(function(t) {
+					return '<tr>'
+						+ '<td>' + t.Name + '</td>'
+						+ '<td>' + (t.ParkName || '<span style="color:#a0aec0">&mdash;</span>') + '</td>'
+						+ '<td style="text-align:right"><a href="' + KnConfig.uir + 'Event/template/' + t.EventId + '" class="kn-btn-ghost" style="font-size:12px;padding:3px 10px">Edit</a></td>'
+						+ '</tr>';
+				}).join('');
+				gid('kn-eventtpl-table').style.display = '';
+			}
+			loaded = true;
+		}).fail(function() {
+			gid('kn-eventtpl-loading').style.display = 'none';
+			showFb('Request failed.', false);
+		});
+	}
+
+	window.knOpenEventTemplatesModal = function() {
+		var ov = gid('kn-eventtpl-overlay');
+		if (!ov) return;
+		gid('kn-eventtpl-feedback').style.display  = 'none';
+		gid('kn-eventtpl-new-name').value          = '';
+		gid('kn-eventtpl-new-park-name').value     = '';
+		gid('kn-eventtpl-new-park-id').value       = '';
+		gid('kn-eventtpl-park-results').classList.remove('kn-ac-open');
+		if (!loaded) loadTemplates();
+		ov.classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() { gid('kn-eventtpl-new-name').focus(); }, 50);
+	};
+
+	var etParkTimer;
+
+	$(document).ready(function() {
+		if (!gid('kn-eventtpl-overlay')) return;
+
+		gid('kn-eventtpl-close-btn').addEventListener('click', closeEventTpl);
+		gid('kn-eventtpl-done-btn').addEventListener('click', closeEventTpl);
+		gid('kn-eventtpl-overlay').addEventListener('click', function(e) {
+			if (e.target === this) closeEventTpl();
+		});
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && gid('kn-eventtpl-overlay') && gid('kn-eventtpl-overlay').classList.contains('kn-open'))
+				closeEventTpl();
+		});
+
+		// Host park autocomplete (kingdom's parks)
+		gid('kn-eventtpl-new-park-name').addEventListener('input', function() {
+			gid('kn-eventtpl-new-park-id').value = '';
+			var term = this.value.trim();
+			if (term.length < 2) { gid('kn-eventtpl-park-results').classList.remove('kn-ac-open'); return; }
+			clearTimeout(etParkTimer);
+			etParkTimer = setTimeout(function() {
+				$.getJSON(PARK_URL, { Action: 'Search/Park', name: term, kingdom_id: KnConfig.kingdomId, limit: 8 }, function(data) {
+					var el = gid('kn-eventtpl-park-results');
+					el.innerHTML = (data && data.length)
+						? data.map(function(p) {
+							return '<div class="kn-ac-item" data-id="' + p.ParkId + '" data-name="' + encodeURIComponent(p.Name) + '">'
+								+ p.Name + '</div>';
+						}).join('')
+						: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
+					el.classList.add('kn-ac-open');
+				});
+			}, 250);
+		});
+		gid('kn-eventtpl-park-results').addEventListener('click', function(e) {
+			var item = e.target.closest('.kn-ac-item[data-id]');
+			if (!item) return;
+			gid('kn-eventtpl-new-park-name').value = decodeURIComponent(item.dataset.name);
+			gid('kn-eventtpl-new-park-id').value   = item.dataset.id;
+			this.classList.remove('kn-ac-open');
+		});
+
+		// Create template
+		gid('kn-eventtpl-create-btn').addEventListener('click', function() {
+			var name   = gid('kn-eventtpl-new-name').value.trim();
+			var parkId = parseInt(gid('kn-eventtpl-new-park-id').value) || 0;
+			if (!name) { showFb('Event name is required.', false); return; }
+			var btn = this;
+			btn.disabled = true;
+			$.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId }, function(r) {
+				btn.disabled = false;
+				if (r && r.status === 0) {
+					var url = KnConfig.uir + 'Event/create/' + r.eventId;
+					if (parkId > 0) url += '/' + parkId;
+					window.location.href = url;
+				} else {
+					showFb((r && r.error) ? r.error : 'Failed to create template.', false);
+				}
+			}, 'json').fail(function() {
+				btn.disabled = false;
+				showFb('Request failed. Please try again.', false);
+			});
+		});
+	});
+})();
+
+// ---- Parknew: Heraldry Upload Modal ----
+(function() {
+	if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+
+	var UPLOAD_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setheraldry';
+
+	function gid(id) { return document.getElementById(id); }
+
+	function showFb(msg, ok) {
+		var el = gid('pk-heraldry-feedback');
+		if (!el) return;
+		el.style.display = 'block';
+		el.className = ok ? 'pk-editoff-feedback pk-editoff-ok' : 'pk-editoff-feedback pk-editoff-err';
+		el.textContent = msg;
+	}
+
+	function closeModal() {
+		var overlay = gid('pk-heraldry-overlay');
+		if (overlay) overlay.classList.remove('pk-open');
+	}
+
+	window.pkOpenHeraldryModal = function() {
+		var overlay = gid('pk-heraldry-overlay');
+		if (!overlay) return;
+		// Reset state
+		var fileInput = gid('pk-heraldry-file-input');
+		if (fileInput) fileInput.value = '';
+		var preview = gid('pk-heraldry-preview');
+		if (preview) { preview.src = ''; preview.style.display = 'none'; }
+		var placeholder = gid('pk-heraldry-placeholder');
+		if (placeholder) placeholder.style.display = 'flex';
+		var submitBtn = gid('pk-heraldry-submit');
+		if (submitBtn) submitBtn.disabled = true;
+		var fb = gid('pk-heraldry-feedback');
+		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+		overlay.classList.add('pk-open');
+	};
+
+	document.addEventListener('DOMContentLoaded', function() {
+		// File input change → preview
+		var fileInput = gid('pk-heraldry-file-input');
+		if (fileInput) {
+			fileInput.addEventListener('change', function() {
+				var file = this.files[0];
+				if (!file) return;
+				var reader = new FileReader();
+				reader.onload = function(e) {
+					var preview = gid('pk-heraldry-preview');
+					var placeholder = gid('pk-heraldry-placeholder');
+					if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
+					if (placeholder) placeholder.style.display = 'none';
+					var submitBtn = gid('pk-heraldry-submit');
+					if (submitBtn) submitBtn.disabled = false;
+				};
+				reader.readAsDataURL(file);
+			});
+		}
+
+		// Submit
+		var submitBtn = gid('pk-heraldry-submit');
+		if (submitBtn) {
+			submitBtn.addEventListener('click', function() {
+				var fileInput = gid('pk-heraldry-file-input');
+				if (!fileInput || !fileInput.files[0]) {
+					showFb('Please select an image file.', false); return;
+				}
+				var btn = this;
+				btn.disabled = true;
+				btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+				var fd = new FormData();
+				fd.append('Heraldry', fileInput.files[0]);
+				fetch(UPLOAD_URL, { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(r) {
+						btn.disabled = false;
+						btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+						if (r && r.status === 0) {
+							showFb('Heraldry updated! Reloading…', true);
+							setTimeout(function() { window.location.reload(); }, 1200);
+						} else {
+							showFb((r && r.error) ? r.error : 'Upload failed.', false);
+						}
+					})
+					.catch(function() {
+						btn.disabled = false;
+						btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+						showFb('Request failed. Please try again.', false);
+					});
+			});
+		}
+
+		// Close buttons
+		var closeBtn = gid('pk-heraldry-close-btn');
+		if (closeBtn) closeBtn.addEventListener('click', closeModal);
+		var cancelBtn = gid('pk-heraldry-cancel');
+		if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+		// Backdrop click
+		var overlay = gid('pk-heraldry-overlay');
+		if (overlay) {
+			overlay.addEventListener('click', function(e) {
+				if (e.target === overlay) closeModal();
+			});
+		}
+
+		// Escape key
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') {
+				var overlay = gid('pk-heraldry-overlay');
+				if (overlay && overlay.classList.contains('pk-open')) closeModal();
+			}
+		});
+	});
+})();
+
+// ---- Parknew: Move Player Modal ----
+(function() {
+	if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+
+	var MOVE_URL   = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
+	var PSEARCH    = PkConfig.uir + 'ParkAjax/playersearch/' + PkConfig.parkId + '&q=';
+
+	var mpPlayerId = 0, mpParkId = 0;
+	var mpPlayerTimer = null, mpParkTimer = null;
+
+	function gid(id) { return document.getElementById(id); }
+
+	function showFb(msg, ok) {
+		var el = gid('pk-moveplayer-feedback');
+		if (!el) return;
+		el.style.display = 'block';
+		el.className = ok ? 'pk-editoff-feedback pk-editoff-ok' : 'pk-editoff-feedback pk-editoff-err';
+		el.textContent = msg;
+	}
+
+	function closeModal() {
+		var overlay = gid('pk-moveplayer-overlay');
+		if (overlay) overlay.classList.remove('pk-open');
+	}
+
+	function closeDropdown(resultsId) {
+		var el = gid(resultsId);
+		if (el) { el.innerHTML = ''; el.classList.remove('pk-ac-open'); }
+	}
+
+	window.pkOpenMovePlayerModal = function() {
+		var overlay = gid('pk-moveplayer-overlay');
+		if (!overlay) return;
+		mpPlayerId = 0; mpParkId = 0;
+		var playerName = gid('pk-moveplayer-player-name');
+		if (playerName) playerName.value = '';
+		var playerId = gid('pk-moveplayer-player-id');
+		if (playerId) playerId.value = '';
+		var parkName = gid('pk-moveplayer-park-name');
+		if (parkName) parkName.value = '';
+		var parkId = gid('pk-moveplayer-park-id');
+		if (parkId) parkId.value = '';
+		closeDropdown('pk-moveplayer-player-results');
+		closeDropdown('pk-moveplayer-park-results');
+		var fb = gid('pk-moveplayer-feedback');
+		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+		overlay.classList.add('pk-open');
+	};
+
+	document.addEventListener('DOMContentLoaded', function() {
+		// Player autocomplete
+		var playerInput = gid('pk-moveplayer-player-name');
+		if (playerInput) {
+			playerInput.addEventListener('input', function() {
+				clearTimeout(mpPlayerTimer);
+				var term = this.value.trim();
+				if (term.length < 2) { closeDropdown('pk-moveplayer-player-results'); return; }
+				mpPlayerTimer = setTimeout(function() {
+					fetch(PSEARCH + encodeURIComponent(term))
+						.then(function(r) { return r.json(); })
+						.then(function(results) {
+							var res = gid('pk-moveplayer-player-results');
+							if (!res) return;
+							res.innerHTML = '';
+							if (!results || !results.length) { res.classList.remove('pk-ac-open'); return; }
+							results.forEach(function(p) {
+								var item = document.createElement('div');
+								item.className = 'pk-ac-item';
+								var sub = p.ParkName ? ' (' + p.ParkName + ')' : '';
+								item.textContent = p.Persona + sub;
+								item.addEventListener('mousedown', function(e) {
+									e.preventDefault();
+									mpPlayerId = p.MundaneId;
+									gid('pk-moveplayer-player-name').value = p.Persona;
+									gid('pk-moveplayer-player-id').value = p.MundaneId;
+									closeDropdown('pk-moveplayer-player-results');
+								});
+								res.appendChild(item);
+							});
+							res.classList.add('pk-ac-open');
+						})
+						.catch(function() { closeDropdown('pk-moveplayer-player-results'); });
+				}, 280);
+			});
+			playerInput.addEventListener('blur', function() {
+				setTimeout(function() { closeDropdown('pk-moveplayer-player-results'); }, 200);
+			});
+		}
+
+		// Park autocomplete
+		var parkInput = gid('pk-moveplayer-park-name');
+		if (parkInput) {
+			parkInput.addEventListener('input', function() {
+				clearTimeout(mpParkTimer);
+				var term = this.value.trim();
+				if (term.length < 2) { closeDropdown('pk-moveplayer-park-results'); return; }
+				mpParkTimer = setTimeout(function() {
+					$.getJSON(PkConfig.httpService, { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
+						var res = gid('pk-moveplayer-park-results');
+						if (!res) return;
+						res.innerHTML = '';
+						var parks = data.Parks || data.parks || data.results || data || [];
+						if (!parks.length) { res.classList.remove('pk-ac-open'); return; }
+						parks.forEach(function(p) {
+							var item = document.createElement('div');
+							item.className = 'pk-ac-item';
+							var sub = p.KingdomName ? ' (' + p.KingdomName + ')' : '';
+							item.textContent = (p.ParkName || p.Name || p.name || '') + sub;
+							item.addEventListener('mousedown', function(e) {
+								e.preventDefault();
+								mpParkId = p.ParkId || p.parkId || p.id || 0;
+								gid('pk-moveplayer-park-name').value = p.ParkName || p.Name || p.name || '';
+								gid('pk-moveplayer-park-id').value = mpParkId;
+								closeDropdown('pk-moveplayer-park-results');
+							});
+							res.appendChild(item);
+						});
+						res.classList.add('pk-ac-open');
+					});
+				}, 280);
+			});
+			parkInput.addEventListener('blur', function() {
+				setTimeout(function() { closeDropdown('pk-moveplayer-park-results'); }, 200);
+			});
+		}
+
+		// Submit
+		var submitBtn = gid('pk-moveplayer-submit');
+		if (submitBtn) {
+			submitBtn.addEventListener('click', function() {
+				mpPlayerId = parseInt(gid('pk-moveplayer-player-id').value) || 0;
+				mpParkId   = parseInt(gid('pk-moveplayer-park-id').value)   || 0;
+				if (!mpPlayerId) { showFb('Please select a player.', false); return; }
+				if (!mpParkId)   { showFb('Please select a destination park.', false); return; }
+				var btn = this;
+				btn.disabled = true;
+				$.post(MOVE_URL, { MundaneId: mpPlayerId, DestParkId: mpParkId }, function(r) {
+					btn.disabled = false;
+					if (r && r.status === 0) {
+						showFb('Player moved successfully.', true);
+						mpPlayerId = 0; mpParkId = 0;
+						var playerName = gid('pk-moveplayer-player-name');
+						if (playerName) playerName.value = '';
+						gid('pk-moveplayer-player-id').value = '';
+						var parkName = gid('pk-moveplayer-park-name');
+						if (parkName) parkName.value = '';
+						gid('pk-moveplayer-park-id').value = '';
+					} else {
+						showFb((r && r.error) ? r.error : 'Move failed.', false);
+					}
+				}, 'json').fail(function() {
+					btn.disabled = false;
+					showFb('Request failed. Please try again.', false);
+				});
+			});
+		}
+
+		// Close buttons
+		var closeBtn = gid('pk-moveplayer-close-btn');
+		if (closeBtn) closeBtn.addEventListener('click', closeModal);
+		var cancelBtn = gid('pk-moveplayer-cancel');
+		if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+		// Backdrop click
+		var overlay = gid('pk-moveplayer-overlay');
+		if (overlay) {
+			overlay.addEventListener('click', function(e) {
+				if (e.target === overlay) closeModal();
+			});
+		}
+
+		// Escape key
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') {
+				var overlay = gid('pk-moveplayer-overlay');
+				if (overlay && overlay.classList.contains('pk-open')) closeModal();
+			}
 		});
 	});
 })();

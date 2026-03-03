@@ -1374,7 +1374,7 @@ var PnConfig = {
 	playerParkName: <?= json_encode($Player['Park'] ?? $Player['ParkName'] ?? '') ?>,
 };
 </script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <?php if ($canEditAdmin): ?>
 <!-- Revoke Award Modal -->

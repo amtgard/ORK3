@@ -365,6 +365,14 @@ class Controller_Event extends Controller {
 
 		$this->data['AtParkId']   = $at_park_id;
 		$this->data['AtParkName'] = '';
+		$rawDate = trim($_GET['date'] ?? '');
+		if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawDate)) {
+			$this->data['PresetDate']    = $rawDate . 'T12:00';
+			$this->data['PresetEndDate'] = $rawDate . 'T18:00';
+		} else {
+			$this->data['PresetDate']    = '';
+			$this->data['PresetEndDate'] = '';
+		}
 		if ( $at_park_id > 0 ) {
 			global $DB;
 			$row = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE park_id = " . $at_park_id . " LIMIT 1");

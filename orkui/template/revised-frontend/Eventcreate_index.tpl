@@ -73,11 +73,11 @@
 				<div class="ec-row">
 					<div class="ec-field">
 						<label>Start Date &amp; Time <span class="ec-required">*</span></label>
-						<input type="datetime-local" name="StartDate" id="ec-StartDate" required>
+						<input type="datetime-local" name="StartDate" id="ec-StartDate" required<?= !empty($PresetDate) ? ' value="' . htmlspecialchars($PresetDate) . '"' : '' ?>>
 					</div>
 					<div class="ec-field">
 						<label>End Date &amp; Time</label>
-						<input type="datetime-local" name="EndDate" id="ec-EndDate">
+						<input type="datetime-local" name="EndDate" id="ec-EndDate"<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
 					</div>
 					<div class="ec-field ec-sm">
 						<label>Price ($)</label>
@@ -207,4 +207,4 @@ var EcConfig = {
 	httpService: '<?= HTTP_SERVICE ?>',
 };
 </script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

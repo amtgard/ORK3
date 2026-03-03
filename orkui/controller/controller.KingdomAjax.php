@@ -247,6 +247,49 @@ class Controller_KingdomAjax extends Controller {
 			]);
 			echo json_encode(['status' => 0]);
 
+		} elseif ($action === 'moveplayer') {
+			$this->load_model('Player');
+			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);
+			$dest_park_id = (int)($_POST['DestParkId'] ?? 0);
+			if (!valid_id($mundane_id))   { echo json_encode(['status' => 1, 'error' => 'Select a player.']);           exit; }
+			if (!valid_id($dest_park_id)) { echo json_encode(['status' => 1, 'error' => 'Select a destination park.']); exit; }
+			$r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'parkId' => $dest_park_id])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'claimpark') {
+			$this->load_model('Park');
+			$park_id         = (int)($_POST['ParkId']        ?? 0);
+			$dest_kingdom_id = (int)($_POST['DestKingdomId'] ?? $kingdom_id);
+			if (!valid_id($park_id))         { echo json_encode(['status' => 1, 'error' => 'Select a park.']);                    exit; }
+			if (!valid_id($dest_kingdom_id)) { echo json_encode(['status' => 1, 'error' => 'Destination kingdom is required.']); exit; }
+			$r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'geteventtemplates') {
+			global $DB;
+			$kid = $kingdom_id;
+			$sql = "SELECT e.event_id, e.name, p.park_id, p.name AS park_name
+			        FROM ork_event e
+			        LEFT JOIN ork_park p ON p.park_id = e.park_id
+			        WHERE e.kingdom_id = $kid ORDER BY e.name";
+			$rs        = $DB->DataSet($sql);
+			$templates = [];
+			if ($rs && $rs->Size() > 0) {
+				while ($rs->Next()) {
+					$templates[] = [
+						'EventId'  => (int)$rs->event_id,
+						'Name'     => $rs->name,
+						'ParkId'   => (int)$rs->park_id,
+						'ParkName' => $rs->park_name ?? '',
+					];
+				}
+			}
+			echo json_encode(['status' => 0, 'templates' => $templates]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

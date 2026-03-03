@@ -272,6 +272,7 @@ class Controller_Kingdom extends Controller {
 		$this->data['kingdom_players'] = $kingdomPlayers;
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$this->data['IsLoggedIn']       = $uid > 0;
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 

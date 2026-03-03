@@ -595,12 +595,15 @@
 						<ul>
 							<li><a href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">Admin Panel</a></li>
 							<li><a href="#" onclick="knOpenAddParkModal();return false;">Create Park</a></li>
-							<li><a href="<?= UIR ?>Admin/editkingdom/<?= $kingdom_id ?>">Configure Kingdom</a></li>
+							<li><a href="#" onclick="knOpenAdminModal();return false;">Configure Kingdom</a></li>
 							<li><a href="<?= UIR ?>Admin/editparks/<?= $kingdom_id ?>">Configure Parks</a></li>
-							<li><a href="<?= UIR ?>Admin/setkilofficers/kingdom/<?= $kingdom_id ?>">Set Officers</a></li>
-							<li><a href="<?= UIR ?>Admin/createplayer&KingdomId=<?= $kingdom_id ?>">Create Player</a></li>
+							<li><a href="#" onclick="knOpenEditOfficersModal();return false;">Set Officers</a></li>
+							<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
+							<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
 							<li><a href="<?= UIR ?>Admin/mergeplayers">Merge Players</a></li>
 							<li><a href="<?= UIR ?>Admin/suspensions/kingdom/<?= $kingdom_id ?>">Suspensions</a></li>
+							<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
+							<li><a href="#" onclick="knOpenEventTemplatesModal();return false;">Event Templates</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -842,6 +845,7 @@ var KnConfig = {
 	kingdomId:        <?= (int)($kingdom_id ?? 0) ?>,
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
+	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -981,6 +985,9 @@ var KnConfig = {
 			<div class="kn-emod-field">
 				<label class="kn-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="kn-emod-input" id="kn-event-name" autocomplete="off" placeholder="e.g. Summer Midreign">
+			</div>
+			<div id="kn-emod-date-row" style="display:none;font-size:12px;color:#2b6cb0;margin-top:8px;padding:5px 8px;background:#ebf8ff;border-radius:5px;border-left:3px solid #90cdf4">
+				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="kn-emod-date-text"></span>
 			</div>
 			<div class="kn-emod-field" style="margin-top:12px">
 				<label class="kn-emod-label">Host Park <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(optional — leave blank for a kingdom-level event)</span></label>
@@ -1356,5 +1363,100 @@ var KnConfig = {
 		</div>
 	</div>
 </div>
+
+<!-- Move Player Modal -->
+<div id="kn-moveplayer-overlay">
+	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<button class="kn-modal-close-btn" id="kn-moveplayer-close-btn">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div id="kn-moveplayer-feedback" style="display:none"></div>
+			<div class="kn-acct-field">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-moveplayer-player-name" autocomplete="off" placeholder="Search players&hellip;">
+				<input type="hidden" id="kn-moveplayer-player-id">
+				<div class="kn-ac-results" id="kn-moveplayer-player-results"></div>
+			</div>
+			<div class="kn-acct-field" style="margin-top:10px">
+				<label>New Home Park <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-moveplayer-park-name" autocomplete="off" placeholder="Search parks&hellip;">
+				<input type="hidden" id="kn-moveplayer-park-id">
+				<div class="kn-ac-results" id="kn-moveplayer-park-results"></div>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn-ghost" id="kn-moveplayer-cancel">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-moveplayer-submit"><i class="fas fa-arrow-right"></i> Move Player</button>
+		</div>
+	</div>
+</div>
+
+<!-- Claim Park Modal -->
+<div id="kn-claimpark-overlay">
+	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-flag" style="margin-right:8px;color:#276749"></i>Claim Park</h3>
+			<button class="kn-modal-close-btn" id="kn-claimpark-close-btn">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div id="kn-claimpark-feedback" style="display:none"></div>
+			<p style="font-size:13px;color:#718096;margin:0 0 14px">Transfer a park from another kingdom into <strong><?= htmlspecialchars($kingdom_name) ?></strong>.</p>
+			<div class="kn-acct-field">
+				<label>Park to Claim <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-claimpark-park-name" autocomplete="off" placeholder="Search all parks&hellip;">
+				<input type="hidden" id="kn-claimpark-park-id">
+				<div class="kn-ac-results" id="kn-claimpark-park-results"></div>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn-ghost" id="kn-claimpark-cancel">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-claimpark-submit"><i class="fas fa-flag"></i> Claim Park</button>
+		</div>
+	</div>
+</div>
+
+<!-- Event Templates Modal -->
+<div id="kn-eventtpl-overlay">
+	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#744210"></i>Event Templates</h3>
+			<button class="kn-modal-close-btn" id="kn-eventtpl-close-btn">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div id="kn-eventtpl-feedback" style="display:none"></div>
+			<div id="kn-eventtpl-list-wrap">
+				<div id="kn-eventtpl-loading" style="text-align:center;padding:16px;color:#a0aec0"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
+				<table class="kn-table" id="kn-eventtpl-table" style="display:none">
+					<thead><tr><th>Event Name</th><th>Host Park</th><th></th></tr></thead>
+					<tbody id="kn-eventtpl-tbody"></tbody>
+				</table>
+				<div id="kn-eventtpl-empty" style="display:none;font-size:13px;color:#a0aec0;text-align:center;padding:12px">No event templates yet.</div>
+			</div>
+			<div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px">
+				<div style="font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Create New Template</div>
+				<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+					<div class="kn-acct-field" style="flex:1;min-width:160px">
+						<label>Event Name <span style="color:#e53e3e">*</span></label>
+						<input type="text" id="kn-eventtpl-new-name" placeholder="e.g. Summer Midreign" autocomplete="off">
+					</div>
+					<div class="kn-acct-field" style="flex:1;min-width:140px">
+						<label>Host Park <span style="color:#718096;font-weight:400;text-transform:none">(optional)</span></label>
+						<input type="text" id="kn-eventtpl-new-park-name" autocomplete="off" placeholder="Search parks&hellip;">
+						<input type="hidden" id="kn-eventtpl-new-park-id">
+						<div class="kn-ac-results" id="kn-eventtpl-park-results"></div>
+					</div>
+					<div style="flex-shrink:0;padding-top:20px">
+						<button class="kn-btn kn-btn-primary" id="kn-eventtpl-create-btn"><i class="fas fa-plus"></i> Create</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="kn-modal-footer" style="justify-content:flex-end">
+			<button class="kn-btn-ghost" id="kn-eventtpl-done-btn">Done</button>
+		</div>
+	</div>
+</div>
 <?php endif; ?>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

@@ -88,11 +88,16 @@
 		<!-- Heraldry -->
 		<div class="pk-hero-left">
 			<?php if ($hasHeraldry): ?>
-			<div class="pk-heraldry-frame">
+			<div class="pk-heraldry-frame<?= !empty($CanManagePark) ? ' pk-heraldry-editable' : '' ?>">
 				<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>"
 				     alt="<?= htmlspecialchars($park_name) ?> heraldry"
 				     crossorigin="anonymous"
 				     onload="pkApplyHeroColor(this)">
+				<?php if (!empty($CanManagePark)): ?>
+				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" title="Change heraldry">
+					<i class="fas fa-camera"></i>
+				</button>
+				<?php endif; ?>
 			</div>
 			<?php endif; ?>
 		</div>
@@ -254,14 +259,6 @@
 			</ul>
 		</div>
 
-		<!-- Description -->
-		<?php if (!empty($description)): ?>
-		<div class="pk-card">
-			<h4><i class="fas fa-info-circle"></i> About</h4>
-			<div class="pk-description-text"><?= nl2br(htmlspecialchars($description)) ?></div>
-		</div>
-		<?php endif; ?>
-
 	</aside>
 
 	<!-- ---- Tabbed Main ---- -->
@@ -270,13 +267,16 @@
 
 			<!-- Tab navigation -->
 			<ul class="pk-tab-nav">
-				<li data-pktab="schedule" class="<?= $firstTab === 'schedule' ? 'pk-tab-active' : '' ?>">
+				<li data-pktab="about" class="pk-tab-active">
+					<i class="fas fa-info-circle"></i> About
+				</li>
+				<li data-pktab="schedule" class="">
 					<i class="fas fa-calendar"></i> Schedule
 					<?php if (count($parkDayList) > 0): ?>
 						<span class="pk-tab-count">(<?= count($parkDayList) ?>)</span>
 					<?php endif; ?>
 				</li>
-				<li data-pktab="events" class="<?= $firstTab === 'events' ? 'pk-tab-active' : '' ?>">
+				<li data-pktab="events" class="">
 					<i class="fas fa-flag"></i> Events
 					<span class="pk-tab-count">(<?= count($eventList) ?>)</span>
 				</li>
@@ -295,8 +295,58 @@
 				</li>
 			</ul>
 
+			<!-- About Tab -->
+			<div class="pk-tab-panel" id="pk-tab-about">
+				<?php if (!empty($CanManagePark)): ?>
+				<div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+					<button class="pk-btn pk-btn-primary" onclick="pkOpenEditDetailsModal()">
+						<i class="fas fa-cog" style="margin-right:6px"></i>Manage Park
+					</button>
+				</div>
+				<?php endif; ?>
+
+				<div class="pk-about-grid">
+					<?php if (!empty($description)): ?>
+					<div class="pk-about-section">
+						<div class="pk-about-label">About</div>
+						<div class="pk-about-text"><?= nl2br(htmlspecialchars($description)) ?></div>
+					</div>
+					<?php endif; ?>
+
+					<?php if (!empty($directions)): ?>
+					<div class="pk-about-section">
+						<div class="pk-about-label">Directions</div>
+						<div class="pk-about-text"><?= nl2br(htmlspecialchars($directions)) ?></div>
+					</div>
+					<?php endif; ?>
+
+					<?php if (!empty($parkInfo['Address']) || !empty($websiteUrl) || !empty($parkInfo['MapUrl'])): ?>
+					<div class="pk-about-section pk-about-meta">
+						<?php if (!empty($parkInfo['Address'])): ?>
+						<div class="pk-about-meta-row">
+							<i class="fas fa-map-marker-alt"></i>
+							<span><?= htmlspecialchars($parkInfo['Address']) ?><?= !empty($parkInfo['City']) ? ', ' . htmlspecialchars($parkInfo['City']) : '' ?><?= !empty($parkInfo['Province']) ? ' ' . htmlspecialchars($parkInfo['Province']) : '' ?><?= !empty($parkInfo['PostalCode']) ? ' ' . htmlspecialchars($parkInfo['PostalCode']) : '' ?></span>
+						</div>
+						<?php endif; ?>
+						<?php if (!empty($websiteUrl)): ?>
+						<div class="pk-about-meta-row">
+							<i class="fas fa-globe"></i>
+							<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($websiteUrl) ?></a>
+						</div>
+						<?php endif; ?>
+						<?php if (!empty($parkInfo['MapUrl'])): ?>
+						<div class="pk-about-meta-row">
+							<i class="fas fa-map"></i>
+							<a href="<?= htmlspecialchars($parkInfo['MapUrl']) ?>" target="_blank" rel="noopener">View on Map</a>
+						</div>
+						<?php endif; ?>
+					</div>
+					<?php endif; ?>
+				</div>
+			</div><!-- /pk-tab-about -->
+
 			<!-- Schedule Tab -->
-			<div class="pk-tab-panel" id="pk-tab-schedule" <?= $firstTab !== 'schedule' ? 'style="display:none"' : '' ?>>
+			<div class="pk-tab-panel" id="pk-tab-schedule" style="display:none">
 				<?php if (count($parkDayList) > 0): ?>
 					<?php if (!empty($CanManagePark)): ?>
 					<div class="pk-tab-toolbar">
@@ -384,7 +434,7 @@
 			</div>
 
 			<!-- Events Tab -->
-			<div class="pk-tab-panel" id="pk-tab-events" <?= $firstTab !== 'events' ? 'style="display:none"' : '' ?>>
+			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;">
@@ -784,6 +834,16 @@
 							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 						</ul>
 					</div>
+					<?php if (!empty($CanManagePark)): ?>
+					<div class="pk-reports-section">
+						<h5>Admin</h5>
+						<ul>
+							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Add Player</a></li>
+							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
+							<li><a href="<?= UIR ?>Admin/mergeplayer/park/<?= $park_id ?>">Merge Players</a></li>
+						</ul>
+					</div>
+					<?php endif; ?>
 				</div>
 			</div>
 
@@ -803,6 +863,7 @@ var PkConfig = {
 	parkName:       <?= json_encode($park_name ?? '') ?>,
 	kingdomId:      <?= (int)($kingdom_id ?? 0) ?>,
 	canManage:      <?= !empty($CanManagePark) ? 'true' : 'false' ?>,
+	loggedIn:       <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	calEvents:      <?= json_encode(array_values($pkCalEvents ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
@@ -1038,6 +1099,9 @@ var PkConfig = {
 			<div class="pk-emod-field">
 				<label class="pk-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
+			</div>
+			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:#2b6cb0;margin-top:8px;padding:5px 8px;background:#ebf8ff;border-radius:5px;border-left:3px solid #90cdf4">
+				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
 			</div>
 			<p class="pk-emod-hint" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
 			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
@@ -1292,6 +1356,63 @@ var PkConfig = {
 <?php endif; ?>
 
 <?php if (!empty($CanManagePark)): ?>
+<!-- Heraldry Upload Modal -->
+<div id="pk-heraldry-overlay">
+	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#744210"></i>Change Heraldry</h3>
+			<button class="pk-modal-close-btn" id="pk-heraldry-close-btn">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-heraldry-feedback" style="display:none"></div>
+			<div style="text-align:center;margin-bottom:14px">
+				<img id="pk-heraldry-preview" src="" alt="" style="max-width:180px;max-height:180px;display:none;border-radius:8px;border:1px solid #e2e8f0">
+				<div id="pk-heraldry-placeholder" style="width:180px;height:180px;margin:0 auto;background:#f7fafc;border:2px dashed #e2e8f0;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#a0aec0;font-size:13px">
+					<i class="fas fa-image" style="font-size:32px"></i>
+				</div>
+			</div>
+			<div class="pk-acct-field">
+				<label>Select Image <span style="color:#e53e3e">*</span></label>
+				<input type="file" id="pk-heraldry-file-input" accept="image/png,image/jpeg,image/gif">
+			</div>
+			<div style="font-size:11px;color:#a0aec0;margin-top:6px">PNG, JPG, or GIF. Recommended: square, at least 200×200 px.</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn-ghost" id="pk-heraldry-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-heraldry-submit" disabled><i class="fas fa-upload"></i> Upload</button>
+		</div>
+	</div>
+</div>
+
+<!-- Move Player Modal -->
+<div id="pk-moveplayer-overlay">
+	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<button class="pk-modal-close-btn" id="pk-moveplayer-close-btn">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-moveplayer-feedback" style="display:none"></div>
+			<div class="pk-acct-field">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-moveplayer-player-name" autocomplete="off" placeholder="Search players in this park…">
+				<input type="hidden" id="pk-moveplayer-player-id">
+				<div class="pk-ac-results" id="pk-moveplayer-player-results"></div>
+			</div>
+			<div class="pk-acct-field" style="margin-top:10px">
+				<label>New Home Park <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-moveplayer-park-name" autocomplete="off" placeholder="Search parks…">
+				<input type="hidden" id="pk-moveplayer-park-id">
+				<div class="pk-ac-results" id="pk-moveplayer-park-results"></div>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn-ghost" id="pk-moveplayer-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-moveplayer-submit"><i class="fas fa-arrow-right"></i> Move Player</button>
+		</div>
+	</div>
+</div>
+
 <!-- Edit Park Details Modal -->
 <div id="pk-editdetails-overlay">
 	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
@@ -1345,4 +1466,4 @@ var PkConfig = {
 	</div>
 </div>
 <?php endif; ?>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

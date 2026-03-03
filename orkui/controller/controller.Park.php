@@ -178,6 +178,7 @@ class Controller_Park extends Controller
 		$this->data['park_players'] = $parkPlayers;
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$this->data['IsLoggedIn']    = $uid > 0;
 		$this->data['CanManagePark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
 	}

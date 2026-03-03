@@ -171,6 +171,36 @@ class Controller_ParkAjax extends Controller {
 
 			echo json_encode($results);
 
+		} elseif ($action === 'setheraldry') {
+			if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'No image file received.']); exit;
+			}
+			$allowed = ['image/png', 'image/jpeg', 'image/gif'];
+			if (!in_array($_FILES['Heraldry']['type'], $allowed)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid image type. Use PNG, JPG, or GIF.']); exit;
+			}
+			$heraldryData = base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name']));
+			$r = $this->Park->SetParkDetails([
+				'Token'            => $this->session->token,
+				'ParkId'           => $park_id,
+				'Heraldry'         => $heraldryData,
+				'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'moveplayer') {
+			$this->load_model('Player');
+			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);
+			$dest_park_id = (int)($_POST['DestParkId'] ?? 0);
+			if (!valid_id($mundane_id))   { echo json_encode(['status' => 1, 'error' => 'Select a player.']); exit; }
+			if (!valid_id($dest_park_id)) { echo json_encode(['status' => 1, 'error' => 'Select a destination park.']); exit; }
+			$r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

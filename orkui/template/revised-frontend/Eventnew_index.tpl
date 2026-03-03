@@ -625,4 +625,4 @@ var EvConfig = {
 	canManage:  <?= !empty($canManage) ? 'true' : 'false' ?>,
 };
 </script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
