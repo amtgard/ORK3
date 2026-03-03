@@ -6637,7 +6637,8 @@ p {
 .nsdd-empty { padding: 14px 16px; color: #a0aec0; font-size: 13px; font-style: italic; text-align: center; }
 .nsdd-section-header { padding: 8px 16px 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #a0aec0; }
 .nsdd-item { display: flex; align-items: center; gap: 10px; padding: 7px 16px; text-decoration: none; color: #2d3748; transition: background 0.1s; outline: none; }
-.nsdd-item:hover, .nsdd-item:focus { background: #f7fafc; text-decoration: none; color: #2d3748; }
+.nsdd-item:hover { background: #edf2f7; text-decoration: none; color: #2d3748; }
+.nsdd-item:focus { background: #dbeafe; color: #1e40af; text-decoration: none; outline: none; border-left: 3px solid #4299e1; padding-left: 13px; }
 .nsdd-item-icon { width: 18px; text-align: center; color: #a0aec0; font-size: 12px; flex-shrink: 0; }
 .nsdd-item-content { flex: 1; min-width: 0; }
 .nsdd-item-label { font-size: 13px; color: #2d3748; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
