@@ -919,6 +919,36 @@ class Controller_Reports extends Controller {
 		unset($pRow);
 
 		$this->data['GridRows'] = array_values($playerData);
+	public function park_distance_matrix($type = null) {
+		$this->template = 'Reports_parkdistancematrix.tpl';
+		$this->data['page_title'] = "Park Distance Matrix";
+
+		$kingdom_id = intval($this->request->KingdomId ?: $this->session->kingdom_id);
+		if (!valid_id($kingdom_id)) {
+			$this->data['error'] = "No kingdom specified.";
+			return;
+		}
+
+		$result = $this->Reports->park_distance_matrix(array('KingdomId' => $kingdom_id));
+		$this->data['parks']      = $result['Parks'];
+		$this->data['matrix']     = $result['Matrix'];
+		$this->data['kingdom_id'] = $kingdom_id;
+	}
+
+	public function closest_parks($type = null) {
+		$this->template = 'Reports_closestparks.tpl';
+		$this->data['page_title'] = "Closest Parks";
+
+		$park_id = intval($this->request->ParkId);
+		if (!valid_id($park_id)) {
+			$this->data['error'] = "No park specified.";
+			return;
+		}
+
+		$result = $this->Reports->closest_parks(array('ParkId' => $park_id));
+		$this->data['parks']       = $result['Parks'];
+		$this->data['origin_park'] = $result['OriginPark'];
+		$this->data['park_id']     = $park_id;
 	}
 
 }

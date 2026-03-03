@@ -268,6 +268,21 @@ class Model_Reports extends Model {
 		return array('Relationships' => array(), 'Knights' => array(), 'AllKnightIds' => array(), 'KnightTypes' => array());
 	}
 
+	function park_distance_matrix($request) {
+		$r = $this->Report->GetParkDistanceMatrix($request);
+		return array(
+			'Parks'  => isset($r['Parks'])  ? $r['Parks']  : array(),
+			'Matrix' => isset($r['Matrix']) ? $r['Matrix'] : array(),
+		);
+	}
+
+	function closest_parks($request) {
+		$r = $this->Report->GetClosestParks($request);
+		return array(
+			'Parks'      => isset($r['Parks']) ? $r['Parks'] : array(),
+			'OriginPark' => isset($r['OriginPark']) ? $r['OriginPark'] : null,
+		);
+	}
 }
 
 ?>
