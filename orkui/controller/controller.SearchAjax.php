@@ -23,14 +23,16 @@ class Controller_SearchAjax extends Controller {
 		$unitBudget    = 3;
 
 		// Parks — prioritize user's kingdom first
-		$parkPri = valid_id($kid) ? "CASE WHEN p.kingdom_id = {$kid} THEN 0 ELSE 1 END" : "0";
+		$parkOrder = valid_id($kid)
+			? "CASE WHEN p.kingdom_id = {$kid} THEN 0 ELSE 1 END, p.name"
+			: "p.name";
 		$rs = $DB->DataSet("
 			SELECT p.park_id, p.name, k.abbreviation AS k_abbr
 			FROM ork_park p
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = p.kingdom_id
 			WHERE p.active = 'Active'
 			  AND (p.name LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')
-			ORDER BY {$parkPri}, p.name
+			ORDER BY {$parkOrder}
 			LIMIT {$parkBudget}");
 		$parks = [];
 		while ($rs->Next()) {
@@ -65,7 +67,9 @@ class Controller_SearchAjax extends Controller {
 		$playerBudget += $unitBudget - count($units);
 
 		// Players — prioritize user's kingdom, with expanded budget from unused slots above
-		$playerPri = valid_id($kid) ? "CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END" : "0";
+		$playerOrder = valid_id($kid)
+			? "CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona"
+			: "m.persona";
 		$rs = $DB->DataSet("
 			SELECT m.mundane_id, m.persona, k.abbreviation AS k_abbr, p.name AS park_name
 			FROM ork_mundane m
@@ -76,7 +80,7 @@ class Controller_SearchAjax extends Controller {
 			    OR m.given_name LIKE '%{$term}%'
 			    OR m.surname LIKE '%{$term}%'
 			    OR m.username LIKE '%{$term}%')
-			ORDER BY {$playerPri}, m.persona
+			ORDER BY {$playerOrder}
 			LIMIT {$playerBudget}");
 		$players = [];
 		while ($rs->Next()) {

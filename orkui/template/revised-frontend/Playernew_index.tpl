@@ -1413,6 +1413,8 @@ var PnConfig = {
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
 	playerParkName: <?= json_encode($Player['Park'] ?? $Player['ParkName'] ?? '') ?>,
 };
+// Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
+if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
