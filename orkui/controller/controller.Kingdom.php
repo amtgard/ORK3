@@ -62,6 +62,102 @@ class Controller_Kingdom extends Controller {
 		exit();
 	}
 
+	public function park_averages_json($kingdom_id = null) {
+		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
+		$kid     = (int)$kingdom_id;
+		$weekly  = $this->Report->GetKingdomParkAverages(['KingdomId' => $kingdom_id]);
+		$monthly = $this->Report->GetKingdomParkMonthlyAverages(['KingdomId' => $kingdom_id]);
+		$result  = array();
+		foreach ((array)($weekly['KingdomParkAveragesSummary'] ?? []) as $park) {
+			$result[$park['ParkId']] = ['att' => (int)$park['AttendanceCount'], 'mo' => 0, 'tp' => 0, 'tm' => 0];
+		}
+		foreach ((array)($monthly['KingdomParkMonthlySummary'] ?? []) as $park) {
+			if (isset($result[$park['ParkId']])) {
+				$result[$park['ParkId']]['mo'] = (int)$park['MonthlyCount'];
+			} else {
+				$result[$park['ParkId']] = ['att' => 0, 'mo' => (int)$park['MonthlyCount'], 'tp' => 0, 'tm' => 0];
+			}
+		}
+		global $DB;
+		$pcSql = "SELECT a.park_id,
+				COUNT(DISTINCT a.mundane_id) AS total_players,
+				COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END) AS total_members
+			FROM ork_attendance a
+			INNER JOIN ork_park p  ON p.park_id  = a.park_id  AND p.kingdom_id = {$kid}
+			INNER JOIN ork_mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
+			WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0
+			GROUP BY a.park_id";
+		$pcResult = $DB->DataSet($pcSql);
+		if ($pcResult && $pcResult->Size() > 0) {
+			while ($pcResult->Next()) {
+				$pid = (int)$pcResult->park_id;
+				if (isset($result[$pid])) {
+					$result[$pid]['tp'] = (int)$pcResult->total_players;
+					$result[$pid]['tm'] = (int)$pcResult->total_members;
+				} else {
+					$result[$pid] = ['att' => 0, 'mo' => 0, 'tp' => (int)$pcResult->total_players, 'tm' => (int)$pcResult->total_members];
+				}
+			}
+		}
+		header('Content-Type: application/json');
+		echo json_encode($result);
+		exit();
+	}
+
+	public function players_json($kingdom_id = null) {
+		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
+		$kid = (int)$kingdom_id;
+		global $DB;
+		$kpSql = "SELECT m.mundane_id, m.persona, m.has_image, m.has_heraldry,
+				COALESCE(sub.last_signin, '1970-01-01') AS last_signin,
+				COALESCE(sub.signin_count, 0)           AS signin_count,
+				c.name                                  AS last_class,
+				hp.name                                 AS park_name,
+				GROUP_CONCAT(DISTINCT o.role ORDER BY o.role SEPARATOR ', ') AS officer_roles
+			FROM ork_mundane m
+			INNER JOIN ork_park hp ON hp.park_id = m.park_id AND hp.kingdom_id = {$kid}
+			LEFT JOIN (
+				SELECT a.mundane_id,
+					MAX(a.date) AS last_signin,
+					SUM(a.date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)) AS signin_count
+				FROM ork_attendance a
+				INNER JOIN ork_park kp ON kp.park_id = a.park_id AND kp.kingdom_id = {$kid}
+				GROUP BY a.mundane_id
+			) sub ON sub.mundane_id = m.mundane_id
+			LEFT JOIN ork_attendance la ON la.mundane_id = m.mundane_id AND la.date = sub.last_signin
+			LEFT JOIN ork_class c ON la.class_id = c.class_id
+			LEFT JOIN ork_officer o ON o.mundane_id = m.mundane_id AND o.park_id = m.park_id
+			WHERE m.suspended = 0 AND m.active = 1 AND sub.mundane_id IS NOT NULL
+			GROUP BY m.mundane_id
+			ORDER BY m.persona";
+		$r = $DB->DataSet($kpSql);
+		$players = [];
+		if ($r && $r->Size() > 0) {
+			while ($r->Next()) {
+				$mid     = (int)$r->mundane_id;
+				$midPad  = sprintf('%06d', $mid);
+				$hasImg  = (int)$r->has_image > 0;
+				$hasHer  = (int)$r->has_heraldry > 0;
+				$herUrl  = $hasHer ? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, $midPad) : null;
+				$imgUrl  = $hasImg ? HTTP_PLAYER_IMAGE    . Common::resolve_image_ext(DIR_PLAYER_IMAGE,    $midPad) : ($hasHer ? $herUrl : null);
+				$players[] = [
+					'id'          => $mid,
+					'persona'     => $r->persona,
+					'parkName'    => $r->park_name,
+					'signinCount' => (int)$r->signin_count,
+					'lastSignin'  => $r->last_signin,
+					'lastClass'   => $r->last_class,
+					'officerRoles'=> $r->officer_roles,
+					'avatarUrl'   => $imgUrl,
+					'heraldryUrl' => $herUrl,
+				];
+			}
+		}
+		header('Content-Type: application/json');
+		echo json_encode(['players' => $players]);
+		exit();
+	}
+
 	public function map($kingdom_id = null) {
 		if (valid_id($kingdom_id)) {
 	    	$kingdom_details = $this->Kingdom->GetKingdomDetails(array('KingdomId' => $kingdom_id));
@@ -199,78 +295,6 @@ class Controller_Kingdom extends Controller {
 			}
 		}
 		$this->data['kingdom_park_days'] = $parkDays;
-
-		$pcSql = "
-			SELECT
-				a.park_id,
-				COUNT(DISTINCT a.mundane_id)                                                        AS total_players,
-				COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END)               AS total_members
-			FROM ork_attendance a
-			INNER JOIN ork_park p  ON p.park_id  = a.park_id  AND p.kingdom_id = {$kid}
-			INNER JOIN ork_mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
-			WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-			  AND a.mundane_id > 0
-			GROUP BY a.park_id";
-		$pcResult         = $DB->DataSet($pcSql);
-		$parkPlayerCounts = [];
-		if ($pcResult && $pcResult->Size() > 0) {
-			while ($pcResult->Next()) {
-				$parkPlayerCounts[(int)$pcResult->park_id] = [
-					'TotalPlayers' => (int)$pcResult->total_players,
-					'TotalMembers' => (int)$pcResult->total_members,
-				];
-			}
-		}
-		$this->data['park_player_counts'] = $parkPlayerCounts;
-
-		$kpSql = "
-			SELECT
-				m.mundane_id,
-				m.persona,
-				m.has_image,
-				m.has_heraldry,
-				COALESCE(sub.last_signin, '1970-01-01') AS last_signin,
-				COALESCE(sub.signin_count, 0)           AS signin_count,
-				c.name                                  AS last_class,
-				hp.name                                 AS park_name,
-				GROUP_CONCAT(DISTINCT o.role ORDER BY o.role SEPARATOR ', ') AS officer_roles
-			FROM ork_mundane m
-			INNER JOIN ork_park hp ON hp.park_id = m.park_id AND hp.kingdom_id = {$kid}
-			LEFT JOIN (
-				SELECT
-					a.mundane_id,
-					MAX(a.date) AS last_signin,
-					SUM(a.date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)) AS signin_count
-				FROM ork_attendance a
-				INNER JOIN ork_park kp ON kp.park_id = a.park_id AND kp.kingdom_id = {$kid}
-				GROUP BY a.mundane_id
-			) sub ON sub.mundane_id = m.mundane_id
-			LEFT JOIN ork_attendance la ON la.mundane_id = m.mundane_id AND la.date = sub.last_signin
-			LEFT JOIN ork_class c ON la.class_id = c.class_id
-			LEFT JOIN ork_officer o ON o.mundane_id = m.mundane_id AND o.park_id = m.park_id
-			WHERE m.suspended = 0
-			  AND m.active = 1
-			  AND sub.mundane_id IS NOT NULL
-			GROUP BY m.mundane_id
-			ORDER BY m.persona";
-		$kpResult       = $DB->DataSet($kpSql);
-		$kingdomPlayers = [];
-		if ($kpResult && $kpResult->Size() > 0) {
-			while ($kpResult->Next()) {
-				$kingdomPlayers[] = [
-					'MundaneId'    => (int)$kpResult->mundane_id,
-					'Persona'      => $kpResult->persona,
-					'HasImage'     => (int)$kpResult->has_image > 0,
-					'HasHeraldry'  => (int)$kpResult->has_heraldry > 0,
-					'SigninCount'  => (int)$kpResult->signin_count,
-					'LastSignin'   => $kpResult->last_signin,
-					'LastClass'    => $kpResult->last_class,
-					'ParkName'     => $kpResult->park_name,
-					'OfficerRoles' => $kpResult->officer_roles,
-				];
-			}
-		}
-		$this->data['kingdom_players'] = $kingdomPlayers;
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['IsLoggedIn']       = $uid > 0;

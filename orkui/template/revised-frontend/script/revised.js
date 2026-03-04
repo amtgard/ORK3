@@ -3447,24 +3447,29 @@ $(document).ready(function() {
 		pkPaginate($table, page);
 	});
 
-	// ---- Player search (filters all .pk-hoa-card across all periods) ----
+	// ---- Player search (filters cards + list rows across all periods) ----
 	$('#pk-player-search').on('input', function() {
 		var q = $(this).val().trim().toLowerCase();
 		if (q === '') {
-			// Restore: show all sections and cards
-			$('.pk-hoa-section').removeClass('pk-search-hidden');
-			$('.pk-hoa-card').show();
+			$('.pk-period-block').show();
+			$('.pk-player-card').show();
 		} else {
-			$('.pk-hoa-card').each(function() {
-				var name = $(this).find('.pk-hoa-name').text().toLowerCase();
+			$('.pk-period-block').show();
+			$('.pk-player-card').each(function() {
+				var name = $(this).find('.pk-player-name').text().toLowerCase();
 				$(this).toggle(name.indexOf(q) !== -1);
 			});
-			// Hide period section headings that have no visible cards
-			$('.pk-hoa-section').each(function() {
-				var hasVisible = $(this).find('.pk-hoa-card:visible').length > 0;
-				$(this).toggleClass('pk-search-hidden', !hasVisible);
+			// Hide period blocks with no visible cards
+			$('.pk-period-block').each(function() {
+				var hasVisible = $(this).find('.pk-player-card:visible').length > 0;
+				$(this).toggle(hasVisible);
 			});
 		}
+		// Also filter list view rows
+		$('#pk-players-table tbody tr').each(function() {
+			var name = $(this).find('td:first').text().toLowerCase();
+			$(this).toggle(!q || name.indexOf(q) !== -1);
+		});
 	});
 
 	// ---- Players view toggle (cards / list) ----

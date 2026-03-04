@@ -3,20 +3,17 @@
 	   Pre-process template data
 	   ----------------------------------------------- */
 	$parkList         = is_array($park_summary['KingdomParkAveragesSummary']) ? $park_summary['KingdomParkAveragesSummary'] : array();
-	$parkCounts       = is_array($park_player_counts) ? $park_player_counts : [];
+	$parkCounts       = []; // loaded via AJAX (park_averages_json)
 	$eventList        = is_array($event_summary) ? $event_summary : array();
 	$tournamentList   = is_array($kingdom_tournaments['Tournaments']) ? $kingdom_tournaments['Tournaments'] : array();
 	$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
 	$officerList      = is_array($kingdom_officers['Officers']) ? $kingdom_officers['Officers'] : array();
 
-	// Aggregate attendance across all parks
-	$totalAtt = 0; $totalMonthly = 0;
+	// Aggregate attendance — weekly loaded now, monthly loaded via AJAX after page load
+	$totalAtt = 0;
 	foreach ($parkList as $p) {
-		$totalAtt     += (int)$p['AttendanceCount'];
-		$totalMonthly += (int)$p['MonthlyCount'];
+		$totalAtt += (int)$p['AttendanceCount'];
 	}
-	$avgWeek  = round($totalAtt / 26, 1);
-	$avgMonth = round($totalMonthly / 12, 1);
 
 	// Heraldry
 	$hasHeraldry = $kingdom_info['Info']['KingdomInfo']['HasHeraldry'] == 1;
@@ -32,16 +29,9 @@
 		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
 	}
 
-	// Group kingdom players by 6-month activity period (same pattern as Parknew)
-	$knAllPlayers = is_array($kingdom_players) ? $kingdom_players : [];
-	$knNowTs = time();
+	// Players loaded via AJAX (players_json) — not available at render time
+	$knAllPlayers    = [];
 	$knPlayerPeriods = [];
-	foreach ($knAllPlayers as $p) {
-		$ts = strtotime($p['LastSignin']);
-		$period = max(0, (int)floor(($knNowTs - $ts) / (30.44 * 24 * 3600) / 6));
-		$knPlayerPeriods[$period][] = $p;
-	}
-	ksort($knPlayerPeriods);
 
 	// Pre-compute map location data (server-side; embedded as JSON for lazy map init)
 	$knMapLocations = [];
@@ -138,12 +128,12 @@
 	</div>
 	<div class="kn-stat-card">
 		<div class="kn-stat-icon"><i class="fas fa-users"></i></div>
-		<div class="kn-stat-number"><?= $avgWeek ?></div>
+		<div class="kn-stat-number" id="kn-stat-avgwk">—</div>
 		<div class="kn-stat-label">Avg / Week</div>
 	</div>
 	<div class="kn-stat-card">
 		<div class="kn-stat-icon"><i class="fas fa-chart-line"></i></div>
-		<div class="kn-stat-number"><?= $avgMonth ?></div>
+		<div class="kn-stat-number" id="kn-stat-avgmo">—</div>
 		<div class="kn-stat-label">Avg / Month</div>
 	</div>
 </div>
@@ -249,9 +239,9 @@
 						<span class="kn-tab-count">(<?= count($principalityList) ?>)</span>
 					</li>
 				<?php endif; ?>
-				<li data-kntab="players">
+				<li data-kntab="players" id="kn-tab-btn-players">
 					<i class="fas fa-users"></i> Players
-					<span class="kn-tab-count">(<?= count($knAllPlayers) ?>)</span>
+					<span class="kn-tab-count" id="kn-players-tab-count"></span>
 				</li>
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i> Reports
@@ -287,7 +277,7 @@
 							<?php $tileHeraldry = $park['HasHeraldry'] == 1
 								? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
 								: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
-							<a class="kn-park-tile" href="<?= UIR ?>Park/index/<?= $park['ParkId'] ?>">
+							<a class="kn-park-tile" href="<?= UIR ?>Park/index/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
 								<div class="kn-park-tile-img-wrap">
 									<img src="<?= $tileHeraldry ?>"
 										onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
@@ -298,11 +288,11 @@
 									<div class="kn-park-tile-type"><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : 'Park') ?></div>
 									<div class="kn-park-tile-stats">
 										<div class="kn-park-tile-stat">
-											<div class="kn-park-tile-stat-val"><?= sprintf("%.1f", $park['AttendanceCount'] / 26) ?></div>
+											<div class="kn-park-tile-stat-val kn-avgwk-tile">—</div>
 											<div class="kn-park-tile-stat-lbl">Avg/Wk</div>
 										</div>
 										<div class="kn-park-tile-stat">
-											<div class="kn-park-tile-stat-val"><?= sprintf("%.1f", $park['MonthlyCount'] / 12) ?></div>
+											<div class="kn-park-tile-stat-val kn-avgmo-tile">—</div>
 											<div class="kn-park-tile-stat-lbl">Avg/Mo</div>
 										</div>
 									</div>
@@ -327,8 +317,7 @@
 							</thead>
 							<tbody>
 								<?php foreach ($parkList as $park): ?>
-								<?php $pc = $parkCounts[(int)$park['ParkId']] ?? ['TotalPlayers' => 0, 'TotalMembers' => 0]; ?>
-									<tr class="kn-row-link" onclick="window.location.href='<?= UIR ?>Park/index/<?= $park['ParkId'] ?>'">
+									<tr class="kn-row-link" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/index/<?= $park['ParkId'] ?>'">
 										<td class="kn-col-nowrap">
 											<img class="kn-thumb"
 												src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
@@ -337,10 +326,10 @@
 											<a href="<?= UIR ?>Park/index/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
 										</td>
 										<td><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : '') ?></td>
-										<td class="kn-col-numeric"><?= sprintf("%.2f", $park['AttendanceCount'] / 26) ?></td>
-										<td class="kn-col-numeric"><?= sprintf("%.1f", $park['MonthlyCount'] / 12) ?></td>
-										<td class="kn-col-numeric" data-sortval="<?= $pc['TotalPlayers'] ?>"><?= $pc['TotalPlayers'] ?></td>
-										<td class="kn-col-numeric" data-sortval="<?= $pc['TotalMembers'] ?>"><?= $pc['TotalMembers'] ?></td>
+										<td class="kn-col-numeric kn-avgwk-row">—</td>
+										<td class="kn-col-numeric kn-avgmo-row">—</td>
+										<td class="kn-col-numeric kn-tp-row">—</td>
+										<td class="kn-col-numeric kn-tm-row">—</td>
 										<?php if ($CanManageKingdom ?? false): ?>
 										<td class="kn-col-edit" onclick="event.stopPropagation();knOpenEditParkModal(<?= (int)$park['ParkId'] ?>)" title="Edit park">
 											<i class="fas fa-pencil-alt"></i>
@@ -352,10 +341,10 @@
 							<tfoot>
 								<tr>
 									<td colspan="2">Kingdom Total</td>
-									<td class="kn-col-numeric"><?= sprintf("%.2f", $totalAtt / 26) ?></td>
-									<td class="kn-col-numeric"><?= sprintf("%.1f", $totalMonthly / 12) ?></td>
-									<td class="kn-col-numeric" title="Sum across parks (players may be counted in multiple parks)"><?= array_sum(array_column($parkCounts, 'TotalPlayers')) ?></td>
-									<td class="kn-col-numeric"><?= array_sum(array_column($parkCounts, 'TotalMembers')) ?></td>
+									<td class="kn-col-numeric" id="kn-total-avgwk">—</td>
+									<td class="kn-col-numeric" id="kn-total-avgmo">—</td>
+									<td class="kn-col-numeric" id="kn-total-tp" title="Sum across parks (players may be counted in multiple parks)">—</td>
+									<td class="kn-col-numeric" id="kn-total-tm">—</td>
 									<?php if ($CanManageKingdom ?? false): ?><td></td><?php endif; ?>
 								</tr>
 							</tfoot>
@@ -613,221 +602,46 @@
 
 		<!-- Players Tab -->
 		<div class="kn-tab-panel" id="kn-tab-players" style="display:none">
-			<?php if (count($knAllPlayers) > 0): ?>
-				<div class="kn-players-toolbar">
-					<span class="kn-players-toolbar-left">
-						<?= count($knPlayerPeriods[0] ?? []) ?> active member<?= count($knPlayerPeriods[0] ?? []) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($knAllPlayers) > count($knPlayerPeriods[0] ?? [])): ?> &middot; <?= count($knAllPlayers) ?> total<?php endif; ?>
-					</span>
-					<div class="kn-players-toolbar-right">
-						<div class="kn-player-search-wrap">
-							<i class="fas fa-search kn-player-search-icon"></i>
-							<input type="text" id="kn-player-search" class="kn-player-search-input" placeholder="Search all players&hellip;" autocomplete="off">
-						</div>
-						<div class="kn-view-toggle">
-							<button class="kn-view-btn kn-view-active" data-knview="cards">
-								<i class="fas fa-th-large"></i> Cards
-							</button>
-							<button class="kn-view-btn" data-knview="list">
-								<i class="fas fa-list"></i> List
-							</button>
-						</div>
-						<?php if ($CanManageKingdom ?? false): ?>
-						<button class="plr-add-btn" onclick="knOpenAddPlayerModal()">
-							<i class="fas fa-user-plus"></i> Add Player
-						</button>
-						<?php endif; ?>
+			<div class="kn-players-toolbar">
+				<span class="kn-players-toolbar-left" id="kn-players-summary">&hellip;</span>
+				<div class="kn-players-toolbar-right">
+					<div class="kn-player-search-wrap">
+						<i class="fas fa-search kn-player-search-icon"></i>
+						<input type="text" id="kn-player-search" class="kn-player-search-input" placeholder="Search all players&hellip;" autocomplete="off">
+					</div>
+					<div class="kn-view-toggle">
+						<button class="kn-view-btn kn-view-active" data-knview="cards"><i class="fas fa-th-large"></i> Cards</button>
+						<button class="kn-view-btn" data-knview="list"><i class="fas fa-list"></i> List</button>
+					</div>
+					<?php if ($CanManageKingdom ?? false): ?>
+					<button class="plr-add-btn" onclick="knOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
+					<?php endif; ?>
+				</div>
+			</div>
+			<div id="kn-players-loading" style="text-align:center;padding:32px;color:#a0aec0"><i class="fas fa-spinner fa-spin"></i> Loading players&hellip;</div>
+			<div id="kn-players-cards" style="display:none"></div>
+			<div id="kn-players-list" style="display:none">
+				<table class="kn-table" id="kn-players-table">
+					<thead>
+						<tr>
+							<th data-sorttype="text">Persona</th>
+							<th data-sorttype="text">Park</th>
+							<th data-sorttype="numeric">Sign-ins</th>
+							<th data-sorttype="date">Last Visit</th>
+							<th data-sorttype="text">Last Class</th>
+							<th data-sorttype="text">Role</th>
+						</tr>
+					</thead>
+					<tbody id="kn-players-tbody"></tbody>
+				</table>
+				<div id="kn-players-list-more" style="display:none">
+					<div class="kn-load-more-wrap kn-load-more-list" data-next="1">
+						<button class="kn-load-more-btn" onclick="knLoadMoreList('kn-players-table', 'kn-players-tmpl', this)"><i class="fas fa-chevron-down"></i> Load More...</button>
+						<span class="kn-load-more-hint" id="kn-players-list-hint"></span>
 					</div>
 				</div>
-
-				<!-- Card view (default) -->
-				<div id="kn-players-cards">
-					<!-- Period 0 (0–6 months) always visible -->
-					<div class="kn-players-grid">
-						<?php foreach ($knPlayerPeriods[0] ?? [] as $p): ?>
-						<?php
-							$knInitial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
-							$knHeraldryBgSrc = $p['HasHeraldry']
-								? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
-								: null;
-							if ($p['HasImage']) {
-								$knAvatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
-							} elseif ($p['HasHeraldry']) {
-								$knAvatarSrc = $knHeraldryBgSrc;
-							} else {
-								$knAvatarSrc = null;
-							}
-						?>
-						<a class="kn-player-card<?= $knHeraldryBgSrc ? ' kn-player-card-hbg' : '' ?>"
-						   <?= $knHeraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($knHeraldryBgSrc) . '\')"' : '' ?>
-						   href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>">
-							<div class="kn-player-card-top">
-								<div class="kn-player-avatar">
-									<?php if ($knAvatarSrc): ?>
-										<img src="<?= htmlspecialchars($knAvatarSrc) ?>"
-										     alt=""
-										     onerror="knAvatarFallback(this,'<?= $knInitial ?>')">
-									<?php else: ?>
-										<?= $knInitial ?>
-									<?php endif; ?>
-								</div>
-								<div>
-									<div class="kn-player-name"><?= htmlspecialchars($p['Persona']) ?></div>
-									<?php if (!empty($p['OfficerRoles'])): ?>
-										<?php foreach (explode(', ', $p['OfficerRoles']) as $knRole): ?>
-											<span class="kn-officer-pill"><?= htmlspecialchars(trim($knRole)) ?></span>
-										<?php endforeach; ?>
-									<?php endif; ?>
-								</div>
-							</div>
-							<div class="kn-player-stats">
-								<span><i class="fas fa-map-marker-alt" style="color:#68d391;width:14px"></i> <?= htmlspecialchars($p['ParkName']) ?></span>
-								<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
-								<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j', strtotime($p['LastSignin'])) ?></span>
-								<?php if (!empty($p['LastClass'])): ?>
-									<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> <?= htmlspecialchars($p['LastClass']) ?></span>
-								<?php endif; ?>
-							</div>
-						</a>
-						<?php endforeach; ?>
-					</div>
-
-					<!-- Period 1+ (hidden; revealed by Load More) -->
-					<?php foreach (array_slice($knPlayerPeriods, 1, null, true) as $knPeriod => $knPeriodPlayers): ?>
-					<div class="kn-period-block" id="kn-players-block-<?= $knPeriod ?>" style="display:none">
-						<div class="kn-period-label"><?= $knPeriod * 6 ?>–<?= ($knPeriod + 1) * 6 ?> months ago</div>
-						<div class="kn-players-grid">
-							<?php foreach ($knPeriodPlayers as $p): ?>
-							<?php
-								$knInitial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
-								$knHeraldryBgSrc = $p['HasHeraldry']
-									? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
-									: null;
-								if ($p['HasImage']) {
-									$knAvatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
-								} elseif ($p['HasHeraldry']) {
-									$knAvatarSrc = $knHeraldryBgSrc;
-								} else {
-									$knAvatarSrc = null;
-								}
-							?>
-							<a class="kn-player-card<?= $knHeraldryBgSrc ? ' kn-player-card-hbg' : '' ?>"
-							   <?= $knHeraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($knHeraldryBgSrc) . '\')"' : '' ?>
-							   href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>">
-								<div class="kn-player-card-top">
-									<div class="kn-player-avatar">
-										<?php if ($knAvatarSrc): ?>
-											<img src="<?= htmlspecialchars($knAvatarSrc) ?>"
-											     alt=""
-											     onerror="knAvatarFallback(this,'<?= $knInitial ?>')">
-										<?php else: ?>
-											<?= $knInitial ?>
-										<?php endif; ?>
-									</div>
-									<div>
-										<div class="kn-player-name"><?= htmlspecialchars($p['Persona']) ?></div>
-										<?php if (!empty($p['OfficerRoles'])): ?>
-											<?php foreach (explode(', ', $p['OfficerRoles']) as $knRole): ?>
-												<span class="kn-officer-pill"><?= htmlspecialchars(trim($knRole)) ?></span>
-											<?php endforeach; ?>
-										<?php endif; ?>
-									</div>
-								</div>
-								<div class="kn-player-stats">
-									<span><i class="fas fa-map-marker-alt" style="color:#68d391;width:14px"></i> <?= htmlspecialchars($p['ParkName']) ?></span>
-									<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
-									<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j', strtotime($p['LastSignin'])) ?></span>
-									<?php if (!empty($p['LastClass'])): ?>
-										<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> <?= htmlspecialchars($p['LastClass']) ?></span>
-									<?php endif; ?>
-								</div>
-							</a>
-							<?php endforeach; ?>
-						</div>
-					</div>
-					<?php endforeach; ?>
-
-					<?php if (count($knPlayerPeriods) > 1): ?>
-					<div class="kn-load-more-wrap" data-next="1" data-group="kn-players">
-						<button class="kn-load-more-btn" onclick="knLoadMoreCards('kn-players', this)">
-							<i class="fas fa-chevron-down"></i> Load More...
-						</button>
-						<span class="kn-load-more-hint">Showing <?= count($knPlayerPeriods[0] ?? []) ?> of <?= count($knAllPlayers) ?> members</span>
-					</div>
-					<?php endif; ?>
-				</div><!-- /kn-players-cards -->
-
-				<!-- List view (hidden by default) -->
-				<div id="kn-players-list" style="display:none">
-					<table class="kn-table" id="kn-players-table">
-						<thead>
-							<tr>
-								<th data-sorttype="text">Persona</th>
-								<th data-sorttype="text">Park</th>
-								<th data-sorttype="numeric">Sign-ins</th>
-								<th data-sorttype="date">Last Visit</th>
-								<th data-sorttype="text">Last Class</th>
-								<th data-sorttype="text">Role</th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($knPlayerPeriods[0] ?? [] as $p): ?>
-							<tr onclick='window.location.href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>"'>
-								<td>
-									<?= htmlspecialchars($p['Persona']) ?>
-									<?php if (!empty($p['OfficerRoles'])): ?>
-										<?php foreach (explode(', ', $p['OfficerRoles']) as $knRole): ?>
-											<span class="kn-officer-pill"><?= htmlspecialchars(trim($knRole)) ?></span>
-										<?php endforeach; ?>
-									<?php endif; ?>
-								</td>
-								<td><?= htmlspecialchars($p['ParkName'] ?? '') ?></td>
-								<td data-sortval="<?= $p['SigninCount'] ?>"><?= $p['SigninCount'] ?></td>
-								<td class="kn-date-col" data-sortval="<?= $p['LastSignin'] ?>">
-									<?= date('M j, Y', strtotime($p['LastSignin'])) ?>
-								</td>
-								<td><?= htmlspecialchars($p['LastClass'] ?? '') ?></td>
-								<td><?= htmlspecialchars($p['OfficerRoles'] ?? '') ?></td>
-							</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-					<!-- Hidden row templates for older periods -->
-					<?php foreach (array_slice($knPlayerPeriods, 1, null, true) as $knPeriod => $knPeriodPlayers): ?>
-					<template id="kn-players-tmpl-<?= $knPeriod ?>">
-						<?php foreach ($knPeriodPlayers as $p): ?>
-						<tr onclick='window.location.href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>"'>
-							<td>
-								<?= htmlspecialchars($p['Persona']) ?>
-								<?php if (!empty($p['OfficerRoles'])): ?>
-									<?php foreach (explode(', ', $p['OfficerRoles']) as $knRole): ?>
-										<span class="kn-officer-pill"><?= htmlspecialchars(trim($knRole)) ?></span>
-									<?php endforeach; ?>
-								<?php endif; ?>
-							</td>
-							<td><?= htmlspecialchars($p['ParkName'] ?? '') ?></td>
-							<td data-sortval="<?= $p['SigninCount'] ?>"><?= $p['SigninCount'] ?></td>
-							<td class="kn-date-col" data-sortval="<?= $p['LastSignin'] ?>">
-								<?= date('M j, Y', strtotime($p['LastSignin'])) ?>
-							</td>
-							<td><?= htmlspecialchars($p['LastClass'] ?? '') ?></td>
-							<td><?= htmlspecialchars($p['OfficerRoles'] ?? '') ?></td>
-						</tr>
-						<?php endforeach; ?>
-					</template>
-					<?php endforeach; ?>
-					<?php if (count($knPlayerPeriods) > 1): ?>
-					<div class="kn-load-more-wrap kn-load-more-list" data-next="1">
-						<button class="kn-load-more-btn" onclick="knLoadMoreList('kn-players-table', 'kn-players-tmpl', this)">
-							<i class="fas fa-chevron-down"></i> Load More...
-						</button>
-						<span class="kn-load-more-hint">Showing <?= count($knPlayerPeriods[0] ?? []) ?> of <?= count($knAllPlayers) ?> members</span>
-					</div>
-					<?php endif; ?>
-					<div class="kn-pagination" id="kn-players-table-pages"></div>
-				</div><!-- /kn-players-list -->
-			<?php else: ?>
-				<div class="kn-empty">No players found</div>
-			<?php endif; ?>
+				<div class="kn-pagination" id="kn-players-table-pages"></div>
+			</div>
 		</div><!-- /kn-tab-players -->
 
 		</div><!-- /kn-tabs -->
@@ -1511,4 +1325,201 @@ var KnConfig = {
 	</div>
 </div>
 <?php endif; ?>
+<script>
+(function() {
+	var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
+	if (!kingdomId) return;
+
+	// ---- Park averages + player counts (AJAX) ----
+	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
+		.then(function(r) { return r.json(); })
+		.then(function(data) {
+			var totalAtt = 0, totalMo = 0, totalTp = 0, totalTm = 0;
+			for (var parkId in data) {
+				var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
+				var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
+				totalAtt += att; totalMo += mo; totalTp += tp; totalTm += tm;
+				// Tile view
+				var tile = document.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
+				if (tile) {
+					var wkEl = tile.querySelector('.kn-avgwk-tile');
+					var moEl = tile.querySelector('.kn-avgmo-tile');
+					if (wkEl) wkEl.textContent = (att / 26).toFixed(1);
+					if (moEl) moEl.textContent = (mo / 12).toFixed(1);
+				}
+				// List view row
+				var row = document.querySelector('tr[data-park-id="' + parkId + '"]');
+				if (row) {
+					var wkTd = row.querySelector('.kn-avgwk-row');
+					var moTd = row.querySelector('.kn-avgmo-row');
+					var tpTd = row.querySelector('.kn-tp-row');
+					var tmTd = row.querySelector('.kn-tm-row');
+					if (wkTd) { wkTd.textContent = (att / 26).toFixed(2); wkTd.setAttribute('data-sortval', att / 26); }
+					if (moTd) { moTd.textContent = (mo / 12).toFixed(1);  moTd.setAttribute('data-sortval', mo / 12); }
+					if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
+					if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
+				}
+			}
+			// Stat cards
+			var statWk = document.getElementById('kn-stat-avgwk');
+			var statMo = document.getElementById('kn-stat-avgmo');
+			if (statWk) statWk.textContent = (totalAtt / 26).toFixed(1);
+			if (statMo) statMo.textContent = (totalMo / 12).toFixed(1);
+			// Footer totals
+			var footWk = document.getElementById('kn-total-avgwk');
+			var footMo = document.getElementById('kn-total-avgmo');
+			var footTp = document.getElementById('kn-total-tp');
+			var footTm = document.getElementById('kn-total-tm');
+			if (footWk) footWk.textContent = (totalAtt / 26).toFixed(2);
+			if (footMo) footMo.textContent = (totalMo / 12).toFixed(1);
+			if (footTp) footTp.textContent = totalTp;
+			if (footTm) footTm.textContent = totalTm;
+		})
+		.catch(function() {});
+
+	// ---- Players tab: lazy-load on first click ----
+	function knHtmlEsc(s) {
+		return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+	}
+	function knFmtDate(s, long) {
+		if (!s || s === '1970-01-01') return '—';
+		var d = new Date(s + 'T00:00:00');
+		return long
+			? d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+			: d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+	}
+	function knPlayerCardHtml(p, uir) {
+		var initial = (p.persona || '?').charAt(0).toUpperCase();
+		var avatarHtml = p.avatarUrl
+			? '<img src="' + knHtmlEsc(p.avatarUrl) + '" alt="" onerror="knAvatarFallback(this,\'' + initial + '\')">'
+			: initial;
+		var hbgAttr  = p.heraldryUrl ? ' style="--hbg:url(\'' + knHtmlEsc(p.heraldryUrl) + '\')"' : '';
+		var hbgClass = p.heraldryUrl ? ' kn-player-card-hbg' : '';
+		var pills = (p.officerRoles || '').split(', ').filter(Boolean).map(function(r) {
+			return '<span class="kn-officer-pill">' + knHtmlEsc(r.trim()) + '</span>';
+		}).join('');
+		var classSpan = p.lastClass ? '<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> ' + knHtmlEsc(p.lastClass) + '</span>' : '';
+		return '<a class="kn-player-card' + hbgClass + '"' + hbgAttr + ' href="' + uir + 'Player/index/' + p.id + '">'
+			+ '<div class="kn-player-card-top"><div class="kn-player-avatar">' + avatarHtml + '</div>'
+			+ '<div><div class="kn-player-name">' + knHtmlEsc(p.persona) + '</div>' + pills + '</div></div>'
+			+ '<div class="kn-player-stats">'
+			+ '<span><i class="fas fa-map-marker-alt" style="color:#68d391;width:14px"></i> ' + knHtmlEsc(p.parkName) + '</span>'
+			+ '<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> ' + p.signinCount + ' sign-in' + (p.signinCount !== 1 ? 's' : '') + '</span>'
+			+ '<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> ' + knFmtDate(p.lastSignin) + '</span>'
+			+ classSpan + '</div></a>';
+	}
+	function knPlayerRowHtml(p, uir) {
+		var pills = (p.officerRoles || '').split(', ').filter(Boolean).map(function(r) {
+			return '<span class="kn-officer-pill">' + knHtmlEsc(r.trim()) + '</span>';
+		}).join('');
+		return '<tr onclick=\'window.location.href="' + uir + 'Player/index/' + p.id + '"\'>'
+			+ '<td>' + knHtmlEsc(p.persona) + pills + '</td>'
+			+ '<td>' + knHtmlEsc(p.parkName || '') + '</td>'
+			+ '<td data-sortval="' + p.signinCount + '">' + p.signinCount + '</td>'
+			+ '<td class="kn-date-col" data-sortval="' + knHtmlEsc(p.lastSignin) + '">' + knFmtDate(p.lastSignin, true) + '</td>'
+			+ '<td>' + knHtmlEsc(p.lastClass || '') + '</td>'
+			+ '<td>' + knHtmlEsc(p.officerRoles || '') + '</td>'
+			+ '</tr>';
+	}
+
+	var knPlayersLoaded = false;
+	function knLoadPlayers() {
+		if (knPlayersLoaded) return;
+		knPlayersLoaded = true;
+		var uir = '<?= UIR ?>';
+		fetch(uir + 'Kingdom/players_json/' + kingdomId)
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				var players  = data.players || [];
+				var nowTs    = Math.floor(Date.now() / 1000);
+				var periods  = {};
+				players.forEach(function(p) {
+					var ts     = new Date((p.lastSignin || '1970-01-01') + 'T00:00:00').getTime() / 1000;
+					var period = Math.max(0, Math.floor((nowTs - ts) / (30.44 * 24 * 3600 * 6)));
+					if (!periods[period]) periods[period] = [];
+					periods[period].push(p);
+				});
+				var periodKeys = Object.keys(periods).map(Number).sort(function(a,b){return a-b;});
+				var active = (periods[0] || []).length, total = players.length;
+
+				// Update tab count
+				var tabCount = document.getElementById('kn-players-tab-count');
+				if (tabCount) tabCount.textContent = '(' + total + ')';
+				// Update summary line
+				var summEl = document.getElementById('kn-players-summary');
+				if (summEl) summEl.textContent = active + ' active member' + (active!==1?'s':'') + ' (past 6 months)' + (total > active ? ' · ' + total + ' total' : '');
+
+				// Build cards HTML
+				var cardsEl = document.getElementById('kn-players-cards');
+				if (cardsEl) {
+					var html = '<div class="kn-players-grid">' + (periods[0]||[]).map(function(p){return knPlayerCardHtml(p,uir);}).join('') + '</div>';
+					periodKeys.slice(1).forEach(function(period) {
+						html += '<div class="kn-period-block" id="kn-players-block-' + period + '" style="display:none">'
+							+ '<div class="kn-period-label">' + (period*6) + '–' + ((period+1)*6) + ' months ago</div>'
+							+ '<div class="kn-players-grid">' + periods[period].map(function(p){return knPlayerCardHtml(p,uir);}).join('') + '</div>'
+							+ '</div>';
+					});
+					if (periodKeys.length > 1) {
+						html += '<div class="kn-load-more-wrap" data-next="1" data-group="kn-players">'
+							+ '<button class="kn-load-more-btn" onclick="knLoadMoreCards(\'kn-players\',this)"><i class="fas fa-chevron-down"></i> Load More...</button>'
+							+ '<span class="kn-load-more-hint">Showing ' + active + ' of ' + total + ' members</span>'
+							+ '</div>';
+					}
+					cardsEl.innerHTML = html;
+					cardsEl.style.display = '';
+				}
+
+				// Build list tbody + templates
+				var tbody = document.getElementById('kn-players-tbody');
+				if (tbody) {
+					tbody.innerHTML = (periods[0]||[]).map(function(p){return knPlayerRowHtml(p,uir);}).join('');
+					var table = document.getElementById('kn-players-table');
+					if (table) {
+						periodKeys.slice(1).forEach(function(period) {
+							var tmpl = document.createElement('template');
+							tmpl.id = 'kn-players-tmpl-' + period;
+							tmpl.innerHTML = periods[period].map(function(p){return knPlayerRowHtml(p,uir);}).join('');
+							table.parentNode.insertBefore(tmpl, table.nextSibling);
+						});
+					}
+					if (periodKeys.length > 1) {
+						var moreWrap = document.getElementById('kn-players-list-more');
+						if (moreWrap) {
+							moreWrap.style.display = '';
+							var hint = document.getElementById('kn-players-list-hint');
+							if (hint) hint.textContent = 'Showing ' + active + ' of ' + total + ' members';
+						}
+					}
+				}
+
+				// Hide spinner
+				var loadEl = document.getElementById('kn-players-loading');
+				if (loadEl) loadEl.style.display = 'none';
+			})
+			.catch(function() {
+				var loadEl = document.getElementById('kn-players-loading');
+				if (loadEl) loadEl.innerHTML = '<span style="color:#e53e3e">Failed to load players.</span>';
+			});
+	}
+
+	// Trigger on first Players tab click; also extend search to cover list rows
+	document.addEventListener('DOMContentLoaded', function() {
+		var btn = document.querySelector('[data-kntab="players"]');
+		if (btn) btn.addEventListener('click', knLoadPlayers, {once: true});
+
+		var searchInput = document.getElementById('kn-player-search');
+		if (searchInput) {
+			searchInput.addEventListener('input', function() {
+				var q = this.value.trim().toLowerCase();
+				var tbody = document.getElementById('kn-players-tbody');
+				if (!tbody) return;
+				tbody.querySelectorAll('tr').forEach(function(row) {
+					var name = row.cells[0] ? row.cells[0].textContent.toLowerCase() : '';
+					row.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
+				});
+			});
+		}
+	});
+})();
+</script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
