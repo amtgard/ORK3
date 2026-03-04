@@ -1193,7 +1193,7 @@
 
 			<!-- Rank Picker (only for ladder awards) -->
 			<div class="pn-acct-field" id="pn-award-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
+				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; light blue = already held, green border = suggested; dark blue = selected</span></label>
 				<div class="pn-rank-pills-wrap" id="pn-rank-pills"></div>
 				<input type="hidden" name="Rank" id="pn-award-rank-val" value="" />
 			</div>

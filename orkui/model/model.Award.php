@@ -43,7 +43,7 @@ class Model_Award extends Model {
 
             $options = '';
             if (!empty($ladder)) {
-                $options .= "<optgroup label='Ladder Awards'>";
+                $options .= "<optgroup label='Common Awards'>";
                 foreach ($ladder as $award) {
                     $options .= "<option value='$award[KingdomAwardId]' data-is-ladder='1' data-award-id='$award[AwardId]'>$award[KingdomAwardName]</option>";
                 }

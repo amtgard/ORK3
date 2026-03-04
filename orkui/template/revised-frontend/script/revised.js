@@ -1,4 +1,50 @@
 /* ===========================
+   Autocomplete keyboard nav
+   =========================== */
+/**
+ * Wire up arrow-key + Enter navigation for an autocomplete input/results pair.
+ * @param {HTMLElement} inputEl   - the text input
+ * @param {HTMLElement} resultsEl - the results container
+ * @param {string}      openClass - CSS class used to show the results (e.g. 'pn-ac-open')
+ * @param {string}      itemSel   - selector for individual result items (e.g. '.pn-ac-item')
+ */
+function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
+	inputEl.addEventListener('keydown', function(e) {
+		if (e.key === 'ArrowDown') {
+			var first = resultsEl.querySelector(itemSel + '[tabindex]');
+			if (first) { e.preventDefault(); first.focus(); }
+		} else if (e.key === 'Escape') {
+			if (resultsEl.classList.contains(openClass)) {
+				e.stopPropagation();
+				resultsEl.classList.remove(openClass);
+			}
+		}
+	});
+	resultsEl.addEventListener('keydown', function(e) {
+		var item = e.target.closest ? e.target.closest(itemSel) : null;
+		if (!item) return;
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			var next = item.nextElementSibling;
+			while (next && !next.matches(itemSel)) next = next.nextElementSibling;
+			if (next) next.focus();
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			var prev = item.previousElementSibling;
+			while (prev && !prev.matches(itemSel)) prev = prev.previousElementSibling;
+			if (prev) prev.focus(); else inputEl.focus();
+		} else if (e.key === 'Enter') {
+			e.preventDefault();
+			item.click();
+		} else if (e.key === 'Escape') {
+			e.stopPropagation();
+			resultsEl.classList.remove(openClass);
+			inputEl.focus();
+		}
+	});
+}
+
+/* ===========================
    Player Profile (PnConfig)
    =========================== */
 // ---- Pagination Helpers ----
@@ -903,14 +949,17 @@ if (PnConfig.recError) {
 		gid('pn-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
 
 		// ---- Award Select Change ----
+		var pnNoBadgeAwards = ['griffon', 'griffin', 'hydra', 'jovious', 'jovius', 'mask', 'zodiac', 'walker'];
 		gid('pn-award-select').addEventListener('change', function() {
 			var opt      = this.options[this.selectedIndex];
 			var isLadder = (opt.getAttribute('data-is-ladder') == '1');
 			var awardId  = parseInt(opt.getAttribute('data-award-id')) || 0;
 			var isCustom = (opt.text.indexOf('Custom Award') !== -1);
+			var optName  = opt.text.toLowerCase();
+			var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
 
 			gid('pn-award-custom-row').style.display  = isCustom ? '' : 'none';
-			gid('pn-award-info-line').innerHTML        = isLadder
+			gid('pn-award-info-line').innerHTML        = showBadge
 				? '<span class="pn-badge-ladder"><i class="fas fa-chart-line"></i> Ladder Award</span>'
 				: '';
 
@@ -983,7 +1032,7 @@ if (PnConfig.recError) {
 						results.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
 					} else {
 						results.innerHTML = data.map(function(p) {
-							return '<div class="pn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+							return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
 								+ p.Persona
 								+ ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr || '') + ':' + (p.PAbbr || '') + ')</span>'
 								+ '</div>';
@@ -1013,14 +1062,15 @@ if (PnConfig.recError) {
 			var term = this.value.trim();
 			if (term.length < 2) { gid('pn-award-givenat-results').classList.remove('pn-ac-open'); return; }
 			givenAtTimer = setTimeout(function() {
-				var url = SEARCH_URL + '?Action=Search%2FLocation&type=all&name=' + encodeURIComponent(term) + '&limit=8';
+				var today = new Date().toISOString().slice(0, 10);
+				var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=8';
 				fetch(url).then(function(r) { return r.json(); }).then(function(data) {
 					var results = gid('pn-award-givenat-results');
 					if (!data || !data.length) {
 						results.innerHTML = '<div class="pn-ac-no-results">No locations found</div>';
 					} else {
 						results.innerHTML = data.map(function(loc) {
-							return '<div class="pn-ac-item"'
+							return '<div class="pn-ac-item" tabindex="-1"'
 								+ ' data-park="' + (parseInt(loc.ParkId) || 0) + '"'
 								+ ' data-kingdom="' + (parseInt(loc.KingdomId) || 0) + '"'
 								+ ' data-event="' + (parseInt(loc.EventId) || 0) + '"'
@@ -1041,6 +1091,10 @@ if (PnConfig.recError) {
 			gid('pn-award-event-id').value         = item.dataset.event   || '0';
 			this.classList.remove('pn-ac-open');
 		});
+
+		// Keyboard navigation for givenBy and givenAt autocompletes
+		acKeyNav(gid('pn-award-givenby-text'), gid('pn-award-givenby-results'), 'pn-ac-open', '.pn-ac-item');
+		acKeyNav(gid('pn-award-givenat-text'), gid('pn-award-givenat-results'), 'pn-ac-open', '.pn-ac-item');
 
 		// Close dropdowns when clicking elsewhere inside the overlay
 		gid('pn-award-overlay').addEventListener('click', function(e) {
@@ -1885,7 +1939,7 @@ $(document).ready(function() {
 				var el = gid('kn-award-player-results');
 				el.innerHTML = (data && data.length)
 					? data.map(function(p) {
-						return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+						return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
 							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
 					}).join('')
 					: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
@@ -1951,12 +2005,13 @@ $(document).ready(function() {
 		if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
 		clearTimeout(givenAtTimer);
 		givenAtTimer = setTimeout(function() {
-			var url = SEARCH_URL + '?Action=Search%2FLocation&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+			var today = new Date().toISOString().slice(0, 10);
+			var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
 			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
 				var el = gid('kn-award-givenat-results');
 				el.innerHTML = (data && data.length)
 					? data.map(function(loc) {
-						return '<div class="kn-ac-item" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
+						return '<div class="kn-ac-item" tabindex="-1" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
 							+ (loc.LocationName || loc.ShortName || '') + '</div>';
 					}).join('')
 					: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No locations found</div>';
@@ -1973,6 +2028,10 @@ $(document).ready(function() {
 		gid('kn-award-event-id').value        = item.dataset.eid || '0';
 		this.classList.remove('kn-ac-open');
 	});
+
+	// Keyboard navigation for givenBy and givenAt autocompletes
+	acKeyNav(gid('kn-award-givenby-text'), gid('kn-award-givenby-results'), 'kn-ac-open', '.kn-ac-item');
+	acKeyNav(gid('kn-award-givenat-text'), gid('kn-award-givenat-results'), 'kn-ac-open', '.kn-ac-item');
 
 	// Note char counter
 	gid('kn-award-note').addEventListener('input', function() {
@@ -3593,7 +3652,7 @@ $(document).ready(function() {
 				var el = gid('pk-award-player-results');
 				el.innerHTML = (data && data.length)
 					? data.map(function(p) {
-						return '<div class="pk-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+						return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
 							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
 					}).join('')
 					: '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
@@ -3659,12 +3718,13 @@ $(document).ready(function() {
 		if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
 		clearTimeout(givenAtTimer);
 		givenAtTimer = setTimeout(function() {
-			var url = SEARCH_URL + '?Action=Search%2FLocation&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+			var today = new Date().toISOString().slice(0, 10);
+			var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
 			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
 				var el = gid('pk-award-givenat-results');
 				el.innerHTML = (data && data.length)
 					? data.map(function(loc) {
-						return '<div class="pk-ac-item" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
+						return '<div class="pk-ac-item" tabindex="-1" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
 							+ (loc.LocationName || loc.ShortName || '') + '</div>';
 					}).join('')
 					: '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No locations found</div>';
@@ -3681,6 +3741,10 @@ $(document).ready(function() {
 		gid('pk-award-event-id').value        = item.dataset.eid || '0';
 		this.classList.remove('pk-ac-open');
 	});
+
+	// Keyboard navigation for givenBy and givenAt autocompletes
+	acKeyNav(gid('pk-award-givenby-text'), gid('pk-award-givenby-results'), 'pk-ac-open', '.pk-ac-item');
+	acKeyNav(gid('pk-award-givenat-text'), gid('pk-award-givenat-results'), 'pk-ac-open', '.pk-ac-item');
 
 	// Note char counter
 	gid('pk-award-note').addEventListener('input', function() {

@@ -778,6 +778,7 @@
 
 /* ---- Account modal fields ---- */
 .pn-acct-field {
+	position: relative;
 	margin-bottom: 14px;
 }
 .pn-acct-field label {
@@ -1041,10 +1042,15 @@
 .pn-officer-chip.pn-selected { background: #ebf4ff; border-color: #90cdf4; color: #0891b2; font-weight: 600; }
 /* Inline autocomplete results */
 .pn-ac-results {
+	position: absolute;
+	left: 0;
+	right: 0;
+	z-index: 300;
 	margin-top: 4px;
 	border: 1px solid #e2e8f0;
 	border-radius: 6px;
 	background: #fff;
+	box-shadow: 0 4px 12px rgba(0,0,0,.12);
 	max-height: 140px;
 	overflow-y: auto;
 	display: none;
@@ -1058,7 +1064,7 @@
 	border-bottom: 1px solid #f7fafc;
 }
 .pn-ac-item:last-child { border-bottom: none; }
-.pn-ac-item:hover { background: #ebf4ff; color: #0891b2; }
+.pn-ac-item:hover, .pn-ac-item:focus { background: #ebf4ff; color: #0891b2; outline: none; }
 .pn-ac-no-results { padding: 8px 12px; font-size: 13px; color: #a0aec0; font-style: italic; }
 /* Tab toolbar (Add Award / Add Title button) */
 .pn-tab-toolbar {
@@ -1804,7 +1810,7 @@
 .kn-ac-results { margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; max-height:140px; overflow-y:auto; display:none; }
 .kn-ac-results.kn-ac-open { display:block; }
 .kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
-.kn-ac-item:hover { background:#ebf4ff; color:#0891b2; }
+.kn-ac-item:hover, .kn-ac-item:focus { background:#ebf4ff; color:#0891b2; outline:none; }
 .kn-award-success { background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#276749; font-size:13px; }
 .kn-btn-ghost { background:transparent; border:1px solid transparent; color:#4a5568; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
 .kn-btn-ghost:hover { background:rgba(255,255,255,0.15); }
@@ -2600,7 +2606,7 @@
 .pk-ac-results { margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; max-height:140px; overflow-y:auto; display:none; }
 .pk-ac-results.pk-ac-open { display:block; }
 .pk-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
-.pk-ac-item:hover { background:#ebf4ff; color:#0891b2; }
+.pk-ac-item:hover, .pk-ac-item:focus { background:#ebf4ff; color:#0891b2; outline:none; }
 .pk-award-success { background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:8px 12px; margin-bottom:12px; color:#276749; font-size:13px; }
 .pk-btn-ghost { background:transparent; border:1px solid transparent; color:#4a5568; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
 .pk-btn-ghost:hover { background:rgba(255,255,255,0.15); }
