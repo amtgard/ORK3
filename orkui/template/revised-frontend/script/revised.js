@@ -1853,6 +1853,7 @@ $(document).ready(function() {
 	var officerOptHTML = KnConfig.officerOptHTML;
 	var currentType = 'awards';
 	var givenByTimer, givenAtTimer, playerTimer;
+	var knPlayerRanks = {};
 
 	function gid(id) { return document.getElementById(id); }
 
@@ -1894,10 +1895,15 @@ $(document).ready(function() {
 		var opt = gid('kn-award-select').querySelector('option[value="' + awardId + '"]');
 		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
 		row.style.display = '';
+		var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+		var held      = knPlayerRanks[baseAwardId] || 0;
+		var suggested = Math.min(held + 1, 10);
 		for (var r = 1; r <= 10; r++) {
 			var pill = document.createElement('button');
 			pill.type      = 'button';
 			pill.className = 'kn-rank-pill';
+			if (r <= held)       pill.className += ' kn-rank-held';
+			if (r === suggested) pill.className += ' kn-rank-suggested';
 			pill.textContent = r;
 			pill.dataset.rank = r;
 			pill.addEventListener('click', (function(rank, el) {
@@ -1909,6 +1915,8 @@ $(document).ready(function() {
 			})(r, pill));
 			wrap.appendChild(pill);
 		}
+		var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
+		if (suggestedPill) { suggestedPill.classList.add('kn-rank-selected'); input.value = suggested; }
 	}
 
 	gid('kn-award-select').addEventListener('change', function() {
@@ -1954,6 +1962,15 @@ $(document).ready(function() {
 		gid('kn-award-player-id').value   = item.dataset.id;
 		this.classList.remove('kn-ac-open');
 		checkRequired();
+		knPlayerRanks = {};
+		var pid = item.dataset.id;
+		fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+			.then(function(r) { return r.json(); })
+			.then(function(ranks) {
+				knPlayerRanks = ranks || {};
+				var curAward = gid('kn-award-select').value;
+				if (curAward) buildRankPills(curAward);
+			}).catch(function() {});
 	});
 
 	// Given By — officer chips + search
@@ -1982,7 +1999,7 @@ $(document).ready(function() {
 				var el = gid('kn-award-givenby-results');
 				el.innerHTML = (data && data.length)
 					? data.map(function(p) {
-						return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+						return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
 							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
 					}).join('')
 					: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
@@ -2030,6 +2047,7 @@ $(document).ready(function() {
 	});
 
 	// Keyboard navigation for givenBy and givenAt autocompletes
+	acKeyNav(gid('kn-award-player-text'),  gid('kn-award-player-results'),  'kn-ac-open', '.kn-ac-item');
 	acKeyNav(gid('kn-award-givenby-text'), gid('kn-award-givenby-results'), 'kn-ac-open', '.kn-ac-item');
 	acKeyNav(gid('kn-award-givenat-text'), gid('kn-award-givenat-results'), 'kn-ac-open', '.kn-ac-item');
 
@@ -2047,6 +2065,7 @@ $(document).ready(function() {
 	// ---- Open / Close ----
 	window.knOpenAwardModal = function() {
 		var today = new Date();
+		knPlayerRanks = {};
 		gid('kn-award-error').style.display      = 'none';
 		gid('kn-award-error').textContent        = '';
 		gid('kn-award-success').style.display    = 'none';
@@ -3560,12 +3579,12 @@ $(document).ready(function() {
 	if (!document.getElementById('pk-award-overlay')) return;
 	var UIR_JS = PkConfig.uir;
 	var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
-	var KINGDOM_ID = PkConfig.kingdomId;
 	var PARK_ID = PkConfig.parkId;
 	var awardOptHTML = PkConfig.awardOptHTML;
 	var officerOptHTML = PkConfig.officerOptHTML;
 	var currentType = 'awards';
 	var givenByTimer, givenAtTimer, playerTimer;
+	var pkPlayerRanks = {};
 
 	function gid(id) { return document.getElementById(id); }
 
@@ -3607,10 +3626,15 @@ $(document).ready(function() {
 		var opt = gid('pk-award-select').querySelector('option[value="' + awardId + '"]');
 		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
 		row.style.display = '';
+		var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+		var held      = pkPlayerRanks[baseAwardId] || 0;
+		var suggested = Math.min(held + 1, 10);
 		for (var r = 1; r <= 10; r++) {
 			var pill = document.createElement('button');
 			pill.type      = 'button';
 			pill.className = 'pk-rank-pill';
+			if (r <= held)       pill.className += ' pk-rank-held';
+			if (r === suggested) pill.className += ' pk-rank-suggested';
 			pill.textContent = r;
 			pill.dataset.rank = r;
 			pill.addEventListener('click', (function(rank, el) {
@@ -3622,6 +3646,9 @@ $(document).ready(function() {
 			})(r, pill));
 			wrap.appendChild(pill);
 		}
+		// Auto-select suggested rank
+		var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
+		if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
 	}
 
 	gid('pk-award-select').addEventListener('change', function() {
@@ -3639,7 +3666,7 @@ $(document).ready(function() {
 		checkRequired();
 	});
 
-	// Player search autocomplete (park members prioritized, then kingdom, then all)
+	// Player search autocomplete (park members only)
 	gid('pk-award-player-text').addEventListener('input', function() {
 		gid('pk-award-player-id').value = '';
 		checkRequired();
@@ -3667,6 +3694,16 @@ $(document).ready(function() {
 		gid('pk-award-player-id').value   = item.dataset.id;
 		this.classList.remove('pk-ac-open');
 		checkRequired();
+		// Fetch this player's held ladder award ranks, then rebuild pills if an award is selected
+		pkPlayerRanks = {};
+		var pid = item.dataset.id;
+		fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+			.then(function(r) { return r.json(); })
+			.then(function(ranks) {
+				pkPlayerRanks = ranks || {};
+				var curAward = gid('pk-award-select').value;
+				if (curAward) buildRankPills(curAward);
+			}).catch(function() {});
 	});
 
 	// Given By — officer chips + search
@@ -3690,12 +3727,12 @@ $(document).ready(function() {
 		if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
 		clearTimeout(givenByTimer);
 		givenByTimer = setTimeout(function() {
-			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+			var url = SEARCH_URL + '?Action=Search%2FPlayer&type=PERSONA&search=' + encodeURIComponent(term) + '&park_id=' + PkConfig.parkId + '&limit=6';
 			fetch(url).then(function(r) { return r.json(); }).then(function(data) {
 				var el = gid('pk-award-givenby-results');
 				el.innerHTML = (data && data.length)
 					? data.map(function(p) {
-						return '<div class="pk-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+						return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
 							+ p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
 					}).join('')
 					: '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
@@ -3742,7 +3779,8 @@ $(document).ready(function() {
 		this.classList.remove('pk-ac-open');
 	});
 
-	// Keyboard navigation for givenBy and givenAt autocompletes
+	// Keyboard navigation for player, givenBy, and givenAt autocompletes
+	acKeyNav(gid('pk-award-player-text'),  gid('pk-award-player-results'),  'pk-ac-open', '.pk-ac-item');
 	acKeyNav(gid('pk-award-givenby-text'), gid('pk-award-givenby-results'), 'pk-ac-open', '.pk-ac-item');
 	acKeyNav(gid('pk-award-givenat-text'), gid('pk-award-givenat-results'), 'pk-ac-open', '.pk-ac-item');
 
@@ -3760,6 +3798,7 @@ $(document).ready(function() {
 	// ---- Open / Close ----
 	window.pkOpenAwardModal = function() {
 		var today = new Date();
+		pkPlayerRanks = {};
 		gid('pk-award-error').style.display      = 'none';
 		gid('pk-award-error').textContent        = '';
 		gid('pk-award-success').style.display    = 'none';

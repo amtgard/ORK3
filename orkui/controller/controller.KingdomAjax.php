@@ -456,17 +456,17 @@ class Controller_KingdomAjax extends Controller {
 			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,
 			       k.name AS kingdom_name, p.name AS park_name,
 			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-			       m.suspended,
-			       CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END AS sort_priority
+			       m.suspended
 			FROM ork_mundane m
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
 			WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+			  AND m.kingdom_id = {$kid}
 			  AND (m.persona LIKE '%{$term}%'
 			    OR m.given_name LIKE '%{$term}%'
 			    OR m.surname LIKE '%{$term}%'
 			    OR m.username LIKE '%{$term}%')
-			ORDER BY sort_priority, m.persona
+			ORDER BY m.persona
 			LIMIT 10";
 
 		$rs      = $DB->DataSet($sql);

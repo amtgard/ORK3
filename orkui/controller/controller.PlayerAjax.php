@@ -281,6 +281,21 @@ class Controller_PlayerAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'awardranks') {
+			global $DB;
+			$pid = (int)$player_id;
+			$rs  = $DB->DataSet("
+				SELECT ka.award_id, MAX(aw.rank) AS max_rank
+				FROM ork_awards aw
+				INNER JOIN ork_kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
+				WHERE aw.mundane_id = {$pid} AND aw.rank > 0
+				GROUP BY ka.award_id");
+			$ranks = [];
+			while ($rs && $rs->Next()) {
+				$ranks[(int)$rs->award_id] = (int)$rs->max_rank;
+			}
+			echo json_encode($ranks);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}
