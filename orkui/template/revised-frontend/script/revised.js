@@ -64,6 +64,63 @@ function pnPageRange(current, total) {
 	return pages;
 }
 
+/* ===========================
+   Generic confirm dialog
+   opts: { title, message, confirmText, danger }
+   =========================== */
+(function() {
+	var _inited = false;
+	function _init() {
+		if (_inited) return;
+		_inited = true;
+		var el = document.createElement('div');
+		el.innerHTML = '<div class="pn-overlay" id="pn-confirm-overlay">' +
+			'<div class="pn-modal-box" style="width:380px;max-width:calc(100vw - 40px);">' +
+				'<div class="pn-modal-header">' +
+					'<h3 class="pn-modal-title" id="pn-confirm-title"></h3>' +
+					'<button class="pn-modal-close-btn" id="pn-confirm-close-btn" aria-label="Close">&times;</button>' +
+				'</div>' +
+				'<div class="pn-modal-body"><p id="pn-confirm-message" style="margin:0;font-size:14px;color:#4a5568"></p></div>' +
+				'<div class="pn-modal-footer">' +
+					'<button class="pn-btn pn-btn-secondary" id="pn-confirm-cancel">Cancel</button>' +
+					'<button class="pn-btn" id="pn-confirm-ok">Confirm</button>' +
+				'</div>' +
+			'</div>' +
+		'</div>';
+		document.body.appendChild(el.firstChild);
+		document.getElementById('pn-confirm-close-btn').addEventListener('click', _close);
+		document.getElementById('pn-confirm-cancel').addEventListener('click', _close);
+		document.getElementById('pn-confirm-overlay').addEventListener('click', function(e) {
+			if (e.target === this) _close();
+		});
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && document.getElementById('pn-confirm-overlay').classList.contains('pn-open'))
+				_close();
+		});
+	}
+	function _close() {
+		document.getElementById('pn-confirm-overlay').classList.remove('pn-open');
+		document.body.style.overflow = '';
+	}
+	/** @type {function({title?:string,message?:string,confirmText?:string,danger?:boolean}|string, function):void} */
+	window.pnConfirm = function(opts, onConfirm) {
+		if (typeof opts === 'string') opts = { message: opts };
+		_init();
+		document.getElementById('pn-confirm-title').textContent   = opts.title   || 'Confirm';
+		document.getElementById('pn-confirm-message').textContent = opts.message || '';
+		var okBtn = document.getElementById('pn-confirm-ok');
+		okBtn.textContent        = opts.confirmText || 'Confirm';
+		okBtn.style.background   = opts.danger !== false ? '#c53030' : '';
+		okBtn.style.color        = opts.danger !== false ? '#fff'    : '';
+		// Replace node to clear previous listeners
+		var fresh = okBtn.cloneNode(true);
+		okBtn.parentNode.replaceChild(fresh, okBtn);
+		fresh.addEventListener('click', function() { _close(); onConfirm(); });
+		document.getElementById('pn-confirm-overlay').classList.add('pn-open');
+		document.body.style.overflow = 'hidden';
+	};
+})();
+
 function pnSetPageSize(tableId, size) {
 	var $table = $('#' + tableId);
 	if (!$table.length) return;
@@ -5325,22 +5382,19 @@ function setupPronounPicker(cfg) {
 	$(document).ready(function() {
 		$(document).on('click', '.pn-dues-revoke-btn', function() {
 			var btn    = this;
-			var row    = $(this).closest('tr');
 			var duesId = $(this).data('dues-id');
-			if (!duesId || !confirm('Revoke this dues record?')) return;
-			btn.disabled = true;
-			fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/revokedues/' + duesId, {
-				method: 'POST'
-			}).then(function(r) { return r.json(); }).then(function(result) {
-				if (result && result.status === 0) {
-					row.fadeOut(300, function() { row.remove(); });
-				} else {
+			if (!duesId) return;
+			pnConfirm({ title: 'Revoke Dues', message: 'Revoke this dues record? This cannot be undone.', confirmText: 'Revoke', danger: true }, function() {
+				btn.disabled = true;
+				fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/revokedues/' + duesId, {
+					method: 'POST'
+				}).then(function(r) {
+					if (!r.ok) throw new Error('Server returned ' + r.status);
+					window.location.reload();
+				}).catch(function() {
 					btn.disabled = false;
-					alert((result && result.error) ? result.error : 'Revoke failed.');
-				}
-			}).catch(function() {
-				btn.disabled = false;
-				alert('Request failed.');
+					alert('Request failed.');
+				});
 			});
 		});
 	});
