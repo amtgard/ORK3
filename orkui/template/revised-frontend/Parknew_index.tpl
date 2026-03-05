@@ -796,9 +796,9 @@
 
 			<!-- Reports Tab -->
 			<div class="pk-tab-panel" id="pk-tab-reports" style="display:none">
-				<div class="pk-reports-grid">
-					<div class="pk-reports-section">
-						<h5>Players</h5>
+				<div class="kn-reports-grid">
+					<div class="kn-report-group">
+						<h5><i class="fas fa-users"></i> Players</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/roster/Park&id=<?= $park_id ?>">Player Roster</a></li>
 							<li><a href="<?= UIR ?>Reports/inactive/Park&id=<?= $park_id ?>">Inactive Players</a></li>
@@ -813,8 +813,8 @@
 							<li><a href="<?= UIR ?>Reports/corpora&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Corpora Qualified</a></li>
 						</ul>
 					</div>
-					<div class="pk-reports-section">
-						<h5>Attendance</h5>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-calendar-check"></i> Attendance</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/Weeks/1">Past Week</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/Months/1">Past Month</a></li>
@@ -824,8 +824,8 @@
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/All">All Time</a></li>
 						</ul>
 					</div>
-					<div class="pk-reports-section">
-						<h5>Awards</h5>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-medal"></i> Awards</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Recommendations</a></li>
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Player Awards</a></li>
@@ -835,8 +835,8 @@
 						</ul>
 					</div>
 					<?php if (!empty($CanManagePark)): ?>
-					<div class="pk-reports-section">
-						<h5>Admin</h5>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-cog"></i> Admin</h5>
 						<ul>
 							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Add Player</a></li>
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>

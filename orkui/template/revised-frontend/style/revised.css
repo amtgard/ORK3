@@ -1631,16 +1631,12 @@
 }
 .kn-report-group h5 {
 	margin: 0 0 8px 0;
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 700;
-	color: #4a5568;
+	color: #718096;
 	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	padding-bottom: 6px;
-	border-bottom: 1px solid #e2e8f0;
-	background: transparent;
-	border-radius: 0;
-	text-shadow: none;
+	letter-spacing: 0.05em;
+	padding-bottom: 5px;
 }
 .kn-report-group ul { list-style: none; margin: 0; padding: 0; }
 .kn-report-group li { padding: 3px 0; }
@@ -2352,30 +2348,7 @@
 }
 .pk-schedule-map-link:hover { text-decoration: underline; }
 
-/* ---- Reports grid ---- */
-.pk-reports-grid {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 14px;
-}
-.pk-reports-section h5 {
-	font-size: 12px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	color: #718096;
-	margin: 0 0 8px 0;
-	padding-bottom: 5px;
-	border-bottom: 1px solid #e2e8f0;
-}
-.pk-reports-section ul {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-}
-.pk-reports-section li { margin-bottom: 5px; }
-.pk-reports-section a { font-size: 13px; color: #0891b2; text-decoration: none; }
-.pk-reports-section a:hover { text-decoration: underline; }
+/* ---- Reports grid (uses shared kn-reports-grid / kn-report-group) ---- */
 
 /* ---- Empty state ---- */
 .pk-empty {
@@ -2546,7 +2519,6 @@
 	.pk-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e2e8f0; }
 	.pk-stats-row { flex-wrap: wrap; }
 	.pk-stat-card { flex: 1 1 50%; min-width: 0; }
-	.pk-reports-grid { grid-template-columns: 1fr; }
 	.pk-park-name { font-size: 22px; }
 	.pk-schedule-grid { grid-template-columns: 1fr; }
 	.pk-players-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
