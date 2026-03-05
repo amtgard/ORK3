@@ -183,6 +183,12 @@ class Controller_Park extends Controller
 		$this->data['CanManagePark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
 
+		$this->data['AwardRecommendations'] = [];
+		if ($this->data['CanManagePark']) {
+			$recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0]);
+			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+		}
+
 		$this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
 		$this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
 	}

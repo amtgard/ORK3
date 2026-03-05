@@ -82,8 +82,19 @@
 <?php endif; ?>
 <?php endif; ?>
 
-			<!-- Documentation -->
-			<a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target='_blank' class='nav-icon-btn' title='Documentation'><i class='fas fa-book'></i></a>
+			<!-- Resources dropdown -->
+			<div class='nav-dropdown-wrap' id='nav-resources-wrap'>
+				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>
+				<div class='nav-dropdown-menu' style='min-width:200px'>
+					<a href='https://www.amtgard.com/' target='_blank'><i class='fas fa-globe'></i> Amtgard Website</a>
+					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
+					<div class='nav-dropdown-divider'></div>
+					<a href='https://play.google.com/store/apps/details?id=com.harvardproductions.mork&hl=en_US' target='_blank'><i class='fab fa-google-play'></i> mORK (Android)</a>
+					<a href='https://apps.apple.com/us/app/mork-mobile-amtgard/id1462457797' target='_blank'><i class='fab fa-apple'></i> mORK (iOS)</a>
+					<div class='nav-dropdown-divider'></div>
+					<a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target='_blank'><i class='fas fa-book'></i> ORK Documentation</a>
+				</div>
+			</div>
 
 <?php if ($this->__session->token == null) : ?>
 			<a href='<?=UIR;?>Login' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
@@ -167,10 +178,12 @@
 		// ---- Sidr mobile menu ----
 		$('#simple-menu').sidr();
 
-		// ---- Avatar dropdown: close on outside click ----
-		$(document).on('click.avatarDropdown', function(e) {
-			var wrap = document.getElementById('nav-avatar-wrap');
-			if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+		// ---- Dropdowns: close on outside click ----
+		$(document).on('click.navDropdowns', function(e) {
+			['nav-avatar-wrap', 'nav-resources-wrap'].forEach(function(id) {
+				var wrap = document.getElementById(id);
+				if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+			});
 		});
 
 		// ---- Universal search ----

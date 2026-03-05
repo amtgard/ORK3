@@ -246,6 +246,14 @@
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i> Reports
 				</li>
+				<?php if ($CanManageKingdom ?? false): ?>
+				<li data-kntab="recommendations">
+					<i class="fas fa-star"></i> Recommendations
+					<?php if (!empty($AwardRecommendations)): ?>
+					<span class="kn-tab-count">(<?= count($AwardRecommendations) ?>)</span>
+					<?php endif; ?>
+				</li>
+				<?php endif; ?>
 			</ul>
 
 			<!-- Parks Tab -->
@@ -599,6 +607,53 @@
 
 				</div>
 			</div>
+
+		<!-- Recommendations Tab (admin only) -->
+		<?php if ($CanManageKingdom ?? false): ?>
+		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
+			<?php if (empty($AwardRecommendations)): ?>
+			<div class="pk-recs-empty">No pending award recommendations.</div>
+			<?php else: ?>
+			<div class="pk-recs-table-wrap">
+				<table class="pk-recs-table">
+					<thead>
+						<tr>
+							<th>Player</th>
+							<th>Award</th>
+							<th>Rank</th>
+							<th>Recommended By</th>
+							<th>Date</th>
+							<th>Notes</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody id="kn-recs-tbody">
+					<?php foreach ($AwardRecommendations as $rec): ?>
+					<tr class="pk-rec-row" data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
+						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
+						<td><?= htmlspecialchars($rec['AwardName']) ?></td>
+						<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
+						<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
+						<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
+						<td class="pk-rec-notes"><?= !empty($rec['Reason']) ? htmlspecialchars($rec['Reason']) : '&mdash;' ?></td>
+						<td class="pk-rec-actions">
+							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
+								data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
+								<i class="fas fa-medal"></i> Grant
+							</button>
+							<button class="pk-rec-dismiss-btn"
+								data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
+								<i class="fas fa-times"></i> Dismiss
+							</button>
+						</td>
+					</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
 
 		<!-- Players Tab -->
 		<div class="kn-tab-panel" id="kn-tab-players" style="display:none">

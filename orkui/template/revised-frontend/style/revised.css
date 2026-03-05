@@ -4386,3 +4386,29 @@
 @media (max-width: 520px) {
     .pronoun-picker-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ---- Shared: award recommendations table (pk, kn) ---- */
+.pk-recs-empty { padding: 32px 0; text-align: center; color: #a0aec0; font-size: 14px; }
+.pk-recs-table-wrap { overflow-x: auto; }
+.pk-recs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pk-recs-table thead th {
+    text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: #718096;
+    border-bottom: 2px solid #e2e8f0; background: #f7fafc; white-space: nowrap;
+}
+.pk-recs-table tbody tr { border-bottom: 1px solid #f0f4f8; }
+.pk-recs-table tbody tr:last-child { border-bottom: none; }
+.pk-recs-table tbody tr:hover { background: #f7fafc; }
+.pk-recs-table td { padding: 8px 10px; vertical-align: middle; color: #2d3748; }
+.pk-recs-table td a { color: #2b6cb0; text-decoration: none; }
+.pk-recs-table td a:hover { text-decoration: underline; }
+.pk-rec-notes { max-width: 220px; white-space: normal; color: #718096; }
+.pk-rec-actions { white-space: nowrap; }
+.pk-rec-actions button { margin-right: 6px; }
+.pk-rec-actions button:last-child { margin-right: 0; }
+.pk-rec-dismiss-btn {
+    font-size: 12px; padding: 4px 10px; border-radius: 4px;
+    background: none; border: 1px solid #e2e8f0; color: #718096; cursor: pointer;
+}
+.pk-rec-dismiss-btn:hover { background: #fff5f5; border-color: #fc8181; color: #c53030; }
+.pk-rec-row.pk-rec-dismissed { opacity: 0.4; pointer-events: none; }

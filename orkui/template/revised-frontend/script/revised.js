@@ -2217,7 +2217,81 @@ $(document).ready(function() {
 	window.knCloseAwardModal = function() {
 		gid('kn-award-overlay').classList.remove('kn-open');
 		document.body.style.overflow = '';
+		knActiveRecId = null;
 	};
+
+	// Track the recommendation that triggered the current award modal open
+	var knActiveRecId = null;
+
+	// Pre-populate award modal from a recommendation row
+	window.knGiveFromRec = function(rec) {
+		knOpenAwardModal();
+		if (rec.Persona || rec.MundaneId) {
+			gid('kn-award-player-text').value = rec.Persona || '';
+			gid('kn-award-player-id').value   = String(rec.MundaneId || '');
+		}
+		if (rec.KingdomAwardId) {
+			var sel = gid('kn-award-select');
+			sel.value = String(rec.KingdomAwardId);
+			sel.dispatchEvent(new Event('change'));
+		}
+		if (rec.Rank) {
+			setTimeout(function() {
+				var pill = document.querySelector('#kn-rank-pills .kn-rank-pill[data-rank="' + rec.Rank + '"]');
+				if (pill) pill.click();
+			}, 0);
+		}
+		if (rec.Reason) {
+			var noteEl = gid('kn-award-note');
+			noteEl.value = rec.Reason;
+			var rem = 400 - rec.Reason.length;
+			var cc = gid('kn-award-char-count');
+			if (cc) { cc.textContent = rem + ' characters remaining'; cc.classList.toggle('kn-char-warn', rem < 50); }
+		}
+		checkRequired();
+		knActiveRecId = rec.RecommendationsId || null;
+	};
+
+	function knAutoDismissRec() {
+		var id = knActiveRecId;
+		knActiveRecId = null;
+		if (!id) return;
+		var row = document.querySelector('#kn-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
+		var fd = new FormData();
+		fd.append('RecommendationsId', id);
+		fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/dismissrecommendation', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(d) {
+				if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+			});
+	}
+
+	// Recommendations tab: grant + dismiss
+	document.addEventListener('click', function(e) {
+		var grantBtn = e.target.closest ? e.target.closest('.pk-rec-grant-btn') : null;
+		if (grantBtn && grantBtn.closest('#kn-tab-recommendations')) {
+			try { window.knGiveFromRec(JSON.parse(grantBtn.getAttribute('data-rec') || '{}')); } catch(ex) {}
+			return;
+		}
+		var dimBtn = e.target.closest ? e.target.closest('.pk-rec-dismiss-btn') : null;
+		if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
+			if (!confirm('Dismiss this recommendation?')) return;
+			var recId = dimBtn.getAttribute('data-rec-id');
+			var row   = dimBtn.closest('.pk-rec-row');
+			var fd = new FormData();
+			fd.append('RecommendationsId', recId);
+			fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/dismissrecommendation', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					if (d.status === 0) {
+						if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+					} else {
+						alert(d.error || 'Failed to dismiss recommendation.');
+					}
+				})
+				.catch(function() { alert('Network error.'); });
+		}
+	});
 
 	gid('kn-award-close-btn').addEventListener('click', knCloseAwardModal);
 	gid('kn-award-cancel').addEventListener('click',    knCloseAwardModal);
@@ -2305,11 +2379,11 @@ $(document).ready(function() {
 
 	// "Add + New Player" — clear player + award/rank/note, keep date/giver/location
 	gid('kn-award-save-new').addEventListener('click', function() {
-		knDoSave(function() { knShowSuccess(); knClearPlayer(); knClearAward(); gid('kn-award-player-text').focus(); });
+		knDoSave(function() { knAutoDismissRec(); knShowSuccess(); knClearPlayer(); knClearAward(); gid('kn-award-player-text').focus(); });
 	});
 	// "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
 	gid('kn-award-save-same').addEventListener('click', function() {
-		knDoSave(function() { knShowSuccess(); knClearAward(); gid('kn-award-select').focus(); });
+		knDoSave(function() { knAutoDismissRec(); knShowSuccess(); knClearAward(); gid('kn-award-select').focus(); });
 	});
 })();
 (function() {
@@ -3950,7 +4024,81 @@ $(document).ready(function() {
 	window.pkCloseAwardModal = function() {
 		gid('pk-award-overlay').classList.remove('pk-open');
 		document.body.style.overflow = '';
+		pkActiveRecId = null;
 	};
+
+	// Track the recommendation that triggered the current award modal open
+	var pkActiveRecId = null;
+
+	// Pre-populate award modal from a recommendation row
+	window.pkGiveFromRec = function(rec) {
+		pkOpenAwardModal();
+		if (rec.Persona || rec.MundaneId) {
+			gid('pk-award-player-text').value = rec.Persona || '';
+			gid('pk-award-player-id').value   = String(rec.MundaneId || '');
+		}
+		if (rec.KingdomAwardId) {
+			var sel = gid('pk-award-select');
+			sel.value = String(rec.KingdomAwardId);
+			sel.dispatchEvent(new Event('change'));
+		}
+		if (rec.Rank) {
+			setTimeout(function() {
+				var pill = document.querySelector('#pk-rank-pills .pk-rank-pill[data-rank="' + rec.Rank + '"]');
+				if (pill) pill.click();
+			}, 0);
+		}
+		if (rec.Reason) {
+			var noteEl = gid('pk-award-note');
+			noteEl.value = rec.Reason;
+			var rem = 400 - rec.Reason.length;
+			var cc = gid('pk-award-char-count');
+			if (cc) { cc.textContent = rem + ' characters remaining'; cc.classList.toggle('pk-char-warn', rem < 50); }
+		}
+		checkRequired();
+		pkActiveRecId = rec.RecommendationsId || null;
+	};
+
+	function pkAutoDismissRec() {
+		var id = pkActiveRecId;
+		pkActiveRecId = null;
+		if (!id) return;
+		var row = document.querySelector('#pk-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
+		var fd = new FormData();
+		fd.append('RecommendationsId', id);
+		fetch(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/dismissrecommendation', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(d) {
+				if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+			});
+	}
+
+	// Recommendations tab: grant + dismiss
+	document.addEventListener('click', function(e) {
+		var grantBtn = e.target.closest ? e.target.closest('.pk-rec-grant-btn') : null;
+		if (grantBtn && grantBtn.closest('#pk-tab-recommendations')) {
+			try { window.pkGiveFromRec(JSON.parse(grantBtn.getAttribute('data-rec') || '{}')); } catch(ex) {}
+			return;
+		}
+		var dimBtn = e.target.closest ? e.target.closest('.pk-rec-dismiss-btn') : null;
+		if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
+			if (!confirm('Dismiss this recommendation?')) return;
+			var recId = dimBtn.getAttribute('data-rec-id');
+			var row   = dimBtn.closest('.pk-rec-row');
+			var fd = new FormData();
+			fd.append('RecommendationsId', recId);
+			fetch(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/dismissrecommendation', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					if (d.status === 0) {
+						if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
+					} else {
+						alert(d.error || 'Failed to dismiss recommendation.');
+					}
+				})
+				.catch(function() { alert('Network error.'); });
+		}
+	});
 
 	gid('pk-award-close-btn').addEventListener('click', pkCloseAwardModal);
 	gid('pk-award-cancel').addEventListener('click',    pkCloseAwardModal);
@@ -4038,11 +4186,11 @@ $(document).ready(function() {
 
 	// "Add + New Player" — clear player + award/rank/note, keep date/giver/location
 	gid('pk-award-save-new').addEventListener('click', function() {
-		pkDoSave(function() { pkShowSuccess(); pkClearPlayer(); pkClearAward(); gid('pk-award-player-text').focus(); });
+		pkDoSave(function() { pkAutoDismissRec(); pkShowSuccess(); pkClearPlayer(); pkClearAward(); gid('pk-award-player-text').focus(); });
 	});
 	// "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
 	gid('pk-award-save-same').addEventListener('click', function() {
-		pkDoSave(function() { pkShowSuccess(); pkClearAward(); gid('pk-award-select').focus(); });
+		pkDoSave(function() { pkAutoDismissRec(); pkShowSuccess(); pkClearAward(); gid('pk-award-select').focus(); });
 	});
 })();
 (function() {

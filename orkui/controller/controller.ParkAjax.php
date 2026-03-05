@@ -192,6 +192,19 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'dismissrecommendation') {
+			$this->load_model('Player');
+			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
+			$r = $this->Player->delete_player_recommendation([
+				'Token'             => $this->session->token,
+				'RecommendationsId' => $rec_id,
+				'RequestedBy'       => $this->session->user_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

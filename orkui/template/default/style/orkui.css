@@ -6564,10 +6564,18 @@ p {
     transition: background 0.15s;
     font-size: 14px;
     text-decoration: none;
+    border: none;
+    background: transparent;
+    padding: 0;
 }
-.nav-icon-btn:hover, .nav-icon-btn.active {
+.nav-icon-btn:hover, .nav-icon-btn.active,
+.nav-dropdown-wrap.open .nav-icon-btn {
     background: rgba(255,255,255,0.12);
     text-decoration: none;
+}
+#nav-resources-wrap .nav-dropdown-menu {
+    right: auto;
+    left: 0;
 }
 .nav-home-btn {
     display: inline-flex;
