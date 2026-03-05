@@ -1344,21 +1344,10 @@
 						<?= $AwardOptions ?>
 					</select>
 				</div>
-				<div class="pn-rec-field">
-					<label for="pn-rec-rank">Rank <span style="color:#a0aec0;font-weight:400;text-transform:none">(optional)</span></label>
-					<select name="Rank" id="pn-rec-rank">
-						<option value="">None</option>
-						<option value="1">1st</option>
-						<option value="2">2nd</option>
-						<option value="3">3rd</option>
-						<option value="4">4th</option>
-						<option value="5">5th</option>
-						<option value="6">6th</option>
-						<option value="7">7th</option>
-						<option value="8">8th</option>
-						<option value="9">9th</option>
-						<option value="10">10th</option>
-					</select>
+				<div class="pn-rec-field" id="pn-rec-rank-row" style="display:none">
+					<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; light blue = already held, green border = suggested; dark blue = selected</span></label>
+					<div class="pn-rank-pills-wrap" id="pn-rec-rank-pills"></div>
+					<input type="hidden" name="Rank" id="pn-rec-rank-val" value="" />
 				</div>
 				<div class="pn-rec-field">
 					<label for="pn-rec-reason">Reason <span style="color:#e53e3e">*</span></label>

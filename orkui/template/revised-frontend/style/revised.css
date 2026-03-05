@@ -603,8 +603,6 @@
 	font-size: 12px;
 	font-weight: 600;
 	color: #4a5568;
-	text-transform: uppercase;
-	letter-spacing: 0.3px;
 	margin-bottom: 4px;
 }
 .pn-rec-field select,
@@ -613,7 +611,7 @@
 	padding: 8px 10px;
 	border: 1px solid #e2e8f0;
 	border-radius: 6px;
-	font-size: 13px;
+	font-size: 14px;
 	color: #2d3748;
 	box-sizing: border-box;
 }
@@ -621,7 +619,7 @@
 .pn-rec-field input[type="text"]:focus {
 	outline: none;
 	border-color: #3182ce;
-	box-shadow: 0 0 0 2px rgba(49,130,206,0.15);
+	box-shadow: 0 0 0 2px rgba(49,130,206,0.12);
 }
 
 /* Delete link + inline confirm */

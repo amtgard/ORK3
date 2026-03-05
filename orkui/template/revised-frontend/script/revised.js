@@ -242,20 +242,44 @@ if (PnConfig.recError) {
 	});
 
 
-	// Auto-fill rank for ladder awards based on player's existing ranks
+	// Rank bubbles for recommend dialog (reuses player's preloaded award ranks)
 	var pnAwardRanks = PnConfig.awardRanks;
-	$('#pn-rec-award').on('change', function() {
-		var $opt     = $(this).find('option:selected');
-		var isLadder = $opt.data('is-ladder') == 1;
-		var baseId   = parseInt($opt.data('award-id')) || 0;
-		if (!$(this).val()) {
-			$('#pn-rec-rank').val('');
-		} else if (isLadder && baseId) {
-			var currentRank = pnAwardRanks[baseId] || 0;
-			$('#pn-rec-rank').val(String(Math.min(currentRank + 1, 6)));
-		} else {
-			$('#pn-rec-rank').val('');
+	function buildRecRankPills(awardId) {
+		var row   = document.getElementById('pn-rec-rank-row');
+		var wrap  = document.getElementById('pn-rec-rank-pills');
+		var input = document.getElementById('pn-rec-rank-val');
+		wrap.innerHTML = '';
+		input.value = '';
+		row.style.display = 'none';
+		if (!awardId) return;
+		var opt = document.querySelector('#pn-rec-award option[value="' + awardId + '"]');
+		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
+		row.style.display = '';
+		var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+		var held      = pnAwardRanks[baseAwardId] || 0;
+		var suggested = Math.min(held + 1, 10);
+		for (var r = 1; r <= 10; r++) {
+			var pill = document.createElement('div');
+			pill.className = 'pn-rank-pill';
+			if (r <= held)       pill.className += ' pn-rank-held';
+			if (r === suggested) pill.className += ' pn-rank-suggested';
+			pill.textContent  = r;
+			pill.dataset.rank = r;
+			wrap.appendChild(pill);
 		}
+		var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
+		if (suggestedPill) { suggestedPill.classList.add('pn-rank-selected'); input.value = suggested; }
+	}
+	document.getElementById('pn-rec-rank-pills').addEventListener('click', function(e) {
+		var p = e.target.closest ? e.target.closest('.pn-rank-pill') : (e.target.classList.contains('pn-rank-pill') ? e.target : null);
+		if (!p) return;
+		var input = document.getElementById('pn-rec-rank-val');
+		this.querySelectorAll('.pn-rank-pill').forEach(function(x) { x.classList.remove('pn-rank-selected'); });
+		p.classList.add('pn-rank-selected');
+		input.value = p.dataset.rank;
+	});
+	$('#pn-rec-award').on('change', function() {
+		buildRecRankPills($(this).val());
 	});
 
 	// ---- Inline Delete Confirmation ----
