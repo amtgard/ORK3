@@ -1403,10 +1403,10 @@ class Player extends Ork3 {
 			$dues->kingdom_id = $request['KingdomId'];
 			$dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
 			if (!empty($request['Months'])) {
-				// Direct month entry — bypass kingdom period config
-				$months = max(1, (int)$request['Months']);
-				$dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $months . ' months'));
-				$dues->terms = $months;
+				$n    = max(1, (int)$request['Months']);
+				$unit = ($request['DuesPeriodType'] === 'week') ? 'weeks' : 'months';
+				$dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $n . ' ' . $unit));
+				$dues->terms = $n;
 			} else {
 				$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
 				$dues->terms = $request['Terms'];

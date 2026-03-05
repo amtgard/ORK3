@@ -39,6 +39,13 @@
 	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
+
+	// Kingdom dues period config
+	$_kconfig = Common::get_configs((int)($KingdomId ?? 0));
+	$_duesPeriodType = (isset($_kconfig['DuesPeriod']['Value']->Type) && $_kconfig['DuesPeriod']['Value']->Type !== '-')
+		? $_kconfig['DuesPeriod']['Value']->Type
+		: 'month';
+	$_duesPeriod = (!empty($_kconfig['DuesPeriod']['Value']->Period)) ? (int)$_kconfig['DuesPeriod']['Value']->Period : 6;
 ?>
 
 <style>:root { --pn-hero-bg: <?= $isSuspended ? '#9b2c2c' : '#2c5282' ?>; }</style>
@@ -1060,8 +1067,8 @@
 			</div>
 
 			<div class="pn-acct-field" id="pn-dues-months-row">
-				<label for="pn-dues-months">Months</label>
-				<input type="number" id="pn-dues-months" name="Months" value="6" min="1" max="120" style="width:100px" />
+				<label for="pn-dues-months" id="pn-dues-months-label"><?= $_duesPeriodType === 'week' ? 'Weeks' : 'Months' ?></label>
+				<input type="number" id="pn-dues-months" name="Months" value="<?= (int)$_duesPeriod ?>" min="1" max="520" style="width:100px" />
 				<div class="pn-dues-until-preview" id="pn-dues-until-preview"></div>
 			</div>
 
@@ -1073,9 +1080,10 @@
 				</div>
 			</div>
 
-			<input type="hidden" name="MundaneId" value="<?= (int)$Player['MundaneId'] ?>" />
-			<input type="hidden" name="ParkId"    value="<?= (int)$Player['ParkId'] ?>" />
-			<input type="hidden" name="KingdomId" value="<?= (int)$KingdomId ?>" />
+			<input type="hidden" name="MundaneId"      value="<?= (int)$Player['MundaneId'] ?>" />
+			<input type="hidden" name="ParkId"         value="<?= (int)$Player['ParkId'] ?>" />
+			<input type="hidden" name="KingdomId"      value="<?= (int)$KingdomId ?>" />
+			<input type="hidden" name="DuesPeriodType" value="<?= htmlspecialchars($_duesPeriodType) ?>" />
 		</div>
 
 		<div class="pn-modal-footer">
@@ -1406,7 +1414,9 @@ var PnConfig = {
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
-	playerParkName: <?= json_encode($Player['Park'] ?? $Player['ParkName'] ?? '') ?>,
+	playerParkName:   <?= json_encode($Player['Park'] ?? $Player['ParkName'] ?? '') ?>,
+	duesPeriodType:   <?= json_encode($_duesPeriodType) ?>,
+	duesPeriod:       <?= (int)$_duesPeriod ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;

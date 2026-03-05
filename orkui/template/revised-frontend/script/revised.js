@@ -837,11 +837,19 @@ if (PnConfig.recError) {
 
 		function gid(id) { return document.getElementById(id); }
 
-		// Add N months to a YYYY-MM-DD string, returns YYYY-MM-DD
-		function addMonths(dateStr, n) {
+		var duesPeriodType = (typeof PnConfig !== 'undefined' && PnConfig.duesPeriodType) || 'month';
+		var duesPeriod     = (typeof PnConfig !== 'undefined' && PnConfig.duesPeriod)     || 6;
+
+		// Add N months or weeks to a YYYY-MM-DD string, returns YYYY-MM-DD
+		function addPeriod(dateStr, n, unit) {
 			var p = dateStr.split('-');
 			if (p.length !== 3) return '';
-			var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1 + n, parseInt(p[2], 10));
+			var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+			if (unit === 'week') {
+				d.setDate(d.getDate() + n * 7);
+			} else {
+				d.setMonth(d.getMonth() + n);
+			}
 			return d.getFullYear() + '-' +
 				String(d.getMonth() + 1).padStart(2, '0') + '-' +
 				String(d.getDate()).padStart(2, '0');
@@ -859,10 +867,10 @@ if (PnConfig.recError) {
 				el.innerHTML = '<i class="fas fa-infinity" style="margin-right:4px"></i>Paid for life';
 				return;
 			}
-			var from   = gid('pn-dues-from').value;
-			var months = parseInt(gid('pn-dues-months').value, 10);
-			if (!from || isNaN(months) || months < 1) { el.textContent = ''; return; }
-			var until = addMonths(from, months);
+			var from = gid('pn-dues-from').value;
+			var n    = parseInt(gid('pn-dues-months').value, 10);
+			if (!from || isNaN(n) || n < 1) { el.textContent = ''; return; }
+			var until = addPeriod(from, n, duesPeriodType);
 			el.innerHTML = 'Paid through: <strong>' + until + '</strong>';
 		}
 
@@ -879,7 +887,7 @@ if (PnConfig.recError) {
 			gid('pn-dues-from').value = today.getFullYear() + '-' +
 				String(today.getMonth() + 1).padStart(2, '0') + '-' +
 				String(today.getDate()).padStart(2, '0');
-			gid('pn-dues-months').value = '6';
+			gid('pn-dues-months').value = duesPeriod;
 			document.querySelectorAll('#pn-dues-overlay input[name="DuesForLife"]').forEach(function(r) {
 				r.checked = (r.value === '0');
 			});
@@ -902,7 +910,16 @@ if (PnConfig.recError) {
 				pnCloseDuesModal();
 		});
 
-		// Live preview wiring
+		// Live preview wiring — if date is cleared, restore to today
+		gid('pn-dues-from').addEventListener('change', function() {
+			if (!this.value) {
+				var t = new Date();
+				this.value = t.getFullYear() + '-' +
+					String(t.getMonth() + 1).padStart(2, '0') + '-' +
+					String(t.getDate()).padStart(2, '0');
+			}
+			updateDuesPreview();
+		});
 		gid('pn-dues-from').addEventListener('input', updateDuesPreview);
 		gid('pn-dues-months').addEventListener('input', updateDuesPreview);
 		document.querySelectorAll('#pn-dues-overlay input[name="DuesForLife"]').forEach(function(r) {

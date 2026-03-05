@@ -947,6 +947,7 @@ class Controller_Admin extends Controller {
 								'DuesFrom' => $this->request->Admin_player->DuesFrom,
 								'Terms' => $this->request->Admin_player->Terms,
 								'Months' => $this->request->Admin_player->Months,
+								'DuesPeriodType' => $this->request->Admin_player->DuesPeriodType,
 								'DuesForLife' => $this->request->Admin_player->DuesForLife
 							));
 						break;
