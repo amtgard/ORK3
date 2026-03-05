@@ -124,7 +124,6 @@ function pnActivateTab(tab) {
 	$('.pn-tab-nav li[data-tab="' + tab + '"]').addClass('pn-tab-active');
 	$('.pn-tab-panel').hide();
 	$('#pn-tab-' + tab).show();
-	$('html, body').animate({ scrollTop: $('.pn-tabs').offset().top - 20 }, 250);
 }
 
 $(document).ready(function() {
@@ -1581,7 +1580,6 @@ function knActivateTab(tab) {
 	if (tab === 'events' && knCalendar) {
 		knCalendar.updateSize();
 	}
-	$('html, body').animate({ scrollTop: $('.kn-tabs').offset().top - 20 }, 250);
 }
 
 // ---- Hero color from heraldry ----
@@ -3406,7 +3404,6 @@ function pkActivateTab(tab) {
 	if (tab === 'events' && pkCalendar) {
 		pkCalendar.updateSize();
 	}
-	$('html, body').animate({ scrollTop: $('.pk-tabs').offset().top - 20 }, 250);
 }
 
 // ---- Pagination helpers ----
