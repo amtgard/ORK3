@@ -174,6 +174,7 @@
 		<!-- Player Details -->
 		<div class="pn-card">
 			<h4><i class="fas fa-user"></i> Player Details<?php if ($canEditAccount): ?><button class="pn-card-edit-btn" onclick="pnOpenAccountModal()" title="Edit account details"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
+			<?php if ($canEditAccount): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Given Name</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['GivenName']) ?></span>
@@ -182,6 +183,7 @@
 				<span class="pn-detail-label">Surname</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['Surname']) ?></span>
 			</div>
+			<?php endif; ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Persona</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['Persona']) ?></span>
