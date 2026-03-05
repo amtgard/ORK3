@@ -137,9 +137,9 @@
 						<i class="fas fa-medal"></i> Enter Awards
 					</button>
 				<?php endif; ?>
-				<a class="pk-btn <?= $LoggedIn ? 'pk-btn-outline' : 'pk-btn-white' ?>" href="<?= UIR ?>Search/park/<?= $park_id ?>">
+				<button class="pk-btn <?= $LoggedIn ? 'pk-btn-outline' : 'pk-btn-white' ?>" onclick="pkActivateTab('players'); var s=document.getElementById('pk-player-search'); if(s){s.focus(); s.select();}">
 					<i class="fas fa-search"></i> Search Players
-				</a>
+				</button>
 				<?php if ($LoggedIn): ?>
 					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= $park_id ?>">
 						<i class="fas fa-cog"></i> Admin
