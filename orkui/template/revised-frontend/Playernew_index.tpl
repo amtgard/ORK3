@@ -95,7 +95,7 @@
 				<?php if ($Player['Restricted'] == 1): ?>
 					<span class="pn-badge pn-badge-orange"><i class="fas fa-exclamation-triangle"></i> Restricted</span>
 				<?php endif; ?>
-				<?php if ($Player['DuesThrough'] != 0): ?>
+				<?php if (!empty($Player['DuesThrough'])): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
 				<?php else: ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Lapsed</span>
