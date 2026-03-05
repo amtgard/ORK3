@@ -435,8 +435,9 @@
 				?>
 				<?php if (!empty($pnLadderProgress)): ?>
 					<div class="pn-ladder-grid">
-						<?php foreach ($pnLadderProgress as $lp): ?>
-							<?php $pct = min(100, round($lp['Rank'] / 10 * 100)); ?>
+						<?php foreach ($pnLadderProgress as $aid => $lp): ?>
+							<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
+							<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
 							<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name']) ?>">
 								<div class="pn-ladder-header">
 									<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
@@ -444,11 +445,11 @@
 										<?php if ($lp['HasMaster']): ?>
 											<span class="pn-ladder-master" title="Master title earned"><i class="fas fa-star"></i> M</span>
 										<?php endif; ?>
-										<span class="pn-ladder-rank"><strong><?= $lp['Rank'] ?></strong> / 10</span>
+										<span class="pn-ladder-rank"><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
 									</span>
 								</div>
 								<div class="pn-ladder-bar-track">
-									<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= 10 ? ' pn-ladder-max' : '' ?>"
+									<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= $maxRank ? ' pn-ladder-max' : '' ?>"
 									     style="width:<?= $pct ?>%"></div>
 								</div>
 							</div>

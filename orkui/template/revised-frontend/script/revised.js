@@ -256,9 +256,10 @@ if (PnConfig.recError) {
 		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
 		row.style.display = '';
 		var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+		var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
 		var held      = pnAwardRanks[baseAwardId] || 0;
-		var suggested = Math.min(held + 1, 10);
-		for (var r = 1; r <= 10; r++) {
+		var suggested = Math.min(held + 1, maxRank);
+		for (var r = 1; r <= maxRank; r++) {
 			var pill = document.createElement('div');
 			pill.className = 'pn-rank-pill';
 			if (r <= held)       pill.className += ' pn-rank-held';
@@ -999,10 +1000,12 @@ if (PnConfig.recError) {
 
 		// ---- Rank Pills ----
 		function buildRankPills(awardId) {
+			var opt      = document.querySelector('#pn-award-select option[data-award-id="' + awardId + '"]');
+			var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
 			var held      = playerRanks[awardId] || 0;
-			var suggested = Math.min(held + 1, 10);
+			var suggested = Math.min(held + 1, maxRank);
 			var html = '';
-			for (var i = 1; i <= 10; i++) {
+			for (var i = 1; i <= maxRank; i++) {
 				var cls = 'pn-rank-pill';
 				if (i <= held)       cls += ' pn-rank-held';
 				if (i === suggested) cls += ' pn-rank-suggested';
@@ -1920,9 +1923,10 @@ $(document).ready(function() {
 		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
 		row.style.display = '';
 		var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+		var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
 		var held      = knPlayerRanks[baseAwardId] || 0;
-		var suggested = Math.min(held + 1, 10);
-		for (var r = 1; r <= 10; r++) {
+		var suggested = Math.min(held + 1, maxRank);
+		for (var r = 1; r <= maxRank; r++) {
 			var pill = document.createElement('button');
 			pill.type      = 'button';
 			pill.className = 'kn-rank-pill';
@@ -3651,9 +3655,10 @@ $(document).ready(function() {
 		if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
 		row.style.display = '';
 		var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+		var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
 		var held      = pkPlayerRanks[baseAwardId] || 0;
-		var suggested = Math.min(held + 1, 10);
-		for (var r = 1; r <= 10; r++) {
+		var suggested = Math.min(held + 1, maxRank);
+		for (var r = 1; r <= maxRank; r++) {
 			var pill = document.createElement('button');
 			pill.type      = 'button';
 			pill.className = 'pk-rank-pill';
@@ -5075,7 +5080,7 @@ function setupPronounPicker(cfg) {
 
 	var currentAwardsId = 0;
 
-	function buildEditRankPills(isLadder, currentRank) {
+	function buildEditRankPills(isLadder, currentRank, awardName) {
 		var wrap    = gid('pn-edit-rank-pills');
 		var rankRow = gid('pn-edit-rank-row');
 		if (!wrap) return;
@@ -5085,8 +5090,9 @@ function setupPronounPicker(cfg) {
 			gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = '');
 			return;
 		}
+		var maxRank = /zodiac/i.test(awardName || '') ? 12 : 10;
 		if (rankRow) rankRow.style.display = '';
-		for (var i = 1; i <= 10; i++) {
+		for (var i = 1; i <= maxRank; i++) {
 			var pill = document.createElement('button');
 			pill.type        = 'button';
 			pill.className   = 'pn-rank-pill' + (i == currentRank ? ' pn-rank-selected' : '');
@@ -5108,7 +5114,7 @@ function setupPronounPicker(cfg) {
 		currentAwardsId = awardsId;
 		var nameEl = gid('pn-edit-award-name');
 		if (nameEl) nameEl.textContent = data.displayName || data.Name || '';
-		buildEditRankPills(data.IsLadder == 1, data.Rank);
+		buildEditRankPills(data.IsLadder == 1, data.Rank, data.displayName || data.Name || '');
 		var dateEl = gid('pn-edit-award-date');
 		if (dateEl) dateEl.value = data.Date || '';
 		var gbText = gid('pn-edit-givenby-text');
