@@ -475,6 +475,10 @@
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
+				<div class="pn-award-search-bar">
+					<i class="fas fa-search pn-award-search-icon"></i>
+					<input type="text" id="pn-award-search" placeholder="Search awards…" class="pn-award-search-input" autocomplete="off" oninput="pnAwardSearch(this.value)" />
+				</div>
 				<table class="pn-table pn-sortable" id="pn-awards-table">
 					<thead>
 						<tr>
@@ -537,6 +541,7 @@
 						<?php endforeach; ?>
 					</tbody>
 				</table>
+				<div id="pn-award-search-empty" class="pn-empty" style="display:none">No awards match your search</div>
 				<?php endif; ?>
 			</div>
 

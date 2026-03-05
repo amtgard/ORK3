@@ -1064,6 +1064,31 @@
 .pn-ac-item:last-child { border-bottom: none; }
 .pn-ac-item:hover, .pn-ac-item:focus { background: #ebf4ff; color: #0891b2; outline: none; }
 .pn-ac-no-results { padding: 8px 12px; font-size: 13px; color: #a0aec0; font-style: italic; }
+/* Award search bar */
+.pn-award-search-bar {
+	position: relative;
+	margin-bottom: 10px;
+}
+.pn-award-search-icon {
+	position: absolute;
+	left: 9px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: #a0aec0;
+	font-size: 12px;
+	pointer-events: none;
+}
+.pn-award-search-input {
+	width: 100%;
+	box-sizing: border-box;
+	border: 1px solid #e2e8f0;
+	border-radius: 5px;
+	padding: 6px 10px 6px 28px;
+	font-size: 13px;
+	outline: none;
+	transition: border-color 0.15s;
+}
+.pn-award-search-input:focus { border-color: #90cdf4; }
 /* Tab toolbar (Add Award / Add Title button) */
 .pn-tab-toolbar {
 	display: flex;

@@ -64,6 +64,30 @@ function pnPageRange(current, total) {
 	return pages;
 }
 
+function pnAwardSearch(q) {
+	q = q.trim().toLowerCase();
+	var table = document.getElementById('pn-awards-table');
+	var noResults = document.getElementById('pn-award-search-empty');
+	if (!table) return;
+	var rows = table.querySelectorAll('tbody tr');
+	if (!q) {
+		rows.forEach(function(r) { r.style.display = ''; });
+		if (noResults) noResults.style.display = 'none';
+		if (typeof pnPaginate === 'function') pnPaginate($('#pn-awards-table'), 1);
+		return;
+	}
+	var matchCount = 0;
+	rows.forEach(function(r) {
+		var match = r.textContent.toLowerCase().indexOf(q) !== -1;
+		r.style.display = match ? '' : 'none';
+		if (match) matchCount++;
+	});
+	var pg = table.nextElementSibling;
+	while (pg && !pg.classList.contains('pn-pagination')) { pg = pg.nextElementSibling; }
+	if (pg) pg.style.display = 'none';
+	if (noResults) noResults.style.display = matchCount === 0 ? '' : 'none';
+}
+
 function pnPaginate($table, page) {
 	var pageSize = 10;
 	var $rows = $table.find('tbody tr');
