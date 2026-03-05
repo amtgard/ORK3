@@ -226,7 +226,15 @@
 				<span class="pn-detail-label">Reeve</span>
 				<span class="pn-detail-value">
 					<?php if ($Player['ReeveQualified'] != 0): ?>
-						<span class="pn-badge pn-badge-green">Until <?= $Player['ReeveQualifiedUntil'] ?></span>
+						<?php
+							$reeveUntil = (!empty($Player['ReeveQualifiedUntil']) && $Player['ReeveQualifiedUntil'] !== '0000-00-00') ? $Player['ReeveQualifiedUntil'] : '';
+							$reeveExpired = $reeveUntil && strtotime($reeveUntil) < time();
+						?>
+						<?php if (!$reeveUntil): ?>
+							<span class="pn-badge pn-badge-green">No end date</span>
+						<?php else: ?>
+							<span class="pn-badge <?= $reeveExpired ? 'pn-badge-red' : 'pn-badge-green' ?>">Until <?= $reeveUntil ?></span>
+						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>
 					<?php endif; ?>
@@ -236,7 +244,15 @@
 				<span class="pn-detail-label">Corpora</span>
 				<span class="pn-detail-value">
 					<?php if ($Player['CorporaQualified'] != 0): ?>
-						<span class="pn-badge pn-badge-green">Until <?= $Player['CorporaQualifiedUntil'] ?></span>
+						<?php
+							$corporaUntil = (!empty($Player['CorporaQualifiedUntil']) && $Player['CorporaQualifiedUntil'] !== '0000-00-00') ? $Player['CorporaQualifiedUntil'] : '';
+							$corporaExpired = $corporaUntil && strtotime($corporaUntil) < time();
+						?>
+						<?php if (!$corporaUntil): ?>
+							<span class="pn-badge pn-badge-green">No end date</span>
+						<?php else: ?>
+							<span class="pn-badge <?= $corporaExpired ? 'pn-badge-red' : 'pn-badge-green' ?>">Until <?= $corporaUntil ?></span>
+						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>
 					<?php endif; ?>
@@ -970,37 +986,9 @@
 				</label>
 			</div>
 
-			<div class="pn-acct-two-col">
-				<div class="pn-acct-field">
-					<label>Reeve Qualified</label>
-					<div class="pn-acct-radio-group">
-						<label><input type="radio" name="ReeveQualified" value="1" <?= $Player['ReeveQualified'] == 1 ? 'checked' : '' ?> /> Yes</label>
-						<label><input type="radio" name="ReeveQualified" value="0" <?= $Player['ReeveQualified'] != 1 ? 'checked' : '' ?> /> No</label>
-					</div>
-				</div>
-				<div class="pn-acct-field">
-					<label for="pn-acct-reeve-until">Reeve Until</label>
-					<input type="text" id="pn-acct-reeve-until" name="ReeveQualifiedUntil" value="<?= htmlspecialchars($Player['ReeveQualifiedUntil'] ?? '') ?>" placeholder="YYYY-MM-DD" />
-				</div>
-			</div>
-
-			<div class="pn-acct-two-col">
-				<div class="pn-acct-field">
-					<label>Corpora Qualified</label>
-					<div class="pn-acct-radio-group">
-						<label><input type="radio" name="CorporaQualified" value="1" <?= $Player['CorporaQualified'] == 1 ? 'checked' : '' ?> /> Yes</label>
-						<label><input type="radio" name="CorporaQualified" value="0" <?= $Player['CorporaQualified'] != 1 ? 'checked' : '' ?> /> No</label>
-					</div>
-				</div>
-				<div class="pn-acct-field">
-					<label for="pn-acct-corpora-until">Corpora Until</label>
-					<input type="text" id="pn-acct-corpora-until" name="CorporaQualifiedUntil" value="<?= htmlspecialchars($Player['CorporaQualifiedUntil'] ?? '') ?>" placeholder="YYYY-MM-DD" />
-				</div>
-			</div>
-
 			<div class="pn-acct-field">
 				<label for="pn-acct-member-since">Park Member Since</label>
-				<input type="text" id="pn-acct-member-since" name="ParkMemberSince" value="<?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?>" placeholder="YYYY-MM-DD" />
+				<input type="date" id="pn-acct-member-since" name="ParkMemberSince" value="<?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?>" />
 			</div>
 			<?php endif; ?>
 		</div>
@@ -1106,7 +1094,7 @@
 				</div>
 				<div class="pn-acct-field pn-qual-until-row" id="pn-qual-reeve-until-row">
 					<label for="pn-qual-reeve-until">Qualified Until</label>
-					<input type="date" id="pn-qual-reeve-until" name="ReeveQualifiedUntil" value="<?= htmlspecialchars($Player['ReeveQualifiedUntil'] ?? '') ?>" />
+					<input type="date" id="pn-qual-reeve-until" name="ReeveQualifiedUntil" value="<?= htmlspecialchars(($Player['ReeveQualifiedUntil'] ?? '') === '0000-00-00' ? '' : ($Player['ReeveQualifiedUntil'] ?? '')) ?>" />
 				</div>
 			</div>
 
@@ -1121,7 +1109,7 @@
 				</div>
 				<div class="pn-acct-field pn-qual-until-row" id="pn-qual-corpora-until-row">
 					<label for="pn-qual-corpora-until">Qualified Until</label>
-					<input type="date" id="pn-qual-corpora-until" name="CorporaQualifiedUntil" value="<?= htmlspecialchars($Player['CorporaQualifiedUntil'] ?? '') ?>" />
+					<input type="date" id="pn-qual-corpora-until" name="CorporaQualifiedUntil" value="<?= htmlspecialchars(($Player['CorporaQualifiedUntil'] ?? '') === '0000-00-00' ? '' : ($Player['CorporaQualifiedUntil'] ?? '')) ?>" />
 				</div>
 			</div>
 

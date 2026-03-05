@@ -916,7 +916,8 @@ if (PnConfig.recError) {
 			var modal = gid('pn-qual-overlay');
 			modal.querySelectorAll('input[name], select[name], textarea[name]').forEach(function(el) {
 				if (el.type === 'radio' && !el.checked) return;
-				fd.append(el.name, el.value);
+				var val = (el.type === 'date' && el.value === '') ? '0000-00-00' : el.value;
+				fd.append(el.name, val);
 			});
 
 			var btn = gid('pn-qual-save');
