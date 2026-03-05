@@ -64,6 +64,13 @@ function pnPageRange(current, total) {
 	return pages;
 }
 
+function pnSetPageSize(tableId, size) {
+	var $table = $('#' + tableId);
+	if (!$table.length) return;
+	$table.data('pagesize', parseInt(size));
+	pnPaginate($table, 1);
+}
+
 function pnAwardSearch(q) {
 	q = q.trim().toLowerCase();
 	var table = document.getElementById('pn-awards-table');
@@ -89,7 +96,7 @@ function pnAwardSearch(q) {
 }
 
 function pnPaginate($table, page) {
-	var pageSize = 10;
+	var pageSize = parseInt($table.data('pagesize')) || 10;
 	var $rows = $table.find('tbody tr');
 	var total = $rows.length;
 	if (total === 0) return;
@@ -294,7 +301,8 @@ if (PnConfig.recError) {
 		var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
 		if (suggestedPill) { suggestedPill.classList.add('pn-rank-selected'); input.value = suggested; }
 	}
-	document.getElementById('pn-rec-rank-pills').addEventListener('click', function(e) {
+	var pnRecRankPillsEl = document.getElementById('pn-rec-rank-pills');
+	if (pnRecRankPillsEl) pnRecRankPillsEl.addEventListener('click', function(e) {
 		var p = e.target.closest ? e.target.closest('.pn-rank-pill') : (e.target.classList.contains('pn-rank-pill') ? e.target : null);
 		if (!p) return;
 		var input = document.getElementById('pn-rec-rank-val');
@@ -1322,23 +1330,6 @@ if (PnConfig.recError) {
 		});
 	})();
 
-	// ---- Default sort (date desc) + initial pagination ----
-
-	pnSortDesc($('#pn-awards-table'), 2, 'date');
-	pnPaginate($('#pn-awards-table'), 1);
-
-	pnSortDesc($('#pn-titles-table'), 2, 'date');
-	pnPaginate($('#pn-titles-table'), 1);
-
-	pnSortDesc($('#pn-attendance-table'), 0, 'date');
-	pnPaginate($('#pn-attendance-table'), 1);
-
-	pnSortDesc($('#pn-rec-table'), 2, 'date');
-	pnPaginate($('#pn-rec-table'), 1);
-
-	pnSortDesc($('#pn-history-table'), 2, 'date');
-	pnPaginate($('#pn-history-table'), 1);
-
 	pnSortDesc($('#pn-classes-table'), 2, 'numeric');
 	// Classes table: click-to-sort without pagination
 	$('#pn-classes-table thead th').on('click', function() {
@@ -1363,6 +1354,7 @@ if (PnConfig.recError) {
 	});
 
 });
+
 
 /* ===========================
    Kingdom Profile (KnConfig)

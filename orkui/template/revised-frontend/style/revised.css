@@ -1064,6 +1064,23 @@
 .pn-ac-item:last-child { border-bottom: none; }
 .pn-ac-item:hover, .pn-ac-item:focus { background: #ebf4ff; color: #0891b2; outline: none; }
 .pn-ac-no-results { padding: 8px 12px; font-size: 13px; color: #a0aec0; font-style: italic; }
+/* Page size selector */
+.pn-pagesize-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 8px;
+	font-size: 13px;
+	color: #4a5568;
+}
+.pn-pagesize-select {
+	border: 1px solid #e2e8f0;
+	border-radius: 4px;
+	padding: 3px 6px;
+	font-size: 13px;
+	outline: none;
+}
+.pn-pagesize-select:focus { border-color: #90cdf4; }
 /* Award search bar */
 .pn-award-search-bar {
 	position: relative;

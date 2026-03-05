@@ -612,6 +612,16 @@
 			<div class="pn-tab-panel" id="pn-tab-attendance" style="display:none">
 				<?php $attendanceList = is_array($Details['Attendance']) ? $Details['Attendance'] : array(); ?>
 				<?php if (count($attendanceList) > 0): ?>
+					<div class="pn-pagesize-bar">
+						<label for="pn-attendance-pagesize">Show</label>
+						<select id="pn-attendance-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-attendance-table', this.value)">
+							<option value="10">10</option>
+							<option value="25">25</option>
+							<option value="50">50</option>
+							<option value="100">100</option>
+						</select>
+						<span>per page</span>
+					</div>
 					<table class="pn-table pn-sortable" id="pn-attendance-table">
 						<thead>
 							<tr>
@@ -1400,6 +1410,13 @@ var PnConfig = {
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script>
+pnSortDesc($('#pn-awards-table'), 2, 'date');     pnPaginate($('#pn-awards-table'), 1);
+pnSortDesc($('#pn-titles-table'), 2, 'date');     pnPaginate($('#pn-titles-table'), 1);
+pnSortDesc($('#pn-attendance-table'), 0, 'date'); pnPaginate($('#pn-attendance-table'), 1);
+pnSortDesc($('#pn-rec-table'), 2, 'date');        pnPaginate($('#pn-rec-table'), 1);
+pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
+</script>
 
 <?php if ($canEditAdmin): ?>
 <!-- Revoke Award Modal -->
