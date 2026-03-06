@@ -3014,7 +3014,8 @@ $(document).ready(function() {
 
 			var lbl = document.createElement('div');
 			lbl.className   = 'kn-admin-config-label';
-			lbl.textContent = cfg.Key;
+			var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility' };
+			lbl.textContent = keyLabels[cfg.Key] || cfg.Key;
 			row.appendChild(lbl);
 
 			var inputs = document.createElement('div');
@@ -3052,13 +3053,27 @@ $(document).ready(function() {
 					inputs.appendChild(inp);
 				});
 			} else {
-				var inp = document.createElement('input');
-				inp.type  = (cfg.Type === 'color')  ? 'color'
-				          : (cfg.Type === 'number') ? 'number' : 'text';
+				var inp;
+				if (cfg.Type === 'boolean') {
+					inp = document.createElement('select');
+					inp.className = 'kn-admin-config-input kn-admin-tselect';
+					var optPublic  = document.createElement('option');
+					optPublic.value = '1'; optPublic.textContent = 'Public (anyone can see)';
+					var optPrivate = document.createElement('option');
+					optPrivate.value = '0'; optPrivate.textContent = 'Officers only';
+					if (String(val) === '1') optPublic.selected = true;
+					else optPrivate.selected = true;
+					inp.appendChild(optPublic);
+					inp.appendChild(optPrivate);
+				} else {
+					inp = document.createElement('input');
+					inp.type  = (cfg.Type === 'color')  ? 'color'
+					          : (cfg.Type === 'number') ? 'number' : 'text';
+					inp.value = (val !== null && val !== undefined) ? val : '';
+					if (cfg.Type === 'number') inp.style.width = '80px';
+				}
 				inp.className        = 'kn-admin-config-input';
-				inp.value            = (val !== null && val !== undefined) ? val : '';
 				inp.dataset.configId = cfg.ConfigurationId;
-				if (cfg.Type === 'number') inp.style.width = '80px';
 				inputs.appendChild(inp);
 			}
 			row.appendChild(inputs);

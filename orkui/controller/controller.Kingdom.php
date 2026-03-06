@@ -301,8 +301,15 @@ class Controller_Kingdom extends Controller {
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 
+		$knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic'])
+			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
+			: true;
+		$this->data['ShowRecsTab']    = $recsPublic || $this->data['CanManageKingdom'];
+		$this->data['AwardRecsPublic'] = $recsPublic;
+
 		$this->data['AwardRecommendations'] = [];
-		if ($this->data['CanManageKingdom']) {
+		if ($this->data['ShowRecsTab']) {
 			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
 			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
 		}

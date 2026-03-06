@@ -246,7 +246,7 @@
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
 				</li>
-				<?php if ($CanManageKingdom ?? false): ?>
+				<?php if ($ShowRecsTab ?? false): ?>
 				<li data-kntab="recommendations">
 					<i class="fas fa-star"></i><span class="kn-tab-label"> Recommendations</span>
 					<?php if (!empty($AwardRecommendations)): ?>
@@ -609,8 +609,8 @@
 				</div>
 			</div>
 
-		<!-- Recommendations Tab (admin only) -->
-		<?php if ($CanManageKingdom ?? false): ?>
+		<!-- Recommendations Tab -->
+		<?php if ($ShowRecsTab ?? false): ?>
 		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
 			<?php if (empty($AwardRecommendations)): ?>
 			<div class="pk-recs-empty">No pending award recommendations.</div>
@@ -625,7 +625,7 @@
 							<th>Recommended By</th>
 							<th>Date</th>
 							<th>Notes</th>
-							<th></th>
+							<?php if ($CanManageKingdom ?? false): ?><th></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody id="kn-recs-tbody">
@@ -637,6 +637,7 @@
 						<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
 						<td class="pk-rec-notes"><?= !empty($rec['Reason']) ? htmlspecialchars($rec['Reason']) : '&mdash;' ?></td>
+						<?php if ($CanManageKingdom ?? false): ?>
 						<td class="pk-rec-actions">
 							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
 								data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
@@ -647,6 +648,7 @@
 								<i class="fas fa-times"></i> Dismiss
 							</button>
 						</td>
+						<?php endif; ?>
 					</tr>
 					<?php endforeach; ?>
 					</tbody>

@@ -183,8 +183,15 @@ class Controller_Park extends Controller
 		$this->data['CanManagePark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
 
+		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic'])
+			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
+			: true;
+		$this->data['ShowRecsTab']     = $recsPublic || $this->data['CanManagePark'];
+		$this->data['AwardRecsPublic'] = $recsPublic;
+
 		$this->data['AwardRecommendations'] = [];
-		if ($this->data['CanManagePark']) {
+		if ($this->data['ShowRecsTab']) {
 			$recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0]);
 			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
 		}
