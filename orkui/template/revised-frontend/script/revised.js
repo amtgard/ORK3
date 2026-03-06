@@ -209,9 +209,12 @@ function pnSortDesc($table, colIndex, sortType) {
 
 function pnActivateTab(tab) {
 	$('.pn-tab-nav li').removeClass('pn-tab-active');
-	$('.pn-tab-nav li[data-tab="' + tab + '"]').addClass('pn-tab-active');
+	var $pnTab = $('.pn-tab-nav li[data-tab="' + tab + '"]');
+	$pnTab.addClass('pn-tab-active');
 	$('.pn-tab-panel').hide();
 	$('#pn-tab-' + tab).show();
+	var pnLabel = $pnTab.find('.pn-tab-label').text().trim();
+	if (pnLabel) $('#pn-active-tab-label').text(pnLabel);
 }
 
 $(document).ready(function() {
@@ -1444,7 +1447,11 @@ var knCalendar  = null;
 var knFilters   = { 'kingdom-event': true, 'park-event': true, 'park-day': false };
 var knCalCache  = {}; // raw events keyed by "startISO|endISO" — avoids re-fetching on filter toggle
 
+function knIsMobile() { return window.innerWidth <= 768; }
+
 function knSetEventsView(view) {
+	// Calendar view is disabled on mobile — always fall back to list
+	if (view === 'calendar' && knIsMobile()) view = 'list';
 	if (view === 'calendar') {
 		$('#kn-events-list-view').hide();
 		$('#kn-events-cal-wrap').show();
@@ -1659,9 +1666,13 @@ function knLoadMoreList(tableId, tmplBase, btn) {
 // ---- Activate a tab by name (used by buttons + links) ----
 function knActivateTab(tab) {
 	$('.kn-tab-nav li').removeClass('kn-tab-active');
-	$('.kn-tab-nav li[data-kntab="' + tab + '"]').addClass('kn-tab-active');
+	var $activeTab = $('.kn-tab-nav li[data-kntab="' + tab + '"]');
+	$activeTab.addClass('kn-tab-active');
 	$('.kn-tab-panel').hide();
 	$('#kn-tab-' + tab).show();
+	// Sync the mobile active-tab label below the icon strip
+	var labelText = $activeTab.find('.kn-tab-label').text().trim();
+	if (labelText) $('#kn-active-tab-label').text(labelText);
 	if (tab === 'map' && !knMapLoaded && knMapLocations.length > 0) {
 		knMapLoaded = true;
 		var s = document.createElement('script');
@@ -1858,6 +1869,13 @@ $(document).ready(function() {
 	// ---- Events view toggle (list / calendar) ----
 	$('#kn-ev-view-list').on('click', function() { knSetEventsView('list'); });
 	$('#kn-ev-view-cal').on('click',  function() { knSetEventsView('calendar'); });
+
+	// If viewport shrinks to mobile while calendar is visible, force list
+	$(window).on('resize.knEventsView', function() {
+		if (knIsMobile() && $('#kn-events-cal-wrap').is(':visible')) {
+			knSetEventsView('list');
+		}
+	});
 
 	// ---- Events filter toggles ----
 	$(document).on('click', '.kn-filter-toggle', function() {
@@ -3385,6 +3403,7 @@ var pkCalLoaded = false;
 var pkCalendar  = null;
 
 function pkSetEventsView(view) {
+	if (view === 'calendar' && knIsMobile()) view = 'list';
 	if (view === 'calendar') {
 		$('#pk-events-list-view').hide();
 		$('#pk-events-cal').show();
@@ -3563,9 +3582,12 @@ function pkApplyHeroColor(img) {
 // ---- Tab activation ----
 function pkActivateTab(tab) {
 	$('.pk-tab-nav li').removeClass('pk-tab-active');
-	$('.pk-tab-nav li[data-pktab="' + tab + '"]').addClass('pk-tab-active');
+	var $pkTab = $('.pk-tab-nav li[data-pktab="' + tab + '"]');
+	$pkTab.addClass('pk-tab-active');
 	$('.pk-tab-panel').hide();
 	$('#pk-tab-' + tab).show();
+	var pkLabel = $pkTab.find('.pk-tab-label').text().trim();
+	if (pkLabel) $('#pk-active-tab-label').text(pkLabel);
 	if (tab === 'events' && pkCalendar) {
 		pkCalendar.updateSize();
 	}
@@ -3681,6 +3703,11 @@ $(document).ready(function() {
 	} catch(e) {
 		pkSetEventsView('list');
 	}
+	$(window).on('resize.pkEvents', function() {
+		if (knIsMobile() && $('#pk-events-cal').is(':visible')) {
+			pkSetEventsView('list');
+		}
+	});
 
 	// ---- Sortable table headers ----
 	$('.pk-table thead th').on('click', function() {

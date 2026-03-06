@@ -76,7 +76,7 @@
 	}
 ?>
 
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 
 <!-- =============================================
      ZONE 1: Hero Header
@@ -268,40 +268,41 @@
 			<!-- Tab navigation -->
 			<ul class="pk-tab-nav">
 				<li data-pktab="about" class="pk-tab-active">
-					<i class="fas fa-info-circle"></i> About
+					<i class="fas fa-info-circle"></i><span class="pk-tab-label"> About</span>
 				</li>
 				<li data-pktab="schedule" class="">
-					<i class="fas fa-calendar"></i> Schedule
+					<i class="fas fa-calendar"></i><span class="pk-tab-label"> Schedule</span>
 					<?php if (count($parkDayList) > 0): ?>
 						<span class="pk-tab-count">(<?= count($parkDayList) ?>)</span>
 					<?php endif; ?>
 				</li>
 				<li data-pktab="events" class="">
-					<i class="fas fa-flag"></i> Events
+					<i class="fas fa-flag"></i><span class="pk-tab-label"> Events</span>
 					<span class="pk-tab-count">(<?= count($eventList) ?>)</span>
 				</li>
 				<li data-pktab="players">
-					<i class="fas fa-users"></i> Players
+					<i class="fas fa-users"></i><span class="pk-tab-label"> Players</span>
 					<span class="pk-tab-count">(<?= count($allPlayers) ?>)</span>
 				</li>
 				<?php if ($totalHeraldry > 0): ?>
 				<li data-pktab="heraldry">
-					<i class="fas fa-shield-alt"></i> Hall of Arms
+					<i class="fas fa-shield-alt"></i><span class="pk-tab-label"> Hall of Arms</span>
 					<span class="pk-tab-count">(<?= $totalHeraldry ?>)</span>
 				</li>
 				<?php endif; ?>
 				<li data-pktab="reports">
-					<i class="fas fa-chart-bar"></i> Reports
+					<i class="fas fa-chart-bar"></i><span class="pk-tab-label"> Reports</span>
 				</li>
 				<?php if (!empty($CanManagePark)): ?>
 				<li data-pktab="recommendations">
-					<i class="fas fa-star"></i> Recommendations
+					<i class="fas fa-star"></i><span class="pk-tab-label"> Recommendations</span>
 					<?php if (!empty($AwardRecommendations)): ?>
 					<span class="pk-tab-count">(<?= count($AwardRecommendations) ?>)</span>
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
 			</ul>
+			<div class="pk-active-tab-label" id="pk-active-tab-label">About</div>
 
 			<!-- About Tab -->
 			<div class="pk-tab-panel" id="pk-tab-about">

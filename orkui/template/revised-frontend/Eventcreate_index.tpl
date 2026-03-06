@@ -18,7 +18,7 @@
 	$atParkName  = htmlspecialchars($AtParkName ?? '');
 ?>
 
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 
 <div class="ec-wrap">
 

@@ -49,7 +49,7 @@
 ?>
 
 <style>:root { --pn-hero-bg: <?= $isSuspended ? '#9b2c2c' : '#2c5282' ?>; }</style>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 
 <!-- =============================================
      ZONE 1: Profile Hero Header
@@ -375,24 +375,25 @@
 		<div class="pn-tabs">
 			<ul class="pn-tab-nav">
 				<li class="pn-tab-active" data-tab="awards">
-					<i class="fas fa-medal"></i> Awards <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
+					<i class="fas fa-medal"></i><span class="pn-tab-label"> Awards</span> <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
 				</li>
 				<li data-tab="titles">
-					<i class="fas fa-crown"></i> Titles <span class="pn-tab-count">(<?= $Stats['TotalTitles'] ?>)</span>
+					<i class="fas fa-crown"></i><span class="pn-tab-label"> Titles</span> <span class="pn-tab-count">(<?= $Stats['TotalTitles'] ?>)</span>
 				</li>
 				<li data-tab="attendance">
-					<i class="fas fa-calendar-check"></i> Attendance <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
+					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
 				</li>
 				<li data-tab="recommendations">
-					<i class="fas fa-star"></i> Recommendations <span class="pn-tab-count">(<?= is_array($AwardRecommendations) ? count($AwardRecommendations) : 0 ?>)</span>
+					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count">(<?= is_array($AwardRecommendations) ? count($AwardRecommendations) : 0 ?>)</span>
 				</li>
 				<li data-tab="history">
-					<i class="fas fa-sticky-note"></i> Notes <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
+					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
 				</li>
 				<li data-tab="classes">
-					<i class="fas fa-shield-alt"></i> Class Levels <span class="pn-tab-count">(<?= is_array($Details['Classes']) ? count($Details['Classes']) : 0 ?>)</span>
+					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span> <span class="pn-tab-count">(<?= is_array($Details['Classes']) ? count($Details['Classes']) : 0 ?>)</span>
 				</li>
 			</ul>
+			<div class="pn-active-tab-label" id="pn-active-tab-label">Awards</div>
 
 			<!-- Awards Tab -->
 			<div class="pn-tab-panel" id="pn-tab-awards">
@@ -1471,7 +1472,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 				<label for="pn-note-desc">Description</label>
 				<textarea id="pn-note-desc" rows="3" maxlength="1000" placeholder="Optional additional details..."></textarea>
 			</div>
-			<div style="display:flex;gap:12px;">
+			<div class="pn-addnote-date-row">
 				<div class="pn-acct-field" style="flex:1">
 					<label for="pn-note-date">Date <span style="color:#e53e3e">*</span></label>
 					<input type="date" id="pn-note-date" />

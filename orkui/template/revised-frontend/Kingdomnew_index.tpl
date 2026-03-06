@@ -51,7 +51,7 @@
 	}
 ?>
 
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 
 <!-- =============================================
      ZONE 1: Hero Header
@@ -223,38 +223,39 @@
 		<div class="kn-tabs">
 			<ul class="kn-tab-nav">
 				<li class="kn-tab-active" data-kntab="parks">
-					<i class="fas fa-map-marker-alt"></i> Parks
+					<i class="fas fa-map-marker-alt"></i><span class="kn-tab-label"> Parks</span>
 					<span class="kn-tab-count">(<?= count($parkList) ?>)</span>
 				</li>
 				<li data-kntab="events">
-					<i class="fas fa-calendar-alt"></i> Events
+					<i class="fas fa-calendar-alt"></i><span class="kn-tab-label"> Events</span>
 					<span class="kn-tab-count">(<?= count($eventList) ?>)</span>
 				</li>
 				<li data-kntab="map">
-					<i class="fas fa-map"></i> Map
+					<i class="fas fa-map"></i><span class="kn-tab-label"> Map</span>
 				</li>
 				<?php if (!$IsPrinz && count($principalityList) > 0): ?>
 					<li data-kntab="principalities">
-						<i class="fas fa-shield-alt"></i> Principalities
+						<i class="fas fa-shield-alt"></i><span class="kn-tab-label"> Principalities</span>
 						<span class="kn-tab-count">(<?= count($principalityList) ?>)</span>
 					</li>
 				<?php endif; ?>
 				<li data-kntab="players" id="kn-tab-btn-players">
-					<i class="fas fa-users"></i> Players
+					<i class="fas fa-users"></i><span class="kn-tab-label"> Players</span>
 					<span class="kn-tab-count" id="kn-players-tab-count"></span>
 				</li>
 				<li data-kntab="reports">
-					<i class="fas fa-chart-bar"></i> Reports
+					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
 				</li>
 				<?php if ($CanManageKingdom ?? false): ?>
 				<li data-kntab="recommendations">
-					<i class="fas fa-star"></i> Recommendations
+					<i class="fas fa-star"></i><span class="kn-tab-label"> Recommendations</span>
 					<?php if (!empty($AwardRecommendations)): ?>
 					<span class="kn-tab-count">(<?= count($AwardRecommendations) ?>)</span>
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
 			</ul>
+			<div class="kn-active-tab-label" id="kn-active-tab-label">Parks</div>
 
 			<!-- Parks Tab -->
 			<div class="kn-tab-panel" id="kn-tab-parks">

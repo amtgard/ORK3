@@ -53,7 +53,7 @@
 	$enCalInitDate = $nextDate ? date('Y-m-d', strtotime($nextDate)) : date('Y-m-d');
 ?>
 
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 
 <?php // ---- HERO ---- ?>
 <div class="en-hero" id="en-hero">

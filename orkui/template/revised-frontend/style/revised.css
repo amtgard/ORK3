@@ -404,6 +404,18 @@
 .pn-tab-panel {
 	padding: 16px 18px;
 }
+.pn-active-tab-label {
+	display: none;
+	text-align: center;
+	font-size: 11px;
+	font-weight: 700;
+	color: #276749;
+	background: #fff;
+	padding: 5px 16px 7px;
+	border-bottom: 1px solid #e2e8f0;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
 
 /* Tab Tables */
 .pn-table {
@@ -915,12 +927,26 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-	.pn-layout {
-		flex-direction: column;
-	}
-	.pn-sidebar {
-		width: 100%;
-	}
+	.pn-layout { flex-direction: column; align-items: stretch; }
+	.pn-main    { order: 1; }
+	.pn-sidebar { width: 100%; order: 2; }
+	.pn-stats-row { display: grid; grid-template-columns: 1fr 1fr; }
+	.pn-stat-card { flex: unset; }
+	/* Tables in tab panels scroll horizontally rather than overflowing */
+	.pn-tab-panel { overflow-x: auto; }
+}
+
+@media (max-width: 480px) {
+	.pn-tab-label { display: none; }
+	.pn-tab-count { display: none; }
+	.pn-tab-nav li { flex: 1; justify-content: center; padding: 12px 4px; font-size: 15px; }
+	.pn-active-tab-label { display: block; }
+	/* Account / Quals modals: two-col fields stack to single column */
+	.pn-acct-two-col { grid-template-columns: 1fr; }
+	/* Tab toolbars with multiple buttons wrap on narrow screens */
+	.pn-tab-toolbar { flex-wrap: wrap; gap: 6px; }
+	/* Add Note modal: date fields stack vertically */
+	.pn-addnote-date-row { flex-direction: column; gap: 0; }
 }
 
 @media (max-width: 425px) {
@@ -939,27 +965,12 @@
 	.pn-hero-actions {
 		align-items: center;
 		flex-direction: row;
-	}
-
-	.pn-stats-row {
 		flex-wrap: wrap;
 	}
-	.pn-stat-card {
-		flex: 1 1 45%;
-		min-width: 0;
-	}
 
-	.pn-tab-nav {
-		-webkit-overflow-scrolling: touch;
-	}
-	.pn-tab-nav li {
-		padding: 10px 14px;
-		font-size: 12px;
-	}
-	.pn-tab-panel {
-		padding: 12px 10px;
-		overflow-x: auto;
-	}
+	.pn-tab-nav { -webkit-overflow-scrolling: touch; }
+	.pn-tab-nav li { padding: 10px 4px; font-size: 15px; }
+	.pn-tab-panel { padding: 12px 10px; }
 }
 
 /* ---- Add Award / Add Title Modal ---- */
@@ -1356,6 +1367,20 @@
 .kn-link-list a:hover { text-decoration: underline; }
 .kn-link-icon { width: 16px; color: #a0aec0; display: inline-block; text-align: center; margin-right: 5px; }
 
+/* Active tab label — visible only on mobile (icon-only tab mode) */
+.kn-active-tab-label {
+	display: none;
+	text-align: center;
+	font-size: 11px;
+	font-weight: 700;
+	color: #276749;
+	background: #fff;
+	padding: 5px 16px 7px;
+	border-bottom: 1px solid #e2e8f0;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
 /* Tabs */
 .kn-tabs {
 	background: #fff;
@@ -1470,6 +1495,7 @@
 	align-items: center;
 	gap: 3px;
 	margin-bottom: 14px;
+	flex-wrap: wrap;
 }
 .kn-view-btn {
 	width: 30px;
@@ -1665,11 +1691,35 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-	.kn-layout { flex-direction: column; }
-	.kn-sidebar { width: 100%; }
-	.kn-stats-row { flex-wrap: wrap; }
-	.kn-stat-card { flex: 1 1 45%; min-width: 0; }
+	.kn-layout { flex-direction: column; align-items: stretch; }
+	.kn-main    { order: 1; }
+	.kn-sidebar { width: 100%; order: 2; }
+	.kn-stats-row { display: grid; grid-template-columns: 1fr 1fr; }
+	.kn-stat-card { flex: unset; }
 	.kn-reports-grid { grid-template-columns: 1fr 1fr; }
+	/* Calendar view not supported on mobile — hide the toggle button */
+	#kn-ev-view-cal { display: none; }
+}
+@media (max-width: 600px) {
+	/* Events filter pills — allow wrapping on narrow screens */
+	#kn-ev-filter-bar { flex-wrap: wrap; }
+	/* Players search — expand to full width */
+	.kn-players-toolbar-right { flex-wrap: wrap; }
+	.kn-player-search-wrap { flex: 1 1 100%; }
+	.kn-player-search-input { width: 100%; }
+}
+@media (max-width: 480px) {
+	/* Icon-only tabs: hide text labels, spread icons evenly */
+	.kn-tab-label { display: none; }
+	.kn-tab-count { display: none; }
+	.kn-tab-nav li {
+		flex: 1;
+		justify-content: center;
+		padding: 12px 4px;
+		font-size: 15px;
+	}
+	/* Show the active-tab name label below the icon strip */
+	.kn-active-tab-label { display: block; }
 }
 @media (max-width: 425px) {
 	.kn-hero-content { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
@@ -1678,7 +1728,7 @@
 	.kn-badges { justify-content: center; }
 	.kn-hero-actions { align-items: center; flex-direction: row; flex-wrap: wrap; justify-content: center; }
 	.kn-tab-nav { -webkit-overflow-scrolling: touch; }
-	.kn-tab-nav li { padding: 10px 12px; font-size: 12px; }
+	.kn-tab-nav li { padding: 10px 4px; font-size: 15px; }
 	.kn-tab-panel { padding: 12px 10px; overflow-x: auto; }
 	.kn-reports-grid { grid-template-columns: 1fr; }
 }
@@ -1713,7 +1763,7 @@
 	font-size: 13px;
 }
 @media (max-width: 768px) {
-	.kn-map-layout { flex-direction: column; }
+	.kn-map-layout { flex-direction: column; align-items: stretch; }
 	.kn-map-directions-wrap { width: 100%; }
 	#kn-map { height: 320px; }
 	#kn-map-directions { max-height: 200px; }
@@ -2188,6 +2238,18 @@
 .pk-tab-active { color: #0891b2 !important; border-bottom-color: #0891b2 !important; font-weight: 600; }
 .pk-tab-count { font-size: 11px; color: #a0aec0; }
 .pk-tab-panel { padding: 16px; }
+.pk-active-tab-label {
+	display: none;
+	text-align: center;
+	font-size: 11px;
+	font-weight: 700;
+	color: #0891b2;
+	background: #fff;
+	padding: 5px 16px 7px;
+	border-bottom: 1px solid #e2e8f0;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
 
 /* ---- Tables ---- */
 .pk-table {
@@ -2515,14 +2577,29 @@
 	.pk-hero-content { flex-wrap: wrap; }
 	.pk-hero-right { width: 100%; }
 	.pk-hero-actions { flex-direction: row; flex-wrap: wrap; }
-	.pk-layout { flex-direction: column; }
-	.pk-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e2e8f0; }
-	.pk-stats-row { flex-wrap: wrap; }
-	.pk-stat-card { flex: 1 1 50%; min-width: 0; }
+	.pk-layout { flex-direction: column; align-items: stretch; }
+	.pk-main    { order: 1; }
+	.pk-sidebar { width: 100%; order: 2; border-right: none; border-bottom: 1px solid #e2e8f0; }
+	.pk-stats-row { display: grid; grid-template-columns: 1fr 1fr; }
+	.pk-stat-card { flex: unset; }
 	.pk-park-name { font-size: 22px; }
 	.pk-schedule-grid { grid-template-columns: 1fr; }
 	.pk-players-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 	.pk-hoa-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+	/* Calendar view not supported on mobile — hide the toggle button */
+	#pk-ev-view-cal { display: none; }
+}
+@media (max-width: 600px) {
+	/* Players search — expand to full width */
+	.pk-players-toolbar-right { flex-wrap: wrap; }
+	.pk-player-search-wrap { flex: 1 1 100%; }
+	.pk-player-search-input { width: 100%; }
+}
+@media (max-width: 480px) {
+	.pk-tab-label { display: none; }
+	.pk-tab-count { display: none; }
+	.pk-tab-nav li { flex: 1; justify-content: center; padding: 12px 4px; font-size: 15px; gap: 0; }
+	.pk-active-tab-label { display: block; }
 }
 
 /* ---- Period label (Load More separators) ---- */
@@ -4148,6 +4225,7 @@
 
 /* ---- Add Note modal (Playernew) ---- */
 #pn-addnote-overlay .pn-modal-box { width:480px; max-width:calc(100vw - 40px); }
+.pn-addnote-date-row { display:flex; gap:12px; }
 .pn-notes-toolbar { display:flex; justify-content:flex-end; margin-bottom:12px; }
 .pn-note-del-btn { background:none; border:1px solid transparent; color:#a0aec0; cursor:pointer; width:24px; height:24px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
 .pn-note-del-btn:hover { background:#fff5f5; border-color:#fc8181; color:#e53e3e; }
@@ -4166,6 +4244,7 @@
 
 /* ---- Class Reconciliation modal (Playernew) ---- */
 #pn-reconcile-overlay .pn-modal-box { width:500px; max-width:calc(100vw - 40px); }
+#pn-reconcile-overlay .pn-modal-body { overflow-x: auto; }
 #pn-reconcile-table { border-radius:0; }
 #pn-reconcile-table th, #pn-reconcile-table td { padding:8px 12px; }
 
@@ -4385,6 +4464,17 @@
 .pronoun-clear-btn:hover { background: #edf2f7; border-color: #a0aec0; }
 @media (max-width: 520px) {
     .pronoun-picker-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ---- Modal responsive rules ---- */
+@media (max-width: 480px) {
+	/* Attendance modal: stack date + credits vertically */
+	.pk-att-header-fields { flex-direction: column; gap: 8px; }
+	.pk-att-hfield-sm input { width: 100%; }
+	/* Add Player modal: stack side-by-side field rows */
+	.plr-field-row { flex-direction: column; }
+	/* Edit Park Details modal: stack two-col fields */
+	.pk-editdetails-two-col { flex-direction: column; }
 }
 
 /* ---- Shared: award recommendations table (pk, kn) ---- */
