@@ -85,9 +85,9 @@
 		</div>
 
 		<div class="kn-hero-actions">
-			<a class="kn-btn kn-btn-white" href="<?= UIR ?>Search/kingdom/<?= $kingdom_id ?>">
+			<button class="kn-btn kn-btn-white" onclick="var t=document.querySelector('[data-kntab=\'players\']'); if(t)t.click(); var s=document.getElementById('kn-player-search'); if(s){s.focus(); s.select();}">
 				<i class="fas fa-search"></i> Search Players
-			</a>
+			</button>
 			<?php if ($LoggedIn): ?>
 				<button class="kn-btn kn-btn-outline" onclick="knOpenAwardModal()">
 					<i class="fas fa-medal"></i> Enter Awards
