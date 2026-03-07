@@ -395,7 +395,8 @@
 
 				<!-- List view -->
 				<div id="kn-events-list-view">
-				<?php if (count($eventList) > 0): ?>
+				<?php $hasParkDays = count($kingdom_park_days ?? []) > 0; ?>
+				<?php if (count($eventList) > 0 || $hasParkDays): ?>
 					<table class="kn-table kn-sortable" id="kn-events-table">
 						<thead>
 							<tr>
