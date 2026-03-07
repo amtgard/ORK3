@@ -198,7 +198,15 @@ class Controller_Player extends Controller {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
-		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+		$canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
+		$this->data['ShowRecsTab']          = $recsPublic || $canEdit;
+		$this->data['AwardRecommendations'] = [];
+		if ($this->data['ShowRecsTab'] || $uid > 0) {
+			$recs = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+		}
 
 		// Preload Kingdom and Park Monarch/Regent for GivenBy autocomplete
 		$this->load_model('Kingdom');
@@ -322,7 +330,15 @@ class Controller_Player extends Controller {
 		$this->data['Notes']         = $this->Player->get_notes($id);
 		$this->data['Dues']          = $this->Player->get_dues($id, 1, true);
 		$this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1]);
-		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(['PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0]);
+		$canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
+		$this->data['ShowRecsTab']          = $recsPublic || $canEdit;
+		$this->data['AwardRecommendations'] = [];
+		if ($this->data['ShowRecsTab'] || $uid > 0) {
+			$recs = $this->Reports->recommended_awards(['PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0]);
+			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+		}
 
 		global $DB;
 		$playerParkId = (int)$this->data['Player']['ParkId'];

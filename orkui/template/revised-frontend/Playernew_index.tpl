@@ -383,9 +383,15 @@
 				<li data-tab="attendance">
 					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
 				</li>
-				<li data-tab="recommendations">
-					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count">(<?= is_array($AwardRecommendations) ? count($AwardRecommendations) : 0 ?>)</span>
-				</li>
+				<?php
+				$_allRecs  = is_array($AwardRecommendations) ? $AwardRecommendations : [];
+				$_myRecs   = array_values(array_filter($_allRecs, function($r) { return $this->__session->user_id == $r['RecommendedById']; }));
+				$_recList  = $ShowRecsTab ? $_allRecs : $_myRecs;
+				$_showRecs = $ShowRecsTab || count($_myRecs) > 0;
+			?>
+			<?php if ($_showRecs): ?><li data-tab="recommendations">
+					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count">(<?= count($_recList) ?>)</span>
+				</li><?php endif; ?>
 				<li data-tab="history">
 					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
 				</li>
@@ -664,9 +670,8 @@
 			</div>
 
 			<!-- Recommendations Tab -->
-			<div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
-				<?php $recList = is_array($AwardRecommendations) ? $AwardRecommendations : array(); ?>
-				<?php if (count($recList) > 0): ?>
+			<?php if ($_showRecs): ?><div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
+				<?php if (count($_recList) > 0): ?>
 					<table class="pn-table" id="pn-rec-table">
 						<thead>
 							<tr>
@@ -681,7 +686,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							<?php foreach ($recList as $rec): ?>
+							<?php foreach ($_recList as $rec): ?>
 								<tr>
 									<td><?= $rec['AwardName'] ?></td>
 									<td class="pn-col-numeric"><?= valid_id($rec['Rank']) ? $rec['Rank'] : '' ?></td>
@@ -714,7 +719,7 @@
 				<?php else: ?>
 					<div class="pn-empty">No recommendations</div>
 				<?php endif; ?>
-			</div>
+			</div><?php endif; ?>
 
 			<!-- Notes Tab -->
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
