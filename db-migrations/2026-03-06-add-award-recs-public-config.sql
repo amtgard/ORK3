@@ -5,7 +5,7 @@
 INSERT INTO ork_configuration (type, var_type, id, `key`, value, user_setting, allowed_values, modified)
 SELECT
     'Kingdom'         AS type,
-    'boolean'         AS var_type,
+    'fixed'           AS var_type,
     k.kingdom_id      AS id,
     'AwardRecsPublic' AS `key`,
     '1'               AS value,

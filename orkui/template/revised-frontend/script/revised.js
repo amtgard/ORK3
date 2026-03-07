@@ -3054,7 +3054,7 @@ $(document).ready(function() {
 				});
 			} else {
 				var inp;
-				if (cfg.Type === 'boolean') {
+				if (cfg.Key === 'AwardRecsPublic') {
 					inp = document.createElement('select');
 					inp.className = 'kn-admin-config-input kn-admin-tselect';
 					var optPublic  = document.createElement('option');
