@@ -12,9 +12,33 @@ class Controller_SearchAjax extends Controller {
 		}
 
 		$kid  = (int)($_GET['kid'] ?? 0);
-		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
 
 		global $DB;
+
+		// Parse optional "KD:PK search term" prefix (same pattern as SearchService::magic_search)
+		// to scope results to a specific kingdom and/or park by abbreviation.
+		// Examples: "KD: Aragon"  →  players/parks in kingdom KD named Aragon
+		//           "KD:PK Aragon" →  players in park PK of kingdom KD
+		$filterKid = 0;
+		$filterPid = 0;
+		$searchQ   = $q;
+		if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
+			$kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
+			$rs = $DB->DataSet("SELECT kingdom_id FROM ork_kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+			if ($rs->Next()) {
+				$filterKid = (int)$rs->kingdom_id;
+			}
+			if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+				$pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
+				$rs = $DB->DataSet("SELECT park_id FROM ork_park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+				if ($rs->Next()) {
+					$filterPid = (int)$rs->park_id;
+				}
+			}
+			$searchQ = trim($m[3]);
+		}
+
+		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
 
 		// Per-category budgets; unused slots from each category roll to players
 		$playerBudget  = 4;
@@ -22,7 +46,10 @@ class Controller_SearchAjax extends Controller {
 		$kingdomBudget = 2;
 		$unitBudget    = 3;
 
-		// Parks — prioritize user's kingdom first
+		// Parks — prioritize user's kingdom first; narrow by abbreviation prefix if provided
+		$parkWhere = "p.active = 'Active' AND (p.name LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')";
+		if ($filterPid > 0)           { $parkWhere .= " AND p.park_id = {$filterPid}"; }
+		elseif ($filterKid > 0)       { $parkWhere .= " AND p.kingdom_id = {$filterKid}"; }
 		$parkOrder = valid_id($kid)
 			? "CASE WHEN p.kingdom_id = {$kid} THEN 0 ELSE 1 END, p.name"
 			: "p.name";
@@ -30,8 +57,7 @@ class Controller_SearchAjax extends Controller {
 			SELECT p.park_id, p.name, k.abbreviation AS k_abbr
 			FROM ork_park p
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = p.kingdom_id
-			WHERE p.active = 'Active'
-			  AND (p.name LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')
+			WHERE {$parkWhere}
 			ORDER BY {$parkOrder}
 			LIMIT {$parkBudget}");
 		$parks = [];
@@ -40,16 +66,18 @@ class Controller_SearchAjax extends Controller {
 		}
 		$playerBudget += $parkBudget - count($parks);
 
-		// Kingdoms
-		$rs = $DB->DataSet("
-			SELECT k.kingdom_id, k.name, k.abbreviation
-			FROM ork_kingdom k
-			WHERE k.name LIKE '%{$term}%' OR k.abbreviation LIKE '%{$term}%'
-			ORDER BY k.name
-			LIMIT {$kingdomBudget}");
+		// Kingdoms — skip if scoped to a specific kingdom/park by abbreviation prefix
 		$kingdoms = [];
-		while ($rs->Next()) {
-			$kingdoms[] = ['type' => 'kingdom', 'id' => (int)$rs->kingdom_id, 'name' => $rs->name, 'abbr' => $rs->abbreviation ?? ''];
+		if ($filterKid === 0) {
+			$rs = $DB->DataSet("
+				SELECT k.kingdom_id, k.name, k.abbreviation
+				FROM ork_kingdom k
+				WHERE k.name LIKE '%{$term}%' OR k.abbreviation LIKE '%{$term}%'
+				ORDER BY k.name
+				LIMIT {$kingdomBudget}");
+			while ($rs->Next()) {
+				$kingdoms[] = ['type' => 'kingdom', 'id' => (int)$rs->kingdom_id, 'name' => $rs->name, 'abbr' => $rs->abbreviation ?? ''];
+			}
 		}
 		$playerBudget += $kingdomBudget - count($kingdoms);
 
@@ -66,7 +94,15 @@ class Controller_SearchAjax extends Controller {
 		}
 		$playerBudget += $unitBudget - count($units);
 
-		// Players — prioritize user's kingdom, with expanded budget from unused slots above
+		// Players — prioritize user's kingdom, with expanded budget from unused slots above;
+		// narrow by kingdom/park if abbreviation prefix was parsed
+		$playerWhere = "m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+			  AND (m.persona LIKE '%{$term}%'
+			    OR m.given_name LIKE '%{$term}%'
+			    OR m.surname LIKE '%{$term}%'
+			    OR m.username LIKE '%{$term}%')";
+		if ($filterPid > 0)           { $playerWhere .= " AND m.park_id = {$filterPid}"; }
+		elseif ($filterKid > 0)       { $playerWhere .= " AND m.kingdom_id = {$filterKid}"; }
 		$playerOrder = valid_id($kid)
 			? "CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona"
 			: "m.persona";
@@ -75,11 +111,7 @@ class Controller_SearchAjax extends Controller {
 			FROM ork_mundane m
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
-			WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
-			  AND (m.persona LIKE '%{$term}%'
-			    OR m.given_name LIKE '%{$term}%'
-			    OR m.surname LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%')
+			WHERE {$playerWhere}
 			ORDER BY {$playerOrder}
 			LIMIT {$playerBudget}");
 		$players = [];
