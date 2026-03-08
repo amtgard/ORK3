@@ -158,6 +158,26 @@ class Player extends Ork3 {
         return InvalidParameter('A note must be selected.');
     }
 
+	public function EditNote($request) {
+		if (!valid_id($request['NotesId'])) return InvalidParameter('A note must be selected.');
+		$this->notes->clear();
+		$this->notes->mundane_note_id = $request['NotesId'];
+		$this->notes->mundane_id      = $request['MundaneId'];
+		if (!$this->notes->find()) return InvalidParameter('Cannot find Note.');
+		$thePlayer = $this->player_info($this->notes->mundane_id);
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
+				|| $mundane_id == $request['MundaneId'])) {
+			$this->notes->note         = $request['Note'];
+			$this->notes->description  = $request['Description'];
+			$this->notes->date         = date('Y-m-d', strtotime($request['Date']));
+			$this->notes->date_complete = ($request['DateComplete'] ? date('Y-m-d', strtotime($request['DateComplete'])) : '');
+			$this->notes->save();
+			return Success($this->notes->mundane_note_id);
+		}
+		return NoAuthorization();
+	}
+
 	public function SetPlayerReconciledCredits($request) {
 
 		$thePlayer = $this->player_info($request['MundaneId']);
@@ -509,6 +529,8 @@ class Player extends Ork3 {
 				$this->mundane->restricted = $request['Restricted']?1:0;
 				$this->mundane->waivered = $request['Waivered']?1:0;
 				$this->mundane->has_image = $request['HasImage']?1:0;
+				if (!empty($request['PronounId']))     $this->mundane->pronoun_id     = (int)$request['PronounId'];
+				if (!empty($request['PronounCustom'])) $this->mundane->pronoun_custom = $request['PronounCustom'];
 				$this->mundane->penalty_box = 0;
 				$this->mundane->active = $request['IsActive'];
 				$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
@@ -840,9 +862,9 @@ class Player extends Ork3 {
 				// TODO: add error messaging
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) {
 					$this->mundane->reeve_qualified = is_null($request['ReeveQualified'])?$this->mundane->reeve_qualified:$request['ReeveQualified'];
-					$this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil'])?$this->mundane->reeve_qualified_until:$request['ReeveQualifiedUntil'];
+					$this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil'])?$this->mundane->reeve_qualified_until:($request['ReeveQualifiedUntil']==='0000-00-00'?null:$request['ReeveQualifiedUntil']);
 					$this->mundane->corpora_qualified = is_null($request['CorporaQualified'])?$this->mundane->corpora_qualified:$request['CorporaQualified'];
-					$this->mundane->corpora_qualified_until = is_null($request['CorporaQualifiedUntil'])?$this->mundane->corpora_qualified_until:$request['CorporaQualifiedUntil'];
+					$this->mundane->corpora_qualified_until = is_null($request['CorporaQualifiedUntil'])?$this->mundane->corpora_qualified_until:($request['CorporaQualifiedUntil']==='0000-00-00'?null:$request['CorporaQualifiedUntil']);
 				}
 
 				$this->mundane->save();
@@ -1380,9 +1402,15 @@ class Player extends Ork3 {
 			$dues->park_id = $request['ParkId'];
 			$dues->kingdom_id = $request['KingdomId'];
 			$dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
-			// TODO: create private function that determins DuesUntil based on kingdom configured terms
-			$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
-			$dues->terms = $request['Terms'];
+			if (!empty($request['Months'])) {
+				$n    = max(1, (int)$request['Months']);
+				$unit = ($request['DuesPeriodType'] === 'week') ? 'weeks' : 'months';
+				$dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $n . ' ' . $unit));
+				$dues->terms = $n;
+			} else {
+				$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
+				$dues->terms = $request['Terms'];
+			}
 			$dues->dues_for_life = $request['DuesForLife'];
 			$dues->save();
 

@@ -1,0 +1,15 @@
+{
+  "name": "ork3-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ORK3 front-end asset tooling. Install to pull FullCalendar dist files into the static asset directory.",
+  "dependencies": {
+    "@fullcalendar/core": "^6.1.15",
+    "@fullcalendar/daygrid": "^6.1.15",
+    "@fullcalendar/interaction": "^6.1.15"
+  },
+  "scripts": {
+    "postinstall": "mkdir -p orkui/template/default/script/js/fullcalendar && cp node_modules/@fullcalendar/core/index.global.min.js orkui/template/default/script/js/fullcalendar/core.global.min.js && cp node_modules/@fullcalendar/daygrid/index.global.min.js orkui/template/default/script/js/fullcalendar/daygrid.global.min.js && cp node_modules/@fullcalendar/interaction/index.global.min.js orkui/template/default/script/js/fullcalendar/interaction.global.min.js",
+    "copy-fullcalendar": "mkdir -p orkui/template/default/script/js/fullcalendar && cp node_modules/@fullcalendar/core/index.global.min.js orkui/template/default/script/js/fullcalendar/core.global.min.js && cp node_modules/@fullcalendar/daygrid/index.global.min.js orkui/template/default/script/js/fullcalendar/daygrid.global.min.js && cp node_modules/@fullcalendar/interaction/index.global.min.js orkui/template/default/script/js/fullcalendar/interaction.global.min.js"
+  }
+}

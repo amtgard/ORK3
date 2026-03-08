@@ -80,13 +80,50 @@ class Controller
 
 	public function index( $action = null )
 	{
+		// Determine the logged-in user's home kingdom from their profile in the DB.
+		// Fall back to the session-cached value only when not logged in.
+		if ( $this->data['LoggedIn'] && isset( $this->session->user_id ) ) {
+			global $DB;
+			$uid = (int) $this->session->user_id;
+			$hkRow = $DB->DataSet(
+				"SELECT p.kingdom_id FROM ork_mundane m
+				 INNER JOIN ork_park p ON p.park_id = m.park_id
+				 WHERE m.mundane_id = {$uid} LIMIT 1"
+			);
+			$this->data['UserKingdomId'] = ($hkRow && $hkRow->Size() > 0 && $hkRow->Next())
+				? (int) $hkRow->kingdom_id
+				: 0;
+		} else {
+			$this->data['UserKingdomId'] = 0;
+		}
+
 		unset( $this->session->kingdom_id );
 		unset( $this->session->park_id );
 		unset( $this->session->kingdom_name );
 		unset( $this->session->park_name );
 		$this->data[ 'Tournaments' ] = $this->Report->TournamentReport( [ 'Limit' => 15 ] );
 		$this->data[ 'ActiveKingdomSummary' ] = $this->Report->GetActiveKingdomsSummary();
-		$this->data[ 'EventSummary' ] = $this->Search->Search_Event( null, null, 0, null, null, 15, null, true );
+		$eventSummary = $this->Search->Search_Event( null, null, 0, null, null, 15, null, true );
+		if (!empty($eventSummary)) {
+			global $DB;
+			$detailIds = array_filter(array_column($eventSummary, 'NextDetailId'));
+			if (!empty($detailIds)) {
+				$idList = implode(',', array_map('intval', $detailIds));
+				$DB->Clear();
+				$rsvpResult = $DB->DataSet("SELECT event_calendardetail_id, COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id IN ($idList) GROUP BY event_calendardetail_id");
+				$rsvpCounts = [];
+				if ($rsvpResult) {
+					while ($rsvpResult->Next()) {
+						$rsvpCounts[(int)$rsvpResult->event_calendardetail_id] = (int)$rsvpResult->cnt;
+					}
+				}
+				foreach ($eventSummary as &$ev) {
+					$ev['RsvpCount'] = $rsvpCounts[(int)($ev['NextDetailId'] ?? 0)] ?? 0;
+				}
+				unset($ev);
+			}
+		}
+		$this->data[ 'EventSummary' ] = $eventSummary;
 		$this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
 		if ($this->data['LoggedIn']) {
 			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];

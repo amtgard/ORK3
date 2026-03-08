@@ -57,6 +57,10 @@ class Model_Attendance extends Model {
 		logtrace("get_event_info($event_id)", $r);
 		return $r;
 	}
+
+	function get_recent_attendees($park_id) {
+		return $this->Report->RecentParkAttendees(['ParkId' => $park_id]);
+	}
 }
 
 ?>
