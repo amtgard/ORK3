@@ -921,6 +921,7 @@
 			<div class="pn-acct-field">
 				<label for="pn-acct-email">Email</label>
 				<input type="email" id="pn-acct-email" name="Email" value="<?= htmlspecialchars($Player['Email'] ?? '') ?>" />
+				<div id="pn-acct-email-warn" style="display:none;color:#e53e3e;font-size:0.82rem;margin-top:4px;">Double check the format of your email address.</div>
 			</div>
 			<div class="pn-acct-field">
 				<label for="pn-acct-username">Username <span style="color:#e53e3e">*</span></label>

@@ -762,6 +762,16 @@ if (PnConfig.recError) {
 				pnCloseAccountModal();
 		});
 
+		(function() {
+			var emailInput = gid('pn-acct-email');
+			var emailWarn  = gid('pn-acct-email-warn');
+			emailInput.addEventListener('input', function() {
+				var v = emailInput.value.trim();
+				var ok = !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+				emailWarn.style.display = ok ? 'none' : '';
+			});
+		})();
+
 		gid('pn-acct-save').addEventListener('click', function() {
 			var persona   = gid('pn-acct-persona').value.trim();
 			var username  = gid('pn-acct-username').value.trim();
@@ -804,29 +814,16 @@ if (PnConfig.recError) {
 				fd.append(el.name, el.value);
 			});
 
-			// DEBUG: log what we're sending
-			console.log('[pn-acct-save] POST to:', SAVE_URL);
-			var fdLog = {};
-			fd.forEach(function(v, k) { fdLog[k] = v; });
-			console.log('[pn-acct-save] FormData:', fdLog);
-
 			var btn = gid('pn-acct-save');
 			btn.disabled = true;
 			btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
 			fetch(SAVE_URL, { method: 'POST', body: fd })
 				.then(function(resp) {
-					console.log('[pn-acct-save] response status:', resp.status, resp.ok);
 					if (!resp.ok) throw new Error('Server returned ' + resp.status);
-					return resp.text();
-				})
-				.then(function(html) {
-					var hasError = html.indexOf('class="error"') !== -1;
-					console.log('[pn-acct-save] response length:', html.length, 'has error indicators:', hasError);
 					window.location.reload();
 				})
 				.catch(function(err) {
-					console.error('[pn-acct-save] fetch error:', err);
 					errEl.textContent = 'Save failed: ' + err.message;
 					errEl.style.display = '';
 					btn.disabled = false;
@@ -6338,6 +6335,7 @@ function setupPronounPicker(cfg) {
 
 	function gid(id) { return document.getElementById(id); }
 
+	var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
 	var selectedParkId   = 0;
 	var selectedParkName = '';
 
@@ -6376,7 +6374,7 @@ function setupPronounPicker(cfg) {
 		if (parkText) {
 			$(parkText).autocomplete({
 				source: function(req, res) {
-					$.getJSON(SEARCH_URL, { Action: 'Search/Location', search: req.term, limit: 15 }, function(data) {
+					$.getJSON(SEARCH_URL, { Action: 'Search/Location', name: req.term, limit: 15 }, function(data) {
 						// Filter to items that have a ParkId
 						var parks = $.grep(data || [], function(v) { return v.ParkId && parseInt(v.ParkId) > 0 && !parseInt(v.EventId || 0); });
 						res($.map(parks, function(v) { return { label: v.Name, value: v }; }));

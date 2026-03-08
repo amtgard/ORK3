@@ -850,8 +850,8 @@ class Player extends Ork3 {
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 
 				$this->mundane->modified = date('Y-m-d H:i:s', time());
-				if (!is_null($request['GivenName'])) $this->mundane->set('given_name', $request['GivenName']);
-				if (!is_null($request['Surname'])) $this->mundane->set('surname', $request['Surname']);
+				$this->mundane->given_name = is_null($request['GivenName'])?$this->mundane->given_name:$request['GivenName'];
+				$this->mundane->surname = is_null($request['Surname'])?$this->mundane->surname:$request['Surname'];
 				$this->mundane->other_name = is_null($request['OtherName'])?$this->mundane->other_name:$request['OtherName'];
 				$this->mundane->username = is_null($request['UserName'])?$this->mundane->username:$request['UserName'];
 				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:$request['Persona'];
@@ -868,7 +868,6 @@ class Player extends Ork3 {
 				}
 
 				$this->mundane->save();
-				logtrace("UpdatePlayer save SQL", $this->mundane->lastSql());
 				$this->set_waiver($request);
 				$this->mundane->save();
 				$this->set_image($request);

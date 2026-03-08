@@ -425,6 +425,7 @@ class Controller_Player extends Controller {
 
 		$this->data['UpcomingRsvps'] = $this->Event->get_upcoming_rsvps((int)$id);
 		$this->data['IsOwnProfile']  = $uid === (int)$id;
+		$this->data['Player']['ParkName'] = $this->session->park_name;
 	}
 
 }
