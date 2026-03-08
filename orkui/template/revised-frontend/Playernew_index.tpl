@@ -1018,7 +1018,7 @@
 
 			<div class="pn-acct-field">
 				<label for="pn-acct-member-since">Park Member Since</label>
-				<input type="date" id="pn-acct-member-since" name="ParkMemberSince" value="<?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?>" />
+				<input type="date" id="pn-acct-member-since" name="ParkMemberSince" value="<?= htmlspecialchars(($Player['ParkMemberSince'] ?? '') === '0000-00-00' ? '' : ($Player['ParkMemberSince'] ?? '')) ?>" />
 			</div>
 			<?php endif; ?>
 		</div>

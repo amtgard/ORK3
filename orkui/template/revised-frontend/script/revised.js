@@ -804,17 +804,29 @@ if (PnConfig.recError) {
 				fd.append(el.name, el.value);
 			});
 
+			// DEBUG: log what we're sending
+			console.log('[pn-acct-save] POST to:', SAVE_URL);
+			var fdLog = {};
+			fd.forEach(function(v, k) { fdLog[k] = v; });
+			console.log('[pn-acct-save] FormData:', fdLog);
+
 			var btn = gid('pn-acct-save');
 			btn.disabled = true;
 			btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
 			fetch(SAVE_URL, { method: 'POST', body: fd })
 				.then(function(resp) {
+					console.log('[pn-acct-save] response status:', resp.status, resp.ok);
 					if (!resp.ok) throw new Error('Server returned ' + resp.status);
-					// Reload to reflect changes
+					return resp.text();
+				})
+				.then(function(html) {
+					var hasError = html.indexOf('class="error"') !== -1;
+					console.log('[pn-acct-save] response length:', html.length, 'has error indicators:', hasError);
 					window.location.reload();
 				})
 				.catch(function(err) {
+					console.error('[pn-acct-save] fetch error:', err);
 					errEl.textContent = 'Save failed: ' + err.message;
 					errEl.style.display = '';
 					btn.disabled = false;
