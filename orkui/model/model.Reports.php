@@ -239,6 +239,14 @@ class Model_Reports extends Model {
 		}
 		return array();
 	}
+
+	function kingdom_officer_directory() {
+		$r = $this->Report->KingdomOfficerDirectory(array());
+		if ($r['Status']['Status'] == 0) {
+			return $r['Kingdoms'];
+		}
+		return array();
+	}
 }
 
 ?>

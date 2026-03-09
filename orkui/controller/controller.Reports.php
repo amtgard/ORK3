@@ -607,6 +607,12 @@ class Controller_Reports extends Controller {
 		}
 	}
 
+	public function kingdom_officer_directory($params = null) {
+		$this->template                 = 'Reports_kingdomofficerdirectory.tpl';
+		$this->data['page_title']       = 'Kingdom Officer Directory';
+		$this->data['OfficerDirectory'] = $this->Reports->kingdom_officer_directory();
+	}
+
 }
 
 ?>
