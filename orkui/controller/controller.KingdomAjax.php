@@ -303,6 +303,36 @@ class Controller_KingdomAjax extends Controller {
 			}
 			echo json_encode(['status' => 0, 'templates' => $templates]);
 
+		} elseif ($action === 'createtournament') {
+			$this->load_model('Tournament');
+			$name   = trim($_POST['Name']        ?? '');
+			$when   = trim($_POST['When']        ?? '');
+			$desc   = trim($_POST['Description'] ?? '');
+			$url    = trim($_POST['Url']         ?? '');
+			$pid    = (int)($_POST['ParkId']                ?? 0);
+			$ecd_id = (int)($_POST['EventCalendarDetailId'] ?? 0);
+
+			if (!strlen($name)) {
+				echo json_encode(['status' => 1, 'error' => 'Tournament name is required.']); exit;
+			}
+			if (!strlen($when)) {
+				echo json_encode(['status' => 1, 'error' => 'Tournament date is required.']); exit;
+			}
+
+			$r = $this->Tournament->create_tournament([
+				'Token'                 => $this->session->token,
+				'Name'                  => $name,
+				'Description'           => $desc,
+				'Url'                   => $url,
+				'When'                  => $when,
+				'KingdomId'             => $kingdom_id,
+				'ParkId'                => $pid,
+				'EventCalendarDetailId' => $ecd_id,
+			]);
+			echo (!isset($r['Status']) || $r['Status'] == 0)
+				? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

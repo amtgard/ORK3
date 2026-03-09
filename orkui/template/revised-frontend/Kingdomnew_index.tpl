@@ -273,7 +273,7 @@
 						<button class="kn-view-btn" id="kn-view-list" title="List view">
 							<i class="fas fa-list"></i>
 						</button>
-						<?php if ($CanManageKingdom ?? false): ?>
+						<?php if ($CanAddPark ?? false): ?>
 						<button onclick="knOpenAddParkModal()" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Park
 						</button>
@@ -415,7 +415,7 @@
 											: '<span style="color:#a0aec0">—</span>' ?>
 									</td>
 									<td class="kn-col-nowrap">
-										<img class="kn-thumb"
+										<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
 											src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
@@ -446,9 +446,9 @@
 				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid #e2e8f0;padding-top:16px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
 					<?php if ($CanManageKingdom): ?>
-					<a href="<?= UIR ?>Tournament/create&KingdomId=<?= $kingdom_id ?>" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">
+					<button onclick="knOpenAddTournamentModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
 						<i class="fas fa-plus"></i> Add Tournament
-					</a>
+					</button>
 					<?php endif; ?>
 				</div>
 				<?php if (count($tournamentList) > 0): ?>
@@ -593,7 +593,9 @@
 						<h5><i class="fas fa-cog"></i> Admin</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">Admin Panel</a></li>
+							<?php if ($CanAddPark ?? false): ?>
 							<li><a href="#" onclick="knOpenAddParkModal();return false;">Create Park</a></li>
+							<?php endif; ?>
 							<li><a href="#" onclick="knOpenAdminModal();return false;">Configure Kingdom</a></li>
 							<li><a href="<?= UIR ?>Admin/editparks/<?= $kingdom_id ?>">Configure Parks</a></li>
 							<li><a href="#" onclick="knOpenEditOfficersModal();return false;">Set Officers</a></li>
@@ -718,6 +720,7 @@ var KnConfig = {
 	kingdomId:        <?= (int)($kingdom_id ?? 0) ?>,
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
+	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1380,6 +1383,41 @@ var KnConfig = {
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end">
 			<button class="kn-btn-ghost" id="kn-eventtpl-done-btn">Done</button>
+		</div>
+	</div>
+</div>
+
+<!-- Add Tournament Modal -->
+<div id="kn-addtournament-overlay">
+	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#276749"></i>Add Tournament</h3>
+			<button class="kn-modal-close-btn" id="kn-addtournament-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div id="kn-addtournament-feedback" style="display:none;margin-bottom:12px;font-size:13px;font-weight:600;"></div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-name">Name <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-addtournament-name" placeholder="e.g. Bear Pit" maxlength="128" />
+			</div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-when">Date <span style="color:#e53e3e">*</span></label>
+				<input type="date" id="kn-addtournament-when" />
+			</div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-desc">Description <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
+				<textarea id="kn-addtournament-desc" rows="3" placeholder="Brief description..."></textarea>
+			</div>
+			<div class="kn-acct-field">
+				<label for="kn-addtournament-url">URL <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
+				<input type="url" id="kn-addtournament-url" placeholder="https://..." maxlength="255" />
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn-ghost" id="kn-addtournament-cancel">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-addtournament-submit">
+				<i class="fas fa-plus"></i> Create Tournament
+			</button>
 		</div>
 	</div>
 </div>

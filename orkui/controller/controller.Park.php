@@ -105,28 +105,29 @@ class Controller_Park extends Controller
 			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id) AS rsvp_count
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
-			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			    AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
 			WHERE e.park_id = {$pid}
-			  AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 			ORDER BY cd.event_start, e.name";
 		$evtResult    = $DB->DataSet($evtSql);
 		$eventSummary = [];
-		$evtSeen      = [];
-		while ($evtResult && $evtResult->Next()) {
-			$eid = (int)$evtResult->event_id;
-			if (!isset($evtSeen[$eid])) {
-				$evtSeen[$eid]  = true;
-				$eventSummary[] = [
-					'EventId'      => $eid,
-					'Name'         => $evtResult->name,
-					'ParkName'     => $evtResult->park_name,
-					'NextDate'     => $evtResult->event_start,
-					'NextEndDate'  => $evtResult->event_end,
-					'NextDetailId' => (int)$evtResult->next_detail_id,
-					'HasHeraldry'  => (int)$evtResult->has_heraldry,
-					'RsvpCount'    => (int)$evtResult->rsvp_count,
-				];
-			}
+		if ($evtResult) {
+			do {
+				$eid = (int)($evtResult->event_id ?? 0);
+				if ($eid) {
+					$eventSummary[] = [
+						'EventId'      => $eid,
+						'Name'         => $evtResult->name,
+						'ParkName'     => $evtResult->park_name,
+						'NextDate'     => $evtResult->event_start,
+						'NextEndDate'  => $evtResult->event_end,
+						'NextDetailId' => (int)$evtResult->next_detail_id,
+						'HasHeraldry'  => (int)$evtResult->has_heraldry,
+						'RsvpCount'    => (int)$evtResult->rsvp_count,
+					];
+				}
+			} while ($evtResult->Next());
 		}
 		$this->data['event_summary'] = $eventSummary;
 

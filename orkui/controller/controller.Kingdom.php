@@ -223,22 +223,22 @@ class Controller_Kingdom extends Controller {
 		$kid = (int)$kingdom_id;
 
 		$evtSql = "
-			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr, cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
+			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
+			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
 			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id) AS rsvp_count
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
-			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			    AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
 			WHERE e.kingdom_id = {$kid}
-			  AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 			ORDER BY cd.event_start, p.name, e.name";
 		$evtResult    = $DB->DataSet($evtSql);
 		$eventSummary = [];
-		$evtSeen      = [];
-		if ($evtResult && $evtResult->Size() > 0) {
-			while ($evtResult->Next()) {
-				$eid = (int)$evtResult->event_id;
-				if (!isset($evtSeen[$eid])) {
-					$evtSeen[$eid]  = true;
+		if ($evtResult) {
+			do {
+				$eid = (int)($evtResult->event_id ?? 0);
+				if ($eid) {
 					$eventSummary[] = [
 						'EventId'      => $eid,
 						'Name'         => $evtResult->name,
@@ -251,7 +251,7 @@ class Controller_Kingdom extends Controller {
 						'_IsParkEvent' => (int)$evtResult->park_id > 0,
 					];
 				}
-			}
+			} while ($evtResult->Next());
 		}
 		$this->data['event_summary'] = $eventSummary;
 
@@ -300,6 +300,8 @@ class Controller_Kingdom extends Controller {
 		$this->data['IsLoggedIn']       = $uid > 0;
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+		$this->data['CanAddPark'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, (int)$kingdom_id, AUTH_CREATE);
 
 		$knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
