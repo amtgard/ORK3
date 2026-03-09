@@ -214,7 +214,8 @@ class Controller_Attendance extends Controller {
 		if (!isset($this->data['AttendanceDate'])) {
 			$this->data['AttendanceDate'] = isset($this->request->AttendanceDate)?$this->request->AttendanceDate:date('Y-m-d');
 		}
-		$this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_date($id, $this->data['AttendanceDate']);
+		$this->data['AttendanceReport']  = $this->Attendance->get_attendance_for_date($id, $this->data['AttendanceDate']);
+		$this->data['RecentAttendees']   = $this->Attendance->get_recent_attendees($id);
 		if ($this->request->exists('Attendance_park')) {
 			$this->data['Attendance_park'] = $this->request->Attendance_park->Request;
 		}

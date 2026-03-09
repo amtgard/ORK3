@@ -1851,6 +1851,14 @@ $(document).ready(function() {
 		knActivateTab($(this).attr('data-kntab'));
 	});
 
+	// ---- Auto-activate tab from URL ?tab= param ----
+	(function() {
+		var urlTab = new URLSearchParams(window.location.search).get('tab');
+		if (urlTab && $('.kn-tab-nav li[data-kntab="' + urlTab + '"]').length) {
+			knActivateTab(urlTab);
+		}
+	})();
+
 	// ---- Parks view toggle (tiles / list) ----
 	function knSetParksView(view) {
 		if (view === 'list') {
@@ -3718,6 +3726,14 @@ $(document).ready(function() {
 	$('.pk-tab-nav li').on('click', function() {
 		pkActivateTab($(this).attr('data-pktab'));
 	});
+
+	// ---- Auto-activate tab from URL ?tab= param ----
+	(function() {
+		var urlTab = new URLSearchParams(window.location.search).get('tab');
+		if (urlTab && $('.pk-tab-nav li[data-pktab="' + urlTab + '"]').length) {
+			pkActivateTab(urlTab);
+		}
+	})();
 
 	// ---- Events view toggle (list / calendar) ----
 	$('#pk-ev-view-list').on('click', function() { pkSetEventsView('list'); });

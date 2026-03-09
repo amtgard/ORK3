@@ -6461,10 +6461,11 @@ body {
 	font-size: 11pt;
 	color: #666;
 	background-color: white;
+	padding-top: 48px; /* clear the fixed navbar (#newmenu height: 48px) */
 }
 #theme_container {
 	width: 80%;
-	margin: 58px auto 40px auto;
+	margin: 10px auto 40px auto;
 	padding: 6px;
 }
 h1,h2,h3,h4,h5,h6 {
@@ -7057,7 +7058,8 @@ a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-cont
 		margin: 0 15px;
 	}
 	body {
-		margin: 0;	
+		margin: 0;
+		padding-top: 0; /* navbar hidden at this breakpoint */
 	}
 	#theme_container {
 		width: 100%;

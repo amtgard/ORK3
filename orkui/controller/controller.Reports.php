@@ -5,7 +5,13 @@ class Controller_Reports extends Controller {
 
 	public function __construct($call=null, $method=null) {
 		parent::__construct($call, $method);
-		$this->data['menu']['reports'] = array( 'url' => UIR.'Reports', 'display' => 'Reports' );
+		$back_url = UIR . 'Reports';
+		if (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+			$back_url = UIR . 'Park/index/' . (int)$this->session->park_id . '?tab=reports';
+		} elseif (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+			$back_url = UIR . 'Kingdom/index/' . (int)$this->session->kingdom_id . '?tab=reports';
+		}
+		$this->data['menu']['reports'] = array( 'url' => $back_url, 'display' => 'Reports' );
 		$this->data[ 'no_index' ] = true;
 	}
 
@@ -137,6 +143,13 @@ class Controller_Reports extends Controller {
 		}
 		$this->template = 'Reports_classmasters.tpl';
 		$this->data['Awards'] = $this->Reports->class_masters(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0));
+		$this->data['report_type'] = $type ?? null;
+		$this->data['report_id']   = $id   ?? null;
+		if (($type ?? null) === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/index/' . (int)$id . '?tab=reports';
+		} elseif (($type ?? null) === 'Kingdom') {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/index/' . (int)$id . '?tab=reports';
+		}
 	}
 
   public function _kam($params, $template, $knights, $masters) {
@@ -218,6 +231,13 @@ class Controller_Reports extends Controller {
                 null,
                 $kingdom_config['KingdomConfiguration']['AttendanceMinimum']['Value'],
                 $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value']);
+		$this->data['report_type'] = $type;
+		$this->data['report_id']   = $this->request->id ?? null;
+		if ($type === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/index/' . (int)$this->request->id . '?tab=reports';
+		} elseif ($type === 'Kingdom') {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/index/' . (int)$this->request->id . '?tab=reports';
+		}
 	}
 
 	public function active_waivered_duespaid($type=null) {
@@ -258,6 +278,13 @@ class Controller_Reports extends Controller {
             $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value'],
             $kingdom_config['KingdomConfiguration']['MonthlyCreditMaximum']['Value'],
             $peerage);
+		$this->data['report_type'] = $type;
+		$this->data['report_id']   = $this->request->id ?? null;
+		if ($type === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/index/' . (int)$this->request->id . '?tab=reports';
+		} elseif ($type === 'Kingdom') {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/index/' . (int)$this->request->id . '?tab=reports';
+		}
     }
 
 	public function roster($type=null) {
@@ -267,13 +294,17 @@ class Controller_Reports extends Controller {
 
 	public function reeve($type=null) {
 		$this->template = 'Reports_reeve.tpl';
-		$this->data['reeve_qualified'] = $this->Reports->reeve_qualified($this->request->KingdomId, $this->request->ParkId, null, 0, 0, 1);
-		$this->data['page_title'] ="Reeve Qualified";
+		$kingdom_id = ($type == 'Kingdom') ? $this->request->id : 0;
+		$park_id    = ($type == 'Park')    ? $this->request->id : null;
+		$this->data['reeve_qualified'] = $this->Reports->reeve_qualified($kingdom_id, $park_id);
+		$this->data['page_title'] = "Reeve Qualified";
 	}
 	public function corpora($type=null) {
 		$this->template = 'Reports_corpora.tpl';
-		$this->data['corpora_qualified'] = $this->Reports->corpora_qualified($this->request->KingdomId, $this->request->ParkId, null, 0, 0, 1);
-		$this->data['page_title'] ="Corpora Qualified";
+		$kingdom_id = ($type == 'Kingdom') ? $this->request->id : 0;
+		$park_id    = ($type == 'Park')    ? $this->request->id : null;
+		$this->data['corpora_qualified'] = $this->Reports->corpora_qualified($kingdom_id, $park_id);
+		$this->data['page_title'] = "Corpora Qualified";
 	}
 
 	public function inactive($type=null) {

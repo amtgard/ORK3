@@ -8,13 +8,27 @@ class Controller_Unit extends Controller {
 	}
 
 	public function unitlist($params=null) {
+		$kingdom_id = valid_id($this->request->KingdomId) ? (int)$this->request->KingdomId : null;
+		$park_id    = valid_id($this->request->ParkId)    ? (int)$this->request->ParkId    : null;
 		$this->data['Units'] = $this->Unit->get_unit_list(array(
-									'KingdomId' => $this->request->KingdomId,
-									'ParkId' => $this->request->ParkId,
-									'IncludeCompanies' => 1,
-									'IncludeHouseHolds' => 1,
-									'IncludeEvents' => 1
-								));
+			'KingdomId'         => $kingdom_id,
+			'ParkId'            => $park_id,
+			'IncludeCompanies'  => 1,
+			'IncludeHouseHolds' => 1,
+			'IncludeEvents'     => 1,
+		));
+		$this->data['ScopeKingdomId'] = $kingdom_id;
+		$this->data['ScopeParkId']    = $park_id;
+		if ($park_id) {
+			$this->data['ScopeLabel'] = $this->session->park_name ?: 'Park';
+			$this->session->unit_list_ref = 'Unit/unitlist&ParkId=' . $park_id;
+		} elseif ($kingdom_id) {
+			$this->data['ScopeLabel'] = $this->session->kingdom_name ?: 'Kingdom';
+			$this->session->unit_list_ref = 'Unit/unitlist&KingdomId=' . $kingdom_id;
+		} else {
+			$this->data['ScopeLabel'] = null;
+			$this->session->unit_list_ref = 'Unit/unitlist';
+		}
 	}
 
 	public function index($unit_id = null) {
@@ -23,7 +37,9 @@ class Controller_Unit extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['unit'] = array( 'url' => UIR."Unit/index/$id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
+		$unit_list_url = UIR . ($this->session->unit_list_ref ?: 'Unit/unitlist');
+		$this->data['menu']['units'] = array( 'url' => $unit_list_url, 'display' => 'Units' );
+		$this->data['menu']['unit']  = array( 'url' => UIR."Unit/index/$unit_id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
 	}
 	
 	public function create($mundane_id) {

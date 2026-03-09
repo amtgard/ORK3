@@ -37,17 +37,53 @@
 		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?'Principality':'Kingdom' ?> Dataset</a></li>
 		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Create Tournament</a></li>	</ul>
 </div>
+<?php if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $KingdomInfo['KingdomId'], AUTH_EDIT)) : ?>
 <div class='info-container'>
-    <h3><?=$KingdomInfo['KingdomName'] ?> Reports</h3>
+	<h3><?=$KingdomInfo['KingdomName'] ?> Reports</h3>
 	<ul>
+		<li>Activity
+			<ul>
+				<li><a href='<?=UIR ?>Reports/active/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Active Players</a></li>
+				<li><a href='<?=UIR ?>Reports/park_attendance_explorer'>Park Attendance Explorer</a></li>
+			</ul>
+		</li>
 		<li>Peerage
 			<ul>
 				<li><a href='<?=UIR ?>Reports/knights/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Active Knights</a></li>
 				<li><a href='<?=UIR ?>Reports/masters/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Active Masters</a></li>
+				<li><a href='<?=UIR ?>Reports/knights_list/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Knights List</a></li>
+				<li><a href='<?=UIR ?>Reports/masters_list/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Masters List</a></li>
+				<li><a href='<?=UIR ?>Reports/knights_and_masters/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Knights &amp; Masters</a></li>
+				<li><a href='<?=UIR ?>Reports/class_masters/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Class Masters/Paragons</a></li>
+			</ul>
+		</li>
+		<li>Awards
+			<ul>
+				<li><a href='<?=UIR ?>Reports/player_awards/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Kingdom Awards</a></li>
+				<li><a href='<?=UIR ?>Reports/custom_awards/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Custom Awards</a></li>
+				<li><a href='<?=UIR ?>Reports/player_award_recommendations/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Award Recommendations</a></li>
+				<li><a href='<?=UIR ?>Reports/guilds/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Kingdom Guilds</a></li>
+			</ul>
+		</li>
+		<li>Roster
+			<ul>
+				<li><a href='<?=UIR ?>Reports/roster/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Full Roster</a></li>
+				<li><a href='<?=UIR ?>Reports/waivered/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Waivered Players</a></li>
+				<li><a href='<?=UIR ?>Reports/unwaivered/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Unwaivered Players</a></li>
+				<li><a href='<?=UIR ?>Reports/inactive/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Inactive Players</a></li>
+				<li><a href='<?=UIR ?>Reports/suspended/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Suspended Players</a></li>
+			</ul>
+		</li>
+		<li>Dues &amp; Compliance
+			<ul>
+				<li><a href='<?=UIR ?>Reports/dues/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Dues Paid</a></li>
+				<li><a href='<?=UIR ?>Reports/reeve/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Reeve Qualified</a></li>
+				<li><a href='<?=UIR ?>Reports/corpora/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Corpora Qualified</a></li>
 			</ul>
 		</li>
 	</ul>
 </div>
+<?php endif; ?>
 <div id="dialogs" style="display: none">
 	<div id="reset-waivers" title="Confirmation Required">
 		This will reset all waivers for the <?=$IsPrinz?'principality':'kingdom' ?>. This action cannot be undone. Continue?

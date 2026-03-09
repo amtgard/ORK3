@@ -538,8 +538,13 @@ class Report  extends Ork3 {
 		if (valid_id($request['IncludeHouseHolds'])) $households = " or u.type = 'Household' ";
 		if (valid_id($request['IncludeEvents'])) $events = " or u.type = 'Event' ";
 		if (valid_id($request['ActiveOnly'])) $active_only = " and um.active = 'Active' ";
+		if (valid_id($request['KingdomId'])) $activity_scope = " and a.kingdom_id = '$request[KingdomId]'";
+		elseif (valid_id($request['ParkId'])) $activity_scope = " and a.park_id = '$request[ParkId]'";
 
-		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count, um.unit_mundane_id
+		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count,
+					(select count(*) from " . DB_PREFIX . "unit_mundane um2 where um2.unit_id = u.unit_id) as total_member_count,
+					(select max(a.date) from " . DB_PREFIX . "attendance a join " . DB_PREFIX . "unit_mundane um3 on um3.mundane_id = a.mundane_id where um3.unit_id = u.unit_id $activity_scope) as last_activity_date,
+					um.unit_mundane_id
 					from " . DB_PREFIX . "unit u
 						left join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id
 							left join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id
@@ -555,12 +560,15 @@ class Report  extends Ork3 {
 		} else if ($r->size() > 0) {
 			while ($r->next()) {
 				$response['Units'][] = array(
-					'UnitId' => $r->unit_id,
-					'Type' => $r->type,
-					'Name' => $r->name,
-					'Persona' => $r->persona,
-					'MemberCount' => $r->member_count,
-					'UnitMundaneId' => $r->unit_mundane_id
+					'UnitId'           => $r->unit_id,
+					'Type'             => $r->type,
+					'Name'             => $r->name,
+					'HasHeraldry'      => (int)$r->has_heraldry,
+					'Persona'          => $r->persona,
+					'MemberCount'       => $r->member_count,
+					'TotalMemberCount'  => $r->total_member_count,
+					'LastActivityDate'  => $r->last_activity_date,
+					'UnitMundaneId'     => $r->unit_mundane_id,
 				);
 			}
 		}
