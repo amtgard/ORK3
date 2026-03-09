@@ -608,9 +608,13 @@ class Controller_Reports extends Controller {
 	}
 
 	public function kingdom_officer_directory($params = null) {
-		$this->template                 = 'Reports_kingdomofficerdirectory.tpl';
-		$this->data['page_title']       = 'Kingdom Officer Directory';
-		$this->data['OfficerDirectory'] = $this->Reports->kingdom_officer_directory();
+		$kingdom_id = valid_id($this->request->KingdomId) ? (int)$this->request->KingdomId : null;
+		$result     = $this->Reports->kingdom_officer_directory($kingdom_id);
+		$this->template                    = 'Reports_kingdomofficerdirectory.tpl';
+		$this->data['page_title']          = $kingdom_id ? 'Park Officer Directory' : 'Kingdom Officer Directory';
+		$this->data['OfficerDirectory']    = $result['Rows'];
+		$this->data['OfficerDirectoryMode'] = $result['Mode'];
+		$this->data['OfficerDirectoryKingdomId'] = $kingdom_id;
 	}
 
 }

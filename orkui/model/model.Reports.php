@@ -240,12 +240,12 @@ class Model_Reports extends Model {
 		return array();
 	}
 
-	function kingdom_officer_directory() {
-		$r = $this->Report->KingdomOfficerDirectory(array());
+	function kingdom_officer_directory($kingdom_id = null) {
+		$r = $this->Report->KingdomOfficerDirectory(array('KingdomId' => $kingdom_id));
 		if ($r['Status']['Status'] == 0) {
-			return $r['Kingdoms'];
+			return ['Rows' => $r['Kingdoms'], 'Mode' => $r['Mode']];
 		}
-		return array();
+		return ['Rows' => [], 'Mode' => 'kingdoms'];
 	}
 }
 

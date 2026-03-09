@@ -1,6 +1,9 @@
 <?php
-$_od_rows = is_array($OfficerDirectory) ? $OfficerDirectory : [];
+$_od_rows  = is_array($OfficerDirectory) ? $OfficerDirectory : [];
 $_od_total = count($_od_rows);
+$_od_mode  = ($OfficerDirectoryMode ?? 'kingdoms') === 'parks' ? 'parks' : 'kingdoms';
+$_od_label = $_od_mode === 'parks' ? 'Park' : 'Kingdom';
+$_od_entity_url_prefix = $_od_mode === 'parks' ? 'Park/index/' : 'Kingdom/index/';
 
 /* Count vacancies per role */
 $_vacant = ['Monarch' => 0, 'Regent' => 0, 'PM' => 0, 'Champion' => 0, 'GMR' => 0];
@@ -35,7 +38,7 @@ foreach ($_od_rows as $_r) {
 		<div class="rp-header-left">
 			<div class="rp-header-icon-title">
 				<i class="fas fa-crown rp-header-icon"></i>
-				<h1 class="rp-header-title">Kingdom Officer Directory</h1>
+				<h1 class="rp-header-title"><?=$_od_label?> Officer Directory</h1>
 			</div>
 		</div>
 		<div class="rp-header-actions">
@@ -46,14 +49,18 @@ foreach ($_od_rows as $_r) {
 
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
+<?php if ($_od_mode === 'parks'): ?>
+		<span>Current officers across all <?=$_od_total?> parks in this kingdom.</span>
+<?php else: ?>
 		<span>Current kingdom-level officers across all <?=$_od_total?> kingdoms. Officers are those assigned to the kingdom seat (not individual parks).</span>
+<?php endif; ?>
 	</div>
 
 	<div class="rp-stats-row">
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-chess-rook"></i></div>
 			<div class="rp-stat-number"><?=$_od_total?></div>
-			<div class="rp-stat-label">Kingdoms</div>
+			<div class="rp-stat-label"><?=$_od_label?>s</div>
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-crown"></i></div>
@@ -81,13 +88,13 @@ foreach ($_od_rows as $_r) {
 <?php if ($_od_total === 0): ?>
 		<div style="padding:32px 16px;text-align:center;color:var(--rp-text-muted);font-size:14px;">
 			<i class="fas fa-crown" style="font-size:28px;display:block;margin-bottom:10px;opacity:0.3;"></i>
-			No kingdoms found.
+			No <?=strtolower($_od_label)?>s found.
 		</div>
 <?php else: ?>
 		<table id="od-table" class="dataTable" style="width:100%">
 			<thead>
 				<tr>
-					<th>Kingdom</th>
+					<th><?=$_od_label?></th>
 					<th>Monarch</th>
 					<th>Regent</th>
 					<th>Prime Minister</th>
@@ -104,7 +111,7 @@ function _od_cell($persona, $id, $uir) {
 foreach ($_od_rows as $row):
 ?>
 				<tr>
-					<td><a class="od-officer-link" href="<?=UIR?>Kingdom/index/<?=$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
+					<td><a class="od-officer-link" href="<?=UIR?><?=$_od_entity_url_prefix?><?=$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
 					<td><?=_od_cell($row['MonarchPersona'],  $row['MonarchId'],  UIR)?></td>
 					<td><?=_od_cell($row['RegentPersona'],   $row['RegentId'],   UIR)?></td>
 					<td><?=_od_cell($row['PMPersona'],       $row['PMId'],       UIR)?></td>
@@ -151,7 +158,7 @@ foreach ($_od_rows as $row):
 		var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
 		var a    = document.createElement('a');
 		a.href   = URL.createObjectURL(blob);
-		a.download = 'kingdom-officer-directory.csv';
+		a.download = 'officer-directory.csv';
 		a.click();
 	});
 }());

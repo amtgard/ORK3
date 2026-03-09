@@ -2085,36 +2085,66 @@ class Report  extends Ork3 {
 	}
 
 	public function KingdomOfficerDirectory($request) {
-		$sql = "SELECT
-					k.kingdom_id,
-					k.name AS kingdom_name,
-					MAX(CASE WHEN o.role = 'Monarch'       THEN m.persona    END) AS monarch_persona,
-					MAX(CASE WHEN o.role = 'Monarch'       THEN m.mundane_id END) AS monarch_id,
-					MAX(CASE WHEN o.role = 'Regent'        THEN m.persona    END) AS regent_persona,
-					MAX(CASE WHEN o.role = 'Regent'        THEN m.mundane_id END) AS regent_id,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
-					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
-					MAX(CASE WHEN o.role = 'Champion'      THEN m.persona    END) AS champion_persona,
-					MAX(CASE WHEN o.role = 'Champion'      THEN m.mundane_id END) AS champion_id,
-					MAX(CASE WHEN o.role = 'GMR'           THEN m.persona    END) AS gmr_persona,
-					MAX(CASE WHEN o.role = 'GMR'           THEN m.mundane_id END) AS gmr_id
-				FROM " . DB_PREFIX . "kingdom k
-					LEFT JOIN " . DB_PREFIX . "officer o  ON o.kingdom_id = k.kingdom_id AND o.park_id = 0
-					LEFT JOIN " . DB_PREFIX . "mundane m  ON m.mundane_id = o.mundane_id
-				WHERE k.parent_kingdom_id = 0
-					AND k.active = 'Active'
-					AND k.name != 'The Freeholds of Amtgard'
-				GROUP BY k.kingdom_id, k.name
-				ORDER BY k.name";
+		$kingdom_id = valid_id($request['KingdomId']) ? (int)$request['KingdomId'] : null;
+
+		if ($kingdom_id) {
+			// Park-scoped: officers for each park within a kingdom
+			$sql = "SELECT
+						p.park_id    AS entity_id,
+						p.name       AS entity_name,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id
+					FROM " . DB_PREFIX . "park p
+						LEFT JOIN " . DB_PREFIX . "officer o ON o.park_id = p.park_id
+						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
+					WHERE p.kingdom_id = '$kingdom_id'
+						AND p.active = 'Active'
+					GROUP BY p.park_id, p.name
+					ORDER BY p.name";
+			$mode = 'parks';
+		} else {
+			// Top-level: kingdom-seat officers for all active kingdoms
+			$sql = "SELECT
+						k.kingdom_id AS entity_id,
+						k.name       AS entity_name,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id
+					FROM " . DB_PREFIX . "kingdom k
+						LEFT JOIN " . DB_PREFIX . "officer o ON o.kingdom_id = k.kingdom_id AND o.park_id = 0
+						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
+					WHERE k.parent_kingdom_id = 0
+						AND k.active = 'Active'
+						AND k.name != 'The Freeholds of Amtgard'
+					GROUP BY k.kingdom_id, k.name
+					ORDER BY k.name";
+			$mode = 'kingdoms';
+		}
+
 		$r = $this->db->query($sql);
-		$response = ['Status' => Success(), 'Kingdoms' => []];
+		$response = ['Status' => Success(), 'Mode' => $mode, 'Kingdoms' => []];
 		if ($r === false) {
 			$response['Status'] = InvalidParameter();
 		} elseif ($r->size() > 0) {
 			while ($r->next()) {
 				$response['Kingdoms'][] = [
-					'KingdomId'      => $r->kingdom_id,
-					'KingdomName'    => $r->kingdom_name,
+					'KingdomId'      => $r->entity_id,
+					'KingdomName'    => $r->entity_name,
 					'MonarchPersona' => $r->monarch_persona,
 					'MonarchId'      => $r->monarch_id,
 					'RegentPersona'  => $r->regent_persona,
