@@ -524,11 +524,13 @@
 								<?php if ($canEditAdmin): ?>
 								<td class="pn-award-actions-cell">
 									<?php $awardData = json_encode([
-										'AwardsId'   => (int)$detail['AwardsId'],
-										'displayName'=> ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
-										'Name'       => $detail['Name'],
-										'IsLadder'   => (int)$detail['IsLadder'],
-										'Rank'       => (int)$detail['Rank'],
+										'AwardsId'      => (int)$detail['AwardsId'],
+										'displayName'   => ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
+										'Name'          => $detail['Name'],
+										'IsLadder'      => (int)$detail['IsLadder'],
+										'IsHistorical'  => (int)($detail['IsHistorical'] ?? 0),
+										'KingdomAwardId'=> (int)$detail['KingdomAwardId'],
+										'Rank'          => (int)$detail['Rank'],
 										'Date'       => $detail['Date'],
 										'GivenBy'    => $detail['GivenBy'],
 										'GivenById'  => (int)$detail['GivenById'],
@@ -1289,6 +1291,31 @@
 		</div>
 		<div class="pn-modal-body">
 			<div id="pn-edit-award-feedback" style="display:none"></div>
+
+			<!-- ── Historical award reconcile banner (shown only for legacy records) ── -->
+			<div id="pn-edit-reconcile-banner" style="display:none;margin-bottom:16px;padding:12px 14px;background:#fffbeb;border:1px solid #f6e05e;border-radius:6px;">
+				<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;font-weight:600;color:#744210;">
+					<input type="checkbox" id="pn-edit-reconcile-check" style="margin-top:3px;flex-shrink:0;">
+					<span id="pn-edit-reconcile-label">Convert legacy record to current award system</span>
+				</label>
+				<div id="pn-edit-reconcile-fields" style="display:none;margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px;">
+					<div class="pn-acct-field">
+						<label>Target Award <span style="color:#e53e3e">*</span></label>
+						<select id="pn-edit-reconcile-award">
+							<option value="">— select award —</option>
+							<?= $AwardOptions ?>
+						</select>
+					</div>
+					<div class="pn-acct-field" id="pn-edit-reconcile-rank-row" style="display:none;">
+						<label>Rank <span style="font-weight:400;color:#a0aec0;font-size:11px">— click to select</span></label>
+						<div class="pn-rank-pills-wrap" id="pn-edit-reconcile-rank-pills"></div>
+						<input type="hidden" id="pn-edit-reconcile-rank-val" value="">
+					</div>
+					<div style="font-size:11px;color:#975a16;margin-top:4px;">
+						Reconciliation links this legacy import to a real award record. The date, note, and location you enter below will be saved.
+					</div>
+				</div>
+			</div>
 
 			<div class="pn-acct-field">
 				<label>Award</label>

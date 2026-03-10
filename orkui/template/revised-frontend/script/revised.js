@@ -5382,6 +5382,7 @@ function setupPronounPicker(cfg) {
 	function gid(id) { return document.getElementById(id); }
 
 	var currentAwardsId = 0;
+	var currentAwardIsHistorical = false;
 
 	function buildEditRankPills(isLadder, currentRank, awardName) {
 		var wrap    = gid('pn-edit-rank-pills');
@@ -5415,6 +5416,24 @@ function setupPronounPicker(cfg) {
 
 	window.pnOpenAwardEditModal = function(awardsId, data) {
 		currentAwardsId = awardsId;
+		currentAwardIsHistorical = data.IsHistorical === 1;
+
+		/* reconcile banner — show only for historical (unreconciled) records */
+		var banner = gid('pn-edit-reconcile-banner');
+		if (banner) banner.style.display = currentAwardIsHistorical ? '' : 'none';
+		var rcCheck  = gid('pn-edit-reconcile-check');
+		var rcFields = gid('pn-edit-reconcile-fields');
+		var rcSelect = gid('pn-edit-reconcile-award');
+		var rcRankRow = gid('pn-edit-reconcile-rank-row');
+		var rcRankPills = gid('pn-edit-reconcile-rank-pills');
+		var rcRankVal = gid('pn-edit-reconcile-rank-val');
+		if (rcCheck)  { rcCheck.checked = false; }
+		if (rcFields) { rcFields.style.display = 'none'; }
+		if (rcSelect) { rcSelect.value = ''; }
+		if (rcRankRow) { rcRankRow.style.display = 'none'; }
+		if (rcRankPills) { rcRankPills.innerHTML = ''; }
+		if (rcRankVal)   { rcRankVal.value = ''; }
+
 		var nameEl = gid('pn-edit-award-name');
 		if (nameEl) nameEl.textContent = data.displayName || data.Name || '';
 		buildEditRankPills(data.IsLadder == 1, data.Rank, data.displayName || data.Name || '');
@@ -5525,6 +5544,63 @@ function setupPronounPicker(cfg) {
 			});
 		}
 
+		// Reconcile checkbox toggle
+		var rcCheck  = gid('pn-edit-reconcile-check');
+		var rcFields = gid('pn-edit-reconcile-fields');
+		if (rcCheck && rcFields) {
+			rcCheck.addEventListener('change', function() {
+				rcFields.style.display = this.checked ? '' : 'none';
+			});
+		}
+
+		// Reconcile award select — show rank pills if ladder, suggest next rank
+		var rcSelect   = gid('pn-edit-reconcile-award');
+		var rcRankRow  = gid('pn-edit-reconcile-rank-row');
+		var rcRankPills = gid('pn-edit-reconcile-rank-pills');
+		var rcRankVal  = gid('pn-edit-reconcile-rank-val');
+		if (rcSelect) {
+			rcSelect.addEventListener('change', function() {
+				if (!rcRankRow || !rcRankPills || !rcRankVal) return;
+				var opt = this.options[this.selectedIndex];
+				var isLadder = opt && opt.getAttribute('data-is-ladder') === '1';
+				var awardId  = opt ? (parseInt(opt.getAttribute('data-award-id')) || 0) : 0;
+				var awardName = opt ? (opt.textContent || '') : '';
+				rcRankRow.style.display = isLadder ? '' : 'none';
+				rcRankPills.innerHTML   = '';
+				rcRankVal.value         = '';
+				if (!isLadder) return;
+
+				/* suggest next rank = max held rank + 1, capped at maxRank */
+				var heldMax    = (PnConfig.playerAwardRanks && awardId) ? (PnConfig.playerAwardRanks[awardId] || 0) : 0;
+				var suggested  = heldMax + 1;
+				var maxRank    = /zodiac/i.test(awardName) ? 12 : 10;
+				if (suggested > maxRank) suggested = 0;
+
+				for (var i = 1; i <= maxRank; i++) {
+					var pill = document.createElement('button');
+					pill.type      = 'button';
+					pill.className = 'pn-rank-pill'
+						+ (i <= heldMax    ? ' pn-rank-held'     : '')
+						+ (i === suggested ? ' pn-rank-suggested' : '');
+					pill.textContent  = i;
+					pill.dataset.rank = i;
+					(function(p, rank) {
+						p.addEventListener('click', function() {
+							rcRankPills.querySelectorAll('.pn-rank-pill').forEach(function(el) { el.classList.remove('pn-rank-selected'); });
+							p.classList.add('pn-rank-selected');
+							rcRankVal.value = rank;
+						});
+					})(pill, i);
+					rcRankPills.appendChild(pill);
+				}
+				/* auto-select the suggested rank */
+				if (suggested > 0) {
+					var sugPill = rcRankPills.querySelector('[data-rank="' + suggested + '"]');
+					if (sugPill) { sugPill.classList.add('pn-rank-selected'); rcRankVal.value = suggested; }
+				}
+			});
+		}
+
 		// Save
 		var saveBtn = gid('pn-edit-award-save');
 		if (saveBtn) {
@@ -5535,21 +5611,43 @@ function setupPronounPicker(cfg) {
 					if (fb) { fb.textContent = 'Date is required.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
 					return;
 				}
+
+				/* check if reconcile conversion is requested */
+				var doReconcile   = currentAwardIsHistorical
+					&& gid('pn-edit-reconcile-check')
+					&& gid('pn-edit-reconcile-check').checked;
+				var kingdomAwardId = gid('pn-edit-reconcile-award') ? gid('pn-edit-reconcile-award').value : '';
+				if (doReconcile && !kingdomAwardId) {
+					if (fb) { fb.textContent = 'Please select a target award to convert to.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					return;
+				}
+
 				saveBtn.disabled = true;
 				var fd = new FormData();
-				fd.append('Rank',      gid('pn-edit-rank-val')    ? gid('pn-edit-rank-val').value    : '');
 				fd.append('Date',      date);
 				fd.append('GivenById', gid('pn-edit-givenby-id')  ? gid('pn-edit-givenby-id').value  : '');
 				fd.append('Note',      gid('pn-edit-award-note')   ? gid('pn-edit-award-note').value  : '');
 				fd.append('ParkId',    gid('pn-edit-park-id')      ? gid('pn-edit-park-id').value     : 0);
 				fd.append('KingdomId', gid('pn-edit-kingdom-id')   ? gid('pn-edit-kingdom-id').value  : 0);
 				fd.append('EventId',   gid('pn-edit-event-id')     ? gid('pn-edit-event-id').value    : 0);
-				fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId, {
+
+				var endpoint;
+				if (doReconcile) {
+					fd.append('KingdomAwardId', kingdomAwardId);
+					fd.append('Rank', gid('pn-edit-reconcile-rank-val') ? (gid('pn-edit-reconcile-rank-val').value || 0) : 0);
+					endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/reconcileaward/' + currentAwardsId;
+				} else {
+					fd.append('Rank', gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '');
+					endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId;
+				}
+
+				fetch(endpoint, {
 					method: 'POST', body: fd
 				}).then(function(r) { return r.json(); }).then(function(result) {
 					saveBtn.disabled = false;
 					if (result && result.status === 0) {
-						if (fb) { fb.textContent = 'Award updated!'; fb.style.display = ''; fb.className = 'pn-award-edit-success'; }
+						var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+						if (fb) { fb.textContent = msg; fb.style.display = ''; fb.className = 'pn-award-edit-success'; }
 						setTimeout(function() { location.reload(); }, 900);
 					} else {
 						if (fb) { fb.textContent = (result && result.error) ? result.error : 'Save failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
