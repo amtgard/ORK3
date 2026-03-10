@@ -1,16 +1,16 @@
 <?php
-$_hr_items      = is_array($Heraldry) ? $Heraldry : [];
+$_hr_all        = is_array($Heraldry) ? $Heraldry : [];
 $_hr_type       = $HeraldryType ?? 'unknown';
 $_hr_is_player  = $_hr_type === 'Mundane';
-$_hr_total      = count($_hr_items);
-$_hr_has_h      = 0;
-$_hr_active     = 0;
 $_one_year_ago  = date('Y-m-d', strtotime('-1 year'));
 
+/* Only include items that have heraldry */
+$_hr_items = array_values(array_filter($_hr_all, fn($i) => $i['HasHeraldry']));
 usort($_hr_items, fn($a, $b) => strcasecmp($a['Name'], $b['Name']));
 
+$_hr_total  = count($_hr_items);
+$_hr_active = 0;
 foreach ($_hr_items as $_item) {
-	if ($_item['HasHeraldry']) $_hr_has_h++;
 	if ($_hr_is_player && !empty($_item['LastSignin']) && $_item['LastSignin'] >= $_one_year_ago) {
 		$_hr_active++;
 	}
@@ -51,7 +51,6 @@ $_hr_label = match($_hr_type) {
 	text-decoration: none;
 	display: block;
 	cursor: pointer;
-	/* staggered entrance */
 	opacity: 0;
 	transform: scale(0.94);
 	animation: hw-fadein 0.3s ease forwards;
@@ -119,18 +118,6 @@ $_hr_label = match($_hr_type) {
 	filter: grayscale(0%) opacity(1);
 }
 
-/* No-heraldry placeholder style */
-.hw-card[data-has-heraldry="0"] {
-	background: repeating-linear-gradient(
-		45deg,
-		#f8fafc,
-		#f8fafc 6px,
-		#f1f5f9 6px,
-		#f1f5f9 12px
-	);
-	border: 1px dashed #cbd5e1;
-}
-
 /* ── Search bar ──────────────────────────────────────── */
 .hw-search-wrap {
 	position: relative;
@@ -189,12 +176,7 @@ $_hr_label = match($_hr_type) {
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas <?=$_hr_icon?>"></i></div>
 			<div class="rp-stat-number"><?=$_hr_total?></div>
-			<div class="rp-stat-label">Total <?=$_hr_label?></div>
-		</div>
-		<div class="rp-stat-card">
-			<div class="rp-stat-icon"><i class="fas fa-image"></i></div>
-			<div class="rp-stat-number"><?=$_hr_has_h?></div>
-			<div class="rp-stat-label">Has Heraldry</div>
+			<div class="rp-stat-label"><?=$_hr_label?> with Heraldry</div>
 		</div>
 <?php if ($_hr_is_player): ?>
 		<div class="rp-stat-card">
@@ -212,38 +194,35 @@ $_hr_label = match($_hr_type) {
 				<i class="fas fa-search"></i>
 				<input type="text" id="hw-search" placeholder="Search by name…">
 			</div>
-			<div class="rp-filter-pills" style="margin:0;">
-				<button class="rp-filter-pill" id="hw-pill-all">All <?=$_hr_label?></button>
-				<button class="rp-filter-pill active" id="hw-pill-heraldry">Has Heraldry Only</button>
 <?php if ($_hr_is_player): ?>
-				<button class="rp-filter-pill" id="hw-pill-inactive" style="margin-left:8px;">
+			<div class="rp-filter-pills" style="margin:0;">
+				<button class="rp-filter-pill active" id="hw-pill-active">Active Only</button>
+				<button class="rp-filter-pill" id="hw-pill-inactive">
 					<i class="fas fa-eye-slash" style="font-size:10px;"></i> Include Inactive
 				</button>
-<?php endif; ?>
 			</div>
+<?php endif; ?>
 		</div>
 
 <?php if ($_hr_total === 0): ?>
 		<div style="padding:40px 16px;text-align:center;color:var(--rp-text-muted);font-size:14px;">
 			<i class="fas <?=$_hr_icon?>" style="font-size:32px;display:block;margin-bottom:12px;opacity:0.25;"></i>
-			No <?=strtolower($_hr_label)?> found.
+			No <?=strtolower($_hr_label)?> with heraldry found.
 		</div>
 <?php else: ?>
 		<div class="hw-gallery" id="hw-gallery">
 <?php foreach ($_hr_items as $_idx => $_item):
-	$_img        = $_item['HasHeraldry'] ? $_item['HeraldryUrl']['Url'] : $Blank;
-	$_signin     = $_item['LastSignin'] ?? '';
-	$_is_active  = !$_hr_is_player || (!empty($_signin) && $_signin >= $_one_year_ago);
-	$_delay      = min($_idx * 18, 600); // stagger capped at 600ms
+	$_signin    = $_item['LastSignin'] ?? '';
+	$_is_active = !$_hr_is_player || (!empty($_signin) && $_signin >= $_one_year_ago);
+	$_delay     = min($_idx * 18, 600);
 ?>
 			<a class="hw-card"
 				href="<?=htmlspecialchars($_item['Url'])?>"
 				data-name="<?=htmlspecialchars(strtolower($_item['Name']))?>"
-				data-has-heraldry="<?=(int)$_item['HasHeraldry']?>"
 				data-active="<?=$_is_active ? '1' : '0'?>"
 				style="animation-delay:<?=$_delay?>ms">
 				<img class="hw-card-img"
-					src="<?=htmlspecialchars($_img)?>"
+					src="<?=htmlspecialchars($_item['HeraldryUrl']['Url'])?>"
 					onerror="this.onerror=null;this.src='<?=$Blank?>'"
 					loading="lazy"
 					alt="<?=htmlspecialchars($_item['Name'])?>">
@@ -251,8 +230,6 @@ $_hr_label = match($_hr_type) {
 					<div class="hw-card-name"><?=htmlspecialchars($_item['Name'])?></div>
 <?php if ($_hr_is_player && !empty($_signin)): ?>
 					<div class="hw-card-meta"><i class="fas fa-sign-in-alt" style="font-size:8px;"></i> <?=htmlspecialchars($_signin)?></div>
-<?php elseif ($_hr_is_player): ?>
-					<div class="hw-card-meta">No sign-in on record</div>
 <?php endif; ?>
 				</div>
 			</a>
@@ -270,7 +247,6 @@ $_hr_label = match($_hr_type) {
 (function () {
 	var isPlayerType    = <?=$_hr_is_player ? 'true' : 'false'?>;
 	var includeInactive = false;
-	var heraldryOnly    = true;
 	var searchTerm      = '';
 
 	function applyFilters() {
@@ -278,12 +254,10 @@ $_hr_label = match($_hr_type) {
 		var visible = 0;
 
 		cards.forEach(function (card) {
-			var hasH     = card.dataset.hasHeraldry === '1';
 			var isActive = card.dataset.active === '1';
 			var name     = card.dataset.name || '';
 
 			var show = true;
-			if (heraldryOnly && !hasH)                         show = false;
 			if (isPlayerType && !includeInactive && !isActive) show = false;
 			if (searchTerm && name.indexOf(searchTerm) === -1) show = false;
 
@@ -304,29 +278,23 @@ $_hr_label = match($_hr_type) {
 		});
 	}
 
-	/* All vs Heraldry-only pills */
-	document.getElementById('hw-pill-all')?.addEventListener('click', function () {
-		heraldryOnly = false;
+	/* Active Only / Include Inactive pills */
+	document.getElementById('hw-pill-active')?.addEventListener('click', function () {
+		includeInactive = false;
 		this.classList.add('active');
-		document.getElementById('hw-pill-heraldry').classList.remove('active');
+		document.getElementById('hw-pill-inactive').classList.remove('active');
+		document.getElementById('hw-pill-inactive').querySelector('i').className = 'fas fa-eye-slash';
+		document.getElementById('hw-pill-inactive').querySelector('i').style.fontSize = '10px';
 		applyFilters();
 	});
-	document.getElementById('hw-pill-heraldry')?.addEventListener('click', function () {
-		heraldryOnly = true;
-		this.classList.add('active');
-		document.getElementById('hw-pill-all').classList.remove('active');
-		applyFilters();
-	});
-
-	/* Include Inactive toggle */
 	var inactivePill = document.getElementById('hw-pill-inactive');
 	if (inactivePill) {
 		inactivePill.addEventListener('click', function () {
-			includeInactive = !includeInactive;
-			inactivePill.classList.toggle('active', includeInactive);
-			var icon = inactivePill.querySelector('i');
-			icon.className = (includeInactive ? 'fas fa-eye' : 'fas fa-eye-slash');
-			icon.style.fontSize = '10px';
+			includeInactive = true;
+			inactivePill.classList.add('active');
+			document.getElementById('hw-pill-active').classList.remove('active');
+			inactivePill.querySelector('i').className = 'fas fa-eye';
+			inactivePill.querySelector('i').style.fontSize = '10px';
 			applyFilters();
 		});
 	}
