@@ -130,8 +130,8 @@ $_hr_label = match($_hr_type) {
 	<div class="rp-table-area" style="padding: 0 16px 20px;">
 
 		<div class="rp-filter-pills" style="margin: 14px 0;">
-			<button class="rp-filter-pill active" id="hr-pill-heraldry" data-heraldry="0">All <?=$_hr_label?></button>
-			<button class="rp-filter-pill" id="hr-pill-heraldry-only" data-heraldry="1">Has Heraldry Only</button>
+			<button class="rp-filter-pill" id="hr-pill-heraldry" data-heraldry="0">All <?=$_hr_label?></button>
+			<button class="rp-filter-pill active" id="hr-pill-heraldry-only" data-heraldry="1">Has Heraldry Only</button>
 <?php if ($_hr_is_player): ?>
 			<button class="rp-filter-pill" id="hr-pill-inactive" style="margin-left:8px;">
 				<i class="fas fa-eye-slash" style="font-size:10px;"></i> Include Inactive
@@ -183,7 +183,7 @@ $_hr_label = match($_hr_type) {
 (function () {
 	var isPlayerType    = <?=$_hr_is_player ? 'true' : 'false'?>;
 	var includeInactive = false;
-	var heraldryOnly    = false;
+	var heraldryOnly    = true;
 
 	var oneYearAgo = new Date();
 	oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -236,6 +236,9 @@ $_hr_label = match($_hr_type) {
 		});
 
 		/* Apply active-only filter on load for player reports */
+		applyFilters();
+	} else {
+		/* Apply heraldry-only filter on load for non-player reports */
 		applyFilters();
 	}
 }());
