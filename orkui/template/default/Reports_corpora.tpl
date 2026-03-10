@@ -15,22 +15,22 @@ if (is_array($corpora_qualified)) {
 	}
 }
 
-/* Scope chip */
+/* Scope chip — derived from controller-passed ScopeType/ScopeId */
 $scope_label = '';
 $scope_link  = '';
 $scope_icon  = 'fa-globe';
 $scope_noun  = 'scope';
 
-if (isset($this->__session->park_id) && !empty($corpora_qualified)) {
+if (($ScopeType ?? '') === 'park' && !empty($corpora_qualified)) {
 	$first       = reset($corpora_qualified);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)$this->__session->park_id;
+	$scope_link  = UIR . 'Park/index/'    . (int)($ScopeId ?? 0);
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
-} elseif (isset($this->__session->kingdom_id) && !empty($corpora_qualified)) {
+} elseif (($ScopeType ?? '') === 'kingdom' && !empty($corpora_qualified)) {
 	$first       = reset($corpora_qualified);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)$this->__session->kingdom_id;
+	$scope_link  = UIR . 'Kingdom/index/' . (int)($ScopeId ?? 0);
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }

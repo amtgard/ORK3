@@ -299,22 +299,46 @@ class Controller_Reports extends Controller {
 
 	public function reeve($type=null) {
 		$this->template = 'Reports_reeve.tpl';
-		$kingdom_id = ($type == 'Kingdom') ? $this->request->id : 0;
-		$park_id    = ($type == 'Park')    ? $this->request->id : null;
+		if ($type == 'Kingdom') {
+			$kingdom_id = valid_id($this->request->id) ? (int)$this->request->id : null;
+			$park_id    = null;
+		} elseif ($type == 'Park') {
+			$kingdom_id = null;
+			$park_id    = valid_id($this->request->id) ? (int)$this->request->id : null;
+		} else {
+			$kingdom_id = valid_id($this->request->KingdomId) ? (int)$this->request->KingdomId : null;
+			$park_id    = valid_id($this->request->ParkId)    ? (int)$this->request->ParkId    : null;
+		}
 		$this->data['reeve_qualified'] = $this->Reports->reeve_qualified($kingdom_id, $park_id);
-		$this->data['page_title'] = "Reeve Qualified";
+		$this->data['ScopeType']       = $park_id ? 'park' : ($kingdom_id ? 'kingdom' : '');
+		$this->data['ScopeId']         = $park_id ?: $kingdom_id;
+		$this->data['page_title']      = "Reeve Qualified";
 	}
+
 	public function corpora($type=null) {
 		$this->template = 'Reports_corpora.tpl';
-		$kingdom_id = ($type == 'Kingdom') ? $this->request->id : 0;
-		$park_id    = ($type == 'Park')    ? $this->request->id : null;
+		if ($type == 'Kingdom') {
+			$kingdom_id = valid_id($this->request->id) ? (int)$this->request->id : null;
+			$park_id    = null;
+		} elseif ($type == 'Park') {
+			$kingdom_id = null;
+			$park_id    = valid_id($this->request->id) ? (int)$this->request->id : null;
+		} else {
+			$kingdom_id = valid_id($this->request->KingdomId) ? (int)$this->request->KingdomId : null;
+			$park_id    = valid_id($this->request->ParkId)    ? (int)$this->request->ParkId    : null;
+		}
 		$this->data['corpora_qualified'] = $this->Reports->corpora_qualified($kingdom_id, $park_id);
-		$this->data['page_title'] = "Corpora Qualified";
+		$this->data['ScopeType']         = $park_id ? 'park' : ($kingdom_id ? 'kingdom' : '');
+		$this->data['ScopeId']           = $park_id ?: $kingdom_id;
+		$this->data['page_title']        = "Corpora Qualified";
 	}
 
 	public function inactive($type=null) {
-		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 0);
-		$this->data['page_title'] ="Inactive Player Roster";
+		$this->template = 'Reports_inactive.tpl';
+		$this->data['roster']     = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 0);
+		$this->data['ScopeType']  = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
+		$this->data['ScopeId']    = valid_id($this->request->id) ? (int)$this->request->id : null;
+		$this->data['page_title'] = "Inactive Player Roster";
 	}
 
 	public function waivered($type=null) {

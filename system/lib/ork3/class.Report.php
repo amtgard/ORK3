@@ -1429,6 +1429,7 @@ class Report  extends Ork3 {
 	}
 
 	public function GetReeveQualified($request) {
+		$where = '';
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
@@ -1466,6 +1467,7 @@ class Report  extends Ork3 {
 	}
 
 	public function GetCorporaQualified($request) {
+		$where = '';
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
