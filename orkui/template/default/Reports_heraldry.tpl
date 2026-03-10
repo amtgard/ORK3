@@ -7,6 +7,8 @@ $_hr_has_h      = 0;
 $_hr_active     = 0;
 $_one_year_ago  = date('Y-m-d', strtotime('-1 year'));
 
+usort($_hr_items, fn($a, $b) => strcasecmp($a['Name'], $b['Name']));
+
 foreach ($_hr_items as $_item) {
 	if ($_item['HasHeraldry']) $_hr_has_h++;
 	if ($_hr_is_player && !empty($_item['LastSignin']) && $_item['LastSignin'] >= $_one_year_ago) {
@@ -35,7 +37,7 @@ $_hr_label = match($_hr_type) {
 /* ── Shield Wall Gallery ─────────────────────────────── */
 .hw-gallery {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
 	gap: 5px;
 	padding: 16px 0 4px;
 }
@@ -115,19 +117,6 @@ $_hr_label = match($_hr_type) {
 }
 .hw-card[data-active="0"]:hover .hw-card-img {
 	filter: grayscale(0%) opacity(1);
-}
-
-/* Active indicator dot */
-.hw-active-dot {
-	position: absolute;
-	top: 5px;
-	right: 5px;
-	width: 7px;
-	height: 7px;
-	border-radius: 50%;
-	background: #22c55e;
-	border: 1px solid #fff;
-	box-shadow: 0 0 0 2px rgba(34,197,94,0.3);
 }
 
 /* No-heraldry placeholder style */
@@ -266,9 +255,6 @@ $_hr_label = match($_hr_type) {
 					<div class="hw-card-meta">No sign-in on record</div>
 <?php endif; ?>
 				</div>
-<?php if ($_hr_is_player && $_is_active): ?>
-				<div class="hw-active-dot" title="Active in past year"></div>
-<?php endif; ?>
 			</a>
 <?php endforeach; ?>
 		</div>
