@@ -22,6 +22,7 @@ class Controller_Reports extends Controller {
 	function parkheraldry($kingdom_id=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_PARK_DEFAULT;
+		$this->data['HeraldryType'] = 'Park';
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Park',
 										'KingdomId' => $kingdom_id
@@ -32,6 +33,7 @@ class Controller_Reports extends Controller {
 	function kingdomheraldry($request=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_KINGDOM_DEFAULT;
+		$this->data['HeraldryType'] = 'Kingdom';
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Kingdom'
 									));
@@ -41,6 +43,7 @@ class Controller_Reports extends Controller {
 	function playerheraldry($kingdom_id=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_PLAYER_DEFAULT;
+		$this->data['HeraldryType'] = 'Mundane';
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Mundane',
 										'KingdomId' => $kingdom_id,
@@ -52,6 +55,7 @@ class Controller_Reports extends Controller {
 	function unitheraldry($request=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_UNIT_DEFAULT;
+		$this->data['HeraldryType'] = 'Unit';
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Unit'
 									));
@@ -61,6 +65,7 @@ class Controller_Reports extends Controller {
 	function eventheraldry($kingdom_id=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_EVENT_DEFAULT;
+		$this->data['HeraldryType'] = 'Event';
 		$this->data['Heraldry'] = $this->Reports->get_heraldry_report(array(
 										'Type' => 'Event',
 										'KingdomId' => $kingdom_id
