@@ -73,7 +73,7 @@ foreach ($_od_rows as $_r) {
 			<div class="rp-stat-label">Vacant Regents</div>
 		</div>
 		<div class="rp-stat-card">
-			<div class="rp-stat-icon"><i class="fas fa-swords"></i></div>
+			<div class="rp-stat-icon"><i class="fas fa-chess-knight"></i></div>
 			<div class="rp-stat-number"><?=$_vacant['Champion']?></div>
 			<div class="rp-stat-label">Vacant Champions</div>
 		</div>
