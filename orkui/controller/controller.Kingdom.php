@@ -99,6 +99,21 @@ class Controller_Kingdom extends Controller {
 				}
 			}
 		}
+		// Kingdom-level unique-player-week total: deduplicated by (year, week, player)
+		// across the whole kingdom — avoids double-counting players who attend multiple parks in one week
+		$knSql = "SELECT COUNT(*) AS katt FROM (
+				SELECT mundane_id FROM " . DB_PREFIX . "attendance
+				WHERE kingdom_id = {$kid}
+					AND date > DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
+					AND mundane_id > 0
+				GROUP BY date_year, date_week3, mundane_id
+			) t";
+		$knResult = $DB->DataSet($knSql);
+		$katt = 0;
+		if ($knResult && $knResult->Size() > 0 && $knResult->Next()) {
+			$katt = (int)$knResult->katt;
+		}
+		$result['_kingdom'] = ['att' => $katt];
 		header('Content-Type: application/json');
 		echo json_encode($result);
 		exit();

@@ -1239,7 +1239,7 @@ class Report  extends Ork3 {
 								(select
 										mundane_id, date_week3 as week, kingdom_id
 									from " . DB_PREFIX . "attendance
-									where date > '" . date("Y-m-d", strtotime("-$request[KingdomAverageWeeks] week")) . "' group by date_week3, mundane_id)
+									where date > '" . date("Y-m-d", strtotime("-$request[KingdomAverageWeeks] week")) . "' and mundane_id > 0 group by date_week3, mundane_id, kingdom_id)
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
@@ -1248,7 +1248,7 @@ class Report  extends Ork3 {
 								(select
 										mundane_id, date_month as month, kingdom_id
 									from " . DB_PREFIX . "attendance
-									where date > '" . date("Y-m-d", strtotime("-1 year")) . "' group by date_month, mundane_id)
+									where date > '" . date("Y-m-d", strtotime("-1 year")) . "' and mundane_id > 0 group by date_month, mundane_id, kingdom_id)
 									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
