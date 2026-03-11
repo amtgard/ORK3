@@ -527,7 +527,7 @@
 		<?php if (count($hmEventList) > 0): ?>
 		<div class="hm-events-list">
 			<?php foreach ($hmEventList as $event): ?>
-			<a class="hm-event-row" href="<?= UIR ?>Event/index/<?= (int)$event['EventId'] ?>">
+			<a class="hm-event-row" href="<?= UIR ?>Event/detail/<?= (int)$event['EventId'] ?>/<?= (int)$event['NextDetailId'] ?>">
 				<div class="hm-event-heraldry">
 					<?php if ($event['HasHeraldry'] == 1): ?>
 						<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', (int)$event['EventId'])) ?>"
