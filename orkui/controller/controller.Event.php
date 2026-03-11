@@ -215,6 +215,34 @@ class Controller_Event extends Controller {
 		$this->data['DefaultKingdomName'] = $this->session->kingdom_name ?? '';
 		$this->data['DefaultKingdomId']   = $this->session->kingdom_id   ?? 0;
 
+		if ( $action === 'deletedetail' && $uid > 0 ) {
+			if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) ) {
+				global $DB;
+				$checkAtt  = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "attendance WHERE event_calendardetail_id = " . $detail_id . " LIMIT 1");
+				$attCnt    = ($checkAtt && $checkAtt->Size() > 0 && $checkAtt->Next()) ? (int)$checkAtt->cnt : 0;
+				$checkRsvp = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . $detail_id . " LIMIT 1");
+				$rsvpCnt   = ($checkRsvp && $checkRsvp->Size() > 0 && $checkRsvp->Next()) ? (int)$checkRsvp->cnt : 0;
+				if ( $attCnt === 0 && $rsvpCnt === 0 ) {
+					$this->Event->delete_calendar_detail($this->session->token, $detail_id);
+				}
+			}
+			$evRow = $DB->DataSet("SELECT kingdom_id, park_id FROM " . DB_PREFIX . "event WHERE event_id = " . $event_id . " LIMIT 1");
+			$evKid = 0; $evPid = 0;
+			if ($evRow && $evRow->Size() > 0 && $evRow->Next()) {
+				$evKid = (int)$evRow->kingdom_id;
+				$evPid = (int)$evRow->park_id;
+			}
+			if ($evPid > 0) {
+				$redirect = UIR . 'Park/index/' . $evPid . '?tab=events';
+			} elseif ($evKid > 0) {
+				$redirect = UIR . 'Kingdom/index/' . $evKid . '?tab=events';
+			} else {
+				$redirect = UIR . 'Event/template/' . $event_id;
+			}
+			header('Location: ' . $redirect);
+			exit;
+		}
+
 		if ( $action === 'rsvp' && $uid > 0 ) {
 			$this->Event->toggle_rsvp($detail_id, $uid);
 			header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);

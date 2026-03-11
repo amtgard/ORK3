@@ -135,4 +135,61 @@ class Controller_EventAjax extends Controller {
 		echo json_encode(['status' => 0]);
 		exit;
 	}
+
+	public function heraldry($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$params   = explode('/', $p ?? '');
+		$event_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$action   = $params[1] ?? '';
+
+		if (!valid_id($event_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+			exit;
+		}
+
+		if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+			exit;
+		}
+
+		if ($action === 'remove') {
+			global $DB;
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_heraldry = 0 WHERE event_id = ' . $event_id);
+			$base = DIR_EVENT_HERALDRY . sprintf('%05d', $event_id);
+			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+			if (file_exists($base . '.png')) unlink($base . '.png');
+			echo json_encode(['status' => 0]);
+			exit;
+		}
+
+		if ($action === 'update') {
+			if (empty($_FILES['Heraldry']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
+				exit;
+			}
+			$tmp  = $_FILES['Heraldry']['tmp_name'];
+			$mime = $_FILES['Heraldry']['type'] ?? 'image/jpeg';
+			$r = Ork3::$Lib->heraldry->SetEventHeraldry([
+				'Token'            => $this->session->token,
+				'EventId'          => $event_id,
+				'Heraldry'         => base64_encode(file_get_contents($tmp)),
+				'HeraldryMimeType' => $mime,
+			]);
+			if (isset($r['Status']) && $r['Status'] == 0) {
+				echo json_encode(['status' => 0]);
+			} else {
+				echo json_encode(['status' => 1, 'error' => $r['Error'] ?? 'Upload failed.']);
+			}
+			exit;
+		}
+
+		echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
+		exit;
+	}
 }

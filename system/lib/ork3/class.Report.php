@@ -2177,6 +2177,75 @@ class Report  extends Ork3 {
 		}
 		return $response;
 	}
+	public function EventAttendanceReport($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
+
+		if (valid_id($request['KingdomId'])) {
+			$where = 'AND e.kingdom_id = ' . (int)$request['KingdomId'];
+		} elseif (valid_id($request['ParkId'])) {
+			$where = 'AND e.park_id = ' . (int)$request['ParkId'];
+		} else {
+			return array('Status' => InvalidParameter(), 'Events' => array());
+		}
+
+		$sql = "SELECT
+					e.event_id,
+					e.name AS event_name,
+					e.has_heraldry,
+					p.park_id,
+					p.name AS park_name,
+					p.abbreviation AS park_abbr,
+					cd.event_calendardetail_id,
+					cd.event_start,
+					cd.event_end,
+					cd.price,
+					cd.city,
+					cd.province,
+					(SELECT COUNT(*) FROM " . DB_PREFIX . "attendance a
+						WHERE a.event_calendardetail_id = cd.event_calendardetail_id) AS attendance_count,
+					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r
+						WHERE r.event_calendardetail_id = cd.event_calendardetail_id) AS rsvp_count
+				FROM " . DB_PREFIX . "event e
+				LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
+				JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
+				WHERE 1 $where
+				ORDER BY cd.event_start DESC
+				LIMIT 1000";
+
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false) {
+			$response['Events'] = array();
+			if ($r->size() > 0) {
+				while ($r->next()) {
+					$response['Events'][] = array(
+						'EventId'         => (int)$r->event_id,
+						'EventName'       => $r->event_name,
+						'HasHeraldry'     => (int)$r->has_heraldry,
+						'ParkId'          => (int)$r->park_id,
+						'ParkName'        => $r->park_name,
+						'ParkAbbr'        => $r->park_abbr,
+						'DetailId'        => (int)$r->event_calendardetail_id,
+						'EventStart'      => $r->event_start,
+						'EventEnd'        => $r->event_end,
+						'Price'           => $r->price,
+						'City'            => $r->city,
+						'Province'        => $r->province,
+						'AttendanceCount' => (int)$r->attendance_count,
+						'RsvpCount'       => (int)$r->rsvp_count,
+					);
+				}
+			}
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+			$response['Events'] = array();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
 }
 
 ?>

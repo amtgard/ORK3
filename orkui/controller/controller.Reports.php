@@ -646,6 +646,36 @@ class Controller_Reports extends Controller {
 		$this->data['OfficerDirectoryKingdomId'] = $kingdom_id;
 	}
 
+	public function event_attendance($params = null) {
+		$this->template = 'Reports_eventattendance.tpl';
+		$this->data['page_title'] = 'Event Attendance Report';
+
+		$parts = explode('/', $params ?? '');
+		$type  = $parts[0] ?? null;
+		$id    = isset($parts[1]) ? (int)$parts[1] : 0;
+
+		if (!in_array($type, array('Kingdom', 'Park')) || !valid_id($id)) {
+			$this->data['error'] = 'Invalid scope or ID.';
+			return;
+		}
+
+		$this->data['report_type'] = $type;
+		$this->data['report_id']   = $id;
+
+		if ($type === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/index/' . $id . '?tab=reports';
+			$this->data['page_title'] = 'Park Event Attendance';
+		} else {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/index/' . $id . '?tab=reports';
+			$this->data['page_title'] = 'Kingdom Event Attendance';
+		}
+
+		$this->data['events'] = $this->Reports->event_attendance(array(
+			'KingdomId' => $type === 'Kingdom' ? $id : 0,
+			'ParkId'    => $type === 'Park'    ? $id : 0,
+		));
+	}
+
 }
 
 ?>

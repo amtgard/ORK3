@@ -247,6 +247,14 @@ class Model_Reports extends Model {
 		}
 		return ['Rows' => [], 'Mode' => 'kingdoms'];
 	}
+	function event_attendance($request) {
+		$r = $this->Report->EventAttendanceReport($request);
+		if (isset($r['Status']['Status']) && $r['Status']['Status'] == 0) {
+			return $r['Events'];
+		}
+		return array();
+	}
+
 }
 
 ?>

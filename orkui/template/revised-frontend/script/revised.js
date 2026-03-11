@@ -7858,12 +7858,23 @@ function setupPronounPicker(cfg) {
 			if (term.length < 2) { results.classList.remove('kn-ac-open'); return; }
 			clearTimeout(timer);
 			timer = setTimeout(function() {
-				$.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 }, function(data) {
+				var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, kingdom_id: KnConfig.kingdomId });
+				var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 });
+				$.when(scopedReq, globalReq).done(function(sr, gr) {
+					var local  = sr[0] || [];
+					var global = gr[0] || [];
+					var seen = {};
+					local.forEach(function(pl) { seen[pl.MundaneId] = true; });
+					var combined = local.concat(global.filter(function(pl) { return !seen[pl.MundaneId]; }));
+					var localIds = {};
+					local.forEach(function(pl) { localIds[pl.MundaneId] = true; });
 					var otherId_val = gid(otherId) ? gid(otherId).value : '';
-					results.innerHTML = (data && data.length)
-						? data.map(function(pl) {
-							var sub = (pl.KAbbr && pl.PAbbr)
-								? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '';
+					results.innerHTML = combined.length
+						? combined.map(function(pl) {
+							var isLocal = localIds[pl.MundaneId];
+							var sub = isLocal
+								? ' <span style="color:#68d391;font-size:11px">&#x2713; Kingdom</span>'
+								: ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
 							var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
 							return '<div class="kn-ac-item' + (same ? ' kn-ac-disabled' : '') + '"'
 								+ (same ? '' : ' data-id="' + pl.MundaneId + '"')
@@ -8596,12 +8607,23 @@ function setupPronounPicker(cfg) {
 			if (term.length < 2) { results.classList.remove('pk-ac-open'); return; }
 			clearTimeout(timer);
 			timer = setTimeout(function() {
-				$.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 }, function(data) {
+				var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId });
+				var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 });
+				$.when(scopedReq, globalReq).done(function(sr, gr) {
+					var local  = sr[0] || [];
+					var global = gr[0] || [];
+					var seen = {};
+					local.forEach(function(pl) { seen[pl.MundaneId] = true; });
+					var combined = local.concat(global.filter(function(pl) { return !seen[pl.MundaneId]; }));
+					var localIds = {};
+					local.forEach(function(pl) { localIds[pl.MundaneId] = true; });
 					var otherId_val = gid(otherId) ? gid(otherId).value : '';
-					results.innerHTML = (data && data.length)
-						? data.map(function(pl) {
-							var sub = (pl.KAbbr && pl.PAbbr)
-								? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '';
+					results.innerHTML = combined.length
+						? combined.map(function(pl) {
+							var isLocal = localIds[pl.MundaneId];
+							var sub = isLocal
+								? ' <span style="color:#68d391;font-size:11px">&#x2713; This Park</span>'
+								: ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
 							var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
 							return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
 								+ (same ? '' : ' data-id="' + pl.MundaneId + '"')
@@ -8677,7 +8699,6 @@ function setupPronounPicker(cfg) {
 // ---- Player Add Attendance Modal (Playernew) ----
 (function() {
 	if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
-	if (!document.getElementById('pn-player-att-overlay')) return;
 
 	var ADD_URL    = PnConfig.uir + 'AttendanceAjax/park/';
 	var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
@@ -8800,4 +8821,298 @@ function setupPronounPicker(cfg) {
 			});
 		});
 	});
+})();
+
+
+// ---- Event Heraldry Upload ----
+(function() {
+	if (typeof EvConfig === 'undefined' || !EvConfig.canManage) return;
+	var UPLOAD_URL = EvConfig.uir + 'EventAjax/heraldry/' + EvConfig.eventId + '/update';
+	var REMOVE_URL = EvConfig.uir + 'EventAjax/heraldry/' + EvConfig.eventId + '/remove';
+	var origImg      = null;
+	var origImgIsPng = false;
+	var cropBox   = null;
+	var dispScale = 1;
+	var cropBound = null;
+
+	function gid(id) { return document.getElementById(id); }
+
+	function showStep(s) {
+		['ev-img-step-select','ev-img-step-crop','ev-img-step-uploading','ev-img-step-success'].forEach(function(id) {
+			var el = gid(id); if (el) el.style.display = (id === s) ? '' : 'none';
+		});
+	}
+
+	function showError(msg) {
+		var el = gid('ev-img-error');
+		if (!el) return;
+		el.textContent = msg;
+		el.style.display = '';
+	}
+
+	window.evOpenImgModal = function() {
+		var fi = gid('ev-img-file-input'); if (fi) fi.value = '';
+		var rn = gid('ev-img-resize-notice'); if (rn) rn.textContent = '';
+		var er = gid('ev-img-error'); if (er) { er.style.display = 'none'; er.textContent = ''; }
+		showStep('ev-img-step-select');
+		var ov = gid('ev-img-overlay'); if (ov) { ov.classList.add('ev-open'); document.body.style.overflow = 'hidden'; }
+	};
+
+	window.evCloseImgModal = function() {
+		var ov = gid('ev-img-overlay'); if (ov) ov.classList.remove('ev-open');
+		document.body.style.overflow = '';
+	};
+
+	var ov = gid('ev-img-overlay');
+	if (ov) ov.addEventListener('click', function(e) { if (e.target === this) evCloseImgModal(); });
+	var cb = gid('ev-img-close-btn'); if (cb) cb.addEventListener('click', evCloseImgModal);
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && gid('ev-img-overlay') && gid('ev-img-overlay').classList.contains('ev-open'))
+			evCloseImgModal();
+	});
+
+	var bb = gid('ev-img-back-btn');
+	if (bb) bb.addEventListener('click', function() {
+		var fi = gid('ev-img-file-input'); if (fi) fi.value = '';
+		var rn = gid('ev-img-resize-notice'); if (rn) rn.textContent = '';
+		showStep('ev-img-step-select');
+	});
+	var ub = gid('ev-img-upload-btn'); if (ub) ub.addEventListener('click', doUploadCropped);
+
+	var fi = gid('ev-img-file-input');
+	if (fi) fi.addEventListener('change', function() {
+		var file = this.files && this.files[0];
+		if (!file) return;
+		var ext = file.name.split('.').pop().toLowerCase();
+		if (['jpg','jpeg','gif','png'].indexOf(ext) < 0) {
+			showError('Invalid file type. Please use JPG, GIF, or PNG.');
+			this.value = '';
+			return;
+		}
+		origImgIsPng = (ext === 'png' || file.type === 'image/png');
+		var er = gid('ev-img-error'); if (er) er.style.display = 'none';
+
+		function loadIntoModal(blob) {
+			var url = URL.createObjectURL(blob);
+			var img = new Image();
+			img.onload = function() {
+				URL.revokeObjectURL(url);
+				origImg = img;
+				initCrop();
+				showStep('ev-img-step-crop');
+			};
+			img.onerror = function() {
+				URL.revokeObjectURL(url);
+				showError('Could not load image. Please try a different file.');
+			};
+			img.src = url;
+		}
+
+		if (file.size > 348836) {
+			var isPng = (file.type === 'image/png');
+			var rn = gid('ev-img-resize-notice'); if (rn) rn.textContent = 'Resizing…';
+			resizeImageToLimit(file, 348836, function(blob) {
+				var rn2 = gid('ev-img-resize-notice');
+				if (rn2) rn2.textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + ' KB';
+				loadIntoModal(blob);
+			}, function(errMsg) { showError(errMsg); }, isPng);
+		} else {
+			loadIntoModal(file);
+		}
+	});
+
+	function initCrop() {
+		var canvas = gid('ev-img-canvas');
+		var img = origImg;
+		var maxW = Math.min(500, window.innerWidth - 100) - 40;
+		var maxH = Math.min(380, window.innerHeight - 260);
+		var scale = Math.min(maxW / img.width, maxH / img.height, 1);
+		canvas.width  = Math.round(img.width  * scale);
+		canvas.height = Math.round(img.height * scale);
+		dispScale = scale;
+		var inX = Math.round(img.width  * 0.01);
+		var inY = Math.round(img.height * 0.01);
+		cropBox = { x: inX, y: inY, w: img.width - inX * 2, h: img.height - inY * 2 };
+		drawCrop();
+		bindCropEvents(canvas);
+	}
+
+	function drawCrop() {
+		var canvas = gid('ev-img-canvas');
+		var ctx = canvas.getContext('2d');
+		var sc = dispScale, cb = cropBox;
+		var cx = Math.round(cb.x * sc), cy = Math.round(cb.y * sc);
+		var cw = Math.round(cb.w * sc), ch = Math.round(cb.h * sc);
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		ctx.drawImage(origImg, 0, 0, canvas.width, canvas.height);
+		ctx.fillStyle = 'rgba(0,0,0,0.52)';
+		ctx.fillRect(0, 0, canvas.width, cy);
+		ctx.fillRect(0, cy + ch, canvas.width, canvas.height - cy - ch);
+		ctx.fillRect(0, cy, cx, ch);
+		ctx.fillRect(cx + cw, cy, canvas.width - cx - cw, ch);
+		ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+		ctx.lineWidth = 1.5;
+		ctx.strokeRect(cx + 0.5, cy + 0.5, cw - 1, ch - 1);
+		ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		ctx.moveTo(cx + cw/3, cy); ctx.lineTo(cx + cw/3, cy + ch);
+		ctx.moveTo(cx + 2*cw/3, cy); ctx.lineTo(cx + 2*cw/3, cy + ch);
+		ctx.moveTo(cx, cy + ch/3); ctx.lineTo(cx + cw, cy + ch/3);
+		ctx.moveTo(cx, cy + 2*ch/3); ctx.lineTo(cx + cw, cy + 2*ch/3);
+		ctx.stroke();
+		var hs = 8;
+		ctx.fillStyle = '#fff';
+		ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+		ctx.lineWidth = 1;
+		[[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(function(pt) {
+			ctx.fillRect(pt[0] - hs/2, pt[1] - hs/2, hs, hs);
+			ctx.strokeRect(pt[0] - hs/2, pt[1] - hs/2, hs, hs);
+		});
+	}
+
+	function getCanvasPos(canvas, e) {
+		var rect = canvas.getBoundingClientRect();
+		var src = e.touches ? e.touches[0] : e;
+		return {
+			x: (src.clientX - rect.left) * (canvas.width  / rect.width),
+			y: (src.clientY - rect.top)  * (canvas.height / rect.height)
+		};
+	}
+
+	function hitHandle(mx, my) {
+		var sc = dispScale, cb = cropBox, hs = 12;
+		var cx = cb.x * sc, cy = cb.y * sc, cw = cb.w * sc, ch = cb.h * sc;
+		var corners = [
+			{ name: 'nw', x: cx,      y: cy      },
+			{ name: 'ne', x: cx + cw, y: cy      },
+			{ name: 'sw', x: cx,      y: cy + ch },
+			{ name: 'se', x: cx + cw, y: cy + ch }
+		];
+		for (var i = 0; i < corners.length; i++) {
+			if (Math.abs(mx - corners[i].x) <= hs && Math.abs(my - corners[i].y) <= hs)
+				return corners[i].name;
+		}
+		if (mx >= cx && mx <= cx + cw && my >= cy && my <= cy + ch) return 'move';
+		return null;
+	}
+
+	function bindCropEvents(canvas) {
+		if (cropBound) {
+			canvas.removeEventListener('mousedown',  cropBound.down);
+			canvas.removeEventListener('touchstart', cropBound.down);
+			window.removeEventListener('mousemove',  cropBound.move);
+			window.removeEventListener('touchmove',  cropBound.move);
+			window.removeEventListener('mouseup',    cropBound.up);
+			window.removeEventListener('touchend',   cropBound.up);
+		}
+		var ds = null;
+
+		function onDown(e) {
+			e.preventDefault();
+			var pos = getCanvasPos(canvas, e);
+			var hit = hitHandle(pos.x, pos.y);
+			if (hit) ds = { handle: hit, startMX: pos.x, startMY: pos.y, startCrop: { x: cropBox.x, y: cropBox.y, w: cropBox.w, h: cropBox.h } };
+		}
+
+		function onMove(e) {
+			if (!ds) return;
+			e.preventDefault();
+			var pos = getCanvasPos(canvas, e);
+			var dx = (pos.x - ds.startMX) / dispScale;
+			var dy = (pos.y - ds.startMY) / dispScale;
+			var s = ds.startCrop, img = origImg, MIN = 20;
+			if (ds.handle === 'move') {
+				cropBox.x = Math.max(0, Math.min(img.width  - s.w, s.x + dx));
+				cropBox.y = Math.max(0, Math.min(img.height - s.h, s.y + dy));
+			} else {
+				var nx = s.x, ny = s.y, nw = s.w, nh = s.h;
+				if      (ds.handle === 'se') { nw = Math.max(MIN, s.w + dx); nh = Math.max(MIN, s.h + dy); }
+				else if (ds.handle === 'sw') { nw = Math.max(MIN, s.w - dx); nh = Math.max(MIN, s.h + dy); nx = s.x + s.w - nw; }
+				else if (ds.handle === 'ne') { nw = Math.max(MIN, s.w + dx); nh = Math.max(MIN, s.h - dy); ny = s.y + s.h - nh; }
+				else                         { nw = Math.max(MIN, s.w - dx); nh = Math.max(MIN, s.h - dy); nx = s.x + s.w - nw; ny = s.y + s.h - nh; }
+				nx = Math.max(0, nx); ny = Math.max(0, ny);
+				nw = Math.min(nw, img.width - nx); nh = Math.min(nh, img.height - ny);
+				cropBox.x = nx; cropBox.y = ny; cropBox.w = nw; cropBox.h = nh;
+			}
+			drawCrop();
+		}
+
+		function onUp() { ds = null; }
+
+		cropBound = { down: onDown, move: onMove, up: onUp };
+		canvas.addEventListener('mousedown',  onDown);
+		canvas.addEventListener('touchstart', onDown, { passive: false });
+		window.addEventListener('mousemove',  onMove);
+		window.addEventListener('touchmove',  onMove, { passive: false });
+		window.addEventListener('mouseup',    onUp);
+		window.addEventListener('touchend',   onUp);
+	}
+
+	function doUploadCropped() {
+		var cb = cropBox;
+		var outCanvas = document.createElement('canvas');
+		outCanvas.width  = Math.round(cb.w);
+		outCanvas.height = Math.round(cb.h);
+		outCanvas.getContext('2d').drawImage(origImg, cb.x, cb.y, cb.w, cb.h, 0, 0, cb.w, cb.h);
+		var outMime = origImgIsPng ? 'image/png' : 'image/jpeg';
+		var outQuality = origImgIsPng ? 1 : 0.88;
+		outCanvas.toBlob(function(blob) {
+			if (blob.size > 348836) {
+				resizeImageToLimit(blob, 348836, doUpload, function(err) {
+					showStep('ev-img-step-select');
+					showError(err);
+				}, origImgIsPng);
+			} else {
+				doUpload(blob);
+			}
+		}, outMime, outQuality);
+	}
+
+	function doUpload(blob) {
+		showStep('ev-img-step-uploading');
+		var fd = new FormData();
+		fd.append('Heraldry', blob, 'image.jpg');
+		fetch(UPLOAD_URL, { method: 'POST', body: fd })
+			.then(function(resp) {
+				if (!resp.ok) throw new Error('Server returned ' + resp.status);
+				return resp.json();
+			})
+			.then(function(result) {
+				if (result && result.status === 0) {
+					showStep('ev-img-step-success');
+					setTimeout(function() { window.location.reload(); }, 1400);
+				} else {
+					showStep('ev-img-step-select');
+					showError((result && result.error) ? result.error : 'Upload failed.');
+				}
+			})
+			.catch(function(err) {
+				showStep('ev-img-step-select');
+				showError('Upload failed: ' + err.message);
+			});
+	}
+
+	var removeBtn = gid('ev-img-remove-btn');
+	if (removeBtn) {
+		removeBtn.addEventListener('click', function() {
+			if (!confirm('Remove the event heraldry? This cannot be undone.')) return;
+			removeBtn.disabled = true;
+			fetch(REMOVE_URL, { method: 'POST' })
+				.then(function(r) { return r.json(); })
+				.then(function(result) {
+					if (result && result.status === 0) {
+						showStep('ev-img-step-success');
+						setTimeout(function() { window.location.reload(); }, 1400);
+					} else {
+						removeBtn.disabled = false;
+						showError((result && result.error) ? result.error : 'Remove failed.');
+					}
+				})
+				.catch(function() {
+					removeBtn.disabled = false;
+					showError('Request failed.');
+				});
+		});
+	}
 })();
