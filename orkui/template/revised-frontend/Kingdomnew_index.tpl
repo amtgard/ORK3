@@ -603,12 +603,6 @@
 						<h5><i class="fas fa-cog"></i> Admin</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">Admin Panel</a></li>
-							<?php if ($CanAddPark ?? false): ?>
-							<li><a href="#" onclick="knOpenAddParkModal();return false;">Create Park</a></li>
-							<?php endif; ?>
-							<li><a href="#" onclick="knOpenAdminModal();return false;">Configure Kingdom</a></li>
-							<li><a href="<?= UIR ?>Admin/editparks/<?= $kingdom_id ?>">Configure Parks</a></li>
-							<li><a href="#" onclick="knOpenEditOfficersModal();return false;">Set Officers</a></li>
 							<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
 							<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
 							<li><a href="<?= UIR ?>Admin/mergeplayers">Merge Players</a></li>
@@ -1194,6 +1188,58 @@ var KnConfig = {
 				</div>
 			</div>
 
+			<!-- ── Panel: Edit Parks ── -->
+			<div class="kn-admin-panel">
+				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-parks" aria-expanded="false">
+					<span><i class="fas fa-map-marker-alt" style="margin-right:6px;color:#a0aec0"></i>Edit Parks</span>
+					<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-parks"></i>
+				</button>
+				<div class="kn-admin-panel-body" id="kn-admin-body-parks" style="display:none">
+					<div id="kn-admin-parks-feedback" class="kn-admin-feedback" style="display:none"></div>
+					<div class="kn-admin-table-wrap">
+						<table class="kn-admin-table kn-admin-parks-table">
+							<thead>
+								<tr>
+									<th>Park Name</th>
+									<th>Title</th>
+									<th>Abbr</th>
+									<th style="text-align:center">Active</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody id="kn-admin-parks-tbody">
+								<!-- Built by JS -->
+							</tbody>
+						</table>
+					</div>
+					<button class="kn-admin-save-btn" id="kn-admin-parks-save">
+						<i class="fas fa-save"></i> Save Parks
+					</button>
+				</div>
+			</div>
+
+			<?php if (!empty($CanAddPark)): ?>
+			<!-- ── Panel: Operations ── -->
+			<div class="kn-admin-panel">
+				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-ops" aria-expanded="false">
+					<span><i class="fas fa-tools" style="margin-right:6px;color:#a0aec0"></i>Operations</span>
+					<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-ops"></i>
+				</button>
+				<div class="kn-admin-panel-body" id="kn-admin-body-ops" style="display:none">
+					<div id="kn-admin-ops-feedback" class="kn-admin-feedback" style="display:none"></div>
+					<div class="kn-admin-ops-row">
+						<div class="kn-admin-ops-info">
+							<strong>Reset Waivers</strong>
+							<p>Clears all waiver records for this <?= $IsPrinz ? 'principality' : 'kingdom' ?>. This action cannot be undone.</p>
+						</div>
+						<button class="kn-admin-ops-btn kn-admin-ops-btn-danger" id="kn-admin-reset-waivers-btn">
+							<i class="fas fa-eraser"></i> Reset Waivers
+						</button>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 		</div><!-- /.kn-modal-body -->
 
 		<div class="kn-modal-footer" style="justify-content:flex-end">
@@ -1204,6 +1250,23 @@ var KnConfig = {
 </div>
 
 <?php endif; ?>
+
+<!-- Confirmation Modal (shared) -->
+<div id="kn-confirm-overlay">
+	<div class="kn-modal-box kn-confirm-box">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title" id="kn-confirm-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#e53e3e"></i>Confirm</h3>
+			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:#2d3748;line-height:1.6"></p>
+		</div>
+		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
+			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>
+			<button class="kn-admin-save-btn kn-confirm-ok-btn" id="kn-confirm-ok-btn">Confirm</button>
+		</div>
+	</div>
+</div>
 
 <?php if ($CanManageKingdom ?? false): ?>
 <!-- Add Player Modal -->

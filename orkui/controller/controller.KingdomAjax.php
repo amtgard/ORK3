@@ -231,7 +231,69 @@ class Controller_KingdomAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'deleteaward') {
+		} elseif ($action === 'updateparks') {
+			$this->load_model('Kingdom');
+			$names  = $_POST['ParkName']     ?? [];
+			$titles = $_POST['ParkTitle']    ?? [];
+			$abbrs  = $_POST['Abbreviation'] ?? [];
+			$active = $_POST['Active']       ?? [];
+
+			if (empty($titles)) {
+				echo json_encode(['status' => 1, 'error' => 'No park data provided.']);
+				exit;
+			}
+
+			$request = [];
+			foreach ($titles as $park_id => $title_id) {
+				$park_id = (int)$park_id;
+				if (!valid_id($park_id)) continue;
+				$request[] = [
+					'ParkId'      => $park_id,
+					'ParkName'    => trim($names[$park_id]  ?? ''),
+					'ParkTitleId' => (int)$title_id,
+					'Abbreviation'=> strtoupper(trim($abbrs[$park_id] ?? '')),
+					'Active'      => !empty($active[$park_id]) ? 'Active' : 'Retired',
+				];
+			}
+
+			if (empty($request)) {
+				echo json_encode(['status' => 1, 'error' => 'No valid parks to update.']);
+				exit;
+			}
+
+			$results = $this->Kingdom->update_parks($this->session->token, $request);
+			$errors  = [];
+			foreach ((array)$results as $r) {
+				if (isset($r['Status']) && $r['Status'] == 5) {
+					echo json_encode(['status' => 5, 'error' => 'Session expired.']);
+					exit;
+				}
+				if (isset($r['Status']) && $r['Status'] != 0) {
+					$errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+				}
+			}
+
+			if ($errors) {
+				echo json_encode(['status' => 1, 'error' => implode('; ', $errors)]);
+			} else {
+				echo json_encode(['status' => 0]);
+			}
+
+	} elseif ($action === 'resetwaivers') {
+			$this->load_model('Player');
+			$r = $this->Player->reset_waivers([
+				'Token'     => $this->session->token,
+				'KingdomId' => $kingdom_id,
+			]);
+			if ($r['Status'] == 5) {
+				echo json_encode(['status' => 5, 'error' => 'Session expired.']);
+			} elseif ($r['Status'] != 0) {
+				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			} else {
+				echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
+			}
+
+	} elseif ($action === 'deleteaward') {
 			$this->load_model('Kingdom');
 			$kawId = (int)($_POST['KingdomAwardId'] ?? 0);
 

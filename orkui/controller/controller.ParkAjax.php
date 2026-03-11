@@ -200,6 +200,20 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'resetwaivers') {
+			$this->load_model('Player');
+			$r = $this->Player->reset_waivers([
+				'Token'  => $this->session->token,
+				'ParkId' => $park_id,
+			]);
+			if ($r['Status'] == 5) {
+				echo json_encode(['status' => 5, 'error' => 'Session expired.']);
+			} elseif ($r['Status'] != 0) {
+				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			} else {
+				echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
+			}
+
 		} elseif ($action === 'moveplayer') {
 			$this->load_model('Player');
 			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);

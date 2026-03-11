@@ -2941,6 +2941,10 @@ $(document).ready(function() {
 		el.textContent = msg;
 		el.className = 'kn-admin-feedback ' + (ok ? 'kn-admin-ok' : 'kn-admin-err');
 		el.style.display = '';
+		if (ok) {
+			clearTimeout(el._hideTimer);
+			el._hideTimer = setTimeout(function() { el.style.display = 'none'; }, 5000);
+		}
 	}
 	function clearFeedback(elId) {
 		var el = gid(elId);
@@ -2948,12 +2952,16 @@ $(document).ready(function() {
 	}
 
 	// ── Open / Close ──────────────────────────────────────────
+	var _knDirty = false;
+
 	window.knOpenAdminModal = function() {
 		var overlay = gid('kn-admin-overlay');
 		if (!overlay) return;
+		_knDirty = false;
 		buildConfig();
 		buildTitles();
 		buildAwards();
+		buildParks();
 		overlay.classList.add('kn-open');
 		document.body.style.overflow = 'hidden';
 	};
@@ -2962,6 +2970,7 @@ $(document).ready(function() {
 		if (!overlay) return;
 		overlay.classList.remove('kn-open');
 		document.body.style.overflow = '';
+		if (_knDirty) { _knDirty = false; setTimeout(function() { location.reload(); }, 0); }
 	}
 
 	// ── Panel toggle ─────────────────────────────────────────
@@ -3005,6 +3014,7 @@ $(document).ready(function() {
 					btn.disabled = false;
 					if (r && r.status === 0) {
 						feedback('kn-admin-details-feedback', 'Details saved!', true);
+						_knDirty = true;
 					} else {
 						feedback('kn-admin-details-feedback', (r && r.error) ? r.error : 'Save failed.', false);
 					}
@@ -3217,10 +3227,10 @@ $(document).ready(function() {
 				btn.disabled = false;
 				if (r && r.status === 0) {
 					feedback('kn-admin-titles-feedback', 'Park titles saved!', true);
+					_knDirty = true;
 					document.querySelectorAll('#kn-admin-titles-table tfoot [data-field]').forEach(function(inp) {
 						inp.value = (inp.dataset.field === 'Length') ? '1' : (inp.type === 'number' ? '0' : '');
 					});
-					setTimeout(function() { location.reload(); }, 1000);
 				} else {
 					feedback('kn-admin-titles-feedback', (r && r.error) ? r.error : 'Save failed.', false);
 				}
@@ -3389,17 +3399,195 @@ $(document).ready(function() {
 		}
 	}
 
+	// ── Shared: Styled confirmation modal ───────────────────
+	var _confirmCallback = null;
+	window.knConfirm = function(message, onConfirm, title) {
+		var overlay = gid('kn-confirm-overlay');
+		if (!overlay) { if (confirm(message)) onConfirm(); return; }
+		gid('kn-confirm-message').textContent = message;
+		if (title) gid('kn-confirm-title').childNodes[1].textContent = ' ' + title;
+		_confirmCallback = onConfirm;
+		overlay.classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+	}
+	function knCloseConfirm() {
+		var overlay = gid('kn-confirm-overlay');
+		if (overlay) overlay.classList.remove('kn-open');
+		document.body.style.overflow = '';
+		_confirmCallback = null;
+	}
+	$(document).ready(function() {
+		var ok     = gid('kn-confirm-ok-btn');
+		var cancel = gid('kn-confirm-cancel-btn');
+		var close  = gid('kn-confirm-close-btn');
+		var over   = gid('kn-confirm-overlay');
+		if (ok)     ok.addEventListener('click',     function() { var cb = _confirmCallback; knCloseConfirm(); if (cb) cb(); });
+		if (cancel) cancel.addEventListener('click', knCloseConfirm);
+		if (close)  close.addEventListener('click',  knCloseConfirm);
+		if (over)   over.addEventListener('click',   function(e) { if (e.target === this) knCloseConfirm(); });
+	});
+
+	// ── Section: Operations ──────────────────────────────────
+	function wireOps() {
+		var btn = gid('kn-admin-reset-waivers-btn');
+		if (!btn) return;
+		btn.addEventListener('click', function() {
+			knConfirm(
+				'This will reset all waivers for this kingdom. This action cannot be undone.',
+				function() {
+					btn.disabled = true;
+					$.post(BASE_URL + 'resetwaivers', {}, function(r) {
+						btn.disabled = false;
+						if (r && r.status === 0) {
+							feedback('kn-admin-ops-feedback', r.message || 'Waivers reset.', true);
+						} else {
+							feedback('kn-admin-ops-feedback', (r && r.error) ? r.error : 'Reset failed.', false);
+						}
+					}, 'json').fail(function() {
+						btn.disabled = false;
+						feedback('kn-admin-ops-feedback', 'Request failed.', false);
+					});
+				},
+				'Reset Waivers'
+			);
+		});
+	}
+
+	// ── Section: Edit Parks ──────────────────────────────────
+	var parksBuilt = false;
+	function buildParks() {
+		if (parksBuilt) return;
+		parksBuilt = true;
+		var tbody = gid('kn-admin-parks-tbody');
+		if (!tbody) return;
+		tbody.innerHTML = '';
+		var parks = Object.values(KnConfig.parkEditLookup || {});
+		parks.sort(function(a, b) { return (a.Name || '').localeCompare(b.Name || ''); });
+		parks.forEach(function(park) {
+			tbody.appendChild(makeParkRow(park));
+		});
+	}
+
+	function makeParkRow(park) {
+		var tr = document.createElement('tr');
+		tr.dataset.parkId = park.ParkId;
+		if (park.Active !== 'Active') tr.classList.add('kn-admin-park-retired');
+
+		// Name
+		var nameTd  = document.createElement('td');
+		var nameInp = document.createElement('input');
+		nameInp.type      = 'text';
+		nameInp.className = 'kn-admin-tinput kn-admin-park-name';
+		nameInp.value     = park.Name || '';
+		nameInp.dataset.field = 'ParkName';
+		nameTd.appendChild(nameInp);
+
+		// Title select
+		var titleTd = document.createElement('td');
+		var sel     = document.createElement('select');
+		sel.className       = 'kn-admin-tselect';
+		sel.dataset.field   = 'ParkTitle';
+		var opts = KnConfig.parkTitleOptions || {};
+		Object.keys(opts).forEach(function(tid) {
+			var o = document.createElement('option');
+			o.value = tid; o.textContent = opts[tid];
+			if (parseInt(tid) === park.ParkTitleId) o.selected = true;
+			sel.appendChild(o);
+		});
+		titleTd.appendChild(sel);
+
+		// Abbreviation
+		var abbrTd  = document.createElement('td');
+		var abbrInp = document.createElement('input');
+		abbrInp.type      = 'text';
+		abbrInp.className = 'kn-admin-tinput kn-admin-park-abbr';
+		abbrInp.value     = park.Abbreviation || '';
+		abbrInp.maxLength = 3;
+		abbrInp.dataset.field = 'Abbreviation';
+		abbrTd.appendChild(abbrInp);
+
+		// Active toggle
+		var activeTd  = document.createElement('td');
+		activeTd.style.textAlign = 'center';
+		var label   = document.createElement('label');
+		label.className = 'kn-admin-toggle';
+		var chk     = document.createElement('input');
+		chk.type    = 'checkbox';
+		chk.checked = (park.Active === 'Active');
+		chk.dataset.field = 'Active';
+		chk.addEventListener('change', function() {
+			tr.classList.toggle('kn-admin-park-retired', !chk.checked);
+		});
+		var track   = document.createElement('span');
+		track.className = 'kn-admin-toggle-track';
+		label.appendChild(chk);
+		label.appendChild(track);
+		activeTd.appendChild(label);
+
+		// View link
+		var viewTd  = document.createElement('td');
+		var viewA   = document.createElement('a');
+		viewA.href  = KnConfig.uir + 'Park/index/' + park.ParkId;
+		viewA.target = '_blank';
+		viewA.className = 'kn-admin-park-view';
+		viewA.title = 'View ' + (park.Name || '');
+		viewA.innerHTML = '<i class="fas fa-external-link-alt"></i>';
+		viewTd.appendChild(viewA);
+
+		tr.appendChild(nameTd);
+		tr.appendChild(titleTd);
+		tr.appendChild(abbrTd);
+		tr.appendChild(activeTd);
+		tr.appendChild(viewTd);
+		return tr;
+	}
+
+	function wireParks() {
+		var btn = gid('kn-admin-parks-save');
+		if (!btn) return;
+		btn.addEventListener('click', function() {
+			clearFeedback('kn-admin-parks-feedback');
+			var data = {};
+			document.querySelectorAll('#kn-admin-parks-tbody tr').forEach(function(row) {
+				var pid = row.dataset.parkId;
+				row.querySelectorAll('[data-field]').forEach(function(inp) {
+					var f = inp.dataset.field;
+					if (inp.type === 'checkbox') {
+						if (inp.checked) data[f + '[' + pid + ']'] = 'YES';
+					} else {
+						data[f + '[' + pid + ']'] = inp.value;
+					}
+				});
+			});
+			if (!Object.keys(data).length) { feedback('kn-admin-parks-feedback', 'No data to save.', false); return; }
+			btn.disabled = true;
+			$.post(BASE_URL + 'updateparks', data, function(r) {
+				btn.disabled = false;
+				if (r && r.status === 0) {
+					feedback('kn-admin-parks-feedback', 'Parks saved!', true);
+					_knDirty = true;
+				} else {
+					feedback('kn-admin-parks-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+				}
+			}, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-parks-feedback', 'Request failed.', false); });
+		});
+	}
+
 	// ── Wire everything in ready() ────────────────────────────
 	$(document).ready(function() {
 		wireToggle('kn-admin-hdr-details', 'kn-admin-body-details', 'kn-admin-chev-details');
 		wireToggle('kn-admin-hdr-config',  'kn-admin-body-config',  'kn-admin-chev-config');
 		wireToggle('kn-admin-hdr-titles',  'kn-admin-body-titles',  'kn-admin-chev-titles');
 		wireToggle('kn-admin-hdr-awards',  'kn-admin-body-awards',  'kn-admin-chev-awards');
+		wireToggle('kn-admin-hdr-parks',   'kn-admin-body-parks',   'kn-admin-chev-parks');
+		wireToggle('kn-admin-hdr-ops',     'kn-admin-body-ops',     'kn-admin-chev-ops');
 
 		wireDetails();
 		wireConfig();
 		wireTitles();
 		wireAwards();
+		wireOps();
+		wireParks();
 
 		var closeBtn = gid('kn-admin-close-btn');
 		if (closeBtn) closeBtn.addEventListener('click', knCloseAdminModal);
@@ -3415,8 +3603,11 @@ $(document).ready(function() {
 		}
 
 		document.addEventListener('keydown', function(e) {
-			if (e.key === 'Escape' && gid('kn-admin-overlay') && gid('kn-admin-overlay').classList.contains('kn-open'))
+			if (e.key === 'Escape' && gid('kn-admin-overlay') && gid('kn-admin-overlay').classList.contains('kn-open')) {
+				var wasDirty = _knDirty;
 				knCloseAdminModal();
+				if (wasDirty) setTimeout(function() { location.reload(); }, 0);
+			}
 		});
 	});
 })();
@@ -6721,79 +6912,151 @@ function setupPronounPicker(cfg) {
 	});
 })();
 
-// ---- Parknew: Edit Park Details ----
+// ---- Parknew: Park Administration ----
 (function() {
 	if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
 
 	function gid(id) { return document.getElementById(id); }
+	var AJAX_BASE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/';
 
-	window.pkOpenEditDetailsModal = function() {
+	function pkFeedback(id, msg, ok) {
+		var el = gid(id);
+		if (!el) return;
+		el.textContent = msg;
+		el.className = 'kn-admin-feedback ' + (ok ? 'kn-admin-ok' : 'kn-admin-err');
+		el.style.display = '';
+		if (ok) {
+			clearTimeout(el._hideTimer);
+			el._hideTimer = setTimeout(function() { el.style.display = 'none'; }, 5000);
+		}
+	}
+	function pkClearFeedback(id) {
+		var el = gid(id); if (el) { el.style.display = 'none'; el.textContent = ''; }
+	}
+
+	function wireToggle(hdrId, bodyId, chevId) {
+		var hdr  = gid(hdrId), body = gid(bodyId), chev = gid(chevId);
+		if (!hdr || !body) return;
+		hdr.addEventListener('click', function() {
+			var open = body.style.display !== 'none';
+			body.style.display = open ? 'none' : '';
+			if (chev) chev.classList.toggle('kn-admin-chevron-open', !open);
+			hdr.setAttribute('aria-expanded', String(!open));
+		});
+	}
+
+	var _pkDirty = false;
+
+	window.pkOpenAdminModal = function() {
 		var d = PkConfig.parkDetails || {};
 		var fields = {
-			'pk-editdetails-url':         d.url        || '',
-			'pk-editdetails-address':     d.address    || '',
-			'pk-editdetails-city':        d.city       || '',
-			'pk-editdetails-province':    d.province   || '',
-			'pk-editdetails-postalcode':  d.postalCode || '',
-			'pk-editdetails-mapurl':      d.mapUrl     || '',
-			'pk-editdetails-description': d.description|| '',
-			'pk-editdetails-directions':  d.directions || '',
+			'pk-editdetails-url':         d.url         || '',
+			'pk-editdetails-address':     d.address     || '',
+			'pk-editdetails-city':        d.city        || '',
+			'pk-editdetails-province':    d.province    || '',
+			'pk-editdetails-postalcode':  d.postalCode  || '',
+			'pk-editdetails-mapurl':      d.mapUrl      || '',
+			'pk-editdetails-description': d.description || '',
+			'pk-editdetails-directions':  d.directions  || '',
 		};
 		Object.keys(fields).forEach(function(id) {
 			var el = gid(id); if (el) el.value = fields[id];
 		});
-		var fb = gid('pk-editdetails-feedback');
-		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
-		var overlay = gid('pk-editdetails-overlay');
-		if (overlay) { overlay.classList.add('pk-open'); document.body.style.overflow = 'hidden'; }
+		pkClearFeedback('pk-admin-details-feedback');
+		pkClearFeedback('pk-admin-ops-feedback');
+		var overlay = gid('pk-admin-overlay');
+		_pkDirty = false;
+		if (overlay) { overlay.classList.add('pk-admin-open'); document.body.style.overflow = 'hidden'; }
 	};
 
-	function pkCloseEditDetailsModal() {
-		var overlay = gid('pk-editdetails-overlay');
-		if (overlay) { overlay.classList.remove('pk-open'); document.body.style.overflow = ''; }
+	function pkCloseAdminModal() {
+		var overlay = gid('pk-admin-overlay');
+		if (overlay) { overlay.classList.remove('pk-admin-open'); document.body.style.overflow = ''; }
+		if (_pkDirty) { _pkDirty = false; setTimeout(function() { location.reload(); }, 0); }
 	}
 
 	$(document).ready(function() {
-		$(document).on('click', '#pk-editdetails-close-btn, #pk-editdetails-cancel', function() { pkCloseEditDetailsModal(); });
-		$(document).on('click', '#pk-editdetails-overlay', function(e) {
-			if ($(e.target).is('#pk-editdetails-overlay')) pkCloseEditDetailsModal();
+		wireToggle('pk-admin-hdr-details', 'pk-admin-body-details', 'pk-admin-chev-details');
+		wireToggle('pk-admin-hdr-ops',     'pk-admin-body-ops',     'pk-admin-chev-ops');
+
+		// Close buttons
+		var overlay = gid('pk-admin-overlay');
+		['pk-admin-close-btn', 'pk-admin-done-btn'].forEach(function(id) {
+			var el = gid(id); if (el) el.addEventListener('click', pkCloseAdminModal);
+		});
+		if (overlay) overlay.addEventListener('click', function(e) { if (e.target === this) pkCloseAdminModal(); });
+		document.addEventListener('keydown', function(e) {
+			var ov = gid('pk-admin-overlay');
+			if (e.key === 'Escape' && ov && ov.classList.contains('pk-admin-open')) {
+				var wasDirty = _pkDirty;
+				pkCloseAdminModal();
+				if (wasDirty) setTimeout(function() { location.reload(); }, 0);
+			}
 		});
 
-		$(document).on('click', '#pk-editdetails-submit', function() {
-			var btn = this;
-			var fb  = gid('pk-editdetails-feedback');
-			btn.disabled = true;
-			btn.textContent = 'Saving...';
-			if (fb) fb.style.display = 'none';
-			var body = 'Url='         + encodeURIComponent((gid('pk-editdetails-url')         || {}).value || '')
-				+ '&Address='     + encodeURIComponent((gid('pk-editdetails-address')     || {}).value || '')
-				+ '&City='        + encodeURIComponent((gid('pk-editdetails-city')        || {}).value || '')
-				+ '&Province='    + encodeURIComponent((gid('pk-editdetails-province')    || {}).value || '')
-				+ '&PostalCode='  + encodeURIComponent((gid('pk-editdetails-postalcode')  || {}).value || '')
-				+ '&MapUrl='      + encodeURIComponent((gid('pk-editdetails-mapurl')      || {}).value || '')
-				+ '&Description=' + encodeURIComponent((gid('pk-editdetails-description') || {}).value || '')
-				+ '&Directions='  + encodeURIComponent((gid('pk-editdetails-directions')  || {}).value || '');
-			fetch(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setdetails', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-				body: body,
-			})
-			.then(function(r) { return r.json(); })
-			.then(function(data) {
-				if (data.status === 0) {
-					location.reload();
-				} else {
-					if (fb) { fb.textContent = data.error || 'Error saving details.'; fb.style.display = ''; fb.className = 'pk-editdetails-feedback pk-feedback-error'; }
-					btn.disabled = false;
-					btn.textContent = 'Save Details';
-				}
-			})
-			.catch(function() {
-				if (fb) { fb.textContent = 'Request failed.'; fb.style.display = ''; fb.className = 'pk-editdetails-feedback pk-feedback-error'; }
-				btn.disabled = false;
-				btn.textContent = 'Save Details';
+		// Save Details
+		var saveBtn = gid('pk-admin-details-save');
+		if (saveBtn) {
+			saveBtn.addEventListener('click', function() {
+				pkClearFeedback('pk-admin-details-feedback');
+				saveBtn.disabled = true;
+				var body = 'Url='         + encodeURIComponent((gid('pk-editdetails-url')         || {}).value || '')
+					+ '&Address='     + encodeURIComponent((gid('pk-editdetails-address')     || {}).value || '')
+					+ '&City='        + encodeURIComponent((gid('pk-editdetails-city')        || {}).value || '')
+					+ '&Province='    + encodeURIComponent((gid('pk-editdetails-province')    || {}).value || '')
+					+ '&PostalCode='  + encodeURIComponent((gid('pk-editdetails-postalcode')  || {}).value || '')
+					+ '&MapUrl='      + encodeURIComponent((gid('pk-editdetails-mapurl')      || {}).value || '')
+					+ '&Description=' + encodeURIComponent((gid('pk-editdetails-description') || {}).value || '')
+					+ '&Directions='  + encodeURIComponent((gid('pk-editdetails-directions')  || {}).value || '');
+				fetch(AJAX_BASE + 'setdetails', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+					body: body,
+				})
+				.then(function(r) { return r.json(); })
+				.then(function(data) {
+					saveBtn.disabled = false;
+					if (data.status === 0) {
+						pkFeedback('pk-admin-details-feedback', 'Details saved!', true);
+						_pkDirty = true;
+					} else {
+						pkFeedback('pk-admin-details-feedback', data.error || 'Error saving details.', false);
+					}
+				})
+				.catch(function() {
+					saveBtn.disabled = false;
+					pkFeedback('pk-admin-details-feedback', 'Request failed.', false);
+				});
 			});
-		});
+		}
+
+		// Reset Waivers
+		var resetBtn = gid('pk-admin-reset-waivers-btn');
+		if (resetBtn) {
+			resetBtn.addEventListener('click', function() {
+				knConfirm(
+					'This will reset all waivers for this park. This action cannot be undone.',
+					function() {
+						resetBtn.disabled = true;
+						fetch(AJAX_BASE + 'resetwaivers', { method: 'POST' })
+						.then(function(r) { return r.json(); })
+						.then(function(data) {
+							resetBtn.disabled = false;
+							if (data.status === 0) {
+								pkFeedback('pk-admin-ops-feedback', data.message || 'Waivers reset.', true);
+							} else {
+								pkFeedback('pk-admin-ops-feedback', data.error || 'Reset failed.', false);
+							}
+						})
+						.catch(function() {
+							resetBtn.disabled = false;
+							pkFeedback('pk-admin-ops-feedback', 'Request failed.', false);
+						});
+					},
+					'Reset Waivers'
+				);
+			});
+		}
 	});
 })();
 

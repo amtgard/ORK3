@@ -305,6 +305,7 @@ class Controller_Admin extends Controller {
 
 	public function editparks($kingdom_id) {
 		$this->load_model('Kingdom');
+		$this->template = '../revised-frontend/Admin_editparks.tpl';
 		if (strlen($this->request->Action) > 0) {
 			$this->request->save('Admin_editparks', true);
 			if (!isset($this->session->user_id)) {
@@ -339,8 +340,9 @@ class Controller_Admin extends Controller {
 		if ($this->request->exists('Admin_editparks')) {
 			$this->data['Admin_editparks'] = $this->request->Admin_editparks->Request;
 		}
-		$this->data['KingdomId'] = $kingdom_id;
-		$this->data['ParkInfo'] = $this->Kingdom->get_park_info($kingdom_id);
+		$this->data['KingdomId']   = $kingdom_id;
+		$this->data['KingdomName'] = $this->Kingdom->get_kingdom_name($kingdom_id);
+		$this->data['ParkInfo']    = $this->Kingdom->get_park_info($kingdom_id);
 	}
 
 	public function setkingdomofficers($post=null) {

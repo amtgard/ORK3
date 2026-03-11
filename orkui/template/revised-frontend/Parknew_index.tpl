@@ -141,7 +141,7 @@
 					<i class="fas fa-search"></i> Search Players
 				</button>
 				<?php if (!empty($CanManagePark)): ?>
-					<button class="pk-btn pk-btn-outline" onclick="pkOpenEditDetailsModal()">
+					<button class="pk-btn pk-btn-outline" onclick="pkOpenAdminModal()">
 						<i class="fas fa-cog"></i> Admin
 					</button>
 				<?php elseif ($LoggedIn): ?>
@@ -303,7 +303,7 @@
 			<div class="pk-tab-panel" id="pk-tab-about">
 				<?php if (!empty($CanManagePark)): ?>
 				<div style="display:flex;justify-content:flex-end;margin-bottom:14px">
-					<button class="pk-btn pk-btn-primary" onclick="pkOpenEditDetailsModal()">
+					<button class="pk-btn pk-btn-primary" onclick="pkOpenAdminModal()">
 						<i class="fas fa-cog" style="margin-right:6px"></i>Manage Park
 					</button>
 				</div>
@@ -1550,56 +1550,93 @@ var PkConfig = {
 	</div>
 </div>
 
-<!-- Edit Park Details Modal -->
-<div id="pk-editdetails-overlay">
-	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
-		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-globe" style="margin-right:8px;color:#2c5282"></i>Edit Park Details</h3>
-			<button class="pk-modal-close-btn" id="pk-editdetails-close-btn" aria-label="Close">&times;</button>
+<!-- Park Administration Modal -->
+<div id="pk-admin-overlay">
+	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-cog" style="margin-right:8px;color:#2b6cb0"></i>Park Administration</h3>
+			<button class="kn-modal-close-btn" id="pk-admin-close-btn" aria-label="Close">&times;</button>
 		</div>
-		<div class="pk-modal-body">
-			<div id="pk-editdetails-feedback" style="display:none"></div>
-			<div class="pk-addday-field">
-				<label for="pk-editdetails-url">Website URL</label>
-				<input type="url" id="pk-editdetails-url" placeholder="https://example.com" />
-			</div>
-			<div class="pk-addday-field">
-				<label for="pk-editdetails-address">Street Address</label>
-				<input type="text" id="pk-editdetails-address" placeholder="123 Main St" />
-			</div>
-			<div class="pk-editdetails-two-col">
-				<div class="pk-addday-field">
-					<label for="pk-editdetails-city">City</label>
-					<input type="text" id="pk-editdetails-city" placeholder="City" />
+
+		<div class="kn-modal-body">
+
+			<!-- ── Panel: Park Details ── -->
+			<div class="kn-admin-panel">
+				<button class="kn-admin-panel-hdr" id="pk-admin-hdr-details" aria-expanded="true">
+					<span><i class="fas fa-edit" style="margin-right:6px;color:#a0aec0"></i>Park Details</span>
+					<i class="fas fa-chevron-down kn-admin-chevron kn-admin-chevron-open" id="pk-admin-chev-details"></i>
+				</button>
+				<div class="kn-admin-panel-body" id="pk-admin-body-details">
+					<div id="pk-admin-details-feedback" class="kn-admin-feedback" style="display:none"></div>
+					<div class="kn-admin-field">
+						<label for="pk-editdetails-url">Website URL</label>
+						<input type="url" id="pk-editdetails-url" placeholder="https://example.com" />
+					</div>
+					<div class="kn-admin-field">
+						<label for="pk-editdetails-address">Street Address</label>
+						<input type="text" id="pk-editdetails-address" placeholder="123 Main St" />
+					</div>
+					<div class="kn-admin-field-row">
+						<div class="kn-admin-field">
+							<label for="pk-editdetails-city">City</label>
+							<input type="text" id="pk-editdetails-city" placeholder="City" />
+						</div>
+						<div class="kn-admin-field">
+							<label for="pk-editdetails-province">Province / State</label>
+							<input type="text" id="pk-editdetails-province" placeholder="State / Province" />
+						</div>
+					</div>
+					<div class="kn-admin-field-row">
+						<div class="kn-admin-field">
+							<label for="pk-editdetails-postalcode">Postal Code</label>
+							<input type="text" id="pk-editdetails-postalcode" placeholder="Zip / Postal Code" />
+						</div>
+						<div class="kn-admin-field">
+							<label for="pk-editdetails-mapurl">Map URL</label>
+							<input type="url" id="pk-editdetails-mapurl" placeholder="Google Maps link..." />
+						</div>
+					</div>
+					<div class="kn-admin-field">
+						<label for="pk-editdetails-description">Description</label>
+						<textarea id="pk-editdetails-description" rows="4" placeholder="About this park..."></textarea>
+					</div>
+					<div class="kn-admin-field">
+						<label for="pk-editdetails-directions">Directions</label>
+						<textarea id="pk-editdetails-directions" rows="3" placeholder="How to find us..."></textarea>
+					</div>
+					<button class="kn-admin-save-btn" id="pk-admin-details-save">
+						<i class="fas fa-save"></i> Save Details
+					</button>
 				</div>
-				<div class="pk-addday-field">
-					<label for="pk-editdetails-province">Province / State</label>
-					<input type="text" id="pk-editdetails-province" placeholder="State / Province" />
+			</div>
+
+			<!-- ── Panel: Operations ── -->
+			<div class="kn-admin-panel">
+				<button class="kn-admin-panel-hdr" id="pk-admin-hdr-ops" aria-expanded="false">
+					<span><i class="fas fa-tools" style="margin-right:6px;color:#a0aec0"></i>Operations</span>
+					<i class="fas fa-chevron-down kn-admin-chevron" id="pk-admin-chev-ops"></i>
+				</button>
+				<div class="kn-admin-panel-body" id="pk-admin-body-ops" style="display:none">
+					<div id="pk-admin-ops-feedback" class="kn-admin-feedback" style="display:none"></div>
+					<div class="kn-admin-ops-row">
+						<div class="kn-admin-ops-info">
+							<strong>Reset Waivers</strong>
+							<p>Clears all waiver records for this park. This action cannot be undone.</p>
+						</div>
+						<button class="kn-admin-ops-btn kn-admin-ops-btn-danger" id="pk-admin-reset-waivers-btn">
+							<i class="fas fa-eraser"></i> Reset Waivers
+						</button>
+					</div>
 				</div>
 			</div>
-			<div class="pk-editdetails-two-col">
-				<div class="pk-addday-field">
-					<label for="pk-editdetails-postalcode">Postal Code</label>
-					<input type="text" id="pk-editdetails-postalcode" placeholder="Zip / Postal Code" />
-				</div>
-				<div class="pk-addday-field">
-					<label for="pk-editdetails-mapurl">Map URL</label>
-					<input type="url" id="pk-editdetails-mapurl" placeholder="Google Maps link..." />
-				</div>
-			</div>
-			<div class="pk-addday-field">
-				<label for="pk-editdetails-description">Description</label>
-				<textarea id="pk-editdetails-description" rows="4" placeholder="About this park..."></textarea>
-			</div>
-			<div class="pk-addday-field">
-				<label for="pk-editdetails-directions">Directions</label>
-				<textarea id="pk-editdetails-directions" rows="3" placeholder="How to find us..."></textarea>
-			</div>
+
+		</div><!-- /.kn-modal-body -->
+
+		<div class="kn-modal-footer" style="justify-content:flex-end">
+			<button class="kn-btn-ghost" id="pk-admin-done-btn">Done</button>
 		</div>
-		<div class="pk-modal-footer">
-			<button class="pk-btn pk-btn-ghost" id="pk-editdetails-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-editdetails-submit"><i class="fas fa-save"></i> Save Details</button>
-		</div>
+
 	</div>
 </div>
 
