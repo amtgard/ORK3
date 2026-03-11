@@ -342,7 +342,14 @@
 
 		<!-- Companies & Households -->
 		<div class="pn-card">
-			<h4><i class="fas fa-users"></i> Companies &amp; Households</h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+				<span><i class="fas fa-users"></i> Companies &amp; Households</span>
+				<?php if ($canEditAdmin || $isOwnProfile): ?>
+				<button class="pn-card-edit-btn" id="pn-unit-create-btn" title="Create new unit">
+					<i class="fas fa-plus"></i>
+				</button>
+				<?php endif; ?>
+			</h4>
 			<?php
 				$unitList = (is_array($Units['Units'])) ? $Units['Units'] : array();
 			?>
@@ -1348,6 +1355,7 @@
 				<?php endif; ?>
 				<input type="text" id="pn-edit-givenby-text" placeholder="Or search by persona…" autocomplete="off" />
 				<input type="hidden" id="pn-edit-givenby-id" value="" />
+				<div class="pn-ac-results" id="pn-edit-givenby-results"></div>
 			</div>
 
 			<div class="pn-acct-field">
@@ -1356,6 +1364,7 @@
 				<input type="hidden" id="pn-edit-park-id"    value="" />
 				<input type="hidden" id="pn-edit-kingdom-id" value="" />
 				<input type="hidden" id="pn-edit-event-id"   value="" />
+				<div class="pn-ac-results" id="pn-edit-givenat-results"></div>
 			</div>
 
 			<div class="pn-acct-field">
@@ -1451,6 +1460,7 @@ var PnConfig = {
 	playerParkName:   <?= json_encode($Player['Park'] ?? $Player['ParkName'] ?? '') ?>,
 	duesPeriodType:   <?= json_encode($_duesPeriodType) ?>,
 	duesPeriod:       <?= (int)$_duesPeriod ?>,
+	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -1609,4 +1619,40 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		</div>
 	</div>
 </div>
+
+<!-- Create Unit Modal -->
+<?php if ($canEditAdmin || $isOwnProfile): ?>
+<div class="pn-overlay" id="pn-unit-create-overlay">
+	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Create Company or Household</h3>
+			<button class="pn-modal-close-btn" id="pn-unit-create-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<form method="post" action="<?= UIR ?>Unit/create/<?= (int)$Player['MundaneId'] ?>">
+			<input type="hidden" name="Action" value="create">
+			<div class="pn-acct-modal-body">
+				<div class="pn-acct-field">
+					<label>Name <span style="color:#e53e3e">*</span></label>
+					<input type="text" name="Name" required placeholder="Enter a name…" autocomplete="off">
+				</div>
+				<div class="pn-acct-field">
+					<label>Type</label>
+					<select name="Type">
+						<option value="Household">Household</option>
+						<option value="Company">Company</option>
+					</select>
+				</div>
+				<div class="pn-acct-field">
+					<label>Website URL <span style="font-weight:400;color:#a0aec0;">(optional)</span></label>
+					<input type="url" name="Url" placeholder="https://…">
+				</div>
+			</div>
+			<div class="pn-modal-footer">
+				<button type="button" class="pn-btn pn-btn-secondary" id="pn-unit-create-cancel">Cancel</button>
+				<button type="submit" class="pn-btn pn-btn-primary"><i class="fas fa-plus"></i> Create</button>
+			</div>
+		</form>
+	</div>
+</div>
+<?php endif; ?>
 <?php endif; ?>

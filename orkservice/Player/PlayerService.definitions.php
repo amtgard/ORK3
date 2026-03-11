@@ -515,4 +515,27 @@ $server->wsdl->addComplexType(
 				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int')
 			)
 	);
+
+/// ReconcileAward()
+
+$server->wsdl->addComplexType(
+		'ReconcileAwardRequest',
+		'complexType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
+				'AwardsId'=>array('name'=>'AwardsId','type'=>'xsd:int'),
+				'KingdomAwardId'=>array('name'=>'KingdomAwardId','type'=>'xsd:int'),
+				'CustomName'=>array('name'=>'CustomName','type'=>'xsd:string'),
+				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int'),
+				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
+				'EventId'=>array('name'=>'EventId','type'=>'xsd:int'),
+				'Rank'=>array('name'=>'Rank','type'=>'xsd:int'),
+				'Date'=>array('name'=>'Date','type'=>'xsd:dateTime'),
+				'GivenById'=>array('name'=>'GivenById','type'=>'xsd:int'),
+				'Note'=>array('name'=>'Note','type'=>'xsd:string')
+			)
+	);
 ?>

@@ -55,6 +55,7 @@
 	$tournaments    = $Tournaments['Tournaments'] ?? [];
 	$tourneyCount   = count($tournaments);
 	$attendanceList = $AttendanceReport['Attendance'] ?? [];
+	$checkedInIds   = array_flip(array_column($attendanceList, 'MundaneId'));
 	$attendanceForm = $Attendance_event ?? [];
 
 	$defaultKingdomName = $DefaultKingdomName       ?? '';
@@ -339,7 +340,7 @@
 				<?php if ($loggedIn): ?>
 				<div class="ev-att-form">
 					<h4><i class="fas fa-plus-circle" style="margin-right:6px;color:#276749"></i>Add Attendance</h4>
-					<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/new">
+					<form method="post" id="ev-attendance-form" action="<?= UIR ?>EventAjax/add_attendance/<?= $eventId ?>/<?= $detailId ?>" onsubmit="evHandleAttendanceSubmit(this); return false;">
 						<div class="ev-form-row">
 							<div class="ev-form-field">
 								<label>Kingdom</label>
@@ -476,12 +477,24 @@
 					<?php if (count($rsvpList) > 0): ?>
 					<table class="ev-table">
 						<thead>
-							<tr><th>Player</th></tr>
+							<tr><th>Player</th><th></th></tr>
 						</thead>
 						<tbody>
 							<?php foreach ($rsvpList as $attendee): ?>
 							<tr>
 								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a></td>
+								<td style="text-align:right;white-space:nowrap">
+									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button" data-mundane="<?= (int)$attendee['MundaneId'] ?>"
+										<?php if (!isset($checkedInIds[$attendee['MundaneId']])): ?>
+										onclick="evOpenCheckinModal(<?= (int)$attendee['MundaneId'] ?>, <?= htmlspecialchars(json_encode($attendee['Persona']), ENT_QUOTES) ?>)"
+										<?php else: ?>disabled<?php endif; ?>>
+										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : 'Check In' ?>
+									</button>
+									<button class="ev-rsvp-del-btn" type="button"
+										onclick="evDeleteRsvp(this, <?= (int)$attendee['MundaneId'] ?>)" title="Remove RSVP">
+										<i class="fas fa-times"></i>
+									</button>
+								</td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -616,6 +629,43 @@
 		</form>
 	</div>
 </div><!-- /.ev-edit-modal -->
+
+<div class="ev-modal-overlay" id="ev-checkin-modal">
+	<div class="ev-modal">
+		<div class="ev-modal-header">
+			<h3><i class="fas fa-user-check" style="margin-right:8px"></i>Check In <span id="ev-checkin-name"></span></h3>
+			<button class="ev-modal-close" type="button" onclick="evCloseCheckinModal()">&times;</button>
+		</div>
+		<form id="ev-checkin-form"
+			action="<?= UIR ?>EventAjax/add_attendance/<?= $eventId ?>/<?= $detailId ?>"
+			onsubmit="evHandleCheckinSubmit(this); return false;">
+			<input type="hidden" name="MundaneId" id="ev-checkin-mundane-id">
+			<input type="hidden" name="AttendanceDate" value="<?= date('Y-m-d') ?>">
+			<div class="ev-modal-body">
+				<div class="ev-modal-row">
+					<div class="ev-modal-field">
+						<label>Class</label>
+						<select name="ClassId">
+							<?php foreach ($Classes ?? [] as $class): ?>
+							<option value="<?= (int)$class['ClassId'] ?>"><?= htmlspecialchars($class['Name']) ?></option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<div class="ev-modal-field" style="max-width:100px">
+						<label>Credits</label>
+						<input type="number" name="Credits" value="1" min="0.25" step="0.25">
+					</div>
+				</div>
+			</div>
+			<div class="ev-modal-footer">
+				<button type="button" class="ev-modal-btn-cancel" onclick="evCloseCheckinModal()">Cancel</button>
+				<button type="submit" class="ev-modal-btn-save">
+					<i class="fas fa-user-check" style="margin-right:5px"></i>Check In
+				</button>
+			</div>
+		</form>
+	</div>
+</div><!-- /.ev-checkin-modal -->
 <?php endif; ?>
 
 <script>
@@ -623,6 +673,8 @@ var EvConfig = {
 	uir:        '<?= UIR ?>',
 	httpService:'<?= HTTP_SERVICE ?>',
 	canManage:  <?= !empty($canManage) ? 'true' : 'false' ?>,
+	eventId:    <?= $eventId ?>,
+	detailId:   <?= $detailId ?>
 };
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

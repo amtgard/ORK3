@@ -6,4 +6,10 @@ function GetPlayers($request) {
 }
 
 
+function ReconcileAward($request) {
+	$P = new Player();
+	return $P->ReconcileAward($request);
+}
+
+
 ?>

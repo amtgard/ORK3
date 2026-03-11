@@ -82,6 +82,19 @@ class Model_Event extends Model {
 		return true;
 	}
 
+	function remove_rsvp($detail_id, $mundane_id) {
+		global $DB;
+		$rsvp = new yapo($DB, DB_PREFIX . 'event_rsvp');
+		$rsvp->clear();
+		$rsvp->event_calendardetail_id = (int)$detail_id;
+		$rsvp->mundane_id = (int)$mundane_id;
+		if ($rsvp->find()) {
+			$rsvp->delete();
+			return true;
+		}
+		return false;
+	}
+
 	function get_rsvp_count($detail_id) {
 		global $DB;
 		$DB->Clear();

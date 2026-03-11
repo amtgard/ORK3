@@ -485,7 +485,8 @@ class Controller_KingdomAjax extends Controller {
 			exit;
 		}
 
-		$q = trim($_GET['q'] ?? '');
+		$q     = trim($_GET['q']     ?? '');
+		$scope = trim($_GET['scope'] ?? 'own'); // 'own' | 'exclude'
 		if (strlen($q) < 2) {
 			echo json_encode([]);
 			exit;
@@ -494,6 +495,12 @@ class Controller_KingdomAjax extends Controller {
 		global $DB;
 		$kid  = $kingdom_id;
 		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
+
+		if ($scope === 'exclude') {
+			$kingdom_clause = "AND m.kingdom_id != {$kid}";
+		} else {
+			$kingdom_clause = "AND m.kingdom_id = {$kid}";
+		}
 
 		$sql = "
 			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,
@@ -504,13 +511,13 @@ class Controller_KingdomAjax extends Controller {
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
 			WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
-			  AND m.kingdom_id = {$kid}
+			  {$kingdom_clause}
 			  AND (m.persona LIKE '%{$term}%'
 			    OR m.given_name LIKE '%{$term}%'
 			    OR m.surname LIKE '%{$term}%'
 			    OR m.username LIKE '%{$term}%')
 			ORDER BY m.persona
-			LIMIT 10";
+			LIMIT 15";
 
 		$rs      = $DB->DataSet($sql);
 		$results = [];

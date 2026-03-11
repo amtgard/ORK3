@@ -72,6 +72,8 @@ class Attendance  extends Ork3 {
         }
         
 		$this->attendance->clear();
+		$this->attendance->park_id = 0;
+		$this->attendance->kingdom_id = 0;
 		$this->attendance->mundane_id = $request['MundaneId'];
         $this->attendance->persona = $request['Persona'] ?? '';
 		$this->attendance->class_id = $request['ClassId'];
@@ -88,6 +90,7 @@ class Attendance  extends Ork3 {
 		$this->attendance->date_week3 = 0;
 		$this->attendance->date_week6 = 0;
 		
+		logtrace("AddAttendance: type before switch", array("type"=>$type, "type_strict_false"=>($type===false), "type_null"=>is_null($type)));
 		switch ($type) {
 			case AUTH_PARK:
 				$park = Ork3::$Lib->park->GetParkShortInfo(array('ParkId' => $request['ParkId']));
@@ -95,7 +98,7 @@ class Attendance  extends Ork3 {
 				$this->attendance->park_id = $request['ParkId'];
 				break;
 			case AUTH_KINGDOM:
-				$this->attendance->kingdom_d = $request['KingdomId'];
+				$this->attendance->kingdom_id = $request['KingdomId'];
 				break;
 			case AUTH_EVENT:
 				$detail = Ork3::$Lib->event->GetEventDetail(array('EventCalendarDetailId' => $request['EventCalendarDetailId']));
@@ -106,10 +109,9 @@ class Attendance  extends Ork3 {
 					return InvalidParameter();
 				}
 
-				if ($kingdom_id) $this->attendance->kingdom_id = $kingdom_id;
-				if (isset($detail['CalendarEventDetails'][0]['AtParkId'])) $this->attendance->park_id = $detail['CalendarEventDetails'][0]['AtParkId'];
-				$this->attendance->date = $detail['CalendarEventDetails'][0]['EventStart'];
-				$this->attendance->event_id = $detail['CalendarEventDetails'][0]['EventId'];
+				            if ($kingdom_id) $this->attendance->kingdom_id = $kingdom_id;
+							if (valid_id($detail['CalendarEventDetails'][0]['AtParkId'])) $this->attendance->park_id = $detail['CalendarEventDetails'][0]['AtParkId'];
+							$this->attendance->date = $detail['CalendarEventDetails'][0]['EventStart'];				$this->attendance->event_id = $detail['CalendarEventDetails'][0]['EventId'];
 				$this->attendance->event_calendardetail_id = $request['EventCalendarDetailId'];
 				break;
 			default:

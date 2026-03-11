@@ -3092,6 +3092,48 @@
 	font-weight: 700;
 }
 .ev-del-link:hover { opacity: 0.7; }
+.ev-checkin-btn {
+	background: #276749;
+	color: #fff;
+	border: none;
+	border-radius: 4px;
+	padding: 4px 10px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.ev-checkin-btn:hover { background: #1e4d35; }
+.ev-checkin-btn.ev-checkin-done, .ev-checkin-btn:disabled {
+	background: #a0aec0;
+	color: #fff;
+	cursor: default;
+	opacity: 0.75;
+}
+.ev-checkin-btn.ev-checkin-done:hover, .ev-checkin-btn:disabled:hover { background: #a0aec0; }
+.ev-rsvp-del-btn {
+	background: transparent;
+	color: #e53e3e;
+	border: none;
+	border-radius: 4px;
+	padding: 4px 7px;
+	font-size: 13px;
+	cursor: pointer;
+	margin-left: 4px;
+	line-height: 1;
+}
+.ev-rsvp-del-btn:hover { background: #fff5f5; }
+.ev-rsvp-confirm { font-size: 12px; color: #4a5568; white-space: nowrap; margin-left: 4px; }
+.ev-rsvp-confirm-yes {
+	background: #e53e3e; color: #fff; border: none; border-radius: 3px;
+	padding: 2px 8px; font-size: 12px; font-weight: 600; cursor: pointer; margin: 0 2px;
+}
+.ev-rsvp-confirm-yes:hover { background: #c53030; }
+.ev-rsvp-confirm-no {
+	background: #e2e8f0; color: #4a5568; border: none; border-radius: 3px;
+	padding: 2px 8px; font-size: 12px; font-weight: 600; cursor: pointer; margin: 0 2px;
+}
+.ev-rsvp-confirm-no:hover { background: #cbd5e0; }
 
 /* ---- Attendance form ---- */
 .ev-att-form {
@@ -4379,7 +4421,7 @@
 #pk-moveplayer-overlay .pk-modal-close-btn:hover { color: #2d3748; }
 #pk-heraldry-overlay .pk-modal-body,
 #pk-moveplayer-overlay .pk-modal-body {
-    padding: 20px; overflow-y: auto; flex: 1;
+    padding: 20px; overflow: visible; flex: 1;
 }
 #pk-heraldry-overlay .pk-modal-footer,
 #pk-moveplayer-overlay .pk-modal-footer {
@@ -4389,6 +4431,9 @@
 #pk-heraldry-overlay .pk-acct-field,
 #pk-moveplayer-overlay .pk-acct-field {
     position: relative; display: flex; flex-direction: column; gap: 4px; margin-bottom: 0;
+}
+#pk-moveplayer-overlay .pk-ac-results {
+    position: absolute; left: 0; right: 0; z-index: 9999;
 }
 #pk-heraldry-overlay .pk-acct-field label,
 #pk-moveplayer-overlay .pk-acct-field label {

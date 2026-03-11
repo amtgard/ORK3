@@ -119,7 +119,8 @@ class Controller_ParkAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'playersearch') {
-			$q = trim($_GET['q'] ?? '');
+			$q     = trim($_GET['q']     ?? '');
+			$scope = trim($_GET['scope'] ?? 'own'); // 'own' | 'exclude' | 'all'
 			if (strlen($q) < 2) {
 				echo json_encode([]);
 				exit;
@@ -128,6 +129,15 @@ class Controller_ParkAjax extends Controller {
 			global $DB;
 			$pid  = (int)$park_id;
 			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
+
+			if ($scope === 'own') {
+				$park_clause = "AND m.park_id = {$pid}";
+			} elseif ($scope === 'exclude') {
+				$park_clause = "AND m.park_id != {$pid}";
+			} else {
+				$park_clause = '';
+			}
+
 			$sql = "
 				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
 				       k.name AS kingdom_name, p.name AS park_name,
@@ -137,13 +147,13 @@ class Controller_ParkAjax extends Controller {
 				LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 				LEFT JOIN ork_park p ON p.park_id = m.park_id
 				WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
-				  AND m.park_id = {$pid}
+				  {$park_clause}
 				  AND (m.persona LIKE '%{$term}%'
 				    OR m.given_name LIKE '%{$term}%'
 				    OR m.surname LIKE '%{$term}%'
 				    OR m.username LIKE '%{$term}%')
 				ORDER BY m.persona
-				LIMIT 10";
+				LIMIT 15";
 			$rs      = $DB->DataSet($sql);
 			$results = [];
 			while ($rs->Next()) {

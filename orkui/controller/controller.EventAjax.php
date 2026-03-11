@@ -40,4 +40,99 @@ class Controller_EventAjax extends Controller {
 		}
 		exit;
 	}
+
+	public function add_attendance($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$this->load_model('Attendance');
+
+		$params    = explode( '/', $p ?? '' );
+		$event_id  = (int)preg_replace( '/[^0-9]/', '', $params[0] ?? '' );
+		$detail_id = (int)preg_replace( '/[^0-9]/', '', $params[1] ?? '' );
+
+		if (!valid_id($event_id) || !valid_id($detail_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+			exit;
+		}
+
+		if (!valid_id($_POST['MundaneId'] ?? 0)) {
+			echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
+			exit;
+		}
+
+		if (!valid_id($_POST['ClassId'] ?? 0)) {
+			echo json_encode(['status' => 1, 'error' => 'A class must be selected.']);
+			exit;
+		}
+
+		$detail = $this->Attendance->get_eventdetail_info($detail_id);
+		$r = $this->Attendance->add_attendance(
+			$this->session->token,
+			$_POST['AttendanceDate'] ?? date('Y-m-d'),
+			valid_id($detail['AtParkId']) ? $detail['AtParkId'] : null,
+			$detail_id,
+			$_POST['MundaneId'] ?? 0,
+			$_POST['ClassId'] ?? 0,
+			$_POST['Credits'] ?? 1
+		);
+
+		if ($r['Status'] == 0) {
+			global $DB;
+			$aid = (int)$r['Detail'];
+			$row = $DB->DataSet("SELECT a.attendance_id AS AttendanceId, a.mundane_id AS MundaneId, m.persona AS Persona, a.kingdom_id AS KingdomId, k.name AS KingdomName, a.park_id AS ParkId, p.name AS ParkName, c.name AS ClassName, a.credits AS Credits FROM ork_attendance a LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id LEFT JOIN ork_park p ON p.park_id = a.park_id LEFT JOIN ork_kingdom k ON k.kingdom_id = a.kingdom_id LEFT JOIN ork_class c ON c.class_id = a.class_id WHERE a.attendance_id = $aid");
+			if ($row && $row->Size() > 0 && $row->Next()) {
+				echo json_encode(['status' => 0, 'attendance' => [
+					'AttendanceId' => $row->AttendanceId,
+					'MundaneId'    => $row->MundaneId,
+					'Persona'      => $row->Persona,
+					'KingdomId'    => $row->KingdomId,
+					'KingdomName'  => $row->KingdomName,
+					'ParkId'       => $row->ParkId,
+					'ParkName'     => $row->ParkName,
+					'ClassName'    => $row->ClassName,
+					'Credits'      => $row->Credits,
+				]]);
+			} else {
+				echo json_encode(['status' => 0, 'attendance' => null]);
+			}
+		} else {
+			echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+		}
+		exit;
+	}
+
+	public function delete_rsvp($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$params     = explode('/', $p ?? '');
+		$event_id   = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id  = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+		$mundane_id = (int)($_POST['MundaneId'] ?? 0);
+
+		if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($mundane_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']);
+			exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+			exit;
+		}
+
+		$this->load_model('Event');
+		$this->Event->remove_rsvp($detail_id, $mundane_id);
+		echo json_encode(['status' => 0]);
+		exit;
+	}
 }

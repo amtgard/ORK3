@@ -4460,11 +4460,183 @@ $(document).ready(function() {
 	// Close on backdrop click
 	document.addEventListener('click', function(e) {
 		if (e.target && e.target.id === 'ev-edit-modal') evCloseEditModal();
+		if (e.target && e.target.id === 'ev-checkin-modal') evCloseCheckinModal();
 	});
 	// Close on Escape key
 	document.addEventListener('keydown', function(e) {
-		if (e.key === 'Escape') evCloseEditModal();
+		if (e.key === 'Escape') { evCloseEditModal(); evCloseCheckinModal(); }
 	});
+
+	window.evOpenCheckinModal = function(mundaneId, personaName) {
+		document.getElementById('ev-checkin-mundane-id').value = mundaneId;
+		document.getElementById('ev-checkin-name').textContent = personaName;
+		var overlay = document.getElementById('ev-checkin-modal');
+		if (overlay) overlay.classList.add('ev-modal-open');
+		document.body.style.overflow = 'hidden';
+	};
+	window.evCloseCheckinModal = function() {
+		var overlay = document.getElementById('ev-checkin-modal');
+		if (overlay) overlay.classList.remove('ev-modal-open');
+		document.body.style.overflow = '';
+	};
+
+	window.evDeleteRsvp = function(btn, mundaneId) {
+		var cell = btn.parentNode;
+		btn.style.display = 'none';
+		var confirm = document.createElement('span');
+		confirm.className = 'ev-rsvp-confirm';
+		confirm.innerHTML =
+			'Are you sure? ' +
+			'<button class="ev-rsvp-confirm-yes" type="button">Yes, Remove</button> ' +
+			'<button class="ev-rsvp-confirm-no" type="button">No, Cancel</button>';
+		cell.appendChild(confirm);
+		confirm.querySelector('.ev-rsvp-confirm-no').onclick = function() {
+			confirm.remove();
+			btn.style.display = '';
+		};
+		confirm.querySelector('.ev-rsvp-confirm-yes').onclick = function() {
+			confirm.querySelector('.ev-rsvp-confirm-yes').disabled = true;
+			confirm.querySelector('.ev-rsvp-confirm-no').disabled = true;
+			var formData = new FormData();
+			formData.append('MundaneId', mundaneId);
+			fetch(EvConfig.uir + 'EventAjax/delete_rsvp/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+				method: 'POST', body: formData
+			})
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				if (data.status === 0) {
+					var row = btn.closest('tr');
+					if (row) row.remove();
+					var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-rsvp"] .ev-tab-count');
+					if (cnt) cnt.textContent = Math.max(0, parseInt(cnt.textContent || '0') - 1);
+				} else {
+					confirm.remove();
+					btn.style.display = '';
+					alert(data.error || 'Failed to remove RSVP.');
+				}
+			})
+			.catch(function(err) {
+				confirm.remove();
+				btn.style.display = '';
+				alert('Request failed: ' + err.message);
+			});
+		};
+	};
+
+	window.evHandleCheckinSubmit = function(form) {
+		var submitBtn = form.querySelector('button[type="submit"]');
+		var initialBtnContent = submitBtn.innerHTML;
+		submitBtn.disabled = true;
+		submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking In...';
+		fetch(form.getAttribute('action'), { method: 'POST', body: new FormData(form) })
+		.then(function(response) { return response.json(); })
+		.then(function(data) {
+			if (data.status === 0) {
+				var mundaneId = form.querySelector('[name="MundaneId"]').value;
+				var rsvpBtn = document.querySelector('.ev-checkin-btn[data-mundane="' + mundaneId + '"]');
+				if (rsvpBtn) {
+					rsvpBtn.classList.add('ev-checkin-done');
+					rsvpBtn.disabled = true;
+					rsvpBtn.removeAttribute('onclick');
+					rsvpBtn.innerHTML = '<i class="fas fa-user-check"></i> Checked In';
+				}
+				evCloseCheckinModal();
+				if (data.attendance) {
+					var newRow = '<tr>' +
+						'<td><a href="' + EvConfig.uir + 'Player/profile/' + data.attendance.MundaneId + '">' + data.attendance.Persona + '</a></td>' +
+						'<td><a href="' + EvConfig.uir + 'Kingdom/profile/' + data.attendance.KingdomId + '">' + data.attendance.KingdomName + '</a></td>' +
+						'<td><a href="' + EvConfig.uir + 'Park/profile/' + data.attendance.ParkId + '">' + data.attendance.ParkName + '</a></td>' +
+						'<td>' + data.attendance.ClassName + '</td>' +
+						'<td>' + data.attendance.Credits + '</td>' +
+						'<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="' + EvConfig.uir + 'Event/detail/' + EvConfig.eventId + '/' + EvConfig.detailId + '/delete/' + data.attendance.AttendanceId + '" onclick="return confirm(\'Remove this attendance record?\')">&times;</a></td>' +
+					'</tr>';
+					var tableBody = document.querySelector('#ev-tab-attendance .ev-table tbody');
+					if (tableBody) {
+						tableBody.insertAdjacentHTML('beforeend', newRow);
+						var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
+						if (emptyMsg) emptyMsg.style.display = 'none';
+						var cnt = document.querySelector('#ev-tab-attendance-nav .ev-tab-count');
+						if (!cnt) cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-attendance"] .ev-tab-count');
+						if (cnt) cnt.textContent = parseInt(cnt.textContent || '0') + 1;
+					}
+				}
+			} else {
+				alert(data.error || 'Check-in failed. Please try again.');
+			}
+		})
+		.catch(function(err) { alert('Request failed: ' + err.message); })
+		.finally(function() { submitBtn.disabled = false; submitBtn.innerHTML = initialBtnContent; });
+	};
+
+	window.evHandleAttendanceSubmit = function(form) {
+		var submitBtn = form.querySelector('button[type="submit"]');
+		var initialBtnContent = submitBtn.innerHTML;
+		submitBtn.disabled = true;
+		submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
+		var formData = new FormData(form);
+		var action = form.getAttribute('action');
+
+		fetch(action, {
+			method: 'POST',
+			body: formData
+		})
+		.then(function(response) { return response.json(); })
+		.then(function(data) {
+			if (data.status === 0 && data.attendance) {
+				var newRow = '<tr>' +
+					'<td><a href="' + EvConfig.uir + 'Player/profile/' + data.attendance.MundaneId + '">' + data.attendance.Persona + '</a></td>' +
+					'<td><a href="' + EvConfig.uir + 'Kingdom/profile/' + data.attendance.KingdomId + '">' + data.attendance.KingdomName + '</a></td>' +
+					'<td><a href="' + EvConfig.uir + 'Park/profile/' + data.attendance.ParkId + '">' + data.attendance.ParkName + '</a></td>' +
+					'<td>' + data.attendance.ClassName + '</td>' +
+					'<td>' + data.attendance.Credits + '</td>' +
+					'<td class="ev-del-cell">' +
+						'<a class="ev-del-link" title="Remove" href="' + EvConfig.uir + 'Event/detail/' + EvConfig.eventId + '/' + EvConfig.detailId + '/delete/' + data.attendance.AttendanceId + '" onclick="return confirm(\'Remove this attendance record?\')">×</a>' +
+					'</td>' +
+				'</tr>';
+				
+				var tableBody = document.querySelector('.ev-table tbody');
+				tableBody.insertAdjacentHTML('beforeend', newRow);
+
+				form.reset();
+				$('#ev-PlayerName').val('');
+				$('#ev-MundaneId').val('');
+
+				var attendeeCount = document.querySelector('.ev-tab-count');
+				attendeeCount.textContent = parseInt(attendeeCount.textContent) + 1;
+				
+				var emptyMessage = document.querySelector('#ev-tab-attendance .ev-empty');
+				if (emptyMessage) {
+					emptyMessage.style.display = 'none';
+				}
+			} else {
+				var errorDiv = document.querySelector('.ev-error');
+				if (!errorDiv) {
+					errorDiv = document.createElement('div');
+					errorDiv.className = 'ev-error';
+					var mainDiv = document.querySelector('.ev-main');
+					mainDiv.insertBefore(errorDiv, mainDiv.firstChild);
+				}
+				errorDiv.style.display = 'block';
+				errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>' + (data.error || 'An unknown error occurred.');
+			}
+		})
+		.catch(function(error) {
+			var errorDiv = document.querySelector('.ev-error');
+			if (!errorDiv) {
+				errorDiv = document.createElement('div');
+				errorDiv.className = 'ev-error';
+				var mainDiv = document.querySelector('.ev-main');
+				mainDiv.insertBefore(errorDiv, mainDiv.firstChild);
+			}
+			errorDiv.style.display = 'block';
+			errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Request failed: ' + error.message;
+		})
+		.finally(function() {
+			submitBtn.disabled = false;
+			submitBtn.innerHTML = initialBtnContent;
+		});
+	};
 })();
 
 /* ===========================
@@ -5416,7 +5588,8 @@ function setupPronounPicker(cfg) {
 
 	window.pnOpenAwardEditModal = function(awardsId, data) {
 		currentAwardsId = awardsId;
-		currentAwardIsHistorical = data.IsHistorical === 1;
+		currentAwardIsHistorical = data.IsHistorical === 1
+			|| (data.GivenById == 0 && data.ParkId == 0 && data.KingdomId == 0 && data.EventId == 0);
 
 		/* reconcile banner — show only for historical (unreconciled) records */
 		var banner = gid('pn-edit-reconcile-banner');
@@ -5433,6 +5606,21 @@ function setupPronounPicker(cfg) {
 		if (rcRankRow) { rcRankRow.style.display = 'none'; }
 		if (rcRankPills) { rcRankPills.innerHTML = ''; }
 		if (rcRankVal)   { rcRankVal.value = ''; }
+
+		/* auto-match historical award name to reconcile dropdown */
+		if (currentAwardIsHistorical && rcSelect) {
+			/* strip parenthetical suffix e.g. "Warrior (2nd)" → "Warrior" */
+			var histName = (data.displayName || data.Name || '').replace(/\s*\(.*\)/, '').trim();
+			if (histName) {
+				var histLower = histName.toLowerCase();
+				for (var _i = 0; _i < rcSelect.options.length; _i++) {
+					if (rcSelect.options[_i].textContent.toLowerCase().indexOf(histLower) !== -1) {
+						rcSelect.value = rcSelect.options[_i].value;
+						break;
+					}
+				}
+			}
+		}
 
 		var nameEl = gid('pn-edit-award-name');
 		if (nameEl) nameEl.textContent = data.displayName || data.Name || '';
@@ -5473,67 +5661,115 @@ function setupPronounPicker(cfg) {
 	$(document).ready(function() {
 		var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
 
-		// Given By autocomplete
-		var gbText = gid('pn-edit-givenby-text');
-		var gbId   = gid('pn-edit-givenby-id');
-		if (gbText && gbId) {
-			$(gbText).autocomplete({
-				source: function(req, res) {
-					$.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PnConfig.kingdomId, limit: 12 }, function(data) {
-						res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
-					});
-				},
-				focus:  function(e, ui) { $(gbText).val(ui.item.label); return false; },
-				select: function(e, ui) { $(gbText).val(ui.item.label); gbId.value = ui.item.value; return false; },
-				change: function(e, ui) { if (!ui.item) gbId.value = ''; return false; },
-				delay: 250, minLength: 2,
+		// Given By autocomplete (edit modal)
+		var editGbText    = gid('pn-edit-givenby-text');
+		var editGbId      = gid('pn-edit-givenby-id');
+		var editGbResults = gid('pn-edit-givenby-results');
+		if (editGbText && editGbId && editGbResults) {
+			var editGbTimer;
+			editGbText.addEventListener('input', function() {
+				clearTimeout(editGbTimer);
+				editGbId.value = '';
+				var term = this.value.trim();
+				if (term.length < 2) { editGbResults.classList.remove('pn-ac-open'); return; }
+				editGbTimer = setTimeout(function() {
+					var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + PnConfig.kingdomId + '&limit=8';
+					fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+						if (!data || !data.length) {
+							editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
+						} else {
+							editGbResults.innerHTML = data.map(function(p) {
+								return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+									+ p.Persona
+									+ ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr || '') + ':' + (p.PAbbr || '') + ')</span>'
+									+ '</div>';
+							}).join('');
+						}
+						editGbResults.classList.add('pn-ac-open');
+					}).catch(function() {});
+				}, 250);
 			});
+			editGbResults.addEventListener('click', function(e) {
+				var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
+				if (!item) return;
+				editGbText.value = decodeURIComponent(item.dataset.name);
+				editGbId.value   = item.dataset.id;
+				editGbResults.classList.remove('pn-ac-open');
+			});
+			acKeyNav(editGbText, editGbResults, 'pn-ac-open', '.pn-ac-item');
 		}
 
-		// Given At autocomplete
-		var gaText = gid('pn-edit-givenat-text');
-		var gaPark = gid('pn-edit-park-id');
-		var gaKing = gid('pn-edit-kingdom-id');
-		var gaEvt  = gid('pn-edit-event-id');
-		if (gaText) {
-			$(gaText).autocomplete({
-				source: function(req, res) {
-					$.getJSON(SEARCH_URL, { Action: 'Search/Location', search: req.term, limit: 12 }, function(data) {
-						res($.map(data || [], function(v) { return { label: v.Name, value: v }; }));
-					});
-				},
-				focus:  function(e, ui) { $(gaText).val(ui.item.label); return false; },
-				select: function(e, ui) {
-					var v = ui.item.value;
-					$(gaText).val(ui.item.label);
-					if (gaPark) gaPark.value = v.ParkId    || 0;
-					if (gaKing) gaKing.value = v.KingdomId || 0;
-					if (gaEvt)  gaEvt.value  = v.EventId   || 0;
-					return false;
-				},
-				change: function(e, ui) {
-					if (!ui.item) {
-						if (gaPark) gaPark.value = 0;
-						if (gaKing) gaKing.value = 0;
-						if (gaEvt)  gaEvt.value  = 0;
-					}
-					return false;
-				},
-				delay: 250, minLength: 2,
+		// Given At autocomplete (edit modal)
+		var editGaText    = gid('pn-edit-givenat-text');
+		var editGaPark    = gid('pn-edit-park-id');
+		var editGaKing    = gid('pn-edit-kingdom-id');
+		var editGaEvt     = gid('pn-edit-event-id');
+		var editGaResults = gid('pn-edit-givenat-results');
+		if (editGaText && editGaResults) {
+			var editGaTimer;
+			editGaText.addEventListener('input', function() {
+				clearTimeout(editGaTimer);
+				if (editGaPark) editGaPark.value = '0';
+				if (editGaKing) editGaKing.value = '0';
+				if (editGaEvt)  editGaEvt.value  = '0';
+				var term = this.value.trim();
+				if (term.length < 2) { editGaResults.classList.remove('pn-ac-open'); return; }
+				editGaTimer = setTimeout(function() {
+					var today = new Date().toISOString().slice(0, 10);
+					var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=8';
+					fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+						if (!data || !data.length) {
+							editGaResults.innerHTML = '<div class="pn-ac-no-results">No locations found</div>';
+						} else {
+							editGaResults.innerHTML = data.map(function(loc) {
+								return '<div class="pn-ac-item" tabindex="-1"'
+									+ ' data-park="' + (parseInt(loc.ParkId) || 0) + '"'
+									+ ' data-kingdom="' + (parseInt(loc.KingdomId) || 0) + '"'
+									+ ' data-event="' + (parseInt(loc.EventId) || 0) + '"'
+									+ ' data-name="' + encodeURIComponent(loc.ShortName || loc.LocationName || '') + '">'
+									+ (loc.LocationName || '') + '</div>';
+							}).join('');
+						}
+						editGaResults.classList.add('pn-ac-open');
+					}).catch(function() {});
+				}, 250);
 			});
+			editGaResults.addEventListener('click', function(e) {
+				var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
+				if (!item) return;
+				editGaText.value = decodeURIComponent(item.dataset.name);
+				if (editGaPark) editGaPark.value = item.dataset.park    || '0';
+				if (editGaKing) editGaKing.value = item.dataset.kingdom || '0';
+				if (editGaEvt)  editGaEvt.value  = item.dataset.event   || '0';
+				editGaResults.classList.remove('pn-ac-open');
+			});
+			acKeyNav(editGaText, editGaResults, 'pn-ac-open', '.pn-ac-item');
 		}
 
-		// Officer chip clicks inside edit modal
+		// Officer chip clicks inside edit modal — also close autocomplete dropdowns
 		$(document).on('click', '#pn-award-edit-overlay .pn-officer-chip', function() {
 			var id   = $(this).data('id');
 			var name = $(this).data('name');
 			var gbT  = gid('pn-edit-givenby-text');
 			var gbI  = gid('pn-edit-givenby-id');
+			var gbR  = gid('pn-edit-givenby-results');
 			if (gbT) gbT.value = name;
 			if (gbI) gbI.value = id;
+			if (gbR) gbR.classList.remove('pn-ac-open');
 			$('#pn-award-edit-overlay .pn-officer-chip').removeClass('pn-chip-active');
 			$(this).addClass('pn-chip-active');
 		});
+
+		// Close edit modal autocomplete dropdowns on outside click
+		var editOverlay = gid('pn-award-edit-overlay');
+		if (editOverlay) {
+			editOverlay.addEventListener('click', function(e) {
+				var gbT = gid('pn-edit-givenby-text'),  gbR = gid('pn-edit-givenby-results');
+				var gaT = gid('pn-edit-givenat-text'),  gaR = gid('pn-edit-givenat-results');
+				if (gbR && e.target !== gbT && !gbR.contains(e.target)) gbR.classList.remove('pn-ac-open');
+				if (gaR && e.target !== gaT && !gaR.contains(e.target)) gaR.classList.remove('pn-ac-open');
+			});
+		}
 
 		// Note char counter
 		var noteEl  = gid('pn-edit-award-note');
@@ -5550,6 +5786,10 @@ function setupPronounPicker(cfg) {
 		if (rcCheck && rcFields) {
 			rcCheck.addEventListener('change', function() {
 				rcFields.style.display = this.checked ? '' : 'none';
+				if (this.checked) {
+					var sel = gid('pn-edit-reconcile-award');
+					if (sel && sel.value) sel.dispatchEvent(new Event('change'));
+				}
 			});
 		}
 
@@ -5571,7 +5811,7 @@ function setupPronounPicker(cfg) {
 				if (!isLadder) return;
 
 				/* suggest next rank = max held rank + 1, capped at maxRank */
-				var heldMax    = (PnConfig.playerAwardRanks && awardId) ? (PnConfig.playerAwardRanks[awardId] || 0) : 0;
+				var heldMax    = (PnConfig.awardRanks && awardId) ? (PnConfig.awardRanks[awardId] || 0) : 0;
 				var suggested  = heldMax + 1;
 				var maxRank    = /zodiac/i.test(awardName) ? 12 : 10;
 				if (suggested > maxRank) suggested = 0;
@@ -5607,8 +5847,15 @@ function setupPronounPicker(cfg) {
 			saveBtn.addEventListener('click', function() {
 				var date = gid('pn-edit-award-date') ? gid('pn-edit-award-date').value : '';
 				var fb   = gid('pn-edit-award-feedback');
+				function showFb(msg, cls) {
+					if (!fb) return;
+					fb.textContent = msg;
+					fb.style.display = '';
+					fb.className = cls;
+					fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+				}
 				if (!date) {
-					if (fb) { fb.textContent = 'Date is required.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					showFb('Date is required.', 'pn-form-error');
 					return;
 				}
 
@@ -5618,7 +5865,7 @@ function setupPronounPicker(cfg) {
 					&& gid('pn-edit-reconcile-check').checked;
 				var kingdomAwardId = gid('pn-edit-reconcile-award') ? gid('pn-edit-reconcile-award').value : '';
 				if (doReconcile && !kingdomAwardId) {
-					if (fb) { fb.textContent = 'Please select a target award to convert to.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					showFb('Please select a target award to convert to.', 'pn-form-error');
 					return;
 				}
 
@@ -5643,18 +5890,18 @@ function setupPronounPicker(cfg) {
 
 				fetch(endpoint, {
 					method: 'POST', body: fd
-				}).then(function(r) { return r.json(); }).then(function(result) {
+				}).then(function(r) {
 					saveBtn.disabled = false;
-					if (result && result.status === 0) {
+					if (r.ok) {
 						var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
-						if (fb) { fb.textContent = msg; fb.style.display = ''; fb.className = 'pn-award-edit-success'; }
+						showFb(msg, 'pn-award-edit-success');
 						setTimeout(function() { location.reload(); }, 900);
 					} else {
-						if (fb) { fb.textContent = (result && result.error) ? result.error : 'Save failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+						showFb('Save failed (server error ' + r.status + ').', 'pn-form-error');
 					}
 				}).catch(function() {
 					saveBtn.disabled = false;
-					if (fb) { fb.textContent = 'Request failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					showFb('Request failed.', 'pn-form-error');
 				});
 			});
 		}
@@ -6735,15 +6982,52 @@ function setupPronounPicker(cfg) {
 	});
 })();
 
+// ---- Create Unit Modal (Playernew) ----
+(function() {
+	if (typeof PnConfig === 'undefined' || !PnConfig.canCreateUnit) return;
+
+	$(document).ready(function() {
+		var overlay   = document.getElementById('pn-unit-create-overlay');
+		var closeBtn  = document.getElementById('pn-unit-create-close-btn');
+		var cancelBtn = document.getElementById('pn-unit-create-cancel');
+		var openBtn   = document.getElementById('pn-unit-create-btn');
+		if (!overlay || !openBtn) return;
+
+		function openModal() {
+			overlay.classList.add('pn-open');
+			document.body.style.overflow = 'hidden';
+			var nameInput = overlay.querySelector('input[name="Name"]');
+			if (nameInput) setTimeout(function() { nameInput.focus(); }, 50);
+		}
+		function closeModal() {
+			overlay.classList.remove('pn-open');
+			document.body.style.overflow = '';
+		}
+
+		openBtn.addEventListener('click', openModal);
+		if (closeBtn)  closeBtn.addEventListener('click', closeModal);
+		if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+		overlay.addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+		document.addEventListener('keydown', function(e) {
+			if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open'))
+				closeModal();
+		});
+	});
+})();
+
 // ---- Move Player Modal (Kingdomnew) ----
 (function() {
 	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
 
-	var MOVE_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/moveplayer';
-	var PSEARCH  = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId + '&q=';
-	var PARK_URL = KnConfig.httpService + 'Search/SearchService.php';
+	var MOVE_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/moveplayer';
+	var PSEARCH_URL = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId;
+	var PARK_URL    = KnConfig.httpService + 'Search/SearchService.php';
+
+	// Modes: 'in' | 'within' | 'out'
+	var knmpMode = 'in';
 
 	function gid(id) { return document.getElementById(id); }
+
 	function showFb(msg, ok) {
 		var el = gid('kn-moveplayer-feedback');
 		el.textContent = msg;
@@ -6757,16 +7041,46 @@ function setupPronounPicker(cfg) {
 		document.body.style.overflow = '';
 	}
 
-	window.knOpenMovePlayerModal = function() {
-		var ov = gid('kn-moveplayer-overlay');
-		if (!ov) return;
-		gid('kn-moveplayer-player-name').value = '';
-		gid('kn-moveplayer-player-id').value   = '';
-		gid('kn-moveplayer-park-name').value   = '';
-		gid('kn-moveplayer-park-id').value     = '';
+	function setMode(mode) {
+		knmpMode = mode;
+		['in','within','out'].forEach(function(m) {
+			var btn = gid('kn-mp-btn-' + m);
+			if (btn) btn.classList.toggle('kn-mp-active', m === mode);
+		});
+		var playerInput = gid('kn-moveplayer-player-name');
+		var parkInput   = gid('kn-moveplayer-park-name');
+		var playerLabel = gid('kn-moveplayer-player-label');
+		var parkLabel   = gid('kn-moveplayer-park-label');
+		if (mode === 'in') {
+			playerInput.placeholder = 'Search players outside this kingdom\u2026';
+			parkInput.placeholder   = 'Search parks in this kingdom\u2026';
+			if (playerLabel) playerLabel.innerHTML = 'Player (outside kingdom) <span style="color:#e53e3e">*</span>';
+			if (parkLabel)   parkLabel.innerHTML   = 'Destination Park (in kingdom) <span style="color:#e53e3e">*</span>';
+		} else if (mode === 'within') {
+			playerInput.placeholder = 'Search kingdom members\u2026';
+			parkInput.placeholder   = 'Search parks in this kingdom\u2026';
+			if (playerLabel) playerLabel.innerHTML = 'Player <span style="color:#e53e3e">*</span>';
+			if (parkLabel)   parkLabel.innerHTML   = 'New Home Park <span style="color:#e53e3e">*</span>';
+		} else {
+			playerInput.placeholder = 'Search kingdom members\u2026';
+			parkInput.placeholder   = 'Search parks outside this kingdom\u2026';
+			if (playerLabel) playerLabel.innerHTML = 'Player <span style="color:#e53e3e">*</span>';
+			if (parkLabel)   parkLabel.innerHTML   = 'Destination Park (outside kingdom) <span style="color:#e53e3e">*</span>';
+		}
+		// Reset fields
+		playerInput.value = '';
+		parkInput.value   = '';
+		gid('kn-moveplayer-player-id').value = '';
+		gid('kn-moveplayer-park-id').value   = '';
 		gid('kn-moveplayer-player-results').classList.remove('kn-ac-open');
 		gid('kn-moveplayer-park-results').classList.remove('kn-ac-open');
 		gid('kn-moveplayer-feedback').style.display = 'none';
+	}
+
+	window.knOpenMovePlayerModal = function() {
+		var ov = gid('kn-moveplayer-overlay');
+		if (!ov) return;
+		setMode('in');
 		ov.classList.add('kn-open');
 		document.body.style.overflow = 'hidden';
 		setTimeout(function() { gid('kn-moveplayer-player-name').focus(); }, 50);
@@ -6787,6 +7101,11 @@ function setupPronounPicker(cfg) {
 				closeMovePlayer();
 		});
 
+		['in','within','out'].forEach(function(m) {
+			var btn = gid('kn-mp-btn-' + m);
+			if (btn) btn.addEventListener('click', function() { setMode(m); });
+		});
+
 		// Player autocomplete
 		gid('kn-moveplayer-player-name').addEventListener('input', function() {
 			gid('kn-moveplayer-player-id').value = '';
@@ -6794,7 +7113,8 @@ function setupPronounPicker(cfg) {
 			if (term.length < 2) { gid('kn-moveplayer-player-results').classList.remove('kn-ac-open'); return; }
 			clearTimeout(mpPlayerTimer);
 			mpPlayerTimer = setTimeout(function() {
-				fetch(PSEARCH + encodeURIComponent(term))
+				var scope = (knmpMode === 'in') ? 'exclude' : 'own';
+				fetch(PSEARCH_URL + '&scope=' + scope + '&q=' + encodeURIComponent(term))
 					.then(function(r) { return r.json(); })
 					.then(function(data) {
 						var el = gid('kn-moveplayer-player-results');
@@ -6816,19 +7136,26 @@ function setupPronounPicker(cfg) {
 			this.classList.remove('kn-ac-open');
 		});
 
-		// Park autocomplete (all parks)
+		// Park autocomplete
 		gid('kn-moveplayer-park-name').addEventListener('input', function() {
 			gid('kn-moveplayer-park-id').value = '';
 			var term = this.value.trim();
 			if (term.length < 2) { gid('kn-moveplayer-park-results').classList.remove('kn-ac-open'); return; }
 			clearTimeout(mpParkTimer);
 			mpParkTimer = setTimeout(function() {
-				$.getJSON(PARK_URL, { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
+				var params = { Action: 'Search/Park', name: term, limit: 10 };
+				if (knmpMode === 'in' || knmpMode === 'within') {
+					params.kingdom_id = KnConfig.kingdomId;
+				} else {
+					params.exclude_kingdom_id = KnConfig.kingdomId;
+				}
+				$.getJSON(PARK_URL, params, function(data) {
 					var el = gid('kn-moveplayer-park-results');
 					el.innerHTML = (data && data.length)
-						? data.map(function(p) {
-							return '<div class="kn-ac-item" data-id="' + p.ParkId + '" data-name="' + encodeURIComponent(p.Name) + '">'
-								+ p.Name + '</div>';
+						? data.map(function(pk) {
+							var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + pk.KingdomName + ')</span>' : '';
+							return '<div class="kn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
+								+ pk.Name + sub + '</div>';
 						}).join('')
 						: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
 					el.classList.add('kn-ac-open');
@@ -6865,7 +7192,6 @@ function setupPronounPicker(cfg) {
 		});
 	});
 })();
-
 // ---- Claim Park Modal (Kingdomnew) ----
 (function() {
 	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
@@ -7212,11 +7538,13 @@ function setupPronounPicker(cfg) {
 (function() {
 	if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
 
-	var MOVE_URL   = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
-	var PSEARCH    = PkConfig.uir + 'ParkAjax/playersearch/' + PkConfig.parkId + '&q=';
+	var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
+	var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&q=';
+	var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&q=';
 
 	var mpPlayerId = 0, mpParkId = 0;
 	var mpPlayerTimer = null, mpParkTimer = null;
+	var mpMode = 'in'; // 'in' = Transfer Into Your Park, 'out' = Transfer to New Park
 
 	function gid(id) { return document.getElementById(id); }
 
@@ -7238,26 +7566,54 @@ function setupPronounPicker(cfg) {
 		if (el) { el.innerHTML = ''; el.classList.remove('pk-ac-open'); }
 	}
 
+	function setMode(mode) {
+		mpMode = mode;
+		var parkSection = gid('pk-moveplayer-park-section');
+		var playerInput = gid('pk-moveplayer-player-name');
+		var btnIn  = gid('pk-mp-btn-in');
+		var btnOut = gid('pk-mp-btn-out');
+
+		// Reset player selection
+		mpPlayerId = 0;
+		if (playerInput) playerInput.value = '';
+		gid('pk-moveplayer-player-id').value = '';
+		closeDropdown('pk-moveplayer-player-results');
+
+		var fb = gid('pk-moveplayer-feedback');
+		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+
+		if (mode === 'in') {
+			if (btnIn)  btnIn.classList.add('pk-mp-active');
+			if (btnOut) btnOut.classList.remove('pk-mp-active');
+			if (parkSection) parkSection.style.display = 'none';
+			if (playerInput) playerInput.placeholder = 'Search players outside this park…';
+			mpParkId = PkConfig.parkId;
+		} else {
+			if (btnOut) btnOut.classList.add('pk-mp-active');
+			if (btnIn)  btnIn.classList.remove('pk-mp-active');
+			if (parkSection) parkSection.style.display = '';
+			if (playerInput) playerInput.placeholder = 'Search members of this park…';
+			var parkInput = gid('pk-moveplayer-park-name');
+			if (parkInput) parkInput.value = '';
+			gid('pk-moveplayer-park-id').value = '';
+			closeDropdown('pk-moveplayer-park-results');
+			mpParkId = 0;
+		}
+	}
+
 	window.pkOpenMovePlayerModal = function() {
 		var overlay = gid('pk-moveplayer-overlay');
 		if (!overlay) return;
-		mpPlayerId = 0; mpParkId = 0;
-		var playerName = gid('pk-moveplayer-player-name');
-		if (playerName) playerName.value = '';
-		var playerId = gid('pk-moveplayer-player-id');
-		if (playerId) playerId.value = '';
-		var parkName = gid('pk-moveplayer-park-name');
-		if (parkName) parkName.value = '';
-		var parkId = gid('pk-moveplayer-park-id');
-		if (parkId) parkId.value = '';
-		closeDropdown('pk-moveplayer-player-results');
-		closeDropdown('pk-moveplayer-park-results');
-		var fb = gid('pk-moveplayer-feedback');
-		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+		setMode('in');
 		overlay.classList.add('pk-open');
 	};
 
 	document.addEventListener('DOMContentLoaded', function() {
+		var btnIn  = gid('pk-mp-btn-in');
+		var btnOut = gid('pk-mp-btn-out');
+		if (btnIn)  btnIn.addEventListener('click',  function() { setMode('in');  });
+		if (btnOut) btnOut.addEventListener('click', function() { setMode('out'); });
+
 		// Player autocomplete
 		var playerInput = gid('pk-moveplayer-player-name');
 		if (playerInput) {
@@ -7265,24 +7621,27 @@ function setupPronounPicker(cfg) {
 				clearTimeout(mpPlayerTimer);
 				var term = this.value.trim();
 				if (term.length < 2) { closeDropdown('pk-moveplayer-player-results'); return; }
+				var searchUrl = (mpMode === 'in') ? PSEARCH_EXCLUDE : PSEARCH_OWN;
 				mpPlayerTimer = setTimeout(function() {
-					fetch(PSEARCH + encodeURIComponent(term))
+					fetch(searchUrl + encodeURIComponent(term))
 						.then(function(r) { return r.json(); })
 						.then(function(results) {
 							var res = gid('pk-moveplayer-player-results');
 							if (!res) return;
 							res.innerHTML = '';
 							if (!results || !results.length) { res.classList.remove('pk-ac-open'); return; }
-							results.forEach(function(p) {
+							results.forEach(function(player) {
 								var item = document.createElement('div');
 								item.className = 'pk-ac-item';
-								var sub = p.ParkName ? ' (' + p.ParkName + ')' : '';
-								item.textContent = p.Persona + sub;
+								var abbr = (player.PAbbr && player.KAbbr)
+									? ' — ' + player.PAbbr + ' (' + player.KAbbr + ')'
+									: (player.ParkName ? ' — ' + player.ParkName : '');
+								item.textContent = player.Persona + abbr;
 								item.addEventListener('mousedown', function(e) {
 									e.preventDefault();
-									mpPlayerId = p.MundaneId;
-									gid('pk-moveplayer-player-name').value = p.Persona;
-									gid('pk-moveplayer-player-id').value = p.MundaneId;
+									mpPlayerId = player.MundaneId;
+									gid('pk-moveplayer-player-name').value = player.Persona;
+									gid('pk-moveplayer-player-id').value = player.MundaneId;
 									closeDropdown('pk-moveplayer-player-results');
 								});
 								res.appendChild(item);
@@ -7297,7 +7656,7 @@ function setupPronounPicker(cfg) {
 			});
 		}
 
-		// Park autocomplete
+		// Park autocomplete (Transfer to New Park mode only)
 		var parkInput = gid('pk-moveplayer-park-name');
 		if (parkInput) {
 			parkInput.addEventListener('input', function() {
@@ -7305,21 +7664,21 @@ function setupPronounPicker(cfg) {
 				var term = this.value.trim();
 				if (term.length < 2) { closeDropdown('pk-moveplayer-park-results'); return; }
 				mpParkTimer = setTimeout(function() {
-					$.getJSON(PkConfig.httpService, { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
+					$.getJSON(PkConfig.httpService + 'Search/SearchService.php', { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
 						var res = gid('pk-moveplayer-park-results');
 						if (!res) return;
 						res.innerHTML = '';
 						var parks = data.Parks || data.parks || data.results || data || [];
 						if (!parks.length) { res.classList.remove('pk-ac-open'); return; }
-						parks.forEach(function(p) {
+						parks.forEach(function(pk) {
 							var item = document.createElement('div');
 							item.className = 'pk-ac-item';
-							var sub = p.KingdomName ? ' (' + p.KingdomName + ')' : '';
-							item.textContent = (p.ParkName || p.Name || p.name || '') + sub;
+							var sub = pk.KingdomName ? ' (' + pk.KingdomName + ')' : '';
+							item.textContent = (pk.ParkName || pk.Name || pk.name || '') + sub;
 							item.addEventListener('mousedown', function(e) {
 								e.preventDefault();
-								mpParkId = p.ParkId || p.parkId || p.id || 0;
-								gid('pk-moveplayer-park-name').value = p.ParkName || p.Name || p.name || '';
+								mpParkId = pk.ParkId || pk.parkId || pk.id || 0;
+								gid('pk-moveplayer-park-name').value = pk.ParkName || pk.Name || pk.name || '';
 								gid('pk-moveplayer-park-id').value = mpParkId;
 								closeDropdown('pk-moveplayer-park-results');
 							});
@@ -7339,7 +7698,7 @@ function setupPronounPicker(cfg) {
 		if (submitBtn) {
 			submitBtn.addEventListener('click', function() {
 				mpPlayerId = parseInt(gid('pk-moveplayer-player-id').value) || 0;
-				mpParkId   = parseInt(gid('pk-moveplayer-park-id').value)   || 0;
+				mpParkId = (mpMode === 'in') ? PkConfig.parkId : (parseInt(gid('pk-moveplayer-park-id').value) || 0);
 				if (!mpPlayerId) { showFb('Please select a player.', false); return; }
 				if (!mpParkId)   { showFb('Please select a destination park.', false); return; }
 				var btn = this;
@@ -7348,13 +7707,14 @@ function setupPronounPicker(cfg) {
 					btn.disabled = false;
 					if (r && r.status === 0) {
 						showFb('Player moved successfully.', true);
-						mpPlayerId = 0; mpParkId = 0;
-						var playerName = gid('pk-moveplayer-player-name');
-						if (playerName) playerName.value = '';
+						mpPlayerId = 0;
+						gid('pk-moveplayer-player-name').value = '';
 						gid('pk-moveplayer-player-id').value = '';
-						var parkName = gid('pk-moveplayer-park-name');
-						if (parkName) parkName.value = '';
-						gid('pk-moveplayer-park-id').value = '';
+						if (mpMode === 'out') {
+							mpParkId = 0;
+							gid('pk-moveplayer-park-name').value = '';
+							gid('pk-moveplayer-park-id').value = '';
+						}
 					} else {
 						showFb((r && r.error) ? r.error : 'Move failed.', false);
 					}
@@ -7371,15 +7731,12 @@ function setupPronounPicker(cfg) {
 		var cancelBtn = gid('pk-moveplayer-cancel');
 		if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
 
-		// Backdrop click
 		var overlay = gid('pk-moveplayer-overlay');
 		if (overlay) {
 			overlay.addEventListener('click', function(e) {
-				if (e.target === overlay) closeModal();
+				if (e.target === this) closeModal();
 			});
 		}
-
-		// Escape key
 		document.addEventListener('keydown', function(e) {
 			if (e.key === 'Escape') {
 				var overlay = gid('pk-moveplayer-overlay');

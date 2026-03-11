@@ -1296,23 +1296,46 @@ var KnConfig = {
 </div>
 
 <!-- Move Player Modal -->
+<style>
+.kn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.kn-mp-toggle-btn {
+	flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600;
+	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s; white-space:nowrap;
+}
+.kn-mp-toggle-btn.kn-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+#kn-moveplayer-overlay .kn-modal-body { overflow:visible; }
+#kn-moveplayer-overlay .kn-acct-field { position:relative; }
+#kn-moveplayer-overlay .kn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
+</style>
 <div id="kn-moveplayer-overlay">
-	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="kn-modal-close-btn" id="kn-moveplayer-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body">
 			<div id="kn-moveplayer-feedback" style="display:none"></div>
+			<!-- Mode toggle -->
+			<div class="kn-mp-toggle">
+				<button class="kn-mp-toggle-btn kn-mp-active" id="kn-mp-btn-in" type="button">
+					<i class="fas fa-arrow-right" style="margin-right:3px"></i>Transfer Into Kingdom
+				</button>
+				<button class="kn-mp-toggle-btn" id="kn-mp-btn-within" type="button">
+					<i class="fas fa-arrows-alt-h" style="margin-right:3px"></i>Transfer Within Kingdom
+				</button>
+				<button class="kn-mp-toggle-btn" id="kn-mp-btn-out" type="button">
+					<i class="fas fa-arrow-left" style="margin-right:3px"></i>Transfer Out of Kingdom
+				</button>
+			</div>
 			<div class="kn-acct-field">
-				<label>Player <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="kn-moveplayer-player-name" autocomplete="off" placeholder="Search players&hellip;">
+				<label id="kn-moveplayer-player-label">Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-moveplayer-player-name" autocomplete="off" placeholder="Search players outside this kingdom&hellip;">
 				<input type="hidden" id="kn-moveplayer-player-id">
 				<div class="kn-ac-results" id="kn-moveplayer-player-results"></div>
 			</div>
 			<div class="kn-acct-field" style="margin-top:10px">
-				<label>New Home Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="kn-moveplayer-park-name" autocomplete="off" placeholder="Search parks&hellip;">
+				<label id="kn-moveplayer-park-label">New Home Park <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-moveplayer-park-name" autocomplete="off" placeholder="Search parks in this kingdom&hellip;">
 				<input type="hidden" id="kn-moveplayer-park-id">
 				<div class="kn-ac-results" id="kn-moveplayer-park-results"></div>
 			</div>

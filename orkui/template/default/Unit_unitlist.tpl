@@ -48,6 +48,74 @@ foreach ($_ul_units as $_u) {
 .ul-name-link { font-weight: 600; color: var(--rp-accent); text-decoration: none; }
 .ul-name-link:hover { color: var(--rp-accent-mid); text-decoration: underline; }
 #ul-table td:first-child, #ul-table th:first-child { width: 50px; padding-right: 4px; }
+
+/* ── Mobile ─────────────────────────────────────────── */
+.rp-table-area { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 600px) {
+	.ul-col-leaders, .ul-col-web { display: none; }
+	.ul-thumb { width: 28px; height: 28px; }
+	.rp-context { font-size: 12px; padding: 8px 10px; }
+	.rp-stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+	.rp-stat-card { flex: unset; }
+}
+
+/* ── Create Unit Modal ───────────────────────────────── */
+.uc-overlay {
+	position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+	display: flex; align-items: center; justify-content: center;
+	z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.18s;
+}
+.uc-overlay.uc-open { opacity: 1; pointer-events: auto; }
+.uc-modal {
+	background: #fff; border-radius: 10px; width: 460px;
+	max-width: calc(100vw - 32px); box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+	transform: translateY(12px); transition: transform 0.18s;
+}
+.uc-overlay.uc-open .uc-modal { transform: none; }
+.uc-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+}
+.uc-modal-title {
+	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
+	background: transparent !important; border: none !important; padding: 0 !important;
+	border-radius: 0 !important; text-shadow: none !important;
+}
+.uc-close-btn {
+	background: none; border: none; font-size: 20px; color: #718096;
+	cursor: pointer; line-height: 1; padding: 0 4px;
+}
+.uc-close-btn:hover { color: #2d3748; }
+.uc-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.uc-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+.uc-field input, .uc-field select {
+	width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
+	font-size: 14px; color: #2d3748; box-sizing: border-box; font-family: inherit;
+	transition: border-color 0.15s;
+}
+.uc-field input:focus, .uc-field select:focus {
+	outline: none; border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12);
+}
+.uc-modal-footer {
+	display: flex; justify-content: flex-end; gap: 8px;
+	padding: 14px 20px; border-top: 1px solid #e2e8f0;
+}
+.uc-btn {
+	border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+	cursor: pointer; padding: 7px 16px; transition: background 0.15s;
+}
+.uc-btn-secondary { background: #edf2f7; color: #4a5568; }
+.uc-btn-secondary:hover { background: #e2e8f0; }
+.uc-btn-primary { background: #3182ce; color: #fff; }
+.uc-btn-primary:hover { background: #2b6cb0; }
+.uc-new-btn {
+	display: inline-flex; align-items: center; gap: 6px;
+	background: #3182ce; color: #fff; border: none; border-radius: 6px;
+	font-size: 13px; font-weight: 600; padding: 6px 14px; cursor: pointer;
+	transition: background 0.15s;
+}
+.uc-new-btn:hover { background: #2b6cb0; }
 </style>
 
 <div class="rp-root">
@@ -69,6 +137,13 @@ foreach ($_ul_units as $_u) {
 			</div>
 <?php endif; ?>
 		</div>
+<?php if (!empty($LoggedIn)): ?>
+		<div class="rp-header-actions">
+			<button class="uc-new-btn" id="uc-open-btn">
+				<i class="fas fa-plus"></i> New Unit
+			</button>
+		</div>
+<?php endif; ?>
 	</div>
 
 	<!-- Stats row -->
@@ -133,9 +208,12 @@ foreach ($_ul_units as $_u) {
 					<th style="display:none">Type</th>
 					<th style="display:none">LastActivity</th>
 <?php if ($_ul_scoped): ?>
-					<th>In <?=htmlspecialchars($ScopeLabel)?></th>
+					<th style="white-space:normal;min-width:60px;">In <?=htmlspecialchars($ScopeLabel)?></th>
 <?php endif; ?>
-					<th>Total Members</th>
+					<th>Members</th>
+					<th>Active</th>
+					<th class="ul-col-leaders">Leaders</th>
+					<th class="ul-col-web" style="text-align:center">Web</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -167,6 +245,9 @@ foreach ($_ul_units as $_u) {
 					<td><?=(int)$unit['MemberCount']?></td>
 <?php endif; ?>
 					<td><?=(int)$unit['TotalMemberCount']?></td>
+					<td><?=(int)$unit['ActiveMemberCount']?></td>
+					<td class="ul-col-leaders"><?=htmlspecialchars($unit['LeaderNames'] ?? '')?></td>
+					<td class="ul-col-web" style="text-align:center"><?php if (!empty($unit['Url'])): ?><a href="<?=htmlspecialchars($unit['Url'])?>" target="_blank" rel="noopener" title="<?=htmlspecialchars($unit['Url'])?>"><i class="fas fa-external-link-alt" style="color:#3730a3;font-size:13px"></i></a><?php else: ?>&nbsp;<?php endif; ?></td>
 				</tr>
 <?php endforeach; ?>
 			</tbody>
@@ -205,6 +286,7 @@ foreach ($_ul_units as $_u) {
 		order     : [[1, 'asc']],
 		columnDefs: [
 			{ targets: 0,            orderable: false, searchable: false },
+			{ targets: -1,           orderable: false, searchable: false },
 			{ targets: TYPE_COL,     visible: false },
 			{ targets: ACTIVITY_COL, visible: false }
 		]
@@ -230,3 +312,67 @@ foreach ($_ul_units as $_u) {
 	});
 }());
 </script>
+
+<?php if (!empty($LoggedIn)): ?>
+<div class="uc-overlay" id="uc-overlay">
+	<div class="uc-modal">
+		<div class="uc-modal-header">
+			<h3 class="uc-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#3182ce"></i>Create Company or Household</h3>
+			<button class="uc-close-btn" id="uc-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<form method="post" action="<?=UIR?>Unit/create/<?=(int)$this->__session->user_id?>">
+			<input type="hidden" name="Action" value="create">
+			<div class="uc-modal-body">
+				<div class="uc-field">
+					<label>Name <span style="color:#e53e3e">*</span></label>
+					<input type="text" name="Name" required placeholder="Enter a name…" id="uc-name-input" autocomplete="off">
+				</div>
+				<div class="uc-field">
+					<label>Type</label>
+					<select name="Type">
+						<option value="Household">Household</option>
+						<option value="Company">Company</option>
+					</select>
+				</div>
+				<div class="uc-field">
+					<label>Website URL <span style="font-weight:400;color:#a0aec0;">(optional)</span></label>
+					<input type="url" name="Url" placeholder="https://…">
+				</div>
+			</div>
+			<div class="uc-modal-footer">
+				<button type="button" class="uc-btn uc-btn-secondary" id="uc-cancel-btn">Cancel</button>
+				<button type="submit" class="uc-btn uc-btn-primary"><i class="fas fa-plus"></i> Create</button>
+			</div>
+		</form>
+	</div>
+</div>
+<script>
+(function() {
+	var overlay   = document.getElementById('uc-overlay');
+	var openBtn   = document.getElementById('uc-open-btn');
+	var closeBtn  = document.getElementById('uc-close-btn');
+	var cancelBtn = document.getElementById('uc-cancel-btn');
+	if (!overlay || !openBtn) return;
+
+	function openModal() {
+		overlay.classList.add('uc-open');
+		document.body.style.overflow = 'hidden';
+		var n = document.getElementById('uc-name-input');
+		if (n) setTimeout(function() { n.focus(); }, 50);
+	}
+	function closeModal() {
+		overlay.classList.remove('uc-open');
+		document.body.style.overflow = '';
+	}
+
+	openBtn.addEventListener('click', openModal);
+	closeBtn.addEventListener('click', closeModal);
+	cancelBtn.addEventListener('click', closeModal);
+	overlay.addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('uc-open'))
+			closeModal();
+	});
+}());
+</script>
+<?php endif; ?>

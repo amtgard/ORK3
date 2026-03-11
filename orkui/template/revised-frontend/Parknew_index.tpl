@@ -1495,6 +1495,14 @@ var PkConfig = {
 </div>
 
 <!-- Move Player Modal -->
+<style>
+.pk-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.pk-mp-toggle-btn {
+	flex:1; padding:6px 10px; border:none; border-radius:4px; font-size:12px; font-weight:600;
+	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s;
+}
+.pk-mp-toggle-btn.pk-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+</style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
@@ -1503,13 +1511,22 @@ var PkConfig = {
 		</div>
 		<div class="pk-modal-body">
 			<div id="pk-moveplayer-feedback" style="display:none"></div>
+			<!-- Mode toggle -->
+			<div class="pk-mp-toggle">
+				<button class="pk-mp-toggle-btn pk-mp-active" id="pk-mp-btn-in" type="button">
+					<i class="fas fa-arrow-right" style="margin-right:4px"></i>Transfer Into Your Park
+				</button>
+				<button class="pk-mp-toggle-btn" id="pk-mp-btn-out" type="button">
+					<i class="fas fa-arrow-right" style="margin-right:4px"></i>Transfer to New Park
+				</button>
+			</div>
 			<div class="pk-acct-field">
-				<label>Player <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="pk-moveplayer-player-name" autocomplete="off" placeholder="Search players in this park…">
+				<label id="pk-moveplayer-player-label">Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-moveplayer-player-name" autocomplete="off" placeholder="Search players outside this park…">
 				<input type="hidden" id="pk-moveplayer-player-id">
 				<div class="pk-ac-results" id="pk-moveplayer-player-results"></div>
 			</div>
-			<div class="pk-acct-field" style="margin-top:10px">
+			<div class="pk-acct-field" id="pk-moveplayer-park-section" style="margin-top:10px;display:none">
 				<label>New Home Park <span style="color:#e53e3e">*</span></label>
 				<input type="text" id="pk-moveplayer-park-name" autocomplete="off" placeholder="Search parks…">
 				<input type="hidden" id="pk-moveplayer-park-id">

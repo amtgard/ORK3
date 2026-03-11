@@ -97,6 +97,7 @@ $server->Register(
 						array( 'name','request',false,'string',true ),
 						array( 'kingdom_id','request',true,'int',true ),
 						array( 'limit','request',true,'int',true ),
+						array( 'exclude_kingdom_id','request',true,'int',true ),
 					)
 			)
 	);

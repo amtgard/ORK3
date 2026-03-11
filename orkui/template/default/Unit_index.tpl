@@ -275,8 +275,22 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
+	/* Hero */
 	.un-hero-content { flex-wrap: wrap; padding: 18px 20px; }
-	.un-hero-actions { flex-direction: row; flex-wrap: wrap; }
+	.un-hero-actions { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; }
+	.un-hero-name { font-size: 21px; }
+	/* Sidebar above roster on mobile (override revised.css order values) */
+	.pn-sidebar { order: 1 !important; }
+	.pn-main    { order: 2 !important; }
+	/* Hide button text labels */
+	.un-btn-label { display: none; }
+	/* Hide less-important roster columns */
+	#un-roster-table th:nth-child(2),
+	#un-roster-table td:nth-child(2),
+	#un-roster-table th:nth-child(3),
+	#un-roster-table td:nth-child(3),
+	#un-roster-table th:nth-child(5),
+	#un-roster-table td:nth-child(5) { display: none; }
 }
 </style>
 
@@ -319,12 +333,12 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 		<div class="un-hero-actions">
 <?php if (trimlen($_url) > 0): ?>
 			<a class="pn-btn pn-btn-outline" href="<?=htmlspecialchars($_url)?>" target="_blank" rel="noopener noreferrer">
-				<i class="fas fa-external-link-alt"></i> Website
+				<i class="fas fa-external-link-alt"></i><span class="un-btn-label"> Website</span>
 			</a>
 <?php endif; ?>
 <?php if ($_can_edit): ?>
 			<button class="pn-btn pn-btn-white" onclick="unOpenModal('un-modal-details')">
-				<i class="fas fa-pen"></i> Edit Details
+				<i class="fas fa-pen"></i><span class="un-btn-label"> Edit Details</span>
 			</button>
 <?php endif; ?>
 		</div>
@@ -352,20 +366,34 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 	<!-- Sidebar -->
 	<aside class="pn-sidebar">
 
-<?php if (trimlen($_desc) > 0): ?>
+<?php if (trimlen($_desc) > 0 || $_can_edit): ?>
 		<div class="pn-card">
-			<h4><i class="fas fa-align-left"></i> About</h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+				<span><i class="fas fa-align-left"></i> About</span>
+				<?php if ($_can_edit): ?>
+				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-details')" title="Edit details">
+					<i class="fas fa-pen"></i>
+				</button>
+				<?php endif; ?>
+			</h4>
 			<div style="font-size:13px;line-height:1.7;color:#4a5568;">
 				<?=nl2br($_desc)?>
 			</div>
 		</div>
 <?php endif; ?>
 
-<?php if (trimlen($_history) > 0): ?>
+<?php if (trimlen($_history) > 0 || $_can_edit): ?>
 		<div class="pn-card">
-			<h4><i class="fas fa-scroll"></i> History</h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+				<span><i class="fas fa-scroll"></i> History</span>
+				<?php if ($_can_edit): ?>
+				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-details')" title="Edit details">
+					<i class="fas fa-pen"></i>
+				</button>
+				<?php endif; ?>
+			</h4>
 			<div style="font-size:13px;line-height:1.7;color:#4a5568;">
-				<?=nl2br($_history)?>
+				<?=nl2br(htmlspecialchars(str_replace(['\r\n', '\r', '\n'], "\n", $_history)))?>
 			</div>
 		</div>
 <?php endif; ?>
@@ -440,7 +468,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 			</div>
 <?php if ($_can_edit): ?>
 			<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="unOpenModal('un-modal-add-member')">
-				<i class="fas fa-plus"></i> Add Member
+				<i class="fas fa-plus"></i><span class="un-btn-label"> Add Member</span>
 			</button>
 <?php endif; ?>
 		</div>
