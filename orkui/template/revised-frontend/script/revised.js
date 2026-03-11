@@ -3399,34 +3399,6 @@ $(document).ready(function() {
 		}
 	}
 
-	// ── Shared: Styled confirmation modal ───────────────────
-	var _confirmCallback = null;
-	window.knConfirm = function(message, onConfirm, title) {
-		var overlay = gid('kn-confirm-overlay');
-		if (!overlay) { if (confirm(message)) onConfirm(); return; }
-		gid('kn-confirm-message').textContent = message;
-		if (title) gid('kn-confirm-title').childNodes[1].textContent = ' ' + title;
-		_confirmCallback = onConfirm;
-		overlay.classList.add('kn-open');
-		document.body.style.overflow = 'hidden';
-	}
-	function knCloseConfirm() {
-		var overlay = gid('kn-confirm-overlay');
-		if (overlay) overlay.classList.remove('kn-open');
-		document.body.style.overflow = '';
-		_confirmCallback = null;
-	}
-	$(document).ready(function() {
-		var ok     = gid('kn-confirm-ok-btn');
-		var cancel = gid('kn-confirm-cancel-btn');
-		var close  = gid('kn-confirm-close-btn');
-		var over   = gid('kn-confirm-overlay');
-		if (ok)     ok.addEventListener('click',     function() { var cb = _confirmCallback; knCloseConfirm(); if (cb) cb(); });
-		if (cancel) cancel.addEventListener('click', knCloseConfirm);
-		if (close)  close.addEventListener('click',  knCloseConfirm);
-		if (over)   over.addEventListener('click',   function(e) { if (e.target === this) knCloseConfirm(); });
-	});
-
 	// ── Section: Operations ──────────────────────────────────
 	function wireOps() {
 		var btn = gid('kn-admin-reset-waivers-btn');
@@ -3609,6 +3581,39 @@ $(document).ready(function() {
 				if (wasDirty) setTimeout(function() { location.reload(); }, 0);
 			}
 		});
+	});
+})();
+
+// ── Shared: Styled confirmation modal (used by Kingdom + Park admin dialogs) ──
+(function() {
+	var _confirmCallback = null;
+
+	window.knConfirm = function(message, onConfirm, title) {
+		var overlay = document.getElementById('kn-confirm-overlay');
+		if (!overlay) { if (confirm(message)) onConfirm(); return; }
+		document.getElementById('kn-confirm-message').textContent = message;
+		if (title) document.getElementById('kn-confirm-title').childNodes[1].textContent = ' ' + title;
+		_confirmCallback = onConfirm;
+		overlay.classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+	};
+
+	function knCloseConfirm() {
+		var overlay = document.getElementById('kn-confirm-overlay');
+		if (overlay) overlay.classList.remove('kn-open');
+		document.body.style.overflow = '';
+		_confirmCallback = null;
+	}
+
+	$(document).ready(function() {
+		var ok     = document.getElementById('kn-confirm-ok-btn');
+		var cancel = document.getElementById('kn-confirm-cancel-btn');
+		var close  = document.getElementById('kn-confirm-close-btn');
+		var over   = document.getElementById('kn-confirm-overlay');
+		if (ok)     ok.addEventListener('click',     function() { var cb = _confirmCallback; knCloseConfirm(); if (cb) cb(); });
+		if (cancel) cancel.addEventListener('click', knCloseConfirm);
+		if (close)  close.addEventListener('click',  knCloseConfirm);
+		if (over)   over.addEventListener('click',   function(e) { if (e.target === this) knCloseConfirm(); });
 	});
 })();
 
