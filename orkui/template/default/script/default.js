@@ -1,3 +1,15 @@
+function isValidName(value) {
+	return /^[\p{L} '\-,_\.]*$/u.test(value);
+}
+
+function isValidEmail(value) {
+	return /^[\p{L}0-9._%+-]+@[\p{L}0-9.-]+$/u.test(value);
+}
+
+function isValidUsername(value) {
+	return /^[a-zA-Z]+[a-zA-Z0-9]*$/.test(value);
+}
+
 function urldecode(url) {
   var d = decodeURIComponent((url+'').replace(/\+/g, '%20').replace(/\+/g, '%2B'));
   return d;
@@ -250,8 +262,7 @@ $(function() {
 			});
 	});
 	$('.name-field').change(function() {
-		var words = new RegExp(/^[a-zA-Z '\-,_\.]*$/);
-		if (!words.test($(this).val())) {
+		if (!isValidName($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
 				$( this ).css('border-color', 'red');
@@ -262,8 +273,7 @@ $(function() {
 		}
 	});
 	$('.alphanumeric-field').change(function() {
-		var words = new RegExp("^[a-zA-Z]+[a-zA-Z0-9]*$");
-		if (!words.test($(this).val())) {
+		if (!isValidUsername($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
 				$( this ).css('border-color', 'red');
@@ -274,8 +284,7 @@ $(function() {
 		}
 	});
 	$('.most-emails-field').change(function() {
-		var words = new RegExp("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+$");
-		if (!words.test($(this).val())) {
+		if (!isValidEmail($(this).val())) {
 			$( this ).val('').fadeOut('slow', function() {
 				$( this ).css('background-color', '#fff0f0');
 				$( this ).css('border-color', 'red');
