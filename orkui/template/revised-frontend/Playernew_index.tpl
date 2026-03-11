@@ -46,6 +46,12 @@
 		? $_kconfig['DuesPeriod']['Value']->Type
 		: 'month';
 	$_duesPeriod = (!empty($_kconfig['DuesPeriod']['Value']->Period)) ? (int)$_kconfig['DuesPeriod']['Value']->Period : 6;
+
+	// Last class used (for attendance modal default)
+	$_lastClassId = 0;
+	foreach (is_array($Details['Attendance']) ? $Details['Attendance'] : [] as $_att) {
+		if (!empty($_att['ClassId'])) { $_lastClassId = (int)$_att['ClassId']; break; }
+	}
 ?>
 
 <style>:root { --pn-hero-bg: <?= $isSuspended ? '#9b2c2c' : '#2c5282' ?>; }</style>
@@ -129,9 +135,7 @@
 		<div class="pn-hero-actions">
 			<?php if ($LoggedIn): ?>
 				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
-				<?php if ($canEditAdmin): ?>
-				<button class="pn-btn pn-btn-ghost pn-hero-btn" onclick="pnOpenMovePlayerModal()"><i class="fas fa-arrows-alt"></i> Move</button>
-				<?php endif; ?>
+
 			<?php endif; ?>
 		</div>
 	</div>
@@ -636,6 +640,11 @@
 			<!-- Attendance Tab -->
 			<div class="pn-tab-panel" id="pn-tab-attendance" style="display:none">
 				<?php $attendanceList = is_array($Details['Attendance']) ? $Details['Attendance'] : array(); ?>
+				<?php if ($canEditAdmin): ?>
+				<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+					<button class="pn-btn pn-btn-primary" onclick="pnOpenPlayerAttModal()"><i class="fas fa-plus"></i> Add Attendance</button>
+				</div>
+				<?php endif; ?>
 				<?php if (count($attendanceList) > 0): ?>
 					<div class="pn-pagesize-bar">
 						<label for="pn-attendance-pagesize">Show</label>
@@ -1034,6 +1043,7 @@
 		</div>
 
 		<div class="pn-modal-footer">
+			<?php if ($canEditAdmin): ?><button class="pn-btn pn-btn-ghost" id="pn-acct-move-player-btn" style="margin-right:auto;color:#c53030;border-color:#feb2b2;"><i class="fas fa-arrows-alt"></i> Move Player</button><?php endif; ?>
 			<button class="pn-btn pn-btn-secondary" id="pn-acct-cancel">Cancel</button>
 			<button class="pn-btn pn-btn-primary" id="pn-acct-save"><i class="fas fa-save"></i> Save Changes</button>
 		</div>
@@ -1458,9 +1468,11 @@ var PnConfig = {
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
 	playerParkName:   <?= json_encode($Player['Park'] ?? $Player['ParkName'] ?? '') ?>,
+	playerPersona:    <?= json_encode($Player['Persona'] ?? '') ?>,
 	duesPeriodType:   <?= json_encode($_duesPeriodType) ?>,
 	duesPeriod:       <?= (int)$_duesPeriod ?>,
 	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
+	lastClassId:      <?= $_lastClassId ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -1533,22 +1545,87 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 	</div>
 </div>
 
-<!-- Move Player Modal -->
-<div class="pn-overlay" id="pn-moveplayer-overlay">
+<!-- Player Add Attendance Modal -->
+<style>
+#pn-player-att-overlay .pn-modal-body { overflow:visible; }
+#pn-player-att-overlay .pn-acct-field { position:relative; }
+#pn-player-att-overlay .pn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
+</style>
+<div class="pn-overlay" id="pn-player-att-overlay">
 	<div class="pn-modal-box" style="width:440px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-plus-circle" style="margin-right:8px;color:#276749"></i>Add Attendance</h3>
+			<button class="pn-modal-close-btn" id="pn-player-att-close" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-player-att-feedback" style="display:none"></div>
+			<div class="pn-acct-field">
+				<label>Player</label>
+				<div class="pn-mp-player-locked"><?= htmlspecialchars($Player['Persona'] ?? '') ?></div>
+			</div>
+			<div class="pn-acct-field" style="position:relative">
+				<label>Park</label>
+				<input type="text" id="pn-player-att-park-name" autocomplete="off" placeholder="Search for a park…" value="<?= htmlspecialchars($Player['ParkName'] ?? '') ?>">
+				<input type="hidden" id="pn-player-att-park-id" value="<?= (int)($Player['ParkId'] ?? 0) ?>">
+				<div class="pn-ac-results" id="pn-player-att-park-results"></div>
+			</div>
+			<div style="display:flex;gap:12px">
+				<div class="pn-acct-field" style="flex:1">
+					<label>Date</label>
+					<input type="date" id="pn-player-att-date" style="width:100%">
+				</div>
+				<div class="pn-acct-field" style="flex:0 0 90px">
+					<label>Credits</label>
+					<input type="number" id="pn-player-att-credits" value="1" min="0.5" max="4" step="0.5" style="width:100%">
+				</div>
+			</div>
+			<div class="pn-acct-field">
+				<label>Class</label>
+				<select id="pn-player-att-class" style="width:100%"></select>
+			</div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-player-att-cancel">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-player-att-submit"><i class="fas fa-plus"></i> Add Attendance</button>
+		</div>
+	</div>
+</div>
+
+<!-- Move Player Modal -->
+<?php if ($canEditAdmin): ?>
+<style>
+.pn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.pn-mp-toggle-btn { flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; background:transparent; color:#718096; white-space:nowrap; }
+.pn-mp-toggle-btn.pn-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+#pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
+#pn-moveplayer-overlay .pn-acct-field { position:relative; }
+#pn-moveplayer-overlay .pn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
+.pn-mp-player-locked { background:#f7fafc; border:1px solid #e2e8f0; border-radius:4px; padding:8px 12px; color:#4a5568; font-size:0.95rem; }
+</style>
+<div class="pn-overlay" id="pn-moveplayer-overlay">
+	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-arrows-alt" style="margin-right:8px;color:#2c5282"></i>Move Player</h3>
 			<button class="pn-modal-close-btn" id="pn-moveplayer-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
 			<div id="pn-moveplayer-feedback" style="display:none"></div>
-			<div class="pn-move-current-park">
+			<div class="pn-mp-toggle">
+				<button class="pn-mp-toggle-btn pn-mp-active" id="pn-mp-btn-within">Transfer Within Kingdom</button>
+				<button class="pn-mp-toggle-btn" id="pn-mp-btn-out">Transfer Out of Kingdom</button>
+			</div>
+			<div class="pn-acct-field">
+				<label>Player</label>
+				<div class="pn-mp-player-locked" id="pn-mp-player-display"><?= htmlspecialchars($Player['Persona'] ?? '') ?></div>
+			</div>
+			<div class="pn-move-current-park" style="margin:10px 0 4px">
 				<strong>Current park:</strong> <span id="pn-move-current-park-name"></span>
 			</div>
 			<div class="pn-acct-field">
-				<label for="pn-move-park-text">New Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="pn-move-park-text" placeholder="Search for a park..." autocomplete="off" />
-				<input type="hidden" id="pn-move-park-id" value="0" />
+				<label id="pn-moveplayer-park-label">New Home Park <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pn-moveplayer-park-name" placeholder="Search for a park…" autocomplete="off" />
+				<input type="hidden" id="pn-moveplayer-park-id" value="" />
+				<div class="pn-ac-results" id="pn-moveplayer-park-results"></div>
 			</div>
 			<div class="pn-move-warning">
 				<i class="fas fa-exclamation-triangle"></i>
@@ -1561,6 +1638,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- Revoke All Awards Modal -->
 <div class="pn-overlay" id="pn-revoke-all-overlay">

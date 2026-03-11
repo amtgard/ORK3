@@ -488,15 +488,12 @@ class Player extends Ork3 {
     		$this->mundane->clear();
     		$this->mundane->username = $username;
     		if ($this->mundane->find()) {
-                echo " username exists ... ";
                 $username = $srcname . '-' . substr(md5(microtime()), 0, 5);
-                echo " trying altered name instead ... ";
     		} else {
         	    $found = true;
     		}
 			$calls--;
         }
-        echo " username is available ... ";
         return $username;
     }
 

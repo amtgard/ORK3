@@ -125,6 +125,17 @@ class Controller_Unit extends Controller {
 						'Id'        => $unit_id_int,
 						'MundaneId' => (int)$this->request->MundaneId,
 					));
+					if ($r['Status'] == 0) {
+						// Also add as a Member if not already on the roster
+						$this->Unit->add_unit_member(array(
+							'Token'     => $this->session->token,
+							'UnitId'    => $unit_id_int,
+							'MundaneId' => (int)$this->request->MundaneId,
+							'Role'      => 'Member',
+							'Title'     => '',
+							'Active'    => 'Active',
+						));
+					}
 					break;
 				case 'deleteauth':
 					$r = $this->Unit->del_unit_auth(array(

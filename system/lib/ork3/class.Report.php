@@ -541,6 +541,16 @@ class Report  extends Ork3 {
 		if (valid_id($request['KingdomId'])) $activity_scope = " and a.kingdom_id = '$request[KingdomId]'";
 		elseif (valid_id($request['ParkId'])) $activity_scope = " and a.park_id = '$request[ParkId]'";
 
+		$name_where = '';
+		if (!empty($request['Name'])) {
+			$safeName = str_replace(["'", '%', '_', '\\'], ["\'\'", '\\%', '\\_', '\\\\'], $request['Name']);
+			$name_where = " and u.name like '%{$safeName}%'";
+		}
+		$limit_clause = isset($request['Limit']) && is_numeric($request['Limit']) ? 'LIMIT ' . (int)$request['Limit'] : '';
+		$allowed_order = ['u.name', 'active_member_count DESC', 'total_member_count DESC'];
+		$order_by = (isset($request['OrderBy']) && in_array($request['OrderBy'], $allowed_order))
+			? $request['OrderBy'] : 'u.name';
+
 		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count,
 					(select count(*) from " . DB_PREFIX . "unit_mundane um2 where um2.unit_id = u.unit_id) as total_member_count,
 					(select max(a.date) from " . DB_PREFIX . "attendance a join " . DB_PREFIX . "unit_mundane um3 on um3.mundane_id = a.mundane_id where um3.unit_id = u.unit_id $activity_scope) as last_activity_date,
@@ -551,9 +561,9 @@ class Report  extends Ork3 {
 						left join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id
 							left join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id
 						left join " . DB_PREFIX . "event e on e.unit_id = u.unit_id
-					where 1 and (1 $kingdom $park $mundane $event_id $active_only) and (0 $companies $households $events)
+					where 1 and (1 $kingdom $park $mundane $event_id $active_only $name_where) and (0 $companies $households $events)
 					group by u.unit_id
-				order by u.name";
+				order by $order_by $limit_clause";
 		$r = $this->db->query($sql);
 		logtrace("Unit Summary", array($request, $sql));
 		$response = array( 'Status' => Success(), 'Units' => array());

@@ -551,9 +551,16 @@
 								</button>
 							</div>
 							<?php if ($CanManagePark ?? false): ?>
-							<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()">
-								<i class="fas fa-user-plus"></i> Add Player
-							</button>
+							<div class="plr-action-group">
+								<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
+								<div class="plr-gear-wrap">
+									<button class="plr-gear-btn" id="pk-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
+									<div class="plr-gear-menu" id="pk-plr-gear-menu">
+										<button class="plr-gear-item" onclick="pkOpenMovePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-people-arrows"></i> Move Player</button>
+										<button class="plr-gear-item" onclick="pkOpenMergePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button>
+									</div>
+								</div>
+							</div>
 							<?php endif; ?>
 						</div>
 					</div>
@@ -1123,9 +1130,9 @@ var PkConfig = {
 				</div>
 			</div>
 
-			<!-- Added this session -->
+			<!-- Entered today -->
 			<div class="pk-att-added-section" id="pk-att-added-section" style="display:none">
-				<div class="pk-att-section-label">Added this session</div>
+				<div class="pk-att-section-label">Entered today</div>
 				<ul class="pk-att-added-list" id="pk-att-added-list"></ul>
 			</div>
 
@@ -1546,6 +1553,53 @@ var PkConfig = {
 		<div class="pk-modal-footer">
 			<button class="pk-btn-ghost" id="pk-moveplayer-cancel">Cancel</button>
 			<button class="pk-btn pk-btn-primary" id="pk-moveplayer-submit"><i class="fas fa-arrow-right"></i> Move Player</button>
+		</div>
+	</div>
+</div>
+
+<!-- Merge Players Modal (Park) -->
+<div id="pk-mergeplayer-overlay">
+	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<button class="pk-modal-close-btn" id="pk-mergeplayer-close-btn">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div id="pk-mergeplayer-feedback" style="display:none"></div>
+			<div class="plr-merge-warning">
+				<i class="fas fa-exclamation-triangle"></i>
+				<div>
+					<strong>This action is permanent and cannot be undone.</strong><br>
+					The <em>Remove</em> player&rsquo;s account will be permanently deleted. All their awards, attendance, officer history, unit memberships, and notes will be transferred to the <em>Keep</em> player. Any attendance on the same date as an existing record will be dropped.
+				</div>
+			</div>
+			<div class="pk-acct-field">
+				<label>Player to Keep <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-merge-keep-name" placeholder="Search for player to keep&hellip;" autocomplete="off">
+				<input type="hidden" id="pk-merge-keep-id">
+				<div class="pk-ac-results" id="pk-merge-keep-results"></div>
+			</div>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label>Player to Remove &mdash; <span style="color:#c53030;font-size:12px"><i class="fas fa-skull-crossbones"></i> this account will be permanently deleted</span> <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-merge-remove-name" placeholder="Search for player to remove&hellip;" autocomplete="off">
+				<input type="hidden" id="pk-merge-remove-id">
+				<div class="pk-ac-results" id="pk-merge-remove-results"></div>
+			</div>
+			<div class="plr-merge-summary" id="pk-merge-summary" style="display:none">
+				<strong>What will happen when you click Merge:</strong>
+				<ul>
+					<li>All attendance &rarr; transferred to <strong id="pk-merge-keep-display"></strong> (duplicate dates dropped)</li>
+					<li>All awards &amp; award history &rarr; transferred</li>
+					<li>All officer roles &rarr; transferred</li>
+					<li>All unit memberships &rarr; transferred</li>
+					<li>Notes &rarr; transferred</li>
+					<li style="color:#c53030"><strong id="pk-merge-remove-display"></strong>&rsquo;s account record is permanently deleted</li>
+				</ul>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn-ghost" id="pk-mergeplayer-cancel">Cancel</button>
+			<button class="pk-btn" id="pk-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>

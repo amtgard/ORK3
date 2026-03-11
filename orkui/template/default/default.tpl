@@ -565,9 +565,11 @@
 			<a class="hm-find-item" href="<?= UIR ?>Search/index">
 				<i class="fas fa-user"></i> Search Players
 			</a>
+<?php if (!empty($LoggedIn)): ?>
 			<a class="hm-find-item" href="<?= UIR ?>Search/unit">
 				<i class="fas fa-users"></i> Companies &amp; Households
 			</a>
+			<?php endif; ?>
 			<a class="hm-find-item" href="<?= UIR ?>Search/event">
 				<i class="fas fa-flag"></i> Find Events
 			</a>

@@ -679,7 +679,16 @@
 						<button class="kn-view-btn" data-knview="list"><i class="fas fa-list"></i> List</button>
 					</div>
 					<?php if ($CanManageKingdom ?? false): ?>
-					<button class="plr-add-btn" onclick="knOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
+					<div class="plr-action-group">
+						<button class="plr-add-btn" onclick="knOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
+						<div class="plr-gear-wrap">
+							<button class="plr-gear-btn" id="kn-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
+							<div class="plr-gear-menu" id="kn-plr-gear-menu">
+								<button class="plr-gear-item" onclick="knOpenMovePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-people-arrows"></i> Move Player</button>
+								<button class="plr-gear-item" onclick="knOpenMergePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button>
+							</div>
+						</div>
+					</div>
 					<?php endif; ?>
 				</div>
 			</div>
@@ -1450,6 +1459,53 @@ var KnConfig = {
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-moveplayer-cancel">Cancel</button>
 			<button class="kn-btn kn-btn-primary" id="kn-moveplayer-submit"><i class="fas fa-arrow-right"></i> Move Player</button>
+		</div>
+	</div>
+</div>
+
+<!-- Merge Players Modal (Kingdom) -->
+<div id="kn-mergeplayer-overlay">
+	<div class="kn-modal-box" style="width:540px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<button class="kn-modal-close-btn" id="kn-mergeplayer-close-btn">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div id="kn-mergeplayer-feedback" style="display:none"></div>
+			<div class="plr-merge-warning">
+				<i class="fas fa-exclamation-triangle"></i>
+				<div>
+					<strong>This action is permanent and cannot be undone.</strong><br>
+					The <em>Remove</em> player&rsquo;s account will be permanently deleted. All their awards, attendance, officer history, unit memberships, and notes will be transferred to the <em>Keep</em> player. Any attendance on the same date as an existing record will be dropped.
+				</div>
+			</div>
+			<div class="kn-acct-field">
+				<label>Player to Keep <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-merge-keep-name" placeholder="Search for player to keep&hellip;" autocomplete="off">
+				<input type="hidden" id="kn-merge-keep-id">
+				<div class="kn-ac-results" id="kn-merge-keep-results"></div>
+			</div>
+			<div class="kn-acct-field" style="margin-top:12px">
+				<label>Player to Remove &mdash; <span style="color:#c53030;font-size:12px"><i class="fas fa-skull-crossbones"></i> this account will be permanently deleted</span> <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-merge-remove-name" placeholder="Search for player to remove&hellip;" autocomplete="off">
+				<input type="hidden" id="kn-merge-remove-id">
+				<div class="kn-ac-results" id="kn-merge-remove-results"></div>
+			</div>
+			<div class="plr-merge-summary" id="kn-merge-summary" style="display:none">
+				<strong>What will happen when you click Merge:</strong>
+				<ul>
+					<li>All attendance &rarr; transferred to <strong id="kn-merge-keep-display"></strong> (duplicate dates dropped)</li>
+					<li>All awards &amp; award history &rarr; transferred</li>
+					<li>All officer roles &rarr; transferred</li>
+					<li>All unit memberships &rarr; transferred</li>
+					<li>Notes &rarr; transferred</li>
+					<li style="color:#c53030"><strong id="kn-merge-remove-display"></strong>&rsquo;s account record is permanently deleted</li>
+				</ul>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn-ghost" id="kn-mergeplayer-cancel">Cancel</button>
+			<button class="kn-btn" id="kn-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>

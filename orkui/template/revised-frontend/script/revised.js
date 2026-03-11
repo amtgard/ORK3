@@ -5238,18 +5238,76 @@ if (typeof EcConfig !== 'undefined') (function() {
 
 // ============================================================
 // Parknew — Attendance Modal (pk-att-)
-// ============================================================
 $(document).ready(function() {
 	if (!document.getElementById('pk-att-overlay')) return;
 
 	var ADD_URL    = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/add';
+	var GETDAY_URL = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/getday';
 	var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
+
+	// MundaneIds already entered for the selected date
+	var pkAttEntered = {};
+
+	// Last class per MundaneId — seeded from recentAttendees, supplemented from getday
+	var pkLastClass = {};
+	(PkConfig.recentAttendees || []).forEach(function(a) {
+		if (a.ClassId) pkLastClass[a.MundaneId] = a.ClassId;
+	});
 
 	function gid(id) { return document.getElementById(id); }
 
+	// --- Fetch and display entries already on the registry for a given date ---
+	function pkFetchDayEntered(date, cb) {
+		var ul      = gid('pk-att-added-list');
+		var section = gid('pk-att-added-section');
+		$.getJSON(GETDAY_URL, { date: date }, function(r) {
+			pkAttEntered = {};
+			// Rebuild pkLastClass from recentAttendees, then supplement from today's entries
+			pkLastClass = {};
+			(PkConfig.recentAttendees || []).forEach(function(a) {
+				if (a.ClassId) pkLastClass[a.MundaneId] = a.ClassId;
+			});
+			// Remove prior entries from the list (keep session-added ones)
+			Array.prototype.forEach.call(ul.querySelectorAll('li.pk-att-prior'), function(li) { li.remove(); });
+			if (r && r.status === 0 && r.entries) {
+				r.entries.forEach(function(e) {
+					pkAttEntered[e.MundaneId] = true;
+					if (e.ClassId && !pkLastClass[e.MundaneId]) pkLastClass[e.MundaneId] = e.ClassId;
+					var li = document.createElement('li');
+					li.className = 'pk-att-prior';
+					li.textContent = e.Persona;
+					ul.appendChild(li);
+				});
+			}
+			section.style.display = ul.children.length ? '' : 'none';
+			pkUpdateQuickAddEntered();
+			if (cb) cb();
+		}).fail(function() {
+			pkAttEntered = {};
+			pkUpdateQuickAddEntered();
+			if (cb) cb();
+		});
+	}
+
+	// --- Mark quick-add rows that are already entered for the current date ---
+	function pkUpdateQuickAddEntered() {
+		var tbody = gid('pk-att-qa-tbody');
+		if (!tbody) return;
+		Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-mundane-id]'), function(tr) {
+			var mid = parseInt(tr.dataset.mundaneId, 10);
+			var alreadyDone = tr.classList.contains('pk-att-done');
+			if (pkAttEntered[mid] && !alreadyDone) {
+				tr.classList.add('pk-att-done');
+				var td = tr.querySelector('td:last-child');
+				if (td) td.innerHTML = '<span class="pk-att-qa-done-mark" title="Already entered today">\u2713 entered</span>';
+			}
+		});
+	}
+
 	// --- Open / Close ---
 	window.pkOpenAttendanceModal = function() {
-		gid('pk-att-date').value = new Date().toISOString().slice(0, 10);
+		var today = new Date().toISOString().slice(0, 10);
+		gid('pk-att-date').value = today;
 		gid('pk-att-credits-default').value = '1';
 		gid('pk-att-search-credits').value  = '1';
 		pkBuildClassOptions();
@@ -5259,7 +5317,9 @@ $(document).ready(function() {
 		pkAttHideFeedback();
 		gid('pk-att-overlay').classList.add('pk-att-open');
 		document.body.style.overflow = 'hidden';
-		setTimeout(function() { gid('pk-att-player-name').focus(); }, 50);
+		pkFetchDayEntered(today, function() {
+			setTimeout(function() { gid('pk-att-player-name').focus(); }, 50);
+		});
 	};
 	window.pkCloseAttendanceModal = function() {
 		gid('pk-att-overlay').classList.remove('pk-att-open');
@@ -5324,6 +5384,8 @@ $(document).ready(function() {
 			tbody.appendChild(tr);
 		});
 		tbody.dataset.built = '1';
+		// Apply any already-entered state (if fetch completed first)
+		pkUpdateQuickAddEntered();
 	}
 
 	// --- Quick-add submit ---
@@ -5336,6 +5398,7 @@ $(document).ready(function() {
 			{ AttendanceDate: gid('pk-att-date').value, MundaneId: attendee.MundaneId, ClassId: classId, Credits: credits },
 			function(ok, err) {
 				if (ok) {
+					pkAttEntered[attendee.MundaneId] = true;
 					tr.classList.add('pk-att-done');
 					btn.parentNode.innerHTML = '<span class="pk-att-qa-done-mark">\u2713</span>';
 					pkAttRecorded(attendee.Persona);
@@ -5363,10 +5426,14 @@ $(document).ready(function() {
 			function(ok, err) {
 				btn.disabled = false;
 				if (ok) {
+					var midInt = parseInt(pid, 10);
+					pkAttEntered[midInt] = true;
+					pkLastClass[midInt]  = parseInt(cls, 10);
 					pkAttShowFeedback('Added: ' + name, true);
 					pkAttRecorded(name);
 					gid('pk-att-player-name').value = '';
 					gid('pk-att-player-id').value   = '';
+					pkUpdateQuickAddEntered();
 				} else {
 					pkAttShowFeedback(err, false);
 				}
@@ -5414,6 +5481,12 @@ $(document).ready(function() {
 		gid('pk-att-search-credits').value = this.value;
 	});
 
+	// --- Date change: re-fetch entries (clears prior entries, keeps session-added) ---
+	gid('pk-att-date').addEventListener('change', function() {
+		pkAttEntered = {};
+		pkFetchDayEntered(this.value);
+	});
+
 	// --- Close handlers ---
 	gid('pk-att-close-btn').addEventListener('click', pkCloseAttendanceModal);
 	gid('pk-att-done-btn').addEventListener('click',  pkCloseAttendanceModal);
@@ -5425,7 +5498,7 @@ $(document).ready(function() {
 			pkCloseAttendanceModal();
 	});
 
-	// --- Player autocomplete (grouped: park → kingdom → other) ---
+	// --- Player autocomplete (grouped: park → kingdom → other, excluding already-entered) ---
 	function pkAttAbbr(v) {
 		return (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
 	}
@@ -5439,15 +5512,18 @@ $(document).ready(function() {
 			).done(function(parkRes, kingRes, allRes) {
 				var seen = {}, parkItems = [], kingItems = [], otherItems = [];
 				$.each(parkRes[0] || [], function(i, v) {
+					if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
 					seen[v.MundaneId] = true;
 					parkItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
 				});
 				$.each(kingRes[0] || [], function(i, v) {
+					if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
 					if (seen[v.MundaneId]) return;
 					seen[v.MundaneId] = true;
 					kingItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
 				});
 				$.each(allRes[0] || [], function(i, v) {
+					if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
 					if (seen[v.MundaneId]) return;
 					otherItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
 				});
@@ -5458,19 +5534,16 @@ $(document).ready(function() {
 				res(items);
 			});
 		},
-		focus:  function(e, ui) { if (!ui.item.value) return false; $('#pk-att-player-name').val(ui.item.name); return false; },
+		focus: function(e, ui) { if (!ui.item.value) return false; $('#pk-att-player-name').val(ui.item.name); return false; },
 		select: function(e, ui) {
 			if (!ui.item.value) return false;
 			$('#pk-att-player-name').val(ui.item.name);
 			$('#pk-att-player-id').val(ui.item.value);
-			// Pre-fill class from recent attendees if available
-			var recent = (PkConfig.recentAttendees || []);
-			for (var ri = 0; ri < recent.length; ri++) {
-				if (recent[ri].MundaneId === ui.item.value) {
-					pkBuildClassOptions();
-					gid('pk-att-class-select').value = String(recent[ri].ClassId);
-					break;
-				}
+			// Pre-fill class from last class map
+			var lastCls = pkLastClass[parseInt(ui.item.value, 10)];
+			if (lastCls) {
+				pkBuildClassOptions();
+				gid('pk-att-class-select').value = String(lastCls);
 			}
 			return false;
 		},
@@ -7069,106 +7142,162 @@ function setupPronounPicker(cfg) {
 (function() {
 	if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
 
+	var PARK_URL  = PnConfig.httpService + 'Search/SearchService.php';
+	var MOVE_URL  = PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/moveplayer';
+	var pnmpMode  = 'within';
+	var mpParkTimer;
+
 	function gid(id) { return document.getElementById(id); }
 
-	var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
-	var selectedParkId   = 0;
-	var selectedParkName = '';
+	function showFb(msg, ok) {
+		var el = gid('pn-moveplayer-feedback');
+		if (!el) return;
+		el.textContent = msg;
+		el.className = ok ? 'pn-form-success' : 'pn-form-error';
+		el.style.display = '';
+	}
+
+	function setMode(mode) {
+		pnmpMode = mode;
+		['within','out'].forEach(function(m) {
+			var btn = gid('pn-mp-btn-' + m);
+			if (btn) btn.classList.toggle('pn-mp-active', m === mode);
+		});
+		var parkLabel = gid('pn-moveplayer-park-label');
+		if (mode === 'within') {
+			if (parkLabel) parkLabel.innerHTML = 'New Home Park <span style="color:#e53e3e">*</span>';
+		} else {
+			if (parkLabel) parkLabel.innerHTML = 'Destination Park (outside kingdom) <span style="color:#e53e3e">*</span>';
+		}
+		// Reset park field
+		var parkInput = gid('pn-moveplayer-park-name');
+		if (parkInput) parkInput.value = '';
+		var parkId = gid('pn-moveplayer-park-id');
+		if (parkId) parkId.value = '';
+		var parkResults = gid('pn-moveplayer-park-results');
+		if (parkResults) parkResults.classList.remove('pn-ac-open');
+		var btn = gid('pn-move-submit');
+		if (btn) btn.disabled = true;
+	}
+
+	function closeMovePlayer() {
+		var ov = gid('pn-moveplayer-overlay');
+		if (ov) { ov.classList.remove('pn-open'); document.body.style.overflow = ''; }
+	}
 
 	window.pnOpenMovePlayerModal = function() {
-		selectedParkId   = 0;
-		selectedParkName = '';
-		var parkText = gid('pn-move-park-text');
-		if (parkText) parkText.value = '';
-		var hiddenId = gid('pn-move-park-id');
-		if (hiddenId) hiddenId.value = 0;
+		var ov = gid('pn-moveplayer-overlay');
+		if (!ov) return;
+		setMode('within');
 		var curPark = gid('pn-move-current-park-name');
 		if (curPark) curPark.textContent = PnConfig.playerParkName || '(unknown)';
 		var fb = gid('pn-moveplayer-feedback');
 		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
-		var btn = gid('pn-move-submit');
-		if (btn) btn.disabled = true;
-		var overlay = gid('pn-moveplayer-overlay');
-		if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
+		ov.classList.add('pn-open');
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() {
+			var inp = gid('pn-moveplayer-park-name');
+			if (inp) inp.focus();
+		}, 50);
 	};
 
-	function pnCloseMovePlayerModal() {
-		var overlay = gid('pn-moveplayer-overlay');
-		if (overlay) { overlay.classList.remove('pn-open'); document.body.style.overflow = ''; }
-	}
-
 	$(document).ready(function() {
-		var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
+		if (!gid('pn-moveplayer-overlay')) return;
 
-		$(document).on('click', '#pn-moveplayer-close-btn, #pn-move-cancel', function() { pnCloseMovePlayerModal(); });
-		$(document).on('click', '#pn-moveplayer-overlay', function(e) {
-			if ($(e.target).is('#pn-moveplayer-overlay')) pnCloseMovePlayerModal();
+		// Toggle buttons
+		['within','out'].forEach(function(m) {
+			var btn = gid('pn-mp-btn-' + m);
+			if (btn) btn.addEventListener('click', function() { setMode(m); });
 		});
 
-		// Park search autocomplete
-		var parkText = gid('pn-move-park-text');
-		if (parkText) {
-			$(parkText).autocomplete({
-				source: function(req, res) {
-					$.getJSON(SEARCH_URL, { Action: 'Search/Location', name: req.term, limit: 15 }, function(data) {
-						// Filter to items that have a ParkId
-						var parks = $.grep(data || [], function(v) { return v.ParkId && parseInt(v.ParkId) > 0 && !parseInt(v.EventId || 0); });
-						res($.map(parks, function(v) { return { label: v.Name, value: v }; }));
-					});
-				},
-				focus: function(e, ui) { $(parkText).val(ui.item.label); return false; },
-				select: function(e, ui) {
-					$(parkText).val(ui.item.label);
-					selectedParkId   = parseInt(ui.item.value.ParkId) || 0;
-					selectedParkName = ui.item.label;
-					var hiddenId = gid('pn-move-park-id');
-					if (hiddenId) hiddenId.value = selectedParkId;
-					var btn = gid('pn-move-submit');
-					if (btn) btn.disabled = (selectedParkId === 0);
-					return false;
-				},
-				change: function(e, ui) {
-					if (!ui.item) {
-						selectedParkId = 0;
-						var hiddenId = gid('pn-move-park-id');
-						if (hiddenId) hiddenId.value = 0;
-						var btn = gid('pn-move-submit');
-						if (btn) btn.disabled = true;
+		// Close handlers
+		$(document).on('click', '#pn-moveplayer-close-btn, #pn-move-cancel', function() { closeMovePlayer(); });
+		$(document).on('click', '#pn-moveplayer-overlay', function(e) {
+			if ($(e.target).is('#pn-moveplayer-overlay')) closeMovePlayer();
+		});
+
+		// Move Player button in Update Account modal
+		$(document).on('click', '#pn-acct-move-player-btn', function() {
+			// Close the acct modal first
+			var acctOv = gid('pn-acct-overlay');
+			if (acctOv) acctOv.classList.remove('pn-open');
+			pnOpenMovePlayerModal();
+		});
+
+		// Park autocomplete
+		var parkInput = gid('pn-moveplayer-park-name');
+		if (parkInput) {
+			parkInput.addEventListener('input', function() {
+				gid('pn-moveplayer-park-id').value = '';
+				var btn = gid('pn-move-submit');
+				if (btn) btn.disabled = true;
+				var term = this.value.trim();
+				if (term.length < 2) {
+					var el = gid('pn-moveplayer-park-results');
+					if (el) el.classList.remove('pn-ac-open');
+					return;
+				}
+				clearTimeout(mpParkTimer);
+				mpParkTimer = setTimeout(function() {
+					var params = { Action: 'Search/Park', name: term, limit: 12 };
+					if (pnmpMode === 'within') {
+						params.kingdom_id = PnConfig.kingdomId;
+					} else {
+						params.exclude_kingdom_id = PnConfig.kingdomId;
 					}
-					return false;
-				},
-				delay: 250, minLength: 2,
+					$.getJSON(PARK_URL, params, function(data) {
+						var el = gid('pn-moveplayer-park-results');
+						if (!el) return;
+						el.innerHTML = (data && data.length)
+							? data.map(function(pk) {
+								var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + pk.KingdomName + ')</span>' : '';
+								return '<div class="pn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
+									+ pk.Name + sub + '</div>';
+							}).join('')
+							: '<div class="pn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
+						el.classList.add('pn-ac-open');
+					});
+				}, 250);
+			});
+
+			gid('pn-moveplayer-park-results').addEventListener('click', function(e) {
+				var item = e.target.closest('.pn-ac-item[data-id]');
+				if (!item) return;
+				gid('pn-moveplayer-park-name').value = decodeURIComponent(item.dataset.name);
+				gid('pn-moveplayer-park-id').value   = item.dataset.id;
+				this.classList.remove('pn-ac-open');
+				var btn = gid('pn-move-submit');
+				if (btn) btn.disabled = false;
 			});
 		}
 
-		// Move submit
+		// Submit
 		$(document).on('click', '#pn-move-submit', function() {
-			if (!selectedParkId) return;
+			var parkId = gid('pn-moveplayer-park-id') ? gid('pn-moveplayer-park-id').value : '';
+			if (!parkId) { showFb('Select a destination park.', false); return; }
+			var parkName = gid('pn-moveplayer-park-name') ? gid('pn-moveplayer-park-name').value : 'the selected park';
+			if (!confirm('Move this player to ' + parkName + '? Their Park Member Since date will be reset.')) return;
 			var btn = this;
-			var fb  = gid('pn-moveplayer-feedback');
-			if (!confirm('Move this player to ' + selectedParkName + '? Their Park Member Since date will be reset.')) return;
 			btn.disabled = true;
-			btn.textContent = 'Moving...';
+			var fb = gid('pn-moveplayer-feedback');
 			if (fb) fb.style.display = 'none';
-			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/moveplayer', {
+			fetch(MOVE_URL, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-				body: 'ParkId=' + encodeURIComponent(selectedParkId),
+				body: 'ParkId=' + encodeURIComponent(parkId),
 			})
 			.then(function(r) { return r.json(); })
 			.then(function(data) {
 				if (data.status === 0) {
 					location.reload();
 				} else {
-					if (fb) { fb.textContent = data.error || 'Error moving player.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+					showFb(data.error || 'Error moving player.', false);
 					btn.disabled = false;
-					btn.textContent = 'Move Player';
 				}
 			})
 			.catch(function() {
-				if (fb) { fb.textContent = 'Request failed.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
+				showFb('Request failed.', false);
 				btn.disabled = false;
-				btn.textContent = 'Move Player';
 			});
 		});
 	});
@@ -7654,6 +7783,148 @@ function setupPronounPicker(cfg) {
 					setTimeout(closeClaimPark, 1200);
 				} else {
 					showFb((r && r.error) ? r.error : 'Claim failed.', false);
+				}
+			}, 'json').fail(function() {
+				btn.disabled = false;
+				showFb('Request failed. Please try again.', false);
+			});
+		});
+	});
+})();
+
+// ---- Merge Players Modal (Kingdomnew) ----
+(function() {
+	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
+
+	var MERGE_URL  = KnConfig.uir + 'PlayerAjax/merge';
+	var SEARCH_URL = KnConfig.httpService + 'Search/SearchService.php';
+
+	function gid(id) { return document.getElementById(id); }
+
+	function showFb(msg, ok) {
+		var el = gid('kn-mergeplayer-feedback');
+		el.textContent = msg;
+		el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+		el.style.display = '';
+	}
+
+	function closeModal() {
+		var ov = gid('kn-mergeplayer-overlay');
+		if (ov) { ov.classList.remove('kn-open'); document.body.style.overflow = ''; }
+	}
+
+	function updateSummary() {
+		var keepId   = gid('kn-merge-keep-id').value;
+		var removeId = gid('kn-merge-remove-id').value;
+		var summary  = gid('kn-merge-summary');
+		var btn      = gid('kn-mergeplayer-submit');
+		if (keepId && removeId) {
+			gid('kn-merge-keep-display').textContent   = gid('kn-merge-keep-name').value.trim();
+			gid('kn-merge-remove-display').textContent = gid('kn-merge-remove-name').value.trim();
+			summary.style.display = '';
+			btn.disabled = false;
+		} else {
+			summary.style.display = 'none';
+			btn.disabled = true;
+		}
+	}
+
+	window.knOpenMergePlayerModal = function() {
+		var ov = gid('kn-mergeplayer-overlay');
+		if (!ov) return;
+		gid('kn-merge-keep-name').value   = '';
+		gid('kn-merge-keep-id').value     = '';
+		gid('kn-merge-remove-name').value = '';
+		gid('kn-merge-remove-id').value   = '';
+		gid('kn-merge-keep-results').classList.remove('kn-ac-open');
+		gid('kn-merge-remove-results').classList.remove('kn-ac-open');
+		gid('kn-merge-summary').style.display = 'none';
+		gid('kn-mergeplayer-submit').disabled = true;
+		gid('kn-mergeplayer-feedback').style.display = 'none';
+		ov.classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() { gid('kn-merge-keep-name').focus(); }, 50);
+	};
+
+	function makePlayerSearch(inputId, hiddenId, resultsId, otherId) {
+		var input   = gid(inputId);
+		var results = gid(resultsId);
+		if (!input || !results) return;
+		var timer;
+		input.addEventListener('input', function() {
+			gid(hiddenId).value = '';
+			updateSummary();
+			var term = this.value.trim();
+			if (term.length < 2) { results.classList.remove('kn-ac-open'); return; }
+			clearTimeout(timer);
+			timer = setTimeout(function() {
+				$.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 }, function(data) {
+					var otherId_val = gid(otherId) ? gid(otherId).value : '';
+					results.innerHTML = (data && data.length)
+						? data.map(function(pl) {
+							var sub = (pl.KAbbr && pl.PAbbr)
+								? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '';
+							var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
+							return '<div class="kn-ac-item' + (same ? ' kn-ac-disabled' : '') + '"'
+								+ (same ? '' : ' data-id="' + pl.MundaneId + '"')
+								+ ' data-name="' + encodeURIComponent(pl.Persona) + '"'
+								+ (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
+								+ '>' + pl.Persona + sub + '</div>';
+						}).join('')
+						: '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+					results.classList.add('kn-ac-open');
+				});
+			}, 250);
+		});
+		results.addEventListener('click', function(e) {
+			var item = e.target.closest('.kn-ac-item[data-id]');
+			if (!item) return;
+			gid(inputId).value  = decodeURIComponent(item.dataset.name);
+			gid(hiddenId).value = item.dataset.id;
+			this.classList.remove('kn-ac-open');
+			updateSummary();
+		});
+	}
+
+	$(document).ready(function() {
+		if (!gid('kn-mergeplayer-overlay')) return;
+
+		// Close-on-outside-click for the gear dropdown
+		document.addEventListener('click', function(e) {
+			var menu = gid('kn-plr-gear-menu');
+			var btn  = gid('kn-plr-gear-btn');
+			if (menu && menu.classList.contains('open') && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+				menu.classList.remove('open');
+				if (btn) btn.setAttribute('aria-expanded', 'false');
+			}
+		});
+
+		gid('kn-mergeplayer-close-btn').addEventListener('click', closeModal);
+		gid('kn-mergeplayer-cancel').addEventListener('click', closeModal);
+		gid('kn-mergeplayer-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && gid('kn-mergeplayer-overlay') && gid('kn-mergeplayer-overlay').classList.contains('kn-open'))
+				closeModal();
+		});
+
+		makePlayerSearch('kn-merge-keep-name',   'kn-merge-keep-id',   'kn-merge-keep-results',   'kn-merge-remove-id');
+		makePlayerSearch('kn-merge-remove-name', 'kn-merge-remove-id', 'kn-merge-remove-results', 'kn-merge-keep-id');
+
+		gid('kn-mergeplayer-submit').addEventListener('click', function() {
+			var keepId     = gid('kn-merge-keep-id').value;
+			var removeId   = gid('kn-merge-remove-id').value;
+			var keepName   = gid('kn-merge-keep-name').value.trim();
+			var removeName = gid('kn-merge-remove-name').value.trim();
+			if (!keepId || !removeId) { showFb('Select both players.', false); return; }
+			if (!confirm('Merge "' + removeName + '" INTO "' + keepName + '"?\n\n"' + removeName + '" will be permanently deleted and all data transferred to "' + keepName + '".\n\nThis CANNOT be undone.')) return;
+			btn.disabled = true;
+			$.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
+				btn.disabled = false;
+				if (r && r.status === 0) {
+					showFb('“' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
+					setTimeout(function() { closeModal(); location.reload(); }, 2200);
+				} else {
+					showFb((r && r.error) ? r.error : 'Merge failed.', false);
 				}
 			}, 'json').fail(function() {
 				btn.disabled = false;
@@ -8254,6 +8525,279 @@ function setupPronounPicker(cfg) {
 		).fail(function() {
 			btn.disabled = false;
 			showFb('Request failed. Please try again.', false);
+		});
+	});
+})();
+
+
+// ---- Merge Players Modal (Parknew) ----
+(function() {
+	if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+
+	var MERGE_URL  = PkConfig.uir + 'PlayerAjax/merge';
+	var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
+
+	function gid(id) { return document.getElementById(id); }
+
+	function showFb(msg, ok) {
+		var el = gid('pk-mergeplayer-feedback');
+		el.textContent = msg;
+		el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+		el.style.display = '';
+	}
+
+	function closeModal() {
+		var ov = gid('pk-mergeplayer-overlay');
+		if (ov) { ov.classList.remove('pk-open'); document.body.style.overflow = ''; }
+	}
+
+	function updateSummary() {
+		var keepId   = gid('pk-merge-keep-id').value;
+		var removeId = gid('pk-merge-remove-id').value;
+		var summary  = gid('pk-merge-summary');
+		var btn      = gid('pk-mergeplayer-submit');
+		if (keepId && removeId) {
+			gid('pk-merge-keep-display').textContent   = gid('pk-merge-keep-name').value.trim();
+			gid('pk-merge-remove-display').textContent = gid('pk-merge-remove-name').value.trim();
+			summary.style.display = '';
+			btn.disabled = false;
+		} else {
+			summary.style.display = 'none';
+			btn.disabled = true;
+		}
+	}
+
+	window.pkOpenMergePlayerModal = function() {
+		var ov = gid('pk-mergeplayer-overlay');
+		if (!ov) return;
+		gid('pk-merge-keep-name').value   = '';
+		gid('pk-merge-keep-id').value     = '';
+		gid('pk-merge-remove-name').value = '';
+		gid('pk-merge-remove-id').value   = '';
+		gid('pk-merge-keep-results').classList.remove('pk-ac-open');
+		gid('pk-merge-remove-results').classList.remove('pk-ac-open');
+		gid('pk-merge-summary').style.display = 'none';
+		gid('pk-mergeplayer-submit').disabled = true;
+		gid('pk-mergeplayer-feedback').style.display = 'none';
+		ov.classList.add('pk-open');
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() { gid('pk-merge-keep-name').focus(); }, 50);
+	};
+
+	function makePlayerSearch(inputId, hiddenId, resultsId, otherId) {
+		var input   = gid(inputId);
+		var results = gid(resultsId);
+		if (!input || !results) return;
+		var timer;
+		input.addEventListener('input', function() {
+			gid(hiddenId).value = '';
+			updateSummary();
+			var term = this.value.trim();
+			if (term.length < 2) { results.classList.remove('pk-ac-open'); return; }
+			clearTimeout(timer);
+			timer = setTimeout(function() {
+				$.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 }, function(data) {
+					var otherId_val = gid(otherId) ? gid(otherId).value : '';
+					results.innerHTML = (data && data.length)
+						? data.map(function(pl) {
+							var sub = (pl.KAbbr && pl.PAbbr)
+								? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '';
+							var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
+							return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
+								+ (same ? '' : ' data-id="' + pl.MundaneId + '"')
+								+ ' data-name="' + encodeURIComponent(pl.Persona) + '"'
+								+ (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
+								+ '>' + pl.Persona + sub + '</div>';
+						}).join('')
+						: '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+					results.classList.add('pk-ac-open');
+				});
+			}, 250);
+		});
+		results.addEventListener('click', function(e) {
+			var item = e.target.closest('.pk-ac-item[data-id]');
+			if (!item) return;
+			gid(inputId).value  = decodeURIComponent(item.dataset.name);
+			gid(hiddenId).value = item.dataset.id;
+			this.classList.remove('pk-ac-open');
+			updateSummary();
+		});
+	}
+
+	$(document).ready(function() {
+		if (!gid('pk-mergeplayer-overlay')) return;
+
+		// Close-on-outside-click for the gear dropdown
+		document.addEventListener('click', function(e) {
+			var menu = gid('pk-plr-gear-menu');
+			var btn  = gid('pk-plr-gear-btn');
+			if (menu && menu.classList.contains('open') && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+				menu.classList.remove('open');
+				if (btn) btn.setAttribute('aria-expanded', 'false');
+			}
+		});
+
+		gid('pk-mergeplayer-close-btn').addEventListener('click', closeModal);
+		gid('pk-mergeplayer-cancel').addEventListener('click', closeModal);
+		gid('pk-mergeplayer-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && gid('pk-mergeplayer-overlay') && gid('pk-mergeplayer-overlay').classList.contains('pk-open'))
+				closeModal();
+		});
+
+		makePlayerSearch('pk-merge-keep-name',   'pk-merge-keep-id',   'pk-merge-keep-results',   'pk-merge-remove-id');
+		makePlayerSearch('pk-merge-remove-name', 'pk-merge-remove-id', 'pk-merge-remove-results', 'pk-merge-keep-id');
+
+		gid('pk-mergeplayer-submit').addEventListener('click', function() {
+			var keepId     = gid('pk-merge-keep-id').value;
+			var removeId   = gid('pk-merge-remove-id').value;
+			var keepName   = gid('pk-merge-keep-name').value.trim();
+			var removeName = gid('pk-merge-remove-name').value.trim();
+			if (!keepId || !removeId) { showFb('Select both players.', false); return; }
+			if (!confirm('Merge "' + removeName + '" INTO "' + keepName + '"?\n\n"' + removeName + '" will be permanently deleted and all data transferred to "' + keepName + '".\n\nThis CANNOT be undone.')) return;
+			var btn = this;
+			btn.disabled = true;
+			$.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
+				btn.disabled = false;
+				if (r && r.status === 0) {
+					showFb('“' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
+					setTimeout(function() { closeModal(); location.reload(); }, 2200);
+				} else {
+					showFb((r && r.error) ? r.error : 'Merge failed.', false);
+				}
+			}, 'json').fail(function() {
+				btn.disabled = false;
+				showFb('Request failed. Please try again.', false);
+			});
+		});
+	});
+})();
+
+
+// ---- Player Add Attendance Modal (Playernew) ----
+(function() {
+	if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+	if (!document.getElementById('pn-player-att-overlay')) return;
+
+	var ADD_URL    = PnConfig.uir + 'AttendanceAjax/park/';
+	var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
+	var parkTimer;
+
+	function gid(id) { return document.getElementById(id); }
+
+	function showFb(msg, ok) {
+		var el = gid('pn-player-att-feedback');
+		el.textContent = msg;
+		el.className = ok ? 'pn-form-success' : 'pn-form-error';
+		el.style.display = '';
+	}
+
+	function closeModal() {
+		var ov = gid('pn-player-att-overlay');
+		if (ov) { ov.classList.remove('pn-open'); document.body.style.overflow = ''; }
+	}
+
+	function buildClassOptions(lastClassId) {
+		var sel = gid('pn-player-att-class');
+		sel.innerHTML = '<option value="">Select class\u2026</option>';
+		(PnConfig.classList || []).forEach(function(c) {
+			var opt = document.createElement('option');
+			opt.value = c.ClassId;
+			opt.textContent = c.ClassName;
+			if (c.ClassId === lastClassId) opt.selected = true;
+			sel.appendChild(opt);
+		});
+	}
+
+	window.pnOpenPlayerAttModal = function() {
+		var ov = gid('pn-player-att-overlay');
+		if (!ov) return;
+		var today = new Date().toISOString().slice(0, 10);
+		gid('pn-player-att-date').value    = today;
+		gid('pn-player-att-credits').value = '1';
+		gid('pn-player-att-feedback').style.display = 'none';
+		gid('pn-player-att-park-results').classList.remove('pn-ac-open');
+		buildClassOptions(PnConfig.lastClassId || 0);
+		ov.classList.add('pn-open');
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() { gid('pn-player-att-date').focus(); }, 50);
+	};
+
+	// Park autocomplete
+	$(document).ready(function() {
+		if (!gid('pn-player-att-overlay')) return;
+
+		var parkInput   = gid('pn-player-att-park-name');
+		var parkResults = gid('pn-player-att-park-results');
+
+		parkInput.addEventListener('input', function() {
+			gid('pn-player-att-park-id').value = '';
+			var term = this.value.trim();
+			if (term.length < 2) { parkResults.classList.remove('pn-ac-open'); return; }
+			clearTimeout(parkTimer);
+			parkTimer = setTimeout(function() {
+				$.getJSON(SEARCH_URL, { Action: 'Search/Park', name: term, limit: 12 }, function(data) {
+					parkResults.innerHTML = (data && data.length)
+						? data.map(function(pk) {
+							var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + pk.KingdomName + ')</span>' : '';
+							return '<div class="pn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
+								+ pk.Name + sub + '</div>';
+						}).join('')
+						: '<div class="pn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
+					parkResults.classList.add('pn-ac-open');
+				});
+			}, 250);
+		});
+
+		parkResults.addEventListener('click', function(e) {
+			var item = e.target.closest('.pn-ac-item[data-id]');
+			if (!item) return;
+			parkInput.value = decodeURIComponent(item.dataset.name);
+			gid('pn-player-att-park-id').value = item.dataset.id;
+			parkResults.classList.remove('pn-ac-open');
+		});
+
+		document.addEventListener('click', function(e) {
+			if (!parkInput.contains(e.target) && !parkResults.contains(e.target))
+				parkResults.classList.remove('pn-ac-open');
+		});
+
+		gid('pn-player-att-close').addEventListener('click', closeModal);
+		gid('pn-player-att-cancel').addEventListener('click', closeModal);
+		gid('pn-player-att-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && gid('pn-player-att-overlay') && gid('pn-player-att-overlay').classList.contains('pn-open'))
+				closeModal();
+		});
+
+		gid('pn-player-att-submit').addEventListener('click', function() {
+			var parkId  = gid('pn-player-att-park-id').value;
+			var classId = gid('pn-player-att-class').value;
+			var date    = gid('pn-player-att-date').value;
+			var credits = gid('pn-player-att-credits').value;
+			if (!parkId)  { showFb('Please select a park.',   false); return; }
+			if (!classId) { showFb('Please select a class.',  false); return; }
+			if (!date)    { showFb('Please enter a date.',    false); return; }
+			var btn = this;
+			btn.disabled = true;
+			gid('pn-player-att-feedback').style.display = 'none';
+			$.post(ADD_URL + parkId + '/add', {
+				AttendanceDate: date,
+				MundaneId:      PnConfig.playerId,
+				ClassId:        classId,
+				Credits:        credits
+			}, function(r) {
+				btn.disabled = false;
+				if (r && r.status === 0) {
+					showFb('Attendance added.', true);
+					setTimeout(function() { closeModal(); location.reload(); }, 1200);
+				} else {
+					showFb((r && r.error) ? r.error : 'Failed to add attendance.', false);
+				}
+			}, 'json').fail(function() {
+				btn.disabled = false;
+				showFb('Request failed. Please try again.', false);
+			});
 		});
 	});
 })();

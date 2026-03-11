@@ -34,6 +34,27 @@ class Controller_AttendanceAjax extends Controller {
 			} else {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			}
+		} elseif ($action === 'getday') {
+			$this->load_model('Attendance');
+			$date = $_GET['date'] ?? date('Y-m-d');
+			if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid date']);
+				exit;
+			}
+			$r = $this->Attendance->get_attendance_for_date($park_id, $date);
+			$seen    = [];
+			$entries = [];
+			foreach ($r['Attendance'] ?? [] as $att) {
+				$mid = (int)$att['MundaneId'];
+				if (isset($seen[$mid])) continue;
+				$seen[$mid] = true;
+				$entries[] = [
+					'MundaneId' => $mid,
+					'Persona'   => (string)($att['Persona'] ?? $att['AttendancePersona'] ?? ''),
+					'ClassId'   => (int)($att['ClassId'] ?? 0),
+				];
+			}
+			echo json_encode(['status' => 0, 'entries' => $entries]);
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

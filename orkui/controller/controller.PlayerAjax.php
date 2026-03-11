@@ -301,4 +301,32 @@ class Controller_PlayerAjax extends Controller {
 		}
 		exit;
 	}
+
+	public function merge($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$from_id = (int)($_POST['FromMundaneId'] ?? 0);
+		$to_id   = (int)($_POST['ToMundaneId']   ?? 0);
+		if (!valid_id($from_id) || !valid_id($to_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Both player IDs are required.']);
+			exit;
+		}
+		if ($from_id === $to_id) {
+			echo json_encode(['status' => 1, 'error' => 'Cannot merge a player with themselves.']);
+			exit;
+		}
+		$this->load_model('Player');
+		$r = $this->Player->merge_player([
+			'Token'         => $this->session->token,
+			'FromMundaneId' => $from_id,
+			'ToMundaneId'   => $to_id,
+		]);
+		echo ($r['Status'] == 0)
+			? json_encode(['status' => 0])
+			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+		exit;
+	}
 }
