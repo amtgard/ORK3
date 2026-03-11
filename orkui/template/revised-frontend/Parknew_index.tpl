@@ -1550,6 +1550,23 @@ var PkConfig = {
 	</div>
 </div>
 
+<!-- Shared Confirmation Modal -->
+<div id="kn-confirm-overlay">
+	<div class="kn-modal-box kn-confirm-box">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title" id="kn-confirm-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#e53e3e"></i>Confirm</h3>
+			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:#2d3748;line-height:1.6"></p>
+		</div>
+		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
+			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>
+			<button class="kn-admin-save-btn kn-confirm-ok-btn" id="kn-confirm-ok-btn">Confirm</button>
+		</div>
+	</div>
+</div>
+
 <!-- Park Administration Modal -->
 <div id="pk-admin-overlay">
 	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
