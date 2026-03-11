@@ -191,6 +191,15 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'removeheraldry') {
+			$r = $this->Park->RemoveParkHeraldry([
+				'Token'  => $this->session->token,
+				'ParkId' => $park_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'moveplayer') {
 			$this->load_model('Player');
 			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);

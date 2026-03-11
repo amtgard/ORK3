@@ -87,9 +87,10 @@
 
 		<!-- Heraldry -->
 		<div class="pk-hero-left">
-			<?php if ($hasHeraldry): ?>
+			<?php $displayHeraldryUrl = $hasHeraldry ? $heraldryUrl : HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 			<div class="pk-heraldry-frame<?= !empty($CanManagePark) ? ' pk-heraldry-editable' : '' ?>">
-				<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>"
+
+				<img class="heraldry-img" src="<?= htmlspecialchars($displayHeraldryUrl) ?>"
 				     alt="<?= htmlspecialchars($park_name) ?> heraldry"
 				     crossorigin="anonymous"
 				     onload="pkApplyHeroColor(this)">
@@ -99,7 +100,6 @@
 				</button>
 				<?php endif; ?>
 			</div>
-			<?php endif; ?>
 		</div>
 
 		<!-- Name / title / officers -->
@@ -140,7 +140,11 @@
 				<button class="pk-btn <?= $LoggedIn ? 'pk-btn-outline' : 'pk-btn-white' ?>" onclick="pkActivateTab('players'); var s=document.getElementById('pk-player-search'); if(s){s.focus(); s.select();}">
 					<i class="fas fa-search"></i> Search Players
 				</button>
-				<?php if ($LoggedIn): ?>
+				<?php if (!empty($CanManagePark)): ?>
+					<button class="pk-btn pk-btn-outline" onclick="pkOpenEditDetailsModal()">
+						<i class="fas fa-cog"></i> Admin
+					</button>
+				<?php elseif ($LoggedIn): ?>
 					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= $park_id ?>">
 						<i class="fas fa-cog"></i> Admin
 					</a>
@@ -219,17 +223,8 @@
 
 		<!-- Quick Links -->
 		<div class="pk-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;">
-				<span><i class="fas fa-link"></i> Quick Links</span>
-				<?php if (!empty($CanManagePark)): ?>
-				<button onclick="pkOpenEditDetailsModal()" class="pk-edit-details-btn" title="Edit park details"><i class="fas fa-pencil-alt"></i></button>
-				<?php endif; ?>
-			</h4>
+			<h4><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="pk-link-list">
-				<li>
-					<span class="pk-link-icon"><i class="fas fa-search"></i></span>
-					<a href="<?= UIR ?>Search/park/<?= $park_id ?>">Search Players</a>
-				</li>
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-image"></i></span>
 					<a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Heraldry</a>
@@ -1468,28 +1463,43 @@ var PkConfig = {
 <?php if (!empty($CanManagePark)): ?>
 <!-- Heraldry Upload Modal -->
 <div id="pk-heraldry-overlay">
-	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
-		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#744210"></i>Change Heraldry</h3>
-			<button class="pk-modal-close-btn" id="pk-heraldry-close-btn">&times;</button>
+	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-camera" style="margin-right:8px;color:#2c5282"></i>Change Heraldry</h3>
+			<button class="pn-modal-close-btn" id="pk-heraldry-close-btn" aria-label="Close">&times;</button>
 		</div>
-		<div class="pk-modal-body">
-			<div id="pk-heraldry-feedback" style="display:none"></div>
-			<div style="text-align:center;margin-bottom:14px">
-				<img id="pk-heraldry-preview" src="" alt="" style="max-width:180px;max-height:180px;display:none;border-radius:8px;border:1px solid #e2e8f0">
-				<div id="pk-heraldry-placeholder" style="width:180px;height:180px;margin:0 auto;background:#f7fafc;border:2px dashed #e2e8f0;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#a0aec0;font-size:13px">
-					<i class="fas fa-image" style="font-size:32px"></i>
+		<!-- Step: select -->
+		<div class="pn-modal-body" id="pk-heraldry-step-select">
+			<label class="pn-upload-area" for="pk-heraldry-file-input" style="cursor:pointer">
+				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
+				Click to choose an image
+				<small>JPG, GIF, PNG &middot; Accepts transparent images</small>
+			</label>
+			<input type="file" id="pk-heraldry-file-input" accept="image/png,image/jpeg,image/gif" style="display:none">
+<?php if ($hasHeraldry): ?>
+			<div style="text-align:center;margin-top:14px">
+				<button type="button" id="pk-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
+					<i class="fas fa-trash"></i> Remove Heraldry
+				</button>
+				<div id="pk-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+					Remove this park's heraldry image?
+					<div style="margin-top:8px;display:flex;gap:8px">
+						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('pk-heraldry-remove-confirm').style.display='none'">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-sm" style="background:#e53e3e;color:#fff" onclick="pkDoRemoveHeraldry()">Yes, Remove</button>
+					</div>
 				</div>
 			</div>
-			<div class="pk-acct-field">
-				<label>Select Image <span style="color:#e53e3e">*</span></label>
-				<input type="file" id="pk-heraldry-file-input" accept="image/png,image/jpeg,image/gif">
-			</div>
-			<div style="font-size:11px;color:#a0aec0;margin-top:6px">PNG, JPG, or GIF. Recommended: square, at least 200×200 px.</div>
+<?php endif; ?>
 		</div>
-		<div class="pk-modal-footer">
-			<button class="pk-btn-ghost" id="pk-heraldry-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-heraldry-submit" disabled><i class="fas fa-upload"></i> Upload</button>
+		<!-- Step: uploading -->
+		<div class="pn-modal-body" id="pk-heraldry-step-uploading" style="display:none;text-align:center;padding:40px 20px">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1"></i>
+			<p style="margin-top:12px;color:#718096">Uploading&hellip;</p>
+		</div>
+		<!-- Step: done -->
+		<div class="pn-modal-body" id="pk-heraldry-step-done" style="display:none;text-align:center;padding:40px 20px">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600">Updated! Refreshing&hellip;</p>
 		</div>
 	</div>
 </div>

@@ -2992,8 +2992,6 @@ $(document).ready(function() {
 			var fd = new FormData();
 			fd.append('Name',         name);
 			fd.append('Abbreviation', abbr);
-			var fileEl = gid('kn-admin-heraldry');
-			if (fileEl && fileEl.files[0]) fd.append('Heraldry', fileEl.files[0]);
 
 			btn.disabled = true;
 			$.ajax({
@@ -3007,7 +3005,6 @@ $(document).ready(function() {
 					btn.disabled = false;
 					if (r && r.status === 0) {
 						feedback('kn-admin-details-feedback', 'Details saved!', true);
-						if (fileEl) fileEl.value = '';
 					} else {
 						feedback('kn-admin-details-feedback', (r && r.error) ? r.error : 'Save failed.', false);
 					}
@@ -3420,6 +3417,116 @@ $(document).ready(function() {
 		document.addEventListener('keydown', function(e) {
 			if (e.key === 'Escape' && gid('kn-admin-overlay') && gid('kn-admin-overlay').classList.contains('kn-open'))
 				knCloseAdminModal();
+		});
+	});
+})();
+
+// ---- Kingdom heraldry modal ----
+(function() {
+	if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
+
+	var UPLOAD_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/setheraldry';
+	var REMOVE_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/removeheraldry';
+
+	function gid(id) { return document.getElementById(id); }
+
+	function closeModal() {
+		var overlay = gid('kn-heraldry-overlay');
+		if (overlay) overlay.classList.remove('kn-open');
+	}
+
+	window.knOpenHeraldryModal = function() {
+		var overlay = gid('kn-heraldry-overlay');
+		if (!overlay) return;
+		var fileInput = gid('kn-heraldry-file-input');
+		if (fileInput) fileInput.value = '';
+		var sel     = gid('kn-heraldry-step-select');
+		var upl     = gid('kn-heraldry-step-uploading');
+		var done    = gid('kn-heraldry-step-done');
+		var confirm = gid('kn-heraldry-remove-confirm');
+		if (sel)     sel.style.display     = '';
+		if (upl)     upl.style.display     = 'none';
+		if (done)    done.style.display    = 'none';
+		if (confirm) confirm.style.display = 'none';
+		overlay.classList.add('kn-open');
+	};
+
+	window.knDoRemoveHeraldry = function() {
+		fetch(REMOVE_URL, { method: 'POST' })
+			.then(function(r) { return r.json(); })
+			.then(function(r) {
+				if (r && r.status === 0) {
+					window.location.reload();
+				} else {
+					alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
+				}
+			})
+			.catch(function() {
+				alert('Request failed. Please try again.');
+			});
+	};
+
+	document.addEventListener('DOMContentLoaded', function() {
+		// File input change → auto-upload
+		var fileInput = gid('kn-heraldry-file-input');
+		if (fileInput) {
+			fileInput.addEventListener('change', function() {
+				var file = this.files[0];
+				if (!file) return;
+				var sel  = gid('kn-heraldry-step-select');
+				var upl  = gid('kn-heraldry-step-uploading');
+				var done = gid('kn-heraldry-step-done');
+				if (sel) sel.style.display = 'none';
+				if (upl) upl.style.display = '';
+				var fd = new FormData();
+				fd.append('Heraldry', file);
+				fetch(UPLOAD_URL, { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(r) {
+						if (upl) upl.style.display = 'none';
+						if (r && r.status === 0) {
+							if (done) done.style.display = '';
+							setTimeout(function() { window.location.reload(); }, 1200);
+						} else {
+							if (sel) sel.style.display = '';
+							alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
+						}
+					})
+					.catch(function() {
+						if (upl) upl.style.display = 'none';
+						if (sel) sel.style.display = '';
+						alert('Request failed. Please try again.');
+					});
+			});
+		}
+
+		// Remove button toggle
+		var removeBtn = gid('kn-heraldry-remove-btn');
+		if (removeBtn) {
+			removeBtn.addEventListener('click', function() {
+				var confirm = gid('kn-heraldry-remove-confirm');
+				if (confirm) confirm.style.display = confirm.style.display === 'none' ? '' : 'none';
+			});
+		}
+
+		// Close button
+		var closeBtn = gid('kn-heraldry-close-btn');
+		if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+		// Backdrop click
+		var overlay = gid('kn-heraldry-overlay');
+		if (overlay) {
+			overlay.addEventListener('click', function(e) {
+				if (e.target === overlay) closeModal();
+			});
+		}
+
+		// Escape key
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') {
+				var overlay = gid('kn-heraldry-overlay');
+				if (overlay && overlay.classList.contains('kn-open')) closeModal();
+			}
 		});
 	});
 })();
@@ -7423,7 +7530,8 @@ function setupPronounPicker(cfg) {
 (function() {
 	if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
 
-	var UPLOAD_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setheraldry';
+	var UPLOAD_URL  = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setheraldry';
+	var REMOVE_URL  = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/removeheraldry';
 
 	function gid(id) { return document.getElementById(id); }
 
@@ -7443,78 +7551,80 @@ function setupPronounPicker(cfg) {
 	window.pkOpenHeraldryModal = function() {
 		var overlay = gid('pk-heraldry-overlay');
 		if (!overlay) return;
-		// Reset state
 		var fileInput = gid('pk-heraldry-file-input');
 		if (fileInput) fileInput.value = '';
-		var preview = gid('pk-heraldry-preview');
-		if (preview) { preview.src = ''; preview.style.display = 'none'; }
-		var placeholder = gid('pk-heraldry-placeholder');
-		if (placeholder) placeholder.style.display = 'flex';
-		var submitBtn = gid('pk-heraldry-submit');
-		if (submitBtn) submitBtn.disabled = true;
-		var fb = gid('pk-heraldry-feedback');
-		if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+		var sel     = gid('pk-heraldry-step-select');
+		var upl     = gid('pk-heraldry-step-uploading');
+		var done    = gid('pk-heraldry-step-done');
+		var confirm = gid('pk-heraldry-remove-confirm');
+		if (sel)     sel.style.display     = '';
+		if (upl)     upl.style.display     = 'none';
+		if (done)    done.style.display    = 'none';
+		if (confirm) confirm.style.display = 'none';
 		overlay.classList.add('pk-open');
 	};
 
+	window.pkDoRemoveHeraldry = function() {
+		fetch(REMOVE_URL, { method: 'POST' })
+			.then(function(r) { return r.json(); })
+			.then(function(r) {
+				if (r && r.status === 0) {
+					window.location.reload();
+				} else {
+					alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
+				}
+			})
+			.catch(function() {
+				alert('Request failed. Please try again.');
+			});
+	};
+
 	document.addEventListener('DOMContentLoaded', function() {
-		// File input change → preview
+		// File input change → auto-upload
 		var fileInput = gid('pk-heraldry-file-input');
 		if (fileInput) {
 			fileInput.addEventListener('change', function() {
 				var file = this.files[0];
 				if (!file) return;
-				var reader = new FileReader();
-				reader.onload = function(e) {
-					var preview = gid('pk-heraldry-preview');
-					var placeholder = gid('pk-heraldry-placeholder');
-					if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
-					if (placeholder) placeholder.style.display = 'none';
-					var submitBtn = gid('pk-heraldry-submit');
-					if (submitBtn) submitBtn.disabled = false;
-				};
-				reader.readAsDataURL(file);
-			});
-		}
-
-		// Submit
-		var submitBtn = gid('pk-heraldry-submit');
-		if (submitBtn) {
-			submitBtn.addEventListener('click', function() {
-				var fileInput = gid('pk-heraldry-file-input');
-				if (!fileInput || !fileInput.files[0]) {
-					showFb('Please select an image file.', false); return;
-				}
-				var btn = this;
-				btn.disabled = true;
-				btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+				var sel  = gid('pk-heraldry-step-select');
+				var upl  = gid('pk-heraldry-step-uploading');
+				var done = gid('pk-heraldry-step-done');
+				if (sel) sel.style.display = 'none';
+				if (upl) upl.style.display = '';
 				var fd = new FormData();
-				fd.append('Heraldry', fileInput.files[0]);
+				fd.append('Heraldry', file);
 				fetch(UPLOAD_URL, { method: 'POST', body: fd })
 					.then(function(r) { return r.json(); })
 					.then(function(r) {
-						btn.disabled = false;
-						btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+						if (upl) upl.style.display = 'none';
 						if (r && r.status === 0) {
-							showFb('Heraldry updated! Reloading…', true);
+							if (done) done.style.display = '';
 							setTimeout(function() { window.location.reload(); }, 1200);
 						} else {
-							showFb((r && r.error) ? r.error : 'Upload failed.', false);
+							if (sel) sel.style.display = '';
+							alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
 						}
 					})
 					.catch(function() {
-						btn.disabled = false;
-						btn.innerHTML = '<i class="fas fa-upload"></i> Upload';
-						showFb('Request failed. Please try again.', false);
+						if (upl) upl.style.display = 'none';
+						if (sel) sel.style.display = '';
+						alert('Request failed. Please try again.');
 					});
 			});
 		}
 
-		// Close buttons
+		// Remove button toggle
+		var removeBtn = gid('pk-heraldry-remove-btn');
+		if (removeBtn) {
+			removeBtn.addEventListener('click', function() {
+				var confirm = gid('pk-heraldry-remove-confirm');
+				if (confirm) confirm.style.display = confirm.style.display === 'none' ? '' : 'none';
+			});
+		}
+
+		// Close button
 		var closeBtn = gid('pk-heraldry-close-btn');
 		if (closeBtn) closeBtn.addEventListener('click', closeModal);
-		var cancelBtn = gid('pk-heraldry-cancel');
-		if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
 
 		// Backdrop click
 		var overlay = gid('pk-heraldry-overlay');

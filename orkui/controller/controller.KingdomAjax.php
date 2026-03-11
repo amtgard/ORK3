@@ -247,7 +247,36 @@ class Controller_KingdomAjax extends Controller {
 			]);
 			echo json_encode(['status' => 0]);
 
-		} elseif ($action === 'moveplayer') {
+		} elseif ($action === 'setheraldry') {
+			$this->load_model('Kingdom');
+			if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'No image file received.']); exit;
+			}
+			$allowed = ['image/png', 'image/jpeg', 'image/gif'];
+			if (!in_array($_FILES['Heraldry']['type'], $allowed)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid image type. Use PNG, JPG, or GIF.']); exit;
+			}
+			$r = $this->Kingdom->set_kingdom_heraldry([
+				'Token'            => $this->session->token,
+				'KingdomId'        => $kingdom_id,
+				'Heraldry'         => base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name'])),
+				'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+	} elseif ($action === 'removeheraldry') {
+			$this->load_model('Kingdom');
+			$r = $this->Kingdom->remove_kingdom_heraldry([
+				'Token'     => $this->session->token,
+				'KingdomId' => $kingdom_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+	} elseif ($action === 'moveplayer') {
 			$this->load_model('Player');
 			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);
 			$dest_park_id = (int)($_POST['DestParkId'] ?? 0);

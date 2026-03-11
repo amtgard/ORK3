@@ -73,6 +73,12 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	max-width: none;
+	max-height: none;
 }
 .un-heraldry-edit-btn {
 	position: absolute;
@@ -309,12 +315,12 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 		<!-- Heraldry -->
 		<div class="un-heraldry-wrap">
 			<div class="un-heraldry-frame">
-				<img src="<?=htmlspecialchars($_hero_src)?>"
+				<img class="heraldry-img" src="<?=htmlspecialchars($_hero_src)?>"
 					onerror="this.onerror=null;this.src='<?=HTTP_UNIT_HERALDRY?>00000.jpg'"
 					alt="<?=htmlspecialchars($_name)?>">
 			</div>
 <?php if ($_can_edit): ?>
-			<button class="un-heraldry-edit-btn" onclick="unOpenModal('un-modal-details')" title="Edit details">
+			<button class="un-heraldry-edit-btn" onclick="unOpenHeraldryModal()" title="Update heraldry">
 				<i class="fas fa-camera"></i>
 			</button>
 <?php endif; ?>
@@ -434,28 +440,6 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 <?php endif; ?>
 		</div>
 <?php endif; ?>
-
-		<div class="pn-card">
-			<h4><i class="fas fa-link"></i> Quick Links</h4>
-			<ul class="kn-link-list">
-				<li>
-					<span class="kn-link-icon"><i class="fas fa-arrow-left"></i></span>
-					<a href="<?=UIR.($this->session->unit_list_ref ?: 'Unit/unitlist')?>">Unit List</a>
-				</li>
-<?php if (trimlen($_url) > 0): ?>
-				<li>
-					<span class="kn-link-icon"><i class="fas fa-globe"></i></span>
-					<a href="<?=htmlspecialchars($_url)?>" target="_blank" rel="noopener">Website</a>
-				</li>
-<?php endif; ?>
-<?php if ($_can_edit): ?>
-				<li>
-					<span class="kn-link-icon"><i class="fas fa-cog"></i></span>
-					<a href="<?=UIR?>Admin/unit/<?=$_unit_id?>">Admin Panel</a>
-				</li>
-<?php endif; ?>
-			</ul>
-		</div>
 
 	</aside>
 
@@ -599,6 +583,49 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 
 <?php if ($_can_edit): ?>
 
+<!-- ── Heraldry Modal ─────────────────────────────────── -->
+<div class="pn-overlay" id="un-img-overlay" onclick="if(event.target===this)unCloseHeraldryModal()">
+	<div class="pn-modal-box" style="max-width:420px">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Heraldry</h3>
+			<button class="pn-modal-close-btn" onclick="unCloseHeraldryModal()" aria-label="Close">&times;</button>
+		</div>
+		<!-- Step: select -->
+		<div class="pn-modal-body" id="un-img-step-select">
+			<label class="pn-upload-area" for="un-img-file-input" style="cursor:pointer">
+				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
+				Click to choose an image
+				<small>JPG, GIF, PNG &middot; Accepts transparent images</small>
+			</label>
+			<input type="file" id="un-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none">
+<?php if (!empty($_unit['HasHeraldry'])): ?>
+			<div style="text-align:center;margin-top:14px">
+				<button type="button" id="un-img-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
+					<i class="fas fa-trash"></i> Remove Heraldry
+				</button>
+				<div id="un-img-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+					Remove this unit's heraldry image?
+					<div style="margin-top:8px;display:flex;gap:8px">
+						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('un-img-remove-confirm').style.display='none'">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-sm" style="background:#e53e3e;color:#fff" onclick="unDoRemoveHeraldry()">Yes, Remove</button>
+					</div>
+				</div>
+			</div>
+<?php endif; ?>
+		</div>
+		<!-- Step: uploading -->
+		<div class="pn-modal-body" id="un-img-step-uploading" style="display:none;text-align:center;padding:40px 20px">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1"></i>
+			<p style="margin-top:12px;color:#718096">Uploading&hellip;</p>
+		</div>
+		<!-- Step: done -->
+		<div class="pn-modal-body" id="un-img-step-done" style="display:none;text-align:center;padding:40px 20px">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+
 <!-- ── Edit Details Modal ─────────────────────────────── -->
 <div class="pn-overlay" id="un-modal-details">
 	<div class="pn-modal-box">
@@ -624,11 +651,6 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 				<div class="pn-acct-field">
 					<label>History</label>
 					<textarea name="History" rows="4"><?=htmlspecialchars($_history)?></textarea>
-				</div>
-				<div class="pn-acct-field">
-					<label>Heraldry Image <span style="font-weight:400;color:#a0aec0;">(leave blank to keep existing)</span></label>
-					<input type="file" name="Heraldry" accept="image/*">
-					<div class="un-field-hint">Accepts JPG, PNG, GIF.</div>
 				</div>
 			</div>
 			<div class="pn-modal-footer">
@@ -768,8 +790,9 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 $(function () {
 	if ($('#un-roster-table').length) {
 		$('#un-roster-table').DataTable({
-			dom       : 'lfrtip',
-			buttons   : [
+			dom         : 'lfrtip',
+			orderClasses: false,
+			buttons     : [
 				{ extend: 'csv',   filename: '<?=addslashes($_name)?>-roster', exportOptions: { columns: ':not(:last-child)' } },
 				{ extend: 'print', exportOptions: { columns: ':not(:last-child)' } }
 			],
@@ -786,6 +809,56 @@ $(function () {
 });
 
 <?php if ($_can_edit): ?>
+// ── Heraldry modal ────────────────────────────────────────
+function unOpenHeraldryModal() {
+	document.getElementById('un-img-step-select').style.display    = '';
+	document.getElementById('un-img-step-uploading').style.display = 'none';
+	document.getElementById('un-img-step-done').style.display      = 'none';
+	document.getElementById('un-img-file-input').value             = '';
+	var rc = document.getElementById('un-img-remove-confirm');
+	if (rc) rc.style.display = 'none';
+	document.getElementById('un-img-overlay').classList.add('pn-open');
+	document.body.style.overflow = 'hidden';
+}
+function unCloseHeraldryModal() {
+	document.getElementById('un-img-overlay').classList.remove('pn-open');
+	document.body.style.overflow = '';
+}
+document.getElementById('un-img-file-input').addEventListener('change', function() {
+	if (!this.files[0]) return;
+	var fd = new FormData();
+	fd.append('Action', 'upload_heraldry');
+	fd.append('Heraldry', this.files[0]);
+	document.getElementById('un-img-step-select').style.display    = 'none';
+	document.getElementById('un-img-step-uploading').style.display = '';
+	fetch('<?=htmlspecialchars($_base_url)?>', { method: 'POST', body: fd })
+		.then(function(r) {
+			document.getElementById('un-img-step-uploading').style.display = 'none';
+			if (r.ok) {
+				document.getElementById('un-img-step-done').style.display = '';
+				setTimeout(function() { window.location.reload(); }, 1200);
+			} else {
+				document.getElementById('un-img-step-select').style.display = '';
+				alert('Upload failed. Please try again.');
+			}
+		});
+});
+var _unRemoveBtn = document.getElementById('un-img-remove-btn');
+if (_unRemoveBtn) {
+	_unRemoveBtn.addEventListener('click', function() {
+		var rc = document.getElementById('un-img-remove-confirm');
+		rc.style.display = rc.style.display === 'none' ? '' : 'none';
+	});
+}
+function unDoRemoveHeraldry() {
+	var fd = new FormData();
+	fd.append('Action', 'remove_heraldry');
+	document.getElementById('un-img-step-select').style.display    = 'none';
+	document.getElementById('un-img-step-uploading').style.display = '';
+	fetch('<?=htmlspecialchars($_base_url)?>', { method: 'POST', body: fd })
+		.then(function(r) { if (r.ok) window.location.reload(); });
+}
+
 function unOpenModal(id) {
 	document.getElementById(id).classList.add('pn-open');
 }

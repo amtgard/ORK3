@@ -90,7 +90,34 @@ class Controller_Unit extends Controller {
 						'UnitId'        => $unit_id_int,
 					));
 					break;
-				case 'addauth':
+				case 'upload_heraldry':
+				header('Content-Type: application/json');
+				if (!empty($_FILES['Heraldry']['size']) && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
+					$tmp = DIR_TMP . sprintf('uu_%05d', $unit_id_int);
+					if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], $tmp)) {
+						$r2 = $this->Unit->upload_unit_heraldry(array(
+							'Token'            => $this->session->token,
+							'UnitId'           => $unit_id_int,
+							'Heraldry'         => base64_encode(file_get_contents($tmp)),
+							'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+						));
+						echo json_encode(array('ok' => $r2['Status'] == 0));
+					} else {
+						echo json_encode(array('ok' => false, 'error' => 'Upload failed'));
+					}
+				} else {
+					echo json_encode(array('ok' => false, 'error' => 'Invalid file'));
+				}
+				exit;
+			case 'remove_heraldry':
+				header('Content-Type: application/json');
+				$r2 = $this->Unit->remove_unit_heraldry(array(
+					'Token'  => $this->session->token,
+					'UnitId' => $unit_id_int,
+				));
+				echo json_encode(array('ok' => $r2['Status'] == 0));
+				exit;
+			case 'addauth':
 					$r = $this->Unit->add_unit_auth(array(
 						'Token'     => $this->session->token,
 						'Role'      => AUTH_EDIT,

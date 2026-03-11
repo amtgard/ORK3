@@ -1190,22 +1190,50 @@
 	gap: 24px;
 	z-index: 1;
 }
+.kn-heraldry-wrap { position: relative; flex-shrink: 0; }
 .kn-heraldry-frame {
 	width: 110px;
 	height: 110px;
 	border-radius: 8px;
 	overflow: hidden;
 	border: 3px solid rgba(255,255,255,0.8);
-	flex-shrink: 0;
 	background: rgba(0,0,0,0.15);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
+.kn-heraldry-edit-btn {
+	position: absolute;
+	bottom: 4px;
+	right: 4px;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	background: rgba(0,0,0,0.55);
+	border: none;
+	color: #fff;
+	font-size: 12px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.18s;
+}
+.kn-heraldry-wrap:hover .kn-heraldry-edit-btn { opacity: 1; }
+#kn-heraldry-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+#kn-heraldry-overlay.kn-open { opacity:1; pointer-events:all; }
+#kn-heraldry-overlay.kn-open .pn-modal-box { transform:translateY(0) scale(1); opacity:1; }
 .kn-heraldry-frame img {
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	max-width: none;
+	max-height: none;
 }
 .kn-hero-info {
 	flex: 1;
@@ -2058,6 +2086,12 @@
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	max-width: none;
+	max-height: none;
 }
 .pk-hero-center { flex: 1; min-width: 0; }
 .pk-kingdom-link { margin-bottom: 4px; }
@@ -2074,7 +2108,8 @@
 	font-weight: 700;
 	color: #fff;
 	margin: 0 0 4px 0;
-	line-height: 1.15;
+	text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+	line-height: 1.2;
 	background: transparent;
 	border: none;
 	padding: 0;
@@ -2866,6 +2901,12 @@
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	max-width: none;
+	max-height: none;
 }
 .ev-hero-info { flex: 1; min-width: 0; }
 .ev-event-name {
@@ -3360,6 +3401,12 @@
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	max-width: none;
+	max-height: none;
 }
 .en-hero-info { flex: 1; min-width: 0; }
 .en-event-name {
@@ -4397,7 +4444,8 @@
 }
 #pk-heraldry-overlay.pk-open,
 #pk-moveplayer-overlay.pk-open { opacity: 1; pointer-events: all; }
-#pk-heraldry-overlay .pk-modal-box,
+#pk-heraldry-overlay.pk-open .pn-modal-box { transform: translateY(0) scale(1); opacity: 1; }
+#pk-heraldry-overlay .pn-modal-box,
 #pk-moveplayer-overlay .pk-modal-box {
     background: #fff; border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -4589,3 +4637,4 @@
 #pk-addtournament-overlay .pk-addday-field input:focus,
 #pk-addtournament-overlay .pk-addday-field textarea:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
 #pk-addtournament-feedback { border-radius:6px; padding:8px 12px; margin-bottom:12px; font-size:13px; font-weight:600; }
+

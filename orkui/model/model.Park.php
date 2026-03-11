@@ -63,6 +63,10 @@ class Model_Park extends Model {
 		logtrace("set_park_details", $request);
 		return $this->Park->SetParkDetails($request);
 	}
+
+	function RemoveParkHeraldry($request) {
+		return $this->Heraldry->RemoveParkHeraldry($request);
+	}
 	
 	function get_park_info($park_id) {
 		return $this->Park->GetParkShortInfo(array('ParkId'=>$park_id));

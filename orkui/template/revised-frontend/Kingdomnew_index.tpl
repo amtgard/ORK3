@@ -60,8 +60,15 @@
 	<div class="kn-hero-bg" style="background-image: url('<?= $heraldryUrl ?>')"></div>
 	<div class="kn-hero-content">
 
-		<div class="kn-heraldry-frame">
-			<img class="heraldry-img" src="<?= $heraldryUrl ?>" alt="<?= htmlspecialchars($kingdom_name) ?>" />
+		<div class="kn-heraldry-wrap">
+			<div class="kn-heraldry-frame<?= !empty($CanManageKingdom) ? ' kn-heraldry-editable' : '' ?>">
+				<img class="heraldry-img" src="<?= $heraldryUrl ?>" alt="<?= htmlspecialchars($kingdom_name) ?>" />
+			</div>
+			<?php if (!empty($CanManageKingdom)): ?>
+			<button class="kn-heraldry-edit-btn" onclick="knOpenHeraldryModal()" title="Change heraldry">
+				<i class="fas fa-camera"></i>
+			</button>
+			<?php endif; ?>
 		</div>
 
 		<div class="kn-hero-info">
@@ -963,6 +970,47 @@ var KnConfig = {
 	</div>
 </div>
 
+<!-- Heraldry Modal -->
+<?php if (!empty($CanManageKingdom)): ?>
+<div id="kn-heraldry-overlay">
+	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-camera" style="margin-right:8px;color:#4a5568"></i>Change Heraldry</h3>
+			<button class="pn-modal-close-btn" id="kn-heraldry-close-btn">&times;</button>
+		</div>
+		<div class="pn-modal-body" id="kn-heraldry-step-select">
+			<label class="pn-upload-area" for="kn-heraldry-file-input" style="cursor:pointer;display:block;border:2px dashed #cbd5e0;border-radius:8px;padding:28px 20px;text-align:center;color:#718096">
+				<i class="fas fa-image" style="font-size:28px;margin-bottom:8px;display:block"></i>
+				Click to select an image<br><small style="color:#a0aec0">PNG, JPG, or GIF</small>
+			</label>
+			<input type="file" id="kn-heraldry-file-input" accept="image/png,image/jpeg,image/gif" style="display:none">
+			<?php if ($hasHeraldry): ?>
+			<div style="text-align:center;margin-top:14px">
+				<button type="button" id="kn-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
+					<i class="fas fa-trash"></i> Remove Heraldry
+				</button>
+				<div id="kn-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+					Remove this kingdom's heraldry image?
+					<div style="margin-top:8px;display:flex;gap:8px">
+						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('kn-heraldry-remove-confirm').style.display='none'">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-sm" style="background:#e53e3e;color:#fff" onclick="knDoRemoveHeraldry()">Yes, Remove</button>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+		</div>
+		<div class="pn-modal-body" id="kn-heraldry-step-uploading" style="display:none;text-align:center;padding:32px 20px">
+			<i class="fas fa-spinner fa-spin" style="font-size:28px;color:#718096;margin-bottom:10px;display:block"></i>
+			<div style="color:#718096;font-size:14px">Uploading…</div>
+		</div>
+		<div class="pn-modal-body" id="kn-heraldry-step-done" style="display:none;text-align:center;padding:32px 20px">
+			<i class="fas fa-check-circle" style="font-size:28px;color:#38a169;margin-bottom:10px;display:block"></i>
+			<div style="color:#38a169;font-size:14px;font-weight:600">Done!</div>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
 <!-- Edit Officers Modal -->
 <div id="kn-editoff-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
@@ -1012,10 +1060,6 @@ var KnConfig = {
 					<div class="kn-admin-field">
 						<label for="kn-admin-abbr">Abbreviation <span class="kn-admin-hint-inline">(letters &amp; numbers only)</span></label>
 						<input type="text" id="kn-admin-abbr" value="<?= htmlspecialchars($AdminInfo['Abbreviation'] ?? '') ?>" maxlength="8">
-					</div>
-					<div class="kn-admin-field">
-						<label for="kn-admin-heraldry">Heraldry Image <span class="kn-admin-hint-inline">(PNG, JPG, or GIF)</span></label>
-						<input type="file" id="kn-admin-heraldry" accept="image/png,image/jpeg,image/gif">
 					</div>
 					<button class="kn-admin-save-btn" id="kn-admin-details-save">
 						<i class="fas fa-save"></i> Save Details
