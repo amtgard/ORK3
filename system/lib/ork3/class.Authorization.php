@@ -772,7 +772,7 @@ class Authorization extends Ork3
 					$event->clear();
 					$event->event_id = $id;
 					if ($event->find()) {
-						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id = $mundane_id)
+						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id == $mundane_id)
 							return true;
 					}
 					break;

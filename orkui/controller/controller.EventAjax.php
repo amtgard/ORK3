@@ -125,7 +125,7 @@ class Controller_EventAjax extends Controller {
 		}
 
 		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
 			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
 			exit;
 		}

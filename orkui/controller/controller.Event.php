@@ -350,10 +350,12 @@ class Controller_Event extends Controller {
 
 		$this->data['CanManageEvent'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+		$this->data['CanManageAttendance'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
-		$this->data['RsvpList']      = $this->data['CanManageEvent'] ? $this->Event->get_rsvp_list($detail_id) : [];
+		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];
 	}
 
 	public function create( $p = null ) {

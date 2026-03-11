@@ -67,8 +67,9 @@
 	$rsvpCount     = (int)($RsvpCount     ?? 0);
 	$userAttending = (bool)($UserAttending ?? false);
 	$rsvpList      = $RsvpList ?? [];
-	$canManage     = $CanManageEvent ?? false;
-	$canDelete     = ($attendeeCount === 0 && $rsvpCount === 0);
+	$canManage           = $CanManageEvent ?? false;
+	$canManageAttendance = $CanManageAttendance ?? false;
+	$canDelete           = ($attendeeCount === 0 && $rsvpCount === 0);
 
 	// Date badge label
 	$startLabel = $eventStart ? date('M j, Y', strtotime($eventStart)) : '';
@@ -410,7 +411,7 @@
 			<?php // ---- Attendance Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-attendance">
 
-				<?php if ($loggedIn): ?>
+				<?php if ($canManageAttendance): ?>
 				<div class="ev-att-form">
 					<h4><i class="fas fa-plus-circle" style="margin-right:6px;color:#276749"></i>Add Attendance</h4>
 					<form method="post" id="ev-attendance-form" action="<?= UIR ?>EventAjax/add_attendance/<?= $eventId ?>/<?= $detailId ?>" onsubmit="evHandleAttendanceSubmit(this); return false;">
@@ -478,7 +479,7 @@
 							<th>Park</th>
 							<th>Class</th>
 							<th>Credits</th>
-							<?php if ($loggedIn): ?>
+							<?php if ($canManageAttendance): ?>
 							<th class="ev-del-cell">&times;</th>
 							<?php endif; ?>
 						</tr>
@@ -491,7 +492,7 @@
 							<td><a href="<?= UIR ?>Park/profile/<?= (int)$att['ParkId'] ?>"><?= htmlspecialchars($att['ParkName']) ?></a></td>
 							<td><?= htmlspecialchars($att['ClassName']) ?></td>
 							<td><?= htmlspecialchars($att['Credits']) ?></td>
-							<?php if ($loggedIn): ?>
+							<?php if ($canManageAttendance): ?>
 							<td class="ev-del-cell">
 								<a class="ev-del-link" title="Remove"
 									href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/delete/<?= (int)$att['AttendanceId'] ?>"
@@ -546,7 +547,7 @@
 					<i class="fas fa-users" style="margin-right:5px;color:#276749"></i>
 					<strong><?= $rsvpCount ?></strong> <?= $rsvpCount === 1 ? 'RSVP' : 'RSVPs' ?>
 				</p>
-				<?php if ($canManage): ?>
+				<?php if ($canManageAttendance): ?>
 					<?php if (count($rsvpList) > 0): ?>
 					<table class="ev-table">
 						<thead>
