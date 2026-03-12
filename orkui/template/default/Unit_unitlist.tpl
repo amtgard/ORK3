@@ -236,7 +236,7 @@ foreach ($_ul_units as $_u) {
 							alt="">
 					</td>
 					<td>
-						<a class="ul-name-link" href="<?=UIR?>Unit/index/<?=$unit['UnitId']?>"><?=htmlspecialchars($unit['Name'])?></a>
+						<a class="ul-name-link" href="<?=UIR?>Unit/index/<?=$unit['UnitId']?>"><?=htmlspecialchars($unit['Name'] ?? '') ?: '(Unnamed)'?></a>
 						<span class="ul-type-badge <?=$_badge_class?>"><?=htmlspecialchars($unit['Type'])?></span>
 					</td>
 					<td style="display:none"><?=htmlspecialchars($unit['Type'])?></td>

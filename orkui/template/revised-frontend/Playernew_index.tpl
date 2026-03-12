@@ -360,7 +360,7 @@
 			<?php if (count($unitList) > 0): ?>
 				<?php foreach ($unitList as $unit): ?>
 					<div class="pn-unit-row">
-						<a class="pn-unit-link" href="<?= UIR ?>Unit/index/<?= $unit['UnitId'] ?>"><?= htmlspecialchars($unit['Name']) ?></a>
+						<a class="pn-unit-link" href="<?= UIR ?>Unit/index/<?= $unit['UnitId'] ?>"><?= htmlspecialchars($unit['Name'] ?? '') ?: '(Unnamed)' ?></a>
 						<span class="pn-unit-type"><?= ucfirst($unit['Type']) ?></span>
 						<?php if ($canEditAdmin || $isOwnProfile): ?>
 						<span class="pn-delete-cell pn-unit-quit-cell">

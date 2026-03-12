@@ -1622,7 +1622,6 @@ var KnConfig = {
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
 			var totalAtt = 0, totalMo = 0, totalTp = 0, totalTm = 0;
-			debugger;
 			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
 			for (var parkId in data) {
 				if (parkId === '_kingdom') continue;

@@ -12,7 +12,7 @@
 	$parkId      = (int)($info['ParkId']    ?? 0);
 	$parkName    = htmlspecialchars($info['ParkName']    ?? '');
 	$unitId      = (int)($info['UnitId']    ?? 0);
-	$unitName    = htmlspecialchars($info['Unit']        ?? '');
+	$unitName    = htmlspecialchars($info['Unit'] ?? '') ?: '(Unnamed)';
 	$mundaneId   = (int)($info['MundaneId'] ?? 0);
 	$persona     = htmlspecialchars($info['Persona']     ?? '');
 
