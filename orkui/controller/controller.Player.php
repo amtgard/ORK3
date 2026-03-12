@@ -428,6 +428,61 @@ class Controller_Player extends Controller {
 		$this->data['Player']['ParkName'] = $this->session->park_name;
 	}
 
+
+	public function reconcile($id = null) {
+		$this->template = '../revised-frontend/Playernew_reconcile.tpl';
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$id  = (int)$id;
+
+		if (!$uid) {
+			header('Location: ' . UIR . "Login/login/Player/reconcile/$id");
+			exit;
+		}
+
+		$this->data['Player']  = $this->Player->fetch_player($id);
+		$this->data['Details'] = $this->Player->fetch_player_details($id);
+		$this->data['KingdomId'] = $this->session->kingdom_id;
+		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+
+		$playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
+		$canEditAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
+		if (!$canEditAdmin) {
+			header('Location: ' . UIR . "Player/profile/$id");
+			exit;
+		}
+		$this->data['canEditAdmin'] = true;
+
+		$this->load_model('Kingdom');
+		$preloadOfficers = [];
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $officer) {
+				if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+					$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']];
+			}
+		}
+		if ($playerParkId > 0) {
+			$parkOfficers = $this->Park->get_officers($playerParkId, $this->session->token);
+			if (is_array($parkOfficers)) {
+				foreach ($parkOfficers as $officer) {
+					if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+						$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']];
+				}
+			}
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
+
+		// AwardId → KingdomAwardId map for current kingdom (pre-match historical award dropdowns)
+		global $DB;
+		$rs = $DB->DataSet(
+			'SELECT kingdomaward_id, award_id FROM ork_kingdomaward WHERE kingdom_id = ' . (int)$this->session->kingdom_id . ' AND is_title = 0'
+		);
+		$awardIdMap = [];
+		if ($rs) { while ($rs->Next()) { $awardIdMap[(int)$rs->award_id] = (int)$rs->kingdomaward_id; } }
+		$this->data['AwardIdToKingdomAwardId'] = $awardIdMap;
+	}
+
 }
 
 

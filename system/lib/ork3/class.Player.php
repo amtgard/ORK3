@@ -1378,7 +1378,8 @@ class Player extends Ork3 {
 					&& $new_custom_name == $awards->custom_name
 					&& $new_at_park_id == $awards->at_park_id
 					&& $new_at_kingdom_id == $awards->at_kingdom_id
-					&& $new_at_event_id == $awards->at_event_id);
+					&& $new_at_event_id == $awards->at_event_id
+					&& intval($awards->by_whom_id) > 0);
 				if ($no_op) {
 					return Success(false);
 				}
@@ -1395,7 +1396,7 @@ class Player extends Ork3 {
 				$set_note = $request['Note'];
 				$set_awards_id = intval($request['AwardsId']);
 
-				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', rank=' . intval($set_rank) . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\' WHERE awards_id=' . intval($set_awards_id);
+				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', rank=' . intval($set_rank) . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\', by_whom_id=' . intval($mundane_id) . ' WHERE awards_id=' . intval($set_awards_id);
 				$this->db->query($sql);
 
 				return Success($set_awards_id);

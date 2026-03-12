@@ -261,7 +261,41 @@ class Controller_PlayerAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'updateclasses') {
+		} elseif ($action === 'reconcileaward') {
+		$awards_id        = (int)($_POST['AwardsId']        ?? 0);
+		$kingdom_award_id = (int)($_POST['KingdomAwardId'] ?? 0);
+		$rank             = (int)($_POST['Rank']           ?? 0);
+		$date             = trim($_POST['Date']            ?? '');
+		$given_by_id      = (int)($_POST['GivenById']      ?? 0);
+		$note             = trim($_POST['Note']            ?? '');
+		$park_id          = (int)($_POST['ParkId']         ?? 0);
+		$kingdom_id       = (int)($_POST['KingdomId']      ?? 0);
+		$event_id         = (int)($_POST['EventId']        ?? 0);
+		if (!valid_id($awards_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid award ID.']);
+			exit;
+		}
+		if (!valid_id($kingdom_award_id)) {
+			echo json_encode(['status' => 1, 'error' => 'A target award is required.']);
+			exit;
+		}
+		$r = $this->Player->reconcile_player_award([
+			'Token'          => $this->session->token,
+			'AwardsId'       => $awards_id,
+			'KingdomAwardId' => $kingdom_award_id,
+			'Rank'           => $rank,
+			'Date'           => $date,
+			'GivenById'      => $given_by_id,
+			'Note'           => $note,
+			'ParkId'         => valid_id($park_id)    ? $park_id    : 0,
+			'KingdomId'      => valid_id($kingdom_id) ? $kingdom_id : 0,
+			'EventId'        => valid_id($event_id)   ? $event_id   : 0,
+		]);
+		echo ($r['Status'] == 0)
+			? json_encode(['status' => 0])
+			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+	} elseif ($action === 'updateclasses') {
 			$reconcile_raw = $_POST['Reconciled'] ?? [];
 			if (!is_array($reconcile_raw)) {
 				echo json_encode(['status' => 1, 'error' => 'Invalid reconciliation data.']);

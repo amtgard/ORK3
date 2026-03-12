@@ -40,6 +40,19 @@
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
+	// Check if player has any reconcilable historical awards
+	$hasHistorical = false;
+	if ($canEditAdmin && is_array($Details['Awards'])) {
+		foreach ($Details['Awards'] as $_ha) {
+			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
+				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
+					$hasHistorical = true;
+					break;
+				}
+			}
+		}
+	}
+
 	// Kingdom dues period config
 	$_kconfig = Common::get_configs((int)($KingdomId ?? 0));
 	$_duesPeriodType = (isset($_kconfig['DuesPeriod']['Value']->Type) && $_kconfig['DuesPeriod']['Value']->Type !== '-')
@@ -417,7 +430,13 @@
 				<?php if ($canEditAdmin): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAwardModal('awards')"><i class="fas fa-plus"></i> Add Award</button>
-					<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
+					<?php if ($hasHistorical): ?>
+				<a href="<?= UIR ?>Player/reconcile/<?= (int)$Player['MundaneId'] ?>"
+				   class="pn-btn pn-btn-sm" style="background:#6b46c1;color:#fff;margin-left:8px">
+					<i class="fas fa-history"></i> Reconcile Historical Awards
+				</a>
+				<?php endif; ?>
+				<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				</div>
 				<?php endif; ?>
 				<?php
