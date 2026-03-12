@@ -36,10 +36,13 @@
 	$websiteName = $cd['UrlName'] ?? '';
 	$mapUrlName  = $cd['MapUrlName'] ?? '';
 	$mapUrl      = $cd['MapUrl']     ?? '';
-	$city     = $cd['City']     ?? '';
-	$province = $cd['Province'] ?? '';
-	$country  = $cd['Country']  ?? '';
-	$locationDisplay = implode(', ', array_filter([$city, $province, $country]));
+	$address    = $cd['Address']    ?? '';
+	$city       = $cd['City']       ?? '';
+	$province   = $cd['Province']   ?? '';
+	$postalCode = $cd['PostalCode'] ?? '';
+	$country    = $cd['Country']    ?? '';
+	$locationDisplay = implode(', ', array_filter([$address, $city, $province, $country]));
+	$mapQueryAddress = implode(', ', array_filter([$address, $city, $province, $postalCode, $country]));
 
 	// Duration
 	$durationLabel = '';
@@ -242,13 +245,22 @@
 		</div>
 		<div class="ev-stat-label">Price</div>
 	</div>
-	<div class="ev-stat-card">
+	<?php $hasMapTab = (bool)$locationDisplay; ?>
+	<?php if (!$locationDisplay && $mapUrl): ?>
+	<a href="<?= htmlspecialchars($mapUrl) ?>" target="_blank" class="ev-stat-card ev-stat-card-link" style="cursor:pointer;text-decoration:none;color:inherit">
+		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
+		<div class="ev-stat-value" style="font-size:14px;padding-top:3px;color:#4a90d9"><?= htmlspecialchars($mapUrlName ?: 'View Map') ?></div>
+		<div class="ev-stat-label">Location</div>
+	</a>
+	<?php else: ?>
+	<div class="ev-stat-card<?= $hasMapTab ? ' ev-stat-card-link' : '' ?>"<?= $hasMapTab ? ' onclick="evShowTab(document.querySelector(\'[data-tab=ev-tab-map]\'),\'ev-tab-map\')" title="View map"' : '' ?> style="<?= $hasMapTab ? 'cursor:pointer' : '' ?>">
 		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
 		<div class="ev-stat-value" style="font-size:14px;padding-top:3px">
 			<?= $locationDisplay ? htmlspecialchars($locationDisplay) : '<span style="color:#a0aec0">TBD</span>' ?>
 		</div>
 		<div class="ev-stat-label">Location</div>
 	</div>
+	<?php endif; ?>
 	<div class="ev-stat-card">
 		<div class="ev-stat-icon"><i class="fas fa-users"></i></div>
 		<div class="ev-stat-value"><?= $attendeeCount ?></div>
@@ -308,6 +320,12 @@
 		<?php // Location card ?>
 		<div class="ev-card">
 			<h4><i class="fas fa-map-marker-alt" style="margin-right:5px"></i>Location</h4>
+			<?php if ($address): ?>
+			<div class="ev-detail-row">
+				<span class="ev-detail-label">Address</span>
+				<span class="ev-detail-value"><?= htmlspecialchars($address) ?></span>
+			</div>
+			<?php endif; ?>
 			<?php if ($city): ?>
 			<div class="ev-detail-row">
 				<span class="ev-detail-label">City</span>
@@ -318,6 +336,12 @@
 			<div class="ev-detail-row">
 				<span class="ev-detail-label">Region</span>
 				<span class="ev-detail-value"><?= htmlspecialchars($province) ?></span>
+			</div>
+			<?php endif; ?>
+			<?php if ($postalCode): ?>
+			<div class="ev-detail-row">
+				<span class="ev-detail-label">Postal Code</span>
+				<span class="ev-detail-value"><?= htmlspecialchars($postalCode) ?></span>
 			</div>
 			<?php endif; ?>
 			<?php if ($country): ?>
@@ -395,6 +419,11 @@
 					<i class="fas fa-calendar-check"></i> RSVPs
 					<span class="ev-tab-count"><?= $rsvpCount ?></span>
 				</li>
+				<?php if ($hasMapTab): ?>
+				<li data-tab="ev-tab-map" onclick="evShowTab(this,'ev-tab-map')">
+					<i class="fas fa-map-marked-alt"></i> Map
+				</li>
+				<?php endif; ?>
 			</ul>
 
 			<?php // ---- Details Tab ---- ?>
@@ -584,6 +613,34 @@
 				</div>
 				<?php endif; ?>
 			</div><!-- /.ev-tab-panel -->
+
+			<?php if ($hasMapTab): ?>
+			<?php
+				$mapOpenUrl  = $mapLink ?: null;
+				$mapQuery    = urlencode($mapQueryAddress);
+				$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
+				if (!$mapOpenUrl) $mapOpenUrl = 'https://maps.google.com/maps?q=' . $mapQuery;
+			?>
+			<?php // ---- Map Tab ---- ?>
+			<div class="ev-tab-panel" id="ev-tab-map">
+				<div style="margin-bottom:10px;display:flex;justify-content:flex-end">
+					<a href="<?= htmlspecialchars($mapOpenUrl) ?>" target="_blank" class="pk-btn pk-btn-secondary" style="font-size:13px;padding:6px 14px;text-decoration:none">
+						<i class="fas fa-external-link-alt" style="margin-right:6px"></i>Open in Maps
+					</a>
+				</div>
+				<div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0">
+					<iframe
+						src="<?= htmlspecialchars($mapEmbedUrl) ?>"
+						width="100%"
+						height="400"
+						style="border:0;display:block"
+						allowfullscreen=""
+						loading="lazy"
+						referrerpolicy="no-referrer-when-downgrade"
+					></iframe>
+				</div>
+			</div><!-- /.ev-tab-panel -->
+			<?php endif; ?>
 
 		</div><!-- /.ev-tabs -->
 	</div><!-- /.ev-main -->

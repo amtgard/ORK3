@@ -301,14 +301,6 @@
 
 			<!-- About Tab -->
 			<div class="pk-tab-panel" id="pk-tab-about">
-				<?php if (!empty($CanManagePark)): ?>
-				<div style="display:flex;justify-content:flex-end;margin-bottom:14px">
-					<button class="pk-btn pk-btn-primary" onclick="pkOpenAdminModal()">
-						<i class="fas fa-cog" style="margin-right:6px"></i>Manage Park
-					</button>
-				</div>
-				<?php endif; ?>
-
 				<div class="pk-about-grid">
 					<?php if (!empty($description)): ?>
 					<div class="pk-about-section">

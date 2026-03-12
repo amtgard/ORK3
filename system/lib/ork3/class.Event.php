@@ -378,9 +378,10 @@ class Event  extends Ork3 {
 				if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
 					return InvalidParameter('The scheduled event for this template cannot be updated because it has already been used (attendance has been entered!).  Please try scheduling a new event for this template.');
 			
-				$details = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['Postal_code']);
-    			$geocode = json_decode( $details[ 'Geocode' ] );
-			
+				$hasAddress = !empty(trim(($request['Address'] ?? '') . ($request['City'] ?? '') . ($request['Province'] ?? '') . ($request['PostalCode'] ?? '')));
+				$details  = $hasAddress ? Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
+				$geocode  = ($details && !empty($details['Geocode'])) ? json_decode($details['Geocode']) : null;
+
 				$this->detail->event_id = $request['EventId'];
 				$this->detail->current = $request['Current'];
 				$this->detail->price = $request['Price'];
@@ -389,18 +390,26 @@ class Event  extends Ork3 {
 				$this->detail->description = Common::make_safe_html($request['Description']);
 				$this->detail->url = $request['Url'];
 				$this->detail->url_name = $request['UrlName'];
-				$this->detail->address = isset($details['Address'])?$details['Address']:$request['Address'];
-				$this->detail->province = isset($details['Province'])?$details['Province']:$request['Province'];
-				$this->detail->postal_code = isset($details['PostalCode'])?$details['PostalCode']:$request['PostalCode'];
-				$this->detail->city = isset($details['City'])?$details['City']:$request['City'];
-				$this->detail->country = $request['Country'];
+				if ($hasAddress) {
+					$this->detail->address    = isset($details['Address'])    ? $details['Address']    : $request['Address'];
+					$this->detail->province   = isset($details['Province'])   ? $details['Province']   : $request['Province'];
+					$this->detail->postal_code = isset($details['PostalCode']) ? $details['PostalCode'] : $request['PostalCode'];
+					$this->detail->city       = isset($details['City'])       ? $details['City']       : $request['City'];
+					$this->detail->country    = $request['Country'];
+				} else {
+					$this->detail->address     = '';
+					$this->detail->province    = '';
+					$this->detail->postal_code = '';
+					$this->detail->city        = '';
+					$this->detail->country     = '';
+				}
 				$this->detail->map_url = $request['MapUrl'];
 				$this->detail->map_url_name = $request['MapUrlName'];
 				$this->detail->modified = date('Y-m-d H:i:s');
-				$this->detail->google_geocode = $details['Geocode'];
-				$this->detail->location = $details['Location'];
-				$this->detail->latitude = $geocode->results[ 0 ]->geometry->location->lat;
-				$this->detail->longitude = $geocode->results[ 0 ]->geometry->location->lng;
+				$this->detail->google_geocode = $details ? $details['Geocode'] : null;
+				$this->detail->location = $details ? $details['Location'] : null;
+				$this->detail->latitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lat : null;
+				$this->detail->longitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lng : null;
 				Ork3::$Lib->heraldry->SetEventHeraldry($request);
 				$this->detail->save();
 				if (valid_id($request['Current'])) {

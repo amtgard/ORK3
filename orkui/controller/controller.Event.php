@@ -275,6 +275,8 @@ class Controller_Event extends Controller {
 					]);
 					if ( $r['Status'] == 0 ) {
 						$this->request->clear('Eventnew_edit');
+						header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
+						exit;
 					} elseif ( $r['Status'] != 5 ) {
 						$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
 					}
