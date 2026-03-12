@@ -2246,6 +2246,77 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
-}
+	public function BeltlineData($request) {
+		$kingdom_id = intval($request['KingdomId']);
+		if (!valid_id($kingdom_id)) {
+			return array('Status' => InvalidParameter('KingdomId required'), 'Relationships' => array(), 'Knights' => array());
+		}
 
-?>
+		$sql = "SELECT
+				ma.mundane_id AS recipient_id,
+				m.persona AS recipient_persona,
+				ma.given_by_id AS giver_id,
+				giver.persona AS giver_persona,
+				IFNULL(ka.name, a.name) AS title_name,
+				a.peerage,
+				ma.date
+			FROM " . DB_PREFIX . "awards ma
+				JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
+				LEFT JOIN " . DB_PREFIX . "mundane giver ON giver.mundane_id = ma.given_by_id
+			WHERE (a.peerage IN ('Squire', 'Man-At-Arms', 'Page', 'Lords-Page')
+					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND ma.kingdom_id = $kingdom_id
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			ORDER BY m.persona";
+
+		logtrace('BeltlineData', $sql);
+		$r = $this->db->query($sql);
+		$relationships = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$relationships[] = array(
+					'RecipientId'      => $r->recipient_id,
+					'RecipientPersona' => $r->recipient_persona,
+					'GiverId'          => $r->giver_id,
+					'GiverPersona'     => $r->giver_persona,
+					'TitleName'        => $r->title_name,
+					'Peerage'          => $r->peerage,
+					'Date'             => $r->date,
+				);
+			}
+		}
+
+		$knights_sql = "SELECT DISTINCT
+				m.mundane_id,
+				m.persona
+			FROM " . DB_PREFIX . "awards ma
+				JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
+			WHERE a.peerage = 'Knight'
+				AND ma.kingdom_id = $kingdom_id
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			ORDER BY m.persona";
+
+		logtrace('BeltlineData knights', $knights_sql);
+		$kr = $this->db->query($knights_sql);
+		$knights = array();
+		if ($kr !== false && $kr->size() > 0) {
+			while ($kr->next()) {
+				$knights[] = array(
+					'MundaneId' => $kr->mundane_id,
+					'Persona'   => $kr->persona,
+				);
+			}
+		}
+
+		return array(
+			'Status'        => Success(),
+			'Relationships' => $relationships,
+			'Knights'       => $knights,
+		);
+	}
+
+}
