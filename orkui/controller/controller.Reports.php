@@ -676,6 +676,31 @@ class Controller_Reports extends Controller {
 		));
 	}
 
+	public function beltline_explorer($params = null) {
+		$this->template = 'Reports_beltlineexplorer.tpl';
+		$this->data['page_title'] = 'Beltline Explorer';
+
+		$kingdom_id = null;
+		if (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
+			$kingdom_id = (int)$this->request->KingdomId;
+		} elseif (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+			$kingdom_id = (int)$this->session->kingdom_id;
+		}
+
+		$this->data['kingdom_id'] = $kingdom_id;
+
+		if (!valid_id($kingdom_id)) {
+			$this->data['no_kingdom'] = true;
+			return;
+		}
+
+		$this->data['menu']['reports']['url'] = UIR . 'Kingdom/index/' . $kingdom_id . '?tab=reports';
+
+		$result = $this->Reports->beltline_data(array('KingdomId' => $kingdom_id));
+		$this->data['BeltlineRelationships'] = $result['Relationships'];
+		$this->data['Knights'] = $result['Knights'];
+	}
+
 }
 
 ?>

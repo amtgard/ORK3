@@ -255,6 +255,17 @@ class Model_Reports extends Model {
 		return array();
 	}
 
+	function beltline_data($request) {
+		$r = $this->Report->BeltlineData($request);
+		if ($r['Status']['Status'] == 0) {
+			return array(
+				'Relationships' => $r['Relationships'],
+				'Knights'       => $r['Knights'],
+			);
+		}
+		return array('Relationships' => array(), 'Knights' => array());
+	}
+
 }
 
 ?>
