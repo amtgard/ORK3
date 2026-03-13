@@ -1230,10 +1230,12 @@
 			<input type="hidden" name="Email"          value="<?= htmlspecialchars($Player['Email'] ?? '') ?>" />
 			<input type="hidden" name="Password"       value="" />
 			<input type="hidden" name="PasswordAgain"  value="" />
+			<?php if (!$canEditAdmin): ?>
 			<input type="hidden" name="Active"         value="<?= $Player['Active'] == 1 ? 'Active' : 'Inactive' ?>" />
 			<input type="hidden" name="Restricted"     value="<?= $Player['Restricted'] == 1 ? 'Restricted' : '' ?>" />
 			<input type="hidden" name="ParkMemberSince" value="<?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?>" />
 			<input type="hidden" name="Waivered"       value="<?= $Player['Waivered'] == 1 ? 'Waivered' : 'Lawsuit Bait' ?>" />
+			<?php endif; ?>
 		</div>
 
 		<div class="pn-modal-footer">
