@@ -582,13 +582,34 @@ $(function() {
 			}
 			$.when(
 				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, park_id: park_id, kingdom_id: kingdom_id, limit: 8 }),
-				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 })
-			).done(function(parkRes, kingdomRes) {
-				var localIds = {}, suggestions = [];
+				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 }),
+				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, limit: 10 })
+			).done(function(parkRes, kingdomRes, globalRes) {
+				var seenIds = {}, suggestions = [], kingdomOutsiders = [], globalOutsiders = [];
 				$.each(parkRes[0], function(i, v) {
-					localIds[v.MundaneId] = true;
+					seenIds[v.MundaneId] = true;
 					suggestions.push({ label: v.Persona, value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } });
 				});
+				$.each(kingdomRes[0], function(i, v) {
+					if (!seenIds[v.MundaneId]) {
+						seenIds[v.MundaneId] = true;
+						var abbr = (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : v.ParkName;
+						kingdomOutsiders.push({ label: v.Persona + ' (' + abbr + ')', value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } });
+					}
+				});
+				$.each(globalRes[0], function(i, v) {
+					if (!seenIds[v.MundaneId]) {
+						seenIds[v.MundaneId] = true;
+						var abbr = (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : v.ParkName;
+						globalOutsiders.push({ label: v.Persona + ' (' + abbr + ')', value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } });
+					}
+				});
+				if (suggestions.length > 0 && (kingdomOutsiders.length > 0 || globalOutsiders.length > 0))
+					suggestions.push({ label: '', value: null, separator: true });
+				if (kingdomOutsiders.length > 0 && globalOutsiders.length > 0)
+					kingdomOutsiders.push({ label: '', value: null, separator: true });
+				response(suggestions.concat(kingdomOutsiders).concat(globalOutsiders));
+			});
 				var outsiders = [];
 				$.each(kingdomRes[0], function(i, v) {
 					if (!localIds[v.MundaneId]) {

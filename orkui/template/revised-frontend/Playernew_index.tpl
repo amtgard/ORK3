@@ -535,6 +535,7 @@
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
+							<?php if ($canEditAdmin): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
@@ -647,6 +648,41 @@
 									</td>
 									<td><?= $detail['Note'] ?></td>
 									<td><a href="<?= UIR ?>Player/index/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+									<?php if ($canEditAdmin): ?>
+									<td class="pn-award-actions-cell">
+										<?php $titleData = json_encode([
+											'AwardsId'       => (int)$detail['AwardsId'],
+											'displayName'    => ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
+											'Name'           => $detail['Name'],
+											'IsLadder'       => (int)$detail['IsLadder'],
+											'IsTitle'        => 1,
+											'IsHistorical'   => (int)($detail['IsHistorical'] ?? 0),
+											'KingdomAwardId' => (int)$detail['KingdomAwardId'],
+											'Rank'           => (int)$detail['Rank'],
+											'Date'           => $detail['Date'],
+											'GivenBy'        => $detail['GivenBy'],
+											'GivenById'      => (int)$detail['GivenById'],
+											'Note'           => $detail['Note'],
+											'ParkId'         => (int)$detail['ParkId'],
+											'ParkName'       => $detail['ParkName'],
+											'KingdomId'      => (int)$detail['KingdomId'],
+											'KingdomName'    => $detail['KingdomName'],
+											'EventId'        => (int)$detail['EventId'],
+											'EventName'      => $detail['EventName'],
+										], JSON_HEX_QUOT | JSON_HEX_APOS); ?>
+										<button class="pn-award-action-btn pn-award-edit-btn"
+										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+										        data-award="<?= htmlspecialchars($titleData, ENT_QUOTES) ?>"
+										        title="Edit title"><i class="fas fa-pencil-alt"></i></button>
+										<button class="pn-award-action-btn pn-award-del-btn"
+										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+										        title="Delete title"><i class="fas fa-trash"></i></button>
+										<button class="pn-award-action-btn pn-award-revoke-btn"
+										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+										        data-award="<?= htmlspecialchars($titleData, ENT_QUOTES) ?>"
+										        title="Revoke title"><i class="fas fa-ban"></i></button>
+									</td>
+									<?php endif; ?>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>

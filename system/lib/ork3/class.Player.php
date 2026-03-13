@@ -1323,19 +1323,19 @@ class Player extends Ork3 {
 
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 
-				$awards->rank = $request['Rank'];
-				$awards->date = $request['Date'];
-				$awards->given_by_id = $request['GivenById'];
-				$awards->note = $request['Note'];
-				// If no event, then go Park!
-				$awards->park_id = !valid_id($request['EventId'])?$request['ParkId']:0;
-				// If no event and valid parkid, go Park! Otherwise, go Kingdom.  Unless it's an event.  Then go ... ZERO!
-				$awards->kingdom_id = !valid_id($request['EventId'])?(valid_id($request['ParkId'])?$info['ParkInfo']['KingdomId']:$request['KingdomId']):0;
-				// Events are awesome.
-				$awards->event_id = valid_id($request['EventId'])?$request['EventId']:0;
-				$awards->save();
+				$set_rank       = intval($request['Rank']);
+				$set_date       = $request['Date'] ? date('Y-m-d', strtotime($request['Date'])) : $awards->date;
+				$set_given_by_id = intval($request['GivenById']);
+				$set_note       = addslashes($request['Note']);
+				$set_at_park_id    = !valid_id($request['EventId']) ? intval($request['ParkId']) : 0;
+				$set_at_kingdom_id = !valid_id($request['EventId']) ? (valid_id($request['ParkId']) ? intval($info['ParkInfo']['KingdomId']) : intval($request['KingdomId'])) : 0;
+				$set_at_event_id   = valid_id($request['EventId']) ? intval($request['EventId']) : 0;
+				$set_awards_id  = intval($request['AwardsId']);
 
-				return Success($awards->awards_id);
+				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . ' WHERE awards_id=' . $set_awards_id;
+				$this->db->query($sql);
+
+				return Success($set_awards_id);
 			} else {
 				return InvalidParamter();
 			}

@@ -5963,6 +5963,7 @@ function setupPronounPicker(cfg) {
 	}
 
 	window.pnOpenAwardEditModal = function(awardsId, data) {
+		console.log('[EditAward] Opening modal — awardsId:', awardsId, 'data:', data);
 		currentAwardsId = awardsId;
 		currentAwardIsHistorical = data.IsHistorical === 1
 			|| (data.GivenById == 0 && data.ParkId == 0 && data.KingdomId == 0 && data.EventId == 0);
@@ -6046,6 +6047,7 @@ function setupPronounPicker(cfg) {
 			editGbText.addEventListener('input', function() {
 				clearTimeout(editGbTimer);
 				editGbId.value = '';
+				console.log('[EditAward] Given By text changed — id cleared, text now:', this.value);
 				var term = this.value.trim();
 				if (term.length < 2) { editGbResults.classList.remove('pn-ac-open'); return; }
 				editGbTimer = setTimeout(function() {
@@ -6070,6 +6072,7 @@ function setupPronounPicker(cfg) {
 				if (!item) return;
 				editGbText.value = decodeURIComponent(item.dataset.name);
 				editGbId.value   = item.dataset.id;
+				console.log('[EditAward] Given By selected — id:', editGbId.value, 'name:', editGbText.value);
 				editGbResults.classList.remove('pn-ac-open');
 			});
 			acKeyNav(editGbText, editGbResults, 'pn-ac-open', '.pn-ac-item');
@@ -6235,6 +6238,15 @@ function setupPronounPicker(cfg) {
 					return;
 				}
 
+				/* validate Given By — text entered but no player selected from autocomplete */
+				var gbText = gid('pn-edit-givenby-text');
+				var gbId   = gid('pn-edit-givenby-id');
+				if (gbText && gbText.value.trim() && gbId && !gbId.value) {
+					showFb('Please select a player from the search dropdown for "Given By".', 'pn-form-error');
+					gbText.focus();
+					return;
+				}
+
 				/* check if reconcile conversion is requested */
 				var doReconcile   = currentAwardIsHistorical
 					&& gid('pn-edit-reconcile-check')
@@ -6247,6 +6259,17 @@ function setupPronounPicker(cfg) {
 
 				saveBtn.disabled = true;
 				var fd = new FormData();
+				console.log('[EditAward] Save clicked — currentAwardsId:', currentAwardsId,
+					'date:', gid('pn-edit-award-date') ? gid('pn-edit-award-date').value : 'N/A',
+					'givenByText:', gid('pn-edit-givenby-text') ? gid('pn-edit-givenby-text').value : 'N/A',
+					'givenById:', gid('pn-edit-givenby-id') ? gid('pn-edit-givenby-id').value : 'N/A',
+					'note:', gid('pn-edit-award-note') ? gid('pn-edit-award-note').value : 'N/A',
+					'parkId:', gid('pn-edit-park-id') ? gid('pn-edit-park-id').value : 'N/A',
+					'kingdomId:', gid('pn-edit-kingdom-id') ? gid('pn-edit-kingdom-id').value : 'N/A',
+					'eventId:', gid('pn-edit-event-id') ? gid('pn-edit-event-id').value : 'N/A',
+					'rank:', gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : 'N/A',
+					'doReconcile:', typeof doReconcile !== 'undefined' ? doReconcile : false
+				);
 				fd.append('Date',      date);
 				fd.append('GivenById', gid('pn-edit-givenby-id')  ? gid('pn-edit-givenby-id').value  : '');
 				fd.append('Note',      gid('pn-edit-award-note')   ? gid('pn-edit-award-note').value  : '');
@@ -6264,17 +6287,22 @@ function setupPronounPicker(cfg) {
 					endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId;
 				}
 
+				console.log('[EditAward] POST to endpoint:', endpoint);
 				fetch(endpoint, {
 					method: 'POST', body: fd
 				}).then(function(r) {
-					saveBtn.disabled = false;
-					if (r.ok) {
-						var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
-						showFb(msg, 'pn-award-edit-success');
-						setTimeout(function() { location.reload(); }, 900);
-					} else {
-						showFb('Save failed (server error ' + r.status + ').', 'pn-form-error');
-					}
+					console.log('[EditAward] Response — status:', r.status, 'ok:', r.ok, 'url:', r.url);
+					return r.clone().text().then(function(body) {
+						console.log('[EditAward] Response body (first 500 chars):', body.substring(0, 500));
+						saveBtn.disabled = false;
+						if (r.ok) {
+							var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+							showFb(msg, 'pn-award-edit-success');
+							setTimeout(function() { location.reload(); }, 900);
+						} else {
+							showFb('Save failed (server error ' + r.status + ').', 'pn-form-error');
+						}
+					});
 				}).catch(function() {
 					saveBtn.disabled = false;
 					showFb('Request failed.', 'pn-form-error');
@@ -6299,7 +6327,8 @@ function setupPronounPicker(cfg) {
 			var btn      = this;
 			var row      = $(this).closest('tr');
 			var awardsId = $(this).data('awards-id');
-			if (!awardsId || !confirm('Delete this award record? This cannot be undone.')) return;
+			var kind     = $(this).closest('table').is('#pn-titles-table') ? 'title' : 'award';
+			if (!awardsId || !confirm('Delete this ' + kind + ' record? This cannot be undone.')) return;
 			btn.disabled = true;
 			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deleteaward', {
 				method: 'POST',
@@ -6712,11 +6741,15 @@ function setupPronounPicker(cfg) {
 	var currentRevokeAwardsId = 0;
 	var currentRevokeAwardName = '';
 
-	window.pnOpenAwardRevokeModal = function(awardsId, awardName) {
+	window.pnOpenAwardRevokeModal = function(awardsId, awardName, isTitle) {
 		currentRevokeAwardsId = awardsId;
 		currentRevokeAwardName = awardName;
 		var nameEl = gid('pn-revoke-award-name');
 		if (nameEl) nameEl.textContent = awardName;
+		var titleEl = document.querySelector('#pn-award-revoke-overlay .pn-modal-title');
+		if (titleEl) titleEl.innerHTML = '<i class="fas fa-ban" style="margin-right:8px;color:#b7791f"></i>' + (isTitle ? 'Revoke Title' : 'Revoke Award');
+		var saveBtn = gid('pn-revoke-award-save');
+		if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + (isTitle ? 'Revoke Title' : 'Revoke Award');
 		var reason = gid('pn-revoke-reason');
 		if (reason) reason.value = '';
 		var counter = gid('pn-revoke-char-count');
@@ -6752,8 +6785,9 @@ function setupPronounPicker(cfg) {
 			var awardsId  = $(this).data('awards-id');
 			var data      = $(this).data('award');
 			if (typeof data === 'string') { try { data = JSON.parse(data); } catch(e) { data = {}; } }
-			var name = (data && data.displayName) ? data.displayName : ('Award #' + awardsId);
-			pnOpenAwardRevokeModal(awardsId, name);
+			var name    = (data && data.displayName) ? data.displayName : ('Award #' + awardsId);
+			var isTitle = !!(data && data.IsTitle);
+			pnOpenAwardRevokeModal(awardsId, name, isTitle);
 		});
 
 		// Save

@@ -29,6 +29,7 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 
 .su-search-bar {
 	display: flex; gap: 10px; align-items: center; margin-bottom: 14px;
+	max-width: 50%;
 }
 .su-search-input {
 	flex: 1; padding: 8px 12px; border: 1.5px solid var(--rp-border); border-radius: 6px;
@@ -41,6 +42,12 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 	padding: 0 6px; line-height: 1; display: none;
 }
 .su-search-clear:hover { color: #4a5568; }
+.su-search-btn {
+	padding: 8px 18px; background: #38a169; color: #fff; border: none; border-radius: 6px;
+	font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit;
+	transition: background 0.15s;
+}
+.su-search-btn:hover { background: #2f855a; }
 .su-loading { text-align: center; padding: 32px; color: var(--rp-text-muted); font-size: 14px; }
 
 /* Mobile */
@@ -153,6 +160,7 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 			<input type="text" class="su-search-input" id="su-search-input"
 				placeholder="Search by name…">
 			<button class="su-search-clear" id="su-search-clear" title="Clear search">&times;</button>
+			<button class="su-search-btn" id="su-search-btn"><i class="fas fa-search"></i> Search</button>
 		</div>
 
 		<!-- Type filter pills -->
@@ -326,32 +334,33 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 		if (table) table.draw();
 	});
 
-	// Search input — only fires when user has typed 2+ chars
+	function doSearch() {
+		var val = $('#su-search-input').val().trim();
+		if (val.length < 3) return;
+		if (val === currentQuery) return;
+		currentQuery = val;
+		loadData(val);
+	}
+
+	function clearSearch() {
+		if (table) { table.destroy(); table = null; }
+		$('#su-table').hide();
+		$('#su-stats-row').hide();
+		$('#su-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>Type a name to search companies &amp; households.').show();
+		$('#su-search-input').val('');
+		$('#su-search-clear').hide();
+		currentQuery = '';
+	}
+
 	$('#su-search-input').on('input', function () {
-		var val = this.value;
-		$('#su-search-clear').css('display', val.length ? 'block' : 'none');
-		clearTimeout(searchTimer);
-		if (val.length === 0) {
-			// Cleared — go back to empty prompt state
-			if (table) { table.destroy(); table = null; }
-			$('#su-table').hide();
-			$('#su-stats-row').hide();
-			$('#su-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>Type a name to search companies &amp; households.').show();
-			currentQuery = '';
-			return;
-		}
-		if (val.length < 2) return;
-		searchTimer = setTimeout(function () {
-			if (val !== currentQuery) {
-				currentQuery = val;
-				loadData(val);
-			}
-		}, 400);
+		$('#su-search-clear').css('display', this.value.length ? 'block' : 'none');
+	}).on('keydown', function (e) {
+		if (e.key === 'Enter') doSearch();
 	});
 
-	$('#su-search-clear').on('click', function () {
-		$('#su-search-input').val('').trigger('input');
-	});
+	$('#su-search-btn').on('click', doSearch);
+
+	$('#su-search-clear').on('click', clearSearch);
 
 	// Initial state — no auto-load
 	$('#su-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>Type a name to search companies &amp; households.').show();

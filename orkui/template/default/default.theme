@@ -172,6 +172,7 @@
 
 	// User's home kingdom ID for priority sorting (0 = not logged in / unknown)
 	var nsKid = <?= (isset($__home) && $__home) ? (int)$__home['kingdom_id'] : 0 ?>;
+	var nsPid = <?= (isset($__home) && $__home) ? (int)$__home['park_id'] : 0 ?>;
 	var nsUir = '<?= UIR ?>';
 
 	$(document).ready(function() {
@@ -198,7 +199,7 @@
 			var $dd = $('#nav-search-dropdown');
 			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
 			if (nsXhr) nsXhr.abort();
-			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid,
+			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid,
 				function(res) { nsRender(res || {}); }
 			).fail(function(xhr) {
 				if (xhr.statusText !== 'abort')

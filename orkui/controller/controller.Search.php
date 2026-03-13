@@ -24,6 +24,7 @@ class Controller_Search extends Controller {
 	}
 	
 	public function unit() {
+		header('X-Robots-Tag: noindex, nofollow');
 		if (isset($this->request->KingdomId)) $this->data['KingdomId'] = $this->request->KingdomId;
 		if (isset($this->request->ParkId)) $this->data['ParkId'] = $this->request->ParkId;
 	}
@@ -42,7 +43,7 @@ class Controller_Search extends Controller {
 			'IncludeCompanies'  => 1,
 			'IncludeHouseHolds' => 1,
 			'IncludeEvents'     => 1,
-			'Limit'             => $is_default ? 100 : 500,
+			'Limit'             => 250,
 			'OrderBy'           => $is_default ? 'active_member_count DESC' : 'u.name',
 		]);
 		echo json_encode($result['Units'] ?? []);

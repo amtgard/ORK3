@@ -701,6 +701,194 @@ class Controller_Reports extends Controller {
 		$this->data['Knights'] = $result['Knights'];
 	}
 
+
+	public function ladder_grid($params = null) {
+		global $DB;
+
+		$kingdom_id = 0;
+		$park_id    = 0;
+		$type       = null;
+		$id         = null;
+
+		if (isset($this->request->KingdomId)) {
+			$kingdom_id = (int)$this->request->KingdomId;
+			$type = 'Kingdom';
+			$id   = $kingdom_id;
+		}
+		if (isset($this->request->ParkId)) {
+			$park_id = (int)$this->request->ParkId;
+			$type = 'Park';
+			$id   = $park_id;
+		}
+
+		$this->template = 'Reports_laddergrid.tpl';
+		$this->data['page_title'] = ($type === 'Park' ? 'Park' : 'Kingdom') . ' Ladder Awards Grid';
+		$this->data['report_type'] = $type;
+		$this->data['report_id']   = $id;
+
+		if ($type === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/index/' . $park_id . '?tab=reports';
+		} elseif ($type === 'Kingdom') {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/index/' . $kingdom_id . '?tab=reports';
+		}
+
+		// 1. Get ladder awards for this kingdom (columns)
+		if ($kingdom_id > 0) {
+			$kSql = "SELECT DISTINCT a.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
+			         FROM ork_kingdomaward ka
+			         JOIN ork_award a ON a.award_id = ka.award_id
+			         WHERE ka.kingdom_id = {$kingdom_id}
+			           AND a.is_ladder = 1
+			           AND a.award_id != 31
+			         ORDER BY IFNULL(ka.name, a.name)";
+		} else {
+			$kSql = "SELECT DISTINCT a.award_id, a.name AS award_name, a.title_class
+			         FROM ork_award a
+			         WHERE a.is_ladder = 1
+			           AND a.award_id != 31
+			         ORDER BY a.name";
+		}
+
+		$awardResult = $DB->DataSet($kSql);
+		$awardCols = [];
+		if ($awardResult && $awardResult->Size() > 0) {
+			do {
+				if (!$awardResult->award_id) continue;
+				$name = $awardResult->award_name;
+				$display = preg_replace('/^Order of (?:the )?/i', '', $name);
+				$awardCols[(int)$awardResult->award_id] = [
+					'Name'        => $name,
+					'DisplayName' => $display,
+				];
+			} while ($awardResult->Next());
+		}
+
+		$this->data['LadderAwards'] = $awardCols;
+
+		if (empty($awardCols)) {
+			$this->data['GridRows'] = [];
+			return;
+		}
+
+		$awardIds = implode(',', array_keys($awardCols));
+
+		// Location clause for players
+		if ($park_id > 0) {
+			$locationClause = "AND m.park_id = {$park_id}";
+		} elseif ($kingdom_id > 0) {
+			$locationClause = "AND m.kingdom_id = {$kingdom_id}";
+		} else {
+			$locationClause = '';
+		}
+
+		// 2. Get players and their max rank per ladder award
+		$dataSql = "SELECT m.mundane_id, m.persona, a.award_id,
+			           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+			         FROM ork_mundane m
+			         JOIN ork_awards ma ON ma.mundane_id = m.mundane_id
+			         JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			         JOIN ork_award a ON a.award_id = ka.award_id
+			         WHERE m.active = 1
+			           AND a.is_ladder = 1
+			           AND a.award_id IN ({$awardIds})
+			           AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			           {$locationClause}
+			         GROUP BY m.mundane_id, a.award_id
+			         ORDER BY m.persona";
+
+		$dataResult = $DB->DataSet($dataSql);
+		$playerData = [];
+		if ($dataResult && $dataResult->Size() > 0) {
+			do {
+				$mid = (int)$dataResult->mundane_id;
+				$aid = (int)$dataResult->award_id;
+				if (!$mid || !$aid) continue;
+				if (!isset($playerData[$mid])) {
+					$playerData[$mid] = [
+						'MundaneId' => $mid,
+						'Persona'   => $dataResult->persona,
+						'Awards'    => [],
+					];
+				}
+				$val = (int)$dataResult->award_count;
+			$playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
+			} while ($dataResult->Next());
+		}
+
+		if (empty($playerData)) {
+			$this->data['GridRows'] = [];
+			return;
+		}
+
+		$mundaneIds = implode(',', array_keys($playerData));
+
+		// 3. Mark Master/Paragon — hardcoded ladder→master award_id map
+		// Keys are ladder award_ids; values are master award_ids that confirm mastery
+		$ladderToMasterMap = [
+			21  => [1],   // Order of the Rose       → Master Rose
+			22  => [2],   // Order of the Smith       → Master Smith
+			23  => [3],   // Order of the Lion        → Master Lion
+			24  => [4],   // Order of the Owl         → Master Owl
+			25  => [5],   // Order of the Dragon      → Master Dragon
+			26  => [6],   // Order of the Garber      → Master Garber
+			27  => [12],  // Order of the Warrior     → Warlord
+			239 => [240], // Order of the Crown       → Master Crown
+			243 => [244], // Order of Battle          → Battlemaster
+		];
+
+		$masterAwardIds = [];
+		foreach (array_keys($awardCols) as $lid) {
+			if (isset($ladderToMasterMap[$lid])) {
+				foreach ($ladderToMasterMap[$lid] as $mid_award) {
+					$masterAwardIds[$mid_award] = $lid;
+				}
+			}
+		}
+
+		if (!empty($masterAwardIds)) {
+			$masterIds = implode(',', array_keys($masterAwardIds));
+			$masterSql = "SELECT ma.mundane_id, ka.award_id AS master_award_id
+			             FROM ork_awards ma
+			             JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			             WHERE ma.mundane_id IN ({$mundaneIds})
+			               AND ka.award_id IN ({$masterIds})
+			               AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			             GROUP BY ma.mundane_id, ka.award_id";
+
+			$masterResult = $DB->DataSet($masterSql);
+			if ($masterResult && $masterResult->Size() > 0) {
+				do {
+					$mid        = (int)$masterResult->mundane_id;
+					if (!$mid) continue;
+					$masterAid  = (int)$masterResult->master_award_id;
+					$ladderAid  = $masterAwardIds[$masterAid] ?? null;
+					if ($ladderAid !== null && isset($playerData[$mid]['Awards'][$ladderAid])) {
+						$playerData[$mid]['Awards'][$ladderAid]['IsMaster'] = true;
+					}
+				} while ($masterResult->Next());
+			}
+		}
+
+		// 4. Mark players with a sign-in within the past 12 months
+		$recentSql = "SELECT DISTINCT mundane_id FROM ork_attendance
+			          WHERE mundane_id IN ({$mundaneIds})
+			            AND date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)";
+		$recentResult = $DB->DataSet($recentSql);
+		$recentIds = [];
+		if ($recentResult && $recentResult->Size() > 0) {
+			do {
+				$rmid = (int)$recentResult->mundane_id;
+				if ($rmid) $recentIds[$rmid] = true;
+			} while ($recentResult->Next());
+		}
+		foreach ($playerData as $mid => &$pRow) {
+			$pRow['RecentSignIn'] = isset($recentIds[$mid]);
+		}
+		unset($pRow);
+
+		$this->data['GridRows'] = array_values($playerData);
+	}
+
 }
 
 ?>
