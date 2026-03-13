@@ -551,7 +551,7 @@ class Report  extends Ork3 {
 		$order_by = (isset($request['OrderBy']) && in_array($request['OrderBy'], $allowed_order))
 			? $request['OrderBy'] : 'u.name';
 
-		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count,
+		$sql = "select distinct u.*, m.*, u.has_heraldry, count(um.mundane_id) as member_count,
 					(select count(*) from " . DB_PREFIX . "unit_mundane um2 where um2.unit_id = u.unit_id) as total_member_count,
 					(select max(a.date) from " . DB_PREFIX . "attendance a join " . DB_PREFIX . "unit_mundane um3 on um3.mundane_id = a.mundane_id where um3.unit_id = u.unit_id $activity_scope) as last_activity_date,
 					(select count(distinct um4.mundane_id) from " . DB_PREFIX . "unit_mundane um4 join " . DB_PREFIX . "attendance a4 on a4.mundane_id = um4.mundane_id where um4.unit_id = u.unit_id and a4.date >= date_sub(curdate(), interval 1 year)) as active_member_count,
