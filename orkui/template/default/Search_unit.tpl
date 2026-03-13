@@ -158,7 +158,7 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 		<!-- Search bar -->
 		<div class="su-search-bar">
 			<input type="text" class="su-search-input" id="su-search-input"
-				placeholder="Search by name…">
+				placeholder="Search by name (3+ characters)…">
 			<button class="su-search-clear" id="su-search-clear" title="Clear search">&times;</button>
 			<button class="su-search-btn" id="su-search-btn"><i class="fas fa-search"></i> Search</button>
 		</div>
