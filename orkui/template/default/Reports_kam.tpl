@@ -156,7 +156,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
-			<table id="kam-report-table" class="display" style="width:100%">
+			<table id="kam-report-table" class="display" style="width:100%;display:none">
 				<thead>
 					<tr>
 <?php if (!isset($this->__session->kingdom_id)) : ?>
@@ -228,7 +228,8 @@ $(function() {
 		fixedHeader : { headerOffset: 48 },
 		responsive  : true,
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedColumns: { left: 1 },
+		initComplete: function() { $('#kam-report-table').show(); }
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
