@@ -10,13 +10,6 @@ class Controller_Unit extends Controller {
 	public function unitlist($params=null) {
 		$kingdom_id = valid_id($this->request->KingdomId) ? (int)$this->request->KingdomId : null;
 		$park_id    = valid_id($this->request->ParkId)    ? (int)$this->request->ParkId    : null;
-		$this->data['Units'] = $this->Unit->get_unit_list(array(
-			'KingdomId'         => $kingdom_id,
-			'ParkId'            => $park_id,
-			'IncludeCompanies'  => 1,
-			'IncludeHouseHolds' => 1,
-			'IncludeEvents'     => 1,
-		));
 		$this->data['ScopeKingdomId'] = $kingdom_id;
 		$this->data['ScopeParkId']    = $park_id;
 		if ($park_id) {
