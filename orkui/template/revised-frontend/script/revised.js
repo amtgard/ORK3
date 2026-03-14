@@ -1,4 +1,22 @@
 /* ===========================
+   HTML escape helper
+   =========================== */
+function escHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/* ===========================
+   Shared constants
+   =========================== */
+var AUTOCOMPLETE_DEBOUNCE_MS = 250;
+var AWARD_NOTE_MAX_CHARS     = 400;
+
+/* ===========================
    Autocomplete keyboard nav
    =========================== */
 /**
@@ -350,7 +368,7 @@ if (PnConfig.recError) {
 
     // Character counter
     $('#pn-rec-reason').on('input', function() {
-        var remaining = 400 - $(this).val().length;
+        var remaining = AWARD_NOTE_MAX_CHARS - $(this).val().length;
         $('#pn-rec-char-count')
             .text(remaining + ' character' + (remaining !== 1 ? 's' : '') + ' remaining')
             .toggleClass('pn-char-warn', remaining < 50);
@@ -1206,14 +1224,14 @@ if (PnConfig.recError) {
                     } else {
                         results.innerHTML = data.map(function(p) {
                             return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                + p.Persona
-                                + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr || '') + ':' + (p.PAbbr || '') + ')</span>'
+                                + escHtml(p.Persona)
+                                + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
                                 + '</div>';
                         }).join('');
                     }
                     results.classList.add('pn-ac-open');
-                }).catch(function() {});
-            }, 250);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('pn-award-givenby-results').addEventListener('click', function(e) {
             var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
@@ -1248,12 +1266,12 @@ if (PnConfig.recError) {
                                 + ' data-kingdom="' + (parseInt(loc.KingdomId) || 0) + '"'
                                 + ' data-event="' + (parseInt(loc.EventId) || 0) + '"'
                                 + ' data-name="' + encodeURIComponent(loc.ShortName || loc.LocationName || '') + '">'
-                                + (loc.LocationName || '') + '</div>';
+                                + escHtml(loc.LocationName || '') + '</div>';
                         }).join('');
                     }
                     results.classList.add('pn-ac-open');
-                }).catch(function() {});
-            }, 250);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('pn-award-givenat-results').addEventListener('click', function(e) {
             var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
@@ -1283,7 +1301,7 @@ if (PnConfig.recError) {
 
         // ---- Note char counter ----
         gid('pn-award-note').addEventListener('input', function() {
-            var rem = 400 - this.value.length;
+            var rem = AWARD_NOTE_MAX_CHARS - this.value.length;
             var el  = gid('pn-award-char-count');
             el.textContent = rem + ' character' + (rem !== 1 ? 's' : '') + ' remaining';
             el.classList.toggle('pn-char-warn', rem < 50);
@@ -1351,7 +1369,7 @@ if (PnConfig.recError) {
             if (rec.Reason) {
                 var noteEl = gid('pn-award-note');
                 noteEl.value = rec.Reason;
-                var rem = 400 - rec.Reason.length;
+                var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
                 var cc = gid('pn-award-char-count');
                 if (cc) {
                     cc.textContent = rem + ' characters remaining';
@@ -2135,12 +2153,12 @@ $(document).ready(function() {
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 el.classList.add('kn-ac-open');
-            }).catch(function() {});
-        }, 250);
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }, AUTOCOMPLETE_DEBOUNCE_MS);
     });
     gid('kn-award-player-results').addEventListener('click', function(e) {
         var item = e.target.closest('.kn-ac-item[data-id]');
@@ -2157,7 +2175,7 @@ $(document).ready(function() {
                 knPlayerRanks = ranks || {};
                 var curAward = gid('kn-award-select').value;
                 if (curAward) buildRankPills(curAward);
-            }).catch(function() {});
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
     });
 
     // Given By — officer chips + search
@@ -2187,12 +2205,12 @@ $(document).ready(function() {
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 el.classList.add('kn-ac-open');
-            }).catch(function() {});
-        }, 250);
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }, AUTOCOMPLETE_DEBOUNCE_MS);
     });
     gid('kn-award-givenby-results').addEventListener('click', function(e) {
         var item = e.target.closest('.kn-ac-item[data-id]');
@@ -2216,12 +2234,12 @@ $(document).ready(function() {
                 el.innerHTML = (data && data.length)
                     ? data.map(function(loc) {
                         return '<div class="kn-ac-item" tabindex="-1" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
-                            + (loc.LocationName || loc.ShortName || '') + '</div>';
+                            + escHtml(loc.LocationName || loc.ShortName || '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No locations found</div>';
                 el.classList.add('kn-ac-open');
-            }).catch(function() {});
-        }, 250);
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }, AUTOCOMPLETE_DEBOUNCE_MS);
     });
     gid('kn-award-givenat-results').addEventListener('click', function(e) {
         var item = e.target.closest('.kn-ac-item');
@@ -2240,7 +2258,7 @@ $(document).ready(function() {
 
     // Note char counter
     gid('kn-award-note').addEventListener('input', function() {
-        var rem = 400 - this.value.length;
+        var rem = AWARD_NOTE_MAX_CHARS - this.value.length;
         var el  = gid('kn-award-char-count');
         el.textContent = rem + ' character' + (rem !== 1 ? 's' : '') + ' remaining';
     });
@@ -2316,7 +2334,7 @@ $(document).ready(function() {
         if (rec.Reason) {
             var noteEl = gid('kn-award-note');
             noteEl.value = rec.Reason;
-            var rem = 400 - rec.Reason.length;
+            var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
             var cc = gid('kn-award-char-count');
             if (cc) { cc.textContent = rem + ' characters remaining'; cc.classList.toggle('kn-char-warn', rem < 50); }
         }
@@ -2335,7 +2353,8 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
-            });
+            })
+            .catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] autoDismissRec failed:', err); });
     }
 
     // Recommendations tab: grant + dismiss
@@ -4330,12 +4349,12 @@ $(document).ready(function() {
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 el.classList.add('pk-ac-open');
-            }).catch(function() {});
-        }, 250);
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }, AUTOCOMPLETE_DEBOUNCE_MS);
     });
     gid('pk-award-player-results').addEventListener('click', function(e) {
         var item = e.target.closest('.pk-ac-item[data-id]');
@@ -4353,7 +4372,7 @@ $(document).ready(function() {
                 pkPlayerRanks = ranks || {};
                 var curAward = gid('pk-award-select').value;
                 if (curAward) buildRankPills(curAward);
-            }).catch(function() {});
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
     });
 
     // Given By — officer chips + search
@@ -4383,12 +4402,12 @@ $(document).ready(function() {
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr||'') + ':' + (p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 el.classList.add('pk-ac-open');
-            }).catch(function() {});
-        }, 250);
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }, AUTOCOMPLETE_DEBOUNCE_MS);
     });
     gid('pk-award-givenby-results').addEventListener('click', function(e) {
         var item = e.target.closest('.pk-ac-item[data-id]');
@@ -4412,12 +4431,12 @@ $(document).ready(function() {
                 el.innerHTML = (data && data.length)
                     ? data.map(function(loc) {
                         return '<div class="pk-ac-item" tabindex="-1" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
-                            + (loc.LocationName || loc.ShortName || '') + '</div>';
+                            + escHtml(loc.LocationName || loc.ShortName || '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No locations found</div>';
                 el.classList.add('pk-ac-open');
-            }).catch(function() {});
-        }, 250);
+            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }, AUTOCOMPLETE_DEBOUNCE_MS);
     });
     gid('pk-award-givenat-results').addEventListener('click', function(e) {
         var item = e.target.closest('.pk-ac-item');
@@ -4436,7 +4455,7 @@ $(document).ready(function() {
 
     // Note char counter
     gid('pk-award-note').addEventListener('input', function() {
-        var rem = 400 - this.value.length;
+        var rem = AWARD_NOTE_MAX_CHARS - this.value.length;
         var el  = gid('pk-award-char-count');
         el.textContent = rem + ' character' + (rem !== 1 ? 's' : '') + ' remaining';
     });
@@ -4513,7 +4532,7 @@ $(document).ready(function() {
         if (rec.Reason) {
             var noteEl = gid('pk-award-note');
             noteEl.value = rec.Reason;
-            var rem = 400 - rec.Reason.length;
+            var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
             var cc = gid('pk-award-char-count');
             if (cc) { cc.textContent = rem + ' characters remaining'; cc.classList.toggle('pk-char-warn', rem < 50); }
         }
@@ -4532,7 +4551,8 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 if (d.status === 0 && row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
-            });
+            })
+            .catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] autoDismissRec failed:', err); });
     }
 
     // Recommendations tab: grant + dismiss
@@ -5001,14 +5021,14 @@ $(document).ready(function() {
                 '</tr>';
                 
                 var tableBody = document.querySelector('.ev-table tbody');
-                tableBody.insertAdjacentHTML('beforeend', newRow);
+                if (tableBody) { tableBody.insertAdjacentHTML('beforeend', newRow); }
 
                 form.reset();
                 $('#ev-PlayerName').val('');
                 $('#ev-MundaneId').val('');
 
                 var attendeeCount = document.querySelector('.ev-tab-count');
-                attendeeCount.textContent = parseInt(attendeeCount.textContent) + 1;
+                if (attendeeCount) { attendeeCount.textContent = parseInt(attendeeCount.textContent || '0') + 1; }
                 
                 var emptyMessage = document.querySelector('#ev-tab-attendance .ev-empty');
                 if (emptyMessage) {
@@ -5020,7 +5040,7 @@ $(document).ready(function() {
                     errorDiv = document.createElement('div');
                     errorDiv.className = 'ev-error';
                     var mainDiv = document.querySelector('.ev-main');
-                    mainDiv.insertBefore(errorDiv, mainDiv.firstChild);
+                    if (mainDiv) { mainDiv.insertBefore(errorDiv, mainDiv.firstChild); }
                 }
                 errorDiv.style.display = 'block';
                 errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>' + (data.error || 'An unknown error occurred.');
@@ -5032,7 +5052,7 @@ $(document).ready(function() {
                 errorDiv = document.createElement('div');
                 errorDiv.className = 'ev-error';
                 var mainDiv = document.querySelector('.ev-main');
-                mainDiv.insertBefore(errorDiv, mainDiv.firstChild);
+                if (mainDiv) { mainDiv.insertBefore(errorDiv, mainDiv.firstChild); }
             }
             errorDiv.style.display = 'block';
             errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Request failed: ' + error.message;
@@ -6143,7 +6163,7 @@ function setupPronounPicker(cfg) {
         var countEl = gid('pn-edit-award-char-count');
         if (noteEl) {
             noteEl.value = data.Note || '';
-            if (countEl) countEl.textContent = (400 - noteEl.value.length) + ' characters remaining';
+            if (countEl) countEl.textContent = (AWARD_NOTE_MAX_CHARS - noteEl.value.length) + ' characters remaining';
         }
         var fb = gid('pn-edit-award-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
@@ -6179,14 +6199,14 @@ function setupPronounPicker(cfg) {
                         } else {
                             editGbResults.innerHTML = data.map(function(p) {
                                 return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                    + p.Persona
-                                    + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr || '') + ':' + (p.PAbbr || '') + ')</span>'
+                                    + escHtml(p.Persona)
+                                    + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
                                     + '</div>';
                             }).join('');
                         }
                         editGbResults.classList.add('pn-ac-open');
-                    }).catch(function() {});
-                }, 250);
+                    }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+                }, AUTOCOMPLETE_DEBOUNCE_MS);
             });
             editGbResults.addEventListener('click', function(e) {
                 var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
@@ -6227,12 +6247,12 @@ function setupPronounPicker(cfg) {
                                     + ' data-kingdom="' + (parseInt(loc.KingdomId) || 0) + '"'
                                     + ' data-event="' + (parseInt(loc.EventId) || 0) + '"'
                                     + ' data-name="' + encodeURIComponent(loc.ShortName || loc.LocationName || '') + '">'
-                                    + (loc.LocationName || '') + '</div>';
+                                    + escHtml(loc.LocationName || '') + '</div>';
                             }).join('');
                         }
                         editGaResults.classList.add('pn-ac-open');
-                    }).catch(function() {});
-                }, 250);
+                    }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+                }, AUTOCOMPLETE_DEBOUNCE_MS);
             });
             editGaResults.addEventListener('click', function(e) {
                 var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
@@ -6276,7 +6296,7 @@ function setupPronounPicker(cfg) {
         var countEl = gid('pn-edit-award-char-count');
         if (noteEl && countEl) {
             noteEl.addEventListener('input', function() {
-                countEl.textContent = (400 - this.value.length) + ' characters remaining';
+                countEl.textContent = (AWARD_NOTE_MAX_CHARS - this.value.length) + ' characters remaining';
             });
         }
 
@@ -7419,14 +7439,14 @@ function setupPronounPicker(cfg) {
                         if (!el) return;
                         el.innerHTML = (data && data.length)
                             ? data.map(function(pk) {
-                                var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + pk.KingdomName + ')</span>' : '';
+                                var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(pk.KingdomName) + ')</span>' : '';
                                 return '<div class="pn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
-                                    + pk.Name + sub + '</div>';
+                                    + escHtml(pk.Name) + sub + '</div>';
                             }).join('')
                             : '<div class="pn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
                         el.classList.add('pn-ac-open');
                     });
-                }, 250);
+                }, AUTOCOMPLETE_DEBOUNCE_MS);
             });
 
             gid('pn-moveplayer-park-results').addEventListener('click', function(e) {
@@ -7796,12 +7816,12 @@ function setupPronounPicker(cfg) {
                         el.innerHTML = (data && data.length)
                             ? data.map(function(p) {
                                 return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                    + p.Persona + ' <span style="color:#a0aec0;font-size:11px">(' + (p.KAbbr || '') + ':' + (p.PAbbr || '') + ')</span></div>';
+                                    + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span></div>';
                             }).join('')
                             : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                         el.classList.add('kn-ac-open');
-                    }).catch(function() {});
-            }, 250);
+                    }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('kn-moveplayer-player-results').addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
@@ -7828,14 +7848,14 @@ function setupPronounPicker(cfg) {
                     var el = gid('kn-moveplayer-park-results');
                     el.innerHTML = (data && data.length)
                         ? data.map(function(pk) {
-                            var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + pk.KingdomName + ')</span>' : '';
+                            var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(pk.KingdomName) + ')</span>' : '';
                             return '<div class="kn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
-                                + pk.Name + sub + '</div>';
+                                + escHtml(pk.Name) + sub + '</div>';
                         }).join('')
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
                     el.classList.add('kn-ac-open');
                 });
-            }, 250);
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('kn-moveplayer-park-results').addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
@@ -7932,7 +7952,7 @@ function setupPronounPicker(cfg) {
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
                     el.classList.add('kn-ac-open');
                 });
-            }, 250);
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('kn-claimpark-park-results').addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
@@ -8051,12 +8071,12 @@ function setupPronounPicker(cfg) {
                                 + (same ? '' : ' data-id="' + pl.MundaneId + '"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                + '>' + pl.Persona + sub + '</div>';
+                                + '>' + escHtml(pl.Persona) + sub + '</div>';
                         }).join('')
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                     results.classList.add('kn-ac-open');
                 });
-            }, 250);
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         results.addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
@@ -8213,7 +8233,7 @@ function setupPronounPicker(cfg) {
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
                     el.classList.add('kn-ac-open');
                 });
-            }, 250);
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('kn-eventtpl-park-results').addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
@@ -8804,12 +8824,12 @@ function setupPronounPicker(cfg) {
                                 + (same ? '' : ' data-id="' + pl.MundaneId + '"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                + '>' + pl.Persona + sub + '</div>';
+                                + '>' + escHtml(pl.Persona) + sub + '</div>';
                         }).join('')
                         : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                     results.classList.add('pk-ac-open');
                 });
-            }, 250);
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         results.addEventListener('click', function(e) {
             var item = e.target.closest('.pk-ac-item[data-id]');
@@ -9049,14 +9069,14 @@ function setupPronounPicker(cfg) {
                 $.getJSON(SEARCH_URL, { Action: 'Search/Park', name: term, limit: 12 }, function(data) {
                     parkResults.innerHTML = (data && data.length)
                         ? data.map(function(pk) {
-                            var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + pk.KingdomName + ')</span>' : '';
+                            var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(pk.KingdomName) + ')</span>' : '';
                             return '<div class="pn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
-                                + pk.Name + sub + '</div>';
+                                + escHtml(pk.Name) + sub + '</div>';
                         }).join('')
                         : '<div class="pn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
                     parkResults.classList.add('pn-ac-open');
                 });
-            }, 250);
+            }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
 
         parkResults.addEventListener('click', function(e) {
