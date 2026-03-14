@@ -169,7 +169,7 @@
 				<img class="heraldry-img" src="<?= htmlspecialchars($displayHeraldryUrl) ?>"
 				     alt="<?= htmlspecialchars($park_name) ?> heraldry"
 				     crossorigin="anonymous"
-				     onload="pkApplyHeroColor(this)">
+				     onload="typeof pkApplyHeroColor==='function'&&pkApplyHeroColor(this)">
 				<?php if (!empty($CanManagePark)): ?>
 				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" title="Change heraldry">
 					<i class="fas fa-camera"></i>
@@ -186,9 +186,19 @@
 				</a>
 			</div>
 			<h1 class="pk-park-name"><?= htmlspecialchars($park_name) ?></h1>
-			<?php if (!empty($parkTitle)): ?>
-				<span class="pk-park-title-badge"><?= htmlspecialchars($parkTitle) ?></span>
-			<?php endif; ?>
+			<div class="pk-hero-badges">
+				<?php if (!empty($parkTitle)): ?>
+					<span class="pk-park-title-badge"><?= htmlspecialchars($parkTitle) ?></span>
+				<?php endif; ?>
+				<?php
+					$_heroCity     = trim($parkInfo['City']     ?? '');
+					$_heroProvince = trim($parkInfo['Province'] ?? '');
+					$_heroLocation = implode(', ', array_filter([$_heroCity, $_heroProvince]));
+				?>
+				<?php if ($_heroLocation): ?>
+					<span class="pk-hero-location"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($_heroLocation) ?></span>
+				<?php endif; ?>
+			</div>
 			<div class="pk-officers-inline">
 				<?php if ($monarch): ?>
 					<i class="fas fa-crown" style="font-size:10px;opacity:0.6;margin-right:3px"></i>
@@ -302,6 +312,21 @@
 		</div>
 		<?php endif; ?>
 
+		<!-- Map Widget -->
+		<?php if (!is_null($parkLat)): ?>
+		<div class="pk-card" style="padding:0;overflow:hidden;border-radius:10px;">
+			<iframe
+				src="https://maps.google.com/maps?q=<?= $parkLat ?>,<?= $parkLng ?>&output=embed&z=11"
+				width="100%"
+				height="200"
+				style="border:0;display:block"
+				allowfullscreen=""
+				loading="lazy"
+				referrerpolicy="no-referrer-when-downgrade">
+			</iframe>
+		</div>
+		<?php endif; ?>
+
 		<!-- Quick Links -->
 		<div class="pk-card">
 			<h4><i class="fas fa-link"></i> Quick Links</h4>
@@ -402,7 +427,13 @@
 						<?php if (!empty($parkInfo['Address'])): ?>
 						<div class="pk-about-meta-row">
 							<i class="fas fa-map-marker-alt"></i>
-							<span><?= htmlspecialchars($parkInfo['Address']) ?><?= !empty($parkInfo['City']) ? ', ' . htmlspecialchars($parkInfo['City']) : '' ?><?= !empty($parkInfo['Province']) ? ' ' . htmlspecialchars($parkInfo['Province']) : '' ?><?= !empty($parkInfo['PostalCode']) ? ' ' . htmlspecialchars($parkInfo['PostalCode']) : '' ?></span>
+							<?php
+								$_addrParts = array_filter([trim($parkInfo['Address'] ?? ''), trim($parkInfo['City'] ?? '')]);
+								$_addrLine1 = implode(', ', $_addrParts);
+								$_addrLine2 = trim(implode(' ', array_filter([trim($parkInfo['Province'] ?? ''), trim($parkInfo['PostalCode'] ?? '')])));
+								$_addrFull  = implode(', ', array_filter([$_addrLine1, $_addrLine2]));
+							?>
+							<span><?= htmlspecialchars($_addrFull) ?></span>
 						</div>
 						<?php endif; ?>
 						<?php if (!empty($websiteUrl)): ?>
@@ -442,7 +473,7 @@
 								default:              $recText = $day['Recurrence'];
 							}
 							switch ($day['Purpose']) {
-								case 'fighter-practice': $purposeLabel = 'Fighter Practice'; $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-fist-raised'; break;
+								case 'fighter-practice': $purposeLabel = 'Fighter Practice'; $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
 								case 'arts-day':         $purposeLabel = 'A&amp;S Day';       $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
 								case 'other':            $purposeLabel = 'Other';             $purposeCls = 'purpose-other';   $iconCls = 'icon-other';   $iconFa = 'fa-star';       break;
 								default:                 $purposeLabel = 'Park Day';          $purposeCls = '';                $iconCls = '';             $iconFa = 'fa-shield-alt';

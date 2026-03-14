@@ -536,6 +536,43 @@
 	transition: width 0.4s ease;
 }
 .pn-ladder-bar-fill.pn-ladder-max { background: linear-gradient(90deg, #f6ad55, #c05621); }
+.pn-hist-tip-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	background: #ebf8ff;
+	color: #2b6cb0;
+	font-size: 13px;
+	font-weight: 700;
+	cursor: help;
+	border: 1px solid #bee3f8;
+	position: relative;
+	flex-shrink: 0;
+	margin-top: 4px;
+}
+.pn-hist-tip-btn .pn-hist-tip-text {
+	display: none;
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	width: 280px;
+	background: #2d3748;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.5;
+	padding: 8px 10px;
+	border-radius: 6px;
+	pointer-events: none;
+	z-index: 100;
+	white-space: normal;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.pn-hist-tip-btn:hover .pn-hist-tip-text,
+.pn-hist-tip-btn:focus .pn-hist-tip-text { display: block; }
 .pn-ladder-master, .pn-paragon-badge {
 	display: inline-flex;
 	align-items: center;
@@ -1896,10 +1933,15 @@
 	background-image: var(--hbg);
 	background-size: cover;
 	background-position: center;
-	opacity: 0.15;
-	filter: blur(2px);
+	opacity: 0.12;
+	filter: blur(4px);
 	transform: scale(1.08);
 	pointer-events: none;
+	transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.kn-player-card-hbg:hover::before {
+	opacity: 0.50;
+	filter: blur(0.5px);
 }
 .kn-player-card-hbg > * { position: relative; }
 .kn-player-card-top { display: flex; align-items: flex-start; gap: 8px; }
@@ -1913,8 +1955,25 @@
 	flex-shrink: 0; overflow: hidden;
 }
 .kn-player-avatar img { width: 100%; height: 100%; object-fit: contain; }
-.kn-player-name { font-size: 13px; font-weight: 600; color: #2d3748; line-height: 1.3; word-break: break-word; }
-.kn-player-stats { font-size: 11px; color: #718096; line-height: 1.7; }
+.kn-player-name {
+	font-size: 13px; font-weight: 600; color: #2d3748; line-height: 1.3; word-break: break-word;
+	display: inline-block;
+	background: rgba(255,255,255,0);
+	border-radius: 10px;
+	padding: 1px 7px;
+	transition: background 0.4s ease;
+}
+.kn-player-card:hover .kn-player-name { background: rgba(255,255,255,0.82); }
+.kn-player-stats {
+	font-size: 11px; color: #4a5568; line-height: 1.7;
+	display: inline-block;
+	background: rgba(255,255,255,0);
+	border-radius: 10px;
+	padding: 1px 7px;
+	width: fit-content;
+	transition: background 0.4s ease;
+}
+.kn-player-card:hover .kn-player-stats { background: rgba(255,255,255,0.82); }
 .kn-player-stats span { display: block; }
 .kn-officer-pill {
 	display: inline-block;
@@ -2156,6 +2215,13 @@
 .pk-officers-inline a:hover { text-decoration: underline; }
 .pk-officers-sep { margin: 0 10px; opacity: 0.35; }
 .pk-vacant { color: rgba(255,255,255,0.45); font-style: italic; }
+.pk-hero-badges {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 8px;
+}
 .pk-park-title-badge {
 	display: inline-block;
 	background: rgba(255,255,255,0.15);
@@ -2163,8 +2229,15 @@
 	font-size: 12px;
 	padding: 2px 8px;
 	border-radius: 12px;
-	margin-bottom: 8px;
 	font-weight: 500;
+}
+.pk-hero-location {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: rgba(255,255,255,0.8);
+	font-size: 12px;
+	font-weight: 400;
 }
 .pk-hero-right { flex-shrink: 0; display: flex; align-items: flex-start; }
 .pk-hero-actions {
@@ -2585,10 +2658,15 @@
 	background-image: var(--hbg);
 	background-size: cover;
 	background-position: center;
-	opacity: 0.15;
-	filter: blur(2px);
+	opacity: 0.12;
+	filter: blur(4px);
 	transform: scale(1.08);
 	pointer-events: none;
+	transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.pk-player-card-hbg:hover::before {
+	opacity: 0.50;
+	filter: blur(0.5px);
 }
 .pk-player-card-hbg > * { position: relative; }
 .pk-player-card-top {
@@ -2621,7 +2699,13 @@
 	color: #2d3748;
 	line-height: 1.3;
 	word-break: break-word;
+	display: inline-block;
+	background: rgba(255,255,255,0);
+	border-radius: 10px;
+	padding: 1px 7px;
+	transition: background 0.4s ease;
 }
+.pk-player-card:hover .pk-player-name { background: rgba(255,255,255,0.82); }
 .pk-officer-pill {
 	display: inline-block;
 	font-size: 10px;
@@ -2636,9 +2720,16 @@
 }
 .pk-player-stats {
 	font-size: 11px;
-	color: #718096;
+	color: #4a5568;
 	line-height: 1.7;
+	display: inline-block;
+	background: rgba(255,255,255,0);
+	border-radius: 10px;
+	padding: 1px 7px;
+	width: fit-content;
+	transition: background 0.4s ease;
 }
+.pk-player-card:hover .pk-player-stats { background: rgba(255,255,255,0.82); }
 .pk-player-stats span { display: block; }
 
 /* ---- Responsive ---- */
@@ -3316,6 +3407,19 @@
 .ev-modal-close:hover { background: #e2e8f0; color: #2d3748; }
 .ev-modal-body { padding: 20px; }
 .ev-modal-section { margin-bottom: 16px; }
+.ev-modal-info-box {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+	background: #ebf8ff;
+	border: 1px solid #bee3f8;
+	border-radius: 6px;
+	padding: 8px 10px;
+	font-size: 12px;
+	color: #2b6cb0;
+	margin-bottom: 10px;
+	line-height: 1.5;
+}
 .ev-modal-section h4 {
 	font-size: 11px;
 	font-weight: 700;

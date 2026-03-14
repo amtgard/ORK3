@@ -149,7 +149,7 @@
 					</div>
 					<div class="ec-field ec-md">
 						<label>Country</label>
-						<input type="text" name="Country" value="USA">
+						<input type="text" name="Country" value="">
 					</div>
 				</div>
 			</div>

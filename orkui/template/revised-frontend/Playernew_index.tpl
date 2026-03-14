@@ -53,6 +53,19 @@
 		}
 	}
 
+	// Same check, but visible to the player themselves (not just admins)
+	$hasHistoricalTip = false;
+	if (($isOwnProfile || $canEditAdmin) && is_array($Details['Awards'])) {
+		foreach ($Details['Awards'] as $_ha) {
+			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
+				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
+					$hasHistoricalTip = true;
+					break;
+				}
+			}
+		}
+	}
+
 	// Kingdom dues period config
 	$_kconfig = Common::get_configs((int)($KingdomId ?? 0));
 	$_duesPeriodType = (isset($_kconfig['DuesPeriod']['Value']->Type) && $_kconfig['DuesPeriod']['Value']->Type !== '-')
@@ -498,26 +511,34 @@
 					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
 				<?php if (!empty($pnLadderProgress)): ?>
-					<div class="pn-ladder-grid">
-						<?php foreach ($pnLadderProgress as $aid => $lp): ?>
-							<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
-							<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-							<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name']) ?>">
-								<div class="pn-ladder-header">
-									<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
-									<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-										<?php if ($lp['HasMaster']): ?>
-											<span class="pn-ladder-master" title="Master title earned"><i class="fas fa-star"></i> M</span>
-										<?php endif; ?>
-										<span class="pn-ladder-rank"><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
-									</span>
+					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
+						<div class="pn-ladder-grid" style="flex:1;min-width:0;margin-bottom:0">
+							<?php foreach ($pnLadderProgress as $aid => $lp): ?>
+								<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
+								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
+								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name']) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+									<div class="pn-ladder-header">
+										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
+										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+											<?php if ($lp['HasMaster']): ?>
+												<span class="pn-ladder-master" title="Master title earned"><i class="fas fa-star"></i> M</span>
+											<?php endif; ?>
+											<span class="pn-ladder-rank"><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
+										</span>
+									</div>
+									<div class="pn-ladder-bar-track">
+										<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= $maxRank ? ' pn-ladder-max' : '' ?>"
+										     style="width:<?= $pct ?>%"></div>
+									</div>
 								</div>
-								<div class="pn-ladder-bar-track">
-									<div class="pn-ladder-bar-fill<?= $lp['Rank'] >= $maxRank ? ' pn-ladder-max' : '' ?>"
-									     style="width:<?= $pct ?>%"></div>
-								</div>
-							</div>
-						<?php endforeach; ?>
+							<?php endforeach; ?>
+						</div>
+						<?php if ($hasHistoricalTip): ?>
+						<div class="pn-hist-tip-btn" tabindex="0" role="button" aria-label="Historical awards info">
+							?
+							<div class="pn-hist-tip-text">Should these numbers look different? You have historically imported awards that need to be reconciled! Contact your Monarch or Prime Minister and ask them to use the Reconcile Historical Awards tool on your legacy awards.</div>
+						</div>
+						<?php endif; ?>
 					</div>
 				<?php endif; ?>
 				<?php if (count($filteredAwards) === 0): ?>

@@ -44,6 +44,25 @@
 	$locationDisplay = implode(', ', array_filter([$address, $city, $province, $country]));
 	$mapQueryAddress = implode(', ', array_filter([$address, $city, $province, $postalCode, $country]));
 
+	// Park address fallback (used when event has no address)
+	$atParkAddress    = trim($AtParkAddress    ?? '');
+	$atParkCity       = trim($AtParkCity       ?? '');
+	$atParkProvince   = trim($AtParkProvince   ?? '');
+	$atParkPostalCode = trim($AtParkPostalCode ?? '');
+	$locationFallback = (!$locationDisplay && ($atParkCity || $atParkProvince))
+		? implode(', ', array_filter([$atParkCity, $atParkProvince])) : '';
+
+	// Park map link fallback: parse park location JSON when event has no map link
+	if (!$mapLink && $locationFallback) {
+		$_parkLoc = @json_decode(stripslashes((string)($AtParkLocation ?? '')));
+		if ($_parkLoc) {
+			$_parkPt = isset($_parkLoc->location) ? $_parkLoc->location
+				: (isset($_parkLoc->bounds->northeast) ? $_parkLoc->bounds->northeast : null);
+			if ($_parkPt && is_numeric($_parkPt->lat ?? null))
+				$mapLink = 'https://maps.google.com/maps?q=@' . $_parkPt->lat . ',' . $_parkPt->lng;
+		}
+	}
+
 	// Duration
 	$durationLabel = '';
 	if ( $eventStart && $eventEnd ) {
@@ -197,10 +216,6 @@
 				href="<?= UIR ?>Reports/attendance/Event/<?= $eventId ?>/All">
 				<i class="fas fa-list-alt"></i> Attendance Report
 			</a>
-			<a class="ev-btn ev-btn-outline"
-				href="<?= UIR ?>Event/template/<?= $eventId ?>">
-				<i class="fas fa-layer-group"></i> Event Template
-			</a>
 			<?php if ($CanManageEvent ?? false): ?>
 			<button class="ev-btn ev-btn-outline" type="button" onclick="evOpenEditModal()">
 				<i class="fas fa-pencil-alt"></i> Edit Details
@@ -214,12 +229,7 @@
 				</button>
 			</form>
 			<?php endif; ?>
-			<?php if ($loggedIn): ?>
-			<a class="ev-btn ev-btn-outline"
-				href="<?= UIR ?>Admin/event/<?= $eventId ?>">
-				<i class="fas fa-cog"></i> Admin Panel
-			</a>
-			<?php endif; ?>
+
 		</div>
 
 	</div>
@@ -245,7 +255,7 @@
 		</div>
 		<div class="ev-stat-label">Price</div>
 	</div>
-	<?php $hasMapTab = (bool)$locationDisplay; ?>
+	<?php $hasMapTab = (bool)($locationDisplay ?: $locationFallback); ?>
 	<?php if (!$locationDisplay && $mapUrl): ?>
 	<a href="<?= htmlspecialchars($mapUrl) ?>" target="_blank" class="ev-stat-card ev-stat-card-link" style="cursor:pointer;text-decoration:none;color:inherit">
 		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
@@ -256,15 +266,16 @@
 	<div class="ev-stat-card<?= $hasMapTab ? ' ev-stat-card-link' : '' ?>"<?= $hasMapTab ? ' onclick="evShowTab(document.querySelector(\'[data-tab=ev-tab-map]\'),\'ev-tab-map\')" title="View map"' : '' ?> style="<?= $hasMapTab ? 'cursor:pointer' : '' ?>">
 		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
 		<div class="ev-stat-value" style="font-size:14px;padding-top:3px">
-			<?= $locationDisplay ? htmlspecialchars($locationDisplay) : '<span style="color:#a0aec0">TBD</span>' ?>
+			<?php $_dispLoc = $locationDisplay ?: $locationFallback; ?>
+			<?= $_dispLoc ? htmlspecialchars($_dispLoc) : '<span style="color:#a0aec0">TBD</span>' ?>
 		</div>
 		<div class="ev-stat-label">Location</div>
 	</div>
 	<?php endif; ?>
 	<div class="ev-stat-card">
 		<div class="ev-stat-icon"><i class="fas fa-users"></i></div>
-		<div class="ev-stat-value"><?= $attendeeCount ?></div>
-		<div class="ev-stat-label">Attendees</div>
+		<div class="ev-stat-value"><?= $isUpcoming ? $rsvpCount : $attendeeCount ?></div>
+		<div class="ev-stat-label"><?= $isUpcoming ? 'RSVPs' : 'Attendees' ?></div>
 	</div>
 </div>
 
@@ -316,26 +327,32 @@
 			<?php endif; ?>
 		</div>
 
-		<?php if ($locationDisplay || $mapLink): ?>
+		<?php
+			$_showAddress  = $address  ?: $atParkAddress;
+			$_showCity     = $city     ?: $atParkCity;
+			$_showProvince = $province ?: $atParkProvince;
+			$_fromPark     = !($address || $city || $province) && ($atParkCity || $atParkProvince || $atParkAddress);
+		?>
+		<?php if ($locationDisplay || $locationFallback || $mapLink): ?>
 		<?php // Location card ?>
 		<div class="ev-card">
-			<h4><i class="fas fa-map-marker-alt" style="margin-right:5px"></i>Location</h4>
-			<?php if ($address): ?>
+			<h4><i class="fas fa-map-marker-alt" style="margin-right:5px"></i>Location<?php if ($_fromPark): ?> <span style="font-size:11px;font-weight:400;color:#718096;margin-left:4px">(park address)</span><?php endif; ?></h4>
+			<?php if ($_showAddress): ?>
 			<div class="ev-detail-row">
 				<span class="ev-detail-label">Address</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($address) ?></span>
+				<span class="ev-detail-value"><?= htmlspecialchars($_showAddress) ?></span>
 			</div>
 			<?php endif; ?>
-			<?php if ($city): ?>
+			<?php if ($_showCity): ?>
 			<div class="ev-detail-row">
 				<span class="ev-detail-label">City</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($city) ?></span>
+				<span class="ev-detail-value"><?= htmlspecialchars($_showCity) ?></span>
 			</div>
 			<?php endif; ?>
-			<?php if ($province): ?>
+			<?php if ($_showProvince): ?>
 			<div class="ev-detail-row">
 				<span class="ev-detail-label">Region</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($province) ?></span>
+				<span class="ev-detail-value"><?= htmlspecialchars($_showProvince) ?></span>
 			</div>
 			<?php endif; ?>
 			<?php if ($postalCode): ?>
@@ -363,34 +380,6 @@
 		</div>
 		<?php endif; ?>
 
-		<?php // Quick Links card ?>
-		<div class="ev-card">
-			<h4><i class="fas fa-link" style="margin-right:5px"></i>Quick Links</h4>
-			<ul class="ev-link-list">
-				<?php if ($websiteUrl): ?>
-				<li>
-					<span class="ev-link-icon"><i class="fas fa-globe"></i></span>
-					<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank">
-						<?= $websiteName ? htmlspecialchars($websiteName) : 'Event Website' ?>
-					</a>
-				</li>
-				<?php endif; ?>
-				<li>
-					<span class="ev-link-icon"><i class="fas fa-list-alt"></i></span>
-					<a href="<?= UIR ?>Reports/attendance/Event/<?= $eventId ?>/All">Full Attendance</a>
-				</li>
-				<li>
-					<span class="ev-link-icon"><i class="fas fa-layer-group"></i></span>
-					<a href="<?= UIR ?>Event/template/<?= $eventId ?>">Event Template</a>
-				</li>
-				<?php if ($loggedIn): ?>
-				<li>
-					<span class="ev-link-icon"><i class="fas fa-cog"></i></span>
-					<a href="<?= UIR ?>Admin/event/<?= $eventId ?>">Admin Panel</a>
-				</li>
-				<?php endif; ?>
-			</ul>
-		</div>
 
 	</div><!-- /.ev-sidebar -->
 
@@ -618,7 +607,12 @@
 			<?php
 				$mapOpenUrl  = $mapLink ?: null;
 				$mapQuery    = urlencode($mapQueryAddress);
-				$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
+				if ($mapLink && strpos($mapLink, 'q=@') !== false) {
+					// lat/lng link — strip @ for embed (Google Maps embed doesn't accept @)
+					$mapEmbedUrl = str_replace('?q=@', '?q=', $mapLink) . '&output=embed&z=14';
+				} else {
+					$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
+				}
 				if (!$mapOpenUrl) $mapOpenUrl = 'https://maps.google.com/maps?q=' . $mapQuery;
 			?>
 			<?php // ---- Map Tab ---- ?>
@@ -706,6 +700,9 @@
 
 				<div class="ev-modal-section">
 					<h4>Location</h4>
+					<?php if ($parkId > 0 || $atParkId > 0): ?>
+					<div class="ev-modal-info-box"><i class="fas fa-info-circle"></i> If no address is provided, the park address will be used.</div>
+					<?php endif; ?>
 					<div class="ev-modal-row">
 						<div class="ev-modal-field ev-field-full">
 							<label>Address</label>

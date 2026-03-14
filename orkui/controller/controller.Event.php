@@ -319,12 +319,22 @@ class Controller_Event extends Controller {
 		$this->data['EventDetail'] = $this->Attendance->get_eventdetail_info($detail_id);
 
 		$atParkId = (int)($this->data['EventDetail']['AtParkId'] ?? 0);
-		if ( $atParkId > 0 ) {
+		$_parkLookupId = $atParkId ?: (int)($this->data['EventInfo']['ParkId'] ?? 0);
+		if ( $_parkLookupId > 0 ) {
 			global $DB;
-			$row = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE park_id = " . $atParkId . " LIMIT 1");
-			$this->data['AtParkName'] = ($row && $row->Size() > 0 && $row->Next()) ? $row->name : '';
+			$row = $DB->DataSet("SELECT name, address, city, province, postal_code, location FROM " . DB_PREFIX . "park WHERE park_id = " . $_parkLookupId . " LIMIT 1");
+			if ($row && $row->Size() > 0 && $row->Next()) {
+				$this->data['AtParkName']       = $row->name;
+				$this->data['AtParkAddress']    = $row->address;
+				$this->data['AtParkCity']       = $row->city;
+				$this->data['AtParkProvince']   = $row->province;
+				$this->data['AtParkPostalCode'] = $row->postal_code;
+				$this->data['AtParkLocation']   = $row->location;
+			} else {
+				$this->data['AtParkName'] = $this->data['AtParkAddress'] = $this->data['AtParkCity'] = $this->data['AtParkProvince'] = $this->data['AtParkPostalCode'] = $this->data['AtParkLocation'] = '';
+			}
 		} else {
-			$this->data['AtParkName'] = '';
+			$this->data['AtParkName'] = $this->data['AtParkAddress'] = $this->data['AtParkCity'] = $this->data['AtParkProvince'] = $this->data['AtParkPostalCode'] = $this->data['AtParkLocation'] = '';
 		}
 		$this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
 		$classes                        = $this->Attendance->get_classes();

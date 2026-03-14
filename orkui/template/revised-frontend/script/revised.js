@@ -225,6 +225,15 @@ $(document).ready(function() {
         pnActivateTab($(this).data('tab'));
     });
 
+    // ---- Ladder tile → filter awards ----
+    $('.pn-ladder-item[data-ladname]').on('click', function() {
+        var name = $(this).data('ladname');
+        pnActivateTab('awards');
+        var $input = $('#pn-award-search');
+        $input.val(name);
+        pnAwardSearch(name);
+    });
+
     // ---- Class Level Calculation ----
     $('#pn-classes-table tbody tr').each(function() {
         var credits = Number($(this).find('.pn-credits').text());
@@ -6552,7 +6561,7 @@ function setupPronounPicker(cfg) {
             (function(ni, hi, vb) {
                 $(ni).autocomplete({
                     source: function(req, res) {
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, limit: 12 }, function(data) {
+                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, park_id: PkConfig.parkId, limit: 12 }, function(data) {
                             res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
                         });
                     },
