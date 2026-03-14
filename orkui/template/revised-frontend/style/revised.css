@@ -594,6 +594,26 @@
 	background: #e9d8fd;
 	border: 1px solid #d6bcfa;
 }
+.pn-level-badge {
+	display: inline-block;
+	font-size: 10px;
+	font-weight: 700;
+	padding: 1px 7px;
+	border-radius: 10px;
+	margin-left: 6px;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+.pn-level-badge-soon {
+	color: #92400e;
+	background: #fef3c7;
+	border: 1px solid #fcd34d;
+}
+.pn-level-badge-up {
+	color: #1a5e2a;
+	background: #d1fae5;
+	border: 1px solid #6ee7b7;
+}
 
 /* Revoked awards section */
 .pn-revoked-section { margin-top: 32px; }

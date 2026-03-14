@@ -244,6 +244,21 @@ $(document).ready(function() {
         else if (credits >= 12) level = 3;
         else if (credits >= 5) level = 2;
         $(this).find('.pn-level').text(level);
+
+        var thresholds = [5, 12, 21, 34, 53];
+        var badge = '';
+        for (var i = 0; i < thresholds.length; i++) {
+            var t = thresholds[i];
+            if (credits === t) { badge = 'leveled'; break; }
+            else if (credits === t - 1 || credits === t - 2) { badge = 'soon'; break; }
+        }
+        var $nameCell = $(this).find('td:first');
+        $nameCell.find('.pn-level-badge').remove();
+        if (badge === 'leveled') {
+            $nameCell.append('<span class="pn-level-badge pn-level-badge-up"><i class="fas fa-arrow-up"></i> Leveled Up!</span>');
+        } else if (badge === 'soon') {
+            $nameCell.append('<span class="pn-level-badge pn-level-badge-soon"><i class="fas fa-hourglass-half"></i> Soon to Level!</span>');
+        }
     });
 
     // ---- Sortable Tables ----
