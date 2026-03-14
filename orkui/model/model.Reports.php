@@ -261,9 +261,11 @@ class Model_Reports extends Model {
 			return array(
 				'Relationships' => $r['Relationships'],
 				'Knights'       => $r['Knights'],
+				'AllKnightIds'  => $r['AllKnightIds'],
+				'KnightTypes'   => $r['KnightTypes'],
 			);
 		}
-		return array('Relationships' => array(), 'Knights' => array());
+		return array('Relationships' => array(), 'Knights' => array(), 'AllKnightIds' => array(), 'KnightTypes' => array());
 	}
 
 }

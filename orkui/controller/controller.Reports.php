@@ -699,6 +699,8 @@ class Controller_Reports extends Controller {
 		$result = $this->Reports->beltline_data(array('KingdomId' => $kingdom_id));
 		$this->data['BeltlineRelationships'] = $result['Relationships'];
 		$this->data['Knights'] = $result['Knights'];
+		$this->data['AllKnightIds'] = $result['AllKnightIds'] ?? array();
+		$this->data['KnightTypes']  = $result['KnightTypes']  ?? array();
 	}
 
 

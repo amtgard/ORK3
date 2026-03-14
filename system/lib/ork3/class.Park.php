@@ -128,8 +128,21 @@ class Park extends Ork3
 			$this->parkday->purpose = $request[ 'Purpose' ];
 			$this->parkday->description = $request[ 'Description' ];
 			$this->parkday->alternate_location = $request[ 'AlternateLocation' ];
+			$this->parkday->online = (int)( $request[ 'Online' ] ?? 0 );
 
-			if ( $request[ 'AlternateLocation' ] > 0 ) {
+			if ( !empty( $request[ 'Online' ] ) ) {
+				logtrace( 'AddParkDay.Online', null );
+				// Online/virtual park day — no physical location
+				$this->parkday->address = '';
+				$this->parkday->city = '';
+				$this->parkday->province = '';
+				$this->parkday->postal_code = '';
+				$this->parkday->latitude = 0;
+				$this->parkday->longitude = 0;
+				$this->parkday->google_geocode = '';
+				$this->parkday->location = '';
+				$this->parkday->map_url = '';
+			} elseif ( $request[ 'AlternateLocation' ] > 0 ) {
      			logtrace( 'AddParkDay.AlternateLocation', null );
 				$this->parkday->address = $request[ 'Address' ];
 				$this->parkday->city = $request[ 'City' ];
@@ -393,6 +406,7 @@ class Park extends Ork3
 					'Location'          => $parkday->location,
 					'MapUrl'            => $parkday->map_url,
 					'LocationUrl'       => $parkday->location_url,
+					'Online'            => (int)$parkday->online,
 				];
 			} while ( $parkday->next() );
 		} else {

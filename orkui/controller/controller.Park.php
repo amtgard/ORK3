@@ -179,6 +179,24 @@ class Controller_Park extends Controller
 		}
 		$this->data['park_players'] = $parkPlayers;
 
+		// Monthly average: unique players per month over past year (matches Kingdomnew formula)
+		$monthlyAvgSql = "
+			SELECT COUNT(*) AS total_player_months
+			FROM (
+				SELECT 1
+				FROM ork_attendance a
+				WHERE a.park_id = {$pid}
+				  AND a.date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+				  AND a.mundane_id > 0
+				GROUP BY a.date_year, a.date_month, a.mundane_id
+			) monthly_uniques";
+		$maResult = $DB->DataSet($monthlyAvgSql);
+		$this->data['MonthlyAvg'] = 0;
+		if ($maResult && $maResult->Next()) {
+			$_totalPM = (int)$maResult->total_player_months;
+			if ($_totalPM > 0) $this->data['MonthlyAvg'] = round($_totalPM / 12, 1);
+		}
+
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['IsLoggedIn']    = $uid > 0;
 		$this->data['CanManagePark'] = $uid > 0

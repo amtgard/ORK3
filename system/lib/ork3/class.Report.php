@@ -2267,7 +2267,6 @@ class Report  extends Ork3 {
 				LEFT JOIN " . DB_PREFIX . "mundane giver ON giver.mundane_id = ma.given_by_id
 			WHERE (a.peerage IN ('Squire', 'Man-At-Arms', 'Page', 'Lords-Page')
 					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
-				AND ma.kingdom_id = $kingdom_id
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)
 			ORDER BY m.persona";
 
@@ -2288,6 +2287,7 @@ class Report  extends Ork3 {
 			}
 		}
 
+		// Knights for the dropdown — kingdom-scoped so the selector stays useful.
 		$knights_sql = "SELECT DISTINCT
 				m.mundane_id,
 				m.persona
@@ -2312,10 +2312,38 @@ class Report  extends Ork3 {
 			}
 		}
 
+		// All knight awards globally — IDs for the crown icon + type names for display.
+		$all_knights_sql = "SELECT ma.mundane_id, IFNULL(ka.name, a.name) AS knight_name
+			FROM " . DB_PREFIX . "awards ma
+				JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+			WHERE a.peerage = 'Knight'
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)";
+
+		$akr = $this->db->query($all_knights_sql);
+		$all_knight_ids = array();
+		$knight_types   = array(); // mundane_id => [type, ...]
+		if ($akr !== false && $akr->size() > 0) {
+			while ($akr->next()) {
+				$mid  = (int)$akr->mundane_id;
+				$name = $akr->knight_name;
+				// Strip common "Knight of (the) " prefixes to get just the type
+				$type = preg_replace('/^knight(?:hood)? of (?:the )?/i', '', $name);
+				if (strcasecmp($type, $name) === 0) $type = $name; // no prefix matched, use as-is
+				$all_knight_ids[] = $mid;
+				if (!in_array($type, $knight_types[$mid] ?? array())) {
+					$knight_types[$mid][] = $type;
+				}
+			}
+			$all_knight_ids = array_unique($all_knight_ids);
+		}
+
 		return array(
 			'Status'        => Success(),
 			'Relationships' => $relationships,
 			'Knights'       => $knights,
+			'AllKnightIds'  => array_values($all_knight_ids),
+			'KnightTypes'   => $knight_types,
 		);
 	}
 

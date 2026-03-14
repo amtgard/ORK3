@@ -60,4 +60,50 @@ class Controller_AttendanceAjax extends Controller {
 		}
 		exit;
 	}
+
+	public function attendance($p = null) {
+		header('Content-Type: application/json');
+		$parts         = explode('/', $p ?? '');
+		$attendance_id = (int)($parts[0] ?? 0);
+		$action        = $parts[1] ?? '';
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		if (!valid_id($attendance_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid attendance ID']);
+			exit;
+		}
+
+		$this->load_model('Attendance');
+
+		if ($action === 'edit') {
+			$date      = trim($_POST['Date']      ?? '');
+			$credits   = (float)($_POST['Credits'] ?? 1);
+			$classId   = (int)($_POST['ClassId']   ?? 0);
+			$mundaneId = (int)($_POST['MundaneId'] ?? 0);
+			if (!$date || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid date']); exit;
+			}
+			if (!valid_id($classId)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid class']); exit;
+			}
+			$r = $this->Attendance->update_attendance($this->session->token, $attendance_id, $date, $credits, $classId, $mundaneId);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'delete') {
+			$r = $this->Attendance->delete_attendance($this->session->token, $attendance_id);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} else {
+			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+		}
+		exit;
+	}
 }

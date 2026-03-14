@@ -64,7 +64,8 @@ class Controller_ParkAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'Time is required.']);
 				exit;
 			}
-			$altLoc = (($_POST['AlternateLocation'] ?? '0') === '1') ? 1 : 0;
+			$online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
+			$altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
 			$r = $this->Park->add_park_day([
 				'Token'             => $this->session->token,
 				'ParkId'            => $park_id,
@@ -75,6 +76,7 @@ class Controller_ParkAjax extends Controller {
 				'Time'              => $time,
 				'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
 				'Description'       => trim($_POST['Description'] ?? ''),
+				'Online'            => $online,
 				'AlternateLocation' => $altLoc,
 				'Address'           => trim($_POST['Address']     ?? ''),
 				'City'              => trim($_POST['City']        ?? ''),

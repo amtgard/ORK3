@@ -60,20 +60,96 @@
 	$pkCalEvents = [];
 	foreach ($eventList as $ev) {
 		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
-		$calEv = [
-			'title' => $ev['Name'],
-			'start' => $ev['NextDate'],
-			'url'   => UIR . ($ev['NextDetailId'] ? 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Event/template/' . $ev['EventId']),
-			'color' => '#2b6cb0',
-		];
-		$endRaw = $ev['NextEndDate'] ?? '';
-		if ($endRaw && substr($endRaw, 0, 10) > substr($ev['NextDate'], 0, 10)) {
-			$endDt = new DateTime(substr($endRaw, 0, 10));
-			$endDt->modify('+1 day');
-			$calEv['end'] = $endDt->format('Y-m-d');
+		if (!empty($ev['is_park_day'])) {
+			$calEv = [
+				'title' => $ev['Name'],
+				'start' => $ev['NextDate'] . 'T' . $ev['park_day_time'],
+				'color' => '#38a169', // Green for park days
+				'description' => $ev['park_day_description'],
+			];
+		} else {
+			$calEv = [
+				'title' => $ev['Name'],
+				'start' => $ev['NextDate'],
+				'url'   => UIR . ($ev['NextDetailId'] ? 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Event/template/' . $ev['EventId']),
+				'color' => '#2b6cb0', // Blue for regular events
+			];
+			$endRaw = $ev['NextEndDate'] ?? '';
+			if ($endRaw && substr($endRaw, 0, 10) > substr($ev['NextDate'], 0, 10)) {
+				$endDt = new DateTime(substr($endRaw, 0, 10));
+				$endDt->modify('+1 day');
+				$calEv['end'] = $endDt->format('Y-m-d');
+			}
 		}
 		$pkCalEvents[] = $calEv;
 	}
+
+	// Pre-compute recurring park day occurrences for calendar (next 90 days)
+	$pkCalParkDays  = [];
+	$_pd_today      = new DateTime(); $_pd_today->setTime(0, 0, 0);
+	$_pd_end        = (clone $_pd_today)->modify('+90 days');
+	$_pd_dayNames   = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+	$_pd_colors     = ['fighter-practice'=>'#e53e3e','arts-day'=>'#805ad5','other'=>'#ed8936'];
+	$_pd_labels     = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
+	foreach ($parkDayList as $_pd) {
+		$_pdColor   = $_pd_colors[$_pd['Purpose']] ?? '#38a169';
+		$_pdLabel   = $_pd_labels[$_pd['Purpose']] ?? 'Park Day';
+		$_pdTimeStr = date('H:i:s', strtotime($_pd['Time']));
+		$_pdOccs    = [];
+		switch ($_pd['Recurrence']) {
+			case 'weekly':
+				$_pdWdn = array_search(strtolower($_pd['WeekDay']), $_pd_dayNames);
+				if ($_pdWdn === false) break;
+				$_pdD = clone $_pd_today;
+				while ((int)$_pdD->format('w') !== $_pdWdn) { $_pdD->modify('+1 day'); }
+				while ($_pdD <= $_pd_end) { $_pdOccs[] = $_pdD->format('Y-m-d'); $_pdD->modify('+7 days'); }
+				break;
+			case 'week-of-month':
+				$_pdWdn = array_search(strtolower($_pd['WeekDay']), $_pd_dayNames);
+				if ($_pdWdn === false) break;
+				$_pdWom = (int)$_pd['WeekOfMonth'];
+				$_pdD   = clone $_pd_today; $_pdD->modify('first day of this month'); $_pdD->setTime(0,0,0);
+				for ($_pdM = 0; $_pdM < 4; $_pdM++) {
+					$_pdFd   = (int)$_pdD->format('w');
+					$_pdDiff = ($_pdWdn - $_pdFd + 7) % 7;
+					$_pdDom  = 1 + $_pdDiff + ($_pdWom - 1) * 7;
+					if ($_pdDom <= (int)$_pdD->format('t')) {
+						$_pdOcc = clone $_pdD; $_pdOcc->setDate((int)$_pdD->format('Y'), (int)$_pdD->format('n'), $_pdDom);
+						if ($_pdOcc >= $_pd_today && $_pdOcc <= $_pd_end) $_pdOccs[] = $_pdOcc->format('Y-m-d');
+					}
+					$_pdD->modify('first day of next month');
+				}
+				break;
+			case 'monthly':
+				$_pdMd = (int)$_pd['MonthDay'];
+				$_pdD  = clone $_pd_today; $_pdD->modify('first day of this month'); $_pdD->setTime(0,0,0);
+				for ($_pdM = 0; $_pdM < 4; $_pdM++) {
+					if ($_pdMd <= (int)$_pdD->format('t')) {
+						$_pdOcc = clone $_pdD; $_pdOcc->setDate((int)$_pdD->format('Y'), (int)$_pdD->format('n'), $_pdMd);
+						if ($_pdOcc >= $_pd_today && $_pdOcc <= $_pd_end) $_pdOccs[] = $_pdOcc->format('Y-m-d');
+					}
+					$_pdD->modify('first day of next month');
+				}
+				break;
+		}
+		foreach ($_pdOccs as $_pdOcc) {
+			$_pdTitle = !empty($_pd['Online']) ? '(Online) ' . $_pdLabel : $_pdLabel;
+			$pkCalParkDays[] = ['title'=>$_pdTitle,'start'=>$_pdOcc.'T'.$_pdTimeStr,'color'=>$_pdColor];
+		}
+	}
+
+	// Next Park Day: earliest upcoming occurrence across all park days
+	$nextParkDayDate = null;
+	if (!empty($pkCalParkDays)) {
+		$_starts = array_column($pkCalParkDays, 'start');
+		sort($_starts);
+		$nextParkDayDate = substr($_starts[0], 0, 10);
+	}
+
+	// Active Players: at least one sign-in in the past 365 days
+	$activePlayersYear = count(array_filter($allPlayers, function($_ap) use ($nowTs) {
+		return ($nowTs - strtotime($_ap['LastSignin'])) <= 365 * 24 * 3600;
+	}));
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -160,25 +236,30 @@
      ZONE 2: Stats Row
      ============================================= -->
 <div class="pk-stats-row">
-	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('schedule')">
-		<div class="pk-stat-icon"><i class="fas fa-calendar-alt"></i></div>
-		<div class="pk-stat-value"><?= count($parkDayList) ?></div>
-		<div class="pk-stat-label">Park Day<?= count($parkDayList) != 1 ? 's' : '' ?></div>
+	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('schedule')"<?php endif; ?>>
+		<div class="pk-stat-icon"><i class="fas fa-calendar-check"></i></div>
+		<?php if ($nextParkDayDate): ?>
+			<div class="pk-stat-value" style="font-size:1.1rem"><?= date('M j', strtotime($nextParkDayDate)) ?></div>
+			<div class="pk-stat-sub"><?= date('l', strtotime($nextParkDayDate)) ?></div>
+		<?php else: ?>
+			<div class="pk-stat-value">&mdash;</div>
+		<?php endif; ?>
+		<div class="pk-stat-label">Next Park Day</div>
+	</div>
+	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('players')">
+		<div class="pk-stat-icon"><i class="fas fa-users"></i></div>
+		<div class="pk-stat-value"><?= $activePlayersYear ?></div>
+		<div class="pk-stat-label">Active Players</div>
+	</div>
+	<div class="pk-stat-card">
+		<div class="pk-stat-icon"><i class="fas fa-chart-line"></i></div>
+		<div class="pk-stat-value"><?= $MonthlyAvg > 0 ? number_format($MonthlyAvg, 1) : '&mdash;' ?></div>
+		<div class="pk-stat-label">Avg / Month</div>
 	</div>
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('events')">
 		<div class="pk-stat-icon"><i class="fas fa-flag"></i></div>
 		<div class="pk-stat-value"><?= count($eventList) ?></div>
 		<div class="pk-stat-label">Event<?= count($eventList) != 1 ? 's' : '' ?></div>
-	</div>
-	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('events')">
-		<div class="pk-stat-icon"><i class="fas fa-trophy"></i></div>
-		<div class="pk-stat-value"><?= count($tournamentList) ?></div>
-		<div class="pk-stat-label">Tournament<?= count($tournamentList) != 1 ? 's' : '' ?></div>
-	</div>
-	<div class="pk-stat-card">
-		<div class="pk-stat-icon"><i class="fas fa-users"></i></div>
-		<div class="pk-stat-value"><?= count($officerList) ?></div>
-		<div class="pk-stat-label">Officer<?= count($officerList) != 1 ? 's' : '' ?></div>
 	</div>
 </div>
 
@@ -345,23 +426,10 @@
 			<div class="pk-tab-panel" id="pk-tab-schedule" style="display:none">
 				<?php if (count($parkDayList) > 0): ?>
 					<?php if (!empty($CanManagePark)): ?>
-					<div class="pk-tab-toolbar">
+					<div class="pk-tab-toolbar" style="text-align: right;">
 						<button class="pk-btn pk-btn-primary pk-btn-sm" onclick="pkOpenAddDayModal()">
 							<i class="fas fa-plus"></i> Add Park Day
 						</button>
-					</div>
-					<?php endif; ?>
-					<div class="pk-schedule-header">
-						<?php if ($parkMapUrl): ?>
-							<a class="pk-map-link" href="<?= $parkMapUrl ?>" target="_blank" rel="noopener">
-								<i class="fas fa-map-marker-alt"></i> View on Google Maps
-							</a>
-						<?php endif; ?>
-					</div>
-					<?php if (!empty($directions)): ?>
-					<div class="pk-directions-panel">
-						<h5><i class="fas fa-directions"></i> Getting There</h5>
-						<div class="pk-directions-text"><?= nl2br(htmlspecialchars($directions)) ?></div>
 					</div>
 					<?php endif; ?>
 					<div class="pk-schedule-grid">
@@ -405,14 +473,21 @@
 								<div class="pk-schedule-when"><?= htmlspecialchars($recText) ?></div>
 								<div class="pk-schedule-time"><?= date('g:i A', strtotime($day['Time'])) ?></div>
 								<span class="pk-schedule-purpose <?= $purposeCls ?>"><?= $purposeLabel ?></span>
-								<?php if (!empty($day['Address'])): ?>
-									<div class="pk-schedule-address"><?= htmlspecialchars($day['Address']) ?></div>
+								<?php if (!empty($day['Online'])): ?>
+									<span class="pk-schedule-online-badge"><i class="fas fa-wifi"></i> Online</span>
+								<?php else: ?>
+									<?php if (!empty($day['Address'])): ?>
+										<div class="pk-schedule-address"><?= htmlspecialchars($day['Address']) ?></div>
+									<?php endif; ?>
+									<?php if ($dayMapUrl): ?>
+										<a class="pk-schedule-map-link" href="<?= htmlspecialchars($dayMapUrl) ?>" target="_blank" rel="noopener">
+											<i class="fas fa-map-marker-alt"></i> Map
+										</a>
+									<?php endif; ?>
 								<?php endif; ?>
-								<?php if ($dayMapUrl): ?>
-									<a class="pk-schedule-map-link" href="<?= htmlspecialchars($dayMapUrl) ?>" target="_blank" rel="noopener">
-										<i class="fas fa-map-marker-alt"></i> Map
-									</a>
-								<?php endif; ?>
+							<?php if (!empty($day['Description'])): ?>
+								<p class="pk-schedule-desc"><?= htmlspecialchars($day['Description']) ?></p>
+							<?php endif; ?>
 							</div>
 						</div>
 						<?php endforeach; ?>
@@ -431,11 +506,18 @@
 
 			<!-- Events Tab -->
 			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
-				<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
 					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
-					<div style="display:flex;align-items:center;gap:8px;">
+					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
+						<?php if (count($parkDayList) > 0): ?>
+						<div id="pk-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
+							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
+							<button class="pk-filter-toggle pk-filter-on" data-filter="event">Events</button>
+							<button class="pk-filter-toggle pk-filter-on" data-filter="park-day">Park Days</button>
+						</div>
+						<?php endif; ?>
 						<?php if ($CanManagePark): ?>
 						<button onclick="pkOpenEventModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
@@ -449,7 +531,7 @@
 
 				<!-- List view -->
 				<div id="pk-events-list-view">
-				<?php if (count($eventList) > 0): ?>
+				<?php if (count($eventList) > 0 || count($parkDayList) > 0): ?>
 					<table class="pk-table" id="pk-events-table">
 						<thead>
 							<tr>
@@ -476,6 +558,28 @@
 									<?= 0 == $event['NextDate'] ? '' : date('M. j, Y', strtotime($event['NextDate'])) ?>
 								</td>
 								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpCount'] ?? 0) ?></td>
+							</tr>
+							<?php endforeach; ?>
+							<?php foreach ($parkDayList as $pkDay): ?>
+							<?php
+								switch ($pkDay['Recurrence']) {
+									case 'weekly':        $pkDayRec = 'Every ' . $pkDay['WeekDay']; break;
+									case 'week-of-month': $pkDayRec = 'Every ' . shortScale::toDigith($pkDay['WeekOfMonth']) . ' ' . $pkDay['WeekDay']; break;
+									case 'monthly':       $pkDayRec = 'Monthly on the ' . shortScale::toDigith($pkDay['MonthDay']); break;
+									default:              $pkDayRec = $pkDay['Recurrence'];
+								}
+								$pkPurposeLabels = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&amp;S Day','other'=>'Other'];
+								$pkDayLabel = $pkPurposeLabels[$pkDay['Purpose']] ?? 'Park Day';
+							?>
+							<tr data-type="park-day" style="display:none">
+								<td>
+									<i class="fas fa-calendar-day" style="margin-right:6px;color:#a0aec0"></i>
+									<?= htmlspecialchars($pkDayLabel) ?><?php if (!empty($pkDay['Online'])): ?> <span class="pk-online-pill"><i class="fas fa-wifi"></i> Online</span><?php endif; ?>
+								</td>
+								<td class="pk-date-col" style="color:#718096;font-style:italic" data-sortval="<?= htmlspecialchars($pkDayRec) ?>">
+									<?= htmlspecialchars($pkDayRec) ?> &middot; <?= date('g:i A', strtotime($pkDay['Time'])) ?>
+								</td>
+								<td class="pk-date-col" style="text-align:center;color:#a0aec0">&mdash;</td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -919,6 +1023,7 @@ var PkConfig = {
 	canManage:      <?= !empty($CanManagePark) ? 'true' : 'false' ?>,
 	loggedIn:       <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	calEvents:      <?= json_encode(array_values($pkCalEvents ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	calParkDays:    <?= json_encode(array_values($pkCalParkDays ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
@@ -1427,7 +1532,8 @@ var PkConfig = {
 				<label>Location</label>
 				<div class="pk-addday-loc-radio">
 					<label><input type="radio" name="pk-addday-altloc" value="0" checked /> Use Park's Location</label>
-					<label><input type="radio" name="pk-addday-altloc" value="1" /> Use Alternate Location</label>
+					<label><input type="radio" name="pk-addday-altloc" value="1" /> Alternate Location</label>
+					<label><input type="radio" name="pk-addday-altloc" value="online" id="pk-addday-online-radio" /> <i class="fas fa-wifi" style="margin-right:3px;color:#0891b2"></i> Online / Virtual</label>
 				</div>
 			</div>
 

@@ -888,7 +888,8 @@ class Player extends Ork3 {
     				$this->mundane->active = is_null($request['Active']) ? $this->mundane->restricted : ($request['Active']?1:0);
 				}
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
-					$this->mundane->park_member_since = is_null($request['ParkMemberSince']) ? $this->mundane->park_member_since : $request['ParkMemberSince'];
+					$pms = $request['ParkMemberSince'];
+					$this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
 				}
 				if (strlen($request['Heraldry'])) {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
@@ -1271,11 +1272,22 @@ class Player extends Ork3 {
 			if (valid_id($request['MundaneId'])
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 
-				do  {
-					$this->revoke_award($awards, $request["Revocation"], $mundane_id);
+				// Collect all IDs first: save() calls Clear()+Find() after each save,
+				// replacing the result set, so next() would exit the loop after one iteration.
+				$award_ids = [];
+				do {
+					$award_ids[] = $awards->awards_id;
 				} while ($awards->next());
 
-				return Success($awards->awards_id);
+				foreach ($award_ids as $aid) {
+					$awards->clear();
+					$awards->awards_id = $aid;
+					if ($awards->find()) {
+						$this->revoke_award($awards, $request["Revocation"], $mundane_id);
+					}
+				}
+
+				return Success(count($award_ids));
 			} else {
 				return NoAuthorization();
 			}

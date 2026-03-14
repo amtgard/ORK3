@@ -183,9 +183,10 @@ if ($kingdom_id && !empty($knights)) {
 	text-decoration: underline;
 }
 
-.be-knight-icon {
-	color: #c8a000;
-	font-size: 13px;
+.be-knight-types {
+	font-size: 11px;
+	color: #7a6000;
+	font-style: italic;
 }
 
 .be-title-badge {
@@ -337,6 +338,8 @@ if ($kingdom_id && !empty($knights)) {
 	/* ── Raw data from PHP ──────────────────────────────── */
 	var allRelationships = <?= json_encode($relationships) ?>;
 	var allKnights       = <?= json_encode($knights) ?>;
+	var allKnightIds     = <?= json_encode(array_values($AllKnightIds ?? [])) ?>;
+	var knightTypes      = <?= json_encode((object)($KnightTypes ?? [])) ?>;
 
 	/* ── Build lookup maps ──────────────────────────────── */
 	// childrenMap[giver_id] = [{RecipientId, RecipientPersona, TitleName, Peerage, Date}]
@@ -374,9 +377,10 @@ if ($kingdom_id && !empty($knights)) {
 		}
 	});
 
-	/* ── Knight set for quick lookup ───────────────────── */
+	/* ── Knight set for quick lookup (dropdown + global) ── */
 	var knightSet = {};
 	allKnights.forEach(function(k) { knightSet[k.MundaneId] = true; });
+	allKnightIds.forEach(function(id) { knightSet[id] = true; });
 
 	/* ── Helpers ─────────────────────────────────────────*/
 	function esc(s) {
@@ -443,15 +447,18 @@ if ($kingdom_id && !empty($knights)) {
 		var html = '<li>';
 		html += '<div class="' + nodeClass + '">';
 
-		if (isKnight && !titleBadge) {
-			html += '<i class="fas fa-chess-king be-knight-icon"></i>';
-		}
 		if (titleBadge) {
 			html += '<span class="be-title-badge ' + titleBadge.cls + '">' + esc(titleBadge.name) + '</span>';
 		}
 		html += '<a href="' + BASE_URL + 'Player/index/' + nodeId + '" class="be-persona">' + persona + '</a>';
 		if (dateStr) {
 			html += '<span class="be-date">' + esc(dateStr) + '</span>';
+		}
+		if (isKnight) {
+			var types = knightTypes[nodeId];
+			if (types && types.length) {
+				html += '<span class="be-knight-types">' + types.map(esc).join(', ') + '</span>';
+			}
 		}
 		html += '</div>';
 

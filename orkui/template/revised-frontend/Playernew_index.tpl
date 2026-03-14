@@ -117,6 +117,8 @@
 				<?php endif; ?>
 				<?php if ($Player['Waivered'] == 1): ?>
 					<span class="pn-badge pn-badge-blue"><i class="fas fa-file-signature"></i> Waivered</span>
+				<?php else: ?>
+					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
 				<?php if ($Player['Restricted'] == 1): ?>
 					<span class="pn-badge pn-badge-orange"><i class="fas fa-exclamation-triangle"></i> Restricted</span>
@@ -592,6 +594,35 @@
 				</table>
 				<div id="pn-award-search-empty" class="pn-empty" style="display:none">No awards match your search</div>
 				<?php endif; ?>
+				<?php if ($canEditAdmin && !empty($RevokedAwards)): ?>
+				<div class="pn-revoked-section">
+					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Awards</h4>
+					<table class="pn-table pn-sortable" id="pn-revoked-awards-table">
+						<thead>
+							<tr>
+								<th data-sorttype="text">Award</th>
+								<th data-sorttype="numeric">Rank</th>
+								<th data-sorttype="date">Date Given</th>
+								<th data-sorttype="date">Revoked On</th>
+								<th data-sorttype="text">Revoked By</th>
+								<th data-sorttype="text">Reason</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($RevokedAwards as $rev): ?>
+							<tr>
+								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['AwardName'] ?? '') ?></td>
+								<td class="pn-col-numeric"><?= valid_id($rev['Rank']) ? (int)$rev['Rank'] : '' ?></td>
+								<td class="pn-col-nowrap"><?= strtotime($rev['Date']) > 0 ? $rev['Date'] : '' ?></td>
+								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
+								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
+								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+							</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php endif; ?>
 			</div>
 
 			<!-- Titles Tab -->
@@ -690,6 +721,35 @@
 				<?php else: ?>
 					<div class="pn-empty">No titles recorded</div>
 				<?php endif; ?>
+				<?php if ($canEditAdmin && !empty($RevokedTitles)): ?>
+				<div class="pn-revoked-section">
+					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Titles</h4>
+					<table class="pn-table pn-sortable" id="pn-revoked-titles-table">
+						<thead>
+							<tr>
+								<th data-sorttype="text">Title</th>
+								<th data-sorttype="numeric">Rank</th>
+								<th data-sorttype="date">Date Given</th>
+								<th data-sorttype="date">Revoked On</th>
+								<th data-sorttype="text">Revoked By</th>
+								<th data-sorttype="text">Reason</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($RevokedTitles as $rev): ?>
+							<tr>
+								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['AwardName'] ?? '') ?></td>
+								<td class="pn-col-numeric"><?= valid_id($rev['Rank']) ? (int)$rev['Rank'] : '' ?></td>
+								<td class="pn-col-nowrap"><?= strtotime($rev['Date']) > 0 ? $rev['Date'] : '' ?></td>
+								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
+								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
+								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+							</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php endif; ?>
 			</div>
 
 			<!-- Attendance Tab -->
@@ -720,6 +780,7 @@
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="text">Class</th>
 								<th data-sorttype="numeric">Credits</th>
+								<?php if ($canEditAdmin): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -733,6 +794,22 @@
 									<td><a href="<?= UIR ?>Attendance/event/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['EventName'] ?></a></td>
 									<td><?= trimlen($detail['Flavor']) > 0 ? $detail['Flavor'] : $detail['ClassName'] ?></td>
 									<td class="pn-col-numeric"><?= $detail['Credits'] ?></td>
+									<?php if ($canEditAdmin): ?>
+									<td class="pn-award-actions-cell">
+										<?php if ((int)$detail['EventId'] === 0): ?>
+										<button class="pn-award-action-btn pn-award-edit-btn pn-att-edit-btn"
+										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
+										        data-date="<?= htmlspecialchars($detail['Date']) ?>"
+										        data-credits="<?= (float)$detail['Credits'] ?>"
+										        data-class-id="<?= (int)$detail['ClassId'] ?>"
+										        data-mundane-id="<?= (int)$detail['MundaneId'] ?>"
+										        title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>
+										<button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"
+										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
+										        title="Delete attendance"><i class="fas fa-trash"></i></button>
+										<?php endif; ?>
+									</td>
+									<?php endif; ?>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -754,7 +831,7 @@
 								<th>Sent By</th>
 								<th>Reason</th>
 								<?php if ($this->__session->user_id): ?>
-									<th>Actions</th>
+									<th style="white-space:nowrap;width:1%">Actions</th>
 								<?php endif; ?>
 							</tr>
 						</thead>
@@ -767,7 +844,7 @@
 									<td><a href="<?= UIR ?>Player/index/<?= $rec['RecommendedById'] ?>"><?= $rec['RecommendedByName'] ?></a></td>
 									<td><?= htmlspecialchars($rec['Reason']) ?></td>
 									<?php if ($this->__session->user_id): ?>
-										<td>
+										<td style="white-space:nowrap">
 											<?php if ($canEditAdmin && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
 												<a class="pn-rec-give-link" href="#"
 													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>"
@@ -819,15 +896,15 @@
 									<td><?= $note['Description'] ?></td>
 									<td class="pn-col-nowrap"><?= $note['Date'] . (strtotime($note['DateComplete']) > 0 ? (' - ' . $note['DateComplete']) : '') ?></td>
 									<?php if ($canEditAdmin): ?>
-									<td>
-										<button class="pn-note-edit-btn"
+									<td class="pn-award-actions-cell">
+										<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"
 											data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>"
 											data-note="<?= htmlspecialchars($note['Note'] ?? '', ENT_QUOTES) ?>"
 											data-desc="<?= htmlspecialchars($note['Description'] ?? '', ENT_QUOTES) ?>"
 											data-date="<?= htmlspecialchars($note['Date'] ?? '', ENT_QUOTES) ?>"
 											data-date-complete="<?= htmlspecialchars($note['DateComplete'] ?? '', ENT_QUOTES) ?>"
 											title="Edit note"><i class="fas fa-pencil-alt"></i></button>
-										<button class="pn-note-del-btn" data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>" title="Delete note"><i class="fas fa-times"></i></button>
+										<button class="pn-award-action-btn pn-award-del-btn pn-note-del-btn" data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>" title="Delete note"><i class="fas fa-trash"></i></button>
 									</td>
 									<?php endif; ?>
 								</tr>
@@ -1230,12 +1307,10 @@
 			<input type="hidden" name="Email"          value="<?= htmlspecialchars($Player['Email'] ?? '') ?>" />
 			<input type="hidden" name="Password"       value="" />
 			<input type="hidden" name="PasswordAgain"  value="" />
-			<?php if (!$canEditAdmin): ?>
 			<input type="hidden" name="Active"         value="<?= $Player['Active'] == 1 ? 'Active' : 'Inactive' ?>" />
 			<input type="hidden" name="Restricted"     value="<?= $Player['Restricted'] == 1 ? 'Restricted' : '' ?>" />
 			<input type="hidden" name="ParkMemberSince" value="<?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?>" />
 			<input type="hidden" name="Waivered"       value="<?= $Player['Waivered'] == 1 ? 'Waivered' : 'Lawsuit Bait' ?>" />
-			<?php endif; ?>
 		</div>
 
 		<div class="pn-modal-footer">
@@ -1530,6 +1605,7 @@ var PnConfig = {
 	duesPeriod:       <?= (int)$_duesPeriod ?>,
 	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
 	lastClassId:      <?= $_lastClassId ?>,
+	attendanceDates:  <?= json_encode(array_values(array_unique(array_filter(array_map(function($a) { return $a['Date'] ?? ''; }, is_array($Details['Attendance']) ? $Details['Attendance'] : []))))) ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -1630,6 +1706,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 				<div class="pn-acct-field" style="flex:1">
 					<label>Date</label>
 					<input type="date" id="pn-player-att-date" style="width:100%">
+				<div id="pn-player-att-date-warn" style="display:none;color:#c05621;font-size:12px;margin-top:4px"><i class="fas fa-exclamation-triangle"></i> Player already has attendance record on this date.</div>
 				</div>
 				<div class="pn-acct-field" style="flex:0 0 90px">
 					<label>Credits</label>
@@ -1647,6 +1724,41 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		</div>
 	</div>
 </div>
+
+<!-- Edit Attendance Modal -->
+<?php if ($canEditAdmin): ?>
+<div class="pn-overlay" id="pn-att-edit-overlay">
+	<div class="pn-modal-box" style="max-width:400px">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2c5282"></i>Edit Attendance</h3>
+			<button class="pn-modal-close-btn" id="pn-att-edit-close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div class="pn-form-error" id="pn-att-edit-feedback" style="display:none"></div>
+			<input type="hidden" id="pn-att-edit-id">
+			<input type="hidden" id="pn-att-edit-mundane-id">
+			<div class="pn-acct-field" style="margin-bottom:12px">
+				<label>Date</label>
+				<input type="date" id="pn-att-edit-date" style="width:100%">
+			</div>
+			<div style="display:flex;gap:12px;margin-bottom:12px">
+				<div class="pn-acct-field" style="flex:1">
+					<label>Class</label>
+					<select id="pn-att-edit-class" style="width:100%"></select>
+				</div>
+				<div class="pn-acct-field" style="flex:0 0 90px">
+					<label>Credits</label>
+					<input type="number" id="pn-att-edit-credits" value="1" min="0.5" max="4" step="0.5" style="width:100%">
+				</div>
+			</div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-att-edit-cancel">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-att-edit-submit"><i class="fas fa-save"></i> Save</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
 
 <!-- Move Player Modal -->
 <?php if ($canEditAdmin): ?>

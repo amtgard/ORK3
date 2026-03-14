@@ -119,6 +119,7 @@
 .pn-badge-gray   { background: #e2e8f0; color: #4a5568; }
 .pn-badge-purple { background: #e9d8fd; color: #553c9a; }
 .pn-badge-gold   { background: #fefcbf; color: #744210; }
+.pn-badge-yellow { background: #fef08a; color: #92400e; }
 
 .pn-suspended-detail {
 	color: rgba(255,255,255,0.8);
@@ -556,6 +557,26 @@
 	background: #e9d8fd;
 	border: 1px solid #d6bcfa;
 }
+
+/* Revoked awards section */
+.pn-revoked-section { margin-top: 32px; }
+.pn-revoked-heading {
+    font-size: 13px;
+    font-weight: 600;
+    color: #c53030;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: 6px 0 6px 2px;
+    border-bottom: 2px solid #fed7d7;
+    margin-bottom: 10px;
+    background: transparent;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    text-shadow: none;
+}
+.pn-revoked-heading i { margin-right: 6px; }
 
 /* Empty state */
 .pn-empty {
@@ -1553,6 +1574,13 @@
 .kn-filter-toggle[data-filter="park-event"]:hover:not(.kn-filter-on)    { border-color:#6b46c1; color:#6b46c1; }
 .kn-filter-toggle[data-filter="park-day"]:hover:not(.kn-filter-on)      { border-color:#b7791f; color:#b7791f; }
 
+.pk-filter-toggle { padding:3px 10px; border:1px solid #cbd5e0; background:#fff; border-radius:20px; font-size:11px; font-weight:600; color:#718096; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; }
+.pk-filter-toggle.pk-filter-on { color:#fff; }
+.pk-filter-toggle[data-filter="event"].pk-filter-on    { background:#276749; border-color:#276749; }
+.pk-filter-toggle[data-filter="park-day"].pk-filter-on { background:#b7791f; border-color:#b7791f; }
+.pk-filter-toggle[data-filter="event"]:hover:not(.pk-filter-on)    { border-color:#276749; color:#276749; }
+.pk-filter-toggle[data-filter="park-day"]:hover:not(.pk-filter-on) { border-color:#b7791f; color:#b7791f; }
+
 /* Park tile grid */
 .kn-park-tiles {
 	display: grid;
@@ -2190,6 +2218,7 @@
 }
 .pk-stat-icon { font-size: 13px; color: #a0aec0; margin-bottom: 3px; }
 .pk-stat-value { font-size: 22px; font-weight: 700; color: #0891b2; line-height: 1.1; }
+.pk-stat-sub   { font-size: 11px; font-weight: 600; color: #4a5568; margin-top: 1px; }
 .pk-stat-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
 
 /* ---- Main layout ---- */
@@ -2436,6 +2465,9 @@
 .pk-schedule-purpose.purpose-arts    { background: #faf5ff; color: #6b46c1; }
 .pk-schedule-purpose.purpose-other   { background: #fffbeb; color: #d69e2e; }
 .pk-schedule-address { font-size: 12px; color: #718096; margin-top: 4px; }
+.pk-schedule-desc { font-size: 12px; color: #718096; margin-top: 10px; margin-bottom: 0; line-height: 1.4; }
+.pk-schedule-online-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:#0891b2; background:#ebf8ff; border:1px solid #bee3f8; border-radius:20px; padding:2px 8px; margin-top:5px; }
+.pk-online-pill { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:600; color:#0891b2; background:#ebf8ff; border:1px solid #bee3f8; border-radius:20px; padding:1px 6px; margin-left:4px; vertical-align:middle; }
 .pk-schedule-map-link {
 	display: inline-flex;
 	align-items: center;

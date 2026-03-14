@@ -365,6 +365,45 @@ class Controller_Player extends Controller {
 		}
 		$this->data['OfficerRoles'] = $officerRoles;
 
+		$this->data['RevokedAwards'] = [];
+		$this->data['RevokedTitles'] = [];
+		if ($canEdit) {
+			$revokedBaseSql = "SELECT a.awards_id, a.rank, a.date, a.revoked_at, a.revocation,
+				COALESCE(NULLIF(a.custom_name,''), ka.name, aw.name) AS award_name,
+				m.persona AS revoked_by
+				FROM ork_awards a
+				LEFT JOIN ork_kingdomaward ka ON a.kingdomaward_id = ka.kingdomaward_id
+				LEFT JOIN ork_award aw ON a.award_id = aw.award_id
+				LEFT JOIN ork_mundane m ON a.revoked_by_id = m.mundane_id
+				WHERE a.stripped_from = " . (int)$id . "
+				  AND a.revoked = 1";
+			$revokedAwardsSql = $revokedBaseSql . "
+				  AND (aw.officer_role = 'none' OR aw.officer_role IS NULL)
+				  AND (ka.is_title IS NULL OR ka.is_title = 0)
+				ORDER BY a.revoked_at DESC, a.date DESC";
+			$revokedTitlesSql = $revokedBaseSql . "
+				  AND (aw.officer_role != 'none' OR ka.is_title = 1)
+				ORDER BY a.revoked_at DESC, a.date DESC";
+			foreach (['RevokedAwards' => $revokedAwardsSql, 'RevokedTitles' => $revokedTitlesSql] as $key => $sql) {
+				$result = $DB->DataSet($sql);
+				$rows = [];
+				if ($result->Size() > 0) {
+					while ($result->Next()) {
+						$rows[] = [
+							'AwardsId'   => $result->awards_id,
+							'AwardName'  => $result->award_name,
+							'Rank'       => $result->rank,
+							'Date'       => $result->date,
+							'RevokedAt'  => $result->revoked_at,
+							'Revocation' => $result->revocation,
+							'RevokedBy'  => $result->revoked_by,
+						];
+					}
+				}
+				$this->data[$key] = $rows;
+			}
+		}
+
 		$adminCheck = $DB->DataSet(
 			"SELECT 1 FROM ork_authorization
 			 WHERE mundane_id = " . (int)$id . "

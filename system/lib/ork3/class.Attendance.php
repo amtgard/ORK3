@@ -140,7 +140,7 @@ class Attendance  extends Ork3 {
 		
 		$this->attendance->clear();
 		$this->attendance->attendance_id = $request['AttendanceId'];
-		if (!valid_id() || !$this->attendance->find()) {
+		if (!valid_id($request['AttendanceId']) || !$this->attendance->find()) {
 			return InvalidParameter();
 		}
 		
