@@ -11,8 +11,9 @@ class Controller_SearchAjax extends Controller {
 			exit;
 		}
 
-		$kid  = (int)($_GET['kid'] ?? 0);
-		$pid  = (int)($_GET['pid'] ?? 0);
+		$kid            = (int)($_GET['kid'] ?? 0);
+		$pid            = (int)($_GET['pid'] ?? 0);
+		$includeInactive = !empty($_GET['inactive']);
 
 		global $DB;
 
@@ -97,7 +98,9 @@ class Controller_SearchAjax extends Controller {
 
 		// Players — prioritize user's kingdom, with expanded budget from unused slots above;
 		// narrow by kingdom/park if abbreviation prefix was parsed
-		$playerWhere = "m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+		$activeClause    = $includeInactive ? '1' : 'm.active = 1';
+		$suspendedClause = $includeInactive ? '1' : 'm.suspended = 0';
+		$playerWhere = "{$suspendedClause} AND {$activeClause} AND LENGTH(m.persona) > 0
 			  AND (m.persona LIKE '%{$term}%'
 			    OR m.given_name LIKE '%{$term}%'
 			    OR m.surname LIKE '%{$term}%'

@@ -327,7 +327,7 @@ var RcConfig = {
 	function acSearch(q, cb) {
 		clearTimeout(_t[q]);
 		_t[q] = setTimeout(function() {
-			fetch(RcConfig.uir + 'SearchAjax/universal&q=' + encodeURIComponent(q) + '&kid=' + RcConfig.kingdomId)
+			fetch(RcConfig.uir + 'SearchAjax/universal&q=' + encodeURIComponent(q) + '&kid=' + RcConfig.kingdomId + '&inactive=1')
 				.then(function(r){ return r.json(); }).then(cb).catch(function(){});
 		}, 220);
 	}

@@ -54,7 +54,7 @@
 			<div id='nav-search-wrap'>
 				<a class='nav-icon-btn' id='nav-search-toggle' onclick='nsToggle(this)' title='Search'><i class='fas fa-search'></i></a>
 				<div id='nav-search-input-wrap'>
-					<input id='UniversalSearch' placeholder='Search players, parks, kingdoms&hellip;' class='nav-search-input' autocomplete='off' />
+					<input id='UniversalSearch' placeholder='Search active players, parks, kingdoms&hellip;' class='nav-search-input' autocomplete='off' />
 					<div id='nav-search-dropdown'></div>
 				</div>
 			</div>
@@ -127,7 +127,6 @@
 				</button>
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
-					<a href='<?=UIR?>Admin/player/<?=$__navUid?>'><i class='fas fa-edit'></i> Edit Profile</a>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
 				</div>
@@ -269,6 +268,18 @@
 
 			$dd.html(html);
 		}
+
+		(function() {
+			var inp = document.getElementById('UniversalSearch');
+			if (!inp) return;
+			function updatePlaceholder() {
+				inp.placeholder = window.innerWidth < 640
+					? 'Search\u2026'
+					: 'Search active players, parks, kingdoms\u2026';
+			}
+			updatePlaceholder();
+			window.addEventListener('resize', updatePlaceholder);
+		})();
 
 		$('#UniversalSearch').on('input', function() {
 			var term = $.trim($(this).val());

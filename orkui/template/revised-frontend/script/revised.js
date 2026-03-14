@@ -6778,23 +6778,25 @@ function setupPronounPicker(cfg) {
             var btn       = this;
             var card      = $(this).closest('.pk-schedule-card');
             var parkDayId = $(this).data('park-day-id');
-            if (!parkDayId || !confirm('Remove this park day?')) return;
-            btn.disabled = true;
-            var fd = new FormData();
-            fd.append('ParkDayId', parkDayId);
-            fetch(DELETE_DAY_URL, { method: 'POST', body: fd })
-                .then(function(r) { return r.json(); })
-                .then(function(result) {
-                    if (result && result.status === 0) {
-                        card.fadeOut(300, function() { card.remove(); });
-                    } else {
+            if (!parkDayId) return;
+            knConfirm('Remove this park day? This cannot be undone.', function() {
+                btn.disabled = true;
+                var fd = new FormData();
+                fd.append('ParkDayId', parkDayId);
+                fetch(DELETE_DAY_URL, { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(result) {
+                        if (result && result.status === 0) {
+                            card.fadeOut(300, function() { card.remove(); });
+                        } else {
+                            btn.disabled = false;
+                            alert((result && result.error) ? result.error : 'Delete failed.');
+                        }
+                    }).catch(function() {
                         btn.disabled = false;
-                        alert((result && result.error) ? result.error : 'Delete failed.');
-                    }
-                }).catch(function() {
-                    btn.disabled = false;
-                    alert('Request failed.');
-                });
+                        alert('Request failed.');
+                    });
+            });
         });
     });
 })();
