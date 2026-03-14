@@ -139,7 +139,7 @@ foreach ($_od_rows as $row):
 		scrollX    : true,
 		order      : [[0, 'asc']],
 		fixedHeader: { headerOffset: 48 },
-		columnDefs : [{ targets: '_all', type: 'string' }]
+		columnDefs : [{ targets: [1, 2, 3, 4, 5], orderable: false }]
 	});
 
 	/* CSV export — strips HTML from cells */
