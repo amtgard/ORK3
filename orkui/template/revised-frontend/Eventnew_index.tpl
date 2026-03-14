@@ -223,7 +223,8 @@
 			<?php endif; ?>
 			<?php if ($loggedIn && $isUpcoming): ?>
 			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0">
-				<button type="submit" class="ev-btn <?= $userAttending ? 'ev-btn-secondary' : 'ev-btn-outline' ?>">
+				<button type="submit" class="ev-btn <?= $userAttending ? 'ev-btn-secondary' : 'ev-btn-outline' ?>"
+					onclick="gtag('event','event_rsvp',{action:'<?= $userAttending ? 'cancel' : 'confirm' ?>'})">
 					<i class="fas <?= $userAttending ? 'fa-times-circle' : 'fa-check-circle' ?>"></i>
 					<?= $userAttending ? 'Cancel RSVP' : 'RSVP' ?>
 				</button>
