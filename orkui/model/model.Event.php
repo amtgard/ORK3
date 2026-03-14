@@ -139,6 +139,11 @@ class Model_Event extends Model {
 		return $list;
 	}
 
+	function delete_event($token, $event_id) {
+		$r = $this->Event->DeleteEvent(array('Token' => $token, 'EventId' => (int)$event_id));
+		return $r;
+	}
+
 	function update_event($token, $event_id, $kingdom_id, $park_id, $mundane_id, $unit_id, $name, $heraldry, $type) {
 		$r = $this->Event->SetEvent(array('Token'=>$token, 'EventId'=> $event_id, 'KingdomId'=>$kingdom_id, 'ParkId'=>$park_id,
 			'MundaneId'=>$mundane_id, 'UnitId'=>$unit_id,'Name'=>$name, 'Heraldry'=>$heraldry, 'HeraldryMimeType'=>$type));

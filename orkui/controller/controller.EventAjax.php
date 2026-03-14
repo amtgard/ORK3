@@ -136,6 +136,32 @@ class Controller_EventAjax extends Controller {
 		exit;
 	}
 
+	public function cancel($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$event_id = (int)($_POST['EventId'] ?? 0);
+
+		if (!valid_id($event_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+			exit;
+		}
+
+		$this->load_model('Event');
+		$r = $this->Event->delete_event($this->session->token, $event_id);
+
+		if (isset($r['Status']) && $r['Status'] == 0) {
+			echo json_encode(['status' => 0]);
+		} else {
+			echo json_encode(['status' => $r['Status'] ?? 1, 'error' => $r['Detail'] ?? 'Could not cancel event.']);
+		}
+		exit;
+	}
+
 	public function heraldry($p = null) {
 		header('Content-Type: application/json');
 

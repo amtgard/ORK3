@@ -53,8 +53,21 @@
 
 	$playerList    = $playerPeriods[0] ?? [];  // 0–6 months (used for stats row count)
 	$totalHeraldry = array_sum(array_map('count', $heraldryPeriods));
+	$hoaPlayers12  = array_merge($heraldryPeriods[0] ?? [], $heraldryPeriods[1] ?? []);
 
-	$firstTab = count($parkDayList) > 0 ? 'schedule' : 'events';
+	$firstTab = 'about';
+
+	// Auto-link URLs in plain text fields
+	function pk_autolink(string $text): string {
+		$escaped = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+		$linked  = preg_replace(
+			'~https?://[^\s<>\"]+~',
+			'<a href="$0" target="_blank" rel="noopener noreferrer">$0</a>',
+			$escaped
+		);
+		return nl2br($linked);
+	}
+
 
 	// Pre-compute FullCalendar event data
 	$pkCalEvents = [];
@@ -216,24 +229,21 @@
 		<div class="pk-hero-right">
 			<div class="pk-hero-actions">
 				<?php if ($LoggedIn): ?>
-					<button class="pk-btn pk-btn-white" onclick="pkOpenAttendanceModal()">
+					<button class="pk-btn pk-btn-outline" onclick="pkOpenAttendanceModal()">
 						<i class="fas fa-clipboard-list"></i> Enter Attendance
 					</button>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
 					</button>
-				<?php endif; ?>
-				<button class="pk-btn <?= $LoggedIn ? 'pk-btn-outline' : 'pk-btn-white' ?>" onclick="pkActivateTab('players'); var s=document.getElementById('pk-player-search'); if(s){s.focus(); s.select();}">
-					<i class="fas fa-search"></i> Search Players
-				</button>
-				<?php if (!empty($CanManagePark)): ?>
+					<?php if (!empty($CanManagePark)): ?>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAdminModal()">
 						<i class="fas fa-cog"></i> Admin
 					</button>
-				<?php elseif ($LoggedIn): ?>
+					<?php else: ?>
 					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= $park_id ?>">
 						<i class="fas fa-cog"></i> Admin
 					</a>
+					<?php endif; ?>
 				<?php endif; ?>
 
 			</div>
@@ -246,7 +256,7 @@
      ZONE 2: Stats Row
      ============================================= -->
 <div class="pk-stats-row">
-	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('schedule')"<?php endif; ?>>
+	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('about')"<?php endif; ?>>
 		<div class="pk-stat-icon"><i class="fas fa-calendar-check"></i></div>
 		<?php if ($nextParkDayDate): ?>
 			<div class="pk-stat-value" style="font-size:1.1rem"><?= date('M j', strtotime($nextParkDayDate)) ?></div>
@@ -371,12 +381,6 @@
 				<li data-pktab="about" class="pk-tab-active">
 					<i class="fas fa-info-circle"></i><span class="pk-tab-label"> About</span>
 				</li>
-				<li data-pktab="schedule" class="">
-					<i class="fas fa-calendar"></i><span class="pk-tab-label"> Schedule</span>
-					<?php if (count($parkDayList) > 0): ?>
-						<span class="pk-tab-count">(<?= count($parkDayList) ?>)</span>
-					<?php endif; ?>
-				</li>
 				<li data-pktab="events" class="">
 					<i class="fas fa-flag"></i><span class="pk-tab-label"> Events</span>
 					<span class="pk-tab-count">(<?= count($eventList) ?>)</span>
@@ -385,10 +389,10 @@
 					<i class="fas fa-users"></i><span class="pk-tab-label"> Players</span>
 					<span class="pk-tab-count">(<?= count($allPlayers) ?>)</span>
 				</li>
-				<?php if ($totalHeraldry > 0): ?>
+				<?php if (count($hoaPlayers12) > 0): ?>
 				<li data-pktab="heraldry">
 					<i class="fas fa-shield-alt"></i><span class="pk-tab-label"> Hall of Arms</span>
-					<span class="pk-tab-count">(<?= $totalHeraldry ?>)</span>
+					<span class="pk-tab-count">(<?= count($hoaPlayers12) ?>)</span>
 				</li>
 				<?php endif; ?>
 				<li data-pktab="reports">
@@ -411,14 +415,14 @@
 					<?php if (!empty($description)): ?>
 					<div class="pk-about-section">
 						<div class="pk-about-label">About</div>
-						<div class="pk-about-text"><?= nl2br(htmlspecialchars($description)) ?></div>
+						<div class="pk-about-text"><?= pk_autolink($description) ?></div>
 					</div>
 					<?php endif; ?>
 
 					<?php if (!empty($directions)): ?>
 					<div class="pk-about-section">
 						<div class="pk-about-label">Directions</div>
-						<div class="pk-about-text"><?= nl2br(htmlspecialchars($directions)) ?></div>
+						<div class="pk-about-text"><?= pk_autolink($directions) ?></div>
 					</div>
 					<?php endif; ?>
 
@@ -451,18 +455,17 @@
 					</div>
 					<?php endif; ?>
 				</div>
-			</div><!-- /pk-tab-about -->
-
-			<!-- Schedule Tab -->
-			<div class="pk-tab-panel" id="pk-tab-schedule" style="display:none">
-				<?php if (count($parkDayList) > 0): ?>
-					<?php if (!empty($CanManagePark)): ?>
-					<div class="pk-tab-toolbar" style="text-align: right;">
+				<!-- Schedule sub-section -->
+				<div class="pk-about-section pk-about-schedule">
+					<div class="pk-about-label" style="display:flex;align-items:center;justify-content:space-between;">
+						<span><i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0;"></i>Schedule</span>
+						<?php if (!empty($CanManagePark)): ?>
 						<button class="pk-btn pk-btn-primary pk-btn-sm" onclick="pkOpenAddDayModal()">
 							<i class="fas fa-plus"></i> Add Park Day
 						</button>
+						<?php endif; ?>
 					</div>
-					<?php endif; ?>
+					<?php if (count($parkDayList) > 0): ?>
 					<div class="pk-schedule-grid">
 						<?php foreach ($parkDayList as $day): ?>
 						<?php
@@ -524,16 +527,10 @@
 						<?php endforeach; ?>
 					</div>
 				<?php else: ?>
-					<?php if (!empty($CanManagePark)): ?>
-					<div class="pk-tab-toolbar">
-						<button class="pk-btn pk-btn-primary pk-btn-sm" onclick="pkOpenAddDayModal()">
-							<i class="fas fa-plus"></i> Add Park Day
-						</button>
-					</div>
-					<?php endif; ?>
 					<div class="pk-empty">No park days scheduled</div>
 				<?php endif; ?>
-			</div>
+				</div><!-- /pk-about-schedule -->
+			</div><!-- /pk-tab-about -->
 
 			<!-- Events Tab -->
 			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
@@ -879,54 +876,62 @@
 			</div><!-- /pk-tab-players -->
 
 			<!-- Hall of Arms Tab -->
-			<?php if ($totalHeraldry > 0): ?>
+			<?php
+				$_isOwnPark = isset($this->__session->user_id)
+					&& (int)$this->__session->user_id > 0
+					&& (int)($this->__session->park_id ?? 0) === (int)$park_id;
+				$_currentUserHasHeraldry = true;
+				if ($_isOwnPark) {
+					foreach ($allPlayers as $_cp) {
+						if ((int)$_cp['MundaneId'] === (int)$this->__session->user_id) {
+							$_currentUserHasHeraldry = (bool)$_cp['HasHeraldry'];
+							break;
+						}
+					}
+				}
+				$_showHoaPrompt = $_isOwnPark && !$_currentUserHasHeraldry;
+			?>
+			<?php if (count($hoaPlayers12) > 0): ?>
 			<div class="pk-tab-panel" id="pk-tab-heraldry" style="display:none">
 				<div class="pk-players-toolbar">
 					<span class="pk-players-toolbar-left">
-						<?= count($heraldryPeriods[0] ?? []) ?> device<?= count($heraldryPeriods[0] ?? []) != 1 ? 's' : '' ?> (past 6 months)<?php if ($totalHeraldry > count($heraldryPeriods[0] ?? [])): ?> &middot; <?= $totalHeraldry ?> total<?php endif; ?>
+						<?= count($hoaPlayers12) ?> device<?= count($hoaPlayers12) != 1 ? 's' : '' ?> (sign-in past 12 months)
 					</span>
 				</div>
-				<!-- Period 0 (0–6 months) -->
-				<div class="pk-hoa-grid" id="pk-hoa-grid-0">
-					<?php foreach ($heraldryPeriods[0] ?? [] as $p): ?>
-					<a class="pk-hoa-card" href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>">
-						<img class="pk-hoa-heraldry"
+				<div class="pk-hoa-search-wrap">
+					<i class="fas fa-search"></i>
+					<input type="text" class="pk-hoa-search" placeholder="Search by name…" autocomplete="off">
+				</div>
+				<div class="pk-hoa-grid" id="pk-hoa-grid">
+					<?php foreach ($hoaPlayers12 as $_hoaIdx => $p): ?>
+					<a class="pk-hoa-card"
+					   href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>"
+					   data-name="<?= htmlspecialchars(strtolower($p['Persona'])) ?>"
+					   style="animation-delay:<?= min($_hoaIdx * 18, 600) ?>ms">
+						<img class="pk-hoa-img"
 						     src="<?= HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId'])) ?>"
 						     alt="<?= htmlspecialchars($p['Persona']) ?>"
+						     loading="lazy"
 						     onerror="this.closest('.pk-hoa-card').style.display='none'">
-						<div class="pk-hoa-name"><?= htmlspecialchars($p['Persona']) ?></div>
-						<?php if (!empty($p['OfficerRoles'])): ?>
-							<span class="pk-officer-pill"><?= htmlspecialchars(explode(', ', $p['OfficerRoles'])[0]) ?></span>
-						<?php endif; ?>
+						<div class="pk-hoa-overlay">
+							<div class="pk-hoa-overlay-name"><?= htmlspecialchars($p['Persona']) ?></div>
+							<?php if (!empty($p['LastSignin'])): ?>
+							<div class="pk-hoa-overlay-meta"><i class="fas fa-sign-in-alt" style="font-size:8px;"></i> <?= htmlspecialchars($p['LastSignin']) ?></div>
+							<?php endif; ?>
+							<?php if (!empty($p['OfficerRoles'])): ?>
+							<div class="pk-hoa-overlay-meta"><i class="fas fa-crown" style="font-size:8px;"></i> <?= htmlspecialchars(explode(', ', $p['OfficerRoles'])[0]) ?></div>
+							<?php endif; ?>
+						</div>
 					</a>
 					<?php endforeach; ?>
 				</div>
-				<!-- Period 1+ (hidden; revealed by Load More) -->
-				<?php foreach (array_slice($heraldryPeriods, 1, null, true) as $hoaPeriod => $hoaPlayers): ?>
-				<div class="pk-period-block" id="pk-hoa-block-<?= $hoaPeriod ?>" style="display:none">
-					<div class="pk-period-label"><?= $hoaPeriod * 6 ?>–<?= ($hoaPeriod + 1) * 6 ?> months ago</div>
-					<div class="pk-hoa-grid">
-						<?php foreach ($hoaPlayers as $p): ?>
-						<a class="pk-hoa-card" href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>">
-							<img class="pk-hoa-heraldry"
-							     src="<?= HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId'])) ?>"
-							     alt="<?= htmlspecialchars($p['Persona']) ?>"
-							     onerror="this.closest('.pk-hoa-card').style.display='none'">
-							<div class="pk-hoa-name"><?= htmlspecialchars($p['Persona']) ?></div>
-							<?php if (!empty($p['OfficerRoles'])): ?>
-								<span class="pk-officer-pill"><?= htmlspecialchars(explode(', ', $p['OfficerRoles'])[0]) ?></span>
-							<?php endif; ?>
-						</a>
-						<?php endforeach; ?>
+				<div id="pk-hoa-empty" style="display:none;padding:32px 0;text-align:center;color:#a0aec0;font-size:14px;">No results match your search.</div>
+				<?php if ($_showHoaPrompt): ?>
+				<div class="pk-hoa-cta">
+					<i class="fas fa-shield-alt pk-hoa-cta-icon"></i>
+					<div class="pk-hoa-cta-body">
+						<strong>Your arms should be here!</strong> Visit <a href="<?= UIR ?>Player/index/<?= (int)$this->__session->user_id ?>">your profile</a> to upload your own heraldry. Don't have heraldry of your own? Reach out to your park or kingdom Regent to be connected with heraldic resources who can help.
 					</div>
-				</div>
-				<?php endforeach; ?>
-				<?php if (count($heraldryPeriods) > 1): ?>
-				<div class="pk-load-more-wrap" data-next="1" data-group="pk-hoa">
-					<button class="pk-load-more-btn" onclick="pkLoadMoreCards('pk-hoa', this)">
-						<i class="fas fa-chevron-down"></i> Load More...
-					</button>
-					<span class="pk-load-more-hint">Showing <?= count($heraldryPeriods[0] ?? []) ?> of <?= $totalHeraldry ?> devices</span>
 				</div>
 				<?php endif; ?>
 			</div><!-- /pk-tab-heraldry -->
@@ -934,6 +939,10 @@
 
 			<!-- Reports Tab -->
 			<div class="pk-tab-panel" id="pk-tab-reports" style="display:none">
+				<div class="pk-reports-mobile-notice">
+					<i class="fas fa-info-circle"></i>
+					Some reports may not display as expected on mobile. For best results, view reports on a full screen device.
+				</div>
 				<div class="kn-reports-grid">
 					<div class="kn-report-group">
 						<h5><i class="fas fa-users"></i> Players</h5>
@@ -1000,7 +1009,7 @@
 								<th>Player</th>
 								<th>Award</th>
 								<th>Rank</th>
-								<th>Recommended By</th>
+								<th data-short="Rec. By">Recommended By</th>
 								<th>Date</th>
 								<th>Notes</th>
 								<?php if (!empty($CanManagePark)): ?><th></th><?php endif; ?>
@@ -1014,7 +1023,11 @@
 							<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
 							<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 							<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
-							<td class="pk-rec-notes"><?= !empty($rec['Reason']) ? htmlspecialchars($rec['Reason']) : '&mdash;' ?></td>
+							<td class="pk-rec-notes">
+<?php if (!empty($rec['Reason'])): ?>
+							<span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span>
+<?php else: ?>&mdash;<?php endif; ?>
+						</td>
 							<?php if (!empty($CanManagePark)): ?>
 							<td class="pk-rec-actions">
 								<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
@@ -1251,7 +1264,7 @@ var PkConfig = {
 				</button>
 				<div class="pk-att-qa-wrap" id="pk-att-qa-wrap" style="display:none">
 					<table class="pk-att-qa-table">
-						<thead><tr><th>Player</th><th>Class</th><th>Credits</th><th></th></tr></thead>
+						<thead><tr><th>Player</th><th>Class</th><th data-short="Cr.">Credits</th><th></th></tr></thead>
 						<tbody id="pk-att-qa-tbody"></tbody>
 					</table>
 					<div class="pk-att-qa-empty" id="pk-att-qa-empty" style="display:none">

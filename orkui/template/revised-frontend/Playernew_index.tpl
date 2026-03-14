@@ -197,8 +197,8 @@
 	</div>
 	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('classes')">
 		<div class="pn-stat-icon"><i class="fas fa-shield-alt"></i></div>
-		<div class="pn-stat-number"><?= $Stats['HighestClassLevel'] ?></div>
-		<div class="pn-stat-label">Highest Class</div>
+		<div class="pn-stat-number pn-stat-text"><?= htmlspecialchars($Stats['LastPlayedClass'] ?: '—') ?></div>
+		<div class="pn-stat-label">Last Played</div>
 	</div>
 </div>
 

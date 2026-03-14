@@ -205,6 +205,18 @@ $server->wsdl->addComplexType(
 	
 
 $server->wsdl->addComplexType(
+		'DeleteEventRequest',
+		'complexType',
+		'struct',
+		'all',
+		'',
+		array(
+				'Token'   => array('name' => 'Token',   'type' => 'xsd:string'),
+				'EventId' => array('name' => 'EventId', 'type' => 'xsd:int')
+			)
+	);
+
+$server->wsdl->addComplexType(
 		'SetEventRequest',
 		'complexType',
 		'struct',

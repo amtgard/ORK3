@@ -86,6 +86,14 @@ class Controller_Park extends Controller
 			if (in_array($o['OfficerRole'], ['Monarch', 'Regent']) && (int)$o['MundaneId'] > 0)
 				$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => $o['OfficerRole']];
 		}
+		$this->load_model('Kingdom');
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $o) {
+				if (in_array($o['OfficerRole'], ['Monarch', 'Regent']) && (int)$o['MundaneId'] > 0)
+					$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => 'Kingdom ' . $o['OfficerRole']];
+			}
+		}
 		$this->data['PreloadOfficers'] = $preloadOfficers;
 
 		$classesResult = $this->Attendance->get_classes();

@@ -188,7 +188,7 @@
 					You can edit any of these details after creation.
 				</div>
 				<div class="ec-action-bar-right">
-					<a class="ec-btn-cancel" href="<?= UIR ?>Event/template/<?= $eventId ?>">
+					<a class="ec-btn-cancel" href="<?= UIR ?>Event/template/<?= $eventId ?>" id="ec-cancel-btn" onclick="ecCancelAndReturn(event, <?= $eventId ?>)">
 						Cancel
 					</a>
 					<button type="submit" class="ec-btn-submit" id="ec-submit-btn">
@@ -203,8 +203,25 @@
 </div><!-- /.ec-wrap -->
 
 <script>
+<?php
+$_ec_return = $parkId    ? UIR . 'Park/profile/'    . $parkId
+				: ($kingdomId ? UIR . 'Kingdom/profile/' . $kingdomId
+				: UIR . 'Event/template/' . $eventId);
+?>
 var EcConfig = {
 	httpService: '<?= HTTP_SERVICE ?>',
+	cancelUrl:   '<?= UIR ?>EventAjax/cancel',
+	returnUrl:   '<?= htmlspecialchars($_ec_return) ?>',
 };
+function ecCancelAndReturn(ev, eventId) {
+	ev.preventDefault();
+	var btn = document.getElementById('ec-cancel-btn');
+	if (btn) { btn.textContent = 'Cancelling…'; btn.style.pointerEvents = 'none'; }
+	var fd = new FormData();
+	fd.append('EventId', eventId);
+	fetch(EcConfig.cancelUrl, { method: 'POST', body: fd })
+		.catch(function () {})
+		.finally(function () { window.location.href = EcConfig.returnUrl; });
+}
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

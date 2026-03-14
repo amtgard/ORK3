@@ -425,6 +425,38 @@ class Event  extends Ork3 {
 		}
 	}
 
+	public function DeleteEvent($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+
+		if (!valid_id($mundane_id)) {
+			return BadToken();
+		}
+
+		$event_id = (int)($request['EventId'] ?? 0);
+		if (!valid_id($event_id)) {
+			return InvalidParameter('EventId is required.');
+		}
+
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			return NoAuthorization();
+		}
+
+		// Refuse if any calendar details exist (event has scheduled occurrences)
+		$this->detail->clear();
+		$this->detail->event_id = $event_id;
+		if ($this->detail->find()) {
+			return InvalidParameter('Cannot delete an event that has scheduled occurrences.');
+		}
+
+		$this->event->clear();
+		$this->event->event_id = $event_id;
+		if ($this->event->find()) {
+			$this->event->delete();
+			return Success();
+		}
+		return InvalidParameter('Event not found.');
+	}
+
 	public function SetEvent($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		

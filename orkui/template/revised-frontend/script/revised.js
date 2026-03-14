@@ -1769,10 +1769,14 @@ function knApplyHeroColor(img) {
 
         // Clamp: keep hue, boost saturation if washed out, fix lightness for dark bg
         var finalS = Math.max(s, 0.28);
+        var hDeg   = Math.round(h * 360);
+        var sPct   = Math.round(finalS * 100);
+        document.documentElement.style.setProperty('--kn-hue', hDeg);
+        document.documentElement.style.setProperty('--kn-sat', sPct + '%');
         var heroEl = document.querySelector('.kn-hero');
         if (heroEl) {
             heroEl.style.backgroundColor =
-                'hsl(' + Math.round(h*360) + ',' + Math.round(finalS*100) + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,18%)';
         }
     } catch(e) { /* CORS or tainted canvas — keep default green */ }
 }
@@ -3967,11 +3971,18 @@ function pkApplyHeroColor(img) {
             h /= 6;
         }
         var finalS = Math.max(s, 0.28);
+        var hDeg   = Math.round(h * 360);
+        var sPct   = Math.round(finalS * 100);
+        document.documentElement.style.setProperty('--pk-hue', hDeg);
+        document.documentElement.style.setProperty('--pk-sat', sPct + '%');
         var heroEl = document.querySelector('.pk-hero');
         if (heroEl) {
             heroEl.style.backgroundColor =
-                'hsl(' + Math.round(h*360) + ',' + Math.round(finalS*100) + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,18%)';
         }
+        document.documentElement.style.setProperty(
+            '--pk-page-tint', 'rgba(' + dr + ',' + dg + ',' + db + ',0.05)'
+        );
     } catch(e) { /* CORS or tainted canvas — keep default green */ }
 }
 
@@ -4099,6 +4110,19 @@ $(document).ready(function() {
             pkActivateTab(urlTab);
         }
     })();
+
+    // ---- Hall of Arms search ----
+    $(document).on('input', '.pk-hoa-search', function() {
+        var q = $(this).val().trim().toLowerCase();
+        var $cards = $('#pk-hoa-grid .pk-hoa-card');
+        var visible = 0;
+        $cards.each(function() {
+            var match = !q || ($(this).data('name') || '').indexOf(q) !== -1;
+            $(this).toggle(match);
+            if (match) visible++;
+        });
+        $('#pk-hoa-empty').toggle(visible === 0);
+    });
 
     // ---- Events view toggle (list / calendar) ----
     $('#pk-ev-view-list').on('click', function() { pkSetEventsView('list'); });
@@ -4516,6 +4540,14 @@ $(document).ready(function() {
         var grantBtn = e.target.closest ? e.target.closest('.pk-rec-grant-btn') : null;
         if (grantBtn && grantBtn.closest('#pk-tab-recommendations')) {
             try { window.pkGiveFromRec(JSON.parse(grantBtn.getAttribute('data-rec') || '{}')); } catch(ex) {}
+            return;
+        }
+        var expandBtn = e.target.closest ? e.target.closest('.pk-rec-expand-btn') : null;
+        if (expandBtn && expandBtn.closest('.pk-rec-notes')) {
+            var notesCell = expandBtn.closest('.pk-rec-notes');
+            var isCollapse = expandBtn.classList.contains('pk-rec-collapse-btn');
+            notesCell.querySelector('.pk-rec-notes-ellipsis').style.display = isCollapse ? '' : 'none';
+            notesCell.querySelector('.pk-rec-notes-full').style.display     = isCollapse ? 'none' : '';
             return;
         }
         var dimBtn = e.target.closest ? e.target.closest('.pk-rec-dismiss-btn') : null;
@@ -5324,6 +5356,10 @@ $(document).ready(function() {
         if (a.ClassId) pkLastClass[a.MundaneId] = a.ClassId;
     });
 
+    // ClassId → ClassName lookup
+    var pkClassNames = {};
+    (PkConfig.classes || []).forEach(function(c) { pkClassNames[c.ClassId] = c.ClassName; });
+
     function gid(id) { return document.getElementById(id); }
 
     // --- Fetch and display entries already on the registry for a given date ---
@@ -5337,15 +5373,16 @@ $(document).ready(function() {
             (PkConfig.recentAttendees || []).forEach(function(a) {
                 if (a.ClassId) pkLastClass[a.MundaneId] = a.ClassId;
             });
-            // Remove prior entries from the list (keep session-added ones)
-            Array.prototype.forEach.call(ul.querySelectorAll('li.pk-att-prior'), function(li) { li.remove(); });
+            // Clear entire list — DB response is authoritative (includes session-added entries)
+            ul.innerHTML = '';
             if (r && r.status === 0 && r.entries) {
                 r.entries.forEach(function(e) {
                     pkAttEntered[e.MundaneId] = true;
                     if (e.ClassId && !pkLastClass[e.MundaneId]) pkLastClass[e.MundaneId] = e.ClassId;
                     var li = document.createElement('li');
                     li.className = 'pk-att-prior';
-                    li.textContent = e.Persona;
+                    var cn = e.ClassId ? pkClassNames[e.ClassId] : '';
+                    li.textContent = e.Persona + (cn ? ' – ' + cn : '');
                     ul.appendChild(li);
                 });
             }
@@ -5359,19 +5396,22 @@ $(document).ready(function() {
         });
     }
 
-    // --- Mark quick-add rows that are already entered for the current date ---
+    // --- Hide quick-add rows for players already entered on the current date ---
     function pkUpdateQuickAddEntered() {
         var tbody = gid('pk-att-qa-tbody');
         if (!tbody) return;
+        var visible = 0;
         Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-mundane-id]'), function(tr) {
             var mid = parseInt(tr.dataset.mundaneId, 10);
-            var alreadyDone = tr.classList.contains('pk-att-done');
-            if (pkAttEntered[mid] && !alreadyDone) {
-                tr.classList.add('pk-att-done');
-                var td = tr.querySelector('td:last-child');
-                if (td) td.innerHTML = '<span class="pk-att-qa-done-mark" title="Already entered today">\u2713 entered</span>';
+            if (pkAttEntered[mid]) {
+                tr.style.display = 'none';
+            } else {
+                tr.style.display = '';
+                visible++;
             }
         });
+        var empty = gid('pk-att-qa-empty');
+        if (empty) empty.style.display = (tbody.dataset.built && visible === 0) ? '' : 'none';
     }
 
     // --- Open / Close ---
@@ -5381,10 +5421,18 @@ $(document).ready(function() {
         gid('pk-att-credits-default').value = '1';
         gid('pk-att-search-credits').value  = '1';
         pkBuildClassOptions();
-        pkBuildQuickAddRows();
         gid('pk-att-player-name').value = '';
         gid('pk-att-player-id').value   = '';
         pkAttHideFeedback();
+        // Collapse quick-add and reset rows so they rebuild fresh on next expand
+        var qaWrap    = gid('pk-att-qa-wrap');
+        var qaToggle  = gid('pk-att-qa-toggle');
+        var qaChevron = gid('pk-att-qa-chevron');
+        var qaTbody   = gid('pk-att-qa-tbody');
+        if (qaWrap)    { qaWrap.style.display = 'none'; }
+        if (qaToggle)  { qaToggle.setAttribute('aria-expanded', 'false'); }
+        if (qaChevron) { qaChevron.classList.remove('pk-att-open'); }
+        if (qaTbody)   { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
         gtag('event', 'park_attendance_open', { source: 'park_info' });
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
@@ -5448,7 +5496,7 @@ $(document).ready(function() {
 
             var td4 = document.createElement('td');
             var btn = document.createElement('button');
-            btn.className = 'pk-att-qa-add'; btn.textContent = 'Add';
+            btn.className = 'pk-att-qa-add'; btn.textContent = '+';
             btn.addEventListener('click', function() { pkQuickAdd(tr, a, btn); });
             td4.appendChild(btn); tr.appendChild(td4);
 
@@ -5472,10 +5520,10 @@ $(document).ready(function() {
                     pkAttEntered[attendee.MundaneId] = true;
                     tr.classList.add('pk-att-done');
                     btn.parentNode.innerHTML = '<span class="pk-att-qa-done-mark">\u2713</span>';
-                    pkAttRecorded(attendee.Persona);
+                    pkAttRecorded(attendee.Persona, pkClassNames[parseInt(tr.querySelector('.pk-att-qa-select').value, 10)]);
                     pkAttHideFeedback();
                 } else {
-                    btn.disabled = false; btn.textContent = 'Add';
+                    btn.disabled = false; btn.textContent = '+';
                     pkAttShowFeedback(err, false);
                 }
             }
@@ -5501,7 +5549,7 @@ $(document).ready(function() {
                     pkAttEntered[midInt] = true;
                     pkLastClass[midInt]  = parseInt(cls, 10);
                     pkAttShowFeedback('Added: ' + name, true);
-                    pkAttRecorded(name);
+                    pkAttRecorded(name, pkClassNames[parseInt(cls, 10)]);
                     gid('pk-att-player-name').value = '';
                     gid('pk-att-player-id').value   = '';
                     pkUpdateQuickAddEntered();
@@ -5528,10 +5576,10 @@ $(document).ready(function() {
         el.style.display = '';
     }
     function pkAttHideFeedback() { gid('pk-att-feedback').style.display = 'none'; }
-    function pkAttRecorded(name) {
+    function pkAttRecorded(name, className) {
         var ul = gid('pk-att-added-list');
         var li = document.createElement('li');
-        li.textContent = name;
+        li.textContent = name + (className ? ' – ' + className : '');
         ul.prepend(li);
         gid('pk-att-added-section').style.display = '';
     }
@@ -5552,9 +5600,11 @@ $(document).ready(function() {
         gid('pk-att-search-credits').value = this.value;
     });
 
-    // --- Date change: re-fetch entries (clears prior entries, keeps session-added) ---
+    // --- Date change: re-fetch entries and reset quick-add rows ---
     gid('pk-att-date').addEventListener('change', function() {
         pkAttEntered = {};
+        var qaTbody = gid('pk-att-qa-tbody');
+        if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
         pkFetchDayEntered(this.value);
     });
 
