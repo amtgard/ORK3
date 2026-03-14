@@ -530,6 +530,10 @@
 
 			<!-- Reports Tab -->
 			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
+				<div class="pk-reports-mobile-notice">
+					<i class="fas fa-info-circle"></i>
+					<span>Some reports may not display as expected on mobile. For best results, view reports on a full screen device.</span>
+				</div>
 				<div class="kn-reports-grid">
 
 					<div class="kn-report-group">
@@ -628,7 +632,7 @@
 							<th>Player</th>
 							<th>Award</th>
 							<th>Rank</th>
-							<th>Recommended By</th>
+							<th data-short="Rec. By">Recommended By</th>
 							<th>Date</th>
 							<th>Notes</th>
 							<?php if ($CanManageKingdom ?? false): ?><th></th><?php endif; ?>
@@ -642,7 +646,7 @@
 						<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
 						<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
-						<td class="pk-rec-notes"><?= !empty($rec['Reason']) ? htmlspecialchars($rec['Reason']) : '&mdash;' ?></td>
+						<td class="pk-rec-notes"><?php if (!empty($rec['Reason'])): ?><span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span><?php else: ?>&mdash;<?php endif; ?></td>
 						<?php if ($CanManageKingdom ?? false): ?>
 						<td class="pk-rec-actions">
 							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
