@@ -388,6 +388,8 @@ class Kingdom  extends Ork3 {
 						'Title' => $r->title,
 						'Class' => $r->class,
                         'HasHeraldry' => $r->has_heraldry,
+                        'City' => $r->city,
+                        'Province' => $r->province,
 						'ParentOf' => $r->is_principality==1?Ork3::$Lib->park->GetParks(array('ParkId'=>$r->park_id, 'Stack' => array($r->park_id))):null
 					);
 			}

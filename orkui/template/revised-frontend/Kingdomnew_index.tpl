@@ -40,13 +40,16 @@
 		if (!$loc) continue;
 		$latlng = isset($loc->location) ? $loc->location : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
 		if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
-		$heraldryHtml = $p['HasHeraldry'] ? '<img src="' . HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $p['ParkId'])) . '" style="max-width:60px;display:block;margin-bottom:6px">' : '';
 		$knMapLocations[] = [
-			'name' => ucwords($p['Name']),
-			'lat'  => (float)$latlng->lat,
-			'lng'  => (float)$latlng->lng,
-			'id'   => (int)$p['ParkId'],
-			'info' => $heraldryHtml . '<p>' . nl2br(htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Directions']))) . '</p><h4>Description</h4><p>' . nl2br(htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Description']))) . '</p>',
+			'name'     => ucwords($p['Name']),
+			'lat'      => (float)$latlng->lat,
+			'lng'      => (float)$latlng->lng,
+			'id'       => (int)$p['ParkId'],
+			'city'     => htmlspecialchars(trim($p['City'] ?? '')),
+			'province' => htmlspecialchars(trim($p['Province'] ?? '')),
+			'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
+			'dir'      => htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Directions'] ?? '')),
+			'desc'     => htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Description'] ?? '')),
 		];
 	}
 ?>
@@ -490,11 +493,15 @@
 							<div class="kn-map-wrap">
 								<div id="kn-map"></div>
 							</div>
-							<div class="kn-map-directions-wrap">
-								<div class="kn-card">
-									<h4 id="kn-directions-title"><i class="fas fa-directions"></i> Directions</h4>
-									<div id="kn-map-directions">
-										<p style="color:#a0aec0;font-style:italic">Click a park pin for details.</p>
+							<div class="kn-map-sidebar-wrap">
+								<div class="kn-map-sidebar-card" id="kn-map-sidebar-card">
+									<div class="kn-map-sidebar-empty" id="kn-map-sidebar-empty">
+										<div class="kn-map-sidebar-empty-icon"><i class="fas fa-map-marker-alt"></i></div>
+										<p>Click any park pin to see details.</p>
+									</div>
+									<div id="kn-map-sidebar-park" style="display:none; flex-direction:column; flex:1;">
+										<div class="kn-park-hero" id="kn-park-hero"></div>
+										<div class="kn-park-body" id="kn-park-body"></div>
 									</div>
 								</div>
 							</div>

@@ -1635,6 +1635,45 @@ function knRenderCalendar() {
 }
 
 // Defined globally so Google Maps API callback can find it
+function knRenderMapSidebar(loc) {
+    var hue = (getComputedStyle(document.documentElement).getPropertyValue('--kn-hue') || '210').trim();
+    var sat = (getComputedStyle(document.documentElement).getPropertyValue('--kn-sat') || '60%').trim();
+    var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
+
+    var heraldryHtml = loc.heraldry
+        ? '<img src="' + loc.heraldry + '" class="kn-park-heraldry" alt="' + loc.name + ' heraldry">'
+        : '<div class="kn-park-heraldry-placeholder"><i class="fas fa-shield-alt"></i></div>';
+    var heroHtml = heraldryHtml
+        + '<div class="kn-park-hero-name">' + knHtmlEsc(loc.name) + '</div>'
+        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + knHtmlEsc(locLine) + '</div>' : '');
+
+    var bodyHtml = '';
+    if (loc.dir) {
+        bodyHtml += '<div class="kn-park-section">'
+            + '<div class="kn-park-section-label"><i class="fas fa-directions" style="margin-right:4px"></i>Directions</div>'
+            + '<p class="kn-park-section-text">' + loc.dir.replace(/\n/g, '<br>') + '</p>'
+            + '</div>';
+    }
+    if (loc.desc) {
+        if (bodyHtml) bodyHtml += '<hr class="kn-park-divider">';
+        bodyHtml += '<div class="kn-park-section">'
+            + '<div class="kn-park-section-label"><i class="fas fa-info-circle" style="margin-right:4px"></i>About</div>'
+            + '<p class="kn-park-section-text">' + loc.desc.replace(/\n/g, '<br>') + '</p>'
+            + '</div>';
+    }
+    bodyHtml += '<a href="?Route=Park/profile/' + loc.id + '" class="kn-park-profile-btn">'
+        + '<i class="fas fa-external-link-alt"></i>View Park Profile</a>';
+
+    var heroEl = document.getElementById('kn-park-hero');
+    heroEl.innerHTML = heroHtml;
+    heroEl.style.background = 'linear-gradient(135deg, hsl(' + hue + ',' + sat + ',28%), hsl(' + hue + ',' + sat + ',40%))';
+    document.getElementById('kn-park-body').innerHTML = bodyHtml;
+
+    document.getElementById('kn-map-sidebar-empty').style.display = 'none';
+    var parkEl = document.getElementById('kn-map-sidebar-park');
+    parkEl.style.display = 'flex';
+}
+
 window.knInitMap = async function() {
     if (!document.getElementById('kn-map')) return;
     document.getElementById('kn-map-loading').style.display = 'none';
@@ -1671,13 +1710,12 @@ window.knInitMap = async function() {
                 content: pinGlyph.element
             });
             google.maps.event.addListener(marker, 'click', function() {
-                infowindow.setContent(
-                    "<b><a href='" + KnConfig.uir + "Park/profile/" + loc.id + "'>" + loc.name + "</a></b>" +
-                    "<div style='margin-top:8px;max-width:260px;font-size:12px'>" + loc.info + "</div>"
-                );
+                var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
+                var tipHtml = '<b><a href="' + KnConfig.uir + 'Park/profile/' + loc.id + '" style="color:#2b6cb0">' + loc.name + '</a></b>'
+                    + (locLine ? '<div style="font-size:12px;color:#718096;margin-top:3px"><i class="fas fa-map-marker-alt" style="font-size:10px;margin-right:3px"></i>' + locLine + '</div>' : '');
+                infowindow.setContent(tipHtml);
                 infowindow.open(map, marker);
-                document.getElementById('kn-directions-title').innerHTML = '<i class="fas fa-directions"></i> ' + loc.name;
-                document.getElementById('kn-map-directions').innerHTML = loc.info;
+                knRenderMapSidebar(loc);
             });
         })(knMapLocations[i]);
     }
