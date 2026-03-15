@@ -1644,8 +1644,8 @@ function knRenderMapSidebar(loc) {
         ? '<img src="' + loc.heraldry + '" class="kn-park-heraldry" alt="' + loc.name + ' heraldry">'
         : '<div class="kn-park-heraldry-placeholder"><i class="fas fa-shield-alt"></i></div>';
     var heroHtml = heraldryHtml
-        + '<div class="kn-park-hero-name">' + knHtmlEsc(loc.name) + '</div>'
-        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + knHtmlEsc(locLine) + '</div>' : '');
+        + '<div class="kn-park-hero-name">' + escHtml(loc.name) + '</div>'
+        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '');
 
     var bodyHtml = '';
     if (loc.dir) {
