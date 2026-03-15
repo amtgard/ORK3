@@ -272,7 +272,7 @@ class SearchService extends Ork3 {
 				
 		$searchtokens = preg_split("/[\s,-]+/", $search ?? '');
     	$opt = array("1");
-        $limit = min(valid_id($limit)?$limit:15, 50);
+        $limit = min(valid_id($limit)?$limit:15, 100);
 		switch (strtoupper($type)) {
 			case 'PERSONA': 
 				if (count($searchtokens) > 0)

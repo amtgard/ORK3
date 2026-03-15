@@ -236,8 +236,14 @@
 				+ '</tr>';
 		}
 
+		if (data.length >= 100) {
+			html += '<tr><td colspan="3" class="sr-empty" style="padding:10px 16px;font-style:normal;color:#c05621;background:#fffaf0">'
+				+ '<i class="fas fa-exclamation-triangle" style="color:#dd6b20"></i>'
+				+ '&ensp;Showing the first 100 results &mdash; please refine your search if you don\'t see who you\'re looking for.'
+				+ '</td></tr>';
+		}
 		tbody.innerHTML = html;
-		countEl.textContent = data.length + ' result' + (data.length === 1 ? '' : 's');
+		countEl.textContent = data.length >= 100 ? '100+ results' : data.length + ' result' + (data.length === 1 ? '' : 's');
 		countEl.style.display = '';
 	}
 
@@ -246,7 +252,7 @@
 			Action:  'Search/Player',
 			search:  term.trim(),
 			type:    'all',
-			limit:   50
+			limit:   100
 		};
 		if (_kid > 0) params.kingdom_id = _kid;
 		if (_pid > 0) params.park_id    = _pid;

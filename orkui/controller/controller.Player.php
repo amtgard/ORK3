@@ -29,8 +29,8 @@ class Controller_Player extends Controller {
 				array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
 			);
 		if (valid_id($this->session->kingdom_id)) {
-			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
-			$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
+			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+			$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->session->park_id, 'display' => $this->session->park_name );
 		} else {
 			unset($this->data['menu']['kingdom']);
 			unset($this->data['menu']['park']);
@@ -55,7 +55,7 @@ class Controller_Player extends Controller {
 
 		if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
 			$this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
-			header('Location: ' . UIR . 'Player/index/' . $id);
+			header('Location: ' . UIR . 'Player/profile/' . $id);
 			return;
 		}
 
@@ -63,7 +63,7 @@ class Controller_Player extends Controller {
 			$this->request->save('Player_index', true);
 			$r = array('Status'=>0);
 			if (!isset($this->session->user_id)) {
-				header( 'Location: '.UIR."Login/login/Player/index/$id" );
+				header( 'Location: '.UIR."Login/login/Player/profile/$id" );
 			} else {
 				switch ($action) {
 					case 'updateclasses':
@@ -173,7 +173,7 @@ class Controller_Player extends Controller {
 					}
 					$this->request->clear('Player_index');
 				} else if($r['Status'] == 5) {
-					header( 'Location: '.UIR."Login/login/Player/index/$id" );
+					header( 'Location: '.UIR."Login/login/Player/profile/$id" );
 				} else {
 					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
 				}
@@ -195,7 +195,7 @@ class Controller_Player extends Controller {
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id, 1, true);
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
-		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
+		$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
 		$canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
 		if ($canEdit) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );

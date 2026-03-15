@@ -85,7 +85,7 @@ class Calendar extends Ork3 {
 							'DateEnd' => $date,
 							'Time' => $parkdays->time,
 							'Title' => $parkdays->name . " ({$parkdays->purpose})",
-							'Url' => HTTP_UI . 'Park/index/' . $parkdays->park_id,
+							'Url' => HTTP_UI . 'Park/profile/' . $parkdays->park_id,
 							'Description' => $parkdays->description
 						);
 			}
