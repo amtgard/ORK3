@@ -411,6 +411,12 @@
 
 			<!-- About Tab -->
 			<div class="pk-tab-panel" id="pk-tab-about">
+				<?php
+					$_addrParts = array_filter([trim($parkInfo['Address'] ?? ''), trim($parkInfo['City'] ?? '')]);
+					$_addrLine1 = implode(', ', $_addrParts);
+					$_addrLine2 = trim(implode(' ', array_filter([trim($parkInfo['Province'] ?? ''), trim($parkInfo['PostalCode'] ?? '')])));
+					$_addrFull  = implode(', ', array_filter([$_addrLine1, $_addrLine2]));
+				?>
 				<div class="pk-about-grid">
 					<?php if (!empty($description)): ?>
 					<div class="pk-about-section">
@@ -419,27 +425,23 @@
 					</div>
 					<?php endif; ?>
 
-					<?php if (!empty($directions)): ?>
+					<?php if (!empty($directions) || !empty($_addrFull)): ?>
 					<div class="pk-about-section">
 						<div class="pk-about-label">Directions</div>
-						<div class="pk-about-text"><?= pk_autolink($directions) ?></div>
-					</div>
-					<?php endif; ?>
-
-					<?php if (!empty($parkInfo['Address']) || !empty($websiteUrl) || !empty($parkInfo['MapUrl'])): ?>
-					<div class="pk-about-section pk-about-meta">
-						<?php if (!empty($parkInfo['Address'])): ?>
-						<div class="pk-about-meta-row">
+						<?php if (!empty($_addrFull)): ?>
+						<div class="pk-about-meta-row" style="margin-bottom:10px">
 							<i class="fas fa-map-marker-alt"></i>
-							<?php
-								$_addrParts = array_filter([trim($parkInfo['Address'] ?? ''), trim($parkInfo['City'] ?? '')]);
-								$_addrLine1 = implode(', ', $_addrParts);
-								$_addrLine2 = trim(implode(' ', array_filter([trim($parkInfo['Province'] ?? ''), trim($parkInfo['PostalCode'] ?? '')])));
-								$_addrFull  = implode(', ', array_filter([$_addrLine1, $_addrLine2]));
-							?>
 							<span><?= htmlspecialchars($_addrFull) ?></span>
 						</div>
 						<?php endif; ?>
+						<?php if (!empty($directions)): ?>
+						<div class="pk-about-text"><?= pk_autolink($directions) ?></div>
+						<?php endif; ?>
+					</div>
+					<?php endif; ?>
+
+					<?php if (!empty($websiteUrl) || !empty($parkInfo['MapUrl'])): ?>
+					<div class="pk-about-section pk-about-meta pk-about-full-row">
 						<?php if (!empty($websiteUrl)): ?>
 						<div class="pk-about-meta-row">
 							<i class="fas fa-globe"></i>

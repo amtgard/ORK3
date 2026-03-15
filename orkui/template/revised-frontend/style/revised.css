@@ -3595,6 +3595,19 @@
 	margin-bottom: 10px;
 	line-height: 1.5;
 }
+.ev-modal-warning-box {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+	background: #fff5f5;
+	border: 1px solid #fc8181;
+	border-radius: 6px;
+	padding: 10px 12px;
+	font-size: 13px;
+	color: #c53030;
+	margin-bottom: 14px;
+	line-height: 1.5;
+}
 .ev-modal-section h4 {
 	font-size: 11px;
 	font-weight: 700;
@@ -4872,7 +4885,9 @@
 .pk-ac-item:hover, .pk-ac-item.pk-ac-focused { background: #ebf8ff; }
 
 /* ---- About tab layout ---- */
-.pk-about-grid { display: flex; flex-direction: column; gap: 18px; }
+.pk-about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; }
+.pk-about-full-row { grid-column: 1 / -1; padding-top: 10px; margin-top: 4px; border-top: 1px solid #edf2f7; }
+.pk-about-schedule { margin-top: 28px; }
 .pk-about-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #718096; margin-bottom: 6px; }
 .pk-about-text { font-size: 14px; color: #2d3748; line-height: 1.6; }
 .pk-about-text a { color: var(--pk-accent-mid); text-decoration: none; }

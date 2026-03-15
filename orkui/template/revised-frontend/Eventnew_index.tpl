@@ -98,6 +98,10 @@
 	$endLabel   = $eventEnd   ? date('M j, Y', strtotime($eventEnd))   : '';
 	$dateBadgeText = $startLabel;
 	if ( $endLabel && $endLabel !== $startLabel ) $dateBadgeText .= ' – ' . $endLabel;
+
+	// Past-event check (date only, ignoring time)
+	$_refDateStr  = $eventEnd ?: $eventStart;
+	$isPastEvent  = $_refDateStr && (strtotime(date('Y-m-d', strtotime($_refDateStr))) < strtotime(date('Y-m-d')));
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -651,6 +655,13 @@
 		</div>
 		<form method="post" id="ev-edit-form" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/edit">
 			<div class="ev-modal-body">
+
+				<?php if ($isPastEvent): ?>
+				<div class="ev-modal-warning-box">
+					<i class="fas fa-exclamation-triangle" style="margin-right:6px;flex-shrink:0;margin-top:2px"></i>
+					<span><strong>Stop!</strong> You are editing a past event. This can impact data for the event including attendance credit assignment. Use caution before proceeding.</span>
+				</div>
+				<?php endif; ?>
 
 				<div class="ev-modal-section">
 					<h4>Dates &amp; Price</h4>
