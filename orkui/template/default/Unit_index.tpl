@@ -34,6 +34,7 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 	position: relative;
 	border-radius: 10px;
 	overflow: hidden;
+	margin-top: 3px;
 	margin-bottom: 20px;
 	min-height: 160px;
 	background-color: <?=$_hero_color?>;
@@ -282,6 +283,7 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
 	/* Hero */
+	.un-hero { margin-bottom: 10px; }
 	.un-hero-content { flex-wrap: wrap; padding: 18px 20px; }
 	.un-hero-actions { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; }
 	.un-hero-name { font-size: 21px; }

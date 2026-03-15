@@ -435,7 +435,7 @@
 					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
 				</li>
 				<li data-tab="classes">
-					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span> <span class="pn-tab-count">(<?= is_array($Details['Classes']) ? count($Details['Classes']) : 0 ?>)</span>
+					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
 			</ul>
 			<div class="pn-active-tab-label" id="pn-active-tab-label">Awards</div>
