@@ -26,7 +26,7 @@ foreach ((array)($Parks['Parks'] ?? []) as $details) {
 		         . ($dirText  ? '<p>' . nl2br($dirText)  . '</p>' : '')
 		         . ($descText ? '<h4 style="margin:8px 0 4px">Description</h4><p>' . nl2br($descText) . '</p>' : ''),
 	];
-	if ($_isTopKingdom) $atKingdomIds[(int)$details['KingdomId']] = true;
+	$atKingdomIds[(int)$details['KingdomId']] = true;
 }
 $atParkCount    = count($atParks);
 $atKingdomCount = count($atKingdomIds);
@@ -176,7 +176,7 @@ $atKingdomCount = count($atKingdomIds);
 		</div>
 		<div class="at-stat">
 			<span class="at-stat-value"><?= number_format($atKingdomCount) ?></span>
-			<span class="at-stat-label">Kingdoms</span>
+			<span class="at-stat-label">Kingdoms &amp; Principalities</span>
 		</div>
 	</div>
 
