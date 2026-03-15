@@ -54,6 +54,10 @@
 	}
 </style>
 
+<div id='playernew-preview-banner' style='display:block;width:calc(100% - 44px);background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:10px 16px;margin:10px;font-size:0.95em;color:#1a5276;'>
+	Want a sneak preview of our new, enhanced player profile? <a href='<?=UIR ?>Player/profile/<?=$Player['MundaneId'] ?>'>Check it out here</a>. Note: Clicking any link will return you to the regular design.
+</div>
+
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
@@ -156,6 +160,39 @@
 		</div>
   </form>
 </div>
+
+<?php if (count($UpcomingRsvps) > 0) : ?>
+<div class='info-container'>
+	<h3>Event RSVPs</h3>
+	<table class='information-table' id='UpcomingRsvpTable'>
+		<thead>
+			<tr>
+				<th>Event</th>
+				<th>Start</th>
+				<th>End</th>
+				<?php if ($IsOwnProfile) : ?><th></th><?php endif ?>
+			</tr>
+		</thead>
+		<tbody>
+			<?php foreach ($UpcomingRsvps as $rsvp) : ?>
+			<tr>
+				<td><a href='<?=UIR ?>Event/index/<?=$rsvp['EventId'] ?>'><?=$rsvp['EventName'] ?></a></td>
+				<td><?=date('Y-m-d', strtotime($rsvp['EventStart'])) ?></td>
+				<td><?=date('Y-m-d', strtotime($rsvp['EventEnd'])) ?></td>
+				<?php if ($IsOwnProfile) : ?>
+				<td>
+					<form method='post' action='<?=UIR ?>Player/index/<?=$Player['MundaneId'] ?>'>
+						<input type='hidden' name='cancel_rsvp_detail_id' value='<?=$rsvp['EventCalendarDetailId'] ?>'>
+						<button type='submit' class='btn btn-attending'>Cancel RSVP</button>
+					</form>
+				</td>
+				<?php endif ?>
+			</tr>
+			<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+<?php endif ?>
 
 <div class='info-container'>
     <h3>Dues</h3>

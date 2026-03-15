@@ -56,6 +56,13 @@ $server->register(
 	);
 
 $server->register(
+		'Event.DeleteEvent',
+		array('DeleteEventRequest' => 'tns:DeleteEventRequest'),
+		array('return' => 'tns:StatusType'),
+		$namespace
+	);
+
+$server->register(
 		'Event.SetEvent',
 		array('SetEventRequest'=>'tns:SetEventRequest'),
 		array('return' => 'tns:StatusType'),

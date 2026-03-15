@@ -5,7 +5,7 @@ class Controller_Admin extends Controller {
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
 		if (!isset($this->session->user_id)) {
-			logtrace('Header redirect: no user id', null);
+			error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
 			header( 'Location: '.UIR."Login" );
 		} else {
 			$this->load_model('Park');
@@ -29,7 +29,7 @@ class Controller_Admin extends Controller {
 			$this->request->save('Admin_mergepark');
 			$r = array('Status'=>0);
 			if (!isset($this->session->user_id)) {
-                logtrace('Header redirect: no user id', null);
+                error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
 				header( 'Location: '.UIR."Login/login/Admin/mergepark" );
 			} else {
 				$r = $this->Park->mergeparks( array(
@@ -41,7 +41,7 @@ class Controller_Admin extends Controller {
 					$this->data['Message'] = 'Parks merged.  <a href="' . UIR . 'Park/index/' . $this->request->Admin_mergepark->ToParkId . '">View your abomination here.</a>';
 					$this->request->clear('Admin_mergepark');
 				} else if($r['Status'] == 5) {
-                    logtrace('Header redirect: bad status', $r);
+                    error_log('ORK_DEBUG Header redirect: bad status: ' . json_encode($r));
 					header( 'Location: '.UIR."Login/login/Admin/mergepark" );
 				} else {
 					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
@@ -305,6 +305,7 @@ class Controller_Admin extends Controller {
 
 	public function editparks($kingdom_id) {
 		$this->load_model('Kingdom');
+		$this->template = '../revised-frontend/Admin_editparks.tpl';
 		if (strlen($this->request->Action) > 0) {
 			$this->request->save('Admin_editparks', true);
 			if (!isset($this->session->user_id)) {
@@ -339,8 +340,9 @@ class Controller_Admin extends Controller {
 		if ($this->request->exists('Admin_editparks')) {
 			$this->data['Admin_editparks'] = $this->request->Admin_editparks->Request;
 		}
-		$this->data['KingdomId'] = $kingdom_id;
-		$this->data['ParkInfo'] = $this->Kingdom->get_park_info($kingdom_id);
+		$this->data['KingdomId']   = $kingdom_id;
+		$this->data['KingdomName'] = $this->Kingdom->get_kingdom_name($kingdom_id);
+		$this->data['ParkInfo']    = $this->Kingdom->get_park_info($kingdom_id);
 	}
 
 	public function setkingdomofficers($post=null) {
@@ -814,7 +816,7 @@ class Controller_Admin extends Controller {
 									'MundaneId' => $id,
 									'Base64FaceImage' => $face_imdata
 									]);
-									logtrace('One Shot.', $one);
+									error_log('ORK_DEBUG One Shot.: ' . json_encode($one));
 								unlink(DIR_TMP . sprintf("fi_%06d", $id));
 								}
 							}
@@ -927,6 +929,21 @@ class Controller_Admin extends Controller {
 								'EventId' => valid_id($this->request->Admin_player->EventId)?$this->request->Admin_player->EventId:0
 							));
 						break;
+					case 'reconcileaward':
+						$reconcile_params = array(
+								'Token' => $this->session->token,
+								'AwardsId' => $roastbeef,
+								'KingdomAwardId' => $this->request->Admin_player->KingdomAwardId,
+								'Rank' => $this->request->Admin_player->Rank,
+								'Date' => $this->request->Admin_player->Date,
+								'GivenById' => $this->request->Admin_player->GivenById,
+								'Note' => $this->request->Admin_player->Note,
+								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
+								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
+								'EventId' => valid_id($this->request->Admin_player->EventId)?$this->request->Admin_player->EventId:0
+						);
+						$r = $this->Player->reconcile_player_award($reconcile_params);
+						break;
 					case 'quitunit':
 						$r = $this->Unit->retire_unit_member( array ('UnitId' => $id, 'UnitMundaneId' => $roastbeef, 'Token' => $this->session->token) );
 						break;
@@ -946,6 +963,8 @@ class Controller_Admin extends Controller {
 								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
 								'DuesFrom' => $this->request->Admin_player->DuesFrom,
 								'Terms' => $this->request->Admin_player->Terms,
+								'Months' => $this->request->Admin_player->Months,
+								'DuesPeriodType' => $this->request->Admin_player->DuesPeriodType,
 								'DuesForLife' => $this->request->Admin_player->DuesForLife
 							));
 						break;
@@ -1180,7 +1199,7 @@ class Controller_Admin extends Controller {
 			$kingdom_id = $params[1];
 			$this->data['KingdomId'] = $kingdom_id;
 		}
-		logtrace('createplayer', $_FILES);
+		error_log('ORK_DEBUG createplayer: ' . json_encode($_FILES));
 		$this->load_model('Player');
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_createplayer', true);
@@ -1481,7 +1500,7 @@ class Controller_Admin extends Controller {
 			$kingdom_id = $params[1];
 			$this->data['KingdomId'] = $kingdom_id;
 		}
-		logtrace('createpark', $params);
+		error_log('ORK_DEBUG createpark: ' . json_encode($params));
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_createpark', true);
 			if (!isset($this->session->user_id)) {

@@ -114,7 +114,15 @@ class Model_Kingdom extends Model {
 		foreach ($r as $k => $e) $t[$e['EventId']] = $e;
 		return $t;
 	}
-	
+
+	function set_kingdom_heraldry($request) {
+		return $this->Heraldry->SetKingdomHeraldry($request);
+	}
+
+	function remove_kingdom_heraldry($request) {
+		return $this->Heraldry->RemoveKingdomHeraldry($request);
+	}
+
 }
 
 ?>

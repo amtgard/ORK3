@@ -8,22 +8,161 @@ class Controller_Unit extends Controller {
 	}
 
 	public function unitlist($params=null) {
-		$this->data['Units'] = $this->Unit->get_unit_list(array(
-									'KingdomId' => $this->request->KingdomId,
-									'ParkId' => $this->request->ParkId,
-									'IncludeCompanies' => 1,
-									'IncludeHouseHolds' => 1,
-									'IncludeEvents' => 1
-								));
+		$kingdom_id = valid_id($this->request->KingdomId) ? (int)$this->request->KingdomId : null;
+		$park_id    = valid_id($this->request->ParkId)    ? (int)$this->request->ParkId    : null;
+		$this->data['ScopeKingdomId'] = $kingdom_id;
+		$this->data['ScopeParkId']    = $park_id;
+		if ($park_id) {
+			$this->data['ScopeLabel'] = $this->session->park_name ?: 'Park';
+			$this->session->unit_list_ref = 'Unit/unitlist&ParkId=' . $park_id;
+		} elseif ($kingdom_id) {
+			$this->data['ScopeLabel'] = $this->session->kingdom_name ?: 'Kingdom';
+			$this->session->unit_list_ref = 'Unit/unitlist&KingdomId=' . $kingdom_id;
+		} else {
+			$this->data['ScopeLabel'] = null;
+			$this->session->unit_list_ref = 'Unit/unitlist';
+		}
 	}
 
 	public function index($unit_id = null) {
+		$unit_id_int = (int)$unit_id;
+
+		// Handle POST actions (logged-in only)
+		$action = trimlen($this->request->Action) > 0 ? $this->request->Action : '';
+		if ($action && $this->data['LoggedIn']) {
+			$r = null;
+			switch ($action) {
+				case 'save_details':
+					$req = array(
+						'Token'       => $this->session->token,
+						'UnitId'      => $unit_id_int,
+						'Name'        => $this->request->Name,
+						'Description' => $this->request->Description,
+						'History'     => $this->request->History,
+						'Url'         => $this->request->Url,
+					);
+					if (!empty($_FILES['Heraldry']['size']) && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
+						$tmp = DIR_TMP . sprintf('uu_%05d', $unit_id_int);
+						if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], $tmp)) {
+							$req['Heraldry']         = base64_encode(file_get_contents($tmp));
+							$req['HeraldryMimeType'] = $_FILES['Heraldry']['type'];
+						}
+					}
+					$r = $this->Unit->set_unit_details($req);
+					break;
+				case 'add_member':
+					$r = $this->Unit->add_unit_member(array(
+						'Token'     => $this->session->token,
+						'UnitId'    => $unit_id_int,
+						'MundaneId' => (int)$this->request->MundaneId,
+						'Role'      => $this->request->Role,
+						'Title'     => $this->request->Title,
+						'Active'    => 'Active',
+					));
+					break;
+				case 'set_member':
+					$r = $this->Unit->set_unit_member(array(
+						'Token'         => $this->session->token,
+						'UnitMundaneId' => (int)$this->request->UnitMundaneId,
+						'Role'          => $this->request->Role,
+						'Title'         => $this->request->Title,
+						'Active'        => 'Active',
+					));
+					break;
+				case 'retire_member':
+					$r = $this->Unit->retire_unit_member(array(
+						'Token'         => $this->session->token,
+						'UnitMundaneId' => (int)$this->request->UnitMundaneId,
+						'UnitId'        => $unit_id_int,
+					));
+					break;
+				case 'remove_member':
+					$r = $this->Unit->remove_unit_member(array(
+						'Token'         => $this->session->token,
+						'UnitMundaneId' => (int)$this->request->UnitMundaneId,
+						'UnitId'        => $unit_id_int,
+					));
+					break;
+				case 'upload_heraldry':
+				header('Content-Type: application/json');
+				if (!empty($_FILES['Heraldry']['size']) && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
+					$tmp = DIR_TMP . sprintf('uu_%05d', $unit_id_int);
+					if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], $tmp)) {
+						$r2 = $this->Unit->upload_unit_heraldry(array(
+							'Token'            => $this->session->token,
+							'UnitId'           => $unit_id_int,
+							'Heraldry'         => base64_encode(file_get_contents($tmp)),
+							'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+						));
+						echo json_encode(array('ok' => $r2['Status'] == 0));
+					} else {
+						echo json_encode(array('ok' => false, 'error' => 'Upload failed'));
+					}
+				} else {
+					echo json_encode(array('ok' => false, 'error' => 'Invalid file'));
+				}
+				exit;
+			case 'remove_heraldry':
+				header('Content-Type: application/json');
+				$r2 = $this->Unit->remove_unit_heraldry(array(
+					'Token'  => $this->session->token,
+					'UnitId' => $unit_id_int,
+				));
+				echo json_encode(array('ok' => $r2['Status'] == 0));
+				exit;
+			case 'addauth':
+					$r = $this->Unit->add_unit_auth(array(
+						'Token'     => $this->session->token,
+						'Role'      => AUTH_EDIT,
+						'Type'      => AUTH_UNIT,
+						'Id'        => $unit_id_int,
+						'MundaneId' => (int)$this->request->MundaneId,
+					));
+					if ($r['Status'] == 0) {
+						// Also add as a Member if not already on the roster
+						$this->Unit->add_unit_member(array(
+							'Token'     => $this->session->token,
+							'UnitId'    => $unit_id_int,
+							'MundaneId' => (int)$this->request->MundaneId,
+							'Role'      => 'Member',
+							'Title'     => '',
+							'Active'    => 'Active',
+						));
+					}
+					break;
+				case 'deleteauth':
+					$r = $this->Unit->del_unit_auth(array(
+						'Token'           => $this->session->token,
+						'AuthorizationId' => (int)$this->request->AuthorizationId,
+					));
+					break;
+			}
+			if (isset($r)) {
+				if ($r['Status'] == 0) {
+					header('Location: ' . UIR . "Unit/index/$unit_id");
+					exit;
+				} else {
+					$this->data['SaveError'] = $r['Error'] . ': ' . $r['Detail'];
+				}
+			}
+		}
+
 		$this->data['Unit_heraldryurl'] = $this->Unit->get_heraldry($unit_id);
 		$this->data['Unit'] = $this->Unit->get_unit_details($unit_id);
+		// Parse scope (kingdom/park) from the unit list session ref for player search scoping
+		$_ref = $this->session->unit_list_ref ?? '';
+		$_scope_kingdom_id = null;
+		$_scope_park_id    = null;
+		if (preg_match('/KingdomId=(\d+)/', $_ref, $_m)) $_scope_kingdom_id = (int)$_m[1];
+		if (preg_match('/ParkId=(\d+)/',    $_ref, $_m)) $_scope_park_id    = (int)$_m[1];
+		$this->data['ScopeKingdomId'] = $_scope_kingdom_id;
+		$this->data['ScopeParkId']    = $_scope_park_id;
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['unit'] = array( 'url' => UIR."Unit/index/$id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
+		$unit_list_url = UIR . ($this->session->unit_list_ref ?: 'Unit/unitlist');
+		$this->data['menu']['units'] = array( 'url' => $unit_list_url, 'display' => 'Units' );
+		$this->data['menu']['unit']  = array( 'url' => UIR."Unit/index/$unit_id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
 	}
 	
 	public function create($mundane_id) {

@@ -17,6 +17,7 @@ services:
       - ork3-php8-net
   ork3db:
     image: mariadb:latest
+    command: --sql-mode=''
     restart: always
     environment:
       MARIADB_DATABASE: 'ork'

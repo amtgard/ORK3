@@ -239,6 +239,35 @@ class Model_Reports extends Model {
 		}
 		return array();
 	}
+
+	function kingdom_officer_directory($kingdom_id = null) {
+		$r = $this->Report->KingdomOfficerDirectory(array('KingdomId' => $kingdom_id));
+		if ($r['Status']['Status'] == 0) {
+			return ['Rows' => $r['Kingdoms'], 'Mode' => $r['Mode']];
+		}
+		return ['Rows' => [], 'Mode' => 'kingdoms'];
+	}
+	function event_attendance($request) {
+		$r = $this->Report->EventAttendanceReport($request);
+		if (isset($r['Status']['Status']) && $r['Status']['Status'] == 0) {
+			return $r['Events'];
+		}
+		return array();
+	}
+
+	function beltline_data($request) {
+		$r = $this->Report->BeltlineData($request);
+		if ($r['Status']['Status'] == 0) {
+			return array(
+				'Relationships' => $r['Relationships'],
+				'Knights'       => $r['Knights'],
+				'AllKnightIds'  => $r['AllKnightIds'],
+				'KnightTypes'   => $r['KnightTypes'],
+			);
+		}
+		return array('Relationships' => array(), 'Knights' => array(), 'AllKnightIds' => array(), 'KnightTypes' => array());
+	}
+
 }
 
 ?>

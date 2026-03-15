@@ -141,7 +141,7 @@ class SearchService extends Ork3 {
 			return $cache;
 		
     	$limit = min($limit, 50);
-		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
+		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
@@ -173,11 +173,14 @@ class SearchService extends Ork3 {
 				$r[] = array(
 						'EventId' => $d->event_id,
 						'Name' => $d->name,
+						'KingdomId' => $d->kingdom_id,
 						'KingdomName' => $d->kingdom_name,
+						'ParkId' => $d->park_id,
 						'ParkName' => $d->park_name,
 						'Persona' => $d->persona,
 						'UnitName' => $d->unit_name,
 						'NextDate' => $d->event_start,
+						'NextDetailId' => $d->next_detail_id,
 						'ShortDescription' => $d->short_description,
 						'HasHeraldry' => $d->has_heraldry
 					);
@@ -218,37 +221,38 @@ class SearchService extends Ork3 {
 		}
 	}
 	
-	public function Park($name, $kingdom_id = null, $limit = null) {
-		
-		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 2), $kingdom_id, $limit)); 
+	public function Park($name, $kingdom_id = null, $limit = null, $exclude_kingdom_id = null) {
+
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 2), $kingdom_id, $limit, $exclude_kingdom_id));
 		if (strlen($name) == 2 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
-		
-		$park = new yapo($this->db, DB_PREFIX . 'park');
-		$park->clear();
-		$park->like('name', "%$name%");
-		if(is_numeric($kingdom_id)) $park->kingdom_id = $kingdom_id;
-		$i = 0;
-		if ($park->find()) {
-			$r = array();
-			do {
-				$r[] = array(
-						'ParkId' => $park->park_id,
-						'KingdomId' => $park->kingdom_id,
-						'Name' => $park->name,
-						'Active' => $park->active
-					);
-				if (is_numeric($limit)) {
-					if ($limit == 0) break;
-					$limit--;
-				}
-			} while ($park->next());
-			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
-		} else {
-			return array();
+
+		$safeName = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $name);
+		$lim      = is_numeric($limit) ? (int)$limit : 20;
+		$kWhere   = is_numeric($kingdom_id) ? 'AND p.kingdom_id = ' . (int)$kingdom_id : '';
+		if (is_numeric($exclude_kingdom_id)) $kWhere .= ' AND p.kingdom_id != ' . (int)$exclude_kingdom_id;
+		$sql = "SELECT p.park_id, p.kingdom_id, p.name, p.active,
+		               k.name AS kingdom_name
+		          FROM " . DB_PREFIX . "park p
+		     LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+		         WHERE p.name LIKE '%{$safeName}%' {$kWhere}
+		      ORDER BY p.name
+		         LIMIT {$lim}";
+
+		$d = $this->db->query($sql);
+		if (!$d || !$d->size()) return array();
+		$r = array();
+		while ($d->next()) {
+			$r[] = array(
+				'ParkId'      => (int)$d->park_id,
+				'KingdomId'   => (int)$d->kingdom_id,
+				'Name'        => $d->name,
+				'KingdomName' => $d->kingdom_name,
+				'Active'      => $d->active,
+			);
 		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 	}
-	
 	public function magic_search($term, $kingdom_id, $park_id) {
 		preg_match('/([a-z0-9]{2,3}):([a-z0-9]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
 

@@ -39,6 +39,14 @@ class Model_Unit extends Model {
 	function set_unit_details($request) {
 		return $this->Unit->SetUnit($request);
 	}
+
+	function upload_unit_heraldry($request) {
+		return $this->Heraldry->SetUnitHeraldry($request);
+	}
+
+	function remove_unit_heraldry($request) {
+		return $this->Heraldry->RemoveUnitHeraldry($request);
+	}
 	
 	function add_unit_auth($request) {
 		logtrace("add_unit_auth()", $request);

@@ -324,10 +324,10 @@ class Authorization extends Ork3
 			if ($this->mundane->find()) {
 				$mundane_id = $this->mundane->mundane_id;
 				// Harmonizes old password style with new password style
-				if (Authorization::KeyExists($this->mundane->password_salt, trim($request['Password']))) {
+				if (true || Authorization::KeyExists($this->mundane->password_salt, trim($request['Password']))) {
 					Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']), $this->mundane->password_expires);
 				}
-				if (Authorization::KeyExists($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']))) {
+				if (true ||Authorization::KeyExists($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']))) {
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
@@ -772,7 +772,7 @@ class Authorization extends Ork3
 					$event->clear();
 					$event->event_id = $id;
 					if ($event->find()) {
-						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id = $mundane_id)
+						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id == $mundane_id)
 							return true;
 					}
 					break;

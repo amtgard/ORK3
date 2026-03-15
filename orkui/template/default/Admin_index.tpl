@@ -25,6 +25,7 @@
 <div class='info-container'>
 	<h3>Reports</h3>
 	<ul>
+		<li><a href='<?=UIR ?>Reports/kingdom_officer_directory'>Kingdom Officer Directory</a></li>
 		<li><a href='<?=UIR ?>Reports/suspended'>Suspended Players</a></li>
 		<li><a href='<?=UIR ?>Reports/knights_and_masters'>Knights and Masters</a></li>
 		<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8'>Kingdom-level Awards</a></li>

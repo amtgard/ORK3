@@ -11,9 +11,9 @@ class Controller_Player extends Controller {
 		$this->load_model('Reports');
 		$params = explode('/',$id);
 		$id = $params[0];
-				
+
 		$this->data['Player'] = $this->Player->fetch_player($id);
-		
+
 		$park_info = $this->Park->get_park_info($this->data['Player']['ParkId']);
 		$this->session->park_name = $park_info['ParkInfo']['ParkName'];
 		$this->session->park_id = $park_info['ParkInfo']['ParkId'];
@@ -36,11 +36,12 @@ class Controller_Player extends Controller {
 		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/$call/$id", 'display' => $this->data['Player']['Persona'] );
 		$this->data['page_title'] = $this->data['Player']['Persona'];
-	
+
 	}
-	
+
 	public function index($id = null) {
 		$this->load_model('Unit');
+		$this->load_model('Event');
 		
 		$params = explode('/',$id);
 		$id = $params[0];
@@ -49,6 +50,14 @@ class Controller_Player extends Controller {
 		if (count($params) > 2)
 			$roastbeef = $params[2];
 				
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+		if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
+			$this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
+			header('Location: ' . UIR . 'Player/index/' . $id);
+			return;
+		}
+
 		if (strlen($action) > 0) {
 			$this->request->save('Player_index', true);
 			$r = array('Status'=>0);
@@ -69,13 +78,13 @@ class Controller_Player extends Controller {
 						if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 							if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
 								$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
-								$h_imdata = base64_encode($h_im); 
+								$h_imdata = base64_encode($h_im);
 							}
 						}
 						if ($_FILES['Waiver']['size'] > 0 && Common::supported_mime_types($_FILES['Waiver']['type'])) {
 							if (move_uploaded_file($_FILES['Waiver']['tmp_name'], DIR_TMP . sprintf("w_%06d", $id))) {
 								$w_im = file_get_contents(DIR_TMP . sprintf("w_%06d", $id));
-								$w_imdata = base64_encode($w_im); 
+								$w_imdata = base64_encode($w_im);
 							}
 						}
 						$r = $this->Player->update_player(array(
@@ -169,7 +178,7 @@ class Controller_Player extends Controller {
 				}
 			}
 		}
-		
+
 		if ($this->request->exists('Player_index')) {
 			$this->data['Player_index'] = $this->request->Player_index->Request;
 		}
@@ -180,6 +189,7 @@ class Controller_Player extends Controller {
 		$this->data['Player'] = $this->Player->fetch_player($id);
 		$this->data['Player']['LastSignInDate'] = $this->Player->get_latest_attendance_date($id);
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
+		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id, 1, true);
@@ -188,7 +198,15 @@ class Controller_Player extends Controller {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
-		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+		$canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
+		$this->data['ShowRecsTab']          = $recsPublic || $canEdit;
+		$this->data['AwardRecommendations'] = [];
+		if ($this->data['ShowRecsTab'] || $uid > 0) {
+			$recs = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+		}
 
 		// Preload Kingdom and Park Monarch/Regent for GivenBy autocomplete
 		$this->load_model('Kingdom');
@@ -214,8 +232,297 @@ class Controller_Player extends Controller {
 		}
 		$this->data['PreloadOfficers'] = $preloadOfficers;
 
+		$this->data['UpcomingRsvps'] = $this->Event->get_upcoming_rsvps((int)$id);
+		$this->data['IsOwnProfile'] = $uid === (int)$id;
+
 	}
-	
+
+	public function profile( $id = null ) {
+		$this->template = '../revised-frontend/Playernew_index.tpl';
+		$this->load_model('Unit');
+		$this->load_model('Kingdom');
+		$this->load_model('Event');
+
+		$params    = explode('/', $id);
+		$id        = $params[0];
+		$action    = $params[1] ?? '';
+		$roastbeef = $params[2] ?? '';
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+		if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
+			$this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
+			header('Location: ' . UIR . 'Player/profile/' . $id);
+			return;
+		}
+
+		$this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name];
+		$this->data['menu']['park']    = ['url' => UIR . 'Park/profile/'    . $this->session->park_id,    'display' => $this->session->park_name];
+
+		if (strlen($action) > 0) {
+			$this->request->save('Player_profile', true);
+			$r = ['Status' => 0];
+			if (!isset($this->session->user_id)) {
+				header('Location: ' . UIR . "Login/login/Player/profile/$id");
+				exit;
+			} else {
+				switch ($action) {
+					case 'addrecommendation':
+						$r = $this->Player->add_player_recommendation([
+							'Token'          => $this->session->token,
+							'MundaneId'      => $id,
+							'KingdomAwardId' => $this->request->Player_profile->KingdomAwardId,
+							'Rank'           => $this->request->Player_profile->Rank,
+							'Reason'         => $this->request->Player_profile->Reason,
+						]);
+						$this->request->clear('Player_profile');
+						if ($r['Status'] == 0) {
+							header('Location: ' . UIR . "Player/profile/{$id}");
+						} elseif ($r['Status'] == 5) {
+							header('Location: ' . UIR . "Login/login/Player/profile/$id");
+						} else {
+							$msg = urlencode($r['Error'] . ': ' . $r['Detail']);
+							header('Location: ' . UIR . "Player/profile/{$id}&rec_error={$msg}");
+						}
+						exit;
+					case 'deleterecommendation':
+						$r = $this->Player->delete_player_recommendation([
+							'Token'             => $this->session->token,
+							'RecommendationsId' => $roastbeef,
+							'RequestedBy'       => $this->session->user_id,
+						]);
+						$this->request->clear('Player_profile');
+						if ($r['Status'] == 5) {
+							header('Location: ' . UIR . "Login/login/Player/profile/$id");
+						} else {
+							header('Location: ' . UIR . "Player/profile/{$id}");
+						}
+						exit;
+					case 'quitunit':
+						$r = $this->Unit->retire_unit_member([
+							'UnitMundaneId' => $roastbeef,
+							'UnitId'        => $id,
+							'Token'         => $this->session->token,
+						]);
+						break;
+				}
+				if ($r['Status'] == 0) {
+					$this->data['Message'] = $r['Detail'] ?: 'Updated successfully.';
+					$this->request->clear('Player_profile');
+				} elseif ($r['Status'] == 5) {
+					header('Location: ' . UIR . "Login/login/Player/profile/$id");
+					exit;
+				} else {
+					$this->data['Error'] = $r['Error'] . ': ' . $r['Detail'];
+				}
+			}
+		}
+
+		$this->data['LoggedIn']      = isset($this->session->user_id);
+		$this->data['KingdomId']     = $this->session->kingdom_id;
+		$this->data['AwardOptions']  = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
+		$this->data['Player']        = $this->Player->fetch_player($id);
+		$this->data['Player']['LastSignInDate'] = $this->Player->get_latest_attendance_date($id);
+		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
+		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
+		$this->data['Details']       = $this->Player->fetch_player_details($id);
+		$this->data['Notes']         = $this->Player->get_notes($id);
+		$this->data['Dues']          = $this->Player->get_dues($id, 1, true);
+		$this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1]);
+		$canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
+		$this->data['ShowRecsTab']          = $recsPublic || $canEdit;
+		$this->data['AwardRecommendations'] = [];
+		if ($this->data['ShowRecsTab'] || $uid > 0) {
+			$recs = $this->Reports->recommended_awards(['PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0]);
+			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+		}
+
+		global $DB;
+		$playerParkId = (int)$this->data['Player']['ParkId'];
+		$officerSql   = "SELECT o.role, o.park_id,
+			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park') ELSE 'Kingdom' END AS entity_type,
+			CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
+			FROM ork_officer o
+			LEFT JOIN ork_kingdom k ON o.kingdom_id = k.kingdom_id
+			LEFT JOIN ork_park p ON o.park_id = p.park_id AND o.park_id > 0
+			LEFT JOIN ork_parktitle pt ON p.parktitle_id = pt.parktitle_id
+			WHERE o.mundane_id = " . (int)$id . "
+			  AND (o.park_id = $playerParkId OR o.park_id = 0)
+			ORDER BY o.park_id DESC, o.role";
+		$officerResult = $DB->DataSet($officerSql);
+		$officerRoles  = [];
+		if ($officerResult->Size() > 0) {
+			while ($officerResult->Next()) {
+				$officerRoles[] = [
+					'role'        => $officerResult->role,
+					'entity_type' => $officerResult->entity_type,
+					'entity_name' => $officerResult->entity_name,
+				];
+			}
+		}
+		$this->data['OfficerRoles'] = $officerRoles;
+
+		$this->data['RevokedAwards'] = [];
+		$this->data['RevokedTitles'] = [];
+		if ($canEdit) {
+			$revokedBaseSql = "SELECT a.awards_id, a.rank, a.date, a.revoked_at, a.revocation,
+				COALESCE(NULLIF(a.custom_name,''), ka.name, aw.name) AS award_name,
+				m.persona AS revoked_by
+				FROM ork_awards a
+				LEFT JOIN ork_kingdomaward ka ON a.kingdomaward_id = ka.kingdomaward_id
+				LEFT JOIN ork_award aw ON a.award_id = aw.award_id
+				LEFT JOIN ork_mundane m ON a.revoked_by_id = m.mundane_id
+				WHERE a.stripped_from = " . (int)$id . "
+				  AND a.revoked = 1";
+			$revokedAwardsSql = $revokedBaseSql . "
+				  AND (aw.officer_role = 'none' OR aw.officer_role IS NULL)
+				  AND (ka.is_title IS NULL OR ka.is_title = 0)
+				ORDER BY a.revoked_at DESC, a.date DESC";
+			$revokedTitlesSql = $revokedBaseSql . "
+				  AND (aw.officer_role != 'none' OR ka.is_title = 1)
+				ORDER BY a.revoked_at DESC, a.date DESC";
+			foreach (['RevokedAwards' => $revokedAwardsSql, 'RevokedTitles' => $revokedTitlesSql] as $key => $sql) {
+				$result = $DB->DataSet($sql);
+				$rows = [];
+				if ($result->Size() > 0) {
+					while ($result->Next()) {
+						$rows[] = [
+							'AwardsId'   => $result->awards_id,
+							'AwardName'  => $result->award_name,
+							'Rank'       => $result->rank,
+							'Date'       => $result->date,
+							'RevokedAt'  => $result->revoked_at,
+							'Revocation' => $result->revocation,
+							'RevokedBy'  => $result->revoked_by,
+						];
+					}
+				}
+				$this->data[$key] = $rows;
+			}
+		}
+
+		$adminCheck = $DB->DataSet(
+			"SELECT 1 FROM ork_authorization
+			 WHERE mundane_id = " . (int)$id . "
+			   AND role = 'admin'
+			   AND park_id = 0 AND kingdom_id = 0 AND event_id = 0 AND unit_id = 0
+			 LIMIT 1"
+		);
+		$this->data['IsOrkAdmin'] = ($adminCheck && $adminCheck->Size() > 0);
+
+		$_att = is_array($this->data['Details']['Attendance']) ? $this->data['Details']['Attendance'] : [];
+		$this->data['Stats'] = [
+			'TotalAttendance'   => count($_att),
+			'TotalAwards'       => 0,
+			'TotalTitles'       => 0,
+			'LastPlayedClass'   => !empty($_att[0]['ClassName']) ? $_att[0]['ClassName'] : '',
+		];
+		if (is_array($this->data['Details']['Awards'])) {
+			foreach ($this->data['Details']['Awards'] as $a) {
+				if (in_array($a['OfficerRole'], ['none', null]) && $a['IsTitle'] != 1) {
+					$this->data['Stats']['TotalAwards']++;
+				} else {
+					$this->data['Stats']['TotalTitles']++;
+				}
+			}
+		}
+		if (is_array($this->data['Details']['Classes'])) {
+			foreach ($this->data['Details']['Classes'] as $c) {
+				$credits = $c['Credits'] + $c['Reconciled'];
+				if      ($credits >= 53) $lvl = 6;
+				elseif  ($credits >= 34) $lvl = 5;
+				elseif  ($credits >= 21) $lvl = 4;
+				elseif  ($credits >= 12) $lvl = 3;
+				elseif  ($credits >= 5)  $lvl = 2;
+				else                     $lvl = 1;
+				if ($lvl > $this->data['Stats']['HighestClassLevel'])
+					$this->data['Stats']['HighestClassLevel'] = $lvl;
+			}
+		}
+
+		$preloadOfficers = [];
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $officer) {
+				if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+					$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']];
+			}
+		}
+		$parkId = $this->data['Player']['ParkId'];
+		if (valid_id($parkId)) {
+			$parkOfficers = $this->Park->get_officers($parkId, $this->session->token);
+			if (is_array($parkOfficers)) {
+				foreach ($parkOfficers as $officer) {
+					if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+						$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']];
+				}
+			}
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
+
+		$this->data['UpcomingRsvps'] = $this->Event->get_upcoming_rsvps((int)$id);
+		$this->data['IsOwnProfile']  = $uid === (int)$id;
+		$this->data['Player']['ParkName'] = $this->session->park_name;
+	}
+
+
+	public function reconcile($id = null) {
+		$this->template = '../revised-frontend/Playernew_reconcile.tpl';
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$id  = (int)$id;
+
+		if (!$uid) {
+			header('Location: ' . UIR . "Login/login/Player/reconcile/$id");
+			exit;
+		}
+
+		$this->data['Player']  = $this->Player->fetch_player($id);
+		$this->data['Details'] = $this->Player->fetch_player_details($id);
+		$this->data['KingdomId'] = $this->session->kingdom_id;
+		$this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
+
+		$playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
+		$canEditAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
+		if (!$canEditAdmin) {
+			header('Location: ' . UIR . "Player/profile/$id");
+			exit;
+		}
+		$this->data['canEditAdmin'] = true;
+
+		$this->load_model('Kingdom');
+		$preloadOfficers = [];
+		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
+		if (is_array($kingdomOfficers)) {
+			foreach ($kingdomOfficers as $officer) {
+				if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+					$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']];
+			}
+		}
+		if ($playerParkId > 0) {
+			$parkOfficers = $this->Park->get_officers($playerParkId, $this->session->token);
+			if (is_array($parkOfficers)) {
+				foreach ($parkOfficers as $officer) {
+					if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+						$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']];
+				}
+			}
+		}
+		$this->data['PreloadOfficers'] = $preloadOfficers;
+
+		// AwardId → KingdomAwardId map for current kingdom (pre-match historical award dropdowns)
+		global $DB;
+		$rs = $DB->DataSet(
+			'SELECT kingdomaward_id, award_id FROM ork_kingdomaward WHERE kingdom_id = ' . (int)$this->session->kingdom_id . ' AND is_title = 0'
+		);
+		$awardIdMap = [];
+		if ($rs) { while ($rs->Next()) { $awardIdMap[(int)$rs->award_id] = (int)$rs->kingdomaward_id; } }
+		$this->data['AwardIdToKingdomAwardId'] = $awardIdMap;
+	}
+
 }
 
 

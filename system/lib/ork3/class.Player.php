@@ -39,7 +39,7 @@ class Player extends Ork3 {
         $result = json_decode($response);
         return $result->result;
       } else {
-        logtrace('No Authorization found.', null);
+        error_log('ORK_DEBUG No Authorization found.: ' . json_encode(null));
         return NoAuthorization();
       }
 
@@ -157,6 +157,26 @@ class Player extends Ork3 {
         }
         return InvalidParameter('A note must be selected.');
     }
+
+	public function EditNote($request) {
+		if (!valid_id($request['NotesId'])) return InvalidParameter('A note must be selected.');
+		$this->notes->clear();
+		$this->notes->mundane_note_id = $request['NotesId'];
+		$this->notes->mundane_id      = $request['MundaneId'];
+		if (!$this->notes->find()) return InvalidParameter('Cannot find Note.');
+		$thePlayer = $this->player_info($this->notes->mundane_id);
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
+				|| $mundane_id == $request['MundaneId'])) {
+			$this->notes->note         = $request['Note'];
+			$this->notes->description  = $request['Description'];
+			$this->notes->date         = date('Y-m-d', strtotime($request['Date']));
+			$this->notes->date_complete = ($request['DateComplete'] ? date('Y-m-d', strtotime($request['DateComplete'])) : '');
+			$this->notes->save();
+			return Success($this->notes->mundane_note_id);
+		}
+		return NoAuthorization();
+	}
 
 	public function SetPlayerReconciledCredits($request) {
 
@@ -468,15 +488,12 @@ class Player extends Ork3 {
     		$this->mundane->clear();
     		$this->mundane->username = $username;
     		if ($this->mundane->find()) {
-                echo " username exists ... ";
                 $username = $srcname . '-' . substr(md5(microtime()), 0, 5);
-                echo " trying altered name instead ... ";
     		} else {
         	    $found = true;
     		}
 			$calls--;
         }
-        echo " username is available ... ";
         return $username;
     }
 
@@ -490,7 +507,7 @@ class Player extends Ork3 {
 			$park->clear();
 			$park->park_id = $request['ParkId'];
 			if ($park->find()) {
-				logtrace('Player->CreatePlayer', $request);
+				error_log('ORK_DEBUG Player->CreatePlayer: ' . json_encode($request));
 				$username = $this->unique_username(trim($request['UserName']), 4);
 				if ($username === false) {
 					return InvalidParameter('No UserName could be generated for this player.  Please try again.');
@@ -509,6 +526,8 @@ class Player extends Ork3 {
 				$this->mundane->restricted = $request['Restricted']?1:0;
 				$this->mundane->waivered = $request['Waivered']?1:0;
 				$this->mundane->has_image = $request['HasImage']?1:0;
+				if (!empty($request['PronounId']))     $this->mundane->pronoun_id     = (int)$request['PronounId'];
+				if (!empty($request['PronounCustom'])) $this->mundane->pronoun_custom = $request['PronounCustom'];
 				$this->mundane->penalty_box = 0;
 				$this->mundane->active = $request['IsActive'];
 				$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
@@ -723,7 +742,7 @@ class Player extends Ork3 {
 			$this->mundane->park_member_since = date('Y-m-d');
 			$this->mundane->waivered = $request['Waivered']?1:0;
 			$this->mundane->save();
-			logtrace('MovePlayer(): Success', $request);
+			error_log('ORK_DEBUG MovePlayer(): Success: ' . json_encode($request));
 			return Success();
 		} else {
 			return NoAuthorization();
@@ -823,7 +842,7 @@ class Player extends Ork3 {
 			$this->mundane->clear();
 			$this->mundane->mundane_id = $request['MundaneId'];
 			if ($this->mundane->find()) {
-				logtrace('Updating player', $request);
+				error_log('ORK_DEBUG Updating player: ' . json_encode($request));
 
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 
@@ -840,9 +859,9 @@ class Player extends Ork3 {
 				// TODO: add error messaging
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) {
 					$this->mundane->reeve_qualified = is_null($request['ReeveQualified'])?$this->mundane->reeve_qualified:$request['ReeveQualified'];
-					$this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil'])?$this->mundane->reeve_qualified_until:$request['ReeveQualifiedUntil'];
+					$this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil'])?$this->mundane->reeve_qualified_until:($request['ReeveQualifiedUntil']==='0000-00-00'?null:$request['ReeveQualifiedUntil']);
 					$this->mundane->corpora_qualified = is_null($request['CorporaQualified'])?$this->mundane->corpora_qualified:$request['CorporaQualified'];
-					$this->mundane->corpora_qualified_until = is_null($request['CorporaQualifiedUntil'])?$this->mundane->corpora_qualified_until:$request['CorporaQualifiedUntil'];
+					$this->mundane->corpora_qualified_until = is_null($request['CorporaQualifiedUntil'])?$this->mundane->corpora_qualified_until:($request['CorporaQualifiedUntil']==='0000-00-00'?null:$request['CorporaQualifiedUntil']);
 				}
 
 				$this->mundane->save();
@@ -869,7 +888,8 @@ class Player extends Ork3 {
     				$this->mundane->active = is_null($request['Active']) ? $this->mundane->restricted : ($request['Active']?1:0);
 				}
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
-					$this->mundane->park_member_since = is_null($request['ParkMemberSince']) ? $this->mundane->park_member_since : $request['ParkMemberSince'];
+					$pms = $request['ParkMemberSince'];
+					$this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
 				}
 				if (strlen($request['Heraldry'])) {
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
@@ -893,11 +913,11 @@ class Player extends Ork3 {
    				$this->mundane->save();
 				return Success($notices);
 			} else {
-				logtrace('No Player found.', null);
+				error_log('ORK_DEBUG No Player found.: ' . json_encode(null));
 				return InvalidParameter();
 			}
 		} else {
-			logtrace('No Authorization found.', null);
+			error_log('ORK_DEBUG No Authorization found.: ' . json_encode(null));
 			return NoAuthorization();
 		}
 	}
@@ -1252,11 +1272,22 @@ class Player extends Ork3 {
 			if (valid_id($request['MundaneId'])
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 
-				do  {
-					$this->revoke_award($awards, $request["Revocation"], $mundane_id);
+				// Collect all IDs first: save() calls Clear()+Find() after each save,
+				// replacing the result set, so next() would exit the loop after one iteration.
+				$award_ids = [];
+				do {
+					$award_ids[] = $awards->awards_id;
 				} while ($awards->next());
 
-				return Success($awards->awards_id);
+				foreach ($award_ids as $aid) {
+					$awards->clear();
+					$awards->awards_id = $aid;
+					if ($awards->find()) {
+						$this->revoke_award($awards, $request["Revocation"], $mundane_id);
+					}
+				}
+
+				return Success(count($award_ids));
 			} else {
 				return NoAuthorization();
 			}
@@ -1304,19 +1335,19 @@ class Player extends Ork3 {
 
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 
-				$awards->rank = $request['Rank'];
-				$awards->date = $request['Date'];
-				$awards->given_by_id = $request['GivenById'];
-				$awards->note = $request['Note'];
-				// If no event, then go Park!
-				$awards->park_id = !valid_id($request['EventId'])?$request['ParkId']:0;
-				// If no event and valid parkid, go Park! Otherwise, go Kingdom.  Unless it's an event.  Then go ... ZERO!
-				$awards->kingdom_id = !valid_id($request['EventId'])?(valid_id($request['ParkId'])?$info['ParkInfo']['KingdomId']:$request['KingdomId']):0;
-				// Events are awesome.
-				$awards->event_id = valid_id($request['EventId'])?$request['EventId']:0;
-				$awards->save();
+				$set_rank       = intval($request['Rank']);
+				$set_date       = $request['Date'] ? date('Y-m-d', strtotime($request['Date'])) : $awards->date;
+				$set_given_by_id = intval($request['GivenById']);
+				$set_note       = addslashes($request['Note']);
+				$set_at_park_id    = !valid_id($request['EventId']) ? intval($request['ParkId']) : 0;
+				$set_at_kingdom_id = !valid_id($request['EventId']) ? (valid_id($request['ParkId']) ? intval($info['ParkInfo']['KingdomId']) : intval($request['KingdomId'])) : 0;
+				$set_at_event_id   = valid_id($request['EventId']) ? intval($request['EventId']) : 0;
+				$set_awards_id  = intval($request['AwardsId']);
 
-				return Success($awards->awards_id);
+				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . ' WHERE awards_id=' . $set_awards_id;
+				$this->db->query($sql);
+
+				return Success($set_awards_id);
 			} else {
 				return InvalidParamter();
 			}
@@ -1325,7 +1356,71 @@ class Player extends Ork3 {
 		}
 	}
 
-	private function get_award(& $awards) {
+	public function ReconcileAward($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$awards = new yapo($this->db, DB_PREFIX . 'awards');
+		$awards->clear();
+		$awards->awards_id = $request['AwardsId'];
+		$found = valid_id($request['AwardsId']) && $awards->find();
+		if ($found) {
+			$mundane = $this->player_info($awards->mundane_id);
+			$hasAuth = valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT);
+			if ($hasAuth) {
+
+				// Validate park and compute new location values for comparison
+				$info = null;
+				if (valid_id($request['ParkId'])) {
+					$Park = new Park();
+					$info = $Park->GetParkShortInfo(array( 'ParkId' => $request['ParkId'] ));
+					if ($info['Status']['Status'] != 0)
+						return InvalidParameter();
+				}
+
+				$new_kingdomaward_id = valid_id($request['KingdomAwardId']) ? $request['KingdomAwardId'] : $awards->kingdomaward_id;
+				$new_at_park_id = valid_id($request['ParkId']) ? $request['ParkId'] : 0;
+				$new_at_kingdom_id = valid_id($request['EventId']) ? 0 : (valid_id($request['ParkId']) ? $info['ParkInfo']['KingdomId'] : (valid_id($request['KingdomId']) ? $request['KingdomId'] : 0));
+				$new_at_event_id = valid_id($request['EventId']) ? $request['EventId'] : 0;
+				$new_custom_name = isset($request['CustomName']) ? $request['CustomName'] : (valid_id($request['KingdomAwardId']) ? '' : $awards->custom_name);
+
+				// Skip save and audit if nothing actually changed
+				$no_op = ($new_kingdomaward_id == $awards->kingdomaward_id
+					&& intval($request['Rank']) == intval($awards->rank)
+					&& $request['GivenById'] == $awards->given_by_id
+					&& $request['Note'] == $awards->note
+					&& $new_custom_name == $awards->custom_name
+					&& $new_at_park_id == $awards->at_park_id
+					&& $new_at_kingdom_id == $awards->at_kingdom_id
+					&& $new_at_event_id == $awards->at_event_id
+					&& intval($awards->by_whom_id) > 0);
+				if ($no_op) {
+					return Success(false);
+				}
+
+				$set_kingdomaward_id = valid_id($request['KingdomAwardId']) ? intval($request['KingdomAwardId']) : intval($awards->kingdomaward_id);
+				$set_award_id = intval($awards->award_id);
+				$set_custom_name = isset($request['CustomName']) ? $request['CustomName'] : '';
+				if (valid_id($request['KingdomAwardId'])) {
+					list($kingdom_id, $set_award_id) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
+				}
+				$set_rank = intval($request['Rank']);
+				$set_date = valid_id($request['Date']) ? date('Y-m-d', strtotime($request['Date'])) : $awards->date;
+				$set_given_by_id = intval($request['GivenById']);
+				$set_note = $request['Note'];
+				$set_awards_id = intval($request['AwardsId']);
+
+				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', rank=' . intval($set_rank) . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\', by_whom_id=' . intval($mundane_id) . ' WHERE awards_id=' . intval($set_awards_id);
+				$this->db->query($sql);
+
+				return Success($set_awards_id);
+			} else {
+				return NoAuthorization();
+			}
+		} else {
+			return InvalidParameter();
+		}
+	}
+
+		private function get_award(& $awards) {
 		$award = new stdClass();
 		$award->awards_id = $awards->awards_id;
 		$award->kingdomaward_id = $awards->kingdomaward_id;
@@ -1380,9 +1475,15 @@ class Player extends Ork3 {
 			$dues->park_id = $request['ParkId'];
 			$dues->kingdom_id = $request['KingdomId'];
 			$dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
-			// TODO: create private function that determins DuesUntil based on kingdom configured terms
-			$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
-			$dues->terms = $request['Terms'];
+			if (!empty($request['Months'])) {
+				$n    = max(1, (int)$request['Months']);
+				$unit = ($request['DuesPeriodType'] === 'week') ? 'weeks' : 'months';
+				$dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $n . ' ' . $unit));
+				$dues->terms = $n;
+			} else {
+				$dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
+				$dues->terms = $request['Terms'];
+			}
 			$dues->dues_for_life = $request['DuesForLife'];
 			$dues->save();
 
