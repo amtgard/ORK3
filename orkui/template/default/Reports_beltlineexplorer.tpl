@@ -354,9 +354,9 @@ if ($kingdom_id && !empty($knights)) {
 	var allKnightIds     = <?= json_encode(array_values($AllKnightIds ?? [])) ?>;
 	var knightTypes      = <?= json_encode((object)($KnightTypes ?? [])) ?>;
 
-	/* ── Build lookup maps ──────────────────────────────── */
-	// childrenMap[giver_id] = [{RecipientId, RecipientPersona, TitleName, Peerage, Date}]
-	var childrenMap = {};
+	/* ── Build lookup maps ──────────────────────── */
+	// childrenBest[giver_id][recipient_id] = most-recent rel (deduplicated before building childrenMap)
+	var childrenBest = {};
 	// beltlineParentMap[recipient_id] = highest-priority beltline parent record
 	// Priority: Squire(4) > Man-At-Arms(3) > Lords-Page(2) > Page(1)
 	var beltlineParentMap = {};
@@ -378,8 +378,12 @@ if ($kingdom_id && !empty($knights)) {
 		personaMap[rel.RecipientId] = rel.RecipientPersona;
 		if (rel.GiverId) {
 			personaMap[rel.GiverId] = rel.GiverPersona;
-			if (!childrenMap[rel.GiverId]) childrenMap[rel.GiverId] = [];
-			childrenMap[rel.GiverId].push(rel);
+			// Deduplicate per (GiverId, RecipientId) — keep only the most recent title
+			if (!childrenBest[rel.GiverId]) childrenBest[rel.GiverId] = {};
+			var prevBest = childrenBest[rel.GiverId][rel.RecipientId];
+			if (!prevBest || (rel.Date || '') > (prevBest.Date || '')) {
+				childrenBest[rel.GiverId][rel.RecipientId] = rel;
+			}
 			// Track highest-priority beltline parent for backward traversal
 			var newPri = PEERAGE_PRIORITY[effectivePeerage(rel)] || 0;
 			var existing = beltlineParentMap[rel.RecipientId];
@@ -388,6 +392,14 @@ if ($kingdom_id && !empty($knights)) {
 				beltlineParentMap[rel.RecipientId] = rel;
 			}
 		}
+	});
+
+	// Flatten childrenBest into childrenMap arrays
+	var childrenMap = {};
+	Object.keys(childrenBest).forEach(function(giverId) {
+		childrenMap[giverId] = Object.keys(childrenBest[giverId]).map(function(recId) {
+			return childrenBest[giverId][recId];
+		});
 	});
 
 	/* ── Knight set for quick lookup (dropdown + global) ── */
