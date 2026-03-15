@@ -6,11 +6,11 @@ $scope_icon  = 'fa-globe';
 
 if (($report_type ?? null) === 'Park') {
 	$scope_label = str_replace(' Ladder Awards Grid', '', $page_title ?? '');
-	$scope_link  = UIR . 'Park/index/' . (int)($report_id ?? 0);
+	$scope_link  = UIR . 'Park/profile/' . (int)($report_id ?? 0);
 	$scope_icon  = 'fa-tree';
 } elseif (($report_type ?? null) === 'Kingdom') {
 	$scope_label = str_replace(' Ladder Awards Grid', '', $page_title ?? '');
-	$scope_link  = UIR . 'Kingdom/index/' . (int)($report_id ?? 0);
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)($report_id ?? 0);
 	$scope_icon  = 'fa-chess-rook';
 }
 
@@ -209,7 +209,7 @@ $numAwards  = count($awardList);
 <?php foreach ($rows as $row) : ?>
 				<tr data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>">
 					<td class="lg-col-player">
-						<a class="lg-player-link" href="<?= UIR . 'Player/index/' . (int)$row['MundaneId'] ?>">
+						<a class="lg-player-link" href="<?= UIR . 'Player/profile/' . (int)$row['MundaneId'] ?>">
 							<?= htmlspecialchars($row['Persona']) ?>
 						</a>
 					</td>

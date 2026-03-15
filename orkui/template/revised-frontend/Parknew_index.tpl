@@ -194,7 +194,7 @@
 		<!-- Name / title / officers -->
 		<div class="pk-hero-center">
 			<div class="pk-kingdom-link">
-				<a href="<?= UIR ?>Kingdom/index/<?= $kingdom_id ?>">
+				<a href="<?= UIR ?>Kingdom/profile/<?= $kingdom_id ?>">
 					<i class="fas fa-crown"></i> <?= htmlspecialchars($kingdom_name) ?>
 				</a>
 			</div>
@@ -217,7 +217,7 @@
 					<i class="fas fa-crown" style="font-size:10px;opacity:0.6;margin-right:3px"></i>
 					Monarch:&nbsp;
 					<?php if (!empty($monarch['MundaneId']) && $monarch['MundaneId'] > 0): ?>
-						<a href="<?= UIR ?>Player/index/<?= $monarch['MundaneId'] ?>"><?= htmlspecialchars($monarch['Persona']) ?></a>
+						<a href="<?= UIR ?>Player/profile/<?= $monarch['MundaneId'] ?>"><?= htmlspecialchars($monarch['Persona']) ?></a>
 					<?php else: ?>
 						<span class="pk-vacant">Vacant</span>
 					<?php endif; ?>
@@ -308,7 +308,7 @@
 					<span class="pk-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
 					<span class="pk-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-							<a href="<?= UIR ?>Player/index/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
 						<?php else: ?>
 							<em style="color:#a0aec0">Vacant</em>
 						<?php endif; ?>
@@ -439,23 +439,24 @@
 						<?php endif; ?>
 					</div>
 					<?php endif; ?>
+				</div>
 
-					<?php if (!empty($websiteUrl) || !empty($parkInfo['MapUrl'])): ?>
-					<div class="pk-about-section pk-about-meta pk-about-full-row">
-						<?php if (!empty($websiteUrl)): ?>
-						<div class="pk-about-meta-row">
-							<i class="fas fa-globe"></i>
-							<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($websiteUrl) ?></a>
-						</div>
-						<?php endif; ?>
-						<?php if (!empty($parkInfo['MapUrl'])): ?>
-						<div class="pk-about-meta-row">
-							<i class="fas fa-map"></i>
-							<a href="<?= htmlspecialchars($parkInfo['MapUrl']) ?>" target="_blank" rel="noopener">View on Map</a>
-						</div>
-						<?php endif; ?>
+				<?php if (!empty($websiteUrl) || !empty($parkInfo['MapUrl'])): ?>
+				<div class="pk-about-section pk-about-meta" style="margin-top:12px">
+					<?php if (!empty($websiteUrl)): ?>
+					<div class="pk-about-meta-row">
+						<i class="fas fa-globe"></i>
+						<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($websiteUrl) ?></a>
 					</div>
 					<?php endif; ?>
+					<?php if (!empty($parkInfo['MapUrl'])): ?>
+					<div class="pk-about-meta-row">
+						<i class="fas fa-map"></i>
+						<a href="<?= htmlspecialchars($parkInfo['MapUrl']) ?>" target="_blank" rel="noopener">View on Map</a>
+					</div>
+					<?php endif; ?>
+				</div>
+				<?php endif; ?>
 
 				<!-- Schedule sub-section -->
 				<div class="pk-about-section pk-about-schedule">
@@ -512,8 +513,17 @@
 								<?php if (!empty($day['Online'])): ?>
 									<span class="pk-schedule-online-badge"><i class="fas fa-wifi"></i> Online</span>
 								<?php else: ?>
-									<?php if (!empty($day['Address'])): ?>
-										<div class="pk-schedule-address"><?= htmlspecialchars($day['Address']) ?></div>
+									<?php
+										$_dayAddr   = trim($day['Address'] ?? '');
+										$_dayCity   = trim($day['City'] ?? '');
+										if ($_dayCity && stripos($_dayAddr, $_dayCity) !== false) {
+											$_dayAddrStr = $_dayAddr;
+										} else {
+											$_dayAddrStr = implode(', ', array_filter([$_dayAddr, $_dayCity, trim($day['Province'] ?? ''), trim($day['PostalCode'] ?? '')]));
+										}
+									?>
+									<?php if (!empty($_dayAddrStr)): ?>
+										<div class="pk-schedule-address"><?= htmlspecialchars($_dayAddrStr) ?></div>
 									<?php endif; ?>
 									<?php if ($dayMapUrl): ?>
 										<a class="pk-schedule-map-link" href="<?= htmlspecialchars($dayMapUrl) ?>" target="_blank" rel="noopener">
@@ -712,7 +722,7 @@
 							?>
 							<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
 							   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
-							   href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>">
+							   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
 								<div class="pk-player-card-top">
 									<div class="pk-player-avatar">
 										<?php if ($avatarSrc): ?>
@@ -764,7 +774,7 @@
 								?>
 								<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
 								   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
-								   href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>">
+								   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
 									<div class="pk-player-card-top">
 										<div class="pk-player-avatar">
 											<?php if ($avatarSrc): ?>
@@ -821,7 +831,7 @@
 							</thead>
 							<tbody>
 								<?php foreach ($playerPeriods[0] ?? [] as $p): ?>
-								<tr onclick='window.location.href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>"'>
+								<tr onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
 									<td>
 										<?= htmlspecialchars($p['Persona']) ?>
 										<?php if (!empty($p['OfficerRoles'])): ?>
@@ -844,7 +854,7 @@
 						<?php foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
 						<template id="pk-players-tmpl-<?= $pkPeriod ?>">
 							<?php foreach ($pkPeriodPlayers as $p): ?>
-							<tr onclick='window.location.href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>"'>
+							<tr onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
 								<td>
 									<?= htmlspecialchars($p['Persona']) ?>
 									<?php if (!empty($p['OfficerRoles'])): ?>
@@ -908,7 +918,7 @@
 				<div class="pk-hoa-grid" id="pk-hoa-grid">
 					<?php foreach ($hoaPlayers12 as $_hoaIdx => $p): ?>
 					<a class="pk-hoa-card"
-					   href="<?= UIR ?>Player/index/<?= $p['MundaneId'] ?>"
+					   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"
 					   data-name="<?= htmlspecialchars(strtolower($p['Persona'])) ?>"
 					   style="animation-delay:<?= min($_hoaIdx * 18, 600) ?>ms">
 						<img class="pk-hoa-img"
@@ -933,7 +943,7 @@
 				<div class="pk-hoa-cta">
 					<i class="fas fa-shield-alt pk-hoa-cta-icon"></i>
 					<div class="pk-hoa-cta-body">
-						<strong>Your arms should be here!</strong> Visit <a href="<?= UIR ?>Player/index/<?= (int)$this->__session->user_id ?>">your profile</a> to upload your own heraldry. Don't have heraldry of your own? Reach out to your park or kingdom Regent to be connected with heraldic resources who can help.
+						<strong>Your arms should be here!</strong> Visit <a href="<?= UIR ?>Player/profile/<?= (int)$this->__session->user_id ?>">your profile</a> to upload your own heraldry. Don't have heraldry of your own? Reach out to your park or kingdom Regent to be connected with heraldic resources who can help.
 					</div>
 				</div>
 				<?php endif; ?>

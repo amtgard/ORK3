@@ -30,13 +30,13 @@ $scope_noun  = 'scope';
 if ($Type === 'Park') {
 	$_first = !empty($attendance_summary['Dates']) ? $attendance_summary['Dates'][0] : [];
 	$scope_label = htmlspecialchars($_first['ParkName'] ?? 'Park');
-	$scope_link  = UIR . 'Park/index/' . (isset($_first['ParkId']) ? $_first['ParkId'] : '');
+	$scope_link  = UIR . 'Park/profile/' . (isset($_first['ParkId']) ? $_first['ParkId'] : '');
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
 } elseif ($Type === 'Kingdom') {
 	$_first = !empty($attendance_summary['Dates']) ? $attendance_summary['Dates'][0] : [];
 	$scope_label = htmlspecialchars($_first['KingdomName'] ?? 'Kingdom');
-	$scope_link  = UIR . 'Kingdom/index/' . (isset($_first['KingdomId']) ? $_first['KingdomId'] : '');
+	$scope_link  = UIR . 'Kingdom/profile/' . (isset($_first['KingdomId']) ? $_first['KingdomId'] : '');
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 } elseif ($Type === 'Event') {
@@ -220,9 +220,9 @@ if (!is_array($attendance_summary['Dates'])) $attendance_summary['Dates'] = [];
 								<?=valid_id($date['EventId']) ? (date('Y-m-d', strtotime($date['EventStart'])) . ' &mdash; ' . date('m-d', strtotime($date['EventEnd']))) : date('Y-m-d', strtotime($date['Date']))?>
 							</a>
 						</td>
-						<td><a href="<?=UIR?>Kingdom/index/<?=$date['KingdomId']?>"><?=htmlspecialchars($date['KingdomName'])?></a></td>
-						<td><a href="<?=UIR?>Park/index/<?=$date['ParkId']?>"><?=htmlspecialchars($date['ParkName'])?></a></td>
-						<td><a href="<?=UIR?>Event/index/<?=$date['EventId']?>"><?=htmlspecialchars($date['EventName'])?></a></td>
+						<td><a href="<?=UIR?>Kingdom/profile/<?=$date['KingdomId']?>"><?=htmlspecialchars($date['KingdomName'])?></a></td>
+						<td><a href="<?=UIR?>Park/profile/<?=$date['ParkId']?>"><?=htmlspecialchars($date['ParkName'])?></a></td>
+						<td><a href="<?=UIR?>Event/template/<?=$date['EventId']?>"><?=htmlspecialchars($date['EventName'])?></a></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>

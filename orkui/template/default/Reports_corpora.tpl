@@ -24,13 +24,13 @@ $scope_noun  = 'scope';
 if (($ScopeType ?? '') === 'park' && !empty($corpora_qualified)) {
 	$first       = reset($corpora_qualified);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)($ScopeId ?? 0);
+	$scope_link  = UIR . 'Park/profile/'    . (int)($ScopeId ?? 0);
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
 } elseif (($ScopeType ?? '') === 'kingdom' && !empty($corpora_qualified)) {
 	$first       = reset($corpora_qualified);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)($ScopeId ?? 0);
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)($ScopeId ?? 0);
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }
@@ -146,9 +146,9 @@ if (($ScopeType ?? '') === 'park' && !empty($corpora_qualified)) {
 <?php if (is_array($corpora_qualified)) : ?>
 <?php 	foreach ($corpora_qualified as $player) : ?>
 				<tr>
-					<td><a href='<?=UIR.'Kingdom/index/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
-					<td><a href='<?=UIR.'Park/index/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
-					<td><a href='<?=UIR.'Player/index/'.$player['MundaneId']?>'><?=trimlen($player['Persona'])>0?htmlspecialchars($player['Persona']):'<i>No Persona</i>'?></a></td>
+					<td><a href='<?=UIR.'Kingdom/profile/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
+					<td><a href='<?=UIR.'Park/profile/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$player['MundaneId']?>'><?=trimlen($player['Persona'])>0?htmlspecialchars($player['Persona']):'<i>No Persona</i>'?></a></td>
 					<td><?=htmlspecialchars($player['CorporaQualifiedUntil'] ?? '')?></td>
 				</tr>
 <?php 	endforeach; ?>

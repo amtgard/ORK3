@@ -24,13 +24,13 @@ $scope_noun  = 'scope';
 if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 	$first       = reset($Awards);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)($report_id ?? 0);
+	$scope_link  = UIR . 'Park/profile/'    . (int)($report_id ?? 0);
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
 } elseif (($report_type ?? null) === 'Kingdom' && !empty($Awards)) {
 	$first       = reset($Awards);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)($report_id ?? 0);
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)($report_id ?? 0);
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }
@@ -187,12 +187,12 @@ if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 <?php 	foreach ($Awards as $award) : ?>
 				<tr>
 <?php 		if (($report_type ?? null) !== 'Kingdom') : ?>
-					<td><a href='<?=UIR.'Kingdom/index/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
+					<td><a href='<?=UIR.'Kingdom/profile/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
 <?php 		endif; ?>
 <?php 		if (($report_type ?? null) !== 'Park') : ?>
-					<td><a href='<?=UIR.'Park/index/'.$award['ParkId']?>'><?=htmlspecialchars($award['ParkName'])?></a></td>
+					<td><a href='<?=UIR.'Park/profile/'.$award['ParkId']?>'><?=htmlspecialchars($award['ParkName'])?></a></td>
 <?php 		endif; ?>
-					<td><a href='<?=UIR.'Player/index/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
 					<td><?=htmlspecialchars($award['AwardName'])?></td>
 					<td><?=htmlspecialchars($award['Date'] ?? '')?></td>
 					<td><?=htmlspecialchars($award['LastAttended'] ?? '')?></td>

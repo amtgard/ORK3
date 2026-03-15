@@ -1672,7 +1672,7 @@ window.knInitMap = async function() {
             });
             google.maps.event.addListener(marker, 'click', function() {
                 infowindow.setContent(
-                    "<b><a href='" + KnConfig.uir + "Park/index/" + loc.id + "'>" + loc.name + "</a></b>" +
+                    "<b><a href='" + KnConfig.uir + "Park/profile/" + loc.id + "'>" + loc.name + "</a></b>" +
                     "<div style='margin-top:8px;max-width:260px;font-size:12px'>" + loc.info + "</div>"
                 );
                 infowindow.open(map, marker);
@@ -2638,7 +2638,7 @@ $(document).ready(function() {
                 if (r && r.status === 0) {
                     knAddParkShowFeedback('Park created! Redirecting\u2026', true);
                     setTimeout(function() {
-                        window.location.href = KnConfig.uir + 'Park/index/' + r.parkId;
+                        window.location.href = KnConfig.uir + 'Park/profile/' + r.parkId;
                     }, 1000);
                 } else {
                     knAddParkShowFeedback((r && r.error) ? r.error : 'Creation failed. Please try again.', false);
@@ -3562,7 +3562,7 @@ $(document).ready(function() {
         // View link
         var viewTd  = document.createElement('td');
         var viewA   = document.createElement('a');
-        viewA.href  = KnConfig.uir + 'Park/index/' + park.ParkId;
+        viewA.href  = KnConfig.uir + 'Park/profile/' + park.ParkId;
         viewA.target = '_blank';
         viewA.className = 'kn-admin-park-view';
         viewA.title = 'View ' + (park.Name || '');
@@ -5919,7 +5919,7 @@ function setupPronounPicker(cfg) {
                 dataType:    'json',
                 success: function(r) {
                     if (r && r.status === 0 && r.mundaneId) {
-                        window.location.href = KnConfig.uir + 'Player/index/' + r.mundaneId;
+                        window.location.href = KnConfig.uir + 'Player/profile/' + r.mundaneId;
                     } else {
                         btn.disabled = false;
                         showFeedback(feedback, (r && r.error) ? r.error : 'Create failed.', false);
@@ -6046,7 +6046,7 @@ function setupPronounPicker(cfg) {
                 dataType:    'json',
                 success: function(r) {
                     if (r && r.status === 0 && r.mundaneId) {
-                        window.location.href = PkConfig.uir + 'Player/index/' + r.mundaneId;
+                        window.location.href = PkConfig.uir + 'Player/profile/' + r.mundaneId;
                     } else {
                         btn.disabled = false;
                         showFeedback(feedback, (r && r.error) ? r.error : 'Create failed.', false);

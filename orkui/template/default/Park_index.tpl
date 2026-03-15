@@ -26,7 +26,7 @@
 	<h4>Park Monarchy</h4>
 		<ul>
 			<?php foreach ($park_officers['Officers'] as $key => $officer): ?>
-				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
+				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/profile/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>	
@@ -168,7 +168,7 @@
 		<tbody>
 <?php if (!is_array($event_summary)) $event_summary = array() ?>
 <?php foreach ($event_summary as $k => $event): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/template/<?=$event['EventId'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>

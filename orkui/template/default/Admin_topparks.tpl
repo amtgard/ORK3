@@ -42,7 +42,7 @@
 		<tbody>
 <?php if (is_array($TopParks)): ?>
 	<?php foreach ($TopParks as $rank => $park): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId']; ?>";'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/profile/<?=$park['ParkId']; ?>";'>
 				<td class='data-column'><?=($rank + 1); ?></td>
 				<td class='data-column'><?=sprintf("%0.2f", $park['AttendanceCount'] / $WeekCount); ?></td>
 				<td><?=stripslashes($park['ParkName'] ?? ''); ?></td>

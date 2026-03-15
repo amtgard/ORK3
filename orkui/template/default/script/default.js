@@ -311,7 +311,7 @@ $(function() {
 		minLength: 3,
 		select: function (e, ui) {
 			showLabel('#PlayerSearch', ui);
-			document.location.href = '?Route=Player/index/' + ui.item.value;
+			document.location.href = '?Route=Player/profile/' + ui.item.value;
 			return false;
 		}
 	});
@@ -371,7 +371,7 @@ $(function() {
 		minLength: 2,
 		select: function (e, ui) {
 			showLabel('#ParkSearch', ui);
-			document.location.href = '?Route=Park/index/' + ui.item.value;
+			document.location.href = '?Route=Park/profile/' + ui.item.value;
 			return false;
 		}
 	});

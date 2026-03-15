@@ -17,7 +17,7 @@
 				$('#player-list-table tbody').html('');
 				$.each(data, function(i, val) {
 					$('#player-list-table tbody').append(
-						"<tr onclick='javascript:window.location.href=\"<?=UIR ?>Player/index/" + val.MundaneId + "\"'>" +
+						"<tr onclick='javascript:window.location.href=\"<?=UIR ?>Player/profile/" + val.MundaneId + "\"'>" +
 							"<td>" + (val.KingdomName!=null?val.KingdomName:"") + "</td>" +
 							"<td>" + (val.ParkName!=null?val.ParkName:"") + "</td>" +
 							"<td>" + (val.Persona!=null?val.Persona:"") + "</td>" +

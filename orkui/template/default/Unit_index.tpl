@@ -423,7 +423,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 				<li>
 					<span class="kn-officer-role" style="font-size:10px;">Editor</span>
 					<span class="kn-officer-name" style="display:flex;align-items:center;justify-content:space-between;">
-						<a href="<?=UIR?>Player/index/<?=(int)$_auth['MundaneId']?>">
+						<a href="<?=UIR?>Player/profile/<?=(int)$_auth['MundaneId']?>">
 							<?=htmlspecialchars($_auth['Persona'] ?: $_auth['UserName'])?>
 						</a>
 						<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline;margin:0;">
@@ -491,7 +491,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 ?>
 				<tr>
 					<td>
-						<a href="<?=UIR?>Player/index/<?=(int)$_m['MundaneId']?>"
+						<a href="<?=UIR?>Player/profile/<?=(int)$_m['MundaneId']?>"
 							style="color:#2b6cb0;text-decoration:none;font-weight:500;">
 							<?=htmlspecialchars($_persona)?>
 						</a>
@@ -501,7 +501,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					</td>
 					<td>
 						<?php if (!empty($_m['ParkId'])): ?>
-						<a href="<?=UIR?>Park/index/<?=(int)$_m['ParkId']?>"
+						<a href="<?=UIR?>Park/profile/<?=(int)$_m['ParkId']?>"
 							style="color:#4a5568;text-decoration:none;">
 							<?=htmlspecialchars($_m['ParkName'] ?? '')?>
 						</a>
@@ -511,7 +511,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					</td>
 					<td>
 						<?php if (!empty($_m['KingdomId'])): ?>
-						<a href="<?=UIR?>Kingdom/index/<?=(int)$_m['KingdomId']?>"
+						<a href="<?=UIR?>Kingdom/profile/<?=(int)$_m['KingdomId']?>"
 							style="color:#4a5568;text-decoration:none;">
 							<?=htmlspecialchars($_m['KingdomName'] ?? '')?>
 						</a>

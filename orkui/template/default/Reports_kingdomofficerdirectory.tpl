@@ -3,7 +3,7 @@ $_od_rows  = is_array($OfficerDirectory) ? $OfficerDirectory : [];
 $_od_total = count($_od_rows);
 $_od_mode  = ($OfficerDirectoryMode ?? 'kingdoms') === 'parks' ? 'parks' : 'kingdoms';
 $_od_label = $_od_mode === 'parks' ? 'Park' : 'Kingdom';
-$_od_entity_url_prefix = $_od_mode === 'parks' ? 'Park/index/' : 'Kingdom/index/';
+$_od_entity_url_prefix = $_od_mode === 'parks' ? 'Park/profile/' : 'Kingdom/profile/';
 
 /* Count vacancies per role */
 $_vacant = ['Monarch' => 0, 'Regent' => 0, 'PM' => 0, 'Champion' => 0, 'GMR' => 0];
@@ -106,7 +106,7 @@ foreach ($_od_rows as $_r) {
 <?php
 function _od_cell($persona, $id, $uir) {
 	if (empty($persona) || !$id) return '<span class="od-vacant-badge">Vacant</span>';
-	return '<a class="od-officer-link" href="' . $uir . 'Player/index/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
+	return '<a class="od-officer-link" href="' . $uir . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
 }
 foreach ($_od_rows as $row):
 ?>

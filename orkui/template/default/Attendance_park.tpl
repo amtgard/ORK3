@@ -317,13 +317,13 @@ $show_chart = $total > 0;
 			</div>
 			<div class="rp-header-scope">
 <?php if ($pname) : ?>
-				<a class="rp-scope-chip" href="<?=UIR.'Park/index/'.$pid?>">
+				<a class="rp-scope-chip" href="<?=UIR.'Park/profile/'.$pid?>">
 					<i class="fas fa-tree"></i>
 					<?=htmlspecialchars($pname)?>
 				</a>
 <?php endif; ?>
 <?php if ($kname) : ?>
-				<a class="rp-scope-chip" href="<?=UIR.'Kingdom/index/'.$kid?>" style="margin-left:4px;">
+				<a class="rp-scope-chip" href="<?=UIR.'Kingdom/profile/'.$kid?>" style="margin-left:4px;">
 					<i class="fas fa-chess-rook"></i>
 					<?=htmlspecialchars($kname)?>
 				</a>
@@ -461,14 +461,14 @@ $show_chart = $total > 0;
 <?php if ((int)$row['MundaneId'] === 0) : ?>
 						<?=htmlspecialchars($row['AttendancePersona'])?><?=strlen($row['Note']??'')>0?' ('.htmlspecialchars($row['Note']).')':''?>
 <?php else : ?>
-						<a href="<?=UIR.'Player/index/'.$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a>
+						<a href="<?=UIR.'Player/profile/'.$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a>
 <?php endif; ?>
 					</td>
-					<td><a href="<?=UIR.'Kingdom/index/'.$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
-					<td><a href="<?=UIR.'Park/index/'.$row['ParkId']?>"><?=htmlspecialchars($row['ParkName'])?></a></td>
+					<td><a href="<?=UIR.'Kingdom/profile/'.$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
+					<td><a href="<?=UIR.'Park/profile/'.$row['ParkId']?>"><?=htmlspecialchars($row['ParkName'])?></a></td>
 					<td><?=htmlspecialchars(strlen($row['Flavor']??'')>0?$row['Flavor']:$row['ClassName'])?></td>
 					<td><?=(int)$row['Credits']?></td>
-					<td><a href="<?=UIR.'Player/index/'.$row['EnteredById']?>"><?=htmlspecialchars($row['EnteredBy']??'')?></a></td>
+					<td><a href="<?=UIR.'Player/profile/'.$row['EnteredById']?>"><?=htmlspecialchars($row['EnteredBy']??'')?></a></td>
 <?php if ($LoggedIn) : ?>
 					<td style="text-align:center;">
 						<a class="att-del-link" href="<?=UIR?>Attendance/park/<?=$Id?>/delete/<?=$row['AttendanceId']?>&AttendanceDate=<?=$AttendanceDate?>" title="Remove">&times;</a>
@@ -688,7 +688,7 @@ $(function() {
 				tr.dataset.mundaneId = a.MundaneId;
 
 				var td1 = document.createElement('td');
-				td1.innerHTML = '<a href="<?=UIR?>Player/index/' + a.MundaneId + '" target="_blank">' + a.Persona + '</a>';
+				td1.innerHTML = '<a href="<?=UIR?>Player/profile/' + a.MundaneId + '" target="_blank">' + a.Persona + '</a>';
 				tr.appendChild(td1);
 
 				var td2 = document.createElement('td');

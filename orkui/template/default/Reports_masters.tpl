@@ -29,13 +29,13 @@ $scope_noun  = 'kingdom';
 if (isset($this->__session->park_id) && !empty($active_players)) {
 	$first       = reset($active_players);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)$this->__session->park_id;
+	$scope_link  = UIR . 'Park/profile/'    . (int)$this->__session->park_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
 } elseif (isset($this->__session->kingdom_id) && !empty($active_players)) {
 	$first       = reset($active_players);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)$this->__session->kingdom_id;
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$this->__session->kingdom_id;
 	$scope_icon  = 'fa-chess-rook';
 }
 ?>
@@ -183,12 +183,12 @@ if (isset($this->__session->park_id) && !empty($active_players)) {
 <?php 	foreach ($active_players as $player) : ?>
 				<tr>
 <?php 		if (!isset($this->__session->kingdom_id)) : ?>
-					<td><a href='<?=UIR.'Kingdom/index/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
+					<td><a href='<?=UIR.'Kingdom/profile/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
 <?php 		endif; ?>
 <?php 		if (!isset($this->__session->park_id)) : ?>
-					<td><a href='<?=UIR.'Park/index/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
+					<td><a href='<?=UIR.'Park/profile/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
 <?php 		endif; ?>
-					<td><a href='<?=UIR.'Player/index/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
 					<td><?=(int)$player['WeeksAttended']?></td>
 					<td><?=(int)$player['ParkDaysAttended']?></td>
 					<td><?=(int)$player['DaysAttended']?></td>

@@ -237,7 +237,7 @@ if ($kingdom_id && !empty($knights)) {
 			</div>
 <?php if (isset($this->__session->kingdom_id)) : ?>
 			<div class="rp-header-scope">
-				<a class="rp-scope-chip" href="<?=UIR?>Kingdom/index/<?=(int)$this->__session->kingdom_id?>">
+				<a class="rp-scope-chip" href="<?=UIR?>Kingdom/profile/<?=(int)$this->__session->kingdom_id?>">
 					<i class="fas fa-chess-rook"></i> Kingdom
 				</a>
 			</div>
@@ -450,7 +450,7 @@ if ($kingdom_id && !empty($knights)) {
 		if (titleBadge) {
 			html += '<span class="be-title-badge ' + titleBadge.cls + '">' + esc(titleBadge.name) + '</span>';
 		}
-		html += '<a href="' + BASE_URL + 'Player/index/' + nodeId + '" class="be-persona">' + persona + '</a>';
+		html += '<a href="' + BASE_URL + 'Player/profile/' + nodeId + '" class="be-persona">' + persona + '</a>';
 		if (dateStr) {
 			html += '<span class="be-date">' + esc(dateStr) + '</span>';
 		}
@@ -514,9 +514,9 @@ if ($kingdom_id && !empty($knights)) {
 		rows.forEach(function(rel) {
 			var tr = document.createElement('tr');
 			tr.innerHTML =
-				'<td><a href="' + BASE_URL + 'Player/index/' + rel.RecipientId + '">' + esc(rel.RecipientPersona) + '</a></td>' +
+				'<td><a href="' + BASE_URL + 'Player/profile/' + rel.RecipientId + '">' + esc(rel.RecipientPersona) + '</a></td>' +
 				'<td><span class="be-title-badge ' + peerage_to_class(rel) + '">' + esc(rel.TitleName) + '</span></td>' +
-				'<td>' + (rel.GiverId ? '<a href="' + BASE_URL + 'Player/index/' + rel.GiverId + '">' + esc(rel.GiverPersona) + '</a>' : '') + '</td>' +
+				'<td>' + (rel.GiverId ? '<a href="' + BASE_URL + 'Player/profile/' + rel.GiverId + '">' + esc(rel.GiverPersona) + '</a>' : '') + '</td>' +
 				'<td>' + esc(rel.Date) + '</td>';
 			tbody.appendChild(tr);
 		});

@@ -106,7 +106,7 @@
 	<h3>Attendees &mdash; <?=date('Y-m-d', strtotime($detail['EventStart'])) ?></h3>
 	<ul>
 		<?php foreach ($rsvp['List'] as $attendee) : ?>
-		<li><a href='<?=UIR ?>Player/index/<?=$attendee['MundaneId'] ?>'><?=$attendee['Persona'] ?></a></li>
+		<li><a href='<?=UIR ?>Player/profile/<?=$attendee['MundaneId'] ?>'><?=$attendee['Persona'] ?></a></li>
 		<?php endforeach ?>
 	</ul>
 </div>

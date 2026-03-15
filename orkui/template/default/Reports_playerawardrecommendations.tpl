@@ -35,13 +35,13 @@ $scope_noun  = 'scope';
 if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
 	$first       = reset($AwardRecommendations);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)$this->__session->park_id;
+	$scope_link  = UIR . 'Park/profile/'    . (int)$this->__session->park_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
 } elseif (isset($this->__session->kingdom_id) && !empty($AwardRecommendations)) {
 	$first       = reset($AwardRecommendations);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)$this->__session->kingdom_id;
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$this->__session->kingdom_id;
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }
@@ -181,16 +181,16 @@ if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
 <?php if (is_array($AwardRecommendations)) : ?>
 <?php 	foreach ($AwardRecommendations as $rec) : ?>
 				<tr>
-					<td><a href='<?=UIR.'Player/index/'.$rec['MundaneId']?>'><?=htmlspecialchars($rec['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$rec['MundaneId']?>'><?=htmlspecialchars($rec['Persona'])?></a></td>
 					<td><?=htmlspecialchars($rec['AwardName'])?></td>
 					<td><?=valid_id($rec['Rank'])?htmlspecialchars($rec['Rank']):''?></td>
 					<td><?=htmlspecialchars($rec['DateRecommended'])?></td>
-					<td><a href="<?=UIR.'Player/index/'.$rec['RecommendedById']?>"><?=htmlspecialchars($rec['RecommendedByName'])?></a></td>
+					<td><a href="<?=UIR.'Player/profile/'.$rec['RecommendedById']?>"><?=htmlspecialchars($rec['RecommendedByName'])?></a></td>
 					<td><?=htmlspecialchars($rec['Reason'])?></td>
 <?php 		if ($this->__session->user_id) : ?>
 					<td>
 <?php 			if ($can_delete || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']) : ?>
-						<a class="rp-action-link confirm-delete-rec" href="<?=UIR.'Player/index/'.$rec['MundaneId'].'/deleterecommendation/'.$rec['RecommendationsId']?>"><i class="fas fa-trash-alt"></i> Delete</a>
+						<a class="rp-action-link confirm-delete-rec" href="<?=UIR.'Player/profile/'.$rec['MundaneId'].'/deleterecommendation/'.$rec['RecommendationsId']?>"><i class="fas fa-trash-alt"></i> Delete</a>
 <?php 			endif; ?>
 					</td>
 <?php 		endif; ?>

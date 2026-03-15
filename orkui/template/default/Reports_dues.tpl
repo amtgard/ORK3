@@ -28,13 +28,13 @@ $scope_noun  = 'scope';
 if (isset($this->__session->park_id) && !empty($players)) {
 	$first       = reset($players);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)$this->__session->park_id;
+	$scope_link  = UIR . 'Park/profile/'    . (int)$this->__session->park_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
 } elseif (isset($this->__session->kingdom_id) && !empty($players)) {
 	$first       = reset($players);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)$this->__session->kingdom_id;
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$this->__session->kingdom_id;
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }
@@ -186,9 +186,9 @@ if (isset($this->__session->park_id) && !empty($players)) {
 <?php if (is_array($roster['DuesPaidList'])) : ?>
 <?php 	foreach ($roster['DuesPaidList'] as $player) : ?>
 				<tr class="<?=(!empty($player['DuesForLife']))?'rp-row-duesforlife':''?><?=(!empty($player['Suspended']))?' rp-row-suspended':''?><?=(empty($player['Waivered']))?' rp-row-unwaivered':''?>">
-					<td><a href='<?=UIR.'Kingdom/index/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
-					<td><a href='<?=UIR.'Park/index/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
-					<td><a href='<?=UIR.'Player/index/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Kingdom/profile/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
+					<td><a href='<?=UIR.'Park/profile/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
 <?php 		if (!$roster['RestrictAccess']) : ?>
 					<td><?=htmlspecialchars($player['GivenName'] . ' ' . $player['Surname'])?></td>
 <?php 		endif; ?>

@@ -83,7 +83,7 @@
 					<i class="fas fa-crown" style="font-size:10px;opacity:0.6;margin-right:3px"></i>
 					Monarch:&nbsp;
 					<?php if (!empty($monarch['MundaneId']) && $monarch['MundaneId'] > 0): ?>
-						<a href="<?= UIR ?>Player/index/<?= $monarch['MundaneId'] ?>"><?= htmlspecialchars($monarch['Persona']) ?></a>
+						<a href="<?= UIR ?>Player/profile/<?= $monarch['MundaneId'] ?>"><?= htmlspecialchars($monarch['Persona']) ?></a>
 					<?php else: ?>
 						<span class="kn-vacant">Vacant</span>
 					<?php endif; ?>
@@ -167,7 +167,7 @@
 					<span class="kn-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
 					<span class="kn-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-							<a href="<?= UIR ?>Player/index/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
 						<?php else: ?>
 							<em style="color:#a0aec0">Vacant</em>
 						<?php endif; ?>
@@ -290,7 +290,7 @@
 							<?php $tileHeraldry = $park['HasHeraldry'] == 1
 								? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
 								: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
-							<a class="kn-park-tile" href="<?= UIR ?>Park/index/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
+							<a class="kn-park-tile" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
 								<div class="kn-park-tile-img-wrap">
 									<img src="<?= $tileHeraldry ?>"
 										onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
@@ -330,13 +330,13 @@
 							</thead>
 							<tbody>
 								<?php foreach ($parkList as $park): ?>
-									<tr class="kn-row-link" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/index/<?= $park['ParkId'] ?>'">
+									<tr class="kn-row-link" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>'">
 										<td class="kn-col-nowrap">
 											<img class="kn-thumb"
 												src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
 												onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
 												alt="">
-											<a href="<?= UIR ?>Park/index/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
+											<a href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
 										</td>
 										<td><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : '') ?></td>
 										<td class="kn-col-numeric kn-avgwk-row">—</td>
@@ -521,7 +521,7 @@
 								onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'"
 								alt="">
 							<div class="kn-prinz-name">
-								<a href="<?= UIR ?>Kingdom/index/<?= $prinz['KingdomId'] ?>&kingdom_name=<?= urlencode($prinz['Name']) ?>"><?= htmlspecialchars($prinz['Name']) ?></a>
+								<a href="<?= UIR ?>Kingdom/profile/<?= $prinz['KingdomId'] ?>&kingdom_name=<?= urlencode($prinz['Name']) ?>"><?= htmlspecialchars($prinz['Name']) ?></a>
 							</div>
 						</div>
 					<?php endforeach; ?>
@@ -1691,7 +1691,7 @@ var KnConfig = {
 			return '<span class="kn-officer-pill">' + knHtmlEsc(r.trim()) + '</span>';
 		}).join('');
 		var classSpan = p.lastClass ? '<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> ' + knHtmlEsc(p.lastClass) + '</span>' : '';
-		return '<a class="kn-player-card' + hbgClass + '"' + hbgAttr + ' href="' + uir + 'Player/index/' + p.id + '">'
+		return '<a class="kn-player-card' + hbgClass + '"' + hbgAttr + ' href="' + uir + 'Player/profile/' + p.id + '">'
 			+ '<div class="kn-player-card-top"><div class="kn-player-avatar">' + avatarHtml + '</div>'
 			+ '<div><div class="kn-player-name">' + knHtmlEsc(p.persona) + '</div>' + pills + '</div></div>'
 			+ '<div class="kn-player-stats">'
@@ -1704,7 +1704,7 @@ var KnConfig = {
 		var pills = (p.officerRoles || '').split(', ').filter(Boolean).map(function(r) {
 			return '<span class="kn-officer-pill">' + knHtmlEsc(r.trim()) + '</span>';
 		}).join('');
-		return '<tr onclick=\'window.location.href="' + uir + 'Player/index/' + p.id + '"\'>'
+		return '<tr onclick=\'window.location.href="' + uir + 'Player/profile/' + p.id + '"\'>'
 			+ '<td>' + knHtmlEsc(p.persona) + pills + '</td>'
 			+ '<td>' + knHtmlEsc(p.parkName || '') + '</td>'
 			+ '<td data-sortval="' + p.signinCount + '">' + p.signinCount + '</td>'

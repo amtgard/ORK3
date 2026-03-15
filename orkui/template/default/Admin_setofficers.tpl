@@ -68,7 +68,7 @@
 	<?php 	foreach ($Officers as $k => $auth): ?>
 				<tr>
 					<td><?=$auth['UserName'] ?></td>
-					<td><a href='<?=UIR.'Player/index/'.$auth['MundaneId'] ?>'><?=$auth['Persona'] . (($auth['Surname'] || $auth['GivenName']) ? ' (' . $auth['Surname'] . ', ' . $auth['GivenName'] . ')':'') ?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$auth['MundaneId'] ?>'><?=$auth['Persona'] . (($auth['Surname'] || $auth['GivenName']) ? ' (' . $auth['Surname'] . ', ' . $auth['GivenName'] . ')':'') ?></a></td>
 					<td><?=$auth['Role'] ?></td>
 <?php if ($Type == 'KingdomId' && $Id == 34) : ?>
 					<td>Champion</td>

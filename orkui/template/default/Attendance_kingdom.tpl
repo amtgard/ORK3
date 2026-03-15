@@ -150,7 +150,7 @@ $show_charts = $total > 0;
 			</div>
 <?php if ($kname) : ?>
 			<div class="rp-header-scope">
-				<a class="rp-scope-chip" href="<?=UIR.'Kingdom/index/'.$kid?>">
+				<a class="rp-scope-chip" href="<?=UIR.'Kingdom/profile/'.$kid?>">
 					<i class="fas fa-chess-rook"></i>
 					<?=htmlspecialchars($kname)?>
 				</a>
@@ -291,17 +291,17 @@ $show_charts = $total > 0;
 				<tbody>
 <?php foreach ($att_rows as $row) : ?>
 				<tr>
-					<td><a href="<?=UIR.'Park/index/'.$row['ParkId']?>"><?=htmlspecialchars($row['ParkName'])?></a></td>
+					<td><a href="<?=UIR.'Park/profile/'.$row['ParkId']?>"><?=htmlspecialchars($row['ParkName'])?></a></td>
 					<td>
 <?php if ((int)$row['MundaneId'] === 0) : ?>
 						<?=htmlspecialchars($row['AttendancePersona'])?><?=strlen($row['Note']??'')>0?' ('.htmlspecialchars($row['Note']).')':''?>
 <?php else : ?>
-						<a href="<?=UIR.'Player/index/'.$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a>
+						<a href="<?=UIR.'Player/profile/'.$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a>
 <?php endif; ?>
 					</td>
 					<td><?=htmlspecialchars(strlen($row['Flavor']??'')>0?$row['Flavor']:$row['ClassName'])?></td>
 					<td><?=(int)$row['Credits']?></td>
-					<td><a href="<?=UIR.'Player/index/'.$row['EnteredById']?>"><?=htmlspecialchars($row['EnteredBy']??'')?></a></td>
+					<td><a href="<?=UIR.'Player/profile/'.$row['EnteredById']?>"><?=htmlspecialchars($row['EnteredBy']??'')?></a></td>
 <?php if ($LoggedIn) : ?>
 					<td style="text-align:center;">
 						<a class="att-del-link" href="<?=UIR?>Attendance/kingdom/<?=$Id?>/delete/<?=$row['AttendanceId']?>&AttendanceDate=<?=$AttendanceDate?>" title="Remove">&times;</a>

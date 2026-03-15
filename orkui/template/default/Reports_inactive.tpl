@@ -11,13 +11,13 @@ $_scope_noun  = 'scope';
 if (($ScopeType ?? '') === 'park' && $_total > 0) {
 	$_first       = reset($_roster);
 	$_scope_label = $_first['ParkName']    ?? '';
-	$_scope_link  = UIR . 'Park/index/'    . (int)($ScopeId ?? 0);
+	$_scope_link  = UIR . 'Park/profile/'    . (int)($ScopeId ?? 0);
 	$_scope_icon  = 'fa-tree';
 	$_scope_noun  = 'park';
 } elseif (($ScopeType ?? '') === 'kingdom' && $_total > 0) {
 	$_first       = reset($_roster);
 	$_scope_label = $_first['KingdomName'] ?? '';
-	$_scope_link  = UIR . 'Kingdom/index/' . (int)($ScopeId ?? 0);
+	$_scope_link  = UIR . 'Kingdom/profile/' . (int)($ScopeId ?? 0);
 	$_scope_icon  = 'fa-chess-rook';
 	$_scope_noun  = 'kingdom';
 }
@@ -82,9 +82,9 @@ if (($ScopeType ?? '') === 'park' && $_total > 0) {
 			<tbody>
 <?php foreach ($_roster as $player): ?>
 			<tr>
-				<td><a href="<?=UIR?>Kingdom/index/<?=(int)$player['KingdomId']?>"><?=htmlspecialchars($player['KingdomName'])?></a></td>
-				<td><a href="<?=UIR?>Park/index/<?=(int)$player['ParkId']?>"><?=htmlspecialchars($player['ParkName'])?></a></td>
-				<td><a href="<?=UIR?>Player/index/<?=(int)$player['MundaneId']?>"><?=htmlspecialchars($player['Persona'] ?: '(No Persona)')?></a></td>
+				<td><a href="<?=UIR?>Kingdom/profile/<?=(int)$player['KingdomId']?>"><?=htmlspecialchars($player['KingdomName'])?></a></td>
+				<td><a href="<?=UIR?>Park/profile/<?=(int)$player['ParkId']?>"><?=htmlspecialchars($player['ParkName'])?></a></td>
+				<td><a href="<?=UIR?>Player/profile/<?=(int)$player['MundaneId']?>"><?=htmlspecialchars($player['Persona'] ?: '(No Persona)')?></a></td>
 				<td><?=$player['Waivered'] ? 'Yes' : ''?></td>
 			</tr>
 <?php endforeach; ?>

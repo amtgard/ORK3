@@ -193,7 +193,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 				<tbody>
 <?php foreach ($attendance as $row) : ?>
 				<tr>
-					<td><a href='<?=UIR.'Park/index/'.$row['ParkId']?>'><?=htmlspecialchars($row['ParkName'])?></a></td>
+					<td><a href='<?=UIR.'Park/profile/'.$row['ParkId']?>'><?=htmlspecialchars($row['ParkName'])?></a></td>
 					<td><?=htmlspecialchars($row['PeriodLabel'])?></td>
 					<td><?=(int)$row['TotalSignins']?></td>
 					<td><?=(int)$row['UniquePlayers']?></td>
@@ -246,7 +246,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 				<tbody>
 <?php foreach ($players as $player) : ?>
 				<tr>
-					<td><a href='<?=UIR.'Player/index/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
 					<td><?=$player['Waivered'] ? 'Yes' : 'No'?></td>
 					<td><?=$player['DuesPaid'] ? htmlspecialchars($player['DuesPaid']) : ''?></td>
 <?php 	foreach ($all_periods as $period) : ?>

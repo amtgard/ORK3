@@ -50,7 +50,7 @@
 		</thead>
 		<tbody>
 <?php foreach ($summary as $row): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR?>Kingdom/index/<?=$row['KingdomId']?>"' style="cursor:pointer;">
+			<tr onclick='javascript:window.location.href="<?=UIR?>Kingdom/profile/<?=$row['KingdomId']?>"' style="cursor:pointer;">
 				<td><?=htmlspecialchars($row['KingdomName'])?></td>
 				<td class="data-column"><?=$row['NewPlayers']?></td>
 				<td class="data-column"><?=$row['ReturningPlayers']?></td>

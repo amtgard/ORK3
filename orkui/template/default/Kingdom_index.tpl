@@ -18,7 +18,7 @@
 	<h4>Monarchy</h4>
 		<ul>
 			<?php foreach ($kingdom_officers['Officers'] as $key => $officer): ?>
-				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
+				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/profile/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>
@@ -41,7 +41,7 @@
 <?php $att = 0 ?>
 <?php foreach ($park_summary['KingdomParkAveragesSummary'] as $k => $park): ?>
     <?php $att += $park['AttendanceCount']; ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"' data-park-id='<?=$park['ParkId']?>'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/profile/<?=$park['ParkId'];?>"' data-park-id='<?=$park['ParkId']?>'>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($park['HasHeraldry']==1): ?>
@@ -97,7 +97,7 @@ jQuery(document).ready(function($) {
 		<tbody>
 <?php if (!is_array($principalities['Principalities'])) $principalities['Principalities'] = array(); ?>
 <?php foreach ($principalities['Principalities'] as $k => $prinz): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/profile/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
 						<img src="<?=HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prinz['KingdomId'])) ?>" onerror="this.src='<?=HTTP_KINGDOM_HERALDRY ?>0000.jpg';">
@@ -181,7 +181,7 @@ jQuery(document).ready(function($) {
 		</thead>
 		<tbody>
 <?php foreach ($event_summary as $k => $event): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/template/<?=$event['EventId'];?>"'>
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>

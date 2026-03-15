@@ -23,13 +23,13 @@ $scope_noun  = 'scope';
 if (isset($this->__session->park_id) && !empty($Awards)) {
 	$first       = reset($Awards);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)$this->__session->park_id;
+	$scope_link  = UIR . 'Park/profile/'    . (int)$this->__session->park_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
 } elseif (isset($this->__session->kingdom_id) && !empty($Awards)) {
 	$first       = reset($Awards);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)$this->__session->kingdom_id;
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$this->__session->kingdom_id;
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }
@@ -174,16 +174,16 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <?php 	foreach ($Awards as $award) : ?>
 				<tr>
 <?php 		if (!isset($this->__session->kingdom_id)) : ?>
-					<td><a href='<?=UIR.'Kingdom/index/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
+					<td><a href='<?=UIR.'Kingdom/profile/'.$award['KingdomId']?>'><?=htmlspecialchars($award['KingdomName'])?></a></td>
 <?php 		endif; ?>
 <?php 		if (!isset($this->__session->park_id)) : ?>
-					<td><a href='<?=UIR.'Park/index/'.$award['ParkId']?>'><?=htmlspecialchars($award['ParkName'])?></a></td>
+					<td><a href='<?=UIR.'Park/profile/'.$award['ParkId']?>'><?=htmlspecialchars($award['ParkName'])?></a></td>
 <?php 		endif; ?>
-					<td><a href='<?=UIR.'Player/index/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
 					<td><?=htmlspecialchars($award['AwardName'])?></td>
 					<td><?=valid_id($award['Rank'])?htmlspecialchars($award['Rank']):''?></td>
 					<td><?=htmlspecialchars($award['Date'] ?? '')?></td>
-					<td><a href="<?=UIR.'Player/index/'.$award['EnteredById']?>"><?=htmlspecialchars($award['EnteredBy'])?></a></td>
+					<td><a href="<?=UIR.'Player/profile/'.$award['EnteredById']?>"><?=htmlspecialchars($award['EnteredBy'])?></a></td>
 				</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>

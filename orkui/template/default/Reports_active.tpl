@@ -40,12 +40,12 @@ $scope_icon  = 'fa-globe';
 if (($report_type ?? null) === 'Park' && !empty($active_players)) {
 	$first       = reset($active_players);
 	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/index/'    . (int)($report_id ?? 0);
+	$scope_link  = UIR . 'Park/profile/'    . (int)($report_id ?? 0);
 	$scope_icon  = 'fa-tree';
 } elseif (($report_type ?? null) === 'Kingdom' && !empty($active_players)) {
 	$first       = reset($active_players);
 	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/index/' . (int)($report_id ?? 0);
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)($report_id ?? 0);
 	$scope_icon  = 'fa-chess-rook';
 }
 
@@ -226,12 +226,12 @@ $show_chart = ($report_type ?? null) === 'Kingdom' && count($chart_parks) > 1;
 <?php 	foreach ($active_players as $player) : ?>
 				<tr>
 <?php 		if (($report_type ?? null) !== 'Kingdom') : ?>
-					<td><a href='<?=UIR.'Kingdom/index/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
+					<td><a href='<?=UIR.'Kingdom/profile/'.$player['KingdomId']?>'><?=htmlspecialchars($player['KingdomName'])?></a></td>
 <?php 		endif; ?>
 <?php 		if (($report_type ?? null) !== 'Park') : ?>
-					<td><a href='<?=UIR.'Park/index/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
+					<td><a href='<?=UIR.'Park/profile/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
 <?php 		endif; ?>
-					<td><a href='<?=UIR.'Player/index/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
+					<td><a href='<?=UIR.'Player/profile/'.$player['MundaneId']?>'><?=htmlspecialchars($player['Persona'])?></a></td>
 					<td><?=(int)$player['WeeksAttended']?></td>
 					<td><?=(int)$player['LocalParkWeeksAttended']?></td>
 					<td><?=(int)$player['ParkDaysAttended']?></td>

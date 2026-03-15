@@ -19,7 +19,7 @@
 				$('#event-list-table tbody').html('');
 				$.each(data, function(i, val) {
 					$('#event-list-table tbody').append(
-						"<tr onclick='javascript:window.location.href=\"<?=UIR ?>Event/index/" + val.EventId + "\"'>" +
+						"<tr onclick='javascript:window.location.href=\"<?=UIR ?>Event/template/" + val.EventId + "\"'>" +
 							"<td>" + (val.Name!=null?val.Name:"") + "</td>" +
 							"<td>" + (val.NextDate!=null?val.NextDate:"") + "</td>" +
 							"<td>" + (val.KingdomName!=null?val.KingdomName:"") + "</td>" +

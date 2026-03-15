@@ -256,7 +256,7 @@ details > summary::-webkit-details-marker { display: none; }
 <?php foreach ($player_details as $player): ?>
 					<tr>
 						<td><?=htmlspecialchars($player['ParkName'])?></td>
-						<td><a href="<?=UIR?>Player/index/<?=$player['MundaneId']?>"><?=htmlspecialchars($player['Persona'])?></a></td>
+						<td><a href="<?=UIR?>Player/profile/<?=$player['MundaneId']?>"><?=htmlspecialchars($player['Persona'])?></a></td>
 						<td class="dt-right"><?=htmlspecialchars($player['FirstSignInDate'])?></td>
 						<td class="dt-right"><?=(int)$player['VisitsInPeriod']?></td>
 						<td class="dt-right"><?=htmlspecialchars($player['LastSignInDate'])?></td>

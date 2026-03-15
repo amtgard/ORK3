@@ -114,9 +114,9 @@
 			<?php endif; ?>
 			<div class="pn-breadcrumb">
 				<?php if (valid_id($this->__session->kingdom_id)): ?>
-					<a href="<?= UIR ?>Kingdom/index/<?= $this->__session->kingdom_id ?>"><?= htmlspecialchars($this->__session->kingdom_name) ?></a>
+					<a href="<?= UIR ?>Kingdom/profile/<?= $this->__session->kingdom_id ?>"><?= htmlspecialchars($this->__session->kingdom_name) ?></a>
 					<span class="pn-sep"><i class="fas fa-chevron-right" style="font-size:10px"></i></span>
-					<a href="<?= UIR ?>Park/index/<?= $this->__session->park_id ?>"><?= htmlspecialchars($this->__session->park_name) ?></a>
+					<a href="<?= UIR ?>Park/profile/<?= $this->__session->park_id ?>"><?= htmlspecialchars($this->__session->park_name) ?></a>
 				<?php endif; ?>
 			</div>
 			<div class="pn-badges">
@@ -571,10 +571,10 @@
 								</td>
 								<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
-								<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/index/<?= $detail['GivenById'] ?>"><?= substr($detail['GivenBy'], 0, 30) ?></a></td>
+								<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= substr($detail['GivenBy'], 0, 30) ?></a></td>
 								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; else echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ', ' . $detail['KingdomName'] : $detail['KingdomName']; ?></td>
 								<td><?= $detail['Note'] ?></td>
-								<td><a href="<?= UIR ?>Player/index/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
 								<?php if ($canEditAdmin): ?>
 								<td class="pn-award-actions-cell">
 									<?php $awardData = json_encode([
@@ -688,7 +688,7 @@
 									</td>
 									<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 									<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
-									<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/index/<?= $detail['GivenById'] ?>"><?= substr($detail['GivenBy'], 0, 30) ?></a></td>
+									<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= substr($detail['GivenBy'], 0, 30) ?></a></td>
 									<td>
 										<?php
 											if (valid_id($detail['EventId'])) {
@@ -699,7 +699,7 @@
 										?>
 									</td>
 									<td><?= $detail['Note'] ?></td>
-									<td><a href="<?= UIR ?>Player/index/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
 									<?php if ($canEditAdmin): ?>
 									<td class="pn-award-actions-cell">
 										<?php $titleData = json_encode([
@@ -810,8 +810,8 @@
 									<td class="pn-col-nowrap">
 										<a href="<?= UIR ?>Attendance/<?= $detail['ParkId'] > 0 ? 'park' : 'event' ?>/<?= (($detail['ParkId'] > 0) ? ($detail['ParkId'] . '&AttendanceDate=' . $detail['Date']) : ($detail['EventId'] . '/' . $detail['EventCalendarDetailId'])) ?>"><?= $detail['Date'] ?></a>
 									</td>
-									<td><a href="<?= UIR ?>Kingdom/index/<?= $detail['KingdomId'] ?>"><?= $detail['KingdomName'] ?></a></td>
-									<td><a href="<?= UIR ?>Park/index/<?= $detail['ParkId'] ?>"><?= $detail['ParkName'] ?></a></td>
+									<td><a href="<?= UIR ?>Kingdom/profile/<?= $detail['KingdomId'] ?>"><?= $detail['KingdomName'] ?></a></td>
+									<td><a href="<?= UIR ?>Park/profile/<?= $detail['ParkId'] ?>"><?= $detail['ParkName'] ?></a></td>
 									<td><a href="<?= UIR ?>Attendance/event/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['EventName'] ?></a></td>
 									<td><?= trimlen($detail['Flavor']) > 0 ? $detail['Flavor'] : $detail['ClassName'] ?></td>
 									<td class="pn-col-numeric"><?= $detail['Credits'] ?></td>
@@ -862,7 +862,7 @@
 									<td><?= $rec['AwardName'] ?></td>
 									<td class="pn-col-numeric"><?= valid_id($rec['Rank']) ? $rec['Rank'] : '' ?></td>
 									<td class="pn-col-nowrap"><?= $rec['DateRecommended'] ?></td>
-									<td><a href="<?= UIR ?>Player/index/<?= $rec['RecommendedById'] ?>"><?= $rec['RecommendedByName'] ?></a></td>
+									<td><a href="<?= UIR ?>Player/profile/<?= $rec['RecommendedById'] ?>"><?= $rec['RecommendedByName'] ?></a></td>
 									<td><?= htmlspecialchars($rec['Reason']) ?></td>
 									<?php if ($this->__session->user_id): ?>
 										<td style="white-space:nowrap">

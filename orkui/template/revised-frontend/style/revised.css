@@ -4891,7 +4891,6 @@
 
 /* ---- About tab layout ---- */
 .pk-about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; }
-.pk-about-full-row { grid-column: 1 / -1; padding-top: 10px; margin-top: 4px; border-top: 1px solid #edf2f7; }
 .pk-about-schedule { margin-top: 28px; }
 .pk-about-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #718096; margin-bottom: 6px; }
 .pk-about-text { font-size: 14px; color: #2d3748; line-height: 1.6; }
