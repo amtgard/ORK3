@@ -242,7 +242,7 @@ $atKingdomCount = count($atKingdomIds);
 	<div class="at-header">
 		<div class="at-header-icon"><i class="fas fa-map-marked-alt"></i></div>
 		<div>
-			<h1 class="at-header-title">Amtgard Atlas</h1>
+			<h1 class="at-header-title">Amtgard Map</h1>
 			<div class="at-header-sub">All active park locations across the Amtgard world</div>
 		</div>
 	</div>

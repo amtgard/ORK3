@@ -1,5 +1,5 @@
 <div class='info-container' style="width: 65%;">
-    <h3>Amtgard Atlas</h3>
+    <h3>Amtgard Map</h3>
 		<div style='border: 1px solid #aaa;' >
 			<div id="map" style="width: 100%; height: 100%; min-width: 400px; min-height: 400px;"></div>
 		</div>

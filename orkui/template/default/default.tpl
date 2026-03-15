@@ -462,7 +462,7 @@
 <div class="hm-section">
 	<div class="hm-section-header">
 		<span class="hm-section-title"><i class="fas fa-crown"></i> Kingdoms</span>
-		<a class="hm-view-all" href="<?= UIR ?>Atlas">Atlas &rarr;</a>
+		<a class="hm-find-item" href="<?= UIR ?>Atlas"><i class="fas fa-map-marked-alt"></i> Kingdom Map</a>
 	</div>
 	<div class="hm-kingdoms-grid">
 		<?php foreach ($hmKingdoms as $k): ?>
@@ -576,7 +576,7 @@
 				<i class="fas fa-flag"></i> Find Events
 			</a>
 			<a class="hm-find-item" href="<?= UIR ?>Atlas">
-				<i class="fas fa-map-marked-alt"></i> Kingdom Atlas
+				<i class="fas fa-map-marked-alt"></i> Kingdom Map
 			</a>
 			<a class="hm-find-item" href="https://play.amtgard.com" target="_blank" rel="noopener">
 				<i class="fas fa-map-marker-alt"></i> Find a Chapter Near You

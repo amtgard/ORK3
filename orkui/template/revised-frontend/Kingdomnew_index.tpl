@@ -98,7 +98,7 @@
 				</button>
 			<?php endif; ?>
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
-				<i class="fas fa-map"></i> Atlas
+				<i class="fas fa-map"></i> Map
 			</a>
 			<?php if ($CanManageKingdom ?? false): ?>
 			<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
@@ -191,7 +191,7 @@
 				<?php endif; ?>
 				<li>
 					<span class="kn-link-icon"><i class="fas fa-map-marked-alt"></i></span>
-					<a href="#" onclick="knActivateTab('map');return false;">Kingdom Atlas</a>
+					<a href="#" onclick="knActivateTab('map');return false;">Kingdom Map</a>
 				</li>
 				<li>
 					<span class="kn-link-icon"><i class="fas fa-coins"></i></span>
