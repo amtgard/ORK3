@@ -157,7 +157,8 @@ class Controller_Unit extends Controller {
 		if (preg_match('/ParkId=(\d+)/',    $_ref, $_m)) $_scope_park_id    = (int)$_m[1];
 		$this->data['ScopeKingdomId'] = $_scope_kingdom_id;
 		$this->data['ScopeParkId']    = $_scope_park_id;
-		if ($this->data['LoggedIn']) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
 		$unit_list_url = UIR . ($this->session->unit_list_ref ?: 'Unit/unitlist');

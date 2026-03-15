@@ -22,12 +22,13 @@ class Controller_Event extends Controller {
 		if (valid_id($this->data['EventDetails']['ParkId']))
 			$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->data['EventDetails']['ParkId'], 'display' => $this->data['EventDetails']['EventInfo'][0]['ParkName'] );
 			$this->data['menu']['event'] = array( 'url' => UIR.'Event/index/'.$id, 'display' => $this->data['EventDetails']['Name'] );
-			if ($this->data['LoggedIn']) {
+			$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+			if ($_uid > 0 && valid_id($id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_EVENT, (int)$id, AUTH_EDIT)) {
 				$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+				$this->data['menulist']['admin'] = array(
+					array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Event' )
+				);
 			}
-			$this->data['menulist']['admin'] = array(
-				array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Event' )
-			);
 	}
 
 	public function index($event_id = null) {
@@ -84,16 +85,16 @@ class Controller_Event extends Controller {
 			'url'     => UIR . 'Event/template/' . $event_id,
 			'display' => $details['Name'],
 		];
-		if ( $this->data['LoggedIn'] ) {
+		if ( $can_manage ) {
 			$this->data['menu']['admin'] = [
 				'url'      => UIR . 'Admin/event/' . $event_id,
 				'display'  => 'Admin Panel <i class="fas fa-cog"></i>',
 				'no-crumb' => 'no-crumb',
 			];
+			$this->data['menulist']['admin'] = [
+				[ 'url' => UIR . 'Admin/event/' . $event_id, 'display' => 'Event' ],
+			];
 		}
-		$this->data['menulist']['admin'] = [
-			[ 'url' => UIR . 'Admin/event/' . $event_id, 'display' => 'Event' ],
-		];
 
 		$now      = time();
 		$upcoming = [];
@@ -196,16 +197,16 @@ class Controller_Event extends Controller {
 			'url'     => UIR . 'Event/template/' . $event_id,
 			'display' => $info['Name'] ?? 'Event',
 		];
-		if ( $this->data['LoggedIn'] ) {
+		if ( $this->data['CanManageEvent'] ) {
 			$this->data['menu']['admin'] = [
 				'url'      => UIR . 'Admin/event/' . $event_id,
 				'display'  => 'Admin Panel <i class="fas fa-cog"></i>',
 				'no-crumb' => 'no-crumb',
 			];
+			$this->data['menulist']['admin'] = [
+				[ 'url' => UIR . 'Admin/event/' . $event_id, 'display' => 'Event' ],
+			];
 		}
-		$this->data['menulist']['admin'] = [
-			[ 'url' => UIR . 'Admin/event/' . $event_id, 'display' => 'Event' ],
-		];
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 

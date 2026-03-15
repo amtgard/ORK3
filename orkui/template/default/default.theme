@@ -40,6 +40,7 @@
 		<div id='navmenu'>
 			<ul>
 <?php foreach ($menu as $k => $item) : ?>
+<?php if ($k === 'admin') continue; ?>
 				<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
 <?php endforeach; ?>
 			</ul>
@@ -127,6 +128,19 @@
 				</button>
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
+<?php if (isset($menu['admin'])): ?>
+					<?php
+						$__adminUrl = $menu['admin']['url'];
+						if      (strpos($__adminUrl, 'Admin/player/')   !== false) $__adminLabel = 'Admin Player';
+						elseif  (strpos($__adminUrl, 'Admin/kingdom/')  !== false) $__adminLabel = 'Admin Kingdom';
+						elseif  (strpos($__adminUrl, 'Admin/park/')     !== false) $__adminLabel = 'Admin Park';
+						elseif  (strpos($__adminUrl, 'Admin/event/')    !== false) $__adminLabel = 'Admin Event';
+						elseif  (strpos($__adminUrl, 'Admin/unit/')     !== false) $__adminLabel = 'Admin Unit';
+						else                                                       $__adminLabel = 'Admin Panel';
+					?>
+					<div class='nav-dropdown-divider'></div>
+					<a href='<?=$__adminUrl?>'><i class='fas fa-cog'></i> <?=$__adminLabel?></a>
+<?php endif; ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
 				</div>

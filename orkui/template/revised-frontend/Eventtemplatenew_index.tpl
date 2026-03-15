@@ -108,7 +108,7 @@
 				<i class="fas fa-calendar-plus"></i> Add Occurrence
 			</button>
 			<?php endif; ?>
-			<?php if ($loggedIn): ?>
+			<?php if ($canManage): ?>
 			<a class="en-btn en-btn-outline"
 				href="<?= UIR ?>Admin/event/<?= $eventId ?>">
 				<i class="fas fa-cog"></i> Admin Panel
@@ -194,7 +194,7 @@
 					<span class="en-link-icon"><i class="fas fa-list-alt"></i></span>
 					<a href="<?= UIR ?>Reports/attendance/Event/<?= $eventId ?>/All">Full Attendance</a>
 				</li>
-				<?php if ($loggedIn): ?>
+				<?php if ($canManage): ?>
 				<li>
 					<span class="en-link-icon"><i class="fas fa-cog"></i></span>
 					<a href="<?= UIR ?>Admin/event/<?= $eventId ?>">Manage Template</a>

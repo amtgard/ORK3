@@ -19,7 +19,8 @@ class Controller_Player extends Controller {
 		$this->session->park_id = $park_info['ParkInfo']['ParkId'];
 		$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 		$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
-		if ($this->data['LoggedIn']) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
 		$this->data['menulist']['admin'] = array(
@@ -194,11 +195,11 @@ class Controller_Player extends Controller {
     	$this->data['Notes'] = $this->Player->get_notes($id);
     	$this->data['Dues'] = $this->Player->get_dues($id, 1, true);
 		$this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' =>1, 'IncludeEvents' => 1, 'ActiveOnly' => 1 ));
-		if ($this->data['LoggedIn']) {
-			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
-		}
 		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
 		$canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+		if ($canEdit) {
+			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+		}
 		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
 		$this->data['ShowRecsTab']          = $recsPublic || $canEdit;

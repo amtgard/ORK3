@@ -58,6 +58,9 @@ class Controller
 				$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
 			}
 		}
+		// HasAuthority uses the auth ORM which shares the global DB connection.
+		// Clear after all auth checks so subclass methods start with a clean DB state.
+		global $DB; $DB->Clear();
 	}
 
 	public function load_model( $name )
