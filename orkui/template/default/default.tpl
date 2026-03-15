@@ -409,12 +409,14 @@
 	.hm-kingdoms-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
 @media (max-width: 600px) {
-	.hm-kingdoms-grid { grid-template-columns: repeat(3, 1fr); }
-	.hm-stats-bar { flex-wrap: wrap; }
-	.hm-stat-item { flex: 1 1 50%; border-bottom: 1px solid #e2e8f0; }
+	.hm-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
+	.hm-stats-bar { display: grid; grid-template-columns: 1fr 1fr; }
+	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid #e2e8f0; }
 	.hm-stat-item:nth-child(odd) { border-right: 1px solid #e2e8f0; }
-	.hm-stat-item:last-child,
+	.hm-stat-item:last-child { border-bottom: none; }
 	.hm-stat-item:nth-last-child(2):nth-child(odd) { border-bottom: none; }
+	/* Last item spanning both columns when count is odd */
+	.hm-stat-item:last-child:nth-child(odd) { grid-column: span 2; border-right: none; }
 	.hm-stat-value { font-size: 20px; }
 }
 </style>
