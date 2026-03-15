@@ -2261,8 +2261,8 @@ class Report  extends Ork3 {
 				a.peerage,
 				ma.date
 			FROM " . DB_PREFIX . "awards ma
-				JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-				JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
 				LEFT JOIN " . DB_PREFIX . "mundane giver ON giver.mundane_id = ma.given_by_id
 			WHERE (a.peerage IN ('Squire', 'Man-At-Arms', 'Page', 'Lords-Page')
@@ -2292,11 +2292,10 @@ class Report  extends Ork3 {
 				m.mundane_id,
 				m.persona
 			FROM " . DB_PREFIX . "awards ma
-				JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-				JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
 				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
 			WHERE a.peerage = 'Knight'
-				AND ma.kingdom_id = $kingdom_id
+				AND m.kingdom_id = $kingdom_id
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)
 			ORDER BY m.persona";
 
@@ -2315,8 +2314,8 @@ class Report  extends Ork3 {
 		// All knight awards globally — IDs for the crown icon + type names for display.
 		$all_knights_sql = "SELECT ma.mundane_id, IFNULL(ka.name, a.name) AS knight_name
 			FROM " . DB_PREFIX . "awards ma
-				JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-				JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 			WHERE a.peerage = 'Knight'
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)";
 

@@ -3,6 +3,16 @@
 $kingdom_id    = $kingdom_id ?? null;
 $knights       = is_array($Knights)       ? $Knights       : array();
 $relationships = is_array($BeltlineRelationships) ? $BeltlineRelationships : array();
+// Strip magic_quotes-era backslash escapes from persona fields
+$knights = array_map(function($k) {
+	$k['Persona'] = stripslashes($k['Persona'] ?? '');
+	return $k;
+}, $knights);
+$relationships = array_map(function($r) {
+	$r['RecipientPersona'] = stripslashes($r['RecipientPersona'] ?? '');
+	$r['GiverPersona']     = stripslashes($r['GiverPersona'] ?? '');
+	return $r;
+}, $relationships);
 $knight_count  = count($knights);
 $rel_count     = count($relationships);
 
@@ -248,7 +258,10 @@ if ($kingdom_id && !empty($knights)) {
 	<!-- ── Context strip ──────────────────────────────────── -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Select a knight to explore their beltline family — squires, men-at-arms, pages, and their full lineage going both up and down the chain.</span>
+		<div>
+			<span>Select a knight to explore their beltline family — squires, persons-at-arms, pages, and their full lineage going both up and down the chain.</span>
+			<p style="margin: 8px 0 0;">Please note, beltline data is based on the presence of associate titles (Page, Squire, Man-at-Arms, Woman-at-Arms, Noble&#39;s Page) being present in the titles list of the given player with a proper assignment of &ldquo;Given By&rdquo; indicating the individual who took them on as an associate. If the data in this report looks incorrect or data is missing, please review the player profiles involved and ask your local officers to help correct any missing or incomplete data.</p>
+		</div>
 	</div>
 
 <?php if (!empty($no_kingdom)) : ?>
