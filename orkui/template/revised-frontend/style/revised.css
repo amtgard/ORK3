@@ -5202,5 +5202,6 @@
 	.pk-card { margin-bottom: 8px; }
 	.pn-card { margin-bottom: 4px; }
 	.pn-layout { gap: 10px; }
+	.award-btn-prefix { display: none; }
 }
 

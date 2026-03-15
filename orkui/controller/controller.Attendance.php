@@ -17,8 +17,8 @@ class Controller_Attendance extends Controller {
 				$this->session->park_name = $park_info['ParkInfo']['ParkName'];
 				$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 				$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
-				$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
-				$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
+				$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+				$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->session->park_id, 'display' => $this->session->park_name );
 				break;
 			case 'event':
 				break;

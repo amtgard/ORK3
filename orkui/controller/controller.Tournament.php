@@ -18,7 +18,7 @@ class Controller_Tournament extends Controller {
 			// Direct link
 			$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 			$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
-			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 		}
 		$this->data['kingdom_id'] = $this->session->kingdom_id;
 		$this->data['park_id'] = $this->session->park_id;

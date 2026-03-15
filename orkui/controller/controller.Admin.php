@@ -38,7 +38,7 @@ class Controller_Admin extends Controller {
 						'ToParkId' => $this->request->Admin_mergepark->ToParkId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = 'Parks merged.  <a href="' . UIR . 'Park/index/' . $this->request->Admin_mergepark->ToParkId . '">View your abomination here.</a>';
+					$this->data['Message'] = 'Parks merged.  <a href="' . UIR . 'Park/profile/' . $this->request->Admin_mergepark->ToParkId . '">View your abomination here.</a>';
 					$this->request->clear('Admin_mergepark');
 				} else if($r['Status'] == 5) {
                     error_log('ORK_DEBUG Header redirect: bad status: ' . json_encode($r));
@@ -621,7 +621,7 @@ class Controller_Admin extends Controller {
 			$this->data['CreateMundaneId'] = valid_id($this->request->Admin_manageevent->MundaneId)?$this->request->Admin_manageevent->MundaneId:$this->request->MundaneId;
 			if (valid_id($this->data['CreateMundaneId'])) {
 				$player = $this->Player->fetch_player($this->data['CreateMundaneId']);
-				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data['CreateMundaneId']}", 'display' => $player['Persona'] );
+				$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/{$this->data['CreateMundaneId']}", 'display' => $player['Persona'] );
 				if ($this->data['LoggedIn']) {
 					$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data['CreateMundaneId']}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 				}
@@ -1032,7 +1032,7 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
+		$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
 		$this->data[ 'page_title' ] = "Admin: " . $this->data['Player']['Persona'];
 	}
 
@@ -1043,7 +1043,7 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$mundane_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$mundane_id", 'display' => $this->data['Player']['Persona'] );
+		$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$mundane_id", 'display' => $this->data['Player']['Persona'] );
 	}
 
 	public function mergeplayer($params=null) {
@@ -1070,7 +1070,7 @@ class Controller_Admin extends Controller {
 						'ToMundaneId' => $this->request->Admin_mergeplayer->ToMundaneId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player created. <a href='".UIR."Player/index/{$this->request->Admin_mergeplayer->ToMundaneId}'>View your abomination here.</a>";
+					$this->data['Message'] = "Player created. <a href='".UIR."Player/profile/{$this->request->Admin_mergeplayer->ToMundaneId}'>View your abomination here.</a>";
 					$this->request->clear('Admin_mergeplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1108,7 +1108,7 @@ class Controller_Admin extends Controller {
 						'ParkId' => $this->request->Admin_claimplayer->ParkId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/index/{$this->request->Admin_claimplayer->ParkId}'>their new home.</a>";
+					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/profile/{$this->request->Admin_claimplayer->ParkId}'>their new home.</a>";
 					$this->request->clear('Admin_claimplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1173,7 +1173,7 @@ class Controller_Admin extends Controller {
 						'ParkId' => $this->request->Admin_moveplayer->ParkId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/index/{$this->request->Admin_moveplayer->ParkId}'>their new home.</a>";
+					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/profile/{$this->request->Admin_moveplayer->ParkId}'>their new home.</a>";
 					$this->request->clear('Admin_moveplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1245,7 +1245,7 @@ class Controller_Admin extends Controller {
 						'IsActive' => 1,
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player created. <a href='".UIR."Player/index/$r[Detail]'>View your spawn here.</a>";
+					$this->data['Message'] = "Player created. <a href='".UIR."Player/profile/$r[Detail]'>View your spawn here.</a>";
 					$this->request->clear('Admin_createplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1318,7 +1318,7 @@ class Controller_Admin extends Controller {
 					));
 				if ($r['Status'] == 0) {
 					$this->request->clear('Admin_createkingdom');
-					header( 'Location: '.UIR.'Kingdom/index/'.$r['Detail'] );
+					header( 'Location: '.UIR.'Kingdom/profile/'.$r['Detail'] );
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
@@ -1523,7 +1523,7 @@ class Controller_Admin extends Controller {
 					));
 				if ($r['Status'] == 0) {
 					$this->request->clear('Admin_createpark');
-					//header( 'Location: '.UIR.'Park/index/'.$r['Detail'] );
+					//header( 'Location: '.UIR.'Park/profile/'.$r['Detail'] );
 				} else if($r['Status'] == 5) {
 					header('Location: '.UIR.'Login/login/Admin/createpark' . (($post!=null)?('/'.$post):''));
 				} else {
@@ -1674,7 +1674,7 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 	}
 
 	private function park_route($id) {
@@ -1699,8 +1699,8 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
-		$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
+		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+		$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->session->park_id, 'display' => $this->session->park_name );
 	}
 }
 

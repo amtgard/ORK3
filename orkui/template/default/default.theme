@@ -72,11 +72,11 @@
 	}
 ?>
 <?php if ($__home) : ?>
-			<a href='<?=UIR?>Kingdom/index/<?=(int)$__home['kingdom_id']?>' class='nav-home-btn' title='My Kingdom: <?=htmlspecialchars($__home['kingdom_name'])?>'>
+			<a href='<?=UIR?>Kingdom/profile/<?=(int)$__home['kingdom_id']?>' class='nav-home-btn' title='My Kingdom: <?=htmlspecialchars($__home['kingdom_name'])?>'>
 				<i class='fas fa-chess-rook'></i>
 				<span class='nav-home-label'><?=htmlspecialchars($__home['kingdom_name'])?></span>
 			</a>
-			<a href='<?=UIR?>Park/index/<?=(int)$__home['park_id']?>' class='nav-home-btn' title='My Park: <?=htmlspecialchars($__home['park_name'])?>'>
+			<a href='<?=UIR?>Park/profile/<?=(int)$__home['park_id']?>' class='nav-home-btn' title='My Park: <?=htmlspecialchars($__home['park_name'])?>'>
 				<i class='fas fa-tree'></i>
 				<span class='nav-home-label'><?=htmlspecialchars($__home['park_name'])?></span>
 			</a>
@@ -234,7 +234,7 @@
 				$.each(players, function(i, p) {
 					var lbl = p.name ? nsEsc(p.name) : '<em class="nsdd-no-value">No Persona</em>';
 					var sub = nsEsc((p.abbr || '') + ' \u00b7 ' + (p.park || ''));
-					html += '<a class="nsdd-item" href="?Route=Player/index/' + p.id + '">' +
+					html += '<a class="nsdd-item" href="?Route=Player/profile/' + p.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-user fa-fw"></i></span>' +
 						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + lbl + '</div>' +
 						'<div class="nsdd-item-sub">' + sub + '</div></span></a>';
@@ -246,7 +246,7 @@
 				if (sep) html += '<div class="nsdd-divider"></div>';
 				html += '<div class="nsdd-section-header"><i class="fas fa-tree fa-fw"></i>&ensp;Parks</div>';
 				$.each(parks, function(i, p) {
-					html += '<a class="nsdd-item" href="?Route=Park/index/' + p.id + '">' +
+					html += '<a class="nsdd-item" href="?Route=Park/profile/' + p.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-tree fa-fw"></i></span>' +
 						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(p.name) + '</div></span></a>';
 				});
@@ -257,7 +257,7 @@
 				if (sep) html += '<div class="nsdd-divider"></div>';
 				html += '<div class="nsdd-section-header"><i class="fas fa-crown fa-fw"></i>&ensp;Kingdoms</div>';
 				$.each(kingdoms, function(i, k) {
-					html += '<a class="nsdd-item" href="?Route=Kingdom/index/' + k.id + '">' +
+					html += '<a class="nsdd-item" href="?Route=Kingdom/profile/' + k.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-crown fa-fw"></i></span>' +
 						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(k.name) + '</div></span></a>';
 				});

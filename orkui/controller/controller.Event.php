@@ -18,9 +18,9 @@ class Controller_Event extends Controller {
 		$this->data[ 'page_title' ] = $this->data['EventDetails']['Name'];
 
 		if (valid_id($this->data['EventDetails']['KingdomId']))
-			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->data['EventDetails']['KingdomId'], 'display' => $this->data['EventDetails']['EventInfo'][0]['KingdomName'] );
+			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->data['EventDetails']['KingdomId'], 'display' => $this->data['EventDetails']['EventInfo'][0]['KingdomName'] );
 		if (valid_id($this->data['EventDetails']['ParkId']))
-			$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->data['EventDetails']['ParkId'], 'display' => $this->data['EventDetails']['EventInfo'][0]['ParkName'] );
+			$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->data['EventDetails']['ParkId'], 'display' => $this->data['EventDetails']['EventInfo'][0]['ParkName'] );
 			$this->data['menu']['event'] = array( 'url' => UIR.'Event/index/'.$id, 'display' => $this->data['EventDetails']['Name'] );
 			$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 			if ($_uid > 0 && valid_id($id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_EVENT, (int)$id, AUTH_EDIT)) {
@@ -234,9 +234,9 @@ class Controller_Event extends Controller {
 				$evPid = (int)$evRow->park_id;
 			}
 			if ($evPid > 0) {
-				$redirect = UIR . 'Park/index/' . $evPid . '?tab=events';
+				$redirect = UIR . 'Park/profile/' . $evPid . '?tab=events';
 			} elseif ($evKid > 0) {
-				$redirect = UIR . 'Kingdom/index/' . $evKid . '?tab=events';
+				$redirect = UIR . 'Kingdom/profile/' . $evKid . '?tab=events';
 			} else {
 				$redirect = UIR . 'Event/template/' . $event_id;
 			}

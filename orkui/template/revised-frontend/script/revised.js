@@ -2469,8 +2469,8 @@ $(document).ready(function() {
                 errEl.style.display = '';
             })
             .finally(function() {
-                btnNew.innerHTML  = '<i class="fas fa-plus"></i> Add + New Player';
-                btnSame.innerHTML = '<i class="fas fa-plus"></i> Add + Same Player';
+                btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
+                btnSame.innerHTML = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player';
                 checkRequired();
             });
     }
@@ -2481,7 +2481,21 @@ $(document).ready(function() {
     });
     // "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
     gid('kn-award-save-same').addEventListener('click', function() {
-        knDoSave(function() { knAutoDismissRec(); knShowSuccess(); knClearAward(); gid('kn-award-select').focus(); });
+        knDoSave(function() {
+            knAutoDismissRec(); knShowSuccess(); knClearAward();
+            var pid = gid('kn-award-player-id').value;
+            if (pid) {
+                knPlayerRanks = {};
+                fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+                    .then(function(r) { return r.json(); })
+                    .then(function(ranks) {
+                        knPlayerRanks = ranks || {};
+                        var curAward = gid('kn-award-select').value;
+                        if (curAward) buildRankPills(curAward);
+                    }).catch(function() {});
+            }
+            gid('kn-award-select').focus();
+        });
     });
 })();
 (function() {
@@ -4675,8 +4689,8 @@ $(document).ready(function() {
                 errEl.style.display = '';
             })
             .finally(function() {
-                btnNew.innerHTML  = '<i class="fas fa-plus"></i> Add + New Player';
-                btnSame.innerHTML = '<i class="fas fa-plus"></i> Add + Same Player';
+                btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
+                btnSame.innerHTML = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player';
                 checkRequired();
             });
     }
@@ -4687,7 +4701,21 @@ $(document).ready(function() {
     });
     // "Add + Same Player" — clear only award/rank/note, keep player + date/giver/location
     gid('pk-award-save-same').addEventListener('click', function() {
-        pkDoSave(function() { pkAutoDismissRec(); pkShowSuccess(); pkClearAward(); gid('pk-award-select').focus(); });
+        pkDoSave(function() {
+            pkAutoDismissRec(); pkShowSuccess(); pkClearAward();
+            var pid = gid('pk-award-player-id').value;
+            if (pid) {
+                pkPlayerRanks = {};
+                fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+                    .then(function(r) { return r.json(); })
+                    .then(function(ranks) {
+                        pkPlayerRanks = ranks || {};
+                        var curAward = gid('pk-award-select').value;
+                        if (curAward) buildRankPills(curAward);
+                    }).catch(function() {});
+            }
+            gid('pk-award-select').focus();
+        });
     });
 })();
 (function() {

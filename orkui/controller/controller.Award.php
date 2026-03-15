@@ -26,7 +26,7 @@ class Controller_Award extends Controller
 				$this->kingdom_info = $kingdom_info;
 				$this->session->kingdom_id = $kingdom_info['KingdomInfo']['KingdomId'];
 				$this->session->kingdom_name = $kingdom_info['KingdomInfo']['KingdomName'];
-				$this->data['menu']['kingdom'] = array('url' => UIR . 'Kingdom/index/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name);
+				$this->data['menu']['kingdom'] = array('url' => UIR . 'Kingdom/profile/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name);
 				$this->data['KingdomId'] = $id;
 		}
 		$this->data['Call'] = $call;

@@ -848,10 +848,10 @@ var KnConfig = {
 			<button class="kn-btn-ghost" id="kn-award-cancel">Close</button>
 			<div style="display:flex;gap:8px">
 				<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
-					<i class="fas fa-plus"></i> Add + Same Player
+					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
 				</button>
 				<button class="kn-btn kn-btn-primary" id="kn-award-save-new" disabled>
-					<i class="fas fa-plus"></i> Add + New Player
+					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
 				</button>
 			</div>
 		</div>

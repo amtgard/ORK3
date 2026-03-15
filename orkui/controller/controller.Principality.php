@@ -33,7 +33,7 @@ class Controller_Principality extends Controller {
 					array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Principality' )
 				);
 		}
-		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 		$this->data['menu']['principality'] = array( 'url' => UIR.'Principality/index/'.$this->session->principality_id, 'display' => $this->session->principality_name );
 		unset($this->data['menu']['park']);
 	}

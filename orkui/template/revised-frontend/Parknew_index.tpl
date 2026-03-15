@@ -1200,10 +1200,10 @@ var PkConfig = {
 			<button class="pk-btn-ghost" id="pk-award-cancel">Close</button>
 			<div style="display:flex;gap:8px">
 				<button class="pk-btn pk-btn-secondary" id="pk-award-save-same" disabled>
-					<i class="fas fa-plus"></i> Add + Same Player
+					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
 				</button>
 				<button class="pk-btn pk-btn-primary" id="pk-award-save-new" disabled>
-					<i class="fas fa-plus"></i> Add + New Player
+					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
 				</button>
 			</div>
 		</div>
