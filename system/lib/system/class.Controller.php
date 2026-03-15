@@ -34,26 +34,27 @@ class Controller
 			$this->data[ 'page_title' ] = $this->method;
 		}
 		$this->data['LoggedIn'] = isset($this->session->user_id);
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
 		$this->data[ 'controller_title' ] = get_class( $this );
 		$this->data[ 'path' ] = [ get_class( $this ), $method ];
 
 		$this->data[ 'menu' ] = [ ];
 		$this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
-		if ($this->data['LoggedIn']) {
+		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, null, null)) {
 			$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel', 'no-crumb' => 'no-crumb' ];
 		}
 
-    if ( isset( $this->session->kingdom_id ) ) {
+		if ( isset( $this->session->kingdom_id ) ) {
 			$this->data[ 'menu' ][ 'kingdom' ] = [ 'url' => UIR . 'Kingdom/index/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name ];
-			if ($this->data['LoggedIn']) {
+			if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
 				$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/kingdom/' . $this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
 			}
 		}
 
 		if ( isset( $this->session->park_id ) ) {
 			$this->data[ 'menu' ][ 'park' ] = [ 'url' => UIR . 'Park/index/' . $this->session->park_id, 'display' => $this->session->park_name ];
-			if ($this->data['LoggedIn']) {
+			if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
 				$this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
 			}
 		}

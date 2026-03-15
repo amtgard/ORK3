@@ -100,16 +100,10 @@
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
 				<i class="fas fa-map"></i> Atlas
 			</a>
-			<?php if ($LoggedIn): ?>
-				<?php if ($CanManageKingdom ?? false): ?>
-				<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
-					<i class="fas fa-cog"></i> Admin
-				</button>
-				<?php else: ?>
-				<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">
-					<i class="fas fa-cog"></i> Admin
-				</a>
-				<?php endif; ?>
+			<?php if ($CanManageKingdom ?? false): ?>
+			<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
+				<i class="fas fa-cog"></i> Admin
+			</button>
 			<?php endif; ?>
 		</div>
 
@@ -211,7 +205,7 @@
 					<span class="kn-link-icon"><i class="fas fa-calendar"></i></span>
 					<a href="<?= UIR ?>Search/event&KingdomId=<?= $kingdom_id ?>">Find Events</a>
 				</li>
-				<?php if ($LoggedIn): ?>
+				<?php if ($CanManageKingdom ?? false): ?>
 					<li>
 						<span class="kn-link-icon"><i class="fas fa-cog"></i></span>
 						<a href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">Admin Panel</a>

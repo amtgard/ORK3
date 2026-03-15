@@ -239,10 +239,6 @@
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAdminModal()">
 						<i class="fas fa-cog"></i> Admin
 					</button>
-					<?php else: ?>
-					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= $park_id ?>">
-						<i class="fas fa-cog"></i> Admin
-					</a>
 					<?php endif; ?>
 				<?php endif; ?>
 
