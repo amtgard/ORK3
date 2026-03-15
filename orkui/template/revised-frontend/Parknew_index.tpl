@@ -454,7 +454,7 @@
 						<?php endif; ?>
 					</div>
 					<?php endif; ?>
-				</div>
+
 				<!-- Schedule sub-section -->
 				<div class="pk-about-section pk-about-schedule">
 					<div class="pk-about-label" style="display:flex;align-items:center;justify-content:space-between;">
@@ -530,6 +530,7 @@
 					<div class="pk-empty">No park days scheduled</div>
 				<?php endif; ?>
 				</div><!-- /pk-about-schedule -->
+				</div><!-- /pk-about-grid -->
 			</div><!-- /pk-tab-about -->
 
 			<!-- Events Tab -->
@@ -543,7 +544,7 @@
 						<div id="pk-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
 							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
 							<button class="pk-filter-toggle pk-filter-on" data-filter="event">Events</button>
-							<button class="pk-filter-toggle pk-filter-on" data-filter="park-day">Park Days</button>
+							<button class="pk-filter-toggle" data-filter="park-day">Park Days</button>
 						</div>
 						<?php endif; ?>
 						<?php if ($CanManagePark): ?>
@@ -596,7 +597,7 @@
 									case 'monthly':       $pkDayRec = 'Monthly on the ' . shortScale::toDigith($pkDay['MonthDay']); break;
 									default:              $pkDayRec = $pkDay['Recurrence'];
 								}
-								$pkPurposeLabels = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&amp;S Day','other'=>'Other'];
+								$pkPurposeLabels = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
 								$pkDayLabel = $pkPurposeLabels[$pkDay['Purpose']] ?? 'Park Day';
 							?>
 							<tr data-type="park-day" style="display:none">

@@ -6575,8 +6575,8 @@ p {
     text-decoration: none;
 }
 #nav-resources-wrap .nav-dropdown-menu {
-    right: auto;
-    left: 0;
+    right: 0;
+    left: auto;
 }
 .nav-home-btn {
     display: inline-flex;
@@ -7031,40 +7031,35 @@ a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-cont
     max-width: 32px;
 }
 
-#simple-menu {
+#nav-mobile-home {
 	display: none;
 }
 
-
-@media (max-width: 425px) {
-	#simple-menu {
-		display: inline-block;
-		position: fixed;
-		right: 8px;
-		top: 0px;
-		line-height: 30px;
+@media (max-width: 640px) {
+	#nav-mobile-home {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 6px;
+		color: #e2e8f0 !important;
+		font-size: 16px;
+		text-decoration: none;
+		flex-shrink: 0;
 	}
-	#newmenu {
-		display: none;	
-	}
-  #sidr input {
-		border-width: 0 0 1px 0;
-		border-color: #eee;
-		margin-left: 4px;
-		background-color: transparent;
-		color: #ffcc00;
-		font-weight: bold;
-		font-size: 15px;
-		margin: 0 15px;
+	#navmenu {
+		display: none;
 	}
 	body {
 		margin: 0;
-		padding-top: 0; /* navbar hidden at this breakpoint */
+		padding-top: 48px;
 	}
 	#theme_container {
 		width: 100%;
-		margin: 30px 0px;
-		padding: 0px;
+		margin: 0;
+		padding: 0 6px;
+		box-sizing: border-box;
 	}
 	#contents {
 		margin: 0;	
@@ -7094,9 +7089,22 @@ a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-cont
 		overflow: visible;
 	}
 	.info-container h3 {
-		border-radius: 0px;	
+		border-radius: 0px;
 		border-width: 1px 0;
 		margin-bottom: 0px;
+	}
+	#nav-search-dropdown {
+		position: fixed;
+		top: 48px;
+		left: 8px;
+		right: 8px;
+		width: auto;
+	}
+	.nav-username, .nav-chevron {
+		display: none;
+	}
+	.nav-home-btn {
+		display: none;
 	}
 }
 

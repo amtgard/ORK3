@@ -395,23 +395,23 @@
 
 			<ul class="ev-tab-nav" id="ev-tab-nav">
 				<li class="ev-tab-active" data-tab="ev-tab-details" onclick="evShowTab(this,'ev-tab-details')">
-					<i class="fas fa-align-left"></i> Details
+					<i class="fas fa-align-left"></i><span class="ev-tab-label"> Details</span>
 				</li>
 				<li data-tab="ev-tab-attendance" onclick="evShowTab(this,'ev-tab-attendance')">
-					<i class="fas fa-clipboard-list"></i> Attendance
+					<i class="fas fa-clipboard-list"></i><span class="ev-tab-label"> Attendance</span>
 					<span class="ev-tab-count"><?= $attendeeCount ?></span>
 				</li>
 				<li data-tab="ev-tab-tournaments" onclick="evShowTab(this,'ev-tab-tournaments')">
-					<i class="fas fa-trophy"></i> Tournaments
+					<i class="fas fa-trophy"></i><span class="ev-tab-label"> Tournaments</span>
 					<span class="ev-tab-count"><?= $tourneyCount ?></span>
 				</li>
 				<li data-tab="ev-tab-rsvp" onclick="evShowTab(this,'ev-tab-rsvp')">
-					<i class="fas fa-calendar-check"></i> RSVPs
+					<i class="fas fa-calendar-check"></i><span class="ev-tab-label"> RSVPs</span>
 					<span class="ev-tab-count"><?= $rsvpCount ?></span>
 				</li>
 				<?php if ($hasMapTab): ?>
 				<li data-tab="ev-tab-map" onclick="evShowTab(this,'ev-tab-map')">
-					<i class="fas fa-map-marked-alt"></i> Map
+					<i class="fas fa-map-marked-alt"></i><span class="ev-tab-label"> Map</span>
 				</li>
 				<?php endif; ?>
 			</ul>
