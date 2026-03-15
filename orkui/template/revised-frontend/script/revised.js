@@ -1640,11 +1640,12 @@ function knRenderMapSidebar(loc) {
     var sat = (getComputedStyle(document.documentElement).getPropertyValue('--kn-sat') || '60%').trim();
     var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
 
+    var profileUrl = '?Route=Park/profile/' + loc.id;
     var heraldryHtml = loc.heraldry
-        ? '<img src="' + loc.heraldry + '" class="kn-park-heraldry" alt="' + loc.name + ' heraldry">'
-        : '<div class="kn-park-heraldry-placeholder"><i class="fas fa-shield-alt"></i></div>';
+        ? '<a href="' + profileUrl + '"><img src="' + loc.heraldry + '" class="kn-park-heraldry" alt="' + loc.name + ' heraldry"></a>'
+        : '<a href="' + profileUrl + '"><div class="kn-park-heraldry-placeholder"><i class="fas fa-shield-alt"></i></div></a>';
     var heroHtml = heraldryHtml
-        + '<div class="kn-park-hero-name">' + escHtml(loc.name) + '</div>'
+        + '<a href="' + profileUrl + '" class="kn-park-hero-name" style="text-decoration:none">' + escHtml(loc.name) + '</a>'
         + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '');
 
     var bodyHtml = '';
