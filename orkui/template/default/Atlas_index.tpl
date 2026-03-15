@@ -9,6 +9,7 @@ foreach ((array)($Parks['Parks'] ?? []) as $details) {
 	        : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
 	if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
 	if ((int)($details['KingdomId'] ?? 0) <= 0 || empty($details['KingdomName'])) continue;
+	$_isTopKingdom = ((int)($details['ParentKingdomId'] ?? 0) === 0);
 	$heraldryHtml = $details['HasHeraldry']
 		? '<img src="' . HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $details['ParkId'])) . '" style="max-width:60px;display:block;margin-bottom:6px">'
 		: '';
@@ -25,7 +26,7 @@ foreach ((array)($Parks['Parks'] ?? []) as $details) {
 		         . ($dirText  ? '<p>' . nl2br($dirText)  . '</p>' : '')
 		         . ($descText ? '<h4 style="margin:8px 0 4px">Description</h4><p>' . nl2br($descText) . '</p>' : ''),
 	];
-	$atKingdomIds[(int)$details['KingdomId']] = true;
+	if ($_isTopKingdom) $atKingdomIds[(int)$details['KingdomId']] = true;
 }
 $atParkCount    = count($atParks);
 $atKingdomCount = count($atKingdomIds);
