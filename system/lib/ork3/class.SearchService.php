@@ -313,7 +313,7 @@ class SearchService extends Ork3 {
 		}
 		$order = $order ?? '';
 		$sql = "select 
-						`mundane_id`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
+						`mundane_id`, m.`active`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
 						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
 					from " . DB_PREFIX . "mundane m
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
@@ -340,6 +340,7 @@ class SearchService extends Ork3 {
 						'ParkName' => $q->park_name,
 						'Waivered' => $q->waivered,
 						'PenaltyBox' => $q->penalty_box,
+						'Active' => (int)$q->active,
 						'KAbbr' => $q->k_abbr,
 						'PAbbr' => $q->p_abbr,
 						'Suspended' => $q->suspended,
