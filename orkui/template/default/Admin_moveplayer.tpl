@@ -70,7 +70,7 @@
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
 						});
 						response(suggestions);
 					}
@@ -91,6 +91,7 @@
 
 <div class='info-container'>
 	<h3>Move Player</h3>
+	<p class='info-message'>Use this tool to move a player's home park record. Start by optionally selecting their current home park to narrow the player search, then search for the player by persona name. Finally, select the destination park they should be moved to and click <strong>Move Player</strong>.</p>
 <?php if (strlen($Error) > 0) : ?>
 	<div class='error-message'><?=$Error ?></div>
 <?php endif; ?>
@@ -99,7 +100,7 @@
 <?php endif; ?>	
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/moveplayer/submit'>
 		<div>
-			<span>Park:</span>
+			<span>Player's Current Home Park:</span>
 			<span><input type='text' value='<?=$Admin_moveplayer['SrcParkName'] ?>' name='SrcParkName' id='SrcParkName' /></span>
 		</div>
 		<div>
