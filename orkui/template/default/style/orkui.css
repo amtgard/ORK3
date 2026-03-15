@@ -6462,9 +6462,11 @@ body {
 	color: #666;
 	background-color: white;
 	padding-top: 48px; /* clear the fixed navbar (#newmenu height: 48px) */
+	scrollbar-gutter: stable;
 }
 #theme_container {
-	width: 80%;
+	width: 95%;
+	max-width: 1600px;
 	margin: 10px auto 40px auto;
 	padding: 6px;
 }
@@ -6484,7 +6486,7 @@ p {
 	text-align: justify;
 }
 #contents {
-	margin: 0px 0px 0px 12px;
+	margin: 0;
 }
 
 /* ===== Global Navigation ===== */
@@ -7035,7 +7037,7 @@ a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-cont
 	display: none;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
 	#nav-mobile-home {
 		display: flex;
 		align-items: center;

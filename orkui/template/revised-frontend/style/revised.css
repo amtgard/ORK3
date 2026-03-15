@@ -394,6 +394,9 @@
 	margin-bottom: -2px;
 	transition: color 0.15s, border-color 0.15s;
 	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 6px;
 	flex-shrink: 0;
 }
 .pn-tab-nav li:hover {
@@ -1028,7 +1031,7 @@
 	.pn-tab-panel { overflow-x: auto; }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
 	.pn-tab-label { display: none; }
 	.pn-tab-count { display: none; }
 	.pn-tab-nav li { flex: 1; justify-content: center; padding: 12px 4px; font-size: 15px; }
@@ -1079,8 +1082,7 @@
 	.pn-breadcrumb { font-size: 11px; margin-bottom: 6px; }
 	.pn-badges { gap: 4px; }
 	.pn-badge { font-size: 10px; padding: 2px 7px; }
-	.pn-tab-nav { overflow-x: hidden; }
-	.pn-tab-nav li { flex: 1; flex-shrink: 1; display: flex; align-items: center; justify-content: center; padding: 10px 4px; font-size: 15px; }
+	.pn-tab-nav li { flex: 1; justify-content: center; padding: 10px 4px; font-size: 15px; }
 	.pn-tab-panel { padding: 12px 10px; }
 }
 
@@ -1563,6 +1565,9 @@
 	margin-bottom: -2px;
 	transition: color 0.15s, border-color 0.15s;
 	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 6px;
 	flex-shrink: 0;
 }
 .kn-tab-nav li:hover { color: var(--kn-accent); background: #edf2f7; }
@@ -1876,7 +1881,7 @@
 	.kn-player-search-wrap { flex: 1 1 100%; }
 	.kn-player-search-input { width: 100%; }
 }
-@media (max-width: 480px) {
+@media (max-width: 768px) {
 	/* Icon-only tabs: hide text labels, spread icons evenly */
 	.kn-tab-label { display: none; }
 	.kn-tab-count { display: none; }
@@ -2862,7 +2867,7 @@
 	.pk-player-search-wrap { flex: 1 1 100%; }
 	.pk-player-search-input { width: 100%; }
 }
-@media (max-width: 480px) {
+@media (max-width: 768px) {
 	.pk-tab-label { display: none; }
 	.pk-tab-count { display: none; }
 	.pk-tab-nav li { flex: 1; justify-content: center; padding: 12px 4px; font-size: 15px; gap: 0; }
@@ -3676,7 +3681,7 @@
 .ev-modal-btn-save:hover { background: #2c5282; }
 
 /* ---- Event page mobile ---- */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
 	.ev-hero { margin-bottom: 10px; }
 	.ev-hero-content {
 		display: grid;
@@ -5190,7 +5195,7 @@
 .adm-btn-ghost { background: transparent; color: #4a5568; border: 1.5px solid #e2e8f0; }
 
 /* ---- Mobile: tighten vertical spacing ---- */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
 	.pn-hero, .kn-hero, .pk-hero, .ev-hero, .en-hero { margin-bottom: 10px; }
 	.pn-stats-row, .kn-stats-row, .pk-stats-row { margin-bottom: 10px; }
 	.pn-tab-nav, .kn-tab-nav, .pk-tab-nav { margin-bottom: 8px; }

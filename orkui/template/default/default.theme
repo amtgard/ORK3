@@ -273,7 +273,7 @@
 			var inp = document.getElementById('UniversalSearch');
 			if (!inp) return;
 			function updatePlaceholder() {
-				inp.placeholder = window.innerWidth < 640
+				inp.placeholder = window.innerWidth < 768
 					? 'Search\u2026'
 					: 'Search active players, parks, kingdoms\u2026';
 			}
