@@ -274,6 +274,9 @@
 						<button class="kn-view-btn" id="kn-view-list" title="List view">
 							<i class="fas fa-list"></i>
 						</button>
+						<button class="kn-view-btn" title="Map view" onclick="knActivateTab('map');return false;">
+							<i class="fas fa-map"></i>
+						</button>
 						<?php if ($CanAddPark ?? false): ?>
 						<button onclick="knOpenAddParkModal()" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Park
