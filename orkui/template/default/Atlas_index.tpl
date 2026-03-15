@@ -8,6 +8,7 @@ foreach ((array)($Parks['Parks'] ?? []) as $details) {
 	$latlng = isset($loc->location) ? $loc->location
 	        : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
 	if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
+	if ((int)($details['KingdomId'] ?? 0) <= 0 || empty($details['KingdomName'])) continue;
 	$heraldryHtml = $details['HasHeraldry']
 		? '<img src="' . HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $details['ParkId'])) . '" style="max-width:60px;display:block;margin-bottom:6px">'
 		: '';
@@ -240,7 +241,7 @@ window.atInitMap = async function() {
 
 	atMapObj = new google.maps.Map(document.getElementById('at-map'), {
 		center: { lat: 39, lng: -98 },
-		zoom: 4,
+		zoom: 6,
 		mapId: 'ORK3_MAP_ID'
 	});
 
