@@ -222,7 +222,7 @@ if (!is_array($attendance_summary['Dates'])) $attendance_summary['Dates'] = [];
 						</td>
 						<td><a href="<?=UIR?>Kingdom/profile/<?=$date['KingdomId']?>"><?=htmlspecialchars($date['KingdomName'])?></a></td>
 						<td><a href="<?=UIR?>Park/profile/<?=$date['ParkId']?>"><?=htmlspecialchars($date['ParkName'])?></a></td>
-						<td><a href="<?=UIR?>Event/template/<?=$date['EventId']?>"><?=htmlspecialchars($date['EventName'])?></a></td>
+						<td><a href="<?=UIR?>Event/index/<?=$date['EventId']?>"><?=htmlspecialchars($date['EventName'])?></a></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
