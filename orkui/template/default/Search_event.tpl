@@ -213,10 +213,10 @@
 			dateCel = '<span class="se-no-date">—</span>';
 		}
 		var kingdomCel = v.KingdomName && v.KingdomId
-			? navLink('<?= UIR ?>Kingdom/index/' + v.KingdomId, v.KingdomName)
+			? navLink('<?= UIR ?>Kingdom/profile/' + v.KingdomId, v.KingdomName)
 			: (v.KingdomName || '');
 		var parkCel = v.ParkName && v.ParkId
-			? navLink('<?= UIR ?>Park/index/' + v.ParkId, v.ParkName)
+			? navLink('<?= UIR ?>Park/profile/' + v.ParkId, v.ParkName)
 			: (v.ParkName || '');
 		return '<tr onclick="window.location.href=\'' + url + '\'">'
 			+ '<td><span class="se-event-name">' + name + '</span></td>'
