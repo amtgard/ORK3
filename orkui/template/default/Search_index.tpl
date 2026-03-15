@@ -105,6 +105,16 @@
 	font-style:normal;
 }
 
+/* Banned state */
+.sr-row-banned td { background:#fff5f5; }
+.sr-row-banned:hover td { background:#fed7d7; }
+.sr-badge-banned {
+	display:inline-block; font-size:10px; font-weight:600;
+	background:#fc8181; color:#fff; border-radius:4px;
+	padding:1px 5px; margin-left:5px; vertical-align:middle;
+	font-style:normal;
+}
+
 /* Player name column */
 .sr-player-name { font-weight:600; color:#2d3748; }
 .sr-row-inactive .sr-player-name { font-weight:400; color:#a0aec0; }
@@ -195,8 +205,11 @@
 			return;
 		}
 
-		// Sort: active first, then inactive
+		// Sort: active first, then inactive, banned last
 		data.sort(function(a, b) {
+			var aBanned = a.Suspended == 1 ? 1 : 0;
+			var bBanned = b.Suspended == 1 ? 1 : 0;
+			if (aBanned !== bBanned) return aBanned - bBanned;
 			if (b.Active !== a.Active) return b.Active - a.Active;
 			var pa = (a.Persona || '').toLowerCase();
 			var pb = (b.Persona || '').toLowerCase();
@@ -207,11 +220,13 @@
 		for (var i = 0; i < data.length; i++) {
 			var v       = data[i];
 			var active  = v.Active !== 0;
-			var rowCls  = active ? '' : ' sr-row-inactive';
+			var banned  = v.Suspended == 1;
+			var rowCls  = banned ? ' sr-row-banned' : (active ? '' : ' sr-row-inactive');
 			var kingdom = v.KingdomName || '';
 			var park    = v.ParkName    || '';
 			var persona = v.Persona     || v.UserName || '';
-			var badge   = active ? '' : '<span class="sr-badge-inactive">Inactive</span>';
+			var badge   = banned ? '<span class="sr-badge-banned">Banned</span>'
+			            : (active ? '' : '<span class="sr-badge-inactive">Inactive</span>');
 			var url     = '<?= UIR ?>Player/profile/' + v.MundaneId;
 
 			html += '<tr class="sr-row' + rowCls + '" onclick="window.location.href=\'' + url + '\'">'
