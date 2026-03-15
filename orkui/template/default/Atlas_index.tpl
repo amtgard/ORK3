@@ -241,7 +241,7 @@ window.atInitMap = async function() {
 
 	atMapObj = new google.maps.Map(document.getElementById('at-map'), {
 		center: { lat: 39, lng: -98 },
-		zoom: 5,
+		zoom: 3,
 		mapId: 'ORK3_MAP_ID'
 	});
 
