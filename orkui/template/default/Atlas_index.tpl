@@ -245,18 +245,7 @@ window.atInitMap = async function() {
 		mapId: 'ORK3_MAP_ID'
 	});
 
-	// Fit bounds to all park locations
-	if (atMapLocations.length > 0) {
-		var bounds = new google.maps.LatLngBounds();
-		atMapLocations.forEach(function(p) {
-			bounds.extend(new google.maps.LatLng(p.lat, p.lng));
-		});
-		atMapObj.fitBounds(bounds);
-		// Pull back one zoom level so pins aren't clipped
-		google.maps.event.addListenerOnce(atMapObj, 'idle', function() {
-			atMapObj.setZoom(atMapObj.getZoom() - 1);
-		});
-	}
+
 
 	var infowindow = new google.maps.InfoWindow();
 
