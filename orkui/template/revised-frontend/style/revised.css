@@ -4751,6 +4751,7 @@
 .pn-award-action-btn.pn-award-edit-btn:hover { color:#0891b2; }
 .pn-award-action-btn.pn-award-del-btn:hover  { color:#e53e3e; }
 .pn-awards-action-col { white-space:nowrap; text-align:right; }
+.pn-award-actions-cell { white-space:nowrap; text-align:right; }
 .pn-edit-award-name-display { font-size:14px; font-weight:600; color:#2d3748; padding:8px 10px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; min-height:36px; }
 .pn-award-edit-success { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 12px; color:#276749; font-size:13px; margin-bottom:12px; }
 
@@ -4967,6 +4968,9 @@
 .pk-about-meta-row i { color: #718096; width: 16px; flex-shrink: 0; margin-top: 2px; }
 .pk-about-meta-row a { color: #2b6cb0; text-decoration: none; }
 .pk-about-meta-row a:hover { text-decoration: underline; }
+@media (max-width: 768px) {
+	.pk-about-grid { grid-template-columns: 1fr; }
+}
 
 /* ---- Heraldry & Move Player overlays ---- */
 #pk-heraldry-overlay,
