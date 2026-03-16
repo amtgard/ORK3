@@ -18,13 +18,26 @@ class Controller_Unit extends Controller {
 		} elseif ($kingdom_id) {
 			$this->data['ScopeLabel'] = $this->session->kingdom_name ?: 'Kingdom';
 			$this->session->unit_list_ref = 'Unit/unitlist&KingdomId=' . $kingdom_id;
+			unset($this->data['menu']['park']);
 		} else {
 			$this->data['ScopeLabel'] = null;
 			$this->session->unit_list_ref = 'Unit/unitlist';
+			unset($this->data['menu']['park']);
+			unset($this->data['menu']['kingdom']);
 		}
 	}
 
 	public function index($unit_id = null) {
+		if (!valid_id($unit_id)) {
+			if (valid_id($this->session->park_id)) {
+				header('Location: ' . UIR . 'Unit/unitlist&ParkId=' . (int)$this->session->park_id);
+			} elseif (valid_id($this->session->kingdom_id)) {
+				header('Location: ' . UIR . 'Unit/unitlist&KingdomId=' . (int)$this->session->kingdom_id);
+			} else {
+				header('Location: ' . UIR . 'Unit/unitlist');
+			}
+			exit;
+		}
 		$unit_id_int = (int)$unit_id;
 
 		// Handle POST actions (logged-in only)
