@@ -147,7 +147,7 @@
 	</div>
 
 	<h2 class="fp-heading">Reset your password</h2>
-	<p class="fp-subheading">Enter your username <strong>or</strong> email address and we'll send you a temporary password.</p>
+	<p class="fp-subheading">Enter both your username and email address and we'll send you a temporary password.</p>
 
 	<form action="<?= UIR ?>Login/forgotpassword/recover" method="POST">
 		<div class="fp-field">
@@ -155,7 +155,7 @@
 			<input class="fp-input" type="text" id="fp-username" name="username" autocomplete="username" autofocus />
 		</div>
 
-		<div class="fp-divider">or</div>
+		<div class="fp-divider">and</div>
 
 		<div class="fp-field">
 			<label class="fp-label" for="fp-email">Email address</label>

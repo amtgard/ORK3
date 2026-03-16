@@ -2603,8 +2603,8 @@ $(document).ready(function() {
         gid('kn-rec-player-id').value = '';
         checkRequired();
         var term = this.value.trim();
-        if (term.length < 2) { gid('kn-rec-player-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(playerTimer);
+        if (term.length < 2) { gid('kn-rec-player-results').classList.remove('pk-ac-open'); return; }
         playerTimer = setTimeout(function() {
             var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
@@ -2635,6 +2635,7 @@ $(document).ready(function() {
             }).catch(function() {});
         checkRequired();
     });
+    acKeyNav(gid('kn-rec-player-text'), gid('kn-rec-player-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
 
     gid('kn-rec-reason').addEventListener('input', function() {
         var rem = 400 - this.value.length;
@@ -4995,8 +4996,8 @@ $(document).ready(function() {
         gid('pk-rec-player-id').value = '';
         checkRequired();
         var term = this.value.trim();
-        if (term.length < 2) { gid('pk-rec-player-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(playerTimer);
+        if (term.length < 2) { gid('pk-rec-player-results').classList.remove('pk-ac-open'); return; }
         playerTimer = setTimeout(function() {
             var url = UIR_JS + 'KingdomAjax/playersearch/' + PkConfig.kingdomId + '&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
@@ -5027,6 +5028,7 @@ $(document).ready(function() {
             }).catch(function() {});
         checkRequired();
     });
+    acKeyNav(gid('pk-rec-player-text'), gid('pk-rec-player-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
 
     gid('pk-rec-reason').addEventListener('input', function() {
         var rem = 400 - this.value.length;
