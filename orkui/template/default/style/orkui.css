@@ -6630,6 +6630,7 @@ p {
     transition: max-width 0.3s ease, opacity 0.2s ease, margin-left 0.3s ease;
 }
 .nav-search-input::placeholder { color: rgba(255,255,255,0.5); }
+#nav-search-wrap:hover .nav-search-input,
 #nav-search-wrap.nav-search-open .nav-search-input { max-width: 200px; opacity: 1; margin-left: 6px; }
 #nav-search-input-wrap { position: relative; display: flex; align-items: center; }
 #nav-search-dropdown {
