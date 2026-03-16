@@ -82,7 +82,7 @@ class Controller_Event extends Controller {
 				'display' => $info['ParkName'],
 			];
 		$this->data['menu']['event'] = [
-			'url'     => UIR . 'Event/template/' . $event_id,
+			'url'     => '',
 			'display' => $details['Name'],
 		];
 		if ( $can_manage ) {
@@ -194,7 +194,7 @@ class Controller_Event extends Controller {
 				'display' => $info['ParkName'],
 			];
 		$this->data['menu']['event'] = [
-			'url'     => UIR . 'Event/template/' . $event_id,
+			'url'     => '',
 			'display' => $info['Name'] ?? 'Event',
 		];
 		if ( $this->data['CanManageEvent'] ) {
@@ -238,7 +238,7 @@ class Controller_Event extends Controller {
 			} elseif ($evKid > 0) {
 				$redirect = UIR . 'Kingdom/profile/' . $evKid . '?tab=events';
 			} else {
-				$redirect = UIR . 'Event/template/' . $event_id;
+				$redirect = UIR;
 			}
 			header('Location: ' . $redirect);
 			exit;
@@ -398,7 +398,7 @@ class Controller_Event extends Controller {
 				'display' => $info['ParkName'],
 			];
 		$this->data['menu']['event'] = [
-			'url'     => UIR . 'Event/template/' . $event_id,
+			'url'     => '',
 			'display' => $info['Name'] ?? 'Event',
 		];
 		$this->data['menu']['create'] = [

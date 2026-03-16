@@ -168,7 +168,7 @@
 		<tbody>
 <?php if (!is_array($event_summary)) $event_summary = array() ?>
 <?php foreach ($event_summary as $k => $event): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/template/<?=$event['EventId'];?>"'>
+			<tr>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>

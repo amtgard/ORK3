@@ -93,7 +93,7 @@
 		</thead>
 		<tbody>
 <?php foreach ($event_summary as $k => $event): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/template/<?=$event['EventId'];?>"'>
+			<tr>
 				<td><?=$event['ParkName'] ?></td>
 				<td><?=$event['Name'] ?></td>
 				<td><?=0 == $event['NextDate']?"":date("M. j, Y", strtotime($event['NextDate'])) ?></td>

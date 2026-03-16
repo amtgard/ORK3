@@ -31,8 +31,7 @@
 		<li>Events
 			<ul>
 				<li><a href='<?=UIR ?>Admin/createevent'>Schedule an Event</a></li>
-				<li><a href='<?=UIR ?>Admin/manageevent'>Event Templates</a></li>
-			</ul>
+				</ul>
 		</li>
 		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?'Principality':'Kingdom' ?> Dataset</a></li>
 		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Create Tournament</a></li>	</ul>

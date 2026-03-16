@@ -315,6 +315,16 @@ class Controller_Kingdom extends Controller {
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['IsLoggedIn']       = $uid > 0;
+
+		// Pin the logged-in user's home park to the first slot in the parks list
+		$this->data['UserParkId'] = 0;
+		if ($uid > 0) {
+			global $DB;
+			$upRow = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $uid LIMIT 1");
+			if ($upRow && $upRow->Next() && $upRow->park_id) {
+				$this->data['UserParkId'] = (int)$upRow->park_id;
+			}
+		}
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 		$this->data['CanAddPark'] = $uid > 0

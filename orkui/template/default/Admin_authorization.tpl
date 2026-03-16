@@ -141,7 +141,7 @@
 				<td><a href='<?=UIR.'Unit/index/'.$auth['UnitId'] ?>'><?=$auth['UnitName'] ?></a></td>
 <?php 		endif; ?>
 <?php 		if (!isset($this->__session->event_id) || $display_all) : ?>
-				<td><a href='<?=UIR.'Event/template/'.$auth['EventId'] ?>'><?=$auth['EventName'] ?></a></td>
+				<td><?=$auth['EventName'] ?></td>
 <?php 		endif; ?>
 				<td><?=$auth['Role'] ?></td>
 				<td><?=$auth['OfficerRole'] ?></td>

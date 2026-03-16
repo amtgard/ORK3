@@ -18,8 +18,7 @@
         </li>
     	<li><a href='<?=UIR ?>Admin/mergeunit'>Merge Units</a></li>
 		<li><a href='<?=UIR ?>Admin/authorization'>Edit Auths</a></li>
-		<li><a href='<?=UIR ?>Admin/manageevent'>Manage Events</a></li>
-		<li><a href='https://github.com/amtgard/ORK3' target="_blank">Source Code</a></li>
+			<li><a href='https://github.com/amtgard/ORK3' target="_blank">Source Code</a></li>
 	</ul>
 </div>
 <div class='info-container'>

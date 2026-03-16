@@ -176,7 +176,7 @@
 		<tbody>
 			<?php foreach ($UpcomingRsvps as $rsvp) : ?>
 			<tr>
-				<td><a href='<?=UIR ?>Event/template/<?=$rsvp['EventId'] ?>'><?=$rsvp['EventName'] ?></a></td>
+				<td><?=$rsvp['EventName'] ?></td>
 				<td><?=date('Y-m-d', strtotime($rsvp['EventStart'])) ?></td>
 				<td><?=date('Y-m-d', strtotime($rsvp['EventEnd'])) ?></td>
 				<?php if ($IsOwnProfile) : ?>

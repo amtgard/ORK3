@@ -199,7 +199,7 @@
 			</div>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
-				<a href="<?= UIR ?>Event/template/<?= $eventId ?>"><?= $eventName ?></a>
+				<?= $eventName ?>
 				<?php if ($kingdomId): ?>
 					<span class="ev-owner-sep">›</span>
 					<a href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"><?= $kingdomName ?></a>

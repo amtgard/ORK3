@@ -264,6 +264,16 @@
 				<?php
 					// Pre-sort alphabetically so tiles match default list order
 					usort($parkList, function($a, $b) { return strcmp($a['ParkName'], $b['ParkName']); });
+					// Pin the logged-in user's home park to the first slot
+					$_upid = isset($UserParkId) ? (int)$UserParkId : 0;
+					if ($_upid > 0) {
+						$_pinIdx = array_search($_upid, array_column($parkList, 'ParkId'));
+						if ($_pinIdx !== false) {
+							$_pinned = array_splice($parkList, $_pinIdx, 1);
+							$_pinned[0]['_pinned'] = true;
+							array_unshift($parkList, $_pinned[0]);
+						}
+					}
 				?>
 				<?php if (count($parkList) > 0): ?>
 
@@ -291,8 +301,9 @@
 							<?php $tileHeraldry = $park['HasHeraldry'] == 1
 								? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
 								: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
-							<a class="kn-park-tile" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
+							<a class="kn-park-tile<?= !empty($park['_pinned']) ? ' kn-pinned' : '' ?>" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
 								<div class="kn-park-tile-img-wrap">
+									<?php if (!empty($park['_pinned'])): ?><span class="kn-park-pin-badge">Your Park</span><?php endif; ?>
 									<img src="<?= $tileHeraldry ?>"
 										onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
 										alt="<?= htmlspecialchars($park['ParkName']) ?>">
@@ -331,13 +342,14 @@
 							</thead>
 							<tbody>
 								<?php foreach ($parkList as $park): ?>
-									<tr class="kn-row-link" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>'">
+									<tr class="kn-row-link<?= !empty($park['_pinned']) ? ' kn-pinned-row' : '' ?>" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>'">
 										<td class="kn-col-nowrap">
 											<img class="kn-thumb"
 												src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
 												onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
 												alt="">
 											<a href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
+											<?php if (!empty($park['_pinned'])): ?><span class="kn-park-pin-badge" style="position:static;margin-left:6px">Your Park</span><?php endif; ?>
 										</td>
 										<td><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : '') ?></td>
 										<td class="kn-col-numeric kn-avgwk-row">—</td>
@@ -413,7 +425,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-								<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>" onclick="window.location.href='<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>'">
+								<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
 									<td class="kn-col-nowrap">
 										<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
 											? date("M j, Y", strtotime($event['NextDate']))
@@ -424,7 +436,7 @@
 											src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
-										<a href="<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>"><?= htmlspecialchars($event['Name']) ?></a>
+										<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
 									<td style="text-align:center"><?= (int)($event['RsvpCount'] ?? 0) ?></td>
@@ -616,7 +628,6 @@
 							<li><a href="<?= UIR ?>Admin/mergeplayers">Merge Players</a></li>
 							<li><a href="<?= UIR ?>Admin/suspensions/kingdom/<?= $kingdom_id ?>">Suspensions</a></li>
 							<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
-							<li><a href="#" onclick="knOpenEventTemplatesModal();return false;">Event Templates</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -1594,49 +1605,8 @@ var KnConfig = {
 	</div>
 </div>
 
-<!-- Event Templates Modal -->
-<div id="kn-eventtpl-overlay">
-	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px)">
-		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#744210"></i>Event Templates</h3>
-			<button class="kn-modal-close-btn" id="kn-eventtpl-close-btn">&times;</button>
-		</div>
-		<div class="kn-modal-body">
-			<div id="kn-eventtpl-feedback" style="display:none"></div>
-			<div id="kn-eventtpl-list-wrap">
-				<div id="kn-eventtpl-loading" style="text-align:center;padding:16px;color:#a0aec0"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
-				<table class="kn-table" id="kn-eventtpl-table" style="display:none">
-					<thead><tr><th>Event Name</th><th>Host Park</th><th></th></tr></thead>
-					<tbody id="kn-eventtpl-tbody"></tbody>
-				</table>
-				<div id="kn-eventtpl-empty" style="display:none;font-size:13px;color:#a0aec0;text-align:center;padding:12px">No event templates yet.</div>
-			</div>
-			<div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px">
-				<div style="font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Create New Template</div>
-				<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
-					<div class="kn-acct-field" style="flex:1;min-width:160px">
-						<label>Event Name <span style="color:#e53e3e">*</span></label>
-						<input type="text" id="kn-eventtpl-new-name" placeholder="e.g. Summer Midreign" autocomplete="off">
-					</div>
-					<div class="kn-acct-field" style="flex:1;min-width:140px">
-						<label>Host Park <span style="color:#718096;font-weight:400;text-transform:none">(optional)</span></label>
-						<input type="text" id="kn-eventtpl-new-park-name" autocomplete="off" placeholder="Search parks&hellip;">
-						<input type="hidden" id="kn-eventtpl-new-park-id">
-						<div class="kn-ac-results" id="kn-eventtpl-park-results"></div>
-					</div>
-					<div style="flex-shrink:0;padding-top:20px">
-						<button class="kn-btn kn-btn-primary" id="kn-eventtpl-create-btn"><i class="fas fa-plus"></i> Create</button>
-					</div>
-				</div>
-			</div>
-		</div>
-		<div class="kn-modal-footer" style="justify-content:flex-end">
-			<button class="kn-btn-ghost" id="kn-eventtpl-done-btn">Done</button>
-		</div>
-	</div>
-</div>
 
-<!-- Add Tournament Modal -->
+<!-- Add Tournament Modal --><!-- Add Tournament Modal -->
 <div id="kn-addtournament-overlay">
 	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="kn-modal-header">

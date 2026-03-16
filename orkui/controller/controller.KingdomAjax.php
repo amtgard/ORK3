@@ -494,7 +494,7 @@ class Controller_KingdomAjax extends Controller {
 				$ev = [
 					'title' => $abbr . $evtResult->name,
 					'start' => $evtResult->event_start,
-					'url'   => UIR . ($did ? "Event/detail/{$eid}/{$did}" : "Event/template/{$eid}"),
+					'url'   => $did ? UIR . "Event/detail/{$eid}/{$did}" : '',
 					'color' => $isPark ? '#6b46c1' : '#0891b2',
 					'type'  => $isPark ? 'park-event' : 'kingdom-event',
 				];

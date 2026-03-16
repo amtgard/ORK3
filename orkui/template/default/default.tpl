@@ -258,14 +258,14 @@
 	color: #a0aec0;
 }
 
-/* ---- Bottom row: Events + Find ---- */
+/* ---- Bottom row: Principalities + Find (3:1) ---- */
 .hm-bottom-row {
 	display: flex;
 	gap: 28px;
 	align-items: flex-start;
 }
-.hm-bottom-main { flex: 1 1 0; min-width: 0; }
-.hm-bottom-side { width: 240px; flex-shrink: 0; }
+.hm-bottom-main { flex: 3 1 0; min-width: 0; }
+.hm-bottom-side { flex: 1 1 0; min-width: 200px; }
 
 /* ---- Events list ---- */
 .hm-events-list {
@@ -405,7 +405,7 @@
 /* ---- Responsive ---- */
 @media (max-width: 900px) {
 	.hm-bottom-row { flex-direction: column; }
-	.hm-bottom-side { width: 100%; }
+	.hm-bottom-main, .hm-bottom-side { flex: unset; width: 100%; min-width: 0; }
 	.hm-kingdoms-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
 @media (max-width: 600px) {
@@ -493,70 +493,30 @@
 </div>
 
 <!-- =============================================
-     Principalities (if any)
-     ============================================= -->
-<?php if (count($hmPrinz) > 0): ?>
-<div class="hm-section">
-	<div class="hm-section-header">
-		<span class="hm-section-title"><i class="fas fa-shield-alt"></i> Principalities</span>
-	</div>
-	<div class="hm-prinz-grid">
-		<?php foreach ($hmPrinz as $p): ?>
-		<a class="hm-prinz-card" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
-			<img class="hm-prinz-heraldry"
-			     src="<?= htmlspecialchars($p['_heraldry']) ?>"
-			     onerror="this.style.display='none'"
-			     alt="<?= htmlspecialchars(stripslashes($p['KingdomName'])) ?>">
-			<div class="hm-prinz-name"><?= htmlspecialchars(stripslashes($p['KingdomName'])) ?></div>
-			<div class="hm-prinz-stat"><?= (int)$p['ParkCount'] ?> parks &middot; <?= number_format($p['_weekly'], 1) ?>/wk</div>
-		</a>
-		<?php endforeach; ?>
-	</div>
-</div>
-<?php endif; ?>
-
-<!-- =============================================
-     Bottom: Events + Find
+     Bottom: Principalities (3/4) + Find (1/4)
      ============================================= -->
 <div class="hm-bottom-row">
 
-	<!-- Upcoming Events -->
+	<!-- Principalities -->
+	<?php if (count($hmPrinz) > 0): ?>
 	<div class="hm-bottom-main">
 		<div class="hm-section-header">
-			<span class="hm-section-title"><i class="fas fa-flag"></i> Upcoming Events</span>
-			<a class="hm-view-all" href="<?= UIR ?>Search/event">View All &rarr;</a>
+			<span class="hm-section-title"><i class="fas fa-shield-alt"></i> Principalities</span>
 		</div>
-		<?php if (count($hmEventList) > 0): ?>
-		<div class="hm-events-list">
-			<?php foreach ($hmEventList as $event): ?>
-			<a class="hm-event-row" href="<?= UIR ?>Event/detail/<?= (int)$event['EventId'] ?>/<?= (int)$event['NextDetailId'] ?>">
-				<div class="hm-event-heraldry">
-					<?php if ($event['HasHeraldry'] == 1): ?>
-						<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', (int)$event['EventId'])) ?>"
-						     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
-					<?php else: ?>
-						<img src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
-					<?php endif; ?>
-				</div>
-				<div class="hm-event-info">
-					<div class="hm-event-name"><?= htmlspecialchars($event['Name']) ?></div>
-					<div class="hm-event-meta"><?= htmlspecialchars($event['KingdomName']) ?> &mdash; <?= htmlspecialchars($event['ParkName']) ?></div>
-				</div>
-				<div class="hm-event-right">
-				<?php if (!empty($event['NextDate']) && $event['NextDate'] !== '0'): ?>
-				<div class="hm-event-date"><?= date('M j', strtotime($event['NextDate'])) ?></div>
-				<?php endif; ?>
-				<?php if (!empty($event['RsvpCount'])): ?>
-				<div class="hm-event-rsvp"><?= (int)$event['RsvpCount'] ?> RSVP<?= $event['RsvpCount'] != 1 ? 's' : '' ?></div>
-				<?php endif; ?>
-			</div>
+		<div class="hm-prinz-grid">
+			<?php foreach ($hmPrinz as $p): ?>
+			<a class="hm-prinz-card" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
+				<img class="hm-prinz-heraldry"
+				     src="<?= htmlspecialchars($p['_heraldry']) ?>"
+				     onerror="this.style.display='none'"
+				     alt="<?= htmlspecialchars(stripslashes($p['KingdomName'])) ?>">
+				<div class="hm-prinz-name"><?= htmlspecialchars(stripslashes($p['KingdomName'])) ?></div>
+				<div class="hm-prinz-stat"><?= (int)$p['ParkCount'] ?> parks &middot; <?= number_format($p['_weekly'], 1) ?>/wk</div>
 			</a>
 			<?php endforeach; ?>
 		</div>
-		<?php else: ?>
-		<div class="hm-empty">No upcoming events</div>
-		<?php endif; ?>
 	</div>
+	<?php endif; ?>
 
 	<!-- Find sidebar -->
 	<div class="hm-bottom-side">

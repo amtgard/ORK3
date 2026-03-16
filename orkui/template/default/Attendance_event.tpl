@@ -176,7 +176,6 @@
 		<input type='hidden' id='ParkId' name='ParkId' value='<?=valid_id($Attendance_index['ParkId'])?$Attendance_index['ParkId']:$DefaultParkId ?>' />
 		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Attendance_index['MundaneId'] ?>' />
 	</form>
-	<a href='<?=UIR ?>Event/template/<?=$Id ?>'>Go to <?=$EventInfo[0]['Name'] ?></a>
 </div>
 
 <div class='info-container'>

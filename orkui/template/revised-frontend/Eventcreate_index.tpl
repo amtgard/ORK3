@@ -41,7 +41,7 @@
 			<div class="ec-banner-label"><i class="fas fa-plus-circle" style="margin-right:4px"></i>New Scheduled Occurrence</div>
 			<h1 class="ec-banner-name"><?= $eventName ?></h1>
 			<div class="ec-banner-crumb">
-				<a href="<?= UIR ?>Event/template/<?= $eventId ?>"><?= $eventName ?></a>
+				<?= $eventName ?>
 				<?php if ($kingdomId): ?>
 					<span>›</span>
 					<a href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"><?= $kingdomName ?></a>
@@ -188,7 +188,7 @@
 					You can edit any of these details after creation.
 				</div>
 				<div class="ec-action-bar-right">
-					<a class="ec-btn-cancel" href="<?= UIR ?>Event/template/<?= $eventId ?>" id="ec-cancel-btn" onclick="ecCancelAndReturn(event, <?= $eventId ?>)">
+					<a class="ec-btn-cancel" href="<?= htmlspecialchars($_ec_return ?: UIR) ?>" id="ec-cancel-btn" onclick="ecCancelAndReturn(event, <?= $eventId ?>)">
 						Cancel
 					</a>
 					<button type="submit" class="ec-btn-submit" id="ec-submit-btn">
@@ -206,7 +206,7 @@
 <?php
 $_ec_return = $parkId    ? UIR . 'Park/profile/'    . $parkId
 				: ($kingdomId ? UIR . 'Kingdom/profile/' . $kingdomId
-				: UIR . 'Event/template/' . $eventId);
+				: UIR);
 ?>
 var EcConfig = {
 	httpService: '<?= HTTP_SERVICE ?>',

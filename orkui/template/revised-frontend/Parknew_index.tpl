@@ -84,7 +84,7 @@
 			$calEv = [
 				'title' => $ev['Name'],
 				'start' => $ev['NextDate'],
-				'url'   => UIR . ($ev['NextDetailId'] ? 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : 'Event/template/' . $ev['EventId']),
+				'url'   => $ev['NextDetailId'] ? UIR . 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : '',
 				'color' => '#2b6cb0', // Blue for regular events
 			];
 			$endRaw = $ev['NextEndDate'] ?? '';
@@ -578,7 +578,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-							<tr onclick='window.location.href="<?= UIR ?><?= $event['NextDetailId'] ? 'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] : 'Event/template/' . $event['EventId'] ?>"'>
+							<tr<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
 								<td>
 									<div class="pk-tiny-heraldry">
 										<?php if ($event['HasHeraldry'] == 1): ?>
