@@ -6613,7 +6613,6 @@ p {
 #nav-search-wrap {
     display: flex;
     align-items: center;
-    gap: 4px;
 }
 .nav-search-input {
     max-width: 0;
