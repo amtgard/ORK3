@@ -201,7 +201,7 @@ if (!is_array($attendance_summary['Dates'])) $attendance_summary['Dates'] = [];
 <?php elseif ($Type === 'Event'): ?>
 <?php foreach ($attendance_summary['Dates'] as $date): ?>
 					<tr>
-						<td><a href="<?=UIR?>Attendance/event/<?=$date['EventId']?>/<?=$date['EventCalendarDetailId']?>"><?=date('Y-m-d', strtotime($date['EventStart']))?></a></td>
+						<td><a href="<?=UIR?>Event/detail/<?=$date['EventId']?>/<?=$date['EventCalendarDetailId']?>#ev-tab-attendance"><?=date('Y-m-d', strtotime($date['EventStart']))?></a></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
@@ -216,7 +216,7 @@ if (!is_array($attendance_summary['Dates'])) $attendance_summary['Dates'] = [];
 <?php foreach ($attendance_summary['Dates'] as $date): ?>
 					<tr>
 						<td>
-							<a href="<?=UIR?>Attendance/<?=$date['ParkId'] > 0 ? 'park' : 'event'?>/<?=($date['ParkId'] > 0) ? ($date['ParkId'] . '&AttendanceDate=' . date('Y-m-d', strtotime($date['Date']))) : ($date['EventId'] . '/' . $date['EventCalendarDetailId'])?>">
+							<a href="<?=$date['ParkId'] > 0 ? (UIR . 'Attendance/park/' . $date['ParkId'] . '&AttendanceDate=' . date('Y-m-d', strtotime($date['Date']))) : (UIR . 'Event/detail/' . $date['EventId'] . '/' . $date['EventCalendarDetailId'] . '#ev-tab-attendance')?>">
 								<?=valid_id($date['EventId']) ? (date('Y-m-d', strtotime($date['EventStart'])) . ' &mdash; ' . date('m-d', strtotime($date['EventEnd']))) : date('Y-m-d', strtotime($date['Date']))?>
 							</a>
 						</td>

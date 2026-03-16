@@ -885,3 +885,12 @@ var EvConfig = {
 </div>
 <?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script>
+(function() {
+    var hash = location.hash.replace('#', '');
+    if (hash) {
+        var li = document.querySelector('[data-tab="' + hash + '"]');
+        if (li && typeof evShowTab === 'function') evShowTab(li, hash);
+    }
+})();
+</script>
