@@ -215,7 +215,7 @@ class Controller_Park extends Controller
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
 			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
 			: true;
-		$this->data['ShowRecsTab']     = $recsPublic || $this->data['CanManagePark'];
+		$this->data['ShowRecsTab']     = $recsPublic || $this->data['CanManagePark'] || $uid > 0;
 		$this->data['AwardRecsPublic'] = $recsPublic;
 
 		$this->data['AwardRecommendations'] = [];

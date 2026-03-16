@@ -2538,6 +2538,176 @@ $(document).ready(function() {
     });
 })();
 (function() {
+    if (!document.getElementById('kn-rec-overlay')) return;
+    var UIR_JS     = KnConfig.uir;
+    var KINGDOM_ID = KnConfig.kingdomId;
+    var playerTimer;
+    var knRecRanks = {};
+
+    function gid(id) { return document.getElementById(id); }
+
+    function checkRequired() {
+        var ok = !!gid('kn-rec-player-id').value
+              && !!gid('kn-rec-award-select').value
+              && !!gid('kn-rec-reason').value.trim();
+        gid('kn-rec-submit').disabled = !ok;
+    }
+
+    function buildRecRankPills(awardId) {
+        var row   = gid('kn-rec-rank-row');
+        var wrap  = gid('kn-rec-rank-pills');
+        var input = gid('kn-rec-rank-val');
+        wrap.innerHTML = '';
+        input.value = '';
+        row.style.display = 'none';
+        if (!awardId) return;
+        var opt = gid('kn-rec-award-select').querySelector('option[value="' + awardId + '"]');
+        if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
+        row.style.display = '';
+        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
+        var held      = knRecRanks[baseAwardId] || 0;
+        var suggested = Math.min(held + 1, maxRank);
+        for (var r = 1; r <= maxRank; r++) {
+            var pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = 'pk-rank-pill';
+            if (r <= held)       pill.className += ' pk-rank-held';
+            if (r === suggested) pill.className += ' pk-rank-suggested';
+            pill.textContent = r;
+            pill.dataset.rank = r;
+            pill.addEventListener('click', (function(rank, el) {
+                return function() {
+                    wrap.querySelectorAll('.pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
+                    el.classList.add('pk-rank-selected');
+                    input.value = rank;
+                };
+            })(r, pill));
+            wrap.appendChild(pill);
+        }
+        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
+        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+    }
+
+    gid('kn-rec-award-select').addEventListener('change', function() {
+        buildRecRankPills(this.value);
+        checkRequired();
+    });
+
+    gid('kn-rec-player-text').addEventListener('input', function() {
+        gid('kn-rec-player-id').value = '';
+        checkRequired();
+        var term = this.value.trim();
+        if (term.length < 2) { gid('kn-rec-player-results').classList.remove('pk-ac-open'); return; }
+        clearTimeout(playerTimer);
+        playerTimer = setTimeout(function() {
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&q=' + encodeURIComponent(term);
+            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                var el = gid('kn-rec-player-results');
+                el.innerHTML = (data && data.length)
+                    ? data.map(function(p) {
+                        return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                    }).join('')
+                    : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                el.classList.add('pk-ac-open');
+            }).catch(function() {});
+        }, 300);
+    });
+    gid('kn-rec-player-results').addEventListener('click', function(e) {
+        var item = e.target.closest('.pk-ac-item[data-id]');
+        if (!item) return;
+        gid('kn-rec-player-text').value = decodeURIComponent(item.dataset.name);
+        gid('kn-rec-player-id').value   = item.dataset.id;
+        this.classList.remove('pk-ac-open');
+        knRecRanks = {};
+        fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
+            .then(function(r) { return r.json(); })
+            .then(function(ranks) {
+                knRecRanks = ranks || {};
+                var cur = gid('kn-rec-award-select').value;
+                if (cur) buildRecRankPills(cur);
+            }).catch(function() {});
+        checkRequired();
+    });
+
+    gid('kn-rec-reason').addEventListener('input', function() {
+        var rem = 400 - this.value.length;
+        gid('kn-rec-char-count').textContent = rem + ' characters remaining';
+        checkRequired();
+    });
+
+    window.knOpenRecModal = function() {
+        gid('kn-rec-error').style.display   = 'none';
+        gid('kn-rec-success').style.display = 'none';
+        gid('kn-rec-player-text').value     = '';
+        gid('kn-rec-player-id').value       = '';
+        gid('kn-rec-player-results').classList.remove('pk-ac-open');
+        gid('kn-rec-award-select').value    = '';
+        gid('kn-rec-rank-row').style.display = 'none';
+        gid('kn-rec-rank-val').value        = '';
+        gid('kn-rec-rank-pills').innerHTML  = '';
+        gid('kn-rec-reason').value          = '';
+        gid('kn-rec-char-count').textContent = '400 characters remaining';
+        knRecRanks = {};
+        checkRequired();
+        gid('kn-rec-overlay').classList.add('kn-open');
+        document.body.style.overflow = 'hidden';
+        gid('kn-rec-player-text').focus();
+    };
+    function knCloseRecModal() {
+        gid('kn-rec-overlay').classList.remove('kn-open');
+        document.body.style.overflow = '';
+    }
+
+    gid('kn-rec-close-btn').addEventListener('click', knCloseRecModal);
+    gid('kn-rec-cancel').addEventListener('click',    knCloseRecModal);
+    gid('kn-rec-overlay').addEventListener('click', function(e) { if (e.target === this) knCloseRecModal(); });
+
+    gid('kn-rec-submit').addEventListener('click', function() {
+        var errEl = gid('kn-rec-error');
+        var btn   = this;
+        errEl.style.display = 'none';
+        var fd = new FormData();
+        fd.append('MundaneId',      gid('kn-rec-player-id').value);
+        fd.append('KingdomAwardId', gid('kn-rec-award-select').value);
+        fd.append('Reason',         gid('kn-rec-reason').value.trim());
+        var rank = gid('kn-rec-rank-val').value;
+        if (rank) fd.append('Rank', rank);
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        fetch(UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/addrecommendation', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    gid('kn-rec-success').style.display = '';
+                    gid('kn-rec-player-text').value = '';
+                    gid('kn-rec-player-id').value   = '';
+                    gid('kn-rec-award-select').value = '';
+                    gid('kn-rec-rank-row').style.display = 'none';
+                    gid('kn-rec-rank-val').value = '';
+                    gid('kn-rec-rank-pills').innerHTML = '';
+                    gid('kn-rec-reason').value = '';
+                    gid('kn-rec-char-count').textContent = '400 characters remaining';
+                    knRecRanks = {};
+                    setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
+                } else {
+                    errEl.textContent = data.error || 'Save failed.';
+                    errEl.style.display = '';
+                }
+            })
+            .catch(function() {
+                errEl.textContent = 'Request failed. Please try again.';
+                errEl.style.display = '';
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Recommendation';
+                checkRequired();
+            });
+    });
+})();
+(function() {
     if (typeof KnConfig === 'undefined') return;
 
     var CREATE_URL = KnConfig.uir + 'EventAjax/create';
@@ -4755,6 +4925,178 @@ $(document).ready(function() {
             }
             gid('pk-award-select').focus();
         });
+    });
+})();
+(function() {
+    if (!document.getElementById('pk-rec-overlay')) return;
+    var UIR_JS      = PkConfig.uir;
+    var PARK_ID     = PkConfig.parkId;
+    var SEARCH_URL  = PkConfig.httpService + 'Search/SearchService.php';
+    var playerTimer;
+    var pkRecRanks  = {};
+
+    function gid(id) { return document.getElementById(id); }
+
+    function checkRequired() {
+        var ok = !!gid('pk-rec-player-id').value
+              && !!gid('pk-rec-award-select').value
+              && !!gid('pk-rec-reason').value.trim();
+        gid('pk-rec-submit').disabled = !ok;
+    }
+
+    function buildRecRankPills(awardId) {
+        var row   = gid('pk-rec-rank-row');
+        var wrap  = gid('pk-rec-rank-pills');
+        var input = gid('pk-rec-rank-val');
+        wrap.innerHTML = '';
+        input.value = '';
+        row.style.display = 'none';
+        if (!awardId) return;
+        var opt = gid('pk-rec-award-select').querySelector('option[value="' + awardId + '"]');
+        if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
+        row.style.display = '';
+        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
+        var held     = pkRecRanks[baseAwardId] || 0;
+        var suggested = Math.min(held + 1, maxRank);
+        for (var r = 1; r <= maxRank; r++) {
+            var pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = 'pk-rank-pill';
+            if (r <= held)       pill.className += ' pk-rank-held';
+            if (r === suggested) pill.className += ' pk-rank-suggested';
+            pill.textContent = r;
+            pill.dataset.rank = r;
+            pill.addEventListener('click', (function(rank, el) {
+                return function() {
+                    wrap.querySelectorAll('.pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
+                    el.classList.add('pk-rank-selected');
+                    input.value = rank;
+                };
+            })(r, pill));
+            wrap.appendChild(pill);
+        }
+        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
+        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+    }
+
+    gid('pk-rec-award-select').addEventListener('change', function() {
+        buildRecRankPills(this.value);
+        checkRequired();
+    });
+
+    // Player search
+    gid('pk-rec-player-text').addEventListener('input', function() {
+        gid('pk-rec-player-id').value = '';
+        checkRequired();
+        var term = this.value.trim();
+        if (term.length < 2) { gid('pk-rec-player-results').classList.remove('pk-ac-open'); return; }
+        clearTimeout(playerTimer);
+        playerTimer = setTimeout(function() {
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + PkConfig.kingdomId + '&q=' + encodeURIComponent(term);
+            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                var el = gid('pk-rec-player-results');
+                el.innerHTML = (data && data.length)
+                    ? data.map(function(p) {
+                        return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                    }).join('')
+                    : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                el.classList.add('pk-ac-open');
+            }).catch(function() {});
+        }, 300);
+    });
+    gid('pk-rec-player-results').addEventListener('click', function(e) {
+        var item = e.target.closest('.pk-ac-item[data-id]');
+        if (!item) return;
+        gid('pk-rec-player-text').value = decodeURIComponent(item.dataset.name);
+        gid('pk-rec-player-id').value   = item.dataset.id;
+        this.classList.remove('pk-ac-open');
+        pkRecRanks = {};
+        fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
+            .then(function(r) { return r.json(); })
+            .then(function(ranks) {
+                pkRecRanks = ranks || {};
+                var cur = gid('pk-rec-award-select').value;
+                if (cur) buildRecRankPills(cur);
+            }).catch(function() {});
+        checkRequired();
+    });
+
+    gid('pk-rec-reason').addEventListener('input', function() {
+        var rem = 400 - this.value.length;
+        gid('pk-rec-char-count').textContent = rem + ' characters remaining';
+        checkRequired();
+    });
+
+    window.pkOpenRecModal = function() {
+        gid('pk-rec-error').style.display   = 'none';
+        gid('pk-rec-success').style.display = 'none';
+        gid('pk-rec-player-text').value     = '';
+        gid('pk-rec-player-id').value       = '';
+        gid('pk-rec-player-results').classList.remove('pk-ac-open');
+        gid('pk-rec-award-select').value    = '';
+        gid('pk-rec-rank-row').style.display = 'none';
+        gid('pk-rec-rank-val').value        = '';
+        gid('pk-rec-rank-pills').innerHTML  = '';
+        gid('pk-rec-reason').value          = '';
+        gid('pk-rec-char-count').textContent = '400 characters remaining';
+        pkRecRanks = {};
+        checkRequired();
+        gid('pk-rec-overlay').classList.add('pk-open');
+        document.body.style.overflow = 'hidden';
+        gid('pk-rec-player-text').focus();
+    };
+    function pkCloseRecModal() {
+        gid('pk-rec-overlay').classList.remove('pk-open');
+        document.body.style.overflow = '';
+    }
+
+    gid('pk-rec-close-btn').addEventListener('click', pkCloseRecModal);
+    gid('pk-rec-cancel').addEventListener('click',    pkCloseRecModal);
+    gid('pk-rec-overlay').addEventListener('click', function(e) { if (e.target === this) pkCloseRecModal(); });
+
+    gid('pk-rec-submit').addEventListener('click', function() {
+        var errEl   = gid('pk-rec-error');
+        var btn     = this;
+        errEl.style.display = 'none';
+        var fd = new FormData();
+        fd.append('MundaneId',      gid('pk-rec-player-id').value);
+        fd.append('KingdomAwardId', gid('pk-rec-award-select').value);
+        fd.append('Reason',         gid('pk-rec-reason').value.trim());
+        var rank = gid('pk-rec-rank-val').value;
+        if (rank) fd.append('Rank', rank);
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        fetch(UIR_JS + 'ParkAjax/park/' + PARK_ID + '/addrecommendation', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    gid('pk-rec-success').style.display = '';
+                    gid('pk-rec-player-text').value = '';
+                    gid('pk-rec-player-id').value   = '';
+                    gid('pk-rec-award-select').value = '';
+                    gid('pk-rec-rank-row').style.display = 'none';
+                    gid('pk-rec-rank-val').value = '';
+                    gid('pk-rec-rank-pills').innerHTML = '';
+                    gid('pk-rec-reason').value = '';
+                    gid('pk-rec-char-count').textContent = '400 characters remaining';
+                    pkRecRanks = {};
+                    setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
+                } else {
+                    errEl.textContent = data.error || 'Save failed.';
+                    errEl.style.display = '';
+                }
+            })
+            .catch(function() {
+                errEl.textContent = 'Request failed. Please try again.';
+                errEl.style.display = '';
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Recommendation';
+                checkRequired();
+            });
     });
 })();
 (function() {

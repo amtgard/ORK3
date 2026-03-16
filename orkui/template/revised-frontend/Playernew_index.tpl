@@ -82,6 +82,7 @@
 
 <style>:root { --pn-hero-bg: <?= $isSuspended ? '#9b2c2c' : '#2c5282' ?>; }</style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <!-- =============================================
      ZONE 1: Profile Hero Header
@@ -842,8 +843,13 @@
 
 			<!-- Recommendations Tab -->
 			<?php if ($_showRecs): ?><div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
+				<?php if ($this->__session->user_id): ?>
+				<div class="pn-tab-toolbar">
+					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> Recommend an Award</button>
+				</div>
+				<?php endif; ?>
 				<?php if (count($_recList) > 0): ?>
-					<table class="pn-table" id="pn-rec-table">
+					<table class="pn-table display" id="pn-rec-table">
 						<thead>
 							<tr>
 								<th>Award</th>
@@ -888,7 +894,7 @@
 						</tbody>
 					</table>
 				<?php else: ?>
-					<div class="pn-empty">No recommendations</div>
+					<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player["Persona"]) ?>. <a href="#" onclick="pnOpenModal();return false;">You can submit a new recommendation here!</a></div>
 				<?php endif; ?>
 			</div><?php endif; ?>
 
@@ -1636,7 +1642,6 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 pnSortDesc($('#pn-awards-table'), 2, 'date');     pnPaginate($('#pn-awards-table'), 1);
 pnSortDesc($('#pn-titles-table'), 2, 'date');     pnPaginate($('#pn-titles-table'), 1);
 pnSortDesc($('#pn-attendance-table'), 0, 'date'); pnPaginate($('#pn-attendance-table'), 1);
-pnSortDesc($('#pn-rec-table'), 2, 'date');        pnPaginate($('#pn-rec-table'), 1);
 pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
 </script>
 
@@ -1924,3 +1929,21 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 </div>
 <?php endif; ?>
 <?php endif; ?>
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script>
+$(function() {
+	if ($('#pn-rec-table').length) {
+		$('#pn-rec-table').DataTable({
+			order: [[2, 'desc']],
+			columnDefs: [
+				{ targets: [2], type: 'date' },
+				<?php if ($this->__session->user_id): ?>
+				{ targets: [-1], orderable: false, searchable: false },
+				<?php endif; ?>
+			],
+			pageLength: 25
+		});
+	}
+});
+</script>

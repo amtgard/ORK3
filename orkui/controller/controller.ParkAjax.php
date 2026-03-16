@@ -227,6 +227,28 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'addrecommendation') {
+			if (!isset($this->session->user_id)) { echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']); exit; }
+			$this->load_model('Player');
+			$mundane_id   = (int)($_POST['MundaneId']       ?? 0);
+			$award_id     = (int)($_POST['KingdomAwardId']  ?? 0);
+			$rank         = (int)($_POST['Rank']            ?? 0);
+			$reason       = trim($_POST['Reason']           ?? '');
+			if (!valid_id($mundane_id)) { echo json_encode(['status' => 1, 'error' => 'Please select a player.']); exit; }
+			if (!valid_id($award_id))   { echo json_encode(['status' => 1, 'error' => 'Please select an award.']); exit; }
+			if (!$reason)               { echo json_encode(['status' => 1, 'error' => 'Please enter a reason.']); exit; }
+			$r = $this->Player->add_player_recommendation([
+				'Token'          => $this->session->token,
+				'MundaneId'      => $mundane_id,
+				'KingdomAwardId' => $award_id,
+				'Rank'           => $rank > 0 ? $rank : null,
+				'GivenById'      => $this->session->user_id,
+				'Reason'         => $reason,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'dismissrecommendation') {
 			$this->load_model('Player');
 			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);

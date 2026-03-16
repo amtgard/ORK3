@@ -55,6 +55,7 @@
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <!-- =============================================
      ZONE 1: Hero Header
@@ -95,7 +96,7 @@
 		</div>
 
 		<div class="kn-hero-actions">
-			<?php if ($LoggedIn): ?>
+			<?php if ($CanManageKingdom ?? false): ?>
 				<button class="kn-btn kn-btn-outline" onclick="knOpenAwardModal()">
 					<i class="fas fa-medal"></i> Enter Awards
 				</button>
@@ -626,11 +627,18 @@
 		<!-- Recommendations Tab -->
 		<?php if ($ShowRecsTab ?? false): ?>
 		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
+			<?php if ($LoggedIn): ?>
+			<div class="pk-tab-toolbar">
+				<button class="kn-btn kn-btn-secondary" onclick="knOpenRecModal()">
+					<i class="fas fa-star"></i> Recommend an Award
+				</button>
+			</div>
+			<?php endif; ?>
 			<?php if (empty($AwardRecommendations)): ?>
-			<div class="pk-recs-empty">No pending award recommendations.</div>
+			<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($kingdom_name) ?>. <a href="#" onclick="knOpenRecModal();return false;">You can submit a new recommendation here!</a></div>
 			<?php else: ?>
 			<div class="pk-recs-table-wrap">
-				<table class="pk-recs-table">
+				<table id="kn-rec-table" class="pk-recs-table display">
 					<thead>
 						<tr>
 							<th>Player</th>
@@ -864,6 +872,51 @@ var KnConfig = {
 					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
 				</button>
 			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Recommend Award Modal -->
+<div id="kn-rec-overlay">
+	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-star" style="margin-right:8px;color:#d69e2e"></i>Make a Recommendation</h3>
+			<button class="kn-modal-close-btn" id="kn-rec-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div class="pk-form-error" id="kn-rec-error" style="display:none"></div>
+			<div class="pk-award-success" id="kn-rec-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Recommendation submitted!
+			</div>
+			<div class="pk-acct-field">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-rec-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="kn-rec-player-id" value="" />
+				<div class="pk-ac-results" id="kn-rec-player-results"></div>
+			</div>
+			<div class="pk-acct-field">
+				<label for="kn-rec-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<select id="kn-rec-award-select">
+					<option value="">Select award...</option>
+					<?= $AwardOptions ?>
+				</select>
+			</div>
+			<div class="pk-acct-field" id="kn-rec-rank-row" style="display:none">
+				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<div class="pk-rank-pills-wrap" id="kn-rec-rank-pills"></div>
+				<input type="hidden" id="kn-rec-rank-val" value="" />
+			</div>
+			<div class="pk-acct-field">
+				<label for="kn-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
+				<span class="pk-char-count" id="kn-rec-char-count">400 characters remaining</span>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="pk-btn-ghost" id="kn-rec-cancel">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-rec-submit" disabled>
+				<i class="fas fa-paper-plane"></i> Submit Recommendation
+			</button>
 		</div>
 	</div>
 </div>
@@ -1819,3 +1872,21 @@ var KnConfig = {
 })();
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script>
+$(function() {
+	if ($('#kn-rec-table').length) {
+		$('#kn-rec-table').DataTable({
+			order: [[4, 'desc']],
+			columnDefs: [
+				{ targets: [4], type: 'date' },
+				<?php if ($CanManageKingdom ?? false): ?>
+				{ targets: [-1], orderable: false, searchable: false },
+				<?php endif; ?>
+			],
+			pageLength: 25
+		});
+	}
+});
+</script>

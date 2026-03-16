@@ -166,6 +166,7 @@
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <!-- =============================================
      ZONE 1: Hero Header
@@ -228,18 +229,16 @@
 		<!-- Action buttons -->
 		<div class="pk-hero-right">
 			<div class="pk-hero-actions">
-				<?php if ($LoggedIn): ?>
+				<?php if (!empty($CanManagePark)): ?>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAttendanceModal()">
 						<i class="fas fa-clipboard-list"></i> Enter Attendance
 					</button>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
 					</button>
-					<?php if (!empty($CanManagePark)): ?>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAdminModal()">
 						<i class="fas fa-cog"></i> Admin
 					</button>
-					<?php endif; ?>
 				<?php endif; ?>
 
 			</div>
@@ -1008,11 +1007,18 @@
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>
 			<div class="pk-tab-panel" id="pk-tab-recommendations" style="display:none">
+				<?php if ($LoggedIn): ?>
+				<div class="pk-tab-toolbar">
+					<button class="pk-btn pk-btn-secondary" onclick="pkOpenRecModal()">
+						<i class="fas fa-star"></i> Recommend an Award
+					</button>
+				</div>
+				<?php endif; ?>
 				<?php if (empty($AwardRecommendations)): ?>
-				<div class="pk-recs-empty">No pending award recommendations.</div>
+				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>. <a href="#" onclick="pkOpenRecModal();return false;">You can submit a new recommendation here!</a></div>
 				<?php else: ?>
 				<div class="pk-recs-table-wrap">
-					<table class="pk-recs-table">
+					<table id="pk-rec-table" class="pk-recs-table display">
 						<thead>
 							<tr>
 								<th>Player</th>
@@ -1294,6 +1300,51 @@ var PkConfig = {
 			<button class="pk-btn pk-btn-ghost" id="pk-att-done-btn">Done</button>
 		</div>
 
+	</div>
+</div>
+
+<!-- Recommend Award Modal -->
+<div id="pk-rec-overlay">
+	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-star" style="margin-right:8px;color:#d69e2e"></i>Make a Recommendation</h3>
+			<button class="pk-modal-close-btn" id="pk-rec-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div class="pk-form-error" id="pk-rec-error" style="display:none"></div>
+			<div class="pk-award-success" id="pk-rec-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Recommendation submitted!
+			</div>
+			<div class="pk-acct-field">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-rec-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="pk-rec-player-id" value="" />
+				<div class="pk-ac-results" id="pk-rec-player-results"></div>
+			</div>
+			<div class="pk-acct-field">
+				<label for="pk-rec-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<select id="pk-rec-award-select">
+					<option value="">Select award...</option>
+					<?= $AwardOptions ?>
+				</select>
+			</div>
+			<div class="pk-acct-field" id="pk-rec-rank-row" style="display:none">
+				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<div class="pk-rank-pills-wrap" id="pk-rec-rank-pills"></div>
+				<input type="hidden" id="pk-rec-rank-val" value="" />
+			</div>
+			<div class="pk-acct-field">
+				<label for="pk-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
+				<span class="pk-char-count" id="pk-rec-char-count">400 characters remaining</span>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn-ghost" id="pk-rec-cancel">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-rec-submit" disabled>
+				<i class="fas fa-paper-plane"></i> Submit Recommendation
+			</button>
+		</div>
 	</div>
 </div>
 
@@ -1900,3 +1951,21 @@ var PkConfig = {
 </div>
 <?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script>
+$(function() {
+	if ($('#pk-rec-table').length) {
+		$('#pk-rec-table').DataTable({
+			order: [[4, 'desc']],
+			columnDefs: [
+				{ targets: [4], type: 'date' },
+				<?php if (!empty($CanManagePark)): ?>
+				{ targets: [-1], orderable: false, searchable: false },
+				<?php endif; ?>
+			],
+			pageLength: 25
+		});
+	}
+});
+</script>

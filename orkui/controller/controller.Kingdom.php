@@ -143,12 +143,13 @@ class Controller_Kingdom extends Controller {
 			LEFT JOIN ork_attendance la ON la.mundane_id = m.mundane_id AND la.date = sub.last_signin
 			LEFT JOIN ork_class c ON la.class_id = c.class_id
 			LEFT JOIN ork_officer o ON o.mundane_id = m.mundane_id AND o.park_id = m.park_id
-			WHERE m.suspended = 0 AND m.active = 1 AND sub.mundane_id IS NOT NULL
+			WHERE m.suspended = 0 AND m.active = 1
 			GROUP BY m.mundane_id
 			ORDER BY m.persona";
+		$DB->Clear();
 		$r = $DB->DataSet($kpSql);
 		$players = [];
-		if ($r && $r->Size() > 0) {
+		if ($r) {
 			while ($r->Next()) {
 				$mid     = (int)$r->mundane_id;
 				$midPad  = sprintf('%06d', $mid);
@@ -323,7 +324,7 @@ class Controller_Kingdom extends Controller {
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
 			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
 			: true;
-		$this->data['ShowRecsTab']    = $recsPublic || $this->data['CanManageKingdom'];
+		$this->data['ShowRecsTab']    = $recsPublic || $this->data['CanManageKingdom'] || $uid > 0;
 		$this->data['AwardRecsPublic'] = $recsPublic;
 
 		$this->data['AwardRecommendations'] = [];
