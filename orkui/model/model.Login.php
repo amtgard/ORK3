@@ -14,6 +14,8 @@ class Model_Login extends Model {
 		unset($this->session->timeout);
 		unset($this->session->kingdom_id);
 		unset($this->session->kingdom_name);
+		unset($this->session->park_id);
+		unset($this->session->park_name);
 		if (isset($_SESSION['is_authorized_mundane_id'])) {
 			unset($_SESSION['is_authorized_mundane_id']);
 		}
