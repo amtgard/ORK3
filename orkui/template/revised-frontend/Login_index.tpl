@@ -290,22 +290,22 @@
 	z-index: 1;
 }
 .lg-benefit-tags {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
 	gap: 8px;
 	position: relative;
 	z-index: 1;
 }
 .lg-benefit-tag {
-	padding: 5px 11px;
-	border-radius: 20px;
+	padding: 7px 11px;
+	border-radius: 8px;
 	background: rgba(255,255,255,0.1);
 	border: 1px solid rgba(255,255,255,0.18);
 	font-size: 12px;
 	color: rgba(255,255,255,0.85);
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 7px;
 }
 .lg-benefit-tag i {
 	font-size: 11px;
@@ -436,7 +436,7 @@
 			<span class="lg-benefit-tag"><i class="fas fa-users"></i> Manage your park</span>
 			<span class="lg-benefit-tag"><i class="fas fa-trophy"></i> Log attendance</span>
 			<span class="lg-benefit-tag"><i class="fas fa-calendar-plus"></i> Create events</span>
-			<span class="lg-benefit-tag"><i class="fas fa-shield-alt"></i> View your belt line</span>
+			<span class="lg-benefit-tag"><i class="fas fa-shield-alt"></i> View more reports</span>
 		</div>
 	</div>
 

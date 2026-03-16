@@ -5289,3 +5289,27 @@
 	.award-btn-prefix { display: none; }
 }
 
+/* =============================================
+   DataTables stripe override
+   Reset tr.odd / tr.even backgrounds injected
+   by jquery.dataTables.css on all revised tables
+   ============================================= */
+table.dataTable.pn-table tbody tr.even,
+table.dataTable.pk-recs-table tbody tr.even,
+table.dataTable.adm-table tbody tr.even {
+	background-color: #fff;
+}
+table.dataTable.pn-table tbody tr.odd,
+table.dataTable.pk-recs-table tbody tr.odd,
+table.dataTable.adm-table tbody tr.odd {
+	background-color: #f7fafc;
+}
+table.dataTable.pn-table tbody tr.odd:hover,
+table.dataTable.pn-table tbody tr.even:hover,
+table.dataTable.pk-recs-table tbody tr.odd:hover,
+table.dataTable.pk-recs-table tbody tr.even:hover,
+table.dataTable.adm-table tbody tr.odd:hover,
+table.dataTable.adm-table tbody tr.even:hover {
+	background-color: #edf2f7;
+}
+
