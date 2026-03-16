@@ -1419,6 +1419,11 @@ if (PnConfig.recError) {
             gid('pn-award-info-line').innerHTML      = '';
             gid('pn-award-custom-name').value        = '';
             gid('pn-award-custom-row').style.display = 'none';
+            gid('pn-award-givenat-text').value       = PnConfig.parkName;
+            gid('pn-award-park-id').value            = String(PnConfig.parkId);
+            gid('pn-award-kingdom-id').value         = '0';
+            gid('pn-award-event-id').value           = '0';
+            gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             checkRequired();
             gid('pn-award-select').focus();
         }
