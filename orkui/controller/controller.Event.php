@@ -247,6 +247,19 @@ class Controller_Event extends Controller {
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
+		// Check if current user is event staff with elevated permissions for this occurrence
+		$uid_staff_can_manage     = false;
+		$uid_staff_can_attendance = false;
+		if ($uid > 0 && valid_id($detail_id)) {
+			global $DB;
+			$DB->Clear();
+			$selfStaff = $DB->DataSet('SELECT can_manage, can_attendance FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' LIMIT 1');
+			if ($selfStaff && $selfStaff->Next()) {
+				$uid_staff_can_manage     = (bool)(int)$selfStaff->can_manage;
+				$uid_staff_can_attendance = (bool)(int)$selfStaff->can_attendance;
+			}
+		}
+
 		$this->data['DefaultAttendanceCredits'] = 1;
 		$this->data['DefaultParkName']    = $this->session->park_name    ?? '';
 		$this->data['DefaultParkId']      = $this->session->park_id      ?? 0;
@@ -293,7 +306,7 @@ class Controller_Event extends Controller {
 		if ( strlen($action) > 0 && $uid > 0 ) {
 
 			if ( $action === 'edit' ) {
-				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage ) {
 					$this->request->save('Eventnew_edit', true);
 					$newName = trim($this->request->Eventnew_edit->EventName ?? '');
 					if ( $newName ) {
@@ -487,17 +500,66 @@ class Controller_Event extends Controller {
 		$this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
 		$this->data['CanManageEvent'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage);
 		$this->data['CanManageAttendance'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) || $uid_staff_can_attendance);
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
-		$this->data['RsvpList']      = $uid > 0 ? $this->Event->get_rsvp_list($detail_id) : [];
+		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];
 
 		global $DB;
 		$cdCountRow = $DB->DataSet('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $event_id . ' LIMIT 1');
 		$this->data['CalendarDetailCount'] = ($cdCountRow && $cdCountRow->Size() > 0 && $cdCountRow->Next()) ? (int)$cdCountRow->cnt : 1;
+		$DB->Clear();
+		$staffRows = $DB->DataSet(
+			'SELECT s.event_staff_id AS EventStaffId, s.mundane_id AS MundaneId, m.persona AS Persona,
+			        s.role_name AS RoleName, s.can_manage AS CanManage, s.can_attendance AS CanAttendance
+			FROM ' . DB_PREFIX . 'event_staff s
+			LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
+			WHERE s.event_calendardetail_id = ' . $detail_id . '
+			ORDER BY s.role_name, m.persona'
+		);
+		$staffList = [];
+		if ($staffRows) {
+			while ($staffRows->Next()) {
+				$staffList[] = [
+					'EventStaffId'  => (int)$staffRows->EventStaffId,
+					'MundaneId'     => (int)$staffRows->MundaneId,
+					'Persona'       => $staffRows->Persona,
+					'RoleName'      => $staffRows->RoleName,
+					'CanManage'     => (int)$staffRows->CanManage,
+					'CanAttendance' => (int)$staffRows->CanAttendance,
+				];
+			}
+		}
+		$this->data['StaffList'] = $staffList;
+
+		// Schedule items for this occurrence
+		$DB->Clear();
+		$scheduleRows = $DB->DataSet(
+			'SELECT event_schedule_id AS EventScheduleId, title AS Title,
+			        start_time AS StartTime, end_time AS EndTime,
+			        location AS Location, description AS Description, category AS Category
+			FROM ' . DB_PREFIX . 'event_schedule
+			WHERE event_calendardetail_id = ' . $detail_id . '
+			ORDER BY start_time'
+		);
+		$scheduleList = [];
+		if ($scheduleRows) {
+			while ($scheduleRows->Next()) {
+				$scheduleList[] = [
+					'EventScheduleId' => (int)$scheduleRows->EventScheduleId,
+					'Title'           => $scheduleRows->Title,
+					'StartTime'       => $scheduleRows->StartTime,
+					'EndTime'         => $scheduleRows->EndTime,
+					'Location'        => $scheduleRows->Location,
+					'Description'     => $scheduleRows->Description,
+					'Category'        => $scheduleRows->Category,
+				];
+			}
+		}
+		$this->data['ScheduleList'] = $scheduleList;
 	}
 
 	public function create( $p = null ) {
