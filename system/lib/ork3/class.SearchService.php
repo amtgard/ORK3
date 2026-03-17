@@ -140,19 +140,41 @@ class SearchService extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
 			return $cache;
 		
-    	$limit = min($limit, 50);
+		$limit = min($limit, 50);
+
+		// $current=0 → past mode: pick most recent past occurrence per event (regardless of whether upcoming also exists)
+		// $current!=0 → pick nearest upcoming occurrence (or most recent past if none upcoming)
+		$pastOnly = ($current === 0 || $current === '0');
+		if ($pastOnly) {
+			$cdJoin = "cd.event_calendardetail_id = (
+							select ecd.event_calendardetail_id from " . DB_PREFIX . "event_calendardetail ecd
+							where ecd.event_id = e.event_id
+							  and (ecd.event_start is null or ecd.event_start < date_sub(now(), interval 7 day))
+							order by ecd.event_start desc
+							limit 1
+						)";
+		} else {
+			$cdJoin = "cd.event_calendardetail_id = (
+							select ecd.event_calendardetail_id from " . DB_PREFIX . "event_calendardetail ecd
+							where ecd.event_id = e.event_id
+							order by (ecd.event_start >= date_sub(now(), interval 7 day)) desc,
+							         if(ecd.event_start >= date_sub(now(), interval 7 day), ecd.event_start, '9999-12-31') asc
+							limit 1
+						)";
+		}
+
 		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = e.mundane_id
 						left join " . DB_PREFIX . "kingdom pk on pk.kingdom_id = p.kingdom_id
-						left join " . DB_PREFIX . "event_calendardetail cd on e.event_id = cd.event_id and cd.current = 1
+						left join " . DB_PREFIX . "event_calendardetail cd on " . $cdJoin . "
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
-	
-	
-		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' " . (is_null($current) || $current != 0 ? " and (cd.current = 1 or cd.current is null) " : " ");
+
+
+		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' ";
 		$sql .= " and e.kingdom_id != 15 and (p.kingdom_id is null or p.kingdom_id != 15) ";
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
 		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";

@@ -174,8 +174,16 @@ class Controller_Unit extends Controller {
 		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$unit_list_url = UIR . ($this->session->unit_list_ref ?: 'Unit/unitlist');
-		$this->data['menu']['units'] = array( 'url' => $unit_list_url, 'display' => 'Units' );
+		$from_player = valid_id($this->request->from_player) ? (int)$this->request->from_player : null;
+		if ($from_player) {
+			$this->load_model('Player');
+			$_pdata = $this->Player->fetch_player($from_player);
+			$_persona = (!empty($_pdata['Persona']) ? $_pdata['Persona'] : null) ?? $_pdata['UserName'] ?? 'Player';
+			$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$from_player", 'display' => htmlspecialchars($_persona) );
+		} else {
+			$unit_list_url = UIR . ($this->session->unit_list_ref ?: 'Unit/unitlist');
+			$this->data['menu']['units'] = array( 'url' => $unit_list_url, 'display' => 'Units' );
+		}
 		$this->data['menu']['unit']  = array( 'url' => UIR."Unit/index/$unit_id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
 	}
 	

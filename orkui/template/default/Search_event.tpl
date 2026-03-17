@@ -203,7 +203,9 @@
 
 	function buildRow(v, isPast) {
 		var name    = v.Name        || '';
-		var url     = '<?= UIR ?>Event/index/' + v.EventId;
+		var url     = v.NextDetailId
+			? '<?= UIR ?>Event/detail/' + v.EventId + '/' + v.NextDetailId
+			: '<?= UIR ?>Event/index/' + v.EventId;
 		var dateFmt = v.NextDate ? formatDate(v.NextDate) : null;
 		var dateCel;
 		if (dateFmt) {
@@ -279,23 +281,9 @@
 				       (v.ParkName    && v.ParkName.trim().length    > 0);
 			}
 
-			// Build set of upcoming EventIds
-			var upcomingIds = {};
-			var upcoming = [];
-			upcomingData.forEach(function(v) {
-				if (hasLocation(v)) {
-					upcomingIds[v.EventId] = true;
-					upcoming.push(v);
-				}
-			});
-
-			// Past = in allData but not in upcoming set
-			var past = [];
-			allData.forEach(function(v) {
-				if (hasLocation(v) && !upcomingIds[v.EventId]) {
-					past.push(v);
-				}
-			});
+			// Server already separates upcoming from past — just filter by location
+			var upcoming = upcomingData.filter(hasLocation);
+			var past     = allData.filter(hasLocation);
 
 			renderResults(upcoming, past);
 		}
@@ -306,9 +294,9 @@
 			function(data) { upcomingData = data || []; tryRender(); }
 		);
 
-		// Request 2: all matching events regardless of date (for past bucket)
+		// Request 2: past occurrences (current=0 picks most recent past calendardetail per event)
 		$.getJSON('<?= HTTP_SERVICE ?>Search/SearchService.php',
-			base,
+			$.extend({}, base, { current: 0 }),
 			function(data) { allData = data || []; tryRender(); }
 		);
 	}

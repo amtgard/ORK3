@@ -234,9 +234,9 @@ class Controller_Event extends Controller {
 				$evPid = (int)$evRow->park_id;
 			}
 			if ($evPid > 0) {
-				$redirect = UIR . 'Park/profile/' . $evPid . '?tab=events';
+				$redirect = UIR . 'Park/profile/' . $evPid . '&tab=events';
 			} elseif ($evKid > 0) {
-				$redirect = UIR . 'Kingdom/profile/' . $evKid . '?tab=events';
+				$redirect = UIR . 'Kingdom/profile/' . $evKid . '&tab=events';
 			} else {
 				$redirect = UIR;
 			}
