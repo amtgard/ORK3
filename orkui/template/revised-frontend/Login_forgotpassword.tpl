@@ -147,7 +147,7 @@
 	</div>
 
 	<h2 class="fp-heading">Reset your password</h2>
-	<p class="fp-subheading">Enter both your username and email address and we'll send you a temporary password.</p>
+	<p class="fp-subheading">Enter both your username and email address and we'll send you a temporary password. If you cannot remember your username and/or email, reach out to your Park or Kingdom Prime Minister.</p>
 
 	<form action="<?= UIR ?>Login/forgotpassword/recover" method="POST">
 		<div class="fp-field">

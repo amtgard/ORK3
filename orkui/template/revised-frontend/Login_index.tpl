@@ -370,10 +370,7 @@
 
 		<?php if (strlen($error) > 0): ?>
 			<div class="lg-error">
-				<?= htmlspecialchars($error) ?>
-				<?php if (strlen($detail) > 0): ?>
-					<div class="lg-error-detail"><?= htmlspecialchars($detail) ?></div>
-				<?php endif; ?>
+				Login failed. If you cannot remember your password, use the <strong>Forgot your password?</strong> link above.
 			</div>
 		<?php endif; ?>
 
