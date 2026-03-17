@@ -12,14 +12,23 @@ foreach ($_att_dates as $_d) {
 	$chart_counts[] = (int)$_d['Attendees'];
 }
 
-$_att_total   = array_sum($chart_counts);
+$chart_dates  = array_reverse($chart_dates);
+$chart_counts = array_reverse($chart_counts);
+
+/* Total Credits comes from attendance_summary to match the table/CSV */
+$_summary_dates = isset($attendance_summary['Dates']) && is_array($attendance_summary['Dates'])
+	? $attendance_summary['Dates'] : [];
+$_att_total   = array_sum(array_column($_summary_dates, 'Attendees'));
+/* Total Weeks matches the SPC chart's weekly-aggregated data points */
 $_att_records = count($chart_counts);
-$_att_mean    = $_att_records ? $_att_total / $_att_records : 0;
+/* Mean and sigma use periodical chart data to stay consistent with the SPC chart */
+$_chart_count = count($chart_counts);
+$_att_mean    = $_chart_count ? array_sum($chart_counts) / $_chart_count : 0;
 $_att_variance = 0;
 foreach ($chart_counts as $_c) {
 	$_att_variance += pow($_c - $_att_mean, 2);
 }
-$_att_variance = $_att_records ? $_att_variance / $_att_records : 0;
+$_att_variance = $_chart_count ? $_att_variance / $_chart_count : 0;
 $_att_sigma   = sqrt($_att_variance);
 
 /* ── Scope chip ── */
@@ -95,22 +104,27 @@ if (!is_array($attendance_summary['Dates'])) $attendance_summary['Dates'] = [];
 
 	<!-- Stats row -->
 	<div class="rp-stats-row">
-		<div class="rp-stat-card">
+		<div class="rp-stat-card" title="Number of weeks with recorded attendance in this period.">
 			<div class="rp-stat-icon"><i class="fas fa-list-ol"></i></div>
 			<div class="rp-stat-number"><?=number_format($_att_records)?></div>
-			<div class="rp-stat-label">Total Records</div>
+			<div class="rp-stat-label">Total Weeks</div>
 		</div>
-		<div class="rp-stat-card">
+		<div class="rp-stat-card" title="Sum of all attendance sign-ins across every park day in this period.">
 			<div class="rp-stat-icon"><i class="fas fa-users"></i></div>
 			<div class="rp-stat-number"><?=number_format($_att_total)?></div>
-			<div class="rp-stat-label">Total Attendees</div>
+			<div class="rp-stat-label">Total Credits</div>
 		</div>
-		<div class="rp-stat-card">
+		<div class="rp-stat-card" title="Total credits divided by weeks with attendance. Note: the Kingdom page Avg/Week divides by a fixed 26-week window including weeks with no activity.">
+			<div class="rp-stat-icon"><i class="fas fa-calendar-week"></i></div>
+			<div class="rp-stat-number"><?=number_format($_att_records ? $_att_total / $_att_records : 0, 1)?></div>
+			<div class="rp-stat-label">Avg per Week <i class="fas fa-info-circle" style="font-size:11px;opacity:0.5"></i></div>
+		</div>
+		<div class="rp-stat-card" title="Mean of weekly attendance totals, used as the SPC chart centerline.">
 			<div class="rp-stat-icon"><i class="fas fa-chart-line"></i></div>
 			<div class="rp-stat-number"><?=number_format($_att_mean, 1)?></div>
-			<div class="rp-stat-label">Mean per Period</div>
+			<div class="rp-stat-label">Mean Attendance</div>
 		</div>
-		<div class="rp-stat-card">
+		<div class="rp-stat-card" title="Population standard deviation of weekly totals, used for SPC control limit lines (±1σ, ±2σ).">
 			<div class="rp-stat-icon"><i class="fas fa-ruler-horizontal"></i></div>
 			<div class="rp-stat-number"><?=number_format($_att_sigma, 1)?></div>
 			<div class="rp-stat-label">Std Deviation (σ)</div>
@@ -299,7 +313,7 @@ if (!is_array($attendance_summary['Dates'])) $attendance_summary['Dates'] = [];
 
 	new Highcharts.Chart({
 		chart  : { renderTo: 'attendance-spc-chart', type: 'line', style: { fontFamily: 'inherit' } },
-		title  : { text: 'Attendance Over Time' },
+		title  : { text: 'Attendance Over Time (Weekly Totals)' },
 		xAxis  : {
 			categories : chartDates,
 			tickInterval: Math.ceil(chartDates.length / 12),

@@ -196,6 +196,11 @@ $context_text = sprintf($context_map[$variant] ?? $context_map['full'], $scope_l
 
 		<!-- Table area -->
 		<div class="rp-table-area">
+			<div id="rp-roster-loading" style="text-align:center;padding:48px 32px;color:#a0aec0">
+				<i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:10px"></i>
+				Loading report&hellip;
+			</div>
+			<div id="rp-roster-table-wrap" style="opacity:0">
 			<table id="roster-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
@@ -250,6 +255,7 @@ $context_text = sprintf($context_map[$variant] ?? $context_map['full'], $scope_l
 <?php endif; ?>
 				</tbody>
 			</table>
+			</div><!-- /rp-roster-table-wrap -->
 		</div><!-- /rp-table-area -->
 
 	</div><!-- /rp-body -->
@@ -299,7 +305,11 @@ $(function() {
 		fixedHeader : { headerOffset: 48 },
 		responsive  : true,
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedColumns: { left: 1 },
+		initComplete: function() {
+			$('#rp-roster-loading').hide();
+			$('#rp-roster-table-wrap').css('opacity', '1');
+		}
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
