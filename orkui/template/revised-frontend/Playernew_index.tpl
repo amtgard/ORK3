@@ -1,5 +1,7 @@
 <?php
-	$passwordExpired = strtotime($Player['PasswordExpires']) - time() <= 0;
+	$passwordExpired  = strtotime($Player['PasswordExpires']) - time() <= 0;
+	$passwordSoonSecs = strtotime($Player['PasswordExpires']) - time();
+	$passwordSoon     = !$passwordExpired && $passwordSoonSecs <= (14 * 86400);
 	$passwordExpiring = $passwordExpired ? 'Expired' : date('Y-m-j', strtotime($Player['PasswordExpires']));
 	$recError = isset($_GET['rec_error']) ? htmlspecialchars(urldecode($_GET['rec_error'])) : '';
 
@@ -232,9 +234,9 @@
 				<span class="pn-detail-label">Username</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['UserName']) ?></span>
 			</div>
-			<div class="pn-detail-row">
+			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:#fffbe6;border-left:3px solid #f6ad55;padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
-				<span class="pn-detail-value"><?= $passwordExpiring ?></span>
+				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Member Since</span>
@@ -275,7 +277,7 @@
 						<?php if (!$reeveUntil): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
-							<span class="pn-badge <?= $reeveExpired ? 'pn-badge-red' : 'pn-badge-green' ?>">Until <?= $reeveUntil ?></span>
+							<span class="pn-badge <?= $reeveExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $reeveExpired ? 'Expired' : 'Until' ?> <?= $reeveUntil ?></span>
 						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>
@@ -293,7 +295,7 @@
 						<?php if (!$corporaUntil): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
-							<span class="pn-badge <?= $corporaExpired ? 'pn-badge-red' : 'pn-badge-green' ?>">Until <?= $corporaUntil ?></span>
+							<span class="pn-badge <?= $corporaExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $corporaExpired ? 'Expired' : 'Until' ?> <?= $corporaUntil ?></span>
 						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>

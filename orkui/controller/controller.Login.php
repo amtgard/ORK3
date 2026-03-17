@@ -41,7 +41,7 @@ class Controller_Login extends Controller {
 		$this->template = '../revised-frontend/Login_forgotpassword.tpl';
 		if ($recover == 'recover') {
 			if (($r = $this->Login->recover_password($_POST['username'], $_POST['email'])) === true) {
-				$this->data["error"] = "Your new password has been sent to you.";
+				$this->data["error"] = "A new password has been emailed to you. The new password will expire in 24 hours. Please log in and change your password immediately.";
 				$this->data["detail"] = "";
 			} else {
 				$this->data["error"] = $r['Error'];
