@@ -12,6 +12,7 @@ Output: map/amtgard_kingdoms.html
 
 import subprocess
 import sys
+import re
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -40,49 +41,85 @@ PALETTE = [
 # Data extraction
 # ---------------------------------------------------------------------------
 
+_RE_LAT = re.compile(rb'\\"lat\\" : ([+-]?[\d.]+)')
+_RE_LNG = re.compile(rb'\\"lng\\" : ([+-]?[\d.]+)')
+
+def _lat_lng_from_geocode(geocode_bytes: bytes):
+    """Extract (lat, lng) from the stored Google geocode blob, or None.
+
+    The DB stores the raw Google API response with literal \\n and \\"
+    escape sequences, so we use regex on the raw bytes rather than
+    trying to parse it as JSON.
+    """
+    try:
+        m_lat = _RE_LAT.search(geocode_bytes)
+        m_lng = _RE_LNG.search(geocode_bytes)
+        if m_lat and m_lng:
+            lat = float(m_lat.group(1))
+            lng = float(m_lng.group(1))
+            if lat != 0 and lng != 0:
+                return lat, lng
+    except Exception:
+        pass
+    return None
+
+
 def extract_parks() -> pd.DataFrame:
-    """Pull active non-freehold parks with coordinates from the ORK DB."""
+    """Pull active non-freehold parks from the ORK DB.
+
+    Parks with lat=0 fall back to coordinates parsed from the stored
+    google_geocode blob (same data the app geocoded at registration time).
+    """
     sql = (
-        "SELECT p.park_id, p.name, k.kingdom_id, k.name, p.latitude, p.longitude "
+        "SELECT p.park_id, p.name, k.kingdom_id, k.name, "
+        "       p.latitude, p.longitude, p.google_geocode "
         "FROM ork_park p "
         "JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id "
-        "WHERE p.active = 'Active' "
-        "  AND k.kingdom_id != 8 "
-        "  AND p.latitude  IS NOT NULL AND p.latitude  != 0 "
-        "  AND p.longitude IS NOT NULL AND p.longitude != 0 "
+        "WHERE p.active = 'Active' AND k.kingdom_id != 8 "
         "ORDER BY k.kingdom_id, p.park_id"
     )
     result = subprocess.run(
         [
             '/usr/local/bin/docker', 'exec', 'ork3-php8-db',
             'mariadb', '-u', 'root', '-proot', 'ork',
-            '--batch', '--skip-column-names', '-e', sql,
+            '--batch', '--raw', '--skip-column-names', '-e', sql,
         ],
-        capture_output=True, text=True,
+        capture_output=True,  # bytes, not text — geocode field has escape chars
     )
     if result.returncode != 0:
-        print("DB error:", result.stderr, file=sys.stderr)
+        print("DB error:", result.stderr.decode(), file=sys.stderr)
         sys.exit(1)
 
     rows = []
-    for line in result.stdout.strip().split('\n'):
-        parts = line.split('\t')
-        if len(parts) != 6:
+    skipped = 0
+    for line in result.stdout.split(b'\n'):
+        parts = line.split(b'\t')
+        if len(parts) != 7:
             continue
         try:
+            lat = float(parts[4])
+            lng = float(parts[5])
+            if lat == 0 or lng == 0:
+                parsed = _lat_lng_from_geocode(parts[6])
+                if parsed:
+                    lat, lng = parsed
+                else:
+                    skipped += 1
+                    continue
             rows.append({
                 'park_id':      int(parts[0]),
-                'park_name':    parts[1],
+                'park_name':    parts[1].decode(),
                 'kingdom_id':   int(parts[2]),
-                'kingdom_name': parts[3],
-                'latitude':     float(parts[4]),
-                'longitude':    float(parts[5]),
+                'kingdom_name': parts[3].decode(),
+                'latitude':     lat,
+                'longitude':    lng,
             })
         except ValueError:
             continue
 
     df = pd.DataFrame(rows)
-    print(f"  {len(df)} parks across {df['kingdom_id'].nunique()} kingdoms")
+    print(f"  {len(df)} parks across {df['kingdom_id'].nunique()} kingdoms "
+          f"({skipped} skipped — no coordinates or geocode data)")
     return df
 
 
