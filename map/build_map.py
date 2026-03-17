@@ -25,6 +25,7 @@ from shapely.geometry import Point, Polygon, MultiPolygon
 from shapely.ops import unary_union
 import geopandas as gpd
 import geodatasets
+import pooch
 import folium
 
 MILES_25_IN_METERS = 40_233.6  # 25 miles in metres
@@ -247,9 +248,18 @@ def build_kingdom_shapes(df: pd.DataFrame):
     gdf_m = gdf_m.copy()
     gdf_m['voronoi'] = polygons
 
-    # Land boundary for clipping (Natural Earth 110m, projected to match)
-    land = gpd.read_file(geodatasets.get_path('naturalearth.land')).to_crs('EPSG:3857')
-    land_union = land.geometry.unary_union
+    # US + Canada boundary for clipping (Natural Earth 110m countries)
+    _countries_zip = pooch.retrieve(
+        'https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip',
+        known_hash=None, progressbar=False,
+    )
+    world = gpd.read_file(_countries_zip)
+    land_union = (
+        world[world['NAME'].isin(['United States of America', 'Canada'])]
+        .to_crs('EPSG:3857')
+        .geometry
+        .unary_union
+    )
 
     # Merge uncapped Voronoi cells per kingdom, clip to land
     kingdom_shapes = {}
