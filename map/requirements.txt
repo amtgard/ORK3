@@ -1,6 +1,7 @@
 scipy
 shapely
 geopandas
+geodatasets
 folium
 pandas
 numpy

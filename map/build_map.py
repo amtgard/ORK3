@@ -21,6 +21,7 @@ from scipy.spatial import Voronoi
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 import geopandas as gpd
+import geodatasets
 import folium
 
 MILES_25_IN_METERS = 40_233.6  # 25 miles in metres
@@ -182,14 +183,20 @@ def build_kingdom_shapes(df: pd.DataFrame):
     gdf_m = gdf_m.copy()
     gdf_m['voronoi'] = polygons
 
-    # Merge uncapped Voronoi cells per kingdom — no radius limit
+    # Land boundary for clipping (Natural Earth 110m, projected to match)
+    land = gpd.read_file(geodatasets.get_path('naturalearth.land')).to_crs('EPSG:3857')
+    land_union = land.geometry.unary_union
+
+    # Merge uncapped Voronoi cells per kingdom, clip to land
     kingdom_shapes = {}
     kingdom_names = {}
     for kid, group in gdf_m.groupby('kingdom_id'):
         cells = [p for p in group['voronoi'] if p is not None]
         if not cells:
             continue
-        merged = unary_union(cells)
+        merged = unary_union(cells).intersection(land_union)
+        if merged.is_empty:
+            continue
         tmp = gpd.GeoDataFrame({'id': [1]}, geometry=[merged], crs='EPSG:3857')
         kingdom_shapes[kid] = tmp.to_crs('EPSG:4326').geometry.iloc[0]
         kingdom_names[kid] = group['kingdom_name'].iloc[0]
