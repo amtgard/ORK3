@@ -355,6 +355,9 @@
 				<?php if ($CanManageKingdom ?? false): ?>
 				<li data-kntab="admin">
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
+				<?php if (!empty($CanManageTests)): ?>
+				<li data-kntab="tests">
+					<i class="fas fa-clipboard-check"></i><span class="kn-tab-label"> Tests</span>
 				</li>
 				<?php endif; ?>
 			</ul>
@@ -971,6 +974,48 @@
 			<div id="kn-players-cards" style="display:none"></div>
 			<div id="kn-players-list" style="display:none"></div>
 		</div><!-- /kn-tab-players -->
+
+		<!-- Tests Tab -->
+		<?php if (!empty($CanManageTests)): ?>
+		<div class="kn-tab-panel" id="kn-tab-tests" style="display:none">
+			<?php
+				$_qtReeveConfig   = Ork3::$Lib->qualtest->getConfig($kingdom_id, 'reeve');
+				$_qtCorporaConfig = Ork3::$Lib->qualtest->getConfig($kingdom_id, 'corpora');
+				$_qtReeveCnt      = Ork3::$Lib->qualtest->countActiveQuestions($kingdom_id, 'reeve');
+				$_qtCorporaCnt    = Ork3::$Lib->qualtest->countActiveQuestions($kingdom_id, 'corpora');
+			?>
+			<?php if ($CanManageKingdom ?? false): ?>
+			<div class="kn-tab-toolbar">
+				<a class="kn-btn kn-btn-secondary" href="<?= UIR ?>QualTest/manage/<?= $kingdom_id ?>">
+					<i class="fas fa-cog"></i> Configure Tests
+				</a>
+			</div>
+			<?php endif; ?>
+			<div class="kn-qt-cards">
+				<?php foreach (['reeve' => ['label' => "Reeve's Test", 'config' => $_qtReeveConfig, 'count' => $_qtReeveCnt], 'corpora' => ['label' => 'Corpora Test', 'config' => $_qtCorporaConfig, 'count' => $_qtCorporaCnt]] as $_qtType => $_qtMeta): ?>
+				<div class="kn-qt-card">
+					<div class="kn-qt-card-title"><i class="fas fa-scroll"></i> <?= $_qtMeta['label'] ?></div>
+					<div class="kn-qt-stats">
+						<span class="kn-qt-stat"><strong><?= $_qtMeta['count'] ?></strong> active question<?= $_qtMeta['count'] !== 1 ? 's' : '' ?></span>
+						<span class="kn-qt-stat"><strong><?= $_qtMeta['config']['QuestionCount'] ?></strong> per test</span>
+						<span class="kn-qt-stat"><strong><?= $_qtMeta['config']['PassPercent'] ?>%</strong> to pass</span>
+						<span class="kn-qt-stat">Valid <strong><?= $_qtMeta['config']['ValidDays'] ?></strong> days</span>
+					</div>
+					<?php if ($CanManageKingdom ?? false): ?>
+					<div class="kn-qt-actions">
+						<a class="kn-btn kn-btn-sm" href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/<?= $_qtType ?>">
+							<i class="fas fa-list"></i> Questions
+						</a>
+						<a class="kn-btn kn-btn-sm kn-btn-outline" href="<?= UIR ?>QualTest/question/create/<?= $kingdom_id ?>/<?= $_qtType ?>">
+							<i class="fas fa-plus"></i> Add Question
+						</a>
+					</div>
+					<?php endif; ?>
+				</div>
+				<?php endforeach; ?>
+			</div>
+		</div><!-- /kn-tab-tests -->
+		<?php endif; ?>
 
 		</div><!-- /kn-tabs -->
 	</div><!-- /kn-main -->
@@ -2212,6 +2257,14 @@ tr:hover .kn-copy-link { opacity: 1; }
 </style>
 <!-- Move Player Modal -->
 <style>
+.kn-qt-cards { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
+.kn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; min-width: 220px; flex: 1; }
+.kn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 10px; }
+.kn-qt-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 12px; font-size: 0.82rem; color: #4a5568; }
+.kn-qt-stat strong { color: #2b6cb0; }
+.kn-qt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.kn-btn-sm { padding: 5px 12px; font-size: 0.8rem; }
+.kn-tab-toolbar { margin-bottom: 14px; }
 .kn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .kn-mp-toggle-btn {
 	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:var(--ork-radius-md); font-size:var(--ork-font-size-sm); font-weight:var(--ork-font-weight-semibold);

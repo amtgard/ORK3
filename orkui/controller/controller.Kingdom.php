@@ -938,6 +938,9 @@ class Controller_Kingdom extends Controller
             $this->data['CanManageAnyParkInKingdom'] = ($_aprs && $_aprs->Size() > 0 && $_aprs->Next());
         }
 
+        // Qualification Tests module: gate the Tests management UI.
+        $this->data['CanManageTests'] = $uid > 0 && Ork3::$Lib->qualtest->canManage($uid, (int)$kingdom_id);
+
         // Gate the "Voting Eligible" Players-nav link by whether this kingdom has
         // voting rules defined. Single source of truth lives in
         // Model_Reports::supported_voting_kingdom_ids() — don't hardcode the list here.
