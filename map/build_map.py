@@ -13,19 +13,46 @@ Output: map/amtgard_kingdoms.html
 import subprocess
 import sys
 import re
+import base64
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
 import pandas as pd
 import numpy as np
 from scipy.spatial import Voronoi
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, MultiPolygon
 from shapely.ops import unary_union
 import geopandas as gpd
 import geodatasets
 import folium
 
 MILES_25_IN_METERS = 40_233.6  # 25 miles in metres
+
+HERALDRY_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets', 'heraldry', 'kingdom')
+HERALDRY_SIZE = 40  # px — diameter of the heraldry badge on the map
+
+
+def _heraldry_data_uri(kingdom_id: int):
+    """Return a base64 data URI for a kingdom's heraldry image, or None."""
+    path = os.path.join(HERALDRY_DIR, f'{kingdom_id:04d}.jpg')
+    if not os.path.exists(path):
+        return None
+    with open(path, 'rb') as f:
+        data = base64.b64encode(f.read()).decode()
+    return f'data:image/jpeg;base64,{data}'
+
+
+def _largest_polygon_centroid(shape):
+    """Return the (lat, lng) centroid of the largest polygon in a shape.
+
+    For non-contiguous kingdoms (MultiPolygon), uses the biggest piece
+    so the badge lands in the most prominent territory chunk.
+    """
+    if isinstance(shape, MultiPolygon):
+        shape = max(shape.geoms, key=lambda p: p.area)
+    c = shape.centroid
+    return c.y, c.x  # lat, lng
 
 # Visually distinct fill colors — one per kingdom (cycles if needed)
 PALETTE = [
@@ -269,6 +296,26 @@ def build_map(kingdom_shapes, kingdom_names, parks_gdf):
             },
             tooltip=name,
         ).add_to(m)
+
+    # Kingdom heraldry badges at centroid of largest polygon
+    for kid, shape in kingdom_shapes.items():
+        uri = _heraldry_data_uri(kid)
+        if not uri:
+            continue
+        lat, lng = _largest_polygon_centroid(shape)
+        icon = folium.DivIcon(
+            html=(
+                f'<img src="{uri}" '
+                f'style="width:{HERALDRY_SIZE}px;height:{HERALDRY_SIZE}px;'
+                f'border-radius:50%;border:1.5px solid #444;'
+                f'box-shadow:0 1px 3px rgba(0,0,0,.5);'
+                f'object-fit:cover;pointer-events:none;">'
+            ),
+            icon_size=(HERALDRY_SIZE, HERALDRY_SIZE),
+            icon_anchor=(HERALDRY_SIZE // 2, HERALDRY_SIZE // 2),
+        )
+        folium.Marker(location=[lat, lng], icon=icon,
+                      tooltip=kingdom_names[kid]).add_to(m)
 
     # Park markers
     for _, row in parks_gdf.iterrows():
