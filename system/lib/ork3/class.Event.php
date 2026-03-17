@@ -389,7 +389,13 @@ class Event  extends Ork3 {
 
 		logtrace("SetEventDetails()",$request);
 		
-		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+		$isStaffManager = false;
+		if (valid_id($mundane_id) && valid_id($request['EventCalendarDetailId'] ?? '')) {
+			$this->db->Clear();
+			$staffCheck = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$request['EventCalendarDetailId'] . ' AND mundane_id = ' . (int)$mundane_id . ' AND can_manage = 1 LIMIT 1');
+			$isStaffManager = $staffCheck && $staffCheck->Next();
+		}
+		if (valid_id($mundane_id) && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT) || $isStaffManager)) {
 		
 			$this->detail->clear();
 			$this->detail->event_id = $request['EventId'];

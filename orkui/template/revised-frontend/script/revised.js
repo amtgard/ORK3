@@ -6887,6 +6887,623 @@ $(document).ready(function() {
             submitBtn.disabled = !(pid && parseInt(pid.value, 10) > 0 && cls && cls.value && cred && parseFloat(cred.value) > 0);
         });
     };
+
+    // ---- Staff Modal ----
+    if (EvConfig.canManageStaff) {
+        var gid = function(id) { return document.getElementById(id); };
+        var evStaffAcTimer = null;
+
+        window.evOpenStaffModal = function() {
+            var modal = gid('ev-staff-modal');
+            if (!modal) return;
+            gid('ev-staff-role').value = '';
+            gid('ev-staff-player-name').value = '';
+            gid('ev-staff-player-id').value = '';
+            gid('ev-staff-can-manage').checked = false;
+            gid('ev-staff-can-attendance').checked = false;
+            gid('ev-staff-error').style.display = 'none';
+            gid('ev-staff-ac').classList.remove('kn-ac-open');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-staff-role').focus(); }, 50);
+        };
+
+        window.evCloseStaffModal = function() {
+            var modal = gid('ev-staff-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'ev-staff-modal') evCloseStaffModal();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && gid('ev-staff-modal') && gid('ev-staff-modal').style.display === 'flex') {
+                evCloseStaffModal();
+            }
+        });
+
+        // Player autocomplete in staff modal
+        var staffAcEl  = gid('ev-staff-ac');
+        var staffNameEl = gid('ev-staff-player-name');
+        var staffIdEl   = gid('ev-staff-player-id');
+        var OPEN_CLASS  = 'kn-ac-open';
+        var ITEM_SEL    = '.kn-ac-item[data-id]';
+
+        function escHtmlSt(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function evStaffPositionAc() {
+            if (!staffNameEl || !staffAcEl) return;
+            var r = staffNameEl.getBoundingClientRect();
+            staffAcEl.style.top   = (r.bottom + 2) + 'px';
+            staffAcEl.style.left  = r.left + 'px';
+            staffAcEl.style.width = r.width + 'px';
+        }
+
+        function evStaffRenderAc(results) {
+            if (!staffAcEl) return;
+            if (!results || !results.length) {
+                staffAcEl.classList.remove(OPEN_CLASS);
+                return;
+            }
+            staffAcEl.innerHTML = results.map(function(pl) {
+                var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
+                return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">'
+                    + escHtmlSt(pl.Persona) + abbr + '</div>';
+            }).join('');
+            evStaffPositionAc();
+            staffAcEl.classList.add(OPEN_CLASS);
+        }
+
+        if (staffNameEl && staffAcEl) {
+            // Override CSS positioning so the dropdown escapes the modal's overflow-y:auto
+            staffAcEl.style.position = 'fixed';
+            staffAcEl.style.zIndex   = '9999';
+            staffAcEl.style.width    = '300px';
+            // Apply kn-ac-results styling class
+            staffAcEl.className = 'kn-ac-results';
+            staffAcEl.style.display = ''; // clear inline display:none so CSS class controls visibility
+
+            staffNameEl.addEventListener('input', function() {
+                var term = this.value.trim();
+                staffIdEl.value = '';
+                if (term.length < 2) { staffAcEl.classList.remove(OPEN_CLASS); return; }
+                clearTimeout(evStaffAcTimer);
+                evStaffAcTimer = setTimeout(function() {
+                    var kid = EvConfig.kingdomId || 0;
+                    if (!kid) {
+                        // No kingdom on this event — search all players via SearchService
+                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                var res = (d || []).map(function(pl) {
+                                    return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' };
+                                });
+                                evStaffRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
+                                var ph = staffAcEl.querySelector('[data-id="-1"]');
+                                if (ph) ph.removeAttribute('data-id');
+                            });
+                        return;
+                    }
+                    // Kingdom-scoped first
+                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
+                        .then(function(r) { return r.json(); })
+                        .then(function(own) {
+                            own = own || [];
+                            if (own.length >= 5) {
+                                evStaffRenderAc(own);
+                            } else {
+                                // Fewer than 5 kingdom results — also fetch outside kingdom and append
+                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
+                                    .then(function(r2) { return r2.json(); })
+                                    .then(function(other) {
+                                        other = (other || []).slice(0, 10 - own.length);
+                                        var combined = own.concat(other);
+                                        evStaffRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found', KAbbr: '', PAbbr: '' }]);
+                                        // Remove no-results placeholder from being selectable
+                                        if (!combined.length) staffAcEl.querySelector('[data-id="0"]') && (staffAcEl.querySelector('[data-id="0"]').removeAttribute('data-id'));
+                                    });
+                            }
+                        });
+                }, 220);
+            });
+
+            staffAcEl.addEventListener('click', function(e) {
+                var item = e.target.closest(ITEM_SEL);
+                if (!item) return;
+                staffNameEl.value = decodeURIComponent(item.dataset.name);
+                staffIdEl.value   = item.dataset.id;
+                staffAcEl.classList.remove(OPEN_CLASS);
+            });
+
+            staffNameEl.addEventListener('blur', function() {
+                setTimeout(function() { staffAcEl.classList.remove(OPEN_CLASS); }, 160);
+            });
+
+            acKeyNav(staffNameEl, staffAcEl, OPEN_CLASS, ITEM_SEL);
+        }
+
+        window.evSubmitStaff = function() {
+            var role       = gid('ev-staff-role').value.trim();
+            var mundaneId  = gid('ev-staff-player-id').value;
+            var canManage  = gid('ev-staff-can-manage').checked ? 1 : 0;
+            var canAtt     = gid('ev-staff-can-attendance').checked ? 1 : 0;
+            var errEl      = gid('ev-staff-error');
+            var saveBtn    = gid('ev-staff-save-btn');
+
+            errEl.style.display = 'none';
+            if (!role)       { errEl.textContent = 'Please enter a role.'; errEl.style.display = 'block'; return; }
+            if (!mundaneId)  { errEl.textContent = 'Please select a player.'; errEl.style.display = 'block'; return; }
+
+            var orig = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+            var fd = new FormData();
+            fd.append('MundaneId',     mundaneId);
+            fd.append('Persona',       gid('ev-staff-player-name').value.trim());
+            fd.append('RoleName',      role);
+            fd.append('CanManage',     canManage);
+            fd.append('CanAttendance', canAtt);
+
+            fetch(EvConfig.uir + 'EventAjax/add_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0 && data.staff) {
+                    evCloseStaffModal();
+                    var s = data.staff;
+                    var chk = '<i class="fas fa-check" style="color:#276749"></i>';
+                    var x   = '<i class="fas fa-times" style="color:#a0aec0"></i>';
+                    var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '">' +
+                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + s.Persona + '</a></td>' +
+                        '<td>' + s.RoleName + '</td>' +
+                        '<td>' + (s.CanManage ? chk : x) + '</td>' +
+                        '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
+                        '<td class="ev-del-cell"><button class="ev-del-link" title="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button></td>' +
+                        '</tr>';
+                    var tbody = gid('ev-staff-tbody');
+                    if (tbody) {
+                        tbody.insertAdjacentHTML('beforeend', newRow);
+                    } else {
+                        // First staff member: table doesn't exist yet, reload to render it properly
+                        location.reload();
+                        return;
+                    }
+                    var empty = gid('ev-staff-empty');
+                    if (empty) empty.style.display = 'none';
+                    // Update tab count badge
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                        }
+                    });
+                } else {
+                    errEl.textContent = data.error || 'An error occurred.';
+                    errEl.style.display = 'block';
+                }
+            })
+            .catch(function(err) {
+                errEl.textContent = 'Request failed: ' + err.message;
+                errEl.style.display = 'block';
+            })
+            .finally(function() {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = orig;
+            });
+        };
+
+        window.evRemoveStaff = function(btn, staffId) {
+            if (!confirm('Remove this staff member?')) return;
+            var fd = new FormData();
+            fd.append('StaffId', staffId);
+            fetch(EvConfig.uir + 'EventAjax/remove_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    var row = gid('ev-staff-row-' + staffId);
+                    if (row) row.remove();
+                    var tbody = gid('ev-staff-tbody');
+                    if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                        var table = gid('ev-staff-table');
+                        if (table) {
+                            table.style.display = 'none';
+                            var empty = gid('ev-staff-empty');
+                            if (empty) empty.style.display = '';
+                        }
+                    }
+                    // Update tab count badge
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) {
+                                var n = parseInt(badge.textContent || '1') - 1;
+                                badge.textContent = Math.max(0, n);
+                            }
+                        }
+                    });
+                } else {
+                    alert(data.error || 'Could not remove staff member.');
+                }
+            })
+            .catch(function(err) { alert('Request failed: ' + err.message); });
+        };
+
+        // ---- Schedule modal ----
+
+        var EV_CATEGORIES = {
+            'Administrative':    { icon: 'fa-clipboard-list', color: '#546e7a', bg: '#eceff1' },
+            'Tournament':        { icon: 'fa-trophy',          color: '#b8860b', bg: '#fffde7' },
+            'Battlegame':        { icon: 'fa-shield-alt',      color: '#c0392b', bg: '#fdecea' },
+            'Arts and Sciences': { icon: 'fa-palette',         color: '#7b1fa2', bg: '#f3e5f5' },
+            'Class':             { icon: 'fa-graduation-cap',  color: '#1565c0', bg: '#e3f2fd' },
+            'Feast and Food':    { icon: 'fa-utensils',        color: '#e65100', bg: '#fff3e0' },
+            'Court':             { icon: 'fa-crown',           color: '#4e342e', bg: '#efebe9' },
+            'Other':             { icon: 'fa-star',            color: '#757575', bg: '#fafafa' }
+        };
+
+        window.evOpenScheduleModal = function() {
+            var modal = gid('ev-schedule-modal');
+            if (!modal) return;
+            gid('ev-sched-mode').value         = 'add';
+            gid('ev-sched-id').value           = '';
+            gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
+            gid('ev-sched-save-label').textContent  = 'Save';
+            gid('ev-sched-category').value    = 'Other';
+            gid('ev-sched-title').value       = '';
+            gid('ev-sched-location').value     = '';
+            gid('ev-sched-description').value  = '';
+            gid('ev-sched-error').style.display = 'none';
+            // Apply event bounds as min/max and default start to event start
+            var startEl = gid('ev-sched-start');
+            var endEl   = gid('ev-sched-end');
+            if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
+            if (EvConfig.eventEnd)   { startEl.max = EvConfig.eventEnd;   endEl.max = EvConfig.eventEnd; }
+            // Default start to event start, end to start + 1hr
+            startEl.value = EvConfig.eventStart || '';
+            if (EvConfig.eventStart) {
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                var ts = new Date(EvConfig.eventStart);
+                ts.setHours(ts.getHours() + 1);
+                endEl.value = ts.getFullYear() + '-' + pad(ts.getMonth()+1) + '-' + pad(ts.getDate()) +
+                              'T' + pad(ts.getHours()) + ':' + pad(ts.getMinutes());
+            } else {
+                endEl.value = '';
+            }
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
+        };
+
+        window.evCloseScheduleModal = function() {
+            var modal = gid('ev-schedule-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'ev-schedule-modal') evCloseScheduleModal();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && gid('ev-schedule-modal') && gid('ev-schedule-modal').style.display === 'flex') {
+                evCloseScheduleModal();
+            }
+        });
+
+        // Auto-set end = start + 1hr when start changes (only if end is blank)
+        var schedStartEl = gid('ev-sched-start');
+        if (schedStartEl) {
+            schedStartEl.addEventListener('change', function() {
+                var endEl = gid('ev-sched-end');
+                if (!endEl || endEl.value) return;
+                var ts = new Date(this.value);
+                if (isNaN(ts)) return;
+                ts.setHours(ts.getHours() + 1);
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                endEl.value = ts.getFullYear() + '-' + pad(ts.getMonth()+1) + '-' + pad(ts.getDate()) +
+                              'T' + pad(ts.getHours()) + ':' + pad(ts.getMinutes());
+            });
+        }
+
+        function evFmtDayHeader(dateStr) {
+            var d = new Date(dateStr + 'T12:00:00');
+            var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+        }
+
+        function evFmtTime(dtStr) {
+            var d = new Date(dtStr.replace(' ', 'T'));
+            if (isNaN(d)) return dtStr;
+            var h = d.getHours(), m = d.getMinutes(), ampm = h >= 12 ? 'pm' : 'am';
+            h = h % 12 || 12;
+            return h + ':' + String(m).padStart(2,'0') + ampm;
+        }
+
+        function escHtmlSch(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        window.evOpenScheduleEditModal = function(scheduleId, btn) {
+            var modal = gid('ev-schedule-modal');
+            if (!modal) return;
+            var row = btn.closest('tr');
+            gid('ev-sched-mode').value         = 'edit';
+            gid('ev-sched-id').value           = scheduleId;
+            gid('ev-sched-modal-title').textContent = 'Edit Schedule Item';
+            gid('ev-sched-save-label').textContent  = 'Save Changes';
+            gid('ev-sched-category').value    = row.getAttribute('data-category') || 'Other';
+            gid('ev-sched-title').value       = row.getAttribute('data-title') || '';
+            gid('ev-sched-location').value     = row.getAttribute('data-location') || '';
+            gid('ev-sched-description').value  = row.getAttribute('data-description') || '';
+            gid('ev-sched-error').style.display = 'none';
+            var startEl = gid('ev-sched-start');
+            var endEl   = gid('ev-sched-end');
+            if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
+            if (EvConfig.eventEnd)   { startEl.max = EvConfig.eventEnd;   endEl.max = EvConfig.eventEnd; }
+            startEl.value = row.getAttribute('data-start') || '';
+            endEl.value   = row.getAttribute('data-end')   || '';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
+        };
+
+        window.evSubmitSchedule = function() {
+            var title   = gid('ev-sched-title').value.trim();
+            var start   = gid('ev-sched-start').value;
+            var end     = gid('ev-sched-end').value;
+            var loc     = gid('ev-sched-location').value.trim();
+            var desc    = gid('ev-sched-description').value.trim();
+            var errEl   = gid('ev-sched-error');
+            var saveBtn = gid('ev-sched-save-btn');
+
+            errEl.style.display = 'none';
+            if (!title) { errEl.textContent = 'Please enter a title.'; errEl.style.display = 'block'; return; }
+            if (!start) { errEl.textContent = 'Please enter a start time.'; errEl.style.display = 'block'; return; }
+            if (!end)   { errEl.textContent = 'Please enter an end time.'; errEl.style.display = 'block'; return; }
+            if (new Date(end) < new Date(start)) {
+                errEl.textContent = 'End time cannot be before start time.'; errEl.style.display = 'block'; return;
+            }
+
+            var orig = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+            var cat = gid('ev-sched-category').value || 'Other';
+            var fd = new FormData();
+            fd.append('Category',    cat);
+            fd.append('Title',       title);
+            fd.append('StartTime',   start.replace('T', ' '));
+            fd.append('EndTime',     end.replace('T', ' '));
+            fd.append('Location',    loc);
+            fd.append('Description', desc);
+
+            var isEdit = gid('ev-sched-mode').value === 'edit';
+            var schedId = gid('ev-sched-id').value;
+            var url = isEdit
+                ? EvConfig.uir + 'EventAjax/update_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId
+                : EvConfig.uir + 'EventAjax/add_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId;
+            if (isEdit) fd.append('ScheduleId', schedId);
+
+            fetch(url, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0 && data.schedule) {
+                    evCloseScheduleModal();
+                    var s = data.schedule;
+                    var startCell = escHtmlSch(evFmtTime(s.StartTime));
+                    var endCell   = escHtmlSch(evFmtTime(s.EndTime));
+                    var catCfg = EV_CATEGORIES[s.Category] || EV_CATEGORIES['Other'];
+                    var glyphHtml = '<i class="fas ' + catCfg.icon + '" style="color:' + catCfg.color + ';margin-right:5px" title="' + escHtmlSch(s.Category) + '"></i>';
+                    var actionCells = '<td class="ev-del-cell">' +
+                        '<button class="ev-edit-link" title="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
+                        '<button class="ev-del-link" title="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
+                        '</td>';
+                    if (isEdit) {
+                        var row = gid('ev-schedule-row-' + s.EventScheduleId);
+                        if (row) {
+                            row.setAttribute('data-title',       s.Title);
+                            row.setAttribute('data-start',       s.StartTime.replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-end',         s.EndTime.replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-location',    s.Location);
+                            row.setAttribute('data-description', s.Description);
+                            row.setAttribute('data-category',    s.Category);
+                            row.style.background = catCfg.bg;
+                            row.cells[0].innerHTML = startCell;
+                            row.cells[1].innerHTML = endCell;
+                            row.cells[2].innerHTML = glyphHtml + escHtmlSch(s.Title);
+                            row.cells[3].textContent = s.Location;
+                            row.cells[4].textContent = s.Description;
+                            row.cells[5].innerHTML = actionCells.replace(/^<td[^>]*>/, '').replace(/<\/td>$/, '');
+                        }
+                    } else {
+                        var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
+                            ' data-title="' + s.Title.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-start="' + s.StartTime.replace(' ','T').substring(0,16) + '"' +
+                            ' data-end="'   + s.EndTime.replace(' ','T').substring(0,16) + '"' +
+                            ' data-location="' + s.Location.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-description="' + s.Description.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-category="' + escHtmlSch(s.Category) + '"' +
+                            ' style="background:' + catCfg.bg + '">' +
+                            '<td style="white-space:nowrap">' + startCell + '</td>' +
+                            '<td style="white-space:nowrap">' + endCell + '</td>' +
+                            '<td>' + glyphHtml + escHtmlSch(s.Title) + '</td>' +
+                            '<td>' + escHtmlSch(s.Location) + '</td>' +
+                            '<td>' + escHtmlSch(s.Description) + '</td>' +
+                            actionCells +
+                            '</tr>';
+                        var dateKey = s.StartTime.substring(0, 10).replace(/-/g, '');
+                        var tbody = gid('ev-schedule-tbody-' + dateKey);
+                        if (!tbody) {
+                            // Build a new day section and insert in chronological order
+                            var dateStr = s.StartTime.substring(0, 10);
+                            var dayLabel = evFmtDayHeader(dateStr);
+                            var delTh = EvConfig.canManage ? '<th class="ev-del-cell"></th>' : '';
+                            var delCol = EvConfig.canManage ? '<col style="width:56px">' : '';
+                            var newSection = '<div class="ev-sched-day-section" data-date="' + dateStr + '">' +
+                                '<div class="ev-sched-day-header">' + dayLabel + '</div>' +
+                                '<table class="ev-table ev-sched-table" id="ev-schedule-table-' + dateKey + '">' +
+                                '<colgroup><col style="width:90px"><col style="width:90px"><col style="width:22%"><col style="width:15%"><col>' + delCol + '</colgroup>' +
+                                '<thead><tr><th>Start</th><th>End</th><th>Title</th><th>Location</th><th>Description</th>' + delTh + '</tr></thead>' +
+                                '<tbody id="ev-schedule-tbody-' + dateKey + '"></tbody>' +
+                                '</table></div>';
+                            var container = gid('ev-schedule-container');
+                            if (!container) { location.reload(); return; }
+                            var sections = container.querySelectorAll('.ev-sched-day-section');
+                            var inserted = false;
+                            sections.forEach(function(sec) {
+                                if (!inserted && sec.getAttribute('data-date') > dateStr) {
+                                    sec.insertAdjacentHTML('beforebegin', newSection);
+                                    inserted = true;
+                                }
+                            });
+                            if (!inserted) container.insertAdjacentHTML('beforeend', newSection);
+                            tbody = gid('ev-schedule-tbody-' + dateKey);
+                        }
+                        if (tbody) {
+                            tbody.insertAdjacentHTML('beforeend', newRow);
+                        } else {
+                            location.reload(); return;
+                        }
+                        var empty = gid('ev-schedule-empty');
+                        if (empty) empty.style.display = 'none';
+                        var navItems = document.querySelectorAll('#ev-tab-nav li');
+                        navItems.forEach(function(li) {
+                            if (li.getAttribute('data-tab') === 'ev-tab-schedule') {
+                                var badge = li.querySelector('.ev-tab-count');
+                                if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                            }
+                        });
+                        evBuildScheduleFilters();
+                    }
+                } else {
+                    errEl.textContent = data.error || 'An error occurred.';
+                    errEl.style.display = 'block';
+                }
+            })
+            .catch(function(err) {
+                errEl.textContent = 'Request failed: ' + err.message;
+                errEl.style.display = 'block';
+            })
+            .finally(function() {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = orig;
+            });
+        };
+
+        window.evBuildScheduleFilters = function() {
+            var container = gid('ev-sched-filters');
+            if (!container) return;
+            var rows = document.querySelectorAll('[id^="ev-schedule-tbody-"] tr');
+            var present = {};
+            rows.forEach(function(row) {
+                var cat = row.getAttribute('data-category') || 'Other';
+                present[cat] = true;
+            });
+            var order = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Other'];
+            container.innerHTML = '';
+            var count = 0;
+            order.forEach(function(cat) {
+                if (!present[cat]) return;
+                count++;
+                var cfg = EV_CATEGORIES[cat] || EV_CATEGORIES['Other'];
+                var pill = document.createElement('button');
+                pill.className = 'ev-sched-pill ev-sched-pill-active';
+                pill.setAttribute('data-cat', cat);
+                pill.style.background = cfg.bg;
+                pill.style.borderColor = cfg.color;
+                pill.style.color = '#333';
+                pill.innerHTML = '<i class="fas ' + cfg.icon + '" style="color:' + cfg.color + ';margin-right:5px"></i>' + escHtmlSch(cat);
+                pill.addEventListener('click', function() { evToggleScheduleFilter(cat); });
+                container.appendChild(pill);
+            });
+            container.style.display = count >= 2 ? 'flex' : 'none';
+        };
+
+        window.evToggleScheduleFilter = function(cat) {
+            var pill = document.querySelector('#ev-sched-filters [data-cat="' + cat + '"]');
+            if (!pill) return;
+            var isActive = pill.classList.contains('ev-sched-pill-active');
+            var cfg = EV_CATEGORIES[cat] || EV_CATEGORIES['Other'];
+            if (isActive) {
+                pill.classList.remove('ev-sched-pill-active');
+                pill.classList.add('ev-sched-pill-inactive');
+            } else {
+                pill.classList.remove('ev-sched-pill-inactive');
+                pill.classList.add('ev-sched-pill-active');
+                pill.style.background = cfg.bg;
+                pill.style.borderColor = cfg.color;
+                pill.style.color = '#333';
+                var icon = pill.querySelector('i');
+                if (icon) icon.style.color = cfg.color;
+            }
+            document.querySelectorAll('[id^="ev-schedule-tbody-"] tr').forEach(function(row) {
+                if ((row.getAttribute('data-category') || 'Other') === cat) {
+                    row.style.display = isActive ? 'none' : '';
+                }
+            });
+        };
+
+        window.evRemoveSchedule = function(btn, scheduleId) {
+            if (!confirm('Remove this schedule item?')) return;
+            var fd = new FormData();
+            fd.append('ScheduleId', scheduleId);
+            fetch(EvConfig.uir + 'EventAjax/remove_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    var row = gid('ev-schedule-row-' + scheduleId);
+                    if (row) row.remove();
+                    var daySection = row ? row.closest('.ev-sched-day-section') : null;
+                    if (daySection) {
+                        var tbody = daySection.querySelector('tbody');
+                        if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                            daySection.remove();
+                        }
+                    }
+                    var container = gid('ev-schedule-container');
+                    if (container && container.querySelectorAll('.ev-sched-day-section').length === 0) {
+                        var empty = gid('ev-schedule-empty');
+                        if (empty) empty.style.display = '';
+                    }
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-schedule') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) {
+                                var n = parseInt(badge.textContent || '1') - 1;
+                                badge.textContent = Math.max(0, n);
+                            }
+                        }
+                    });
+                    evBuildScheduleFilters();
+                } else {
+                    alert(data.error || 'Could not remove schedule item.');
+                }
+            })
+            .catch(function(err) { alert('Request failed: ' + err.message); });
+        };
+        // Initialize schedule filters on page load
+        evBuildScheduleFilters();
+    }
 })();
 
 /* ===========================

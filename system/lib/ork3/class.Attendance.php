@@ -221,10 +221,18 @@ class Attendance  extends Ork3 {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $detail['CalendarEventDetails'][0]['EventId'], AUTH_EDIT)) {
 				return AUTH_EVENT;
 			}
+			// Check event staff with can_attendance permission
+			$this->db->Clear();
+			$staffRow = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$request['EventCalendarDetailId'] . ' AND mundane_id = ' . (int)$mundane_id . ' AND can_attendance = 1 LIMIT 1');
+			if ($staffRow && $staffRow->Next()) return AUTH_EVENT;
 		} else if (valid_id($request['EventId'])) {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
 				return AUTH_EVENT;
 			}
+			// Check event staff with can_attendance permission (via event_id join for delete path)
+			$this->db->Clear();
+			$staffRow = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff s JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = s.event_calendardetail_id WHERE cd.event_id = ' . (int)$request['EventId'] . ' AND s.mundane_id = ' . (int)$mundane_id . ' AND s.can_attendance = 1 LIMIT 1');
+			if ($staffRow && $staffRow->Next()) return AUTH_EVENT;
 		} else if (valid_id($request['ParkId'])) {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
 				return AUTH_PARK;

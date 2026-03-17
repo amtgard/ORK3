@@ -112,8 +112,11 @@
 	$rsvpCount     = $rsvpCounts['total'];
 	$userAttending = $UserAttending ?? false; // false or 'going' or 'interested'
 	$rsvpList      = $RsvpList ?? [];
+	$scheduleList  = $ScheduleList ?? [];
+	$scheduleCount = count($scheduleList);
 	$canManage           = $CanManageEvent ?? false;
 	$canManageAttendance = $CanManageAttendance ?? false;
+	$canManageStaff = $canManage || $canManageAttendance;
 	$canDelete           = ($attendeeCount === 0 && $rsvpCount === 0);
 
 	// Date badge label
@@ -264,6 +267,26 @@ html[data-theme="dark"] #ev-rsvp-credits {
 }
 html[data-theme="dark"] #ev-rsvp-table thead th label { color: var(--ork-text-muted) !important; }
 html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); color: var(--ork-bg, #1a202c); }
+
+.ev-sched-pill {
+	display: inline-flex; align-items: center; padding: 4px 11px;
+	border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer;
+	transition: opacity .15s, background .15s, border-color .15s;
+	white-space: nowrap; border-width: 1px; border-style: solid;
+}
+.ev-sched-pill-inactive {
+	background: #fff !important; border-color: #ddd !important;
+	color: #bbb !important; opacity: 0.6;
+}
+.ev-sched-pill-inactive i { color: #ccc !important; }
+.ev-sched-day-header {
+	font-weight: 700; font-size: 15px; color: #2d3748;
+	margin: 18px 0 6px; padding-bottom: 5px;
+	border-bottom: 2px solid #e2e8f0;
+}
+.ev-sched-day-section:first-child .ev-sched-day-header { margin-top: 4px; }
+.ev-sched-day-section + .ev-sched-day-section { margin-top: 10px; }
+.ev-sched-table { table-layout: fixed; width: 100%; }
 </style>
 
 <?php // ---- HERO ---- ?>
@@ -510,6 +533,10 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				<li class="ev-tab-active" data-tab="ev-tab-details" onclick="evShowTab(this,'ev-tab-details')">
 					<i class="fas fa-align-left"></i><span class="ev-tab-label"> Details</span>
 				</li>
+				<li data-tab="ev-tab-schedule" onclick="evShowTab(this,'ev-tab-schedule')">
+					<i class="fas fa-clock"></i><span class="ev-tab-label"> Schedule</span>
+					<span class="ev-tab-count"><?= $scheduleCount ?></span>
+				</li>
 				<li data-tab="ev-tab-attendance" onclick="evShowTab(this,'ev-tab-attendance')">
 					<i class="fas fa-clipboard-list"></i><span class="ev-tab-label"> Attendance</span>
 					<span class="ev-tab-count">(<?= $attendeeCount ?>)</span>
@@ -518,6 +545,10 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				<li data-tab="ev-tab-rsvp" onclick="evShowTab(this,'ev-tab-rsvp')">
 					<i class="fas fa-calendar-check"></i><span class="ev-tab-label"> RSVPs</span>
 					<span class="ev-tab-count">(<?= $rsvpCount ?>)</span>
+				</li>
+				<li data-tab="ev-tab-staff" onclick="evShowTab(this,'ev-tab-staff')">
+					<i class="fas fa-id-badge"></i><span class="ev-tab-label"> Staff</span>
+					<span class="ev-tab-count"><?= count($StaffList ?? []) ?></span>
 				</li>
 				<?php if ($hasMapTab): ?>
 				<li data-tab="ev-tab-map" onclick="evShowTab(this,'ev-tab-map')">
@@ -543,6 +574,94 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 			</div>
 
 			<?php // ---- Attendance Tab ---- ?>
+			<div class="ev-tab-panel" id="ev-tab-schedule">
+
+				<?php if ($canManage): ?>
+				<div style="margin-bottom:14px">
+					<button type="button" class="ev-submit-btn" style="float:right" onclick="evOpenScheduleModal()">
+						<i class="fas fa-plus"></i> Add Schedule Item
+					</button>
+				</div>
+				<?php endif; ?>
+
+				<?php
+			$evSchedCategories = [
+				'Administrative'    => ['icon' => 'fa-clipboard-list', 'color' => '#546e7a', 'bg' => '#eceff1'],
+				'Tournament'        => ['icon' => 'fa-trophy',          'color' => '#b8860b', 'bg' => '#fffde7'],
+				'Battlegame'        => ['icon' => 'fa-shield-alt',      'color' => '#c0392b', 'bg' => '#fdecea'],
+				'Arts and Sciences' => ['icon' => 'fa-palette',         'color' => '#7b1fa2', 'bg' => '#f3e5f5'],
+				'Class'             => ['icon' => 'fa-graduation-cap',  'color' => '#1565c0', 'bg' => '#e3f2fd'],
+				'Feast and Food'    => ['icon' => 'fa-utensils',        'color' => '#e65100', 'bg' => '#fff3e0'],
+				'Court'             => ['icon' => 'fa-crown',           'color' => '#4e342e', 'bg' => '#efebe9'],
+				'Other'             => ['icon' => 'fa-star',            'color' => '#757575', 'bg' => '#fafafa'],
+			];
+			?>
+			<div id="ev-sched-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+			<div id="ev-schedule-container">
+			<?php
+			$scheduleByDay = [];
+			foreach ($scheduleList as $item) {
+				$dayKey = date('Ymd', strtotime($item['StartTime']));
+				$scheduleByDay[$dayKey][] = $item;
+			}
+			foreach ($scheduleByDay as $dayKey => $dayItems):
+				$dayTs = strtotime($dayItems[0]['StartTime']);
+			?>
+			<div class="ev-sched-day-section" data-date="<?= date('Y-m-d', $dayTs) ?>">
+				<div class="ev-sched-day-header"><?= date('l, F j, Y', $dayTs) ?></div>
+				<table class="ev-table ev-sched-table" id="ev-schedule-table-<?= $dayKey ?>">
+					<colgroup>
+						<col style="width:90px">
+						<col style="width:90px">
+						<col style="width:22%">
+						<col style="width:15%">
+						<col>
+						<?php if ($canManage): ?><col style="width:56px"><?php endif; ?>
+					</colgroup>
+					<thead>
+						<tr>
+							<th>Start</th>
+							<th>End</th>
+							<th>Title</th>
+							<th>Location</th>
+							<th>Description</th>
+							<?php if ($canManage): ?><th class="ev-del-cell"></th><?php endif; ?>
+						</tr>
+					</thead>
+					<tbody id="ev-schedule-tbody-<?= $dayKey ?>">
+						<?php foreach ($dayItems as $item): ?>
+						<?php $evCat = $item['Category'] ?? 'Other'; $evCatCfg = $evSchedCategories[$evCat] ?? $evSchedCategories['Other']; ?>
+						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
+							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['StartTime'])) ?></td>
+							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['EndTime'])) ?></td>
+							<td><i class="fas <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>;margin-right:5px" title="<?= htmlspecialchars($evCat) ?>"></i><?= htmlspecialchars($item['Title']) ?></td>
+							<td><?= htmlspecialchars($item['Location']) ?></td>
+							<td><?= htmlspecialchars($item['Description']) ?></td>
+							<?php if ($canManage): ?>
+							<td class="ev-del-cell">
+								<button class="ev-edit-link" title="Edit" onclick="evOpenScheduleEditModal(<?= (int)$item['EventScheduleId'] ?>, this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0">
+									<i class="fas fa-pencil-alt"></i>
+								</button>
+								<button class="ev-del-link" title="Remove"
+									onclick="evRemoveSchedule(this, <?= (int)$item['EventScheduleId'] ?>)"
+									style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">
+									&times;
+								</button>
+							</td>
+							<?php endif; ?>
+						</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+			<?php endforeach; ?>
+			</div><!-- /#ev-schedule-container -->
+			<div class="ev-empty" id="ev-schedule-empty"<?= empty($scheduleList) ? '' : ' style="display:none"' ?>>
+				<i class="fas fa-clock" style="margin-right:6px"></i>No schedule items yet
+			</div>
+
+			</div><!-- /.ev-tab-panel (schedule) -->
+
 			<div class="ev-tab-panel" id="ev-tab-attendance">
 
 				<?php if ($reconciled): ?>
@@ -767,6 +886,56 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				</div>
 				<?php endif; ?>
 			</div><!-- /.ev-tab-panel -->
+
+			<?php // ---- Staff Tab ---- ?>
+			<div class="ev-tab-panel" id="ev-tab-staff">
+
+				<?php if ($canManageStaff): ?>
+				<div style="margin-bottom:14px">
+					<button type="button" class="ev-submit-btn" style="float:right" onclick="evOpenStaffModal()">
+						<i class="fas fa-plus"></i> Add Staff
+					</button>
+				</div>
+				<?php endif; ?>
+
+				<?php if (!empty($StaffList)): ?>
+				<table class="ev-table" id="ev-staff-table">
+					<thead>
+						<tr>
+							<th>Player</th>
+							<th>Role</th>
+							<th>Can Manage</th>
+							<th>Can Take Attendance</th>
+							<?php if ($canManageStaff): ?><th class="ev-del-cell">&times;</th><?php endif; ?>
+						</tr>
+					</thead>
+					<tbody id="ev-staff-tbody">
+						<?php foreach ($StaffList as $staff): ?>
+						<tr id="ev-staff-row-<?= (int)$staff['EventStaffId'] ?>">
+							<td><a href="<?= UIR ?>Player/profile/<?= (int)$staff['MundaneId'] ?>"><?= htmlspecialchars($staff['Persona']) ?></a></td>
+							<td><?= htmlspecialchars($staff['RoleName']) ?></td>
+							<td><?= $staff['CanManage'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
+							<td><?= $staff['CanAttendance'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
+							<?php if ($canManageStaff): ?>
+							<td class="ev-del-cell">
+								<button class="ev-del-link" title="Remove"
+									onclick="evRemoveStaff(this, <?= (int)$staff['EventStaffId'] ?>)"
+									style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">
+									&times;
+								</button>
+							</td>
+							<?php endif; ?>
+						</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+				<?php else: ?>
+				<div class="ev-empty" id="ev-staff-empty">
+					<i class="fas fa-id-badge" style="margin-right:6px"></i>No staff assigned yet
+				</div>
+				<?php endif; ?>
+
+			</div><!-- /.ev-tab-panel (staff) -->
 
 			<?php if ($hasMapTab): ?>
 			<?php
@@ -1101,12 +1270,67 @@ var EvConfig = {
 	uir:        '<?= UIR ?>',
 	httpService:'<?= HTTP_SERVICE ?>',
 	canManage:  <?= !empty($canManage) ? 'true' : 'false' ?>,
+	canManageStaff: <?= !empty($canManageStaff) ? 'true' : 'false' ?>,
+	kingdomId:  <?= $kingdomId ?>,
 	eventId:    <?= $eventId ?>,
 	detailId:   <?= $detailId ?>,
 	eventName:  <?= json_encode($info['Name'] ?? 'Event') ?>,
-	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>
+	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>,
+	eventStart: '<?= $eventStart ? date('Y-m-d\TH:i', strtotime($eventStart)) : '' ?>',
+	eventEnd:   '<?= $eventEnd   ? date('Y-m-d\TH:i', strtotime($eventEnd))   : '' ?>'
 };
 </script>
+<?php if ($canManageStaff): ?>
+<!-- Staff Modal -->
+<div class="ev-modal-overlay" id="ev-staff-modal">
+	<div class="ev-modal">
+		<div class="ev-modal-header">
+			<h3><i class="fas fa-id-badge" style="margin-right:8px"></i>Add Staff Member</h3>
+			<button class="ev-modal-close" type="button" onclick="evCloseStaffModal()">&times;</button>
+		</div>
+		<div class="ev-modal-body">
+			<div class="ev-modal-row">
+				<div class="ev-modal-field ev-field-full">
+					<label>Role</label>
+					<input type="text" id="ev-staff-role" placeholder="Autocrat, Gate Staff, etc..." autocomplete="off" style="width:100%">
+				</div>
+			</div>
+			<div class="ev-modal-row">
+				<div class="ev-modal-field ev-field-full" style="position:relative">
+					<label>Player</label>
+					<input type="text" id="ev-staff-player-name" placeholder="Search players..." autocomplete="off" style="width:100%">
+					<input type="hidden" id="ev-staff-player-id">
+					<div id="ev-staff-ac" class="ev-ac-results" style="display:none"></div>
+				</div>
+			</div>
+			<div class="ev-modal-row" style="margin-top:12px">
+				<div class="ev-modal-field">
+					<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+						<input type="checkbox" id="ev-staff-can-manage" style="width:auto;margin:0">
+						Can manage event details
+					</label>
+				</div>
+			</div>
+			<div class="ev-modal-row">
+				<div class="ev-modal-field">
+					<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+						<input type="checkbox" id="ev-staff-can-attendance" style="width:auto;margin:0">
+						Can manage attendance
+					</label>
+				</div>
+			</div>
+			<div id="ev-staff-error" class="ev-img-form-error" style="display:none;margin-top:10px"></div>
+		</div><!-- /.ev-modal-body -->
+		<div class="ev-modal-footer">
+			<button type="button" class="ev-modal-btn-cancel" onclick="evCloseStaffModal()">Cancel</button>
+			<button type="button" class="ev-modal-btn-save" id="ev-staff-save-btn" onclick="evSubmitStaff()">
+				<i class="fas fa-plus" style="margin-right:5px"></i>Add Staff
+			</button>
+		</div>
+	</div>
+</div><!-- /.ev-staff-modal -->
+<?php endif; ?>
+
 <?php if ($canManage): ?>
 <!-- Event Heraldry Upload Modal -->
 <div class="ev-img-overlay" id="ev-img-overlay">
@@ -1163,6 +1387,69 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 }
 </style>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<?php if ($canManage): ?>
+<!-- Schedule Modal -->
+<div class="ev-modal-overlay" id="ev-schedule-modal">
+	<div class="ev-modal">
+		<div class="ev-modal-header">
+			<h3><i class="fas fa-clock" style="margin-right:8px"></i><span id="ev-sched-modal-title">Add Schedule Item</span></h3>
+			<button class="ev-modal-close" type="button" onclick="evCloseScheduleModal()">&times;</button>
+		</div>
+		<div class="ev-modal-body">
+			<div class="ev-modal-row">
+				<div class="ev-modal-field">
+					<label>Category</label>
+					<select id="ev-sched-category" style="width:100%">
+						<option value="Administrative">Administrative</option>
+						<option value="Tournament">Tournament</option>
+						<option value="Battlegame">Battlegame</option>
+						<option value="Arts and Sciences">Arts and Sciences</option>
+						<option value="Class">Class</option>
+						<option value="Feast and Food">Feast and Food</option>
+						<option value="Court">Court</option>
+						<option value="Other" selected>Other</option>
+					</select>
+				</div>
+				<div class="ev-modal-field">
+					<label>Title <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="ev-sched-title" placeholder="Evening Feast, Battlegame, etc." autocomplete="off" style="width:100%">
+				</div>
+			</div>
+			<div class="ev-modal-row">
+				<div class="ev-modal-field">
+					<label>Start Time <span style="color:#e53e3e">*</span></label>
+					<input type="datetime-local" id="ev-sched-start" style="width:100%">
+				</div>
+				<div class="ev-modal-field">
+					<label>End Time <span style="color:#e53e3e">*</span></label>
+					<input type="datetime-local" id="ev-sched-end" style="width:100%">
+				</div>
+			</div>
+			<div class="ev-modal-row">
+				<div class="ev-modal-field ev-field-full">
+					<label>Location</label>
+					<input type="text" id="ev-sched-location" placeholder="Main field, Feast hall, etc." autocomplete="off" style="width:100%">
+				</div>
+			</div>
+			<div class="ev-modal-row">
+				<div class="ev-modal-field ev-field-full">
+					<label>Description</label>
+					<textarea id="ev-sched-description" rows="3" placeholder="Optional details..." style="width:100%;resize:vertical"></textarea>
+				</div>
+			</div>
+			<div class="ev-modal-error" id="ev-sched-error" style="display:none"></div>
+		</div>
+		<div class="ev-modal-footer">
+			<button class="ev-btn ev-btn-outline" type="button" onclick="evCloseScheduleModal()">Cancel</button>
+			<input type="hidden" id="ev-sched-mode" value="add">
+			<input type="hidden" id="ev-sched-id" value="">
+			<button class="ev-submit-btn" type="button" id="ev-sched-save-btn" onclick="evSubmitSchedule()">
+				<i class="fas fa-save"></i> <span id="ev-sched-save-label">Save</span>
+			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 (function() {

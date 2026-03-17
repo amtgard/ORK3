@@ -144,8 +144,13 @@ class Controller_EventAjax extends Controller {
 
 		$uid = (int)$this->session->user_id;
 		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
-			exit;
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_attendance = 1 LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+				exit;
+			}
 		}
 
 		$this->load_model('Event');
@@ -296,6 +301,279 @@ class Controller_EventAjax extends Controller {
 		exit;
 	}
 
+	// --- Event staff and schedule management methods ---
+
+	public function add_staff($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$params    = explode('/', $p ?? '');
+		$event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+
+		if (!valid_id($event_id) || !valid_id($detail_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+			exit;
+		}
+
+		if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+			exit;
+		}
+
+		$mundane_id    = (int)($_POST['MundaneId']    ?? 0);
+		$role_name     = trim($_POST['RoleName']      ?? '');
+		$can_manage    = (int)(bool)($_POST['CanManage']    ?? 0);
+		$can_attendance = (int)(bool)($_POST['CanAttendance'] ?? 0);
+
+		if (!valid_id($mundane_id)) {
+			echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
+			exit;
+		}
+		if (!$role_name) {
+			echo json_encode(['status' => 1, 'error' => 'A role is required.']);
+			exit;
+		}
+
+		global $DB;
+		$role_safe = str_replace(["'", '\\'], ["''", '\\\\'], $role_name);
+		$DB->Clear(); // reset stale bound params from prior ORM queries in this request
+		$DB->Execute(
+			'INSERT INTO ' . DB_PREFIX . 'event_staff
+			(event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance)
+			VALUES (' . $detail_id . ', ' . $mundane_id . ', \'' . $role_safe . '\', ' . $can_manage . ', ' . $can_attendance . ')
+			ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage), can_attendance = VALUES(can_attendance)'
+		);
+		$DB->Clear();
+		$idrow = $DB->DataSet('SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $mundane_id . ' ORDER BY event_staff_id DESC LIMIT 1');
+		$staff_id = ($idrow && $idrow->Next()) ? (int)$idrow->event_staff_id : 0;
+		echo json_encode(['status' => 0, 'staff' => [
+			'EventStaffId'  => $staff_id,
+			'MundaneId'     => (int)$mundane_id,
+			'Persona'       => trim($_POST['Persona'] ?? ''),
+			'RoleName'      => $role_name,
+			'CanManage'     => $can_manage,
+			'CanAttendance' => $can_attendance,
+		]]);
+		exit;
+	}
+
+	public function remove_staff($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$params    = explode('/', $p ?? '');
+		$event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+		$staff_id  = (int)($_POST['StaffId'] ?? 0);
+
+		if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($staff_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']);
+			exit;
+		}
+
+		if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+			exit;
+		}
+
+		global $DB;
+		$DB->Clear();
+		$DB->Execute(
+			'DELETE FROM ' . DB_PREFIX . 'event_staff
+			WHERE event_staff_id = ' . $staff_id . ' AND event_calendardetail_id = ' . $detail_id
+		);
+		echo json_encode(['status' => 0]);
+		exit;
+	}
+
+	public function add_schedule($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+
+		$params    = explode('/', $p ?? '');
+		$event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+
+		if (!valid_id($event_id) || !valid_id($detail_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']); exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
+			}
+		}
+
+		$title       = trim($_POST['Title']       ?? '');
+		$start_time  = trim($_POST['StartTime']   ?? '');
+		$end_time    = trim($_POST['EndTime']     ?? '');
+		$location    = trim($_POST['Location']    ?? '');
+		$description = trim($_POST['Description'] ?? '');
+		$category    = trim($_POST['Category']    ?? 'Other');
+		$allowed_cats = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Other'];
+		if (!in_array($category, $allowed_cats)) $category = 'Other';
+
+		if (!$title)      { echo json_encode(['status' => 1, 'error' => 'A title is required.']); exit; }
+		if (!$start_time) { echo json_encode(['status' => 1, 'error' => 'A start time is required.']); exit; }
+		if (!$end_time)   { echo json_encode(['status' => 1, 'error' => 'An end time is required.']); exit; }
+
+		$startTs = strtotime($start_time);
+		$endTs   = strtotime($end_time);
+		if (!$startTs || !$endTs)  { echo json_encode(['status' => 1, 'error' => 'Invalid time format.']); exit; }
+		if ($endTs < $startTs)     { echo json_encode(['status' => 1, 'error' => 'End time cannot be before start time.']); exit; }
+
+		$title_safe       = str_replace(["'", '\\'], ["''", '\\\\'], $title);
+		$location_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $location);
+		$description_safe = str_replace(["'", '\\'], ["''", '\\\\'], $description);
+		$category_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $category);
+		$start_fmt = date('Y-m-d H:i:s', $startTs);
+		$end_fmt   = date('Y-m-d H:i:s', $endTs);
+
+		global $DB;
+		$DB->Clear();
+		$DB->Execute(
+			'INSERT INTO ' . DB_PREFIX . 'event_schedule
+			(event_calendardetail_id, title, start_time, end_time, location, description, category)
+			VALUES (' . $detail_id . ', \'' . $title_safe . '\', \'' . $start_fmt . '\', \'' . $end_fmt . '\', \'' . $location_safe . '\', \'' . $description_safe . '\', \'' . $category_safe . '\')'
+		);
+		$DB->Clear();
+		$idrow = $DB->DataSet('SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . $detail_id . ' ORDER BY event_schedule_id DESC LIMIT 1');
+		$schedule_id = ($idrow && $idrow->Next()) ? (int)$idrow->event_schedule_id : 0;
+		echo json_encode(['status' => 0, 'schedule' => [
+			'EventScheduleId' => $schedule_id,
+			'Title'           => $title,
+			'StartTime'       => $start_fmt,
+			'EndTime'         => $end_fmt,
+			'Location'        => $location,
+			'Description'     => $description,
+			'Category'        => $category,
+		]]);
+		exit;
+	}
+
+	public function remove_schedule($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+
+		$params      = explode('/', $p ?? '');
+		$event_id    = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id   = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+		$schedule_id = (int)($_POST['ScheduleId'] ?? 0);
+
+		if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($schedule_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']); exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
+			}
+		}
+
+		global $DB;
+		$DB->Clear();
+		$DB->Execute(
+			'DELETE FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ' . $schedule_id . ' AND event_calendardetail_id = ' . $detail_id
+		);
+		echo json_encode(['status' => 0]);
+		exit;
+	}
+
+	public function update_schedule($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+
+		$params      = explode('/', $p ?? '');
+		$event_id    = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id   = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+		$schedule_id = (int)($_POST['ScheduleId'] ?? 0);
+
+		if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($schedule_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']); exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
+			}
+		}
+
+		$title       = trim($_POST['Title']       ?? '');
+		$start_time  = trim($_POST['StartTime']   ?? '');
+		$end_time    = trim($_POST['EndTime']     ?? '');
+		$location    = trim($_POST['Location']    ?? '');
+		$description = trim($_POST['Description'] ?? '');
+		$category    = trim($_POST['Category']    ?? 'Other');
+		$allowed_cats = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Other'];
+		if (!in_array($category, $allowed_cats)) $category = 'Other';
+
+		if (!$title)      { echo json_encode(['status' => 1, 'error' => 'A title is required.']); exit; }
+		if (!$start_time) { echo json_encode(['status' => 1, 'error' => 'A start time is required.']); exit; }
+		if (!$end_time)   { echo json_encode(['status' => 1, 'error' => 'An end time is required.']); exit; }
+
+		$startTs = strtotime($start_time);
+		$endTs   = strtotime($end_time);
+		if (!$startTs || !$endTs)  { echo json_encode(['status' => 1, 'error' => 'Invalid time format.']); exit; }
+		if ($endTs < $startTs)     { echo json_encode(['status' => 1, 'error' => 'End time cannot be before start time.']); exit; }
+
+		$title_safe       = str_replace(["'", '\\'], ["''", '\\\\'], $title);
+		$location_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $location);
+		$description_safe = str_replace(["'", '\\'], ["''", '\\\\'], $description);
+		$category_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $category);
+		$start_fmt = date('Y-m-d H:i:s', $startTs);
+		$end_fmt   = date('Y-m-d H:i:s', $endTs);
+
+		global $DB;
+		$DB->Clear();
+		$DB->Execute(
+			'UPDATE ' . DB_PREFIX . 'event_schedule SET ' .
+			'title = \'' . $title_safe . '\', ' .
+			'start_time = \'' . $start_fmt . '\', ' .
+			'end_time = \'' . $end_fmt . '\', ' .
+			'location = \'' . $location_safe . '\', ' .
+			'description = \'' . $description_safe . '\', ' .
+			'category = \'' . $category_safe . '\' ' .
+			'WHERE event_schedule_id = ' . $schedule_id . ' AND event_calendardetail_id = ' . $detail_id
+		);
+		echo json_encode(['status' => 0, 'schedule' => [
+			'EventScheduleId' => $schedule_id,
+			'Title'           => $title,
+			'StartTime'       => $start_fmt,
+			'EndTime'         => $end_fmt,
+			'Location'        => $location,
+			'Description'     => $description,
+			'Category'        => $category,
+		]]);
+		exit;
+	}
+
 	public function heraldry($p = null) {
 		header('Content-Type: application/json');
 
@@ -313,7 +591,15 @@ class Controller_EventAjax extends Controller {
 			exit;
 		}
 
-		if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+		$hUid = (int)$this->session->user_id;
+		$hCanManage = Ork3::$Lib->authorization->HasAuthority($hUid, AUTH_EVENT, $event_id, AUTH_EDIT);
+		if (!$hCanManage) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff s JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = s.event_calendardetail_id WHERE cd.event_id = ' . $event_id . ' AND s.mundane_id = ' . $hUid . ' AND s.can_manage = 1 LIMIT 1');
+			$hCanManage = $staffRow && $staffRow->Next();
+		}
+		if (!$hCanManage) {
 			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
 			exit;
 		}
