@@ -182,23 +182,15 @@ def build_kingdom_shapes(df: pd.DataFrame):
     gdf_m = gdf_m.copy()
     gdf_m['voronoi'] = polygons
 
-    # Global claimed zone: union of all parks' 25-mile buffers
-    all_buffers = unary_union([
-        pt.buffer(MILES_25_IN_METERS) for pt in gdf_m.geometry
-    ])
-
-    # Merge uncapped Voronoi cells per kingdom, then clip to claimed zone
+    # Merge uncapped Voronoi cells per kingdom — no radius limit
     kingdom_shapes = {}
     kingdom_names = {}
     for kid, group in gdf_m.groupby('kingdom_id'):
         cells = [p for p in group['voronoi'] if p is not None]
         if not cells:
             continue
-        raw = unary_union(cells)
-        trimmed = raw.intersection(all_buffers)
-        if trimmed.is_empty:
-            continue
-        tmp = gpd.GeoDataFrame({'id': [1]}, geometry=[trimmed], crs='EPSG:3857')
+        merged = unary_union(cells)
+        tmp = gpd.GeoDataFrame({'id': [1]}, geometry=[merged], crs='EPSG:3857')
         kingdom_shapes[kid] = tmp.to_crs('EPSG:4326').geometry.iloc[0]
         kingdom_names[kid] = group['kingdom_name'].iloc[0]
 
