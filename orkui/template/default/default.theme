@@ -88,12 +88,10 @@
 				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>
 				<div class='nav-dropdown-menu' style='min-width:200px'>
 					<a href='https://www.amtgard.com/' target='_blank'><i class='fas fa-globe'></i> Amtgard Website</a>
+					<a href='https://wiki.amtgard.com/Main_Page' target='_blank'><i class='fas fa-book-open'></i> Amtgard Wiki</a>
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
 					<div class='nav-dropdown-divider'></div>
-					<a href='https://play.google.com/store/apps/details?id=com.harvardproductions.mork&hl=en_US' target='_blank'><i class='fab fa-google-play'></i> mORK (Android)</a>
-					<a href='https://apps.apple.com/us/app/mork-mobile-amtgard/id1462457797' target='_blank'><i class='fab fa-apple'></i> mORK (iOS)</a>
-					<div class='nav-dropdown-divider'></div>
-					<a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target='_blank'><i class='fas fa-book'></i> ORK Documentation</a>
+					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
 				</div>
 			</div>
 
@@ -336,6 +334,23 @@
 			}
 		});
 	});
+	</script>
+
+	<!-- Simple info dialog -->
+	<div id="nav-info-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+		<div style="background:#fff;border-radius:10px;padding:32px 28px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);text-align:center;font-family:inherit;">
+			<div style="font-size:32px;margin-bottom:12px;color:#4a5568;"><i class="fas fa-book"></i></div>
+			<div id="nav-info-msg" style="font-size:15px;color:#2d3748;line-height:1.5;margin-bottom:20px;"></div>
+			<button onclick="document.getElementById('nav-info-overlay').style.display='none';" style="background:#4299e1;color:#fff;border:none;border-radius:6px;padding:8px 28px;font-size:14px;cursor:pointer;font-family:inherit;">OK</button>
+		</div>
+	</div>
+	<script>
+	function navInfoDialog(msg) {
+		document.getElementById('nav-info-msg').textContent = msg;
+		var el = document.getElementById('nav-info-overlay');
+		el.style.display = 'flex';
+		el.onclick = function(e) { if (e.target === el) el.style.display = 'none'; };
+	}
 	</script>
 
 	</body>
