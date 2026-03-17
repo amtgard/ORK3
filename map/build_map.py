@@ -149,7 +149,22 @@ def finite_voronoi_polygons(vor: Voronoi, far: float = 5_000_000):
 
 def build_kingdom_shapes(df: pd.DataFrame):
     """
-    For each kingdom: Voronoi cell per park → clip to 25-mi radius → union.
+    Build kingdom territories using a true connected Voronoi approach:
+
+    1. Compute uncapped Voronoi cells for every park.
+    2. Union each kingdom's cells into one raw territory (fills gaps between
+       same-kingdom parks automatically — no intra-kingdom clipping).
+    3. Build the global "claimed zone" = union of every park's 25-mile buffer.
+       This defines the outer frontier: territory more than 25 miles from the
+       nearest park of any kingdom is unclaimed and gets trimmed away.
+    4. Intersect each kingdom's raw territory with the claimed zone.
+
+    Result: same-kingdom parks whose 25-mile radii overlap are seamlessly
+    connected (the Voronoi boundary between them is interior and invisible).
+    The outer edge of each kingdom is defined by the 25-mile buffer frontier.
+    Cross-kingdom boundaries fall exactly on the Voronoi line within the
+    overlapping buffer zone.
+
     Returns (kingdom_shapes dict, kingdom_names dict, parks GeoDataFrame WGS84).
     """
     gdf = gpd.GeoDataFrame(
@@ -164,29 +179,26 @@ def build_kingdom_shapes(df: pd.DataFrame):
     vor = Voronoi(coords)
     polygons = finite_voronoi_polygons(vor)
 
-    # Clip each Voronoi cell to the park's 25-mile buffer
-    clipped = []
-    for i, poly in enumerate(polygons):
-        if poly is None:
-            clipped.append(None)
-            continue
-        buf = gdf_m.geometry.iloc[i].buffer(MILES_25_IN_METERS)
-        c = poly.intersection(buf)
-        clipped.append(c if not c.is_empty else None)
-
     gdf_m = gdf_m.copy()
-    gdf_m['territory'] = clipped
+    gdf_m['voronoi'] = polygons
 
-    # Merge cells into kingdom polygons (still in EPSG:3857)
+    # Global claimed zone: union of all parks' 25-mile buffers
+    all_buffers = unary_union([
+        pt.buffer(MILES_25_IN_METERS) for pt in gdf_m.geometry
+    ])
+
+    # Merge uncapped Voronoi cells per kingdom, then clip to claimed zone
     kingdom_shapes = {}
     kingdom_names = {}
     for kid, group in gdf_m.groupby('kingdom_id'):
-        pieces = [t for t in group['territory'] if t is not None]
-        if not pieces:
+        cells = [p for p in group['voronoi'] if p is not None]
+        if not cells:
             continue
-        merged_m = unary_union(pieces)
-        # Reproject to WGS84
-        tmp = gpd.GeoDataFrame({'id': [1]}, geometry=[merged_m], crs='EPSG:3857')
+        raw = unary_union(cells)
+        trimmed = raw.intersection(all_buffers)
+        if trimmed.is_empty:
+            continue
+        tmp = gpd.GeoDataFrame({'id': [1]}, geometry=[trimmed], crs='EPSG:3857')
         kingdom_shapes[kid] = tmp.to_crs('EPSG:4326').geometry.iloc[0]
         kingdom_names[kid] = group['kingdom_name'].iloc[0]
 
