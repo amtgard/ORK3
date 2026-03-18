@@ -503,7 +503,7 @@
 							<th>Class</th>
 							<th>Credits</th>
 							<?php if ($canManageAttendance): ?>
-							<th class="ev-del-cell">&times;</th>
+							<th class="ev-del-cell"></th>
 							<?php endif; ?>
 						</tr>
 					</thead>

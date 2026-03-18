@@ -815,7 +815,7 @@
 									</td>
 									<td><a href="<?= UIR ?>Kingdom/profile/<?= $detail['KingdomId'] ?>"><?= $detail['KingdomName'] ?></a></td>
 									<td><a href="<?= UIR ?>Park/profile/<?= $detail['ParkId'] ?>"><?= $detail['ParkName'] ?></a></td>
-									<td><a href="<?= UIR ?>Attendance/event/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['EventName'] ?></a></td>
+									<td><a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['EventName'] ?></a></td>
 									<td><?= trimlen($detail['Flavor']) > 0 ? $detail['Flavor'] : $detail['ClassName'] ?></td>
 									<td class="pn-col-numeric"><?= $detail['Credits'] ?></td>
 									<?php if ($canEditAdmin): ?>
