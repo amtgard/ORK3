@@ -612,17 +612,6 @@ $(function() {
 					kingdomOutsiders.push({ label: '', value: null, separator: true });
 				response(suggestions.concat(kingdomOutsiders).concat(globalOutsiders));
 			});
-				var outsiders = [];
-				$.each(kingdomRes[0], function(i, v) {
-					if (!localIds[v.MundaneId]) {
-						var abbr = (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : v.ParkName;
-						outsiders.push({ label: v.Persona + ' (' + abbr + ')', value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } });
-					}
-				});
-				if (suggestions.length > 0 && outsiders.length > 0)
-					suggestions.push({ label: '', value: null, separator: true });
-				response(suggestions.concat(outsiders));
-			});
 		},
 		focus:  function(e, ui) { if (!ui.item.value) return false; return showLabel('#PlayerName', ui); },
 		delay:  250,
