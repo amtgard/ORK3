@@ -519,7 +519,7 @@
 							<td class="ev-del-cell">
 								<a class="ev-del-link" title="Remove"
 									href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/delete/<?= (int)$att['AttendanceId'] ?>"
-									onclick="return confirm('Remove this attendance record?')">×</a>
+									onclick="evConfirmAttDelete(event, this)">×</a>
 							</td>
 							<?php endif; ?>
 						</tr>
@@ -664,6 +664,16 @@
 				<?php endif; ?>
 
 				<div class="ev-modal-section">
+					<h4>Event Name</h4>
+					<div class="ev-modal-row">
+						<div class="ev-modal-field ev-field-full">
+							<label>Name</label>
+							<input type="text" name="EventName" value="<?= htmlspecialchars($info['Name'] ?? '') ?>" required>
+						</div>
+					</div>
+				</div>
+
+				<div class="ev-modal-section">
 					<h4>Dates &amp; Price</h4>
 					<div class="ev-modal-row">
 						<div class="ev-modal-field">
@@ -764,7 +774,7 @@
 		<div class="ev-modal-footer" style="justify-content:space-between;align-items:center;display:flex">
 			<div>
 <?php if ($canDelete): ?>
-				<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/deletedetail" style="margin:0" onsubmit="return confirm('Delete this event occurrence? This cannot be undone.')">
+				<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/deletedetail" style="margin:0" onsubmit="evConfirmDeleteOccurrence(event, this)">
 					<button type="submit" class="ev-modal-btn-delete">
 						<i class="fas fa-trash-alt" style="margin-right:5px"></i>Delete Occurrence
 					</button>
@@ -909,4 +919,37 @@ $(function() {
 	});
 });
 <?php endif; ?>
+<?php if ($canManage && ($CalendarDetailCount ?? 1) > 1): ?>
+(function() {
+	var form = document.getElementById('ev-edit-form');
+	if (!form) return;
+	var originalName = <?= json_encode($info['Name'] ?? '') ?>;
+	var detailCount  = <?= (int)($CalendarDetailCount ?? 1) ?>;
+	form.addEventListener('submit', function(e) {
+		var newName = (form.querySelector('[name="EventName"]') || {}).value || '';
+		if (newName && newName !== originalName) {
+			e.preventDefault();
+			pnConfirm({
+				title: 'Rename Event?',
+				message: 'This event has ' + detailCount + ' scheduled dates. Renaming it will update the name for all ' + detailCount + ' occurrences.',
+				confirmText: 'Rename',
+				danger: true
+			}, function() { form.submit(); });
+		}
+	});
+})();
+<?php endif; ?>
+
+function evConfirmAttDelete(e, link) {
+	e.preventDefault();
+	pnConfirm({ title: 'Remove Attendance?', message: 'Remove this attendance record? This cannot be undone.', confirmText: 'Remove', danger: true }, function() {
+		window.location.href = link.href;
+	});
+}
+function evConfirmDeleteOccurrence(e, form) {
+	e.preventDefault();
+	pnConfirm({ title: 'Delete Occurrence?', message: 'Delete this event occurrence? This cannot be undone.', confirmText: 'Delete', danger: true }, function() {
+		form.submit();
+	});
+}
 </script>

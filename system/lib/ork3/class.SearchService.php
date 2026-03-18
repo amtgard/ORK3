@@ -181,6 +181,7 @@ class SearchService extends Ork3 {
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";
 		if (valid_id($unit_id)) $sql .= " and e.unit_id = $unit_id ";
 		if (valid_id($event_id)) $sql .= " and e.event_id = $event_id ";
+		$sql .= " and cd.event_calendardetail_id is not null ";
 		if ($date_order != null) {
 			$when = "date_add(now(), interval - 7 day)";
 			if (!is_null($date_start) && strtotime($date_start))

@@ -255,6 +255,12 @@ class Controller_Event extends Controller {
 			if ( $action === 'edit' ) {
 				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) ) {
 					$this->request->save('Eventnew_edit', true);
+					$newName = trim($this->request->Eventnew_edit->EventName ?? '');
+					if ( $newName ) {
+						$this->Event->update_event($this->session->token, $event_id, null, null, null, null, $newName, '', '');
+						$bustKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
+						Ork3::$Lib->ghettocache->bust('SearchService.Event', $bustKey);
+					}
 					$r = $this->Event->update_event_detail([
 						'Token'                 => $this->session->token,
 						'EventCalendarDetailId' => $detail_id,
@@ -369,6 +375,10 @@ class Controller_Event extends Controller {
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
 		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];
+
+		global $DB;
+		$cdCountRow = $DB->DataSet('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $event_id . ' LIMIT 1');
+		$this->data['CalendarDetailCount'] = ($cdCountRow && $cdCountRow->Size() > 0 && $cdCountRow->Next()) ? (int)$cdCountRow->cnt : 1;
 	}
 
 	public function create( $p = null ) {

@@ -39,6 +39,10 @@ class Ghettocache {
 		return $content;
 	}
 	
+	function bust($call, $key) {
+		$this->memcache->delete("{$this->prefix}.$call.$key");
+	}
+
 	function key($request) {
 		if (!is_array($request))
 			return '';
