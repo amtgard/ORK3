@@ -598,12 +598,12 @@
 					</table>
 					<?php else: ?>
 					<div class="ev-empty">
-						<i class="fas fa-calendar-check" style="margin-right:6px"></i>No RSVPs yet
+						<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
 					</div>
 					<?php endif; ?>
 				<?php elseif ($rsvpCount === 0): ?>
 				<div class="ev-empty">
-					<i class="fas fa-calendar-check" style="margin-right:6px"></i>No RSVPs yet
+					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
 				</div>
 				<?php endif; ?>
 			</div><!-- /.ev-tab-panel -->

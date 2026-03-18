@@ -450,10 +450,6 @@
 		<span class="hm-stat-value">~<?= number_format($hmWeeklyAvg) ?></span>
 		<span class="hm-stat-label">Players / Week</span>
 	</div>
-	<div class="hm-stat-item">
-		<span class="hm-stat-value"><?= count($hmEventList) ?></span>
-		<span class="hm-stat-label">Upcoming Events</span>
-	</div>
 </div>
 
 <!-- =============================================
