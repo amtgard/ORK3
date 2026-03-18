@@ -117,7 +117,9 @@ $atKingdomCount = count($atKingdomIds);
 }
 #at-map {
 	width:100%; height:72vh; min-height:400px;
-	border-radius:8px; border:1px solid #e2e8f0;
+	border-radius:4px; border:3px solid #8B6914;
+	box-shadow:0 2px 8px rgba(100,60,0,0.25);
+	filter:sepia(0.35) saturate(0.85);
 }
 .at-sidebar-wrap {
 	width:270px; flex-shrink:0;
@@ -398,7 +400,7 @@ window.atInitMap = async function() {
 	atMapLocations.forEach(function(loc) {
 		var color    = loc.color ? '#' + loc.color : '#718096';
 		var locLine  = [loc.city, loc.province].filter(Boolean).join(', ');
-		var pinGlyph = new PinElement({ background: color, scale: 0.7 });
+		var pinGlyph = new PinElement({ background: color, borderColor: '#B8860B', glyphColor: '#FFD700', scale: 0.7 });
 		var marker   = new google.maps.marker.AdvancedMarkerElement({
 			position: new google.maps.LatLng(loc.lat, loc.lng),
 			map: atMapObj,

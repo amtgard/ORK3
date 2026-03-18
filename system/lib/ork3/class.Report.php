@@ -741,7 +741,7 @@ class Report  extends Ork3 {
 		}
 
 		$sql = "select a.*, a.persona as attendance_persona,
-					k.name as kingdom_name, k.parent_kingdom_id, mk.name as from_kingdom_name, mk.parent_kingdom_id as from_parent_kingdom_id,
+					k.name as kingdom_name, k.parent_kingdom_id, mk.kingdom_id as from_kingdom_id, mk.name as from_kingdom_name, mk.parent_kingdom_id as from_parent_kingdom_id,
 					p.name as park_name, p.park_id as park_id, mp.name as from_park_name, mp.park_id as from_park_id,
 					m.persona, bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
 					$unit_phrase c.name as class_name, e.event_id, d.event_calendardetail_id, e.name as event_name, d.event_start, d.event_end

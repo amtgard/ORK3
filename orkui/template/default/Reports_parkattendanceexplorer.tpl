@@ -192,6 +192,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 				</thead>
 				<tbody>
 <?php foreach ($attendance as $row) : ?>
+<?php if (!valid_id($row['ParkId'])) continue; ?>
 				<tr>
 					<td><a href='<?=UIR.'Park/profile/'.$row['ParkId']?>'><?=htmlspecialchars($row['ParkName'])?></a></td>
 					<td><?=htmlspecialchars($row['PeriodLabel'])?></td>
@@ -311,7 +312,11 @@ $(function() {
 		fixedHeader : { headerOffset: 48 },
 		responsive  : true,
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedColumns: { left: 1 },
+		drawCallback: function() {
+			var body = $(this.api().table().body());
+			body.find('tr.rp-row-summary').appendTo(body);
+		}
 	});
 	$('.rp-btn-export').on('click', function() { apTable.button(0).trigger(); });
 	$('.rp-btn-print' ).on('click', function() { apTable.button(1).trigger(); });

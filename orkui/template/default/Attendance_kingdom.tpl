@@ -8,12 +8,14 @@ $total_credits = 0;
 $park_counts   = [];
 $class_counts  = [];
 
+$has_events = false;
 foreach ($att_rows as $row) {
 	$total_credits += (int)($row['Credits'] ?? 1);
-	$pname = $row['ParkName'] ?? 'Unknown';
+	$pname = $row['FromParkName'] ?? 'Unknown';
 	$cname = strlen($row['Flavor'] ?? '') > 0 ? $row['Flavor'] : ($row['ClassName'] ?? 'Unknown');
 	$park_counts[$pname]  = ($park_counts[$pname]  ?? 0) + 1;
 	$class_counts[$cname] = ($class_counts[$cname] ?? 0) + 1;
+	if (!empty($row['EventId'])) $has_events = true;
 }
 arsort($park_counts);
 arsort($class_counts);
@@ -209,6 +211,7 @@ $show_charts = $total > 0;
 	<div class="rp-body">
 
 		<!-- Sidebar -->
+<?php if ($CanAddAttendance) : ?>
 		<div class="rp-sidebar">
 			<div class="att-form-card">
 				<div class="att-form-card-header">
@@ -253,7 +256,7 @@ $show_charts = $total > 0;
 							<input class="att-form-input" type="text" name="Credits" id="Credits"
 								value="<?=valid_id($Attendance_kingdom['Credits'])?$Attendance_kingdom['Credits']:$DefaultCredits?>">
 						</div>
-<?php if ($LoggedIn) : ?>
+<?php if ($CanAddAttendance) : ?>
 						<button class="att-form-btn" type="submit">Add Attendance</button>
 <?php endif; ?>
 						<input type="hidden" id="KingdomId" name="KingdomId"
@@ -266,6 +269,7 @@ $show_charts = $total > 0;
 				</div>
 			</div>
 		</div><!-- /rp-sidebar -->
+<?php endif; ?>
 
 		<!-- Table area -->
 		<div class="rp-table-area">
@@ -280,10 +284,13 @@ $show_charts = $total > 0;
 					<tr>
 						<th>Park</th>
 						<th>Player</th>
+						<th>Home Kingdom</th>
+						<th>Home Park</th>
 						<th>Class</th>
 						<th>Credits</th>
 						<th>Entered By</th>
-<?php if ($LoggedIn) : ?>
+<?php if ($has_events) : ?><th>Event</th><?php endif; ?>
+<?php if ($CanAddAttendance) : ?>
 						<th></th>
 <?php endif; ?>
 					</tr>
@@ -299,10 +306,13 @@ $show_charts = $total > 0;
 						<a href="<?=UIR.'Player/profile/'.$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a>
 <?php endif; ?>
 					</td>
+					<td><?php if (!empty($row['FromKingdomId'])) : ?><a href="<?=UIR.'Kingdom/profile/'.$row['FromKingdomId']?>"><?=htmlspecialchars($row['FromKingdomName']??'')?></a><?php else : ?><?=htmlspecialchars($row['FromKingdomName']??'')?><?php endif; ?></td>
+					<td><?php if (!empty($row['FromParkId'])) : ?><a href="<?=UIR.'Park/profile/'.$row['FromParkId']?>"><?=htmlspecialchars($row['FromParkName']??'')?></a><?php else : ?><?=htmlspecialchars($row['FromParkName']??'')?><?php endif; ?></td>
 					<td><?=htmlspecialchars(strlen($row['Flavor']??'')>0?$row['Flavor']:$row['ClassName'])?></td>
 					<td><?=(int)$row['Credits']?></td>
 					<td><a href="<?=UIR.'Player/profile/'.$row['EnteredById']?>"><?=htmlspecialchars($row['EnteredBy']??'')?></a></td>
-<?php if ($LoggedIn) : ?>
+<?php if ($has_events) : ?><td><?php if (!empty($row['EventId'])) : ?><a href="<?=UIR.'Event/detail/'.$row['EventId'].'/'.$row['EventCalendarDetailId']?>"><?=htmlspecialchars($row['EventName']??'')?></a><?php endif; ?></td><?php endif; ?>
+<?php if ($CanAddAttendance) : ?>
 					<td style="text-align:center;">
 						<a class="att-del-link" href="<?=UIR?>Attendance/kingdom/<?=$Id?>/delete/<?=$row['AttendanceId']?>&AttendanceDate=<?=$AttendanceDate?>" title="Remove">&times;</a>
 					</td>
@@ -328,6 +338,7 @@ $show_charts = $total > 0;
 
 <script>
 $(function() {
+<?php if ($CanAddAttendance) : ?>
 	/* ── Datepicker ──────────────────────────────────── */
 	$('#AttendanceDate').datepicker({ dateFormat: 'yy-mm-dd' });
 
@@ -382,6 +393,7 @@ $(function() {
 		},
 		change: function(e, ui) { if (!ui.item) { showLabel('#PlayerName', null); $('#MundaneId').val(null); } return false; }
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
+<?php endif; ?>
 
 	/* ── Chart collapse toggle ──────────────────────── */
 	document.querySelectorAll('.att-chart-title').forEach(function(title) {
@@ -399,9 +411,12 @@ $(function() {
 			{ extend: 'print', exportOptions: { columns: ':not(:last-child)' } }
 		],
 		columnDefs: [
-			{ targets: [3], type: 'num', className: 'dt-right' },
-<?php if ($LoggedIn) : ?>
-			{ targets: [-1], orderable: false, searchable: false }
+			{ targets: [5], type: 'num', className: 'dt-right' },
+<?php if ($has_events) : ?>
+			{ targets: [7], orderable: false, searchable: false },
+<?php endif; ?>
+<?php if ($CanAddAttendance) : ?>
+			{ targets: [-1], orderable: false, searchable: false },
 <?php endif; ?>
 		],
 		order: [[0, 'asc'], [1, 'asc']],

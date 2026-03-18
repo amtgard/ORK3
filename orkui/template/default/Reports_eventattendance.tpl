@@ -98,7 +98,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 	$price    = $ev['Price'];
 ?>
 					<tr>
-						<td><a href="<?=UIR?>Event/index/<?=(int)$ev['EventId']?>"><?=htmlspecialchars($ev['EventName'])?></a></td>
+						<td><a href="<?=UIR?>Event/detail/<?=(int)$ev['EventId']?>/<?=(int)$ev['DetailId']?>"><?=htmlspecialchars($ev['EventName'])?></a></td>
 <?php if ($scope_type === 'Kingdom'): ?>
 						<td><?=htmlspecialchars($ev['ParkName'] ?? '')?></td>
 <?php endif; ?>

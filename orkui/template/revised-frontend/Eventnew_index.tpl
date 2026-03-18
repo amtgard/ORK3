@@ -494,7 +494,7 @@
 				<?php endif; ?>
 
 				<?php if (count($attendanceList) > 0): ?>
-				<table class="ev-table">
+				<table class="display" id="ev-attendance-table" style="width:100%">
 					<thead>
 						<tr>
 							<th>Player</th>
@@ -884,6 +884,8 @@ var EvConfig = {
 	</div>
 </div>
 <?php endif; ?>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 (function() {
@@ -893,4 +895,18 @@ var EvConfig = {
         if (li && typeof evShowTab === 'function') evShowTab(li, hash);
     }
 })();
+<?php if (count($attendanceList) > 0): ?>
+$(function() {
+	$('#ev-attendance-table').DataTable({
+		dom: 'lfrtip',
+		order: [[0, 'asc']],
+		columnDefs: [
+<?php if ($canManageAttendance): ?>
+			{ targets: [-1], orderable: false, searchable: false }
+<?php endif; ?>
+		],
+		pageLength: 25
+	});
+});
+<?php endif; ?>
 </script>

@@ -44,9 +44,13 @@ class Controller_Attendance extends Controller {
 
 		$this->data['Type'] = $type;
 		$this->data['Id'] = $id;
-		
+
 		$this->data['DefaultCredits'] = 1;
-		
+
+		$_uid = (int)($this->session->user_id ?? 0);
+		$this->data['CanAddAttendance'] = $_uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$id, AUTH_CREATE);
+
 		if (strlen($action) > 0) {
 			$this->request->save('Attendance_kingdom', true);
 			$r = array('Status'=>0);
@@ -171,7 +175,11 @@ class Controller_Attendance extends Controller {
         $this->data['DefaultParkId'] = $this->session->park_id;
         $this->data['DefaultKingdomName'] = $this->session->kingdom_name;
         $this->data['DefaultKingdomId'] = $this->session->kingdom_id;
-		
+
+		$_uid = (int)($this->session->user_id ?? 0);
+		$this->data['CanAddAttendance'] = $_uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$id, AUTH_CREATE);
+
 		if (strlen($action) > 0) {
 			$this->request->save('Attendance_park', true);
 			$r = array('Status'=>0);

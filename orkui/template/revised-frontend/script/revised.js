@@ -1708,7 +1708,7 @@ window.knInitMap = async function() {
     var infowindow = new google.maps.InfoWindow();
     for (var i = 0; i < knMapLocations.length; i++) {
         (function(loc) {
-            var pinGlyph = new PinElement({ scale: 0.7 });
+            var pinGlyph = new PinElement({ scale: 0.7, background: '#8B1A1A', borderColor: '#B8860B', glyphColor: '#FFD700' });
             var marker = new google.maps.marker.AdvancedMarkerElement({
                 position: new google.maps.LatLng(loc.lat, loc.lng),
                 map: map,
