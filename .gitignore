@@ -40,4 +40,4 @@ ork.zip
 .prod.env
 config.tmpprod.php
 .DS_Store
-.vscode/
+.vscode/system/lib/ork3/class.Authorization.php
