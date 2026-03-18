@@ -57,7 +57,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-sign-in-alt"></i></div>
 			<div class="rp-stat-number"><?=number_format($total_attendance)?></div>
-			<div class="rp-stat-label">Total Attendees</div>
+			<div class="rp-stat-label">Total Sign-ins</div>
 		</div>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-chart-line"></i></div>
@@ -139,6 +139,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 		var startCol = <?=$scope_type === 'Kingdom' ? 2 : 1?>;
 		var dt = $('#ea-table').DataTable({
 			order: [[startCol, 'desc']],
+			orderClasses: false,
 			pageLength: 25,
 			dom: 'lfrtip',
 			buttons: [
