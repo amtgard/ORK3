@@ -132,7 +132,7 @@ class SearchService extends Ork3 {
 		}
 	}
 	
-	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1) {
+	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1, $multi = 0) {
 		$keys = func_get_args();
 		if (count($keys) > 0)
 			$keys[0] = substr($keys[0] ?? '', 0, 4);
@@ -144,8 +144,12 @@ class SearchService extends Ork3 {
 
 		// $current=0 → past mode: pick most recent past occurrence per event (regardless of whether upcoming also exists)
 		// $current!=0 → pick nearest upcoming occurrence (or most recent past if none upcoming)
+		$multiMode = ($multi == 1);
+
 		$pastOnly = ($current === 0 || $current === '0');
-		if ($pastOnly) {
+		if ($multiMode) {
+			$cdJoin = "cd.event_id = e.event_id and cd.event_start < now()";
+		} elseif ($pastOnly) {
 			$cdJoin = "cd.event_calendardetail_id = (
 							select ecd.event_calendardetail_id from " . DB_PREFIX . "event_calendardetail ecd
 							where ecd.event_id = e.event_id
@@ -158,7 +162,8 @@ class SearchService extends Ork3 {
 							select ecd.event_calendardetail_id from " . DB_PREFIX . "event_calendardetail ecd
 							where ecd.event_id = e.event_id
 							order by (ecd.event_start >= date_sub(now(), interval 7 day)) desc,
-							         if(ecd.event_start >= date_sub(now(), interval 7 day), ecd.event_start, '9999-12-31') asc
+							         if(ecd.event_start >= date_sub(now(), interval 7 day), ecd.event_start, null) asc,
+							         ecd.event_start desc
 							limit 1
 						)";
 		}
@@ -181,7 +186,7 @@ class SearchService extends Ork3 {
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";
 		if (valid_id($unit_id)) $sql .= " and e.unit_id = $unit_id ";
 		if (valid_id($event_id)) $sql .= " and e.event_id = $event_id ";
-		$sql .= " and cd.event_calendardetail_id is not null ";
+		if (!valid_id($event_id)) $sql .= " and cd.event_calendardetail_id is not null ";
 		if ($date_order != null) {
 			$when = "date_add(now(), interval - 7 day)";
 			if (!is_null($date_start) && strtotime($date_start))

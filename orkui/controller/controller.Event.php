@@ -466,6 +466,8 @@ class Controller_Event extends Controller {
 					$all     = $details['CalendarEventDetails'] ?? [];
 					if ( $all ) $new_id = max(array_map('intval', array_column($all, 'EventCalendarDetailId')));
 				}
+				$bustKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
+				Ork3::$Lib->ghettocache->bust('SearchService.Event', $bustKey);
 				header('Location: ' . UIR . "Event/detail/{$event_id}/{$new_id}");
 				return;
 			} elseif ( $r['Status'] != 5 ) {

@@ -68,6 +68,9 @@
 	font-size:12px; color:#718096; background:#edf2f7;
 	padding:2px 8px; border-radius:10px;
 }
+.se-past-header-right { display:flex; align-items:center; gap:10px; }
+.se-all-toggle { display:flex; align-items:center; gap:5px; font-size:12px; color:#718096; cursor:pointer; user-select:none; }
+.se-all-toggle input { cursor:pointer; }
 .se-table {
 	width:100%; border-collapse:collapse;
 }
@@ -168,7 +171,10 @@
 	<div class="se-results-card se-hidden" id="se-past-card">
 		<div class="se-results-header">
 			<div class="se-results-title past"><i class="fas fa-history"></i> Past Events</div>
-			<div class="se-results-count" id="se-past-count" style="display:none"></div>
+			<div class="se-past-header-right">
+				<label class="se-all-toggle"><input type="checkbox" id="se-all-past-toggle"> Show all occurrences</label>
+				<div class="se-results-count" id="se-past-count" style="display:none"></div>
+			</div>
 		</div>
 		<table class="se-table">
 			<thead>
@@ -185,6 +191,7 @@
 (function() {
 	var _timer   = null;
 	var _current = '';
+	var _allPast = false;
 	var _kid     = parseInt(document.getElementById('se-kingdom-id').value) || 0;
 	var _pid     = parseInt(document.getElementById('se-park-id').value)    || 0;
 	var _uid_val = parseInt(document.getElementById('se-unit-id').value)    || 0;
@@ -281,22 +288,29 @@
 				       (v.ParkName    && v.ParkName.trim().length    > 0);
 			}
 
-			// Server already separates upcoming from past — just filter by location
+			// Upcoming: from today onwards (server already filtered by date_start)
+			// Past: all occurrences before today, sorted desc
+			var todayStr = new Date().toISOString().slice(0, 10);
 			var upcoming = upcomingData.filter(hasLocation);
-			var past     = allData.filter(hasLocation);
+			var past = allData.filter(hasLocation).sort(function(a, b) {
+				if (!a.NextDate && !b.NextDate) return 0;
+				if (!a.NextDate) return 1;
+				if (!b.NextDate) return -1;
+				return b.NextDate > a.NextDate ? 1 : b.NextDate < a.NextDate ? -1 : 0;
+			});
 
 			renderResults(upcoming, past);
 		}
 
 		// Request 1: events with a scheduled upcoming date (sorted by date asc)
 		$.getJSON('<?= HTTP_SERVICE ?>Search/SearchService.php',
-			$.extend({}, base, { date_order: 1 }),
+			$.extend({}, base, { date_order: 1, date_start: new Date().toISOString().slice(0,10) }),
 			function(data) { upcomingData = data || []; tryRender(); }
 		);
 
-		// Request 2: past occurrences (current=0 picks most recent past calendardetail per event)
+		// Request 2: all past occurrences (multi=1 returns one row per calendar detail)
 		$.getJSON('<?= HTTP_SERVICE ?>Search/SearchService.php',
-			$.extend({}, base, { current: 0 }),
+			_allPast ? $.extend({}, base, { multi: 1 }) : base,
 			function(data) { allData = data || []; tryRender(); }
 		);
 	}
@@ -308,6 +322,11 @@
 		document.getElementById('se-past-card').classList.add('se-hidden');
 		document.getElementById('se-past-count').style.display = 'none';
 	}
+
+	document.getElementById('se-all-past-toggle').addEventListener('change', function() {
+		_allPast = this.checked;
+		if (_current.length >= 2) doSearch(_current);
+	});
 
 	document.getElementById('se-event-input').addEventListener('input', function() {
 		var term = this.value;
