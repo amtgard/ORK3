@@ -615,6 +615,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 						<col style="width:90px">
 						<col style="width:22%">
 						<col style="width:15%">
+						<col style="width:18%">
 						<col>
 						<?php if ($canManage): ?><col style="width:56px"><?php endif; ?>
 					</colgroup>
@@ -624,6 +625,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 							<th>End</th>
 							<th>Title</th>
 							<th>Location</th>
+							<th>Lead(s)</th>
 							<th>Description</th>
 							<?php if ($canManage): ?><th class="ev-del-cell"></th><?php endif; ?>
 						</tr>
@@ -631,11 +633,12 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 					<tbody id="ev-schedule-tbody-<?= $dayKey ?>">
 						<?php foreach ($dayItems as $item): ?>
 						<?php $evCat = $item['Category'] ?? 'Other'; $evCatCfg = $evSchedCategories[$evCat] ?? $evSchedCategories['Other']; ?>
-						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
+						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['StartTime'])) ?></td>
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['EndTime'])) ?></td>
 							<td><i class="fas <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>;margin-right:5px" title="<?= htmlspecialchars($evCat) ?>"></i><?= htmlspecialchars($item['Title']) ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
+							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Playernew/index/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
 							<td><?= htmlspecialchars($item['Description']) ?></td>
 							<?php if ($canManage): ?>
 							<td class="ev-del-cell">
@@ -1277,7 +1280,8 @@ var EvConfig = {
 	eventName:  <?= json_encode($info['Name'] ?? 'Event') ?>,
 	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>,
 	eventStart: '<?= $eventStart ? date('Y-m-d\TH:i', strtotime($eventStart)) : '' ?>',
-	eventEnd:   '<?= $eventEnd   ? date('Y-m-d\TH:i', strtotime($eventEnd))   : '' ?>'
+	eventEnd:   '<?= $eventEnd   ? date('Y-m-d\TH:i', strtotime($eventEnd))   : '' ?>',
+	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona']]; }, $StaffList ?? [])) ?>
 };
 </script>
 <?php if ($canManageStaff): ?>
@@ -1429,6 +1433,25 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 				<div class="ev-modal-field ev-field-full">
 					<label>Location</label>
 					<input type="text" id="ev-sched-location" placeholder="Main field, Feast hall, etc." autocomplete="off" style="width:100%">
+				</div>
+			</div>
+			<div class="ev-modal-row">
+				<div class="ev-modal-field ev-field-full">
+					<label>Item Lead(s)</label>
+					<div id="ev-sched-leads-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:26px;margin-bottom:8px;align-items:center"></div>
+					<div style="position:relative">
+						<input type="text" id="ev-sched-lead-input" placeholder="Search players to add as lead..." autocomplete="off" style="width:100%">
+						<div id="ev-sched-lead-ac" class="kn-ac-results" style="display:none"></div>
+					</div>
+				</div>
+			</div>
+			<div class="ev-modal-row" id="ev-sched-staff-quickadd-row" style="display:none">
+				<div class="ev-modal-field ev-field-full">
+					<button type="button" onclick="evToggleStaffQuickAdd()" style="background:none;border:none;cursor:pointer;color:#4a5568;font-size:12px;padding:0;display:flex;align-items:center;gap:5px;margin-bottom:6px">
+						<i id="ev-sched-staff-qa-chevron" class="fas fa-chevron-right" style="font-size:10px;transition:transform .15s"></i>
+						<span>Add from Event Staff</span>
+					</button>
+					<div id="ev-sched-staff-qa-list" style="display:none;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;max-height:160px;overflow-y:auto"></div>
 				</div>
 			</div>
 			<div class="ev-modal-row">

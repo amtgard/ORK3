@@ -454,6 +454,21 @@ class Controller_EventAjax extends Controller {
 		$DB->Clear();
 		$idrow = $DB->DataSet('SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . $detail_id . ' ORDER BY event_schedule_id DESC LIMIT 1');
 		$schedule_id = ($idrow && $idrow->Next()) ? (int)$idrow->event_schedule_id : 0;
+
+		// Sync leads
+		$leadsJson = trim($_POST['Leads'] ?? '');
+		$leadsIn = ($leadsJson !== '') ? json_decode($leadsJson, true) : [];
+		$leadsOut = [];
+		if (is_array($leadsIn)) {
+			$DB->Clear();
+			foreach ($leadsIn as $lead) {
+				$lmid = (int)($lead['MundaneId'] ?? 0);
+				if (!valid_id($lmid)) continue;
+				$DB->Execute('INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (' . $schedule_id . ', ' . $lmid . ')');
+				$leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? ''];
+			}
+		}
+
 		echo json_encode(['status' => 0, 'schedule' => [
 			'EventScheduleId' => $schedule_id,
 			'Title'           => $title,
@@ -462,6 +477,7 @@ class Controller_EventAjax extends Controller {
 			'Location'        => $location,
 			'Description'     => $description,
 			'Category'        => $category,
+			'Leads'           => $leadsOut,
 		]]);
 		exit;
 	}
@@ -562,6 +578,22 @@ class Controller_EventAjax extends Controller {
 			'category = \'' . $category_safe . '\' ' .
 			'WHERE event_schedule_id = ' . $schedule_id . ' AND event_calendardetail_id = ' . $detail_id
 		);
+
+		// Sync leads (replace all)
+		$leadsJson = trim($_POST['Leads'] ?? '');
+		$leadsIn = ($leadsJson !== '') ? json_decode($leadsJson, true) : [];
+		$leadsOut = [];
+		$DB->Clear();
+		$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $schedule_id);
+		if (is_array($leadsIn)) {
+			foreach ($leadsIn as $lead) {
+				$lmid = (int)($lead['MundaneId'] ?? 0);
+				if (!valid_id($lmid)) continue;
+				$DB->Execute('INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (' . $schedule_id . ', ' . $lmid . ')');
+				$leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? ''];
+			}
+		}
+
 		echo json_encode(['status' => 0, 'schedule' => [
 			'EventScheduleId' => $schedule_id,
 			'Title'           => $title,
@@ -570,6 +602,7 @@ class Controller_EventAjax extends Controller {
 			'Location'        => $location,
 			'Description'     => $description,
 			'Category'        => $category,
+			'Leads'           => $leadsOut,
 		]]);
 		exit;
 	}

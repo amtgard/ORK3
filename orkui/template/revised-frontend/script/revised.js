@@ -7142,6 +7142,157 @@ $(document).ready(function() {
 
         // ---- Schedule modal ----
 
+        // --- Schedule leads state & helpers ---
+        var evSchedLeads = [];
+        var evSchedLeadAcTimer = null;
+
+        function evSchedLeadsCell(leads) {
+            if (!leads || !leads.length) return '';
+            return leads.map(function(l) {
+                return '<a href="' + EvConfig.uir + 'Playernew/index/' + l.MundaneId + '">' + escHtmlSt(l.Persona) + '</a>';
+            }).join(', ');
+        }
+
+        function evRenderSchedLeads() {
+            var list = gid('ev-sched-leads-list');
+            if (!list) return;
+            if (!evSchedLeads.length) {
+                list.innerHTML = '<span style="color:#a0aec0;font-size:12px;line-height:26px">None assigned</span>';
+                return;
+            }
+            list.innerHTML = evSchedLeads.map(function(l) {
+                return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;border-radius:4px;padding:3px 8px;font-size:12px">' +
+                    escHtmlSt(l.Persona) +
+                    '<button type="button" onclick="evRemoveSchedLead(' + l.MundaneId + ')" style="background:none;border:none;cursor:pointer;color:#718096;font-size:13px;padding:0;margin-left:2px;line-height:1">&times;</button>' +
+                    '</span>';
+            }).join('');
+        }
+
+        window.evRemoveSchedLead = function(mundaneId) {
+            evSchedLeads = evSchedLeads.filter(function(l) { return l.MundaneId !== mundaneId; });
+            evRenderSchedLeads();
+            evRefreshStaffQuickAdd();
+        };
+
+        function evRefreshStaffQuickAdd() {
+            var qaRow  = gid('ev-sched-staff-quickadd-row');
+            var qaList = gid('ev-sched-staff-qa-list');
+            if (!qaRow || !qaList) return;
+            var staff = (EvConfig.staffList || []).filter(function(s) {
+                return !evSchedLeads.some(function(l) { return l.MundaneId === s.MundaneId; });
+            });
+            if (!staff.length) { qaRow.style.display = 'none'; return; }
+            qaRow.style.display = '';
+            qaList.innerHTML = staff.map(function(s) {
+                return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:13px">' +
+                    '<span>' + escHtmlSt(s.Persona) + '</span>' +
+                    '<button type="button" onclick="evStaffQuickAddLead(' + s.MundaneId + ',\'' + encodeURIComponent(s.Persona) + '\')" ' +
+                    'style="background:#276749;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px">+ Add</button>' +
+                    '</div>';
+            }).join('');
+        }
+
+        window.evToggleStaffQuickAdd = function() {
+            var list    = gid('ev-sched-staff-qa-list');
+            var chevron = gid('ev-sched-staff-qa-chevron');
+            if (!list) return;
+            var open = list.style.display !== 'none';
+            list.style.display = open ? 'none' : '';
+            if (chevron) chevron.style.transform = open ? '' : 'rotate(90deg)';
+        };
+
+        window.evStaffQuickAddLead = function(mundaneId, encodedName) {
+            var name = decodeURIComponent(encodedName);
+            if (!evSchedLeads.some(function(l) { return l.MundaneId === mundaneId; })) {
+                evSchedLeads.push({ MundaneId: mundaneId, Persona: name });
+                evRenderSchedLeads();
+                evRefreshStaffQuickAdd();
+            }
+        };
+
+        // Lead player autocomplete
+        var leadAcEl    = gid('ev-sched-lead-ac');
+        var leadInputEl = gid('ev-sched-lead-input');
+        if (leadInputEl && leadAcEl) {
+            leadAcEl.style.position = 'fixed';
+            leadAcEl.style.zIndex   = '9999';
+            leadAcEl.style.display  = '';
+            leadAcEl.className      = 'kn-ac-results';
+
+            function evLeadPositionAc() {
+                var r = leadInputEl.getBoundingClientRect();
+                leadAcEl.style.top   = (r.bottom + 2) + 'px';
+                leadAcEl.style.left  = r.left + 'px';
+                leadAcEl.style.width = r.width + 'px';
+            }
+
+            function evLeadRenderAc(results) {
+                if (!results || !results.length) { leadAcEl.classList.remove(OPEN_CLASS); return; }
+                leadAcEl.innerHTML = results.map(function(pl) {
+                    var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
+                    return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">' + escHtmlSt(pl.Persona) + abbr + '</div>';
+                }).join('');
+                evLeadPositionAc();
+                leadAcEl.classList.add(OPEN_CLASS);
+            }
+
+            leadInputEl.addEventListener('input', function() {
+                var term = this.value.trim();
+                if (term.length < 2) { leadAcEl.classList.remove(OPEN_CLASS); return; }
+                clearTimeout(evSchedLeadAcTimer);
+                evSchedLeadAcTimer = setTimeout(function() {
+                    var kid = EvConfig.kingdomId || 0;
+                    if (!kid) {
+                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                var res = (d || []).map(function(pl) { return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' }; });
+                                evLeadRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
+                                var ph = leadAcEl.querySelector('[data-id="-1"]');
+                                if (ph) ph.removeAttribute('data-id');
+                            });
+                        return;
+                    }
+                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
+                        .then(function(r) { return r.json(); })
+                        .then(function(own) {
+                            own = own || [];
+                            if (own.length >= 5) {
+                                evLeadRenderAc(own);
+                            } else {
+                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
+                                    .then(function(r2) { return r2.json(); })
+                                    .then(function(other) {
+                                        other = (other || []).slice(0, 10 - own.length);
+                                        var combined = own.concat(other);
+                                        evLeadRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found' }]);
+                                        if (!combined.length && leadAcEl.querySelector('[data-id="0"]')) leadAcEl.querySelector('[data-id="0"]').removeAttribute('data-id');
+                                    });
+                            }
+                        });
+                }, 220);
+            });
+
+            leadAcEl.addEventListener('click', function(e) {
+                var item = e.target.closest(ITEM_SEL);
+                if (!item) return;
+                var mid  = parseInt(item.dataset.id);
+                var name = decodeURIComponent(item.dataset.name);
+                leadAcEl.classList.remove(OPEN_CLASS);
+                leadInputEl.value = '';
+                if (!mid || evSchedLeads.some(function(l) { return l.MundaneId === mid; })) return;
+                evSchedLeads.push({ MundaneId: mid, Persona: name });
+                evRenderSchedLeads();
+            });
+
+            leadInputEl.addEventListener('blur', function() {
+                setTimeout(function() { leadAcEl.classList.remove(OPEN_CLASS); }, 160);
+            });
+
+            acKeyNav(leadInputEl, leadAcEl, OPEN_CLASS, ITEM_SEL);
+        }
+
+
         var EV_CATEGORIES = {
             'Administrative':    { icon: 'fa-clipboard-list', color: '#546e7a', bg: '#eceff1' },
             'Tournament':        { icon: 'fa-trophy',          color: '#b8860b', bg: '#fffde7' },
@@ -7165,6 +7316,14 @@ $(document).ready(function() {
             gid('ev-sched-location').value     = '';
             gid('ev-sched-description').value  = '';
             gid('ev-sched-error').style.display = 'none';
+            evSchedLeads = [];
+            evRenderSchedLeads();
+            // Collapse staff quick-add and refresh
+            var qaList = gid('ev-sched-staff-qa-list');
+            var qaChevron = gid('ev-sched-staff-qa-chevron');
+            if (qaList) { qaList.style.display = 'none'; }
+            if (qaChevron) { qaChevron.style.transform = ''; }
+            evRefreshStaffQuickAdd();
             // Apply event bounds as min/max and default start to event start
             var startEl = gid('ev-sched-start');
             var endEl   = gid('ev-sched-end');
@@ -7249,6 +7408,14 @@ $(document).ready(function() {
             gid('ev-sched-location').value     = row.getAttribute('data-location') || '';
             gid('ev-sched-description').value  = row.getAttribute('data-description') || '';
             gid('ev-sched-error').style.display = 'none';
+            try { evSchedLeads = JSON.parse(row.getAttribute('data-leads') || '[]'); } catch(e) { evSchedLeads = []; }
+            evRenderSchedLeads();
+            // Collapse staff quick-add and refresh
+            var qaList = gid('ev-sched-staff-qa-list');
+            var qaChevron = gid('ev-sched-staff-qa-chevron');
+            if (qaList) { qaList.style.display = 'none'; }
+            if (qaChevron) { qaChevron.style.transform = ''; }
+            evRefreshStaffQuickAdd();
             var startEl = gid('ev-sched-start');
             var endEl   = gid('ev-sched-end');
             if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
@@ -7289,6 +7456,7 @@ $(document).ready(function() {
             fd.append('EndTime',     end.replace('T', ' '));
             fd.append('Location',    loc);
             fd.append('Description', desc);
+            fd.append('Leads',       JSON.stringify(evSchedLeads));
 
             var isEdit = gid('ev-sched-mode').value === 'edit';
             var schedId = gid('ev-sched-id').value;
@@ -7323,13 +7491,15 @@ $(document).ready(function() {
                             row.setAttribute('data-location',    s.Location);
                             row.setAttribute('data-description', s.Description);
                             row.setAttribute('data-category',    s.Category);
+                            row.setAttribute('data-leads',       JSON.stringify(s.Leads || []));
                             row.style.background = catCfg.bg;
                             row.cells[0].innerHTML = startCell;
                             row.cells[1].innerHTML = endCell;
                             row.cells[2].innerHTML = glyphHtml + escHtmlSch(s.Title);
                             row.cells[3].textContent = s.Location;
-                            row.cells[4].textContent = s.Description;
-                            row.cells[5].innerHTML = actionCells.replace(/^<td[^>]*>/, '').replace(/<\/td>$/, '');
+                            row.cells[4].innerHTML = evSchedLeadsCell(s.Leads || []);
+                            row.cells[5].textContent = s.Description;
+                            if (row.cells[6]) row.cells[6].innerHTML = actionCells.replace(/^<td[^>]*>/, '').replace(/<\/td>$/, '');
                         }
                     } else {
                         var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
@@ -7339,11 +7509,13 @@ $(document).ready(function() {
                             ' data-location="' + s.Location.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-description="' + s.Description.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-category="' + escHtmlSch(s.Category) + '"' +
+                            ' data-leads="' + JSON.stringify(s.Leads || []).replace(/"/g,'&quot;') + '"' +
                             ' style="background:' + catCfg.bg + '">' +
                             '<td style="white-space:nowrap">' + startCell + '</td>' +
                             '<td style="white-space:nowrap">' + endCell + '</td>' +
                             '<td>' + glyphHtml + escHtmlSch(s.Title) + '</td>' +
                             '<td>' + escHtmlSch(s.Location) + '</td>' +
+                            '<td>' + evSchedLeadsCell(s.Leads || []) + '</td>' +
                             '<td>' + escHtmlSch(s.Description) + '</td>' +
                             actionCells +
                             '</tr>';
@@ -7358,8 +7530,8 @@ $(document).ready(function() {
                             var newSection = '<div class="ev-sched-day-section" data-date="' + dateStr + '">' +
                                 '<div class="ev-sched-day-header">' + dayLabel + '</div>' +
                                 '<table class="ev-table ev-sched-table" id="ev-schedule-table-' + dateKey + '">' +
-                                '<colgroup><col style="width:90px"><col style="width:90px"><col style="width:22%"><col style="width:15%"><col>' + delCol + '</colgroup>' +
-                                '<thead><tr><th>Start</th><th>End</th><th>Title</th><th>Location</th><th>Description</th>' + delTh + '</tr></thead>' +
+                                '<colgroup><col style="width:90px"><col style="width:90px"><col style="width:22%"><col style="width:15%"><col style="width:18%"><col>' + delCol + '</colgroup>' +
+                                '<thead><tr><th>Start</th><th>End</th><th>Title</th><th>Location</th><th>Lead(s)</th><th>Description</th>' + delTh + '</tr></thead>' +
                                 '<tbody id="ev-schedule-tbody-' + dateKey + '"></tbody>' +
                                 '</table></div>';
                             var container = gid('ev-schedule-container');
