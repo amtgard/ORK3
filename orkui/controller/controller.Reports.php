@@ -139,6 +139,7 @@ class Controller_Reports extends Controller {
 			$ladder = $this->request->Ladder;
 		$this->template = 'Reports_playerawardrecommendations.tpl';
 		$this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+		$this->data['ScopeType'] = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
 		$this->data[ 'page_title' ] = "Award Recommendations";
 	}
 
@@ -379,7 +380,16 @@ class Controller_Reports extends Controller {
 	public function suspended($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_suspension'] = 1;
-		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, null, null, 2, 1);
+		$this->data['roster']     = $this->Reports->player_roster($type, $this->request->id, null, null, null, 2, 1);
+		$this->data['ScopeType']  = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
+		$this->data['ScopeId']    = valid_id($this->request->id) ? (int)$this->request->id : null;
+		if ($type === 'Park' && valid_id($this->request->id)) {
+			$this->load_model('Park');
+			$this->data['ScopeName'] = $this->Park->get_park_name($this->request->id);
+		} elseif ($type === 'Kingdom' && valid_id($this->request->id)) {
+			$this->load_model('Kingdom');
+			$this->data['ScopeName'] = $this->Kingdom->get_kingdom_name($this->request->id);
+		}
 		$this->data['page_title'] ="Suspended Player Roster";
 	}
 

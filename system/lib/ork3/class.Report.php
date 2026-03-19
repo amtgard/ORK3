@@ -438,7 +438,11 @@ class Report  extends Ork3 {
 			a.peerage, ifnull(ka.name, a.name) as award_name, 
 			m.persona, 
 			recs.date_recommended, 
-			m.mundane_id, 
+			m.mundane_id,
+			m.park_id,
+			m.kingdom_id,
+			p.name as park_name,
+			k.name as kingdom_name,
 			recs.rank, 
 			rbi.mundane_id as recommended_by_id, rbi.persona as recommended_by_persona,
 			recs.recommendations_id,
@@ -455,6 +459,8 @@ class Report  extends Ork3 {
 			LEFT JOIN " . DB_PREFIX . "award a on a.award_id = ka.award_id
 			LEFT join " . DB_PREFIX . "mundane m on m.mundane_id = recs.mundane_id
 			LEFT join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = recs.recommended_by_id
+			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
+			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 			WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0) $location_clause
 			HAVING (kacount = 0 AND awcount = 0)
 			order by m.persona, a.name, recs.rank, m.persona";
@@ -473,7 +479,11 @@ class Report  extends Ork3 {
 						'Reason' => $r->reason,
 						'RecommendedByName' => $r->recommended_by_persona,
 						'RecommendedById' => $r->recommended_by_id,
-						'KingdomAwardId' => (int)$r->ka_kaward_id
+						'KingdomAwardId' => (int)$r->ka_kaward_id,
+						'ParkId' => $r->park_id,
+						'KingdomId' => $r->kingdom_id,
+						'ParkName' => $r->park_name,
+						'KingdomName' => $r->kingdom_name,
 					);
 			}
 			$response['Status'] = Success();

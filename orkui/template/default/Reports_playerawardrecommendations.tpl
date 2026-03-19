@@ -2,7 +2,9 @@
 /* ── Auth check ──────────────────────────────────────────── */
 $can_delete = false;
 if ($this->__session->user_id) {
-	if (isset($this->__session->park_id)) {
+	if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+		$can_delete = true;
+	} else if (isset($this->__session->park_id)) {
 		if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_EDIT)) {
 			$can_delete = true;
 		}
@@ -32,18 +34,40 @@ $scope_link  = '';
 $scope_icon  = 'fa-globe';
 $scope_noun  = 'scope';
 
-if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
-	$first       = reset($AwardRecommendations);
-	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/profile/'    . (int)$this->__session->park_id;
+$_recScopeType = $ScopeType ?? (isset($this->__session->park_id) ? 'park' : (isset($this->__session->kingdom_id) ? 'kingdom' : ''));
+$_first = !empty($AwardRecommendations) ? reset($AwardRecommendations) : [];
+
+if ($_recScopeType === 'park') {
+	$scope_label = $_first['ParkName']    ?? '';
+	$scope_link  = UIR . 'Park/profile/'    . (int)($this->__session->park_id ?? 0);
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
-} elseif (isset($this->__session->kingdom_id) && !empty($AwardRecommendations)) {
-	$first       = reset($AwardRecommendations);
-	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)$this->__session->kingdom_id;
+} elseif ($_recScopeType === 'kingdom') {
+	$scope_label = $_first['KingdomName'] ?? '';
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)($this->__session->kingdom_id ?? 0);
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
+}
+
+$_showKingdom = ($_recScopeType === '');
+$_showPark    = ($_recScopeType === '' || $_recScopeType === 'kingdom');
+/* date column index shifts with extra columns */
+$_dateColIdx  = $_showKingdom ? 5 : ($_showPark ? 4 : 3);
+$_actionsLast = $this->__session->user_id ? true : false;
+
+/* Pre-sort so initial render matches the header sort indicators */
+if (is_array($AwardRecommendations) && count($AwardRecommendations) > 1) {
+	usort($AwardRecommendations, function($a, $b) use ($_showKingdom, $_showPark) {
+		if ($_showKingdom) {
+			$c = strcmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? '');
+			if ($c !== 0) return $c;
+		}
+		if ($_showPark) {
+			$c = strcmp($a['ParkName'] ?? '', $b['ParkName'] ?? '');
+			if ($c !== 0) return $c;
+		}
+		return strcmp($a['Persona'] ?? '', $b['Persona'] ?? '');
+	});
 }
 ?>
 
@@ -126,6 +150,18 @@ if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
 					<i class="fas fa-table"></i> Column Guide
 				</div>
 				<div class="rp-filter-card-body">
+<?php if ($_showKingdom) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Kingdom</span>
+						<span class="rp-col-guide-desc">The kingdom the nominee belongs to.</span>
+					</div>
+<?php endif; ?>
+<?php if ($_showPark) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Park</span>
+						<span class="rp-col-guide-desc">The park the nominee belongs to.</span>
+					</div>
+<?php endif; ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Persona</span>
 						<span class="rp-col-guide-desc">The player being recommended for the award.</span>
@@ -163,9 +199,20 @@ if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
+			<div id="rec-loading" style="text-align:center;padding:48px 32px;color:#a0aec0">
+				<i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:10px"></i>
+				Loading report&hellip;
+			</div>
+			<div id="rec-table-wrap" style="opacity:0">
 			<table id="rec-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
+<?php if ($_showKingdom) : ?>
+						<th>Kingdom</th>
+<?php endif; ?>
+<?php if ($_showPark) : ?>
+						<th>Park</th>
+<?php endif; ?>
 						<th>Persona</th>
 						<th>Award</th>
 						<th>Rank</th>
@@ -181,6 +228,12 @@ if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
 <?php if (is_array($AwardRecommendations)) : ?>
 <?php 	foreach ($AwardRecommendations as $rec) : ?>
 				<tr>
+<?php if ($_showKingdom) : ?>
+					<td><a href="<?=UIR.'Kingdom/profile/'.(int)$rec['KingdomId']?>"><?=htmlspecialchars($rec['KingdomName'])?></a></td>
+<?php endif; ?>
+<?php if ($_showPark) : ?>
+					<td><a href="<?=UIR.'Park/profile/'.(int)$rec['ParkId']?>"><?=htmlspecialchars($rec['ParkName'])?></a></td>
+<?php endif; ?>
 					<td><a href='<?=UIR.'Player/profile/'.$rec['MundaneId']?>'><?=htmlspecialchars($rec['Persona'])?></a></td>
 					<td><?=htmlspecialchars($rec['AwardName'])?></td>
 					<td><?=valid_id($rec['Rank'])?htmlspecialchars($rec['Rank']):''?></td>
@@ -199,6 +252,7 @@ if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
 <?php endif; ?>
 				</tbody>
 			</table>
+			</div><!-- /rec-table-wrap -->
 		</div><!-- /rp-table-area -->
 
 	</div><!-- /rp-body -->
@@ -206,9 +260,48 @@ if (isset($this->__session->park_id) && !empty($AwardRecommendations)) {
 </div><!-- /rp-root -->
 
 <?php if ($this->__session->user_id) : ?>
-<div id="dialogs" style="display:none">
-	<div id="delete-recommendation" title="Confirmation Required">
-		Are you sure you want to delete this recommendation?
+<style>
+#del-rec-overlay {
+	display: none; position: fixed; inset: 0; z-index: 9999;
+	background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+}
+#del-rec-box {
+	background: #fff; border-radius: 12px; max-width: 400px; width: 90%;
+	box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden;
+}
+#del-rec-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+}
+#del-rec-header h4 {
+	margin: 0; font-size: 16px; font-weight: 600; color: #1a202c;
+	background: none; border: none; padding: 0;
+}
+#del-rec-body { padding: 18px 20px 8px; }
+#del-rec-body p { margin: 0; font-size: 14px; color: #4a5568; text-align: left; line-height: 1.5; }
+.del-rec-actions { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 20px 18px; }
+.del-rec-actions button {
+	padding: 8px 18px; border-radius: 6px; border: 1px solid #cbd5e0;
+	font-size: 14px; cursor: pointer; background: #edf2f7; color: #4a5568; font-weight: 500;
+}
+.del-rec-actions button:hover { background: #e2e8f0; }
+.del-rec-actions button.del-rec-ok {
+	background: #c53030; color: #fff; border-color: #c53030;
+}
+.del-rec-actions button.del-rec-ok:hover { background: #9b2c2c; border-color: #9b2c2c; }
+</style>
+<div id="del-rec-overlay">
+	<div id="del-rec-box">
+		<div id="del-rec-header">
+			<h4>Delete Recommendation?</h4>
+		</div>
+		<div id="del-rec-body">
+			<p>Are you sure you want to delete this award recommendation? This cannot be undone.</p>
+		</div>
+		<div class="del-rec-actions">
+			<button id="del-rec-cancel">Cancel</button>
+			<button class="del-rec-ok" id="del-rec-ok">Delete</button>
+		</div>
 	</div>
 </div>
 <?php endif; ?>
@@ -239,32 +332,46 @@ $(function() {
 <?php if ($this->__session->user_id) : ?>
 			{ targets: [-1], orderable: false, searchable: false, className: 'dt-center' },
 <?php endif; ?>
-			{ targets: [3], type: 'date', className: 'dt-right' },
+			{ targets: [<?=$_dateColIdx?>], type: 'date', className: 'dt-right' },
 			{ targets: [0], responsivePriority: 1 }
 		],
 		pageLength: 25,
-		order: [[3, 'desc'], [0, 'asc']],
+		order: <?php
+			if ($_showKingdom)     echo '[[0,"asc"],[1,"asc"],[2,"asc"]]'; // Kingdom, Park, Persona
+			elseif ($_showPark)   echo '[[0,"asc"],[1,"asc"]]';           // Park, Persona
+			else                  echo '[[0,"asc"]]';                     // Persona
+		?>,
 		fixedHeader : { headerOffset: 48 },
 		responsive  : true,
 		scrollX     : true,
 		fixedColumns: { left: 1 }
 	});
 
+	$('#rec-loading').hide();
+	$('#rec-table-wrap').css('opacity', '1');
+
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
 	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
 
 <?php if ($this->__session->user_id) : ?>
+	var _delRecUrl = null;
+	document.getElementById('del-rec-cancel').addEventListener('click', function() {
+		document.getElementById('del-rec-overlay').style.display = 'none';
+		_delRecUrl = null;
+	});
+	document.getElementById('del-rec-ok').addEventListener('click', function() {
+		if (!_delRecUrl) return;
+		var btn = this;
+		btn.disabled = true;
+		btn.textContent = 'Deleting…';
+		fetch(_delRecUrl, { redirect: 'follow' })
+			.catch(function() {})
+			.finally(function() { window.location.reload(); });
+	});
 	$('.confirm-delete-rec').on('click', function(e) {
 		e.preventDefault();
-		var targetUrl = $(this).attr('href');
-		$('#delete-recommendation').dialog({
-			width  : 460,
-			modal  : true,
-			buttons: {
-				'Cancel' : function() { $(this).dialog('close'); },
-				'Confirm': function() { window.location.href = targetUrl; $(this).dialog('close'); }
-			}
-		});
+		_delRecUrl = $(this).attr('href');
+		document.getElementById('del-rec-overlay').style.display = 'flex';
 	});
 <?php endif; ?>
 });
