@@ -446,6 +446,14 @@ class Controller_KingdomAjax extends Controller {
 				? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'getparks') {
+			$this->load_model('Kingdom');
+			$r = $this->Kingdom->get_park_info($kingdom_id);
+			$parks = [];
+			foreach ($r['Parks'] ?? [] as $park) {
+				$parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
+			}
+			echo json_encode(['status' => 0, 'parks' => $parks]);
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}
@@ -598,8 +606,9 @@ class Controller_KingdomAjax extends Controller {
 			exit;
 		}
 
-		$q     = trim($_GET['q']     ?? '');
-		$scope = trim($_GET['scope'] ?? 'own'); // 'own' | 'exclude'
+		$q       = trim($_GET['q']       ?? '');
+		$scope   = trim($_GET['scope']   ?? 'own'); // 'own' | 'exclude'
+		$park_id = (int)($_GET['park_id'] ?? 0);
 		if (strlen($q) < 2) {
 			echo json_encode([]);
 			exit;
@@ -615,6 +624,8 @@ class Controller_KingdomAjax extends Controller {
 			$kingdom_clause = "AND m.kingdom_id = {$kid}";
 		}
 
+		$park_clause = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+
 		$sql = "
 			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,
 			       k.name AS kingdom_name, p.name AS park_name,
@@ -625,6 +636,7 @@ class Controller_KingdomAjax extends Controller {
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
 			WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
 			  {$kingdom_clause}
+			  {$park_clause}
 			  AND (m.persona LIKE '%{$term}%'
 			    OR m.given_name LIKE '%{$term}%'
 			    OR m.surname LIKE '%{$term}%'

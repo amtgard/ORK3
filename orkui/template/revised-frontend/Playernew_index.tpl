@@ -156,7 +156,7 @@
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
 					<i class="fas fa-info-circle"></i>
-					Suspended <?= $Player['SuspendedAt'] ?> &mdash; Until <?= $Player['SuspendedUntil'] ?>
+					Suspended <?= $Player['SuspendedAt'] ?> &mdash; Until <?php $_until = $Player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?>
 					<?php if (!empty($Player['Suspension'])): ?>
 						&mdash; <?= htmlspecialchars($Player['Suspension']) ?>
 					<?php endif; ?>

@@ -497,6 +497,16 @@
 	background-color: #fed7d7;
 }
 
+/* Fix fixedColumns clone background for suspended rows */
+.dtfc-fixed-start tbody tr.rp-row-suspended td {
+	background-color: #fff5f5 !important;
+	color           : #742a2a !important;
+}
+
+.dtfc-fixed-start tbody tr.rp-row-suspended:hover td {
+	background-color: #fed7d7 !important;
+}
+
 /* Dues for Life row highlight */
 .rp-table-area table.dataTable tbody tr.rp-row-duesforlife > td {
 	background-color: #f0fff4;
