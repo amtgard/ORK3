@@ -163,6 +163,7 @@
 .ev-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .ev-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
 .ev-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+.ev-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
 </style>
 
 <?php // ---- HERO ---- ?>
@@ -678,12 +679,12 @@
 					<div class="ev-modal-row">
 						<div class="ev-modal-field">
 							<label>Start Date &amp; Time</label>
-							<input type="datetime-local" name="StartDate"
+							<input type="text" name="StartDate" id="ev-fp-start" autocomplete="off"
 								value="<?php $sTs = $eventStart ? strtotime($eventStart) : 0; echo ($sTs > 0) ? date('Y-m-d\TH:i', $sTs) : ''; ?>">
 						</div>
 						<div class="ev-modal-field">
 							<label>End Date &amp; Time</label>
-							<input type="datetime-local" name="EndDate"
+							<input type="text" name="EndDate" id="ev-fp-end" autocomplete="off"
 								value="<?php $eTs = $eventEnd ? strtotime($eventEnd) : 0; echo ($eTs > 0) ? date('Y-m-d\TH:i', $eTs) : ''; ?>">
 						</div>
 						<div class="ev-modal-field" style="max-width:120px">
@@ -894,6 +895,8 @@ var EvConfig = {
 	</div>
 </div>
 <?php endif; ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
@@ -952,4 +955,39 @@ function evConfirmDeleteOccurrence(e, form) {
 		form.submit();
 	});
 }
+
+// Flatpickr for event edit modal date fields
+function fpAddTitle(label, calEl) {
+	var title = document.createElement('div');
+	title.className = 'ev-fp-title';
+	title.textContent = label;
+	calEl.insertBefore(title, calEl.firstChild);
+}
+var _fpOpts = {
+	enableTime: true,
+	dateFormat: 'Y-m-d\\TH:i',
+	minuteIncrement: 10,
+	time_24hr: false
+};
+var _prevStartDate = null;
+var _fpStart = flatpickr('#ev-fp-start', Object.assign({}, _fpOpts, {
+	onReady: function(sel, str, fp) {
+		fpAddTitle('Start Date & Time', fp.calendarContainer);
+		_prevStartDate = sel[0] || null;
+	},
+	onChange: function(sel) {
+		if (!sel[0]) return;
+		var endDates = _fpEnd.selectedDates;
+		if (endDates[0] && _prevStartDate) {
+			var offset = endDates[0].getTime() - _prevStartDate.getTime();
+			_fpEnd.setDate(new Date(sel[0].getTime() + offset), true);
+		} else if (!endDates[0]) {
+			_fpEnd.setDate(new Date(sel[0].getTime() + 60 * 60 * 1000), true);
+		}
+		_prevStartDate = sel[0];
+	}
+}));
+var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
+	onReady: function(sel, str, fp) { fpAddTitle('End Date & Time', fp.calendarContainer); }
+}));
 </script>

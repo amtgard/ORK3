@@ -73,11 +73,11 @@
 				<div class="ec-row">
 					<div class="ec-field">
 						<label>Start Date &amp; Time <span class="ec-required">*</span></label>
-						<input type="datetime-local" name="StartDate" id="ec-StartDate" required<?= !empty($PresetDate) ? ' value="' . htmlspecialchars($PresetDate) . '"' : '' ?>>
+						<input type="text" name="StartDate" id="ec-fp-start" autocomplete="off" required<?= !empty($PresetDate) ? ' value="' . htmlspecialchars($PresetDate) . '"' : '' ?>>
 					</div>
 					<div class="ec-field">
 						<label>End Date &amp; Time</label>
-						<input type="datetime-local" name="EndDate" id="ec-EndDate"<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
+						<input type="text" name="EndDate" id="ec-fp-end" autocomplete="off"<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
 					</div>
 					<div class="ec-field ec-sm">
 						<label>Price ($)</label>
@@ -201,6 +201,46 @@
 	</div><!-- /.ec-form-card -->
 
 </div><!-- /.ec-wrap -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<style>
+.ev-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
+</style>
+<script>
+function ecFpAddTitle(label, calEl) {
+	var title = document.createElement('div');
+	title.className = 'ev-fp-title';
+	title.textContent = label;
+	calEl.insertBefore(title, calEl.firstChild);
+}
+var _ecFpOpts = {
+	enableTime: true,
+	dateFormat: 'Y-m-d\\TH:i',
+	minuteIncrement: 10,
+	time_24hr: false
+};
+var _ecFpEnd = flatpickr('#ec-fp-end', Object.assign({}, _ecFpOpts, {
+	onReady: function(sel, str, fp) { ecFpAddTitle('End Date & Time', fp.calendarContainer); }
+}));
+var _ecPrevStartDate = null;
+var _ecFpStart = flatpickr('#ec-fp-start', Object.assign({}, _ecFpOpts, {
+	onReady: function(sel, str, fp) {
+		ecFpAddTitle('Start Date & Time', fp.calendarContainer);
+		_ecPrevStartDate = sel[0] || null;
+	},
+	onChange: function(sel) {
+		if (!sel[0]) return;
+		var endDates = _ecFpEnd.selectedDates;
+		if (endDates[0] && _ecPrevStartDate) {
+			var offset = endDates[0].getTime() - _ecPrevStartDate.getTime();
+			_ecFpEnd.setDate(new Date(sel[0].getTime() + offset), true);
+		} else if (!endDates[0]) {
+			_ecFpEnd.setDate(new Date(sel[0].getTime() + 60 * 60 * 1000), true);
+		}
+		_ecPrevStartDate = sel[0];
+	}
+}));
+</script>
 
 <script>
 <?php
