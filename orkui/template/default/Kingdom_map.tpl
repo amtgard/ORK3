@@ -1,9 +1,9 @@
 <div class='info-container' style="width: 65%;">
 	<h3>Kingdom Map</h3>
-	<div style='border: 3px solid #8B6914; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); overflow: hidden;'><div id="map" style="width: 100%; height: 100%; min-width: 400px; min-height: 400px; filter: sepia(0.35) saturate(0.85);"></div></div>
+	<div style='border: 1px solid #aaa;' ><div id="map" style="width: 100%; height: 100%; min-width: 400px; min-height: 400px;"></div></div>
 </div>
 
-<div class='info-container' style="width: 25%; background: #fdf5e6; border: 1px solid #B8860B; border-radius: 4px; padding: 8px; color: #5c3a00;" id='directions-container'>
+<div class='info-container' style="width: 25%;" id='directions-container'>
 	<h3>Directions</h3>
 	<div id="directions"></div>
 </div>
@@ -63,9 +63,6 @@
 		
 		for (i = 0; i < locations.length; i++) {
 			const pinGlyph = new PinElement({
-				background: '#8B1A1A',
-				borderColor: '#B8860B',
-				glyphColor: '#FFD700',
 				scale: 0.7
 			});
 
