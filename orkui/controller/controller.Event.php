@@ -559,7 +559,32 @@ class Controller_Event extends Controller {
 				];
 			}
 		}
-		$this->data['ScheduleList'] = $scheduleList;
+		// Batch-load leads for all schedule items
+	if (!empty($scheduleList)) {
+		$slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
+		$DB->Clear();
+		$leadRows = $DB->DataSet(
+			'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
+			FROM ' . DB_PREFIX . 'event_schedule_lead sl
+			JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
+			WHERE sl.event_schedule_id IN (' . $slIds . ')
+			ORDER BY m.persona'
+		);
+		$leadsMap = [];
+		if ($leadRows) {
+			while ($leadRows->Next()) {
+				$leadsMap[(int)$leadRows->EventScheduleId][] = [
+					'MundaneId' => (int)$leadRows->MundaneId,
+					'Persona'   => $leadRows->Persona,
+				];
+			}
+		}
+		foreach ($scheduleList as &$schItem) {
+			$schItem['Leads'] = $leadsMap[(int)$schItem['EventScheduleId']] ?? [];
+		}
+		unset($schItem);
+	}
+	$this->data['ScheduleList'] = $scheduleList;
 	}
 
 	public function create( $p = null ) {
