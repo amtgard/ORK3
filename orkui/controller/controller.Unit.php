@@ -149,6 +149,14 @@ class Controller_Unit extends Controller {
 						'AuthorizationId' => (int)$this->request->AuthorizationId,
 					));
 					break;
+				case 'convert_type':
+					$target = $this->request->TargetType;
+					if ($target === 'Household') {
+						$r = $this->Unit->convert_to_household($unit_id_int);
+					} elseif ($target === 'Company') {
+						$r = $this->Unit->convert_to_company($unit_id_int);
+					}
+					break;
 			}
 			if (isset($r)) {
 				if ($r['Status'] == 0) {

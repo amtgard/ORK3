@@ -1028,7 +1028,7 @@
 				</div>
 				<?php endif; ?>
 				<?php if (empty($AwardRecommendations)): ?>
-				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>. <a href="#" onclick="pkOpenRecModal();return false;">You can submit a new recommendation here!</a></div>
+				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
 				<div class="pk-recs-table-wrap">
 					<table id="pk-rec-table" class="pk-recs-table display">

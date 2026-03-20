@@ -642,6 +642,21 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					<label>Name</label>
 					<input type="text" name="Name" value="<?=htmlspecialchars($_name)?>" required>
 				</div>
+				<div class="pn-acct-field" style="display:flex;align-items:center;gap:12px;">
+					<div style="flex:1;">
+						<label>Type</label>
+						<div style="font-size:14px;color:#2d3748;padding:8px 0 2px;">
+							<i class="fas <?=$_type_icon?>"></i> <?=htmlspecialchars($_type)?>
+						</div>
+					</div>
+					<div style="flex-shrink:0;padding-top:22px;">
+						<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="un-convert-btn"
+							onclick="unConvertType('<?=($_type === 'Company' ? 'Household' : 'Company')?>')">
+							<i class="fas <?=($_type === 'Company' ? 'fa-home' : 'fa-shield-alt')?>"></i>
+							Convert to <?=($_type === 'Company' ? 'Household' : 'Company')?>
+						</button>
+					</div>
+				</div>
 				<div class="pn-acct-field">
 					<label>Website URL</label>
 					<input type="url" name="Url" value="<?=htmlspecialchars($_url)?>" placeholder="https://…">
@@ -868,6 +883,27 @@ function unOpenModal(id) {
 }
 function unCloseModal(id) {
 	document.getElementById(id).classList.remove('pn-open');
+}
+function unConvertType(targetType) {
+	var btn = document.getElementById('un-convert-btn');
+	btn.disabled = true;
+	btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting\u2026';
+	var fd = new FormData();
+	fd.append('Action', 'convert_type');
+	fd.append('TargetType', targetType);
+	fetch('<?=htmlspecialchars($_base_url)?>', { method: 'POST', body: fd })
+		.then(function(r) {
+			if (r.ok) {
+				window.location.reload();
+			} else {
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed';
+			}
+		})
+		.catch(function() {
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed';
+		});
 }
 function unOpenEditMember(unitMundaneId, role, title) {
 	document.getElementById('un-edit-umid').value  = unitMundaneId;

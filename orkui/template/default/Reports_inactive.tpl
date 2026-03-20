@@ -21,6 +21,14 @@ if (($ScopeType ?? '') === 'park' && $_total > 0) {
 	$_scope_icon  = 'fa-chess-rook';
 	$_scope_noun  = 'kingdom';
 }
+
+$_one_year_ago    = date('Y-m-d', strtotime('-1 year'));
+$_recent_inactive = 0;
+foreach ($_roster as $_p) {
+	if (!empty($_p['LastSignIn']) && $_p['LastSignIn'] >= $_one_year_ago) {
+		$_recent_inactive++;
+	}
+}
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -52,7 +60,7 @@ if (($ScopeType ?? '') === 'park' && $_total > 0) {
 
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Players within <?=$_scope_label ? htmlspecialchars($_scope_label) : 'this ' . $_scope_noun?> whose accounts are marked inactive. These players have not been removed but no longer appear in active rosters.</span>
+		<span>Players within <?=$_scope_label ? htmlspecialchars($_scope_label) : 'this ' . $_scope_noun?> whose accounts are marked inactive. These players have not been removed but no longer appear in active rosters. There may be players marked inactive that should not be. You can sort by attendance to see. INACTIVE players will NOT appear in various ORK reports.</span>
 	</div>
 
 	<div class="rp-stats-row">
@@ -60,6 +68,11 @@ if (($ScopeType ?? '') === 'park' && $_total > 0) {
 			<div class="rp-stat-icon"><i class="fas fa-user-slash"></i></div>
 			<div class="rp-stat-number"><?=$_total?></div>
 			<div class="rp-stat-label">Inactive Players</div>
+		</div>
+		<div class="rp-stat-card" title="Inactive players who have signed in within the last year and may not belong on this list">
+			<div class="rp-stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+			<div class="rp-stat-number"><?=$_recent_inactive?></div>
+			<div class="rp-stat-label">Played in Last Year</div>
 		</div>
 	</div>
 
@@ -77,6 +90,7 @@ if (($ScopeType ?? '') === 'park' && $_total > 0) {
 					<th>Park</th>
 					<th>Persona</th>
 					<th>Waivered</th>
+					<th>Last Sign-in</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -86,6 +100,7 @@ if (($ScopeType ?? '') === 'park' && $_total > 0) {
 				<td><a href="<?=UIR?>Park/profile/<?=(int)$player['ParkId']?>"><?=htmlspecialchars($player['ParkName'])?></a></td>
 				<td><a href="<?=UIR?>Player/profile/<?=(int)$player['MundaneId']?>"><?=htmlspecialchars($player['Persona'] ?: '(No Persona)')?></a></td>
 				<td><?=$player['Waivered'] ? 'Yes' : ''?></td>
+				<td><?=htmlspecialchars($player['LastSignIn'] ?? '')?></td>
 			</tr>
 <?php endforeach; ?>
 			</tbody>

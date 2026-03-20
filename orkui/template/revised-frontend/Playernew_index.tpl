@@ -445,6 +445,9 @@
 
 			<!-- Awards Tab -->
 			<div class="pn-tab-panel" id="pn-tab-awards">
+				<?php
+					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
+				?>
 				<?php if ($canEditAdmin): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAwardModal('awards')"><i class="fas fa-plus"></i> Add Award</button>
@@ -454,11 +457,12 @@
 					<i class="fas fa-history"></i> Reconcile Historical Awards
 				</a>
 				<?php endif; ?>
+				<?php if (!empty($awardsList)): ?>
 				<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
+				<?php endif; ?>
 				</div>
 				<?php endif; ?>
 				<?php
-					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 					$filteredAwards = array();
 					foreach ($awardsList as $a) {
 						if (in_array($a['OfficerRole'], ['none', null]) && $a['IsTitle'] != 1) {
@@ -900,7 +904,7 @@
 						</tbody>
 					</table>
 				<?php else: ?>
-					<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player["Persona"]) ?>. <a href="#" onclick="pnOpenModal();return false;">You can submit a new recommendation here!</a></div>
+					<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player["Persona"]) ?>.</div>
 				<?php endif; ?>
 			</div><?php endif; ?>
 

@@ -235,6 +235,17 @@ function pnActivateTab(tab) {
     if (pnLabel) $('#pn-active-tab-label').text(pnLabel);
 }
 
+// ---- Custom Recommendation Modal (global — called from inline onclick) ----
+function pnOpenModal() {
+    $('#pn-rec-overlay').addClass('pn-open');
+    $('body').css('overflow', 'hidden');
+}
+function pnCloseModal() {
+    $('#pn-rec-overlay').removeClass('pn-open');
+    $('body').css('overflow', '');
+    $('#pn-rec-error').hide().empty();
+}
+
 $(document).ready(function() {
     if (typeof PnConfig === 'undefined') return;
 
@@ -323,16 +334,6 @@ $(document).ready(function() {
 
 
     // ---- Custom Recommendation Modal ----
-    function pnOpenModal() {
-        $('#pn-rec-overlay').addClass('pn-open');
-        $('body').css('overflow', 'hidden');
-    }
-    function pnCloseModal() {
-        $('#pn-rec-overlay').removeClass('pn-open');
-        $('body').css('overflow', '');
-        $('#pn-rec-error').hide().empty();
-    }
-
     $('#pn-recommend-btn').on('click', function(e) {
         e.preventDefault();
         pnOpenModal();
@@ -6898,22 +6899,29 @@ function setupPronounPicker(cfg) {
             var row      = $(this).closest('tr');
             var awardsId = $(this).data('awards-id');
             var kind     = $(this).closest('table').is('#pn-titles-table') ? 'title' : 'award';
-            if (!awardsId || !confirm('Delete this ' + kind + ' record? This cannot be undone.')) return;
-            btn.disabled = true;
-            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deleteaward', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'AwardsId=' + encodeURIComponent(awardsId),
-            }).then(function(r) { return r.json(); }).then(function(result) {
-                if (result && result.status === 0) {
-                    row.fadeOut(300, function() { row.remove(); });
-                } else {
+            if (!awardsId) return;
+            pnConfirm({
+                title:       'Delete ' + (kind === 'title' ? 'Title' : 'Award'),
+                message:     'Delete this ' + kind + ' record? This cannot be undone.',
+                confirmText: 'Delete',
+                danger:      true
+            }, function() {
+                btn.disabled = true;
+                fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deleteaward', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'AwardsId=' + encodeURIComponent(awardsId),
+                }).then(function(r) { return r.json(); }).then(function(result) {
+                    if (result && result.status === 0) {
+                        location.reload();
+                    } else {
+                        btn.disabled = false;
+                        pnConfirm({ title: 'Error', message: (result && result.error) ? result.error : 'Delete failed.', confirmText: 'OK', danger: false }, function() {});
+                    }
+                }).catch(function() {
                     btn.disabled = false;
-                    alert((result && result.error) ? result.error : 'Delete failed.');
-                }
-            }).catch(function() {
-                btn.disabled = false;
-                alert('Request failed.');
+                    pnConfirm({ title: 'Error', message: 'Request failed.', confirmText: 'OK', danger: false }, function() {});
+                });
             });
         });
 
@@ -7399,11 +7407,7 @@ function setupPronounPicker(cfg) {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    // Mark row as revoked visually (strike-through on first cell)
-                    $('.pn-award-revoke-btn[data-awards-id="' + currentRevokeAwardsId + '"]').closest('tr').find('td:first').css('text-decoration', 'line-through');
-                    // Remove action buttons since award is now revoked
-                    $('.pn-award-revoke-btn[data-awards-id="' + currentRevokeAwardsId + '"]').closest('.pn-award-actions-cell').html('<em style="color:#a0aec0;font-size:11px">revoked</em>');
-                    pnCloseAwardRevokeModal();
+                    location.reload();
                 } else {
                     if (fb) { fb.textContent = data.error || 'Error revoking award.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
                     btn.disabled = false;
