@@ -37,6 +37,7 @@
 	$eventStart  = $cd['EventStart']  ?? null;
 	$eventEnd    = $cd['EventEnd']    ?? null;
 	$price       = (float)($cd['Price'] ?? 0);
+	$eventFees   = $EventFees ?? [];
 	$description = $cd['Description'] ?? '';
 	$hasDescription = !empty(trim($description));
 	$websiteUrl  = $cd['Url']     ?? '';
@@ -383,15 +384,11 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 		<div class="ev-stat-label">Date</div>
 	</div>
 	<div class="ev-stat-card">
-		<div class="ev-stat-icon"><i class="fas fa-ticket-alt"></i></div>
-		<div class="ev-stat-value">
-			<?php if ($price > 0): ?>
-				$<?= number_format($price, 2) ?>
-			<?php else: ?>
-				<span style="color:var(--ork-badge-green-text,#276749);font-size:16px">Free</span>
-			<?php endif; ?>
+		<div class="ev-stat-icon"><i class="fas fa-clock"></i></div>
+		<div class="ev-stat-value" style="font-size:15px;padding-top:3px">
+			<?= $eventStart ? date('g:i A', strtotime($eventStart)) : '<span style="color:#a0aec0">TBD</span>' ?>
 		</div>
-		<div class="ev-stat-label">Price</div>
+		<div class="ev-stat-label">Starts At</div>
 	</div>
 	<?php $hasMapTab = (bool)($locationDisplay ?: $locationFallback); ?>
 	<?php if (!$locationDisplay && $mapUrl): ?>
@@ -564,13 +561,30 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 
 			<?php // ---- Details Tab ---- ?>
 			<div class="ev-tab-panel ev-tab-visible" id="ev-tab-details">
-				<?php if ($hasDescription): ?>
-					<div class="ev-description kn-description-body"><?= ev_markdown(rawurldecode($description)) ?></div>
-				<?php else: ?>
-					<div class="ev-empty">
-						<i class="fas fa-file-alt" style="margin-right:6px"></i>No description provided
+				<div style="display:flex;gap:20px;align-items:flex-start">
+					<div style="flex:1;min-width:0">
+						<?php if ($hasDescription): ?>
+							<div class="ev-description kn-description-body"><?= ev_markdown(rawurldecode($description)) ?></div>
+						<?php else: ?>
+							<div class="ev-empty">
+								<i class="fas fa-file-alt" style="margin-right:6px"></i>No description provided
+							</div>
+						<?php endif; ?>
 					</div>
-				<?php endif; ?>
+					<?php if (!empty($eventFees)): ?>
+					<div style="flex:0 0 220px">
+						<div class="ev-card" style="margin-bottom:0">
+							<h4><i class="fas fa-ticket-alt" style="margin-right:5px"></i>Admission &amp; Fees</h4>
+							<?php foreach ($eventFees as $fee): ?>
+							<div class="ev-detail-row">
+								<span class="ev-detail-label"><?= htmlspecialchars($fee['AdmissionType']) ?></span>
+								<span class="ev-detail-value"><?= (float)$fee['Cost'] == 0 ? '<span style="color:#276749">Free</span>' : '$' . number_format((float)$fee['Cost'], 2) ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+					</div>
+					<?php endif; ?>
+				</div>
 			</div>
 
 			<?php // ---- Attendance Tab ---- ?>
@@ -1021,7 +1035,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				</div>
 
 				<div class="ev-modal-section">
-					<h4>Dates &amp; Price</h4>
+					<h4>Dates</h4>
 					<div class="ev-modal-row">
 						<div class="ev-modal-field">
 							<label>Start Date &amp; Time</label>
@@ -1033,12 +1047,16 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 							<input type="text" name="EndDate" id="ev-fp-end" autocomplete="off"
 								value="<?php $eTs = $eventEnd ? strtotime($eventEnd) : 0; echo ($eTs > 0) ? date('Y-m-d\TH:i', $eTs) : ''; ?>">
 						</div>
-						<div class="ev-modal-field" style="max-width:120px">
-							<label>Price ($)</label>
-							<input type="number" name="Price" min="0" step="0.01"
-								value="<?= number_format($price, 2) ?>">
-						</div>
 					</div>
+				</div>
+
+				<div class="ev-modal-section" id="ev-fees-section">
+					<h4>Admission &amp; Fees</h4>
+					<div id="ev-fees-list" style="margin-bottom:8px"></div>
+					<button type="button" onclick="evFeesAdd()" style="background:#ebf8ff;border:1px solid #90cdf4;color:#2b6cb0;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer">
+						<i class="fas fa-plus"></i> Add Fee
+					</button>
+					<input type="hidden" name="Fees" id="ev-fees-json">
 				</div>
 
 				<div class="ev-modal-section">
@@ -1281,7 +1299,9 @@ var EvConfig = {
 	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>,
 	eventStart: '<?= $eventStart ? date('Y-m-d\TH:i', strtotime($eventStart)) : '' ?>',
 	eventEnd:   '<?= $eventEnd   ? date('Y-m-d\TH:i', strtotime($eventEnd))   : '' ?>',
-	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona']]; }, $StaffList ?? [])) ?>
+	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona']]; }, $StaffList ?? [])) ?>,
+	hasFees:    true,
+	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees)) ?>
 };
 </script>
 <?php if ($canManageStaff): ?>
@@ -1716,7 +1736,7 @@ var _fpOpts = {
 	enableTime: true,
 	dateFormat: 'Y-m-d\\TH:i',
 	altInput: true,
-	altFormat: 'M j, Y h:i K',
+	altFormat: 'F j, Y  h:i K',
 	minuteIncrement: 10,
 	time_24hr: false
 };
