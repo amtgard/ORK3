@@ -254,13 +254,22 @@ class Controller_Reports extends Controller {
 	}
 
 	public function active_waivered_duespaid($type=null) {
+		if (!$type || !valid_id($this->request->id)) {
+			header('Location: ' . $this->data['menu']['reports']['url']);
+			exit;
+		}
         $this->_peerage_waivered_duespaid(null, $type);
-		$this->data['page_title'] ="Active Waivered Dues Paid";
+		$this->data['page_title']     = "Active Waivered Dues Paid";
+		$this->data['activewaivered'] = true;
 	}
 
     public function active_duespaid($type=null) {
+		if (!$type || !valid_id($this->request->id)) {
+			header('Location: ' . $this->data['menu']['reports']['url']);
+			exit;
+		}
         $this->_peerage_waivered_duespaid(null, $type, true, null);
-		$this->data['page_title'] ="Active Dues Paid";
+		$this->data['page_title'] = "Active Dues Paid";
 	}
 
     public function knights($type=null) {
@@ -302,7 +311,11 @@ class Controller_Reports extends Controller {
 
 	public function roster($type=null) {
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
-		$this->data['page_title'] ="Player Roster";
+		$this->data['page_title'] = "Player Roster";
+		$_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
+		$this->data['canViewMundane'] = $_uid > 0 && valid_id($this->request->id)
+			&& Ork3::$Lib->authorization->HasAuthority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
 	}
 
 	public function reeve($type=null) {

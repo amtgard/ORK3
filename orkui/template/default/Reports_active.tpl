@@ -86,10 +86,12 @@ $show_chart = ($report_type ?? null) === 'Kingdom' && count($chart_parks) > 1;
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
 		<span>
-<?php if (isset($activewaivereduespaid)) : ?>
-			Players who attended at least once in the last 6 months, meet this <?=$scope_label ? htmlspecialchars($scope_label) : 'kingdom' ?>'s minimum activity requirements, and have a dues record on file.
+<?php if (isset($activewaivered)) : ?>
+			Players who attended at least once in the last 6 months, meet their kingdom's minimum activity requirements, and have a current waiver and dues payment on record.
+<?php elseif (isset($activewaivereduespaid)) : ?>
+			Players who attended at least once in the last 6 months, meet their kingdom's minimum activity requirements, and have a current dues payment on record.
 <?php else : ?>
-			Players who attended at least once in the last 6 months and meet this <?=$scope_label ? htmlspecialchars($scope_label) : 'kingdom' ?>'s minimum attendance and credit requirements.
+			Players who attended at least once in the last 6 months and meet their kingdom's minimum attendance and credit requirements.
 <?php endif; ?>
 		</span>
 	</div>

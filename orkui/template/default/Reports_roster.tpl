@@ -263,7 +263,9 @@ if ($_isOrkAdmin) {
 						<th>Park</th>
 <?php endif; ?>
 						<th>Persona</th>
+<?php if (!empty($canViewMundane)) : ?>
 						<th>Mundane</th>
+<?php endif; ?>
 <?php if (!$is_suspended) : ?>
 						<th>Waivered</th>
 <?php endif; ?>
@@ -296,7 +298,9 @@ if ($_isOrkAdmin) {
 					<td><a href='<?=UIR.'Park/profile/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
 <?php 		endif; ?>
 					<td><a href='<?=UIR.'Player/profile/'.$player['MundaneId']?>'><?= trimlen($player['Persona']) > 0 ? htmlspecialchars($player['Persona']) : '<i>No Persona</i>' ?></a></td>
+<?php if (!empty($canViewMundane)) : ?>
 					<td><?= $player['Displayable'] == 0 ? "<span class='restricted-player-display'>Restricted</span>" : htmlspecialchars($player['Surname'].', '.$player['GivenName']) ?></td>
+<?php endif; ?>
 <?php if (!$is_suspended) : ?>
 					<td><?= $player['Waivered'] == 1 ? 'Waiver' : '' ?></td>
 <?php endif; ?>
@@ -308,7 +312,7 @@ if ($_isOrkAdmin) {
 <?php 		if ($is_suspended) : ?>
 					<td><?=htmlspecialchars($player['SuspendedAt'] ?? '')?></td>
 <?php 		endif; ?>
-					<td><?php $_until = $player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?></td>
+					<td><?php if (!empty($player['Suspended'])) { $_until = $player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; } ?></td>
 <?php 		if ($is_suspended) : ?>
 					<td><?=htmlspecialchars($player['Suspendator'] ?? '')?></td>
 					<td><?=htmlspecialchars($player['Suspension']  ?? '')?></td>
