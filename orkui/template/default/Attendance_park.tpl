@@ -109,7 +109,8 @@ $show_chart = $total > 0;
 	cursor: pointer;
 	margin-top: 6px;
 }
-.att-form-btn:hover { background: #3730a3; }
+.att-form-btn:hover:not(:disabled) { background: #3730a3; }
+.att-form-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .att-chart-card {
 	background: #fff;
 	border: 1px solid #e5e7eb;
@@ -406,7 +407,7 @@ $show_chart = $total > 0;
 							<input class="att-form-input" type="text" name="Credits" id="Credits"
 								value="<?=valid_id($Attendance_park['Credits'])?$Attendance_park['Credits']:$DefaultCredits?>">
 						</div>
-					<button class="att-form-btn" type="submit">Add Attendance</button>
+					<button class="att-form-btn" type="submit" id="att-submit-btn" disabled>Add Attendance</button>
 					<button class="att-qa-open-btn" type="button" id="att-qa-open">
 						<i class="fas fa-users"></i> Quick Add — Recent Attendees
 					</button>
@@ -534,7 +535,17 @@ $show_chart = $total > 0;
 $(function() {
 <?php if ($CanAddAttendance) : ?>
 	/* ── Datepicker ──────────────────────────────────── */
-	$('#AttendanceDate').datepicker({ dateFormat: 'yy-mm-dd' });
+	$('#AttendanceDate').datepicker({ dateFormat: 'yy-mm-dd', onSelect: attCheckSubmit });
+
+	/* ── Submit button validation ────────────────────── */
+	function attCheckSubmit() {
+		var ok = $('#AttendanceDate').val().trim() !== ''
+			&& parseInt($('#MundaneId').val(), 10) > 0
+			&& $('#ClassId').val() !== ''
+			&& $('#Credits').val().trim() !== '';
+		$('#att-submit-btn').prop('disabled', !ok);
+	}
+	$('#ClassId, #Credits').on('change input', attCheckSubmit);
 
 	/* ── Kingdom autocomplete ────────────────────────── */
 	$('#KingdomName').autocomplete({
@@ -619,9 +630,10 @@ $(function() {
 			if (!ui.item.value) return false;
 			showLabel('#PlayerName', ui);
 			$('#MundaneId').val(ui.item.value.MundaneId);
+			attCheckSubmit();
 			return false;
 		},
-		change: function(e, ui) { if (!ui.item) { showLabel('#PlayerName', null); $('#MundaneId').val(null); } return false; }
+		change: function(e, ui) { if (!ui.item) { showLabel('#PlayerName', null); $('#MundaneId').val(null); } attCheckSubmit(); return false; }
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
 	playerAC.data('autocomplete')._renderItem = function(ul, item) {

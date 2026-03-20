@@ -138,7 +138,7 @@ if ($_isOrkAdmin) {
 		</div>
 		<div class="rp-header-actions">
 <?php if ($_canRemoveAny && $_scopeType === 'kingdom') : ?>
-			<button class="rp-btn-ghost" id="rp-suspend-player-btn" style="color:#c53030;border-color:#fed7d7"><i class="fas fa-ban"></i> Suspend Player</button>
+			<button class="rp-btn-ghost" id="rp-suspend-player-btn" style="color:#fc8181;border-color:#fc8181"><i class="fas fa-ban"></i> Suspend Player</button>
 <?php endif; ?>
 			<button class="rp-btn-ghost rp-btn-export"><i class="fas fa-download"></i> Export CSV</button>
 			<button class="rp-btn-ghost rp-btn-print"><i class="fas fa-print"></i> Print</button>

@@ -258,7 +258,7 @@
 				<?php endif; ?>
 				<?php if ($CanManageKingdom ?? false): ?>
 				<li data-kntab="admin">
-					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin</span>
+					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
 				<?php endif; ?>
 			</ul>
@@ -1546,7 +1546,7 @@ var KnConfig = {
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-moveplayer-cancel">Cancel</button>
-			<button class="kn-btn kn-btn-primary" id="kn-moveplayer-submit"><i class="fas fa-arrow-right"></i> Move Player</button>
+			<button class="kn-btn kn-btn-primary" id="kn-moveplayer-submit" disabled><i class="fas fa-arrow-right"></i> Move Player</button>
 		</div>
 	</div>
 </div>

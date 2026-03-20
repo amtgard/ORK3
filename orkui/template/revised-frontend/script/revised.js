@@ -7765,6 +7765,36 @@ function setupPronounPicker(cfg) {
     });
 })();
 
+// ---- Shared: autocomplete keyboard navigation ----
+// Adds ArrowUp/Down/Enter key nav to an input+results dropdown pair.
+// selectFn(item) is called when Enter is pressed on a focused item.
+function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
+    var idx = -1;
+    function items() { return resultsEl.querySelectorAll(itemSel); }
+    function clearFocus(all) { if (idx >= 0 && all[idx]) all[idx].classList.remove(focusedClass); }
+    inputEl.addEventListener('input', function() { idx = -1; });
+    inputEl.addEventListener('keydown', function(e) {
+        var all = items();
+        if (!all.length) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            clearFocus(all);
+            idx = Math.min(idx + 1, all.length - 1);
+            all[idx].classList.add(focusedClass);
+            all[idx].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            clearFocus(all);
+            idx = Math.max(idx - 1, 0);
+            all[idx].classList.add(focusedClass);
+            all[idx].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter' && idx >= 0 && all[idx]) {
+            e.preventDefault();
+            selectFn(all[idx]);
+        }
+    });
+}
+
 // ---- Playernew: Move Player ----
 (function() {
     if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
@@ -7896,6 +7926,7 @@ function setupPronounPicker(cfg) {
                 var btn = gid('pn-move-submit');
                 if (btn) btn.disabled = false;
             });
+            setupAcKeyNav(parkInput, gid('pn-moveplayer-park-results'), '.pn-ac-item[data-id]', 'pn-ac-focused', function(item) { item.click(); });
         }
 
         // Submit
@@ -8174,6 +8205,13 @@ function setupPronounPicker(cfg) {
         document.body.style.overflow = '';
     }
 
+    function knmpCheckSubmit() {
+        var hasPlayer = !!gid('kn-moveplayer-player-id').value;
+        var hasPark   = !!gid('kn-moveplayer-park-id').value;
+        var btn = gid('kn-moveplayer-submit');
+        if (btn) btn.disabled = !(hasPlayer && hasPark);
+    }
+
     function setMode(mode) {
         knmpMode = mode;
         ['in','within','out'].forEach(function(m) {
@@ -8208,6 +8246,7 @@ function setupPronounPicker(cfg) {
         gid('kn-moveplayer-player-results').classList.remove('kn-ac-open');
         gid('kn-moveplayer-park-results').classList.remove('kn-ac-open');
         gid('kn-moveplayer-feedback').style.display = 'none';
+        knmpCheckSubmit();
     }
 
     window.knOpenMovePlayerModal = function() {
@@ -8267,7 +8306,12 @@ function setupPronounPicker(cfg) {
             gid('kn-moveplayer-player-name').value = decodeURIComponent(item.dataset.name);
             gid('kn-moveplayer-player-id').value   = item.dataset.id;
             this.classList.remove('kn-ac-open');
+            knmpCheckSubmit();
         });
+        gid('kn-moveplayer-player-name').addEventListener('input', function() {
+            if (!this.value.trim()) { gid('kn-moveplayer-player-id').value = ''; knmpCheckSubmit(); }
+        });
+        setupAcKeyNav(gid('kn-moveplayer-player-name'), gid('kn-moveplayer-player-results'), '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
 
         // Park autocomplete
         gid('kn-moveplayer-park-name').addEventListener('input', function() {
@@ -8301,7 +8345,12 @@ function setupPronounPicker(cfg) {
             gid('kn-moveplayer-park-name').value = decodeURIComponent(item.dataset.name);
             gid('kn-moveplayer-park-id').value   = item.dataset.id;
             this.classList.remove('kn-ac-open');
+            knmpCheckSubmit();
         });
+        gid('kn-moveplayer-park-name').addEventListener('input', function() {
+            if (!this.value.trim()) { gid('kn-moveplayer-park-id').value = ''; knmpCheckSubmit(); }
+        });
+        setupAcKeyNav(gid('kn-moveplayer-park-name'), gid('kn-moveplayer-park-results'), '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
 
         gid('kn-moveplayer-submit').addEventListener('click', function() {
             var mundaneId = gid('kn-moveplayer-player-id').value;
@@ -8728,6 +8777,13 @@ function setupPronounPicker(cfg) {
         if (el) { el.innerHTML = ''; el.classList.remove('pk-ac-open'); }
     }
 
+    function pkmpCheckSubmit() {
+        var hasPlayer = parseInt(gid('pk-moveplayer-player-id').value) > 0;
+        var hasPark   = mpMode === 'in' ? true : parseInt(gid('pk-moveplayer-park-id').value) > 0;
+        var btn = gid('pk-moveplayer-submit');
+        if (btn) btn.disabled = !(hasPlayer && hasPark);
+    }
+
     function setMode(mode) {
         mpMode = mode;
         var parkSection = gid('pk-moveplayer-park-section');
@@ -8761,6 +8817,7 @@ function setupPronounPicker(cfg) {
             closeDropdown('pk-moveplayer-park-results');
             mpParkId = 0;
         }
+        pkmpCheckSubmit();
     }
 
     window.pkOpenMovePlayerModal = function() {
@@ -8781,6 +8838,9 @@ function setupPronounPicker(cfg) {
         if (playerInput) {
             playerInput.addEventListener('input', function() {
                 clearTimeout(mpPlayerTimer);
+                mpPlayerId = 0;
+                gid('pk-moveplayer-player-id').value = '';
+                pkmpCheckSubmit();
                 var term = this.value.trim();
                 if (term.length < 2) { closeDropdown('pk-moveplayer-player-results'); return; }
                 var searchUrl = (mpMode === 'in') ? PSEARCH_EXCLUDE : PSEARCH_OWN;
@@ -8805,6 +8865,7 @@ function setupPronounPicker(cfg) {
                                     gid('pk-moveplayer-player-name').value = player.Persona;
                                     gid('pk-moveplayer-player-id').value = player.MundaneId;
                                     closeDropdown('pk-moveplayer-player-results');
+                                    pkmpCheckSubmit();
                                 });
                                 res.appendChild(item);
                             });
@@ -8816,6 +8877,9 @@ function setupPronounPicker(cfg) {
             playerInput.addEventListener('blur', function() {
                 setTimeout(function() { closeDropdown('pk-moveplayer-player-results'); }, 200);
             });
+            setupAcKeyNav(playerInput, gid('pk-moveplayer-player-results'), '.pk-ac-item', 'pk-ac-focused', function(item) {
+                item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            });
         }
 
         // Park autocomplete (Transfer to New Park mode only)
@@ -8823,6 +8887,9 @@ function setupPronounPicker(cfg) {
         if (parkInput) {
             parkInput.addEventListener('input', function() {
                 clearTimeout(mpParkTimer);
+                mpParkId = 0;
+                gid('pk-moveplayer-park-id').value = '';
+                pkmpCheckSubmit();
                 var term = this.value.trim();
                 if (term.length < 2) { closeDropdown('pk-moveplayer-park-results'); return; }
                 mpParkTimer = setTimeout(function() {
@@ -8843,6 +8910,7 @@ function setupPronounPicker(cfg) {
                                 gid('pk-moveplayer-park-name').value = pk.ParkName || pk.Name || pk.name || '';
                                 gid('pk-moveplayer-park-id').value = mpParkId;
                                 closeDropdown('pk-moveplayer-park-results');
+                                pkmpCheckSubmit();
                             });
                             res.appendChild(item);
                         });
@@ -8852,6 +8920,9 @@ function setupPronounPicker(cfg) {
             });
             parkInput.addEventListener('blur', function() {
                 setTimeout(function() { closeDropdown('pk-moveplayer-park-results'); }, 200);
+            });
+            setupAcKeyNav(parkInput, gid('pk-moveplayer-park-results'), '.pk-ac-item', 'pk-ac-focused', function(item) {
+                item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
             });
         }
 
@@ -8877,6 +8948,7 @@ function setupPronounPicker(cfg) {
                             gid('pk-moveplayer-park-name').value = '';
                             gid('pk-moveplayer-park-id').value = '';
                         }
+                        pkmpCheckSubmit();
                     } else {
                         showFb((r && r.error) ? r.error : 'Move failed.', false);
                     }

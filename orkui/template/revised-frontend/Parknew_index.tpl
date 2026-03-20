@@ -403,7 +403,7 @@
 				<?php endif; ?>
 				<?php if (!empty($CanManagePark)): ?>
 				<li data-pktab="admin">
-					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin</span>
+					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin Tasks</span>
 				</li>
 				<?php endif; ?>
 			</ul>
@@ -1769,7 +1769,7 @@ var PkConfig = {
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn-ghost" id="pk-moveplayer-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-moveplayer-submit"><i class="fas fa-arrow-right"></i> Move Player</button>
+			<button class="pk-btn pk-btn-primary" id="pk-moveplayer-submit" disabled><i class="fas fa-arrow-right"></i> Move Player</button>
 		</div>
 	</div>
 </div>
