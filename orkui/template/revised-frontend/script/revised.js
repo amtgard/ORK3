@@ -6786,6 +6786,7 @@ $(document).ready(function() {
         var overlay = document.getElementById('ev-edit-modal');
         if (overlay) overlay.classList.add('ev-modal-open');
         document.body.style.overflow = 'hidden';
+        if (typeof evFeesReset === 'function') evFeesReset(EvConfig.fees || []);
     };
     window.evCloseEditModal = function() {
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
@@ -12605,7 +12606,6 @@ window.pnCloseUnitCreateModal = function() {
     }
 })();
 
-/* [TOURNAMENTS HIDDEN] KN delete tournament buttons */
 // ---- Recs table export helpers (shared by Kingdom + Park) ----
 function recsCellText(td) {
     // Clone so we don't mutate the live DOM; strip expand/collapse buttons and
@@ -12748,3 +12748,88 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
         box.classList.remove('esc-visible');
     });
 };
+// ---- Admission & Fees management (event detail + create) ----
+(function() {
+    var cfg = (typeof EvConfig !== 'undefined' && EvConfig.hasFees) ? EvConfig
+            : (typeof EcConfig !== 'undefined' && EcConfig.hasFees) ? EcConfig : null;
+    if (!cfg) return;
+
+    var evFees = (cfg.fees || []).map(function(f) {
+        return { AdmissionType: f.AdmissionType || '', Cost: parseFloat(f.Cost) || 0 };
+    });
+
+    var listId = cfg.feesListId || 'ev-fees-list';
+
+    function render() {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        if (evFees.length === 0) {
+            list.innerHTML = '<div style="color:#718096;font-size:13px;padding:4px 0">No fees added — event is free.</div>';
+            serialize();
+            return;
+        }
+        evFees.forEach(function(fee, idx) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+            var typeVal = (fee.AdmissionType || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+            var costVal = (typeof fee.Cost === 'number' ? fee.Cost : 0).toFixed(2);
+            row.innerHTML =
+                '<input type="text" placeholder="Admission type (e.g. Full Weekend)" value="' + typeVal + '" ' +
+                'data-fees-idx="' + idx + '" data-fees-field="AdmissionType" ' +
+                'style="flex:1;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<span style="color:#718096;font-size:13px;flex-shrink:0">$</span>' +
+                '<input type="number" min="0" step="0.01" value="' + costVal + '" ' +
+                'data-fees-idx="' + idx + '" data-fees-field="Cost" ' +
+                'style="width:80px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<button type="button" data-fees-remove="' + idx + '" title="Remove" ' +
+                'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1">&times;</button>';
+            list.appendChild(row);
+        });
+        list.querySelectorAll('input[data-fees-idx]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                var i = parseInt(this.getAttribute('data-fees-idx'));
+                var f = this.getAttribute('data-fees-field');
+                if (!evFees[i]) return;
+                evFees[i][f] = (f === 'Cost') ? (parseFloat(this.value) || 0) : this.value;
+                serialize();
+            });
+        });
+        list.querySelectorAll('button[data-fees-remove]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var i = parseInt(this.getAttribute('data-fees-remove'));
+                evFees.splice(i, 1);
+                render();
+            });
+        });
+        serialize();
+    }
+
+    function serialize() {
+        var el = document.getElementById('ev-fees-json');
+        if (el) el.value = JSON.stringify(evFees);
+    }
+
+    window.evFeesAdd = function() {
+        evFees.push({ AdmissionType: '', Cost: 0 });
+        render();
+        var inputs = document.querySelectorAll('#' + listId + ' input[type="text"]');
+        if (inputs.length) inputs[inputs.length - 1].focus();
+    };
+
+    // Re-init fees from server data when edit modal opens
+    window.evFeesReset = function(fees) {
+        evFees = (fees || []).map(function(f) {
+            return { AdmissionType: f.AdmissionType || '', Cost: parseFloat(f.Cost) || 0 };
+        });
+        render();
+    };
+
+    // Hook form submit to serialize
+    var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+    if (form) {
+        form.addEventListener('submit', function() { serialize(); });
+    }
+
+    render();
+})();
