@@ -256,6 +256,11 @@
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
+				<?php if ($CanManageKingdom ?? false): ?>
+				<li data-kntab="admin">
+					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin</span>
+				</li>
+				<?php endif; ?>
 			</ul>
 			<div class="kn-active-tab-label" id="kn-active-tab-label">Parks</div>
 
@@ -618,22 +623,34 @@
 						</ul>
 					</div>
 
-					<?php if ($CanManageKingdom ?? false): ?>
-					<div class="kn-report-group">
-						<h5><i class="fas fa-cog"></i> Admin</h5>
-						<ul>
-							<li><a href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">Admin Panel</a></li>
-							<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
-							<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
-							<li><a href="<?= UIR ?>Admin/mergeplayers">Merge Players</a></li>
-							<li><a href="<?= UIR ?>Admin/suspensions/kingdom/<?= $kingdom_id ?>">Suspensions</a></li>
-							<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
-						</ul>
-					</div>
-					<?php endif; ?>
+
 
 				</div>
 			</div>
+
+		<!-- Admin Tab -->
+		<?php if ($CanManageKingdom ?? false): ?>
+		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
+			<div class="kn-report-cols">
+				<div class="kn-report-group">
+					<h5><i class="fas fa-users-cog"></i> Players</h5>
+					<ul>
+						<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
+						<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
+						<li><a href="<?= UIR ?>Admin/mergeplayers">Merge Players</a></li>
+						<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspensions</a></li>
+					</ul>
+				</div>
+				<div class="kn-report-group">
+					<h5><i class="fas fa-cog"></i> Kingdom</h5>
+					<ul>
+						<li><a href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">Admin Panel</a></li>
+						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		<?php endif; ?>
 
 		<!-- Recommendations Tab -->
 		<?php if ($ShowRecsTab ?? false): ?>

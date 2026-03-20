@@ -275,7 +275,7 @@
 								</a>
 								&nbsp;
 								<a class="en-attend-link"
-									href="<?= UIR ?>Attendance/event/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
+									href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
 									<i class="fas fa-clipboard-list"></i> Attendance
 								</a>
 							</td>
@@ -344,7 +344,7 @@
 									</a>
 									&nbsp;
 									<a class="en-attend-link"
-										href="<?= UIR ?>Attendance/event/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
+										href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $cd['EventCalendarDetailId'] ?>">
 										<i class="fas fa-clipboard-list"></i> Attendance
 									</a>
 								</td>

@@ -811,7 +811,11 @@
 							<?php foreach ($attendanceList as $detail): ?>
 								<tr>
 									<td class="pn-col-nowrap">
-										<a href="<?= UIR ?>Attendance/<?= $detail['ParkId'] > 0 ? 'park' : 'event' ?>/<?= (($detail['ParkId'] > 0) ? ($detail['ParkId'] . '&AttendanceDate=' . $detail['Date']) : ($detail['EventId'] . '/' . $detail['EventCalendarDetailId'])) ?>"><?= $detail['Date'] ?></a>
+										<?php if ($detail['ParkId'] > 0): ?>
+											<a href="<?= UIR ?>Attendance/park/<?= $detail['ParkId'] ?>&AttendanceDate=<?= $detail['Date'] ?>"><?= $detail['Date'] ?></a>
+										<?php else: ?>
+											<a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['Date'] ?></a>
+										<?php endif; ?>
 									</td>
 									<td><a href="<?= UIR ?>Kingdom/profile/<?= $detail['KingdomId'] ?>"><?= $detail['KingdomName'] ?></a></td>
 									<td><a href="<?= UIR ?>Park/profile/<?= $detail['ParkId'] ?>"><?= $detail['ParkName'] ?></a></td>

@@ -401,6 +401,11 @@
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
+				<?php if (!empty($CanManagePark)): ?>
+				<li data-pktab="admin">
+					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin</span>
+				</li>
+				<?php endif; ?>
 			</ul>
 			<div class="pk-active-tab-label" id="pk-active-tab-label">About</div>
 
@@ -991,18 +996,26 @@
 							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 						</ul>
 					</div>
-					<?php if (!empty($CanManagePark)): ?>
+
+				</div>
+			</div>
+
+			<!-- Admin Tab -->
+			<?php if (!empty($CanManagePark)): ?>
+			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
+				<div class="kn-report-cols">
 					<div class="kn-report-group">
-						<h5><i class="fas fa-cog"></i> Admin</h5>
+						<h5><i class="fas fa-users-cog"></i> Players</h5>
 						<ul>
 							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Add Player</a></li>
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
 							<li><a href="<?= UIR ?>Admin/mergeplayer/park/<?= $park_id ?>">Merge Players</a></li>
+							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
 						</ul>
 					</div>
-					<?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>

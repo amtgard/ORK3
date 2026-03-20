@@ -353,17 +353,17 @@ $(function() {
 			{
 				extend: 'csv',
 				filename: '<?=addslashes($report_title)?>',
-				exportOptions: { columns: ':visible' }
+				exportOptions: { columns: ':visible:not(.no-export)' }
 			},
 			{
 				extend: 'print',
-				exportOptions: { columns: ':visible' }
+				exportOptions: { columns: ':visible:not(.no-export)' }
 			}
 		],
 		columnDefs: [
 			{ targets: [0], responsivePriority: 1 },
 <?php if ($_canRemoveAny) : ?>
-			{ targets: [-1], orderable: false, searchable: false }
+			{ targets: [-1], orderable: false, searchable: false, className: 'no-export' }
 <?php endif; ?>
 		],
 		pageLength: 25,
