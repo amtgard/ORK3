@@ -79,12 +79,20 @@
 						<label>End Date &amp; Time</label>
 						<input type="text" name="EndDate" id="ec-fp-end" autocomplete="off" required<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
 					</div>
-					<div class="ec-field ec-sm">
-						<label>Price ($)</label>
-						<input type="number" name="Price" min="0" step="0.01" value="0.00">
-						<span class="ec-field-hint">Leave 0 for free</span>
-					</div>
 				</div>
+			</div>
+
+			<?php // ---- Section: Admission & Fees ---- ?>
+			<div class="ec-section">
+				<h4 class="ec-section-title">
+					<i class="fas fa-ticket-alt"></i> Admission &amp; Fees
+				</h4>
+				<div id="ec-fees-list" style="margin-bottom:8px"></div>
+				<button type="button" onclick="evFeesAdd()" style="background:#ebf8ff;border:1px solid #90cdf4;color:#2b6cb0;border-radius:4px;padding:5px 12px;font-size:13px;cursor:pointer">
+					<i class="fas fa-plus"></i> Add Fee
+				</button>
+				<span class="ec-field-hint" style="display:block;margin-top:6px">Leave empty for a free event.</span>
+				<input type="hidden" name="Fees" id="ev-fees-json">
 			</div>
 
 			<?php // ---- Section: Description ---- ?>
@@ -257,6 +265,9 @@ var EcConfig = {
 	httpService: '<?= HTTP_SERVICE ?>',
 	cancelUrl:   '<?= UIR ?>EventAjax/cancel',
 	returnUrl:   '<?= htmlspecialchars($_ec_return) ?>',
+	hasFees:     true,
+	fees:        [],
+	feesListId:  'ec-fees-list',
 };
 function ecCancelAndReturn(ev, eventId) {
 	ev.preventDefault();
