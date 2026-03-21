@@ -1139,6 +1139,7 @@ class Controller_Admin extends Controller {
 						'SuspendedAt' => $this->request->Admin_suspendplayer->SuspendedAt,
 						'SuspendedUntil' => $this->request->Admin_suspendplayer->SuspendedUntil,
 						'Suspension' => $this->request->Admin_suspendplayer->Suspension,
+					'SuspensionPropagates' => $this->request->Admin_suspendplayer->SuspensionPropagates,
 					));
 				if ($r['Status'] == 0) {
 					$this->data['Message'] = "Player has been <b><a href='" . UIR . "Reports/suspended/Kingdom&id=" . $this->session->kingdom_id . "'>" .

@@ -750,7 +750,7 @@ class Player extends Ork3 {
 	}
 
 	public function _ClearSuspensions() {
-		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
+		$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null, suspension_propagates = 1 where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
 		$this->db->query($sql);
 	}
 
@@ -780,11 +780,13 @@ class Player extends Ork3 {
 				$this->mundane->suspended_at = "0000-00-00";
 				$this->mundane->suspended_until = "0000-00-00";
 				$this->mundane->suspension= "";
+				$this->mundane->suspension_propagates = 1;
 			} else {
 				$this->mundane->suspended_by_id = $request['SuspendedById'];
 				$this->mundane->suspended_at = $request['SuspendedAt'];
 				if (isset($request['SuspendedUntil'])) $this->mundane->suspended_until = $request['SuspendedUntil'];
 				if (isset($request['Suspension'])) $this->mundane->suspension= $request['Suspension'];
+				$this->mundane->suspension_propagates = isset($request['SuspensionPropagates']) ? (int)(bool)$request['SuspensionPropagates'] : 1;
 			}
 			$this->mundane->save();
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);

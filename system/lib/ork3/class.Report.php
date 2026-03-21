@@ -929,7 +929,7 @@ class Report  extends Ork3 {
 		$restrict_clause = array();
 		if (true == $request['Suspended']) {
 			/* Borrowed from Player class to clear the suspensions past their suspended_until date before running the report */
-			$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
+			$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null, suspension_propagates = 1 where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
 			$this->db->query($sql);
 		}
 		switch ($request['Type']) {
@@ -965,7 +965,7 @@ class Report  extends Ork3 {
 		$select_list = array_merge($select_list,
 			array(
 				'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name',
-				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'suspended_by.persona suspendator',
+				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'm.suspension_propagates', 'suspended_by.persona suspendator',
 				'p.name as park_name','k.name as kingdom_name','m.penalty_box'));
 			if (true == $request['Active']) $restrict_clause[] = ' m.active = 1 ';
 			if (true == $request['InActive']) $restrict_clause[] = ' m.active = 0 ';
@@ -1028,6 +1028,7 @@ class Report  extends Ork3 {
 								'SuspendedUntil' => $r->suspended_until,
 								'Suspendator' => $r->suspendator,
 								'Suspension' => $r->suspension,
+							'SuspensionPropagates' => $r->suspension_propagates,
 								'ParkId' => $r->park_id,
 								'KingdomId' => $r->kingdom_id,
 								'ParentKingdomId' => $r->parent_kingdom_id,
