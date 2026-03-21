@@ -2417,7 +2417,19 @@ $(document).ready(function() {
         }
         var dimBtn = e.target.closest ? e.target.closest('.pk-rec-dismiss-btn') : null;
         if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
-            if (!confirm('Dismiss this recommendation?')) return;
+            if (!dimBtn.dataset.confirm) {
+                dimBtn.dataset.confirm = '1';
+                dimBtn.textContent = 'Confirm Dismiss?';
+                dimBtn.classList.add('pk-rec-dismiss-confirm');
+                dimBtn._confirmTimer = setTimeout(function() {
+                    dimBtn.dataset.confirm = '';
+                    dimBtn.textContent = 'Dismiss';
+                    dimBtn.classList.remove('pk-rec-dismiss-confirm');
+                }, 3000);
+                return;
+            }
+            clearTimeout(dimBtn._confirmTimer);
+            dimBtn.dataset.confirm = '';
             var recId = dimBtn.getAttribute('data-rec-id');
             var row   = dimBtn.closest('.pk-rec-row');
             var fd = new FormData();
@@ -3417,13 +3429,36 @@ $(document).ready(function() {
                 var key = sub ? ('Config[' + cid + '][' + sub + ']') : ('Config[' + cid + ']');
                 data[key] = inp.value;
             });
-            if (!Object.keys(data).length) { feedback('kn-admin-config-feedback', 'No configuration fields found.', false); return; }
+            var recsEl = gid('kn-admin-recs-public');
+            var recsVal = recsEl ? recsEl.value : null;
+            if (!Object.keys(data).length && recsVal === null) { feedback('kn-admin-config-feedback', 'No configuration fields found.', false); return; }
             btn.disabled = true;
-            $.post(BASE_URL + 'setconfig', data, function(r) {
-                btn.disabled = false;
-                if (r && r.status === 0) feedback('kn-admin-config-feedback', 'Configuration saved!', true);
-                else feedback('kn-admin-config-feedback', (r && r.error) ? r.error : 'Save failed.', false);
-            }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-config-feedback', 'Request failed.', false); });
+            function saveRecs(cb) {
+                if (recsVal === null) { cb(true, null); return; }
+                $.post(BASE_URL + 'setrecsvisibility', { Value: recsVal }, function(r2) {
+                    cb(r2 && r2.status === 0, (r2 && r2.error) ? r2.error : 'Visibility save failed.');
+                }, 'json').fail(function() { cb(false, 'Visibility request failed.'); });
+            }
+            if (Object.keys(data).length) {
+                $.post(BASE_URL + 'setconfig', data, function(r) {
+                    if (r && r.status === 0) {
+                        saveRecs(function(ok, err) {
+                            btn.disabled = false;
+                            if (ok) feedback('kn-admin-config-feedback', 'Configuration saved!', true);
+                            else feedback('kn-admin-config-feedback', err, false);
+                        });
+                    } else {
+                        btn.disabled = false;
+                        feedback('kn-admin-config-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    }
+                }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-config-feedback', 'Request failed.', false); });
+            } else {
+                saveRecs(function(ok, err) {
+                    btn.disabled = false;
+                    if (ok) feedback('kn-admin-config-feedback', 'Configuration saved!', true);
+                    else feedback('kn-admin-config-feedback', err, false);
+                });
+            }
         });
     }
 
@@ -4814,7 +4849,19 @@ $(document).ready(function() {
         }
         var dimBtn = e.target.closest ? e.target.closest('.pk-rec-dismiss-btn') : null;
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
-            if (!confirm('Dismiss this recommendation?')) return;
+            if (!dimBtn.dataset.confirm) {
+                dimBtn.dataset.confirm = '1';
+                dimBtn.textContent = 'Confirm Dismiss?';
+                dimBtn.classList.add('pk-rec-dismiss-confirm');
+                dimBtn._confirmTimer = setTimeout(function() {
+                    dimBtn.dataset.confirm = '';
+                    dimBtn.textContent = 'Dismiss';
+                    dimBtn.classList.remove('pk-rec-dismiss-confirm');
+                }, 3000);
+                return;
+            }
+            clearTimeout(dimBtn._confirmTimer);
+            dimBtn.dataset.confirm = '';
             var recId = dimBtn.getAttribute('data-rec-id');
             var row   = dimBtn.closest('.pk-rec-row');
             var fd = new FormData();
@@ -9812,4 +9859,84 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
                 });
         });
     }
+})();
+
+// ---- Tournament delete buttons (Kingdomnew) ----
+(function() {
+    if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
+    var table = document.getElementById('kn-tournaments-table');
+    if (!table) return;
+
+    var DELETE_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deletetournament';
+
+    function resetBtn(btn) {
+        clearTimeout(btn._resetTimer);
+        btn.classList.remove('kn-del-confirm');
+        btn.textContent = '×';
+        btn.disabled = false;
+    }
+
+    table.querySelectorAll('.kn-tournament-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation(); // prevent row navigation onclick
+
+            if (!btn.classList.contains('kn-del-confirm')) {
+                // First click: arm
+                btn.classList.add('kn-del-confirm');
+                btn.textContent = 'Delete?';
+                btn._resetTimer = setTimeout(function() { resetBtn(btn); }, 3000);
+                return;
+            }
+
+            // Second click: confirmed
+            clearTimeout(btn._resetTimer);
+            btn.disabled = true;
+            btn.textContent = '…';
+
+            jQuery.post(DELETE_URL, { TournamentId: btn.dataset.id }, function(r) {
+                if (r && r.status === 0) {
+                    table.querySelectorAll('.kn-tournament-del-btn[data-id="' + btn.dataset.id + '"]').forEach(function(b) {
+                        var row = b.closest('tr');
+                        if (row) row.remove();
+                    });
+                } else {
+                    resetBtn(btn);
+                    alert((r && r.error) ? r.error : 'Delete failed.');
+                }
+            }, 'json').fail(function() {
+                resetBtn(btn);
+                alert('Request failed. Please try again.');
+            });
+        });
+    });
+
+    // Click anywhere else resets armed buttons
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.kn-tournament-del-btn')) {
+            table.querySelectorAll('.kn-tournament-del-btn.kn-del-confirm').forEach(function(b) { resetBtn(b); });
+        }
+    });
+})();
+// ---- Recommendations tab filter bar (Kingdomnew) ----
+(function() {
+    var bar = document.querySelector('.kn-rec-filter-bar');
+    if (!bar) return;
+
+    var activeFilter = 'all';
+
+    function applyFilter(filter) {
+        activeFilter = filter;
+        var rows = document.querySelectorAll('#kn-recs-tbody .pk-rec-row');
+        rows.forEach(function(row) {
+            row.style.display = (filter === 'all' || row.dataset.filter === filter) ? '' : 'none';
+        });
+        bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(btn) {
+            btn.classList.toggle('kn-rec-filter-active', btn.dataset.filter === filter);
+        });
+    }
+
+    bar.addEventListener('click', function(e) {
+        var btn = e.target.closest('.kn-rec-filter-btn');
+        if (btn) applyFilter(btn.dataset.filter);
+    });
 })();

@@ -334,13 +334,24 @@ class Controller_Kingdom extends Controller {
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
 			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
 			: true;
-		$this->data['ShowRecsTab']    = $recsPublic || $this->data['CanManageKingdom'] || $uid > 0;
 		$this->data['AwardRecsPublic'] = $recsPublic;
 
 		$this->data['AwardRecommendations'] = [];
-		if ($this->data['ShowRecsTab']) {
+		$canManageKingdom = $this->data['CanManageKingdom'] ?? false;
+		if ($recsPublic || $canManageKingdom) {
+			$this->data['ShowRecsTab'] = true;
 			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
 			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+		} elseif ($uid > 0) {
+			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
+			$allRecs = is_array($recs) ? $recs : [];
+			$myRecs = array_values(array_filter($allRecs, function($r) use ($uid) {
+				return (int)$r['RecommendedById'] === $uid;
+			}));
+			$this->data['AwardRecommendations'] = $myRecs;
+			$this->data['ShowRecsTab'] = !empty($myRecs);
+		} else {
+			$this->data['ShowRecsTab'] = false;
 		}
 
 		$this->data['ParkTitleId_options'] = [];

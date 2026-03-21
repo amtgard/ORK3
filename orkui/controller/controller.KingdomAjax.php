@@ -446,6 +446,40 @@ class Controller_KingdomAjax extends Controller {
 				? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'deletetournament') {
+			$this->load_model('Tournament');
+			$tournament_id = (int)($_POST['TournamentId'] ?? 0);
+			if (!valid_id($tournament_id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid tournament ID.']); exit;
+			}
+			$r = $this->Tournament->delete_tournament([
+				'Token'        => $this->session->token,
+				'TournamentId' => $tournament_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+				} elseif ($action === 'setrecsvisibility') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
+			}
+			$value = (int)($_POST['Value'] ?? 1) ? '1' : '0';
+			global $DB;
+			$kid = (int)$kingdom_id;
+			$DB->Clear();
+			$existing = $DB->DataSet("SELECT configuration_id FROM " . DB_PREFIX . "configuration WHERE type='Kingdom' AND id=$kid AND `key`='AwardRecsPublic' LIMIT 1");
+			if ($existing && $existing->Next()) {
+				$cid = (int)$existing->configuration_id;
+				$DB->Clear();
+				$DB->Execute("UPDATE " . DB_PREFIX . "configuration SET value='" . json_encode($value) . "', modified=NOW() WHERE configuration_id=$cid");
+			} else {
+				$DB->Clear();
+				$DB->Execute("INSERT INTO " . DB_PREFIX . "configuration (type, var_type, id, `key`, value, user_setting, allowed_values, modified) VALUES ('Kingdom', 'fixed', $kid, 'AwardRecsPublic', '" . json_encode($value) . "', 1, 'null', NOW())");
+			}
+			echo json_encode(['status' => 0]);
+
 		} elseif ($action === 'getparks') {
 			$this->load_model('Kingdom');
 			$r = $this->Kingdom->get_park_info($kingdom_id);

@@ -481,6 +481,7 @@
 								<th data-sorttype="text">Tournament</th>
 								<th data-sorttype="text">Park</th>
 								<th data-sorttype="text">Event</th>
+								<?php if ($CanManageKingdom): ?><th data-nosort></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -492,6 +493,11 @@
 									</td>
 									<td><?= htmlspecialchars($t['ParkName']) ?></td>
 									<td><?= htmlspecialchars($t['EventName']) ?></td>
+									<?php if ($CanManageKingdom): ?>
+									<td class="kn-col-actions">
+										<button class="kn-tournament-del-btn" data-id="<?= (int)$t['TournamentId'] ?>" data-name="<?= htmlspecialchars($t['Name'], ENT_QUOTES) ?>" title="Delete tournament">&times;</button>
+									</td>
+									<?php endif; ?>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -665,7 +671,13 @@
 			<?php if (empty($AwardRecommendations)): ?>
 			<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($kingdom_name) ?>.</div>
 			<?php else: ?>
-			<div class="pk-recs-table-wrap">
+			<div class="kn-rec-filter-bar">
+				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="all">All</button>
+				<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
+				<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
+				<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
+			</div>
+				<div class="pk-recs-table-wrap">
 				<table id="kn-rec-table" class="pk-recs-table display">
 					<thead>
 						<tr>
@@ -680,10 +692,20 @@
 					</thead>
 					<tbody id="kn-recs-tbody">
 					<?php foreach ($AwardRecommendations as $rec): ?>
-					<tr class="pk-rec-row" data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
+					<tr class="pk-rec-row"
+						data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
+						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 						<td><?= htmlspecialchars($rec['AwardName']) ?></td>
-						<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
+						<td style="white-space:nowrap">
+							<?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?>
+							<?php if (!empty($rec['AlreadyHas'])): ?>
+							<span class="pk-rec-has-tip"
+								title="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">
+								<i class="fas fa-info-circle"></i>
+							</span>
+							<?php endif; ?>
+						</td>
 						<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
 						<td class="pk-rec-notes"><?php if (!empty($rec['Reason'])): ?><span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span><?php else: ?>&mdash;<?php endif; ?></td>
@@ -789,6 +811,7 @@ var KnConfig = {
 	adminConfig:     <?= json_encode($AdminConfig     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminParkTitles: <?= json_encode($AdminParkTitles ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminAwards:     <?= json_encode($AdminAwards     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	adminRecsPublic: <?= !empty($AwardRecsPublic) ? 'true' : 'false' ?>,
 };
 </script>
 <?php if ($LoggedIn): ?>
@@ -1166,6 +1189,17 @@ var KnConfig = {
 				</button>
 				<div class="kn-admin-panel-body" id="kn-admin-body-config" style="display:none">
 					<div id="kn-admin-config-feedback" class="kn-admin-feedback" style="display:none"></div>
+					<div class="kn-admin-field kn-admin-recs-visibility-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e2e8f0;margin-bottom:12px">
+						<div>
+							<div style="font-size:13px;font-weight:600;color:#2d3748">Recommendation Visibility</div>
+							<div style="font-size:12px;color:#718096;margin-top:3px">When Private, besides the monarchy, only the submitter can see their own recommendations.</div>
+						</div>
+						<select id="kn-admin-recs-public" style="font-size:13px;border:1.5px solid #e2e8f0;border-radius:6px;padding:5px 8px;flex-shrink:0">
+							<option value="1" <?= !empty($AwardRecsPublic) ? 'selected' : '' ?>>Public</option>
+							<option value="0" <?= empty($AwardRecsPublic) ? 'selected' : '' ?>>Private (monarchy and submitters only)</option>
+						</select>
+					</div>
+					<div id="kn-admin-recs-feedback" class="kn-admin-feedback" style="display:none"></div>
 					<div id="kn-admin-config-rows">
 						<!-- Built by JS from KnConfig.adminConfig -->
 					</div>

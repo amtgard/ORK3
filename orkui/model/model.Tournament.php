@@ -15,6 +15,10 @@ class Model_Tournament extends Model {
 	function create_tournament($request) {
 		return $this->Tournament->CreateTournament($request);
 	}
+
+	function delete_tournament($request) {
+		return $this->Tournament->DeleteTournament($request);
+	}
 	
 	function add_bracket($request) {
 	echo "add bracket1";

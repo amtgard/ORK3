@@ -5173,9 +5173,23 @@
     background: none; border: 1px solid #e2e8f0; color: #718096; cursor: pointer;
 }
 .pk-rec-dismiss-btn:hover { background: #fff5f5; border-color: #fc8181; color: #c53030; }
+.pk-rec-dismiss-btn.pk-rec-dismiss-confirm { background: #fff5f5; border-color: #fc8181; color: #c53030; font-weight: 600; }
 .pk-rec-row.pk-rec-dismissed { opacity: 0.4; pointer-events: none; }
+.kn-rec-filter-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.kn-rec-filter-btn { padding:4px 12px; border-radius:20px; border:1.5px solid #e2e8f0; background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.kn-rec-filter-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
+.kn-rec-filter-btn.kn-rec-filter-active { background:#2b6cb0; border-color:#2b6cb0; color:#fff; }
+.pk-rec-has-tip { position:relative; display:inline-block; margin-left:4px; color:#3182ce; cursor:default; font-size:12px; }
+.pk-rec-has-tip::after { content:attr(title); position:absolute; bottom:calc(100% + 5px); left:50%; transform:translateX(-50%); background:#2d3748; color:#fff; font-size:11px; font-weight:600; white-space:nowrap; padding:3px 8px; border-radius:4px; pointer-events:none; opacity:0; transition:opacity 0s; z-index:100; }
+.pk-rec-has-tip::before { content:''; position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#2d3748; pointer-events:none; opacity:0; transition:opacity 0s; z-index:100; }
+.pk-rec-has-tip:hover::after, .pk-rec-has-tip:hover::before { opacity:1; }
 .pk-rec-expand-btn { background: none; border: none; color: var(--pk-accent-mid); font-size: 12px; cursor: pointer; padding: 0 2px; }
 .pk-rec-expand-btn:hover { text-decoration: underline; }
+/* On desktop, always show full notes — truncation is mobile-only */
+@media (min-width: 769px) {
+    .pk-rec-notes-ellipsis { display: none !important; }
+    .pk-rec-notes-full { display: inline !important; }
+}
 @media (max-width: 768px) {
 	.pk-recs-table th[data-short] { font-size: 0; }
 	.pk-recs-table th[data-short]::after { content: attr(data-short); font-size: 11px; }
@@ -5186,6 +5200,12 @@
 @media (min-width: 769px) {
 	.pk-rec-expand-btn { display: none; }
 }
+
+/* ---- Tournament table delete button ---- */
+.kn-tournament-del-btn { background:none; border:none; color:#a0aec0; font-size:16px; line-height:1; cursor:pointer; padding:2px 6px; border-radius:4px; transition:color 0.15s,background 0.15s; }
+.kn-tournament-del-btn:hover { color:#c53030; background:#fff5f5; }
+.kn-tournament-del-btn.kn-del-confirm { color:#c53030; font-size:11px; font-weight:700; background:#fff5f5; border:1px solid #fc8181; padding:2px 6px; white-space:nowrap; }
+#kn-tournaments-table .kn-col-actions { width:36px; text-align:center; padding:4px 2px; }
 
 /* ---- Add Tournament Modal (Kingdom: kn-addtournament-) ---- */
 #kn-addtournament-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1100; opacity:0; pointer-events:none; transition:opacity 0.2s; }

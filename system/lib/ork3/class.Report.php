@@ -111,6 +111,7 @@ class Report  extends Ork3 {
 						left join " . DB_PREFIX . "park park on t.park_id = park.park_id
 					where
 						1 $where
+					group by t.tournament_id
 					order by t.date_time
 					$limit";
 
@@ -452,8 +453,16 @@ class Report  extends Ork3 {
 			recs.deleted_by,
 			ka.award_id as ka_award_id,
 			ka.kingdomaward_id as ka_kaward_id,
-			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= recs.rank) as kacount,
-			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= recs.rank) as awcount
+			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
+			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
+			COALESCE(
+				(SELECT MAX(subr.rank) FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id),
+				(SELECT MAX(subr2.rank) FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id)
+			) as player_ka_rank,
+			COALESCE(
+				(SELECT subr.date FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id ORDER BY subr.rank DESC, subr.date DESC LIMIT 1),
+				(SELECT subr2.date FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id ORDER BY subr2.rank DESC, subr2.date DESC LIMIT 1)
+			) as player_ka_date
 			FROM " . DB_PREFIX . "recommendations recs			
 			LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = recs.kingdomaward_id
 			LEFT JOIN " . DB_PREFIX . "award a on a.award_id = ka.award_id
@@ -462,7 +471,6 @@ class Report  extends Ork3 {
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 			WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0) $location_clause
-			HAVING (kacount = 0 AND awcount = 0)
 			order by m.persona, a.name, recs.rank, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
@@ -484,6 +492,9 @@ class Report  extends Ork3 {
 						'KingdomId' => $r->kingdom_id,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
+						'AlreadyHas' => ($r->kacount > 0 || $r->awcount > 0),
+						'CurrentRank' => ($r->kacount > 0 || $r->awcount > 0) ? (int)$r->player_ka_rank : null,
+						'CurrentRankDate' => ($r->kacount > 0 || $r->awcount > 0) ? $r->player_ka_date : null,
 					);
 			}
 			$response['Status'] = Success();
