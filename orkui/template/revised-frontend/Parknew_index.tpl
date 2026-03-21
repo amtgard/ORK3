@@ -1896,6 +1896,7 @@ var PkConfig = {
 	</div>
 </div>
 
+<?php endif; ?>
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
