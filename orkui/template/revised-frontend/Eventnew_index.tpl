@@ -74,8 +74,9 @@
 		}
 	}
 
-	$tournaments    = $Tournaments['Tournaments'] ?? [];
-	$tourneyCount   = count($tournaments);
+	// [TOURNAMENTS HIDDEN]
+	$tournaments  = [];
+	$tourneyCount = 0;
 	$attendanceList = $AttendanceReport['Attendance'] ?? [];
 	$checkedInIds   = array_flip(array_column($attendanceList, 'MundaneId'));
 	$attendanceForm = $Attendance_event ?? [];
@@ -406,10 +407,7 @@
 					<i class="fas fa-clipboard-list"></i><span class="ev-tab-label"> Attendance</span>
 					<span class="ev-tab-count"><?= $attendeeCount ?></span>
 				</li>
-				<li data-tab="ev-tab-tournaments" onclick="evShowTab(this,'ev-tab-tournaments')">
-					<i class="fas fa-trophy"></i><span class="ev-tab-label"> Tournaments</span>
-					<span class="ev-tab-count"><?= $tourneyCount ?></span>
-				</li>
+				<?php /* [TOURNAMENTS HIDDEN] tab */ ?>
 				<li data-tab="ev-tab-rsvp" onclick="evShowTab(this,'ev-tab-rsvp')">
 					<i class="fas fa-calendar-check"></i><span class="ev-tab-label"> RSVPs</span>
 					<span class="ev-tab-count"><?= $rsvpCount ?></span>
@@ -535,35 +533,7 @@
 
 			</div><!-- /.ev-tab-panel -->
 
-			<?php // ---- Tournaments Tab ---- ?>
-			<div class="ev-tab-panel" id="ev-tab-tournaments">
-				<?php if ($tourneyCount > 0): ?>
-				<table class="ev-table">
-					<thead>
-						<tr>
-							<th>Tournament</th>
-							<th>Date</th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ($tournaments as $t): ?>
-						<tr>
-							<td>
-								<a href="<?= UIR ?>Tournament/worksheet/<?= (int)$t['TournamentId'] ?>">
-									<?= htmlspecialchars($t['Name'] ?? 'Tournament') ?>
-								</a>
-							</td>
-							<td><?= $t['EventStart'] ? date('M j, Y', strtotime($t['EventStart'])) : '—' ?></td>
-						</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-				<?php else: ?>
-				<div class="ev-empty">
-					<i class="fas fa-trophy" style="margin-right:6px"></i>No tournaments recorded
-				</div>
-				<?php endif; ?>
-			</div><!-- /.ev-tab-panel -->
+			<?php /* [TOURNAMENTS HIDDEN] tab panel */ ?>
 
 			<?php // ---- RSVPs Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-rsvp">
@@ -966,6 +936,8 @@ function fpAddTitle(label, calEl) {
 var _fpOpts = {
 	enableTime: true,
 	dateFormat: 'Y-m-d\\TH:i',
+	altInput: true,
+	altFormat: 'M j, Y h:i K',
 	minuteIncrement: 10,
 	time_24hr: false
 };

@@ -11,7 +11,7 @@
 	$officerList    = $park_officers['Officers']          ?? [];
 	$parkDayList    = $park_days['ParkDays']              ?? [];
 	$eventList      = (array)($event_summary              ?? []);
-	$tournamentList = $park_tournaments['Tournaments']    ?? [];
+	// [TOURNAMENTS HIDDEN] $tournamentList = [];
 
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
@@ -631,39 +631,7 @@
 				<?php endif; ?>
 				</div><!-- /pk-events-list-view -->
 
-				<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;border-top:1px solid #e2e8f0;padding-top:16px;">
-					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-trophy" style="margin-right:6px;color:#a0aec0"></i>Tournaments</h4>
-					<?php if ($CanManagePark): ?>
-					<button onclick="pkOpenAddTournamentModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;border:none;cursor:pointer;">
-						<i class="fas fa-plus"></i> Add Tournament
-					</button>
-					<?php endif; ?>
-				</div>
-				<?php if (count($tournamentList) > 0): ?>
-					<table class="pk-table" id="pk-tournaments-table">
-						<thead>
-							<tr>
-								<th data-sorttype="text">Tournament</th>
-								<th data-sorttype="text">Event</th>
-								<th data-sorttype="date">Date</th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($tournamentList as $t): ?>
-							<tr onclick='window.location.href="<?= UIR ?>Tournament/worksheet/<?= $t['TournamentId'] ?>"'>
-								<td><?= htmlspecialchars($t['Name']) ?></td>
-								<td><?= htmlspecialchars($t['EventName']) ?></td>
-								<td class="pk-date-col" data-sortval="<?= $t['DateTime'] ?>">
-									<?= date('M. j, Y', strtotime($t['DateTime'])) ?>
-								</td>
-							</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-					<div class="pk-pagination" id="pk-tournaments-table-pages"></div>
-				<?php else: ?>
-					<div class="pk-empty">No tournaments found</div>
-				<?php endif; ?>
+				<?php /* [TOURNAMENTS HIDDEN] */ ?>
 			</div>
 
 
@@ -1928,41 +1896,7 @@ var PkConfig = {
 	</div>
 </div>
 
-<!-- Add Tournament Modal -->
-<div id="pk-addtournament-overlay">
-	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
-		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#276749"></i>Add Tournament</h3>
-			<button class="pk-modal-close-btn" id="pk-addtournament-close-btn" aria-label="Close">&times;</button>
-		</div>
-		<div class="pk-modal-body">
-			<div id="pk-addtournament-feedback" style="display:none;margin-bottom:12px;font-size:13px;font-weight:600;"></div>
-			<div class="pk-addday-field">
-				<label for="pk-addtournament-name">Name <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="pk-addtournament-name" placeholder="e.g. Bear Pit" maxlength="128" />
-			</div>
-			<div class="pk-addday-field">
-				<label for="pk-addtournament-when">Date <span style="color:#e53e3e">*</span></label>
-				<input type="date" id="pk-addtournament-when" />
-			</div>
-			<div class="pk-addday-field">
-				<label for="pk-addtournament-desc">Description <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
-				<textarea id="pk-addtournament-desc" rows="3" placeholder="Brief description..."></textarea>
-			</div>
-			<div class="pk-addday-field">
-				<label for="pk-addtournament-url">URL <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></label>
-				<input type="url" id="pk-addtournament-url" placeholder="https://..." maxlength="255" />
-			</div>
-		</div>
-		<div class="pk-modal-footer">
-			<button class="pk-btn pk-btn-ghost" id="pk-addtournament-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-addtournament-submit">
-				<i class="fas fa-plus"></i> Create Tournament
-			</button>
-		</div>
-	</div>
-</div>
-<?php endif; ?>
+<!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>

@@ -47,7 +47,7 @@ class Controller_Kingdom extends Controller {
 		$this->data['kingdom_info'] = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
 		$this->data['kingdom_officers'] = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
 		$this->data['IsPrinz'] = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
-		$this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $kingdom_id);
+		// [TOURNAMENTS HIDDEN] $this->data['kingdom_tournaments'] = [];
 		logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
 	}
 
@@ -217,7 +217,7 @@ class Controller_Kingdom extends Controller {
 				$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => $o['OfficerRole']];
 		}
 		$this->data['PreloadOfficers']     = $preloadOfficers;
-		$this->data['kingdom_tournaments'] = $this->Reports->get_tournaments(null, $kingdom_id);
+		// [TOURNAMENTS HIDDEN] $this->data['kingdom_tournaments'] = [];
 
 		$rawParks = $this->Kingdom->GetParks(['KingdomId' => $kingdom_id]);
 		$this->data['map_parks'] = is_array($rawParks['Parks'])
