@@ -542,7 +542,6 @@
 					<div class="pk-empty">No park days scheduled</div>
 				<?php endif; ?>
 				</div><!-- /pk-about-schedule -->
-				</div><!-- /pk-about-grid -->
 			</div><!-- /pk-tab-about -->
 
 			<!-- Events Tab -->

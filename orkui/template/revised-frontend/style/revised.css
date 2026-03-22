@@ -1845,6 +1845,7 @@
 	border: 1px solid #e2e8f0;
 	border-radius: 6px;
 	padding: 12px 14px;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 .kn-report-group h5 {
 	margin: 0 0 8px 0;
@@ -1853,7 +1854,15 @@
 	color: #718096;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
-	padding-bottom: 5px;
+	padding: 0 0 6px 0;
+	border-bottom: 1px solid #e2e8f0;
+	background: transparent;
+	border-radius: 0;
+	border-top: none;
+	border-left: none;
+	border-right: none;
+	text-shadow: none;
+	font-family: inherit;
 }
 .kn-report-group ul { list-style: none; margin: 0; padding: 0; }
 .kn-report-group li { padding: 3px 0; }
@@ -2541,7 +2550,7 @@
 .pk-description-text { font-size: 13px; color: #4a5568; line-height: 1.5; }
 
 /* ---- Tabs ---- */
-.pk-tabs { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; }
+.pk-tabs { background: #fff; border: 1px solid #cbd5e0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.10); overflow: hidden; min-height: 60vh; }
 .pk-tab-nav {
 	list-style: none;
 	margin: 0; padding: 0;
@@ -2567,7 +2576,7 @@
 	flex-shrink: 0;
 }
 .pk-tab-nav li:hover { color: var(--pk-accent); background: #edf2f7; }
-.pk-tab-active { color: var(--pk-accent) !important; border-bottom-color: var(--pk-accent) !important; background: #fff; }
+.pk-tab-nav li.pk-tab-active { color: var(--pk-accent) !important; border-bottom-color: var(--pk-accent) !important; background: #fff; }
 .pk-tab-count { font-size: 11px; color: #a0aec0; }
 .pk-tab-panel { padding: 16px 18px; }
 .pk-active-tab-label {
