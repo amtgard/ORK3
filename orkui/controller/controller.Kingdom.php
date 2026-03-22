@@ -88,6 +88,7 @@ class Controller_Kingdom extends Controller {
 			INNER JOIN ork_mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
 			WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0
 			GROUP BY a.park_id";
+		$DB->Clear();
 		$pcResult = $DB->DataSet($pcSql);
 		if ($pcResult && $pcResult->Size() > 0) {
 			while ($pcResult->Next()) {
@@ -109,6 +110,7 @@ class Controller_Kingdom extends Controller {
 					AND mundane_id > 0
 				GROUP BY date_year, date_week3, mundane_id
 			) t";
+		$DB->Clear();
 		$knResult = $DB->DataSet($knSql);
 		$katt = 0;
 		if ($knResult && $knResult->Size() > 0 && $knResult->Next()) {

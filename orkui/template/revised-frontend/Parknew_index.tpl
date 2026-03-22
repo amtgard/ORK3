@@ -7,6 +7,7 @@
 	$description = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Description'] ?? ''));
 	$directions  = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Directions']  ?? ''));
 	$websiteUrl  = trim($parkInfo['Url']          ?? '');
+	$parkIsInactive = (trim($parkInfo['Active'] ?? 'Active') !== 'Active');
 
 	$officerList    = $park_officers['Officers']          ?? [];
 	$parkDayList    = $park_days['ParkDays']              ?? [];
@@ -171,7 +172,7 @@
 <!-- =============================================
      ZONE 1: Hero Header
      ============================================= -->
-<div class="pk-hero">
+<div class="pk-hero<?= $parkIsInactive ? ' pk-hero--inactive' : '' ?>">
 	<div class="pk-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pk-hero-content">
 
@@ -183,7 +184,7 @@
 				<img class="heraldry-img" src="<?= htmlspecialchars($displayHeraldryUrl) ?>"
 				     alt="<?= htmlspecialchars($park_name) ?> heraldry"
 				     crossorigin="anonymous"
-				     onload="typeof pkApplyHeroColor==='function'&&pkApplyHeroColor(this)">
+				     onload="typeof pkApplyHeroColor==='function'&&!<?= $parkIsInactive ? 'true' : 'false' ?>&&pkApplyHeroColor(this)">
 				<?php if (!empty($CanManagePark)): ?>
 				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" title="Change heraldry">
 					<i class="fas fa-camera"></i>
@@ -209,6 +210,9 @@
 					$_heroProvince = trim($parkInfo['Province'] ?? '');
 					$_heroLocation = implode(', ', array_filter([$_heroCity, $_heroProvince]));
 				?>
+				<?php if ($parkIsInactive): ?>
+					<span class="pk-inactive-badge"><i class="fas fa-moon"></i> Inactive Park</span>
+				<?php endif; ?>
 				<?php if ($_heroLocation): ?>
 					<span class="pk-hero-location"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($_heroLocation) ?></span>
 				<?php endif; ?>
@@ -978,6 +982,12 @@
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
 							<li><a href="<?= UIR ?>Admin/mergeplayer/park/<?= $park_id ?>">Merge Players</a></li>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
+						</ul>
+					</div>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-cog"></i> Park</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
 						</ul>
 					</div>
 				</div>

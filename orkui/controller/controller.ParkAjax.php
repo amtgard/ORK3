@@ -156,6 +156,7 @@ class Controller_ParkAjax extends Controller {
 				    OR m.username LIKE '%{$term}%')
 				ORDER BY m.persona
 				LIMIT 15";
+			$DB->Clear();
 			$rs      = $DB->DataSet($sql);
 			$results = [];
 			while ($rs->Next()) {
@@ -385,6 +386,44 @@ class Controller_ParkAjax extends Controller {
 			} else {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			}
+		} elseif ($action === 'addauth') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
+			}
+			$mid  = (int)($_POST['MundaneId'] ?? 0);
+			$role = in_array($_POST['Role'] ?? '', ['create','edit','admin']) ? $_POST['Role'] : 'create';
+			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Invalid player.']); exit; }
+			if ($role === 'admin' && !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+				echo json_encode(['status' => 5, 'error' => 'Only a system administrator can grant the Administrator role.']); exit;
+			}
+			global $DB;
+			$DB->Clear();
+			$DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
+				VALUES ({$mid}, {$park_id}, 0, 0, 0, '{$role}', NOW())");
+			$DB->Clear();
+			$rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
+				LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id
+				WHERE a.mundane_id = {$mid} AND a.park_id = {$park_id}
+				ORDER BY a.authorization_id DESC LIMIT 1");
+			$authId = 0; $persona = '';
+			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
+			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
+
+		} elseif ($action === 'removeauth') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
+			}
+			$this->load_model('Authorization');
+			$r = $this->Authorization->del_auth([
+				'Token'           => $this->session->token,
+				'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

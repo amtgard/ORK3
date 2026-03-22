@@ -711,6 +711,114 @@ class Controller_Admin extends Controller {
 			);
 	}
 
+	public function permissions($path = null) {
+		$parts = explode('/', $path ?? '');
+		$type  = in_array($parts[0] ?? '', ['Kingdom', 'Park']) ? $parts[0] : null;
+		$id    = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+		if (!$type || !$id) {
+			header('Location: ' . UIR . 'Admin');
+			exit;
+		}
+
+		$uid = (int)($this->session->user_id ?? 0);
+		$authType = ($type === 'Kingdom') ? AUTH_KINGDOM : AUTH_PARK;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_CREATE)) {
+			header('Location: ' . UIR . ($type === 'Kingdom' ? 'Kingdom/index/' : 'Park/index/') . $id);
+			exit;
+		}
+
+		$this->load_model('Reports');
+		$this->template = 'Admin_permissions.tpl';
+
+		if ($type === 'Kingdom') {
+			$this->load_model('Kingdom');
+			$info = $this->Kingdom->get_kingdom_shortinfo($id);
+			$name = $info['Info']['KingdomInfo']['KingdomName'] ?? 'Kingdom ' . $id;
+			$url  = UIR . 'Kingdom/index/' . $id;
+		} else {
+			$this->load_model('Park');
+			$info = $this->Park->get_park_details($id);
+			$name = $info['ParkInfo']['ParkName'] ?? 'Park ' . $id;
+			$url  = UIR . 'Park/index/' . $id;
+		}
+
+		// All grants at this type+id level (officers + non-officers), including modified timestamp
+		global $DB;
+		$eid = (int)$id;
+		$scopeCol   = ($type === 'Kingdom') ? 'a.kingdom_id' : 'a.park_id';
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
+			        m.persona, m.username, m.given_name, m.surname, m.restricted,
+			        o.role AS officer_role, o.officer_id
+			 FROM " . DB_PREFIX . "authorization a
+			 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+			 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+			 WHERE $scopeCol = $eid
+			 ORDER BY m.persona"
+		);
+		$auths = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$auths[] = [
+					'AuthorizationId' => (int)$rs->authorization_id,
+					'MundaneId'       => (int)$rs->mundane_id,
+					'Role'            => $rs->role,
+					'Modified'        => $rs->modified,
+					'Persona'         => $rs->persona,
+					'UserName'        => $rs->username,
+					'GivenName'       => $rs->given_name,
+					'Surname'         => $rs->surname,
+					'OfficerRole'     => $rs->officer_role,
+					'OfficerId'       => $rs->officer_id,
+				];
+			}
+		}
+
+		// For kingdom pages: all park-level grants for every park in the kingdom
+		$parkAuths = [];
+		if ($type === 'Kingdom') {
+			$DB->Clear();
+			$rs = $DB->DataSet(
+				"SELECT a.authorization_id, a.mundane_id, a.park_id, a.role, a.modified,
+				        p.name AS park_name, m.persona, m.username, m.given_name, m.surname, m.restricted,
+				        o.role AS officer_role, o.officer_id
+				 FROM " . DB_PREFIX . "authorization a
+				 JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id
+				 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+				 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+				 WHERE p.kingdom_id = $eid
+				 ORDER BY p.name, m.persona"
+			);
+			if ($rs) {
+				while ($rs->Next()) {
+					$parkAuths[] = [
+						'AuthorizationId' => (int)$rs->authorization_id,
+						'MundaneId'       => (int)$rs->mundane_id,
+						'ParkId'          => (int)$rs->park_id,
+						'ParkName'        => $rs->park_name,
+						'Role'            => $rs->role,
+						'Modified'        => $rs->modified,
+						'Persona'         => $rs->persona,
+						'UserName'        => $rs->username,
+						'GivenName'       => $rs->given_name,
+						'Surname'         => $rs->surname,
+						'OfficerRole'     => $rs->officer_role,
+						'OfficerId'       => $rs->officer_id,
+					];
+				}
+			}
+		}
+
+		$this->data['PermType']         = $type;
+		$this->data['PermId']           = $id;
+		$this->data['PermName']         = $name;
+		$this->data['PermUrl']          = $url;
+		$this->data['PermAuths']        = $auths;
+		$this->data['PermParkAuths']    = $parkAuths;
+		$this->data['PermCanGrantAdmin'] = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+	}
+
 	public function player($id) {
 		logtrace("player call", $_REQUEST);
 		$this->load_model('Player');

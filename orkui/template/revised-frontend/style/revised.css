@@ -2343,6 +2343,28 @@
 	filter: blur(4px);
 	transform: scale(1.05);
 }
+.pk-hero--inactive {
+	background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%) !important;
+	background-color: #1a1a1a !important;
+}
+.pk-hero--inactive .pk-hero-bg {
+	opacity: 0.04;
+	filter: blur(6px) grayscale(1);
+}
+.pk-inactive-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	background: rgba(255,255,255,0.12);
+	border: 1px solid rgba(255,255,255,0.25);
+	color: #e2e8f0;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	border-radius: 20px;
+	padding: 3px 10px;
+}
 .pk-hero-content {
 	position: relative;
 	display: flex;
