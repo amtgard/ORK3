@@ -2198,9 +2198,8 @@ class Report  extends Ork3 {
 		}
 		return $response;
 	}
-}
 
-		public function RecentParkAttendees($request) {
+	public function RecentParkAttendees($request) {
 		$park_id = intval($request['ParkId']);
 		if (!valid_id($park_id)) return ['Status' => InvalidParameter(), 'Attendees' => []];
 		$sql = "SELECT a.mundane_id, m.persona,
