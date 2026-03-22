@@ -703,7 +703,7 @@ class Report  extends Ork3 {
 			$unit_phrase = "u.name as unit_name, ";
 		}
 
-		$sql = "select a.*, k.name as kingdom_name, p.park_id, p.name as park_name, k.parent_kingdom_id, m.persona, $unit_phrase c.name as class_name
+		$sql = "select a.*, k.name as kingdom_name, p.park_id, p.name as park_name, k.abbreviation as k_abbr, p.abbreviation as p_abbr, k.parent_kingdom_id, m.persona, $unit_phrase c.name as class_name
 					from " . DB_PREFIX . "attendance a
 						LEFT JOIN " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
 							LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
@@ -741,6 +741,8 @@ class Report  extends Ork3 {
 						'Credits' => $r->credits,
 						'KingdomName' => $r->kingdom_name,
 						'ParkName' => $r->park_name,
+						'KAbbr' => $r->k_abbr,
+						'PAbbr' => $r->p_abbr,
 						'UnitName' => $r->unit_name,
 						'Persona' => $r->persona,
 						'ClassName' => $r->class_name,

@@ -50,7 +50,7 @@ class Controller_Event extends Controller {
 		}
 
 		$can_manage = $uid > 0 && valid_id($event_id)
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
 		$this->data['CanManageEvent'] = $can_manage;
 
 		$rsvp_data = [];
@@ -161,7 +161,7 @@ class Controller_Event extends Controller {
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['CanManageEvent'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority( $uid, AUTH_EVENT, $event_id, AUTH_EDIT );
+			&& Ork3::$Lib->authorization->HasAuthority( $uid, AUTH_EVENT, $event_id, AUTH_CREATE );
 	}
 
 	public function detail( $p = null ) {
@@ -217,7 +217,7 @@ class Controller_Event extends Controller {
 		$this->data['DefaultKingdomId']   = $this->session->kingdom_id   ?? 0;
 
 		if ( $action === 'deletedetail' && $uid > 0 ) {
-			if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) ) {
+			if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
 				global $DB;
 				$checkAtt  = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "attendance WHERE event_calendardetail_id = " . $detail_id . " LIMIT 1");
 				$attCnt    = ($checkAtt && $checkAtt->Size() > 0 && $checkAtt->Next()) ? (int)$checkAtt->cnt : 0;
@@ -253,7 +253,7 @@ class Controller_Event extends Controller {
 		if ( strlen($action) > 0 && $uid > 0 ) {
 
 			if ( $action === 'edit' ) {
-				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) ) {
+				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
 					$this->request->save('Eventnew_edit', true);
 					$newName = trim($this->request->Eventnew_edit->EventName ?? '');
 					if ( $newName ) {
@@ -368,9 +368,9 @@ class Controller_Event extends Controller {
 		$this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
 		$this->data['CanManageEvent'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
-		$this->data['CanManageAttendance'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+		$this->data['CanManageAttendance'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;

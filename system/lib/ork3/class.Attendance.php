@@ -218,11 +218,11 @@ class Attendance  extends Ork3 {
 				logtrace('attendance_authority_h() - ecdid match', $detail);
 				return false;
 			}
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $detail['CalendarEventDetails'][0]['EventId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $detail['CalendarEventDetails'][0]['EventId'], AUTH_EDIT)) {
 				return AUTH_EVENT;
 			}
 		} else if (valid_id($request['EventId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
 				return AUTH_EVENT;
 			}
 		} else if (valid_id($request['ParkId'])) {

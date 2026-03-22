@@ -5,8 +5,19 @@
 	$entityUrl  = $PermUrl       ?? (UIR . ($type === 'Kingdom' ? 'Kingdom/index/' : 'Park/index/') . $entityId);
 	$auths      = is_array($PermAuths)     ? $PermAuths     : [];
 	$parkAuths  = is_array($PermParkAuths) ? $PermParkAuths : [];
-	$ajaxBase      = UIR . ($type === 'Kingdom' ? 'KingdomAjax/kingdom/' : 'ParkAjax/park/') . $entityId . '/';
+	$ajaxBaseMap = [
+		'Kingdom' => UIR . 'KingdomAjax/kingdom/' . $entityId . '/',
+		'Park'    => UIR . 'ParkAjax/park/'        . $entityId . '/',
+		'Event'   => UIR . 'EventAjax/auth/'       . $entityId . '/',
+	];
+	$ajaxBase      = $ajaxBaseMap[$type] ?? $ajaxBaseMap['Park'];
 	$canGrantAdmin = !empty($PermCanGrantAdmin);
+
+	$eventCreator            = $PermEventCreator            ?? null;
+	$inheritedParkAuths      = is_array($PermInheritedParkAuths)    ? $PermInheritedParkAuths    : [];
+	$inheritedKingdomAuths   = is_array($PermInheritedKingdomAuths) ? $PermInheritedKingdomAuths : [];
+	$inheritedParkName       = $PermInheritedParkName    ?? '';
+	$inheritedKingdomName    = $PermInheritedKingdomName ?? '';
 
 	// Group park auths by park name for rendering
 	$parkAuthsByPark = [];
@@ -82,7 +93,7 @@
 .ap-empty { padding:28px; text-align:center; color:var(--rp-text-hint); font-size:13px; }
 .ap-empty i { font-size:20px; display:block; margin-bottom:8px; opacity:.4; }
 
-.kn-ac-results { position:absolute; left:0; right:0; z-index:9999; margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
+.kn-ac-results { position:absolute; top:100%; left:0; right:0; z-index:9999; margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
 .kn-ac-results.kn-ac-open { display:block; }
 .kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
 .kn-ac-item:last-child { border-bottom:none; }
@@ -100,7 +111,8 @@
 			</div>
 			<div class="rp-header-scope">
 				<a class="rp-scope-chip" href="<?= htmlspecialchars($entityUrl) ?>">
-					<i class="fas fa-<?= $type === 'Kingdom' ? 'chess-rook' : 'tree' ?>"></i>
+					<?php $scopeIcon = $type === 'Kingdom' ? 'chess-rook' : ($type === 'Event' ? 'calendar-alt' : 'tree'); ?>
+					<i class="fas fa-<?= $scopeIcon ?>"></i>
 					<span class="rp-scope-chip-label">Scope:</span>
 					<?= htmlspecialchars($entityName) ?>
 				</a>
@@ -108,7 +120,7 @@
 		</div>
 		<div class="rp-header-actions">
 			<a class="rp-btn-ghost" href="<?= htmlspecialchars($entityUrl) ?>">
-				<i class="fas fa-arrow-left"></i> Back
+				<i class="fas fa-arrow-left"></i> Back to <?= htmlspecialchars($type) ?>
 			</a>
 		</div>
 	</div>
@@ -121,18 +133,20 @@
 		</div>
 		<div class="ap-card-body">
 			<div class="ap-row">
-				<div class="ap-field" style="flex:2;position:relative">
+				<div class="ap-field" style="flex:2">
 					<label>Player</label>
-					<input type="text" id="ap-player-input" placeholder="Search by persona or username&hellip;" autocomplete="off">
-					<input type="hidden" id="ap-player-id">
-					<div class="kn-ac-results" id="ap-player-results"></div>
+					<div style="position:relative">
+						<input type="text" id="ap-player-input" placeholder="Search by persona or username&hellip;" autocomplete="off">
+						<input type="hidden" id="ap-player-id">
+						<div class="kn-ac-results" id="ap-player-results"></div>
+					</div>
 				</div>
 				<div class="ap-field" style="flex:1;min-width:140px">
 					<label>Role</label>
 					<select id="ap-role-select">
 						<option value="create">Create</option>
 						<option value="edit">Edit</option>
-						<?php if ($canGrantAdmin): ?>
+						<?php if ($canGrantAdmin && $type !== 'Event'): ?>
 						<option value="admin">Administrator</option>
 						<?php endif; ?>
 					</select>
@@ -165,6 +179,10 @@
 					<li>Track kingdom-wide attendance</li>
 					<li>Grant and revoke permissions for others</li>
 					<li>Inherits all park-level access within the kingdom</li>
+					<?php elseif ($type === 'Event'): ?>
+					<li>Add and remove event attendance</li>
+					<li>Manage RSVPs</li>
+					<li>Grant and revoke event-level permissions for others</li>
 					<?php else: ?>
 					<li>Edit park name, heraldry, schedule &amp; settings</li>
 					<li>Set and vacate officer roles at the park</li>
@@ -182,6 +200,10 @@
 					<li>View the Admin Panel link</li>
 					<li>Toggle award recommendation visibility</li>
 					<li>Cannot manage kingdom data or grant permissions</li>
+					<?php elseif ($type === 'Event'): ?>
+					<li>Add and remove event attendance</li>
+					<li>Manage RSVPs</li>
+					<li>Cannot edit event details, heraldry, or grant permissions</li>
 					<?php else: ?>
 					<li>View the Admin Panel link</li>
 					<li>Edit player records within the park</li>
@@ -189,6 +211,7 @@
 					<?php endif; ?>
 				</ul>
 			</div>
+			<?php if ($type !== 'Event'): ?>
 			<div class="ap-role-block">
 				<div class="ap-role-block-title"><span class="ap-role ap-role-admin">Administrator</span></div>
 				<ul>
@@ -197,11 +220,91 @@
 					<li>Use sparingly; prefer Create for local admins</li>
 				</ul>
 			</div>
+			<?php endif; ?>
 		</div>
 		<?php if ($type === 'Kingdom'): ?>
 		<p style="margin:10px 0 0;font-size:12px;color:var(--rp-text-muted)"><i class="fas fa-level-up-alt" style="margin-right:4px"></i><strong>Cascade:</strong> Kingdom Create/Edit access automatically satisfies the same check at any park within the kingdom — no separate park grant needed.</p>
 		<?php endif; ?>
 	</div>
+
+	<?php if ($type === 'Event'): ?>
+	<!-- ── Inherited Access (Event) ──────────────────────────── -->
+	<div class="ap-section" style="margin-top:24px">
+		<i class="fas fa-sitemap"></i> Inherited Access
+	</div>
+	<div class="ap-explainer" style="margin-bottom:16px">
+		<div class="ap-explainer-title"><i class="fas fa-info-circle"></i> Who can manage this event without an explicit grant</div>
+		<p style="margin:0 0 8px;font-size:13px;color:var(--rp-text-body)">These people already have access through the event&rsquo;s parent park or kingdom. You do not need to add them here.</p>
+	</div>
+	<div class="rp-table-area" style="margin-bottom:24px;border-radius:8px">
+		<table class="ap-table">
+			<thead>
+				<tr>
+					<th>Person</th>
+					<th>Access Via</th>
+					<th>Role</th>
+					<th>Officer</th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php if ($eventCreator): ?>
+				<tr>
+					<td>
+						<strong><?= htmlspecialchars($eventCreator['Persona']) ?></strong>
+						<?php if (!empty($eventCreator['GivenName']) || !empty($eventCreator['Surname'])): ?>
+							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($eventCreator['GivenName'] . ' ' . $eventCreator['Surname'])) ?></span>
+						<?php endif; ?>
+					</td>
+					<td style="color:var(--rp-text-muted);font-size:12px"><i class="fas fa-star" style="color:#d4a017;margin-right:4px"></i>Event Creator</td>
+					<td><span class="ap-role ap-role-create">Full Access</span></td>
+					<td>—</td>
+				</tr>
+				<?php endif; ?>
+				<?php foreach ($inheritedParkAuths as $a): ?>
+				<tr>
+					<td>
+						<strong><?= htmlspecialchars($a['Persona']) ?></strong>
+						<?php if (!empty($a['GivenName']) || !empty($a['Surname'])): ?>
+							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($a['GivenName'] . ' ' . $a['Surname'])) ?></span>
+						<?php endif; ?>
+					</td>
+					<td style="color:var(--rp-text-muted);font-size:12px"><i class="fas fa-tree" style="margin-right:4px"></i><?= htmlspecialchars($inheritedParkName) ?> (Park)</td>
+					<td><span class="ap-role ap-role-<?= htmlspecialchars($a['Role']) ?>"><?= htmlspecialchars(ucfirst($a['Role'])) ?></span></td>
+					<td>
+						<?php if (!empty($a['OfficerRole'])): ?>
+							<span class="ap-officer"><?= htmlspecialchars($a['OfficerRole']) ?></span>
+						<?php else: ?>—<?php endif; ?>
+					</td>
+				</tr>
+				<?php endforeach; ?>
+				<?php foreach ($inheritedKingdomAuths as $a): ?>
+				<tr>
+					<td>
+						<strong><?= htmlspecialchars($a['Persona']) ?></strong>
+						<?php if (!empty($a['GivenName']) || !empty($a['Surname'])): ?>
+							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($a['GivenName'] . ' ' . $a['Surname'])) ?></span>
+						<?php endif; ?>
+					</td>
+					<td style="color:var(--rp-text-muted);font-size:12px"><i class="fas fa-chess-rook" style="margin-right:4px"></i><?= htmlspecialchars($inheritedKingdomName) ?> (Kingdom)</td>
+					<td><span class="ap-role ap-role-<?= htmlspecialchars($a['Role']) ?>"><?= htmlspecialchars(ucfirst($a['Role'])) ?></span></td>
+					<td>
+						<?php if (!empty($a['OfficerRole'])): ?>
+							<span class="ap-officer"><?= htmlspecialchars($a['OfficerRole']) ?></span>
+						<?php else: ?>—<?php endif; ?>
+					</td>
+				</tr>
+				<?php endforeach; ?>
+				<?php if (!$eventCreator && !$inheritedParkAuths && !$inheritedKingdomAuths): ?>
+				<tr><td colspan="4" style="color:var(--rp-text-hint);font-size:13px;padding:14px 10px">No inherited access found.</td></tr>
+				<?php endif; ?>
+			</tbody>
+		</table>
+	</div>
+
+	<div class="ap-section">
+		<i class="fas fa-key"></i> Event-Specific Grants
+	</div>
+	<?php endif; ?>
 
 	<div class="rp-table-area" style="margin-bottom:0;border-radius:8px 8px <?= ($type === 'Kingdom' && count($parkAuthsByPark)) ? '0 0' : '8px 8px' ?>">
 		<?php if (count($auths) > 0): ?>
@@ -377,10 +480,20 @@
 	function apEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 	// ── Custom autocomplete dropdown ───────────────────────────────
-	var apResults  = document.getElementById('ap-player-results');
-	var apTimer    = null;
+	var apResults = document.getElementById('ap-player-results');
+	var apInput   = document.getElementById('ap-player-input');
+	var apTimer   = null;
+	var apSeq     = 0; // increments on each search to discard stale responses
 
 	function apClose() { apResults.classList.remove('kn-ac-open'); apResults.innerHTML = ''; }
+
+	function apSelect(item) {
+		apInput.value = decodeURIComponent(item.dataset.name);
+		document.getElementById('ap-player-id').value  = item.dataset.id;
+		document.getElementById('ap-add-btn').disabled = false;
+		apClose();
+		apInput.focus();
+	}
 
 	function apOpen(items) {
 		if (!items.length) { apClose(); return; }
@@ -393,37 +506,68 @@
 		apResults.classList.add('kn-ac-open');
 	}
 
-	document.getElementById('ap-player-input').addEventListener('input', function () {
+	apInput.addEventListener('input', function () {
 		var term = this.value.trim();
 		document.getElementById('ap-player-id').value = '';
 		document.getElementById('ap-add-btn').disabled = true;
-		if (term.length < 2) { apClose(); return; }
 		clearTimeout(apTimer);
+		if (term.length < 2) { apClose(); return; }
+		var seq = ++apSeq;
 		apTimer = setTimeout(function () {
 			var urlA, urlB;
 			if (AP_PERM_TYPE === 'Kingdom') {
-				urlA = AP_UIR + 'KingdomAjax/playersearch/' + AP_PERM_ID + '?scope=own&q='     + encodeURIComponent(term);
-				urlB = AP_UIR + 'KingdomAjax/playersearch/' + AP_PERM_ID + '?scope=exclude&q=' + encodeURIComponent(term);
+				urlA = AP_UIR + 'KingdomAjax/playersearch/' + AP_PERM_ID + '&scope=own&q='     + encodeURIComponent(term);
+				urlB = AP_UIR + 'KingdomAjax/playersearch/' + AP_PERM_ID + '&scope=exclude&q=' + encodeURIComponent(term);
 			} else {
-				urlA = AJAX_BASE + 'playersearch?scope=own&q='     + encodeURIComponent(term);
-				urlB = AJAX_BASE + 'playersearch?scope=exclude&q=' + encodeURIComponent(term);
+				urlA = AJAX_BASE + 'playersearch&scope=own&q='     + encodeURIComponent(term);
+				urlB = AJAX_BASE + 'playersearch&scope=exclude&q=' + encodeURIComponent(term);
 			}
 			$.when($.getJSON(urlA), $.getJSON(urlB)).then(function (rA, rB) {
+				if (seq !== apSeq) return; // input changed while request was in flight
 				var seen = {}, items = [];
 				(rA[0] || []).forEach(function (p) { if (!seen[p.MundaneId]) { seen[p.MundaneId] = true; items.push(p); } });
 				(rB[0] || []).forEach(function (p) { if (!seen[p.MundaneId]) { seen[p.MundaneId] = true; items.push(p); } });
 				apOpen(items.slice(0, 15));
-			}).fail(apClose);
+			}).fail(function () { if (seq === apSeq) apClose(); });
 		}, 220);
+	});
+
+	// Keyboard navigation from the input field
+	apInput.addEventListener('keydown', function (e) {
+		if (!apResults.classList.contains('kn-ac-open')) return;
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			var first = apResults.querySelector('.kn-ac-item');
+			if (first) first.focus();
+		} else if (e.key === 'Escape') {
+			apClose();
+		}
+	});
+
+	// Keyboard navigation within the dropdown
+	apResults.addEventListener('keydown', function (e) {
+		var focused = document.activeElement;
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			var next = focused.nextElementSibling;
+			if (next) next.focus(); else apResults.querySelector('.kn-ac-item').focus();
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			var prev = focused.previousElementSibling;
+			if (prev) prev.focus(); else apInput.focus();
+		} else if (e.key === 'Enter') {
+			e.preventDefault();
+			if (focused && focused.dataset.id) apSelect(focused);
+		} else if (e.key === 'Escape') {
+			apClose();
+			apInput.focus();
+		}
 	});
 
 	apResults.addEventListener('click', function (e) {
 		var item = e.target.closest('.kn-ac-item[data-id]');
 		if (!item) return;
-		document.getElementById('ap-player-input').value = decodeURIComponent(item.dataset.name);
-		document.getElementById('ap-player-id').value    = item.dataset.id;
-		document.getElementById('ap-add-btn').disabled   = false;
-		apClose();
+		apSelect(item);
 	});
 
 	document.addEventListener('click', function (e) {

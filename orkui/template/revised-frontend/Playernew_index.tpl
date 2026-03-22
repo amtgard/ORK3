@@ -380,7 +380,7 @@
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-users"></i> Companies &amp; Households</span>
 				<?php if ($canEditAdmin || $isOwnProfile): ?>
-				<button class="pn-card-edit-btn" id="pn-unit-create-btn" title="Create new unit">
+				<button class="pn-card-edit-btn" id="pn-unit-create-btn" title="Create new unit" onclick="pnOpenUnitCreateModal()">
 					<i class="fas fa-plus"></i>
 				</button>
 				<?php endif; ?>
@@ -1903,13 +1903,15 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 	</div>
 </div>
 
+<?php endif; ?>
+
 <!-- Create Unit Modal -->
 <?php if ($canEditAdmin || $isOwnProfile): ?>
 <div class="pn-overlay" id="pn-unit-create-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Create Company or Household</h3>
-			<button class="pn-modal-close-btn" id="pn-unit-create-close-btn" aria-label="Close">&times;</button>
+			<button class="pn-modal-close-btn" id="pn-unit-create-close-btn" aria-label="Close" onclick="pnCloseUnitCreateModal()">&times;</button>
 		</div>
 		<form method="post" action="<?= UIR ?>Unit/create/<?= (int)$Player['MundaneId'] ?>">
 			<input type="hidden" name="Action" value="create">
@@ -1931,13 +1933,12 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 				</div>
 			</div>
 			<div class="pn-modal-footer">
-				<button type="button" class="pn-btn pn-btn-secondary" id="pn-unit-create-cancel">Cancel</button>
+				<button type="button" class="pn-btn pn-btn-secondary" id="pn-unit-create-cancel" onclick="pnCloseUnitCreateModal()">Cancel</button>
 				<button type="submit" class="pn-btn pn-btn-primary"><i class="fas fa-plus"></i> Create</button>
 			</div>
 		</form>
 	</div>
 </div>
-<?php endif; ?>
 <?php endif; ?>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>

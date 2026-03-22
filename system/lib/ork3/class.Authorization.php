@@ -740,6 +740,7 @@ class Authorization extends Ork3
 				switch ($this->auth->role) {
 					case AUTH_EDIT:
 						$sufficient |= (AUTH_EDIT == $role);
+						break;
 					case AUTH_CREATE:
 						return true;
 					case AUTH_ADMIN:

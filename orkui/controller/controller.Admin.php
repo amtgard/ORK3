@@ -779,9 +779,10 @@ class Controller_Admin extends Controller {
 	}
 
 	public function permissions($path = null) {
-		$parts = explode('/', $path ?? '');
-		$type  = in_array($parts[0] ?? '', ['Kingdom', 'Park']) ? $parts[0] : null;
-		$id    = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+		$parts    = explode('/', $path ?? '');
+		$type     = in_array($parts[0] ?? '', ['Kingdom', 'Park', 'Event']) ? $parts[0] : null;
+		$id       = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+		$detailId = (int)preg_replace('/[^0-9]/', '', $parts[2] ?? '');
 		$uid = (int)($this->session->user_id ?? 0);
 
 		// Global ORK view — no type/id provided
@@ -832,9 +833,13 @@ class Controller_Admin extends Controller {
 			$this->template = 'Admin_permissions_global.tpl';
 			return;
 		}
-		$authType = ($type === 'Kingdom') ? AUTH_KINGDOM : AUTH_PARK;
+		$authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK, 'Event' => AUTH_EVENT];
+		$authType = $authTypeMap[$type];
 		if (!Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_CREATE)) {
-			header('Location: ' . UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $id);
+			$backUrl = $type === 'Event'
+				? UIR . 'Event/detail/' . $id . ($detailId ? '/' . $detailId : '')
+				: UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $id;
+			header('Location: ' . $backUrl);
 			exit;
 		}
 
@@ -846,17 +851,23 @@ class Controller_Admin extends Controller {
 			$info = $this->Kingdom->get_kingdom_shortinfo($id);
 			$name = $info['Info']['KingdomInfo']['KingdomName'] ?? 'Kingdom ' . $id;
 			$url  = UIR . 'Kingdom/profile/' . $id;
-		} else {
+		} elseif ($type === 'Park') {
 			$this->load_model('Park');
 			$info = $this->Park->get_park_details($id);
 			$name = $info['ParkInfo']['ParkName'] ?? 'Park ' . $id;
 			$url  = UIR . 'Park/profile/' . $id;
+		} else { // Event
+			$this->load_model('Event');
+			$info = $this->Event->get_event_details($id);
+			$name = $info['Name'] ?? 'Event ' . $id;
+			$url  = UIR . 'Event/detail/' . $id . ($detailId ? '/' . $detailId : '');
 		}
 
 		// All grants at this type+id level (officers + non-officers), including modified timestamp
 		global $DB;
 		$eid = (int)$id;
-		$scopeCol   = ($type === 'Kingdom') ? 'a.kingdom_id' : 'a.park_id';
+		$scopeColMap = ['Kingdom' => 'a.kingdom_id', 'Park' => 'a.park_id', 'Event' => 'a.event_id'];
+		$scopeCol    = $scopeColMap[$type];
 		$DB->Clear();
 		$rs = $DB->DataSet(
 			"SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
@@ -921,13 +932,107 @@ class Controller_Admin extends Controller {
 			}
 		}
 
+		// For event pages: show inherited access (creator + park/kingdom grant holders)
+		$eventCreator      = null;
+		$inheritedParkAuths     = [];
+		$inheritedKingdomAuths  = [];
+		$inheritedParkName      = '';
+		$inheritedKingdomName   = '';
+		if ($type === 'Event') {
+			$DB->Clear();
+			$evRow = $DB->DataSet(
+				"SELECT e.mundane_id AS creator_id, e.park_id AS ev_park_id, e.kingdom_id AS ev_kingdom_id,
+				        m.persona AS creator_persona, m.given_name, m.surname,
+				        p.name AS park_name, k.name AS kingdom_name
+				 FROM " . DB_PREFIX . "event e
+				 LEFT JOIN " . DB_PREFIX . "mundane m  ON m.mundane_id = e.mundane_id
+				 LEFT JOIN " . DB_PREFIX . "park p     ON p.park_id    = e.park_id
+				 LEFT JOIN " . DB_PREFIX . "kingdom k  ON k.kingdom_id = e.kingdom_id
+				 WHERE e.event_id = $eid LIMIT 1"
+			);
+			$evParkId = 0; $evKingdomId = 0;
+			if ($evRow && $evRow->Next()) {
+				$evParkId    = (int)$evRow->ev_park_id;
+				$evKingdomId = (int)$evRow->ev_kingdom_id;
+				$inheritedParkName    = $evRow->park_name    ?? '';
+				$inheritedKingdomName = $evRow->kingdom_name ?? '';
+				if ((int)$evRow->creator_id > 0) {
+					$eventCreator = [
+						'MundaneId' => (int)$evRow->creator_id,
+						'Persona'   => $evRow->creator_persona,
+						'GivenName' => $evRow->given_name,
+						'Surname'   => $evRow->surname,
+					];
+				}
+			}
+
+			// Park-level grant holders for the event's host park
+			if ($evParkId) {
+				$DB->Clear();
+				$rs = $DB->DataSet(
+					"SELECT a.authorization_id, a.mundane_id, a.role,
+					        m.persona, m.given_name, m.surname,
+					        o.role AS officer_role
+					 FROM " . DB_PREFIX . "authorization a
+					 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+					 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+					 WHERE a.park_id = $evParkId
+					 ORDER BY a.role DESC, m.persona"
+				);
+				if ($rs) {
+					while ($rs->Next()) {
+						$inheritedParkAuths[] = [
+							'MundaneId'   => (int)$rs->mundane_id,
+							'Role'        => $rs->role,
+							'Persona'     => $rs->persona,
+							'GivenName'   => $rs->given_name,
+							'Surname'     => $rs->surname,
+							'OfficerRole' => $rs->officer_role,
+						];
+					}
+				}
+			}
+
+			// Kingdom-level grant holders for the event's kingdom
+			if ($evKingdomId) {
+				$DB->Clear();
+				$rs = $DB->DataSet(
+					"SELECT a.authorization_id, a.mundane_id, a.role,
+					        m.persona, m.given_name, m.surname,
+					        o.role AS officer_role
+					 FROM " . DB_PREFIX . "authorization a
+					 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+					 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+					 WHERE a.kingdom_id = $evKingdomId
+					 ORDER BY a.role DESC, m.persona"
+				);
+				if ($rs) {
+					while ($rs->Next()) {
+						$inheritedKingdomAuths[] = [
+							'MundaneId'   => (int)$rs->mundane_id,
+							'Role'        => $rs->role,
+							'Persona'     => $rs->persona,
+							'GivenName'   => $rs->given_name,
+							'Surname'     => $rs->surname,
+							'OfficerRole' => $rs->officer_role,
+						];
+					}
+				}
+			}
+		}
+
 		$this->data['PermType']         = $type;
 		$this->data['PermId']           = $id;
 		$this->data['PermName']         = $name;
 		$this->data['PermUrl']          = $url;
 		$this->data['PermAuths']        = $auths;
 		$this->data['PermParkAuths']    = $parkAuths;
-		$this->data['PermCanGrantAdmin'] = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$this->data['PermCanGrantAdmin']      = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$this->data['PermEventCreator']       = $eventCreator;
+		$this->data['PermInheritedParkAuths']    = $inheritedParkAuths;
+		$this->data['PermInheritedKingdomAuths'] = $inheritedKingdomAuths;
+		$this->data['PermInheritedParkName']     = $inheritedParkName;
+		$this->data['PermInheritedKingdomName']  = $inheritedKingdomName;
 	}
 
 	public function player($id) {

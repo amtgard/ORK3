@@ -126,7 +126,7 @@ class Controller_Unit extends Controller {
 			case 'addauth':
 					$r = $this->Unit->add_unit_auth(array(
 						'Token'     => $this->session->token,
-						'Role'      => AUTH_EDIT,
+						'Role'      => AUTH_CREATE,
 						'Type'      => AUTH_UNIT,
 						'Id'        => $unit_id_int,
 						'MundaneId' => (int)$this->request->MundaneId,

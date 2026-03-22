@@ -964,7 +964,6 @@ if (PnConfig.recError) {
             gid('pn-dues-overlay').classList.remove('pn-open');
             document.body.style.overflow = '';
         };
-
         gid('pn-dues-close-btn').addEventListener('click', pnCloseDuesModal);
         gid('pn-dues-cancel').addEventListener('click', pnCloseDuesModal);
         gid('pn-dues-overlay').addEventListener('click', function(e) {
@@ -5261,52 +5260,30 @@ $(document).ready(function() {
             return false;
         }
 
-        $('#ev-KingdomName').autocomplete({
-            source: function(req, res) {
-                $.getJSON(EvConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Kingdom', name: req.term, limit: 6 },
-                    function(data) {
-                        res($.map(data, function(v) { return { label: v.Name, value: v.KingdomId }; }));
-                    });
-            },
-            focus:  function(e,ui) { return showLabel('#ev-KingdomName', ui); },
-            delay: 250, minLength: 0,
-            select: function(e,ui) { showLabel('#ev-KingdomName',ui); $('#ev-KingdomId').val(ui.item.value); return false; },
-            change: function(e,ui) { if(!ui.item) { showLabel('#ev-KingdomName',null); $('#ev-KingdomId').val(''); } return false; }
-        }).focus(function() { if(!this.value) $(this).trigger('keydown.autocomplete'); });
-
-        $('#ev-ParkName').autocomplete({
-            source: function(req, res) {
-                $.getJSON(EvConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Park', name: req.term, kingdom_id: $('#ev-KingdomId').val(), limit: 6 },
-                    function(data) {
-                        res($.map(data, function(v) { return { label: v.Name, value: v.ParkId }; }));
-                    });
-            },
-            focus:  function(e,ui) { return showLabel('#ev-ParkName', ui); },
-            delay: 250, minLength: 0,
-            select: function(e,ui) { showLabel('#ev-ParkName',ui); $('#ev-ParkId').val(ui.item.value); return false; },
-            change: function(e,ui) { if(!ui.item) { showLabel('#ev-ParkName',null); $('#ev-ParkId').val(''); } return false; }
-        }).focus(function() { if(!this.value) $(this).trigger('keydown.autocomplete'); });
+        function evAttAbbr(v) {
+            return (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
+        }
 
         $('#ev-PlayerName').autocomplete({
             source: function(req, res) {
                 $.getJSON(EvConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Player', type: 'all', search: req.term,
-                      park_id: $('#ev-ParkId').val(), kingdom_id: $('#ev-KingdomId').val(), limit: 15 },
+                    { Action: 'Search/Player', type: 'all', search: req.term, limit: 15 },
                     function(data) {
-                        res($.map(data, function(v) { return { label: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox }; }));
+                        res($.map(data, function(v) {
+                            var abbr = evAttAbbr(v);
+                            return { label: v.Persona + (abbr ? ' — ' + abbr : ''), name: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox };
+                        }));
                     });
             },
-            focus:  function(e,ui) { return showLabel('#ev-PlayerName', ui); },
-            delay: 250, minLength: 0,
+            focus:  function(e,ui) { if (ui.item) $('#ev-PlayerName').val(ui.item.name); return false; },
+            delay: 250, minLength: 2,
             select: function(e,ui) {
-                showLabel('#ev-PlayerName', ui);
+                $('#ev-PlayerName').val(ui.item.name);
                 $('#ev-MundaneId').val(ui.item.value.split('|')[0]);
                 return false;
             },
-            change: function(e,ui) { if(!ui.item) { showLabel('#ev-PlayerName',null); $('#ev-MundaneId').val(''); } return false; }
-        }).focus(function() { if(!this.value) $(this).trigger('keydown.autocomplete'); });
+            change: function(e,ui) { if(!ui.item) { $('#ev-MundaneId').val(''); } return false; }
+        });
     });
 
     // ---- Hero dominant-color tint ----
@@ -5485,53 +5462,49 @@ $(document).ready(function() {
         .then(function(response) { return response.json(); })
         .then(function(data) {
             if (data.status === 0 && data.attendance) {
-                var newRow = '<tr>' +
-                    '<td><a href="' + EvConfig.uir + 'Player/profile/' + data.attendance.MundaneId + '">' + data.attendance.Persona + '</a></td>' +
-                    '<td><a href="' + EvConfig.uir + 'Kingdom/profile/' + data.attendance.KingdomId + '">' + data.attendance.KingdomName + '</a></td>' +
-                    '<td><a href="' + EvConfig.uir + 'Park/profile/' + data.attendance.ParkId + '">' + data.attendance.ParkName + '</a></td>' +
-                    '<td>' + data.attendance.ClassName + '</td>' +
-                    '<td>' + data.attendance.Credits + '</td>' +
+                var att = data.attendance;
+                var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
+                var kingCell  = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
+                var parkCell  = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
+                var newRow = '<tr data-att-id="' + att.AttendanceId + '">' +
+                    '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
+                    '<td>' + kingCell + '</td>' +
+                    '<td>' + parkCell + '</td>' +
+                    '<td>' + escHtml(att.ClassName || '') + '</td>' +
+                    '<td>' + escHtml(att.Credits || '') + '</td>' +
                     '<td class="ev-del-cell">' +
-                        '<a class="ev-del-link" title="Remove" href="' + EvConfig.uir + 'Event/detail/' + EvConfig.eventId + '/' + EvConfig.detailId + '/delete/' + data.attendance.AttendanceId + '" onclick="return confirm(\'Remove this attendance record?\')">×</a>' +
+                        '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
                     '</td>' +
                 '</tr>';
-                
-                var tableBody = document.querySelector('.ev-table tbody');
-                if (tableBody) { tableBody.insertAdjacentHTML('beforeend', newRow); }
+
+                var tableBody = document.querySelector('#ev-attendance-table tbody');
+                if (tableBody) {
+                    tableBody.insertAdjacentHTML('beforeend', newRow);
+                } else {
+                    // Table doesn't exist yet — create it
+                    var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
+                    var tableHtml = '<table class="display" id="ev-attendance-table" style="width:100%">' +
+                        '<thead><tr><th>Player</th><th>Kingdom</th><th>Park</th><th>Class</th><th>Credits</th><th class="ev-del-cell"></th></tr></thead>' +
+                        '<tbody>' + newRow + '</tbody></table>';
+                    if (emptyMsg) { emptyMsg.outerHTML = tableHtml; }
+                }
 
                 form.reset();
                 $('#ev-PlayerName').val('');
                 $('#ev-MundaneId').val('');
 
-                var attendeeCount = document.querySelector('.ev-tab-count');
-                if (attendeeCount) { attendeeCount.textContent = parseInt(attendeeCount.textContent || '0') + 1; }
-                
-                var emptyMessage = document.querySelector('#ev-tab-attendance .ev-empty');
-                if (emptyMessage) {
-                    emptyMessage.style.display = 'none';
-                }
+                var tabCount = document.querySelector('[data-tab="ev-tab-attendance"] .ev-tab-count');
+                if (tabCount) { tabCount.textContent = parseInt(tabCount.textContent || '0') + 1; }
             } else {
-                var errorDiv = document.querySelector('.ev-error');
-                if (!errorDiv) {
-                    errorDiv = document.createElement('div');
-                    errorDiv.className = 'ev-error';
-                    var mainDiv = document.querySelector('.ev-main');
-                    if (mainDiv) { mainDiv.insertBefore(errorDiv, mainDiv.firstChild); }
-                }
+                var errorDiv = document.querySelector('.ev-att-form .ev-error') || document.createElement('div');
+                errorDiv.className = 'ev-error';
                 errorDiv.style.display = 'block';
                 errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>' + (data.error || 'An unknown error occurred.');
+                if (!errorDiv.parentNode) { form.parentNode.insertBefore(errorDiv, form.nextSibling); }
             }
         })
         .catch(function(error) {
-            var errorDiv = document.querySelector('.ev-error');
-            if (!errorDiv) {
-                errorDiv = document.createElement('div');
-                errorDiv.className = 'ev-error';
-                var mainDiv = document.querySelector('.ev-main');
-                if (mainDiv) { mainDiv.insertBefore(errorDiv, mainDiv.firstChild); }
-            }
-            errorDiv.style.display = 'block';
-            errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Request failed: ' + error.message;
+            console.error('Add attendance failed:', error);
         })
         .finally(function() {
             submitBtn.disabled = false;
@@ -8194,34 +8167,28 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
 })();
 
 // ---- Create Unit Modal (Playernew) ----
+window.pnOpenUnitCreateModal = function() {
+    var el = document.getElementById('pn-unit-create-overlay');
+    if (!el) return;
+    el.classList.add('pn-open');
+    document.body.style.overflow = 'hidden';
+    var nameInput = el.querySelector('input[name="Name"]');
+    if (nameInput) setTimeout(function() { nameInput.focus(); }, 50);
+};
+window.pnCloseUnitCreateModal = function() {
+    var el = document.getElementById('pn-unit-create-overlay');
+    if (!el) return;
+    el.classList.remove('pn-open');
+    document.body.style.overflow = '';
+};
 (function() {
-    if (typeof PnConfig === 'undefined' || !PnConfig.canCreateUnit) return;
-
     $(document).ready(function() {
-        var overlay   = document.getElementById('pn-unit-create-overlay');
-        var closeBtn  = document.getElementById('pn-unit-create-close-btn');
-        var cancelBtn = document.getElementById('pn-unit-create-cancel');
-        var openBtn   = document.getElementById('pn-unit-create-btn');
-        if (!overlay || !openBtn) return;
-
-        function openModal() {
-            overlay.classList.add('pn-open');
-            document.body.style.overflow = 'hidden';
-            var nameInput = overlay.querySelector('input[name="Name"]');
-            if (nameInput) setTimeout(function() { nameInput.focus(); }, 50);
-        }
-        function closeModal() {
-            overlay.classList.remove('pn-open');
-            document.body.style.overflow = '';
-        }
-
-        openBtn.addEventListener('click', openModal);
-        if (closeBtn)  closeBtn.addEventListener('click', closeModal);
-        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
-        overlay.addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+        var overlay = document.getElementById('pn-unit-create-overlay');
+        if (!overlay) return;
+        overlay.addEventListener('click', function(e) { if (e.target === this) pnCloseUnitCreateModal(); });
         document.addEventListener('keydown', function(e) {
             if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open'))
-                closeModal();
+                pnCloseUnitCreateModal();
         });
     });
 })();

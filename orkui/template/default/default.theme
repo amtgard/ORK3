@@ -126,14 +126,13 @@
 				</button>
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
-<?php if (isset($menu['admin'])): ?>
+<?php if (isset($menu['admin']) && strpos($menu['admin']['url'], 'Admin/unit/') === false): ?>
 					<?php
 						$__adminUrl = $menu['admin']['url'];
 						if      (strpos($__adminUrl, 'Admin/player/')   !== false) $__adminLabel = 'Admin Player';
 						elseif  (strpos($__adminUrl, 'Admin/kingdom/')  !== false) $__adminLabel = 'Admin Kingdom';
 						elseif  (strpos($__adminUrl, 'Admin/park/')     !== false) $__adminLabel = 'Admin Park';
 						elseif  (strpos($__adminUrl, 'Admin/event/')    !== false) $__adminLabel = 'Admin Event';
-						elseif  (strpos($__adminUrl, 'Admin/unit/')     !== false) $__adminLabel = 'Admin Unit';
 						else                                                       $__adminLabel = 'Admin Panel';
 					?>
 					<div class='nav-dropdown-divider'></div>

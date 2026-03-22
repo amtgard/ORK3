@@ -419,20 +419,32 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 			</h4>
 <?php if (count($_auths) > 0): ?>
 			<ul class="kn-officer-list">
-<?php foreach ($_auths as $_auth): ?>
+<?php foreach ($_auths as $_auth): $__aid = (int)$_auth['AuthorizationId']; ?>
 				<li>
-					<span class="kn-officer-role" style="font-size:10px;">Editor</span>
+					<span class="kn-officer-role" style="font-size:10px;">Manager</span>
 					<span class="kn-officer-name" style="display:flex;align-items:center;justify-content:space-between;">
 						<a href="<?=UIR?>Player/profile/<?=(int)$_auth['MundaneId']?>">
 							<?=htmlspecialchars($_auth['Persona'] ?: $_auth['UserName'])?>
 						</a>
-						<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline;margin:0;">
-							<input type="hidden" name="Action" value="deleteauth">
-							<input type="hidden" name="AuthorizationId" value="<?=(int)$_auth['AuthorizationId']?>">
-							<button type="submit" class="pn-delete-link" title="Remove manager"
-								onclick="return confirm('Remove <?=htmlspecialchars(addslashes($_auth['Persona'] ?: $_auth['UserName']))?> as manager?')"
-								style="text-decoration:none;font-size:13px;line-height:1;padding:0 2px;">&times;</button>
-						</form>
+						<div id="un-mgr-btns-<?=$__aid?>">
+							<button class="pn-btn pn-btn-ghost pn-btn-sm"
+								onclick="unToggleConfirm('mgr', <?=$__aid?>)"
+								title="Remove manager" style="color:#e53e3e;">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="pn-delete-confirm" id="un-mgr-<?=$__aid?>">
+							<span style="color:#e53e3e;font-weight:600;">Remove manager?</span>
+							<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline">
+								<input type="hidden" name="Action" value="deleteauth">
+								<input type="hidden" name="AuthorizationId" value="<?=$__aid?>">
+								<button type="submit" class="pn-delete-yes">Yes</button>
+							</form>
+							<button class="pn-delete-no"
+								onclick="document.getElementById('un-mgr-<?=$__aid?>').classList.remove('pn-active');document.getElementById('un-mgr-btns-<?=$__aid?>').style.display=''">
+								No
+							</button>
+						</div>
 					</span>
 				</li>
 <?php endforeach; ?>
@@ -917,15 +929,18 @@ function unOpenEditMember(unitMundaneId, role, title) {
 	document.getElementById('un-edit-title').value = title;
 	unOpenModal('un-modal-edit-member');
 }
-function unToggleConfirm(type, unitMundaneId) {
+function unToggleConfirm(type, id) {
 	/* hide all other open confirms */
 	document.querySelectorAll('.pn-delete-confirm.pn-active').forEach(function (el) {
 		el.classList.remove('pn-active');
-		var btns = document.getElementById('un-btns-' + el.id.replace('un-retire-','').replace('un-remove-',''));
+		var suffix = el.id.replace('un-retire-','').replace('un-remove-','').replace('un-mgr-','');
+		var btns = document.getElementById('un-mgr-btns-' + suffix) || document.getElementById('un-btns-' + suffix);
 		if (btns) btns.style.display = '';
 	});
-	var el   = document.getElementById('un-' + type + '-' + unitMundaneId);
-	var btns = document.getElementById('un-btns-' + unitMundaneId);
+	var el   = document.getElementById('un-' + type + '-' + id);
+	var btns = type === 'mgr'
+		? document.getElementById('un-mgr-btns-' + id)
+		: document.getElementById('un-btns-' + id);
 	if (el) {
 		el.classList.add('pn-active');
 		if (btns) btns.style.display = 'none';
