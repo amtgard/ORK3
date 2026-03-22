@@ -581,6 +581,13 @@
 					</div>
 
 					<div class="kn-report-group">
+						<h5><i class="fas fa-map"></i> Geography</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
+						</ul>
+					</div>
+
+					<div class="kn-report-group">
 						<h5><i class="fas fa-search"></i> Find</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Search/kingdom/<?= $kingdom_id ?>">Players</a></li>

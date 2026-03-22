@@ -968,6 +968,13 @@
 						</ul>
 					</div>
 
+					<div class="kn-report-group">
+						<h5><i class="fas fa-map"></i> Geography</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
+						</ul>
+					</div>
+
 				</div>
 			</div>
 
