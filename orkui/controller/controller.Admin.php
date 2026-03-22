@@ -795,9 +795,12 @@ class Controller_Admin extends Controller {
 			$DB->Clear();
 			$rs = $DB->DataSet(
 				"SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
-				        m.persona, m.username, m.given_name, m.surname
+				        m.persona, m.username, m.given_name, m.surname,
+				        DATE_SUB(m.token_expires, INTERVAL 72 HOUR) AS last_login,
+				        lc.last_credit
 				 FROM " . DB_PREFIX . "authorization a
 				 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+				 LEFT JOIN (SELECT mundane_id, MAX(date) AS last_credit FROM " . DB_PREFIX . "attendance WHERE credits > 0 GROUP BY mundane_id) lc ON lc.mundane_id = a.mundane_id
 				 WHERE a.role = 'admin' AND a.kingdom_id = 0 AND a.park_id = 0 AND a.event_id = 0 AND a.unit_id = 0
 				 ORDER BY m.persona"
 			);
@@ -812,6 +815,8 @@ class Controller_Admin extends Controller {
 						'UserName'        => $rs->username,
 						'GivenName'       => $rs->given_name,
 						'Surname'         => $rs->surname,
+						'LastLogin'       => $rs->last_login,
+						'LastCredit'      => $rs->last_credit,
 					];
 				}
 			}

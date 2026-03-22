@@ -240,12 +240,18 @@ class Controller_Player extends Controller {
 
 	public function profile( $id = null ) {
 		$this->template = '../revised-frontend/Playernew_index.tpl';
+
+		$params    = explode('/', $id ?? '');
+		$id        = $params[0];
+
+		if (!(int)$id) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
 		$this->load_model('Unit');
 		$this->load_model('Kingdom');
 		$this->load_model('Event');
-
-		$params    = explode('/', $id);
-		$id        = $params[0];
 		$action    = $params[1] ?? '';
 		$roastbeef = $params[2] ?? '';
 

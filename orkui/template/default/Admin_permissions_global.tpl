@@ -46,6 +46,11 @@
 .ap-empty { padding:28px; text-align:center; color:var(--rp-text-hint); font-size:13px; }
 .ap-empty i { font-size:20px; display:block; margin-bottom:8px; opacity:.4; }
 
+#ap-admin-table th.tablesorter-header:not(.sorter-false) { cursor:pointer; user-select:none; }
+#ap-admin-table th.tablesorter-header:not(.sorter-false) .tablesorter-header-inner::after { font-family:'Font Awesome 5 Free'; font-weight:900; content:'\f0dc'; margin-left:5px; opacity:.35; font-size:10px; }
+#ap-admin-table th.tablesorter-headerAsc .tablesorter-header-inner::after  { content:'\f0de' !important; opacity:1; color:var(--rp-accent); }
+#ap-admin-table th.tablesorter-headerDesc .tablesorter-header-inner::after { content:'\f0dd' !important; opacity:1; color:var(--rp-accent); }
+
 .kn-ac-results { position:absolute; top:100%; left:0; right:0; z-index:9999; margin-top:2px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
 .kn-ac-results.kn-ac-open { display:block; }
 .kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
@@ -123,16 +128,20 @@
 			<thead>
 				<tr>
 					<th>Person</th>
-					<th>Role</th>
+					<th data-sorter="false">Role</th>
+					<th>Last Login</th>
+					<th>Last Credit</th>
 					<th>Last Modified</th>
-					<th></th>
+					<th data-sorter="false"></th>
 				</tr>
 			</thead>
 			<tbody id="ap-admin-tbody">
 				<?php foreach ($adminAuths as $a): ?>
 				<tr id="ap-row-<?= (int)$a['AuthorizationId'] ?>">
 					<td>
-						<strong><?= htmlspecialchars($a['Persona']) ?></strong>
+						<a href="<?= UIR ?>Player/profile/<?= (int)$a['MundaneId'] ?>" style="font-weight:700;color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+							<?= !empty($a['Persona']) ? htmlspecialchars($a['Persona']) : '<span style="color:var(--rp-text-hint);font-style:italic">(No Persona)</span>' ?>
+						</a>
 						<?php if (!empty($a['GivenName']) || !empty($a['Surname'])): ?>
 							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($a['GivenName'] . ' ' . $a['Surname'])) ?></span>
 						<?php endif; ?>
@@ -141,7 +150,13 @@
 						<?php endif; ?>
 					</td>
 					<td><span class="ap-role ap-role-admin">Administrator</span></td>
-					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">
+					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap" data-sort="<?= !empty($a['LastLogin'])  ? date('Y-m-d', strtotime($a['LastLogin']))  : '0000-00-00' ?>">
+						<?= !empty($a['LastLogin']) ? date('M j, Y', strtotime($a['LastLogin'])) : '—' ?>
+					</td>
+					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap" data-sort="<?= !empty($a['LastCredit']) ? date('Y-m-d', strtotime($a['LastCredit'])) : '0000-00-00' ?>">
+						<?= !empty($a['LastCredit']) ? date('M j, Y', strtotime($a['LastCredit'])) : '—' ?>
+					</td>
+					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap" data-sort="<?= !empty($a['Modified'])   ? date('Y-m-d', strtotime($a['Modified']))   : '0000-00-00' ?>">
 						<?= !empty($a['Modified']) ? date('M j, Y', strtotime($a['Modified'])) : '—' ?>
 					</td>
 					<td style="text-align:right">
@@ -243,11 +258,14 @@
 				$('#ap-player-input').val('');
 				$('#ap-player-id').val('');
 
-				var persona = $('<div>').text(r.persona || '').html();
+				var persona    = r.persona ? $('<div>').text(r.persona).html() : '<span style="color:var(--rp-text-hint);font-style:italic">(No Persona)</span>';
+				var profileUrl = <?= json_encode(UIR) ?> + 'Player/profile/' + r.mundaneId;
 				var today   = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
 				var row = '<tr id="ap-row-' + r.authId + '">'
-					+ '<td><strong>' + persona + '</strong></td>'
+					+ '<td><a href="' + profileUrl + '" style="font-weight:700;color:inherit;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\';" onmouseout="this.style.textDecoration=\'none\'">' + persona + '</a></td>'
 					+ '<td><span class="ap-role ap-role-admin">Administrator</span></td>'
+					+ '<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">—</td>'
+					+ '<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">—</td>'
 					+ '<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">' + today + '</td>'
 					+ '<td style="text-align:right"><button class="ap-del" data-id="' + r.authId + '">Revoke</button></td>'
 					+ '</tr>';
@@ -256,7 +274,7 @@
 				if ($empty.length) {
 					$empty.replaceWith(
 						'<table class="ap-table" id="ap-admin-table">'
-						+ '<thead><tr><th>Person</th><th>Role</th><th>Last Modified</th><th></th></tr></thead>'
+						+ '<thead><tr><th>Person</th><th>Role</th><th>Last Login</th><th>Last Credit</th><th>Last Modified</th><th></th></tr></thead>'
 						+ '<tbody id="ap-admin-tbody"></tbody></table>'
 					);
 				}
@@ -299,6 +317,16 @@
 	}
 
 	$('.ap-del').each(function () { bindDelete(this); });
+
+	// ── Sortable table ───────────────────────────────────────────
+	if ($('#ap-admin-table').length) {
+		$('#ap-admin-table').tablesorter({
+			headerTemplate: '{content}',
+			textExtraction: function (node) {
+				return node.getAttribute('data-sort') || node.textContent || node.innerText || '';
+			}
+		});
+	}
 
 }(jQuery));
 </script>

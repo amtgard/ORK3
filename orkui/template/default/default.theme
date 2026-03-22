@@ -129,11 +129,11 @@
 <?php if (isset($menu['admin']) && strpos($menu['admin']['url'], 'Admin/unit/') === false): ?>
 					<?php
 						$__adminUrl = $menu['admin']['url'];
-						if      (strpos($__adminUrl, 'Admin/player/')   !== false) $__adminLabel = 'Admin Player';
-						elseif  (strpos($__adminUrl, 'Admin/kingdom/')  !== false) $__adminLabel = 'Admin Kingdom';
-						elseif  (strpos($__adminUrl, 'Admin/park/')     !== false) $__adminLabel = 'Admin Park';
-						elseif  (strpos($__adminUrl, 'Admin/event/')    !== false) $__adminLabel = 'Admin Event';
-						else                                                       $__adminLabel = 'Admin Panel';
+						if      (strpos($__adminUrl, 'Admin/player/')   !== false) $__adminLabel = 'Old Admin Player';
+						elseif  (strpos($__adminUrl, 'Admin/kingdom/')  !== false) $__adminLabel = 'Old Admin Kingdom';
+						elseif  (strpos($__adminUrl, 'Admin/park/')     !== false) $__adminLabel = 'Old Admin Park';
+						elseif  (strpos($__adminUrl, 'Admin/event/')    !== false) $__adminLabel = 'Old Admin Event';
+						else                                                       $__adminLabel = 'Old Admin Panel';
 					?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=$__adminUrl?>'><i class='fas fa-cog'></i> <?=$__adminLabel?></a>

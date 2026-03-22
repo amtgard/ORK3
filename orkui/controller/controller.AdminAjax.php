@@ -69,7 +69,7 @@ class Controller_AdminAjax extends Controller {
 			);
 			$authId = 0; $persona = '';
 			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
-			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
+			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona, 'mundaneId' => $mid]);
 
 		} elseif ($action === 'removeauth') {
 			$this->load_model('Authorization');

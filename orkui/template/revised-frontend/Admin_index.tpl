@@ -209,12 +209,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Global Permissions</div>
 					<div class="cp-action-desc">Manage system admins &amp; kingdom access</div>
 				</a>
-				<a class="cp-action-card" href="<?= UIR ?>Admin/authorization">
-					<div class="cp-action-icon cp-action-icon-gray"><i class="fas fa-key"></i></div>
-					<div class="cp-action-label">Edit Authorizations</div>
-					<div class="cp-action-desc">Directly edit player auth records</div>
-				</a>
-			</div>
+				</div>
 		</div>
 
 		<!-- Kingdom Overview Table -->
@@ -299,7 +294,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			<ul class="cp-report-list">
 				<li><a href="https://github.com/amtgard/ORK3" target="_blank"><i class="fab fa-github"></i><span>Source Code<span class="cp-report-list-desc">ORK3 on GitHub</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/permissions"><i class="fas fa-shield-alt"></i><span>Global Permissions<span class="cp-report-list-desc">System admins &amp; kingdom access</span></span></a></li>
-			<li><a href="<?= UIR ?>Admin/authorization"><i class="fas fa-key"></i><span>Authorization Editor<span class="cp-report-list-desc">Raw auth record management</span></span></a></li>
 			</ul>
 		</div>
 
