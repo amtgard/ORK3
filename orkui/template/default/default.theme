@@ -22,7 +22,25 @@
 		gtag('config', 'G-PVQCKENY0M');
 		</script>
 		<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
-	</head>
+	
+	<style>
+	/* What's New modal */
+	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
+	.wn-overlay.wn-open { display:flex; }
+	.wn-modal { background:#fff; border-radius:12px; padding:32px 28px 24px; max-width:480px; width:92%; box-shadow:0 8px 40px rgba(0,0,0,0.28); font-family:inherit; }
+	.wn-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+	.wn-header-icon { font-size:28px; color:#4299e1; }
+	.wn-title { font-size:20px; font-weight:700; color:#2d3748; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
+	.wn-subtitle { font-size:12px; color:#718096; margin-top:3px; font-style:italic; }
+	.wn-items { list-style:none; margin:0 0 24px; padding:0; display:flex; flex-direction:column; gap:14px; }
+	.wn-item { display:flex; gap:14px; align-items:flex-start; }
+	.wn-item-icon { color:#4299e1; font-size:18px; margin-top:2px; min-width:20px; }
+	.wn-item-title { font-weight:600; color:#2d3748; font-size:14px; }
+	.wn-item-body { color:#4a5568; font-size:13px; line-height:1.5; margin-top:2px; }
+	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; display:block; margin:0 auto; }
+	.wn-dismiss:hover { background:#3182ce; }
+	</style>
+</head>
 	<body>
 		<div id='theme_container'>
 
@@ -356,5 +374,52 @@
 	}
 	</script>
 
-	</body>
+	
+<?php if ($this->__session->token != null) : ?>
+<?php
+// --- What's New modal ---
+require_once(DIR_UI . 'whats_new_content.php');
+$__wnUid = (int)$this->__session->user_id;
+$DB->Clear();
+$__wnRow = $DB->DataSet("SELECT id FROM ork_whats_new_seen WHERE mundane_id = " . $__wnUid . " AND version = '" . WHATS_NEW_VERSION . "' LIMIT 1");
+$__wnShow = !($__wnRow && $__wnRow->Next());
+$DB->Clear();
+?>
+<?php if ($__wnShow): ?>
+<div class="wn-overlay wn-open" id="wn-overlay">
+  <div class="wn-modal">
+    <div class="wn-header">
+      <span class="wn-header-icon"><i class="fas fa-star"></i></span>
+      <span class="wn-title">What&rsquo;s New on the ORK?</span>
+      <span class="wn-subtitle">Version 3.5: The Dragon Release</span>
+    </div>
+    <ul class="wn-items">
+    <?php foreach ($WHATS_NEW_ITEMS as $__item): ?>
+      <li class="wn-item">
+        <span class="wn-item-icon"><i class="<?=htmlspecialchars($__item['icon'])?>"></i></span>
+        <div>
+          <div class="wn-item-title"><?=htmlspecialchars($__item['title'])?></div>
+          <div class="wn-item-body"><?=htmlspecialchars($__item['body'])?></div>
+        </div>
+      </li>
+    <?php endforeach; ?>
+    </ul>
+    <button class="wn-dismiss" onclick="wnDismiss()">Got it!</button>
+  </div>
+</div>
+<script>
+var wnVersion = <?=json_encode(WHATS_NEW_VERSION)?>;
+var wnUir = '<?=UIR?>';
+function wnDismiss() {
+  document.getElementById('wn-overlay').classList.remove('wn-open');
+  $.post(wnUir + 'WnAjax/dismiss', { version: wnVersion });
+}
+document.getElementById('wn-overlay').addEventListener('click', function(e) {
+  if (e.target === this) wnDismiss();
+});
+</script>
+<?php endif; ?>
+<?php endif; ?>
+
+</body>
 </html>
