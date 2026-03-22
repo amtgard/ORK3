@@ -170,12 +170,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Suspend Player</div>
 					<div class="cp-action-desc">Issue or lift a player suspension</div>
 				</button>
-				<button class="cp-action-card" onclick="cpOpenModal('cp-ban-overlay')">
-					<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-user-slash"></i></div>
-					<div class="cp-action-label">Ban Player</div>
-					<div class="cp-action-desc">Ban or unban a player globally</div>
-				</button>
-			</div>
+				</div>
 		</div>
 
 		<!-- Parks -->
@@ -536,40 +531,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		<div class="cp-modal-footer">
 			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-suspend-overlay')">Cancel</button>
 			<button class="adm-btn adm-btn-primary" id="cp-susp-submit"><i class="fas fa-user-clock"></i> <span id="cp-susp-submit-label">Suspend Player</span></button>
-		</div>
-	</div>
-</div>
-
-<!-- ---- Ban Player ---- -->
-<div class="cp-overlay" id="cp-ban-overlay">
-	<div class="cp-modal-box">
-		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-user-slash" style="margin-right:8px;color:#c53030"></i>Ban / Unban Player</h3>
-			<button class="cp-modal-close" onclick="cpCloseModal('cp-ban-overlay')">&times;</button>
-		</div>
-		<div class="cp-modal-body">
-			<div class="cp-feedback" id="cp-ban-feedback"></div>
-			<div class="cp-warning">
-				<i class="fas fa-exclamation-triangle"></i>
-				<div>A ban prevents the player from logging in and participating globally. Use suspend for temporary penalties.</div>
-			</div>
-			<div class="cp-field cp-field-ac">
-				<label>Player <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="cp-ban-player-name" autocomplete="off" placeholder="Search all players…">
-				<input type="hidden" id="cp-ban-player-id">
-				<div class="kn-ac-results" id="cp-ban-player-results"></div>
-			</div>
-			<div class="cp-field" style="margin-top:4px">
-				<label>Action</label>
-				<div class="cp-radio-group">
-					<label><input type="radio" name="cp-ban-action" value="1" checked> Ban Player</label>
-					<label><input type="radio" name="cp-ban-action" value="0"> Unban Player</label>
-				</div>
-			</div>
-		</div>
-		<div class="cp-modal-footer">
-			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-ban-overlay')">Cancel</button>
-			<button class="adm-btn adm-btn-danger" id="cp-ban-submit"><i class="fas fa-user-slash"></i> <span id="cp-ban-submit-label">Ban Player</span></button>
 		</div>
 	</div>
 </div>
@@ -1002,30 +963,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			document.getElementById('cp-susp-player-name').value = '';
 			document.getElementById('cp-susp-player-id').value = '';
 		});
-	});
-
-	/* ==================================================
-	   BAN PLAYER
-	   ================================================== */
-	cpAc({ inputId:'cp-ban-player-name', hiddenId:'cp-ban-player-id', resultsId:'cp-ban-player-results',
-		fetchFn: function(q, cb) { cpSearchPlayersGlobal(q, cb, true); } });
-	document.querySelectorAll('input[name="cp-ban-action"]').forEach(function(r) {
-		r.addEventListener('change', function() {
-			document.getElementById('cp-ban-submit-label').textContent = this.value === '1' ? 'Ban Player' : 'Unban Player';
-		});
-	});
-	document.getElementById('cp-ban-submit').addEventListener('click', function() {
-		var pid = document.getElementById('cp-ban-player-id').value;
-		if (!pid) { cpShowFeedback('cp-ban-feedback', 'Please select a player.', false); return; }
-		var action = document.querySelector('input[name="cp-ban-action"]:checked').value;
-		var btn = this;
-		cpPost(UIR + 'Admin/ajax/banplayer', { MundaneId: pid, Banned: action },
-			btn, 'cp-ban-feedback', function() {
-				var label = action === '1' ? 'banned' : 'unbanned';
-				cpShowFeedback('cp-ban-feedback', 'Player has been ' + label + '.', true);
-				document.getElementById('cp-ban-player-name').value = '';
-				document.getElementById('cp-ban-player-id').value = '';
-			});
 	});
 
 	/* ==================================================
