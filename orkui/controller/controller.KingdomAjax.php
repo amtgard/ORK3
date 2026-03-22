@@ -526,6 +526,14 @@ class Controller_KingdomAjax extends Controller {
 				$parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
 			}
 			echo json_encode(['status' => 0, 'parks' => $parks]);
+		} elseif ($action === 'parktitles') {
+			$this->load_model('Kingdom');
+			$result = $this->Kingdom->get_park_info($kingdom_id);
+			$titles = [];
+			foreach ($result['Titles'] ?? [] as $pt) {
+				$titles[] = ['ParkTitleId' => (int)$pt['ParkTitleId'], 'Title' => $pt['Title']];
+			}
+			echo json_encode(['status' => 0, 'titles' => $titles]);
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

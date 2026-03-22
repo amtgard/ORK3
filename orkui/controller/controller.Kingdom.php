@@ -117,6 +117,54 @@ class Controller_Kingdom extends Controller {
 			$katt = (int)$knResult->katt;
 		}
 		$result['_kingdom'] = ['att' => $katt];
+
+		// Previous-period trend data — only for users with kingdom-level auth
+		$uid = (int)($this->session->user_id ?? 0);
+		if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT)) {
+			// Previous 26 weeks (weeks 27–52 ago)
+			$DB->Clear();
+			$prevWkResult = $DB->DataSet(
+				"SELECT COUNT(mw.mundane_id) AS att, p.park_id
+				 FROM ork_park p
+				 LEFT JOIN (
+				     SELECT a.mundane_id, a.park_id
+				     FROM ork_attendance a
+				     WHERE a.date >  DATE_SUB(CURDATE(), INTERVAL 52 WEEK)
+				       AND a.date <= DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
+				       AND a.kingdom_id = {$kid} AND a.mundane_id > 0
+				     GROUP BY date_year, date_week3, mundane_id, a.park_id
+				 ) mw ON p.park_id = mw.park_id
+				 WHERE p.kingdom_id = {$kid} AND p.active = 'Active'
+				 GROUP BY p.park_id"
+			);
+			if ($prevWkResult) {
+				while ($prevWkResult->Next()) {
+					$pid = (int)$prevWkResult->park_id;
+					if (isset($result[$pid])) $result[$pid]['prev_att'] = (int)$prevWkResult->att;
+				}
+			}
+			// Previous 12 months (months 13–24 ago)
+			$DB->Clear();
+			$prevMoResult = $DB->DataSet(
+				"SELECT COUNT(mm.mundane_id) AS mo, mm.park_id
+				 FROM (
+				     SELECT a.mundane_id, a.date_year, a.date_month, a.park_id
+				     FROM ork_attendance a
+				     INNER JOIN ork_park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+				       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+				       AND a.mundane_id > 0
+				     GROUP BY a.date_year, a.date_month, a.mundane_id, a.park_id
+				 ) mm
+				 GROUP BY mm.park_id"
+			);
+			if ($prevMoResult) {
+				while ($prevMoResult->Next()) {
+					$pid = (int)$prevMoResult->park_id;
+					if (isset($result[$pid])) $result[$pid]['prev_mo'] = (int)$prevMoResult->mo;
+				}
+			}
+		}
 		header('Content-Type: application/json');
 		echo json_encode($result);
 		exit();

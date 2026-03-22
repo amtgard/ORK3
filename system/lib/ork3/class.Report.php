@@ -1302,6 +1302,20 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
+	public function GetDistinctActivePlayerCount($weeks = 26) {
+		$cacheKey = Ork3::$Lib->ghettocache->key(['weeks' => $weeks]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 600)) !== false)
+			return $cache;
+		$since = date('Y-m-d', strtotime("-{$weeks} week"));
+		$sql = "SELECT COUNT(DISTINCT mundane_id) AS player_count FROM `" . DB_PREFIX . "attendance` WHERE date > '{$since}' AND mundane_id > 0";
+		$r = $this->db->query($sql);
+		$count = 0;
+		if ($r && $r->next()) {
+			$count = (int)$r->player_count;
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $count);
+	}
+
 	public function GetActivePlayers($request) {
 		if (strlen($request['MinimumWeeklyAttendance']) == 0) $request['MinimumWeeklyAttendance'] = 0;
     	if (strlen($request['MinimumDailyAttendance']) == 0) $request['MinimumDailyAttendance'] = 6;
@@ -2140,7 +2154,22 @@ class Report  extends Ork3 {
 						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
 						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
 						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
 					FROM " . DB_PREFIX . "park p
 						LEFT JOIN " . DB_PREFIX . "officer o ON o.park_id = p.park_id
 						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
@@ -2163,7 +2192,22 @@ class Report  extends Ork3 {
 						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
 						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
 						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
-						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
 					FROM " . DB_PREFIX . "kingdom k
 						LEFT JOIN " . DB_PREFIX . "officer o ON o.kingdom_id = k.kingdom_id AND o.park_id = 0
 						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
@@ -2184,16 +2228,31 @@ class Report  extends Ork3 {
 				$response['Kingdoms'][] = [
 					'KingdomId'      => $r->entity_id,
 					'KingdomName'    => $r->entity_name,
-					'MonarchPersona' => $r->monarch_persona,
-					'MonarchId'      => $r->monarch_id,
-					'RegentPersona'  => $r->regent_persona,
-					'RegentId'       => $r->regent_id,
-					'PMPersona'      => $r->pm_persona,
-					'PMId'           => $r->pm_id,
-					'ChampionPersona'=> $r->champion_persona,
-					'ChampionId'     => $r->champion_id,
-					'GMRPersona'     => $r->gmr_persona,
-					'GMRId'          => $r->gmr_id,
+					'MonarchPersona'  => $r->monarch_persona,
+					'MonarchId'       => $r->monarch_id,
+					'MonarchGiven'    => $r->monarch_given,
+					'MonarchSurname'  => $r->monarch_surname,
+					'MonarchEmail'    => $r->monarch_email,
+					'RegentPersona'   => $r->regent_persona,
+					'RegentId'        => $r->regent_id,
+					'RegentGiven'     => $r->regent_given,
+					'RegentSurname'   => $r->regent_surname,
+					'RegentEmail'     => $r->regent_email,
+					'PMPersona'       => $r->pm_persona,
+					'PMId'            => $r->pm_id,
+					'PMGiven'         => $r->pm_given,
+					'PMSurname'       => $r->pm_surname,
+					'PMEmail'         => $r->pm_email,
+					'ChampionPersona' => $r->champion_persona,
+					'ChampionId'      => $r->champion_id,
+					'ChampionGiven'   => $r->champion_given,
+					'ChampionSurname' => $r->champion_surname,
+					'ChampionEmail'   => $r->champion_email,
+					'GMRPersona'      => $r->gmr_persona,
+					'GMRId'           => $r->gmr_id,
+					'GMRGiven'        => $r->gmr_given,
+					'GMRSurname'      => $r->gmr_surname,
+					'GMREmail'        => $r->gmr_email,
 				];
 			}
 		}

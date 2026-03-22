@@ -43,10 +43,12 @@ class Controller_SearchAjax extends Controller {
 		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
 
 		// Per-category budgets; unused slots from each category roll to players
-		$playerBudget  = 4;
-		$parkBudget    = 3;
-		$kingdomBudget = 2;
-		$unitBudget    = 3;
+		// Optional ?focus=type gives that type 10 results and zeros the rest (for single-type admin searches)
+		$focus = trim($_GET['focus'] ?? '');
+		$playerBudget  = $focus === 'player'  ? 10 : ($focus ? 0 : 4);
+		$parkBudget    = $focus === 'park'    ? 10 : ($focus ? 0 : 3);
+		$kingdomBudget = $focus === 'kingdom' ? 10 : ($focus ? 0 : 2);
+		$unitBudget    = $focus === 'unit'    ? 10 : ($focus ? 0 : 3);
 
 		// Parks — prioritize user's kingdom first; narrow by abbreviation prefix if provided
 		$parkWhere = "p.active = 'Active' AND (p.name LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')";

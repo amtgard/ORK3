@@ -30,6 +30,9 @@ foreach ($_od_rows as $_r) {
 	letter-spacing: 0.05em; background: #fff1f2; color: #be123c;
 	border: 1px solid #fecdd3;
 }
+.od-real-name { display: block; font-size: 11px; color: var(--rp-text-muted); margin-top: 2px; }
+.od-email-link { display: block; font-size: 11px; color: var(--rp-text-muted); text-decoration: none; margin-top: 1px; }
+.od-email-link:hover { text-decoration: underline; }
 </style>
 
 <div class="rp-root">
@@ -104,19 +107,23 @@ foreach ($_od_rows as $_r) {
 			</thead>
 			<tbody>
 <?php
-function _od_cell($persona, $id, $uir) {
+function _od_cell($persona, $id, $uir, $given = '', $surname = '', $email = '') {
 	if (empty($persona) || !$id) return '<span class="od-vacant-badge">Vacant</span>';
-	return '<a class="od-officer-link" href="' . $uir . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
+	$real = trim($given . ' ' . $surname);
+	$out  = '<a class="od-officer-link" href="' . $uir . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
+	if ($real)  $out .= '<span class="od-real-name">'  . htmlspecialchars($real)  . '</span>';
+	if ($email) $out .= '<a class="od-email-link" href="mailto:' . htmlspecialchars($email) . '">' . htmlspecialchars($email) . '</a>';
+	return $out;
 }
 foreach ($_od_rows as $row):
 ?>
 				<tr>
 					<td><a class="od-officer-link" href="<?=UIR?><?=$_od_entity_url_prefix?><?=$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
-					<td><?=_od_cell($row['MonarchPersona'],  $row['MonarchId'],  UIR)?></td>
-					<td><?=_od_cell($row['RegentPersona'],   $row['RegentId'],   UIR)?></td>
-					<td><?=_od_cell($row['PMPersona'],       $row['PMId'],       UIR)?></td>
-					<td><?=_od_cell($row['ChampionPersona'], $row['ChampionId'], UIR)?></td>
-					<td><?=_od_cell($row['GMRPersona'],      $row['GMRId'],      UIR)?></td>
+					<td><?=_od_cell($row['MonarchPersona'],  $row['MonarchId'],  UIR, $row['MonarchGiven'],  $row['MonarchSurname'],  $row['MonarchEmail'])?></td>
+					<td><?=_od_cell($row['RegentPersona'],   $row['RegentId'],   UIR, $row['RegentGiven'],   $row['RegentSurname'],   $row['RegentEmail'])?></td>
+					<td><?=_od_cell($row['PMPersona'],       $row['PMId'],       UIR, $row['PMGiven'],       $row['PMSurname'],       $row['PMEmail'])?></td>
+					<td><?=_od_cell($row['ChampionPersona'], $row['ChampionId'], UIR, $row['ChampionGiven'], $row['ChampionSurname'], $row['ChampionEmail'])?></td>
+					<td><?=_od_cell($row['GMRPersona'],      $row['GMRId'],      UIR, $row['GMRGiven'],      $row['GMRSurname'],      $row['GMREmail'])?></td>
 				</tr>
 <?php endforeach; ?>
 			</tbody>

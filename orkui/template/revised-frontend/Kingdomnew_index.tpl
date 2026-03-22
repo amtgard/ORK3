@@ -1632,18 +1632,25 @@ var KnConfig = {
 		.then(function(data) {
 			var totalAtt = 0, totalMo = 0, totalTp = 0, totalTm = 0;
 			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
+			function knTrend(cur, prev, decimals) {
+				if (prev === undefined) return '';
+				if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';
+				if (cur < prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' + prev.toFixed(decimals) + ' (prev period)">&#9660;</span>';
+				return '';
+			}
 			for (var parkId in data) {
 				if (parkId === '_kingdom') continue;
 				var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
 				var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
+				var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
 				totalAtt += att; totalMo += mo; totalTp += tp; totalTm += tm;
 				// Tile view
 				var tile = document.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
 				if (tile) {
 					var wkEl = tile.querySelector('.kn-avgwk-tile');
 					var moEl = tile.querySelector('.kn-avgmo-tile');
-					if (wkEl) wkEl.textContent = (att / 26).toFixed(1);
-					if (moEl) moEl.textContent = (mo / 12).toFixed(1);
+					if (wkEl) wkEl.innerHTML = (att / 26).toFixed(1) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 1);
+					if (moEl) moEl.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);
 				}
 				// List view row
 				var row = document.querySelector('tr[data-park-id="' + parkId + '"]');
@@ -1652,8 +1659,8 @@ var KnConfig = {
 					var moTd = row.querySelector('.kn-avgmo-row');
 					var tpTd = row.querySelector('.kn-tp-row');
 					var tmTd = row.querySelector('.kn-tm-row');
-					if (wkTd) { wkTd.textContent = (att / 26).toFixed(2); wkTd.setAttribute('data-sortval', att / 26); }
-					if (moTd) { moTd.textContent = (mo / 12).toFixed(1);  moTd.setAttribute('data-sortval', mo / 12); }
+					if (wkTd) { wkTd.innerHTML = (att / 26).toFixed(2) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 2); wkTd.setAttribute('data-sortval', att / 26); }
+					if (moTd) { moTd.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);  moTd.setAttribute('data-sortval', mo / 12); }
 					if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
 					if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
 				}
