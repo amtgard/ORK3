@@ -6,8 +6,6 @@ $_pdm_count  = count($_pdm_parks);
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
 
 <style>
-/* Break out of the 1600px theme_container for wide matrices */
-.rp-root { width: 100vw; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw; box-sizing: border-box; padding: 0 24px; }
 .pdm-wrap { overflow-x: auto; margin-top: 4px; }
 .pdm-table { border-collapse: collapse; white-space: nowrap; font-size: 0.8em; }
 .pdm-table th, .pdm-table td { border: 1px solid #e2e8f0; padding: 4px 6px; text-align: center; }
@@ -125,3 +123,9 @@ $_pdm_count  = count($_pdm_parks);
 <?php endif; ?>
 
 </div>
+<script>
+(function(){
+	var c = document.getElementById("theme_container");
+	if (c) { c.style.maxWidth = "none"; c.style.width = "98%"; }
+}());
+</script>
