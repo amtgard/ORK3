@@ -573,16 +573,10 @@
 					</div>
 
 					<div class="kn-report-group">
-						<h5><i class="fas fa-image"></i> Heraldry</h5>
+						<h5><i class="fas fa-ellipsis-h"></i> Other</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/parkheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Players</a></li>
-						</ul>
-					</div>
-
-					<div class="kn-report-group">
-						<h5><i class="fas fa-map"></i> Geography</h5>
-						<ul>
 							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
 						</ul>
 					</div>
