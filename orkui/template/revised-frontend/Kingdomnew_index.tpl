@@ -400,6 +400,31 @@
 							<button class="kn-filter-toggle kn-filter-on" data-filter="park-event">Park Events</button>
 							<button class="kn-filter-toggle" data-filter="park-day">Park Days</button>
 						</div>
+						<div class="kn-sub-wrap" id="kn-sub-wrap">
+							<button class="kn-view-btn" id="kn-sub-btn" title="Subscribe to calendar"
+								onclick="document.getElementById('kn-sub-pop').classList.toggle('kn-sub-open');event.stopPropagation();">
+								<i class="fas fa-rss"></i>
+							</button>
+							<div class="kn-sub-pop" id="kn-sub-pop">
+								<div class="kn-sub-pop-title"><i class="fas fa-calendar-check" style="margin-right:5px"></i>Subscribe to Events</div>
+								<div class="kn-sub-pop-row">
+									<input class="kn-sub-url-input" id="kn-sub-url-input" type="text"
+										value="<?= htmlspecialchars($IcsUrl) ?>" readonly>
+									<button class="kn-sub-copy-btn" onclick="knCopyIcsUrl()" title="Copy URL">
+										<i class="fas fa-copy"></i>
+									</button>
+								</div>
+								<a class="kn-sub-gcal-btn"
+									href="https://calendar.google.com/calendar/r/settings/addbyurl?url=<?= urlencode($IcsUrl) ?>"
+									target="_blank" rel="noopener">
+									<i class="fab fa-google" style="margin-right:6px"></i>Add to Google Calendar
+								</a>
+								<a class="kn-sub-webcal-btn"
+									href="webcal://<?= htmlspecialchars(preg_replace('#^https?://#', '', $IcsUrl)) ?>">
+									<i class="fas fa-link" style="margin-right:4px"></i>webcal:// (direct app)
+								</a>
+							</div>
+						</div>
 						<?php if ($CanManageKingdom): ?>
 						<button onclick="knOpenEventModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
@@ -1507,6 +1532,37 @@ var KnConfig = {
 #kn-moveplayer-overlay .kn-modal-body { overflow:visible; }
 #kn-moveplayer-overlay .kn-acct-field { position:relative; }
 #kn-moveplayer-overlay .kn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
+/* Subscribe popover */
+.kn-sub-wrap { position:relative; }
+.kn-sub-pop {
+	display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:200;
+	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:12px 14px; width:280px; font-size:13px;
+}
+.kn-sub-pop.kn-sub-open { display:block; }
+.kn-sub-pop-title {
+	font-weight:700; color:#2d3748; margin-bottom:8px; font-size:12px;
+	text-transform:uppercase; letter-spacing:.05em;
+}
+.kn-sub-pop-row { display:flex; gap:4px; margin-bottom:8px; }
+.kn-sub-url-input {
+	flex:1; font-size:11px; padding:4px 6px; border:1px solid #e2e8f0;
+	border-radius:4px; color:#4a5568; background:#f7fafc; min-width:0;
+}
+.kn-sub-copy-btn {
+	padding:4px 8px; border:1px solid #e2e8f0; border-radius:4px;
+	background:#edf2f7; cursor:pointer; color:#4a5568; font-size:12px;
+}
+.kn-sub-copy-btn:hover { background:#e2e8f0; }
+.kn-sub-gcal-btn {
+	display:block; text-align:center; background:#4285f4; color:#fff;
+	border-radius:5px; padding:7px 10px; font-size:12px; font-weight:600; text-decoration:none;
+}
+.kn-sub-gcal-btn:hover { background:#3367d6; color:#fff; }
+.kn-sub-webcal-btn {
+	display:block; margin-top:6px; font-size:11px; color:#718096; text-align:center; text-decoration:none;
+}
+.kn-sub-webcal-btn:hover { color:#4a5568; }
 </style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
@@ -1827,6 +1883,29 @@ var KnConfig = {
 			});
 		}
 	});
+
+	function knCopyIcsUrl() {
+		var inp = document.getElementById('kn-sub-url-input');
+		if (!inp) return;
+		inp.select();
+		inp.setSelectionRange(0, 99999);
+		try {
+			navigator.clipboard.writeText(inp.value).then(function() {
+				var btn = document.querySelector('.kn-sub-copy-btn');
+				if (btn) { btn.innerHTML = '<i class="fas fa-check"></i>'; setTimeout(function(){ btn.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500); }
+			});
+		} catch(e) { document.execCommand('copy'); }
+	}
+
+	// Close subscribe popover on outside click
+	document.addEventListener('click', function(e) {
+		var wrap = document.getElementById('kn-sub-wrap');
+		if (wrap && !wrap.contains(e.target)) {
+			var pop = document.getElementById('kn-sub-pop');
+			if (pop) pop.classList.remove('kn-sub-open');
+		}
+	});
+
 })();
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

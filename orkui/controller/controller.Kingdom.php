@@ -446,6 +446,112 @@ class Controller_Kingdom extends Controller {
 
 		$this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
 		$this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
+		$this->data['IcsUrl'] = UIR . 'Kingdom/ics/' . $kingdom_id;
+	}
+
+	// ------------------------------------------------------------------ ICS helpers
+	private static function ics_dt($str) {
+		return gmdate('Ymd\THis\Z', strtotime($str));
+	}
+	private static function ics_dt_plus1hr($str) {
+		return gmdate('Ymd\THis\Z', strtotime($str) + 3600);
+	}
+	private static function ics_escape($str) {
+		$str = str_replace('\\', '\\\\', $str);
+		$str = str_replace(';',  '\;',   $str);
+		$str = str_replace(',',  '\,',   $str);
+		$str = str_replace(["\r\n", "\r", "\n"], '\\n', $str);
+		return $str;
+	}
+	private static function ics_fold($line) {
+		$out = '';
+		while (strlen($line) > 75) {
+			$out  .= substr($line, 0, 75) . "\r\n ";
+			$line  = substr($line, 75);
+		}
+		return $out . $line;
+	}
+	private static function ics_location($address, $city, $province, $postal, $country) {
+		$parts = array_filter([$address, $city, $province, $postal, $country], 'strlen');
+		return implode(', ', $parts);
+	}
+
+	// ------------------------------------------------------------------ ICS Feed
+	public function ics($kingdom_id = null) {
+		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
+		$kid = (int)$kingdom_id;
+
+		// Kingdom name for CALNAME
+		$knName = $this->Kingdom->get_kingdom_name($kid);
+		if (empty($knName)) $knName = 'Kingdom';
+
+		// Fetch events
+		global $DB;
+		$sql = "
+			SELECT
+				e.event_id, e.name,
+				p.name AS park_name,
+				cd.event_calendardetail_id, cd.event_start, cd.event_end,
+				cd.description, cd.url,
+				cd.address, cd.city, cd.province, cd.postal_code, cd.country
+			FROM ork_event e
+			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+				AND cd.event_start >= CURDATE()
+				AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
+			WHERE e.kingdom_id = {$kid}
+			ORDER BY cd.event_start ASC";
+		$DB->Clear();
+		$result = $DB->DataSet($sql);
+
+		// Build ICS
+		$lines = [];
+		$lines[] = 'BEGIN:VCALENDAR';
+		$lines[] = 'VERSION:2.0';
+		$lines[] = 'PRODID:-//ORK3//Amtgard ORK//EN';
+		$lines[] = 'CALSCALE:GREGORIAN';
+		$lines[] = 'METHOD:PUBLISH';
+		$lines[] = self::ics_fold('X-WR-CALNAME:' . self::ics_escape($knName) . ' Events');
+
+		if ($result) {
+			while ($result->Next()) {
+				$dtstart = self::ics_dt($result->event_start);
+				$rawEnd  = $result->event_end;
+				$dtend   = (!empty($rawEnd) && $rawEnd !== '0000-00-00 00:00:00')
+					? self::ics_dt($rawEnd)
+					: self::ics_dt_plus1hr($result->event_start);
+
+				$uid      = 'event-' . (int)$result->event_id . '-' . (int)$result->event_calendardetail_id . '@ork3';
+				$location = self::ics_location($result->address, $result->city, $result->province, $result->postal_code, $result->country);
+				$dtstamp  = gmdate('Ymd\THis\Z');
+
+				$lines[] = 'BEGIN:VEVENT';
+				$lines[] = self::ics_fold('UID:' . $uid);
+				$lines[] = 'DTSTAMP:' . $dtstamp;
+				$lines[] = 'DTSTART:' . $dtstart;
+				$lines[] = 'DTEND:' . $dtend;
+				$lines[] = self::ics_fold('SUMMARY:' . self::ics_escape($result->name));
+				if (!empty($result->description)) {
+					$lines[] = self::ics_fold('DESCRIPTION:' . self::ics_escape(strip_tags($result->description)));
+				}
+				if (!empty($location)) {
+					$lines[] = self::ics_fold('LOCATION:' . self::ics_escape($location));
+				}
+				if (!empty($result->url)) {
+					$lines[] = self::ics_fold('URL:' . $result->url);
+				}
+				$lines[] = 'END:VEVENT';
+			}
+		}
+
+		$lines[] = 'END:VCALENDAR';
+
+		$safeName = preg_replace('/[^a-z0-9]/i', '-', $knName);
+		header('Content-Type: text/calendar; charset=utf-8');
+		header('Content-Disposition: attachment; filename="' . $safeName . '-events.ics"');
+		header('Cache-Control: no-cache, must-revalidate');
+		echo implode("\r\n", $lines) . "\r\n";
+		exit();
 	}
 
 }

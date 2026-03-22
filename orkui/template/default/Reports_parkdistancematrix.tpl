@@ -6,7 +6,9 @@ $_pdm_count  = count($_pdm_parks);
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
 
 <style>
+.rp-table-area { width: 100%; box-sizing: border-box; }
 .pdm-wrap { overflow-x: auto; margin-top: 4px; }
+.pdm-table { width: 100%; }
 .pdm-table { border-collapse: collapse; white-space: nowrap; font-size: 0.8em; }
 .pdm-table th, .pdm-table td { border: 1px solid #e2e8f0; padding: 4px 6px; text-align: center; }
 .pdm-table td.pdm-rowhead { text-align: left; font-weight: 600; white-space: nowrap; background: #f7fafc; }
