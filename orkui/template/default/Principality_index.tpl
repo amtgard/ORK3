@@ -6,7 +6,6 @@
 <?php if ($LoggedIn) : ?>
 		<li><a href='<?=UIR ?>Award/principality/<?=$principality_id ?>'>Enter Awards</a></li>
 <?php endif ; ?>
-		<li><a href='<?=UIR ?>Treasury/principality/<?=$PrincipalityInfo['PrincipalityId'] ?>'>Treasury</a></li>
 	</ul>
 </div>
 
@@ -76,7 +75,6 @@
 				<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$principality_id ?>'>Principality Heraldry, Players</a></li>
 			</ul>
 		</li>
-		<li><a href=''>Treasury Report</a></li>
 		<li><a href='<?=UIR ?>Unit/unitlist&PrincipalityId=<?=$principality_id ?>'>Companies and Households</a></li>
 	</ul>
 </div>

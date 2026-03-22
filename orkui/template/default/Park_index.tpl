@@ -14,7 +14,6 @@
 		<li><a href='<?=UIR ?>Search/park/<?=$park_id ?>'>Search Players</a></li>
 		<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Park Heraldry, Players</a></li>
 		<li><a href='<?=UIR ?>Unit/unitlist&ParkId=<?=$park_id ?>'>Companies and Households</a></li>
-		<li><a href='<?=UIR ?>Treasury/park/<?=$park_info['ParkInfo']['ParkId'] ?>'>Treasury</a></li>
 		<li><?php $location = json_decode(stripslashes($park_info['ParkInfo']['Location'])); $location = ((isset($location->location))?$location->location:$location->bounds->northeast);  ?>
 			<a href="http://maps.google.com/maps?q=@<?= $location->lat . ',' . $location->lng ?>">Park Map</a>
 		</li>
@@ -153,7 +152,6 @@
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Reports/closest_parks&ParkId=<?=$park_id ?>'>Closest Parks</a></li>
-		<li><a href='' class='unimplemented'>Treasury Report</a></li>
 	</ul>
 </div>
 

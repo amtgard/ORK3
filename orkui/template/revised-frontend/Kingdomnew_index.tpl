@@ -198,10 +198,6 @@
 					<a href="#" onclick="knActivateTab('map');return false;">Kingdom Map</a>
 				</li>
 				<li>
-					<span class="kn-link-icon"><i class="fas fa-coins"></i></span>
-					<a href="<?= UIR ?>Treasury/kingdom/<?= $kingdom_id ?>">Treasury</a>
-				</li>
-				<li>
 					<span class="kn-link-icon"><i class="fas fa-users"></i></span>
 					<a href="<?= UIR ?>Unit/unitlist&KingdomId=<?= $kingdom_id ?>">Companies &amp; Households</a>
 				</li>
