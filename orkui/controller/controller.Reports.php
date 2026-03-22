@@ -919,6 +919,8 @@ class Controller_Reports extends Controller {
 		unset($pRow);
 
 		$this->data['GridRows'] = array_values($playerData);
+	}
+
 	public function park_distance_matrix($type = null) {
 		$this->template = 'Reports_parkdistancematrix.tpl';
 		$this->data['page_title'] = "Park Distance Matrix";
