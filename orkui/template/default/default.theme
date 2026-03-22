@@ -139,6 +139,10 @@
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=$__adminUrl?>'><i class='fas fa-cog'></i> <?=$__adminLabel?></a>
 <?php endif; ?>
+<?php if (Ork3::$Lib->authorization->HasAuthority($__navUid, AUTH_ADMIN, 0, AUTH_ADMIN)): ?>
+					<?php if (!isset($menu['admin'])): ?><div class='nav-dropdown-divider'></div><?php endif; ?>
+					<a href='<?=UIR?>Admin'><i class='fas fa-shield-alt'></i> ORK Admin</a>
+<?php endif; ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
 				</div>
