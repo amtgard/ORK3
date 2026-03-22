@@ -723,7 +723,7 @@ class Controller_Admin extends Controller {
 		$uid = (int)($this->session->user_id ?? 0);
 		$authType = ($type === 'Kingdom') ? AUTH_KINGDOM : AUTH_PARK;
 		if (!Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_CREATE)) {
-			header('Location: ' . UIR . ($type === 'Kingdom' ? 'Kingdom/index/' : 'Park/index/') . $id);
+			header('Location: ' . UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $id);
 			exit;
 		}
 
@@ -734,12 +734,12 @@ class Controller_Admin extends Controller {
 			$this->load_model('Kingdom');
 			$info = $this->Kingdom->get_kingdom_shortinfo($id);
 			$name = $info['Info']['KingdomInfo']['KingdomName'] ?? 'Kingdom ' . $id;
-			$url  = UIR . 'Kingdom/index/' . $id;
+			$url  = UIR . 'Kingdom/profile/' . $id;
 		} else {
 			$this->load_model('Park');
 			$info = $this->Park->get_park_details($id);
 			$name = $info['ParkInfo']['ParkName'] ?? 'Park ' . $id;
-			$url  = UIR . 'Park/index/' . $id;
+			$url  = UIR . 'Park/profile/' . $id;
 		}
 
 		// All grants at this type+id level (officers + non-officers), including modified timestamp
