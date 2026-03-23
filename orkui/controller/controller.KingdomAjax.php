@@ -627,10 +627,28 @@ class Controller_KingdomAjax extends Controller {
 		global $DB;
 		$events = [];
 
+		// Fetch Monarch/Regent mundane IDs for royal-attendance detection
+		$DB->Clear();
+		$offResult = $DB->DataSet("SELECT role, mundane_id FROM ork_officer WHERE kingdom_id = {$kid} AND park_id = 0 AND role IN ('Monarch','Regent') AND mundane_id > 0");
+		$monarchId = 0; $regentId = 0;
+		if ($offResult) { while ($offResult->Next()) {
+			if ($offResult->role === 'Monarch') $monarchId = (int)$offResult->mundane_id;
+			if ($offResult->role === 'Regent')  $regentId  = (int)$offResult->mundane_id;
+		} }
+		$monarchSubq = $monarchId > 0
+			? "(SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$monarchId})"
+			: "0";
+		$regentSubq = $regentId > 0
+			? "(SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$regentId})"
+			: "0";
+
 		// Events in range (all calendar-detail occurrences within window)
+		$DB->Clear();
 		$evtSql = "
 			SELECT e.event_id, e.name, e.park_id, p.abbreviation AS park_abbr,
-			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id
+			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id,
+			       {$monarchSubq} AS monarch_rsvp,
+			       {$regentSubq} AS regent_rsvp
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
@@ -641,10 +659,12 @@ class Controller_KingdomAjax extends Controller {
 		$evtResult = $DB->DataSet($evtSql);
 		if ($evtResult && $evtResult->Size() > 0) {
 			while ($evtResult->Next()) {
-				$isPark = (int)$evtResult->park_id > 0;
-				$abbr   = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
-				$eid    = (int)$evtResult->event_id;
-				$did    = (int)$evtResult->detail_id;
+				$isPark    = (int)$evtResult->park_id > 0;
+				$abbr      = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
+				$eid       = (int)$evtResult->event_id;
+				$did       = (int)$evtResult->detail_id;
+				$mRsvp     = (int)$evtResult->monarch_rsvp;
+				$rRsvp     = (int)$evtResult->regent_rsvp;
 				$ev = [
 					'title' => $abbr . $evtResult->name,
 					'start' => $evtResult->event_start,
@@ -652,6 +672,9 @@ class Controller_KingdomAjax extends Controller {
 					'color' => $isPark ? '#6b46c1' : '#0891b2',
 					'type'  => $isPark ? 'park-event' : 'kingdom-event',
 				];
+				if ($mRsvp && $rRsvp)  $ev['royalPresence'] = 'both';
+				elseif ($mRsvp)        $ev['royalPresence'] = 'monarch';
+				elseif ($rRsvp)        $ev['royalPresence'] = 'regent';
 				$endRaw = $evtResult->event_end ?? '';
 				if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {
 					$endDt = new DateTime(substr($endRaw, 0, 10));
