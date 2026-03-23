@@ -344,7 +344,7 @@
 					<span class="pk-link-icon"><i class="fas fa-image"></i></span>
 					<a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Heraldry</a>
 				</li>
-				<?php if ($LoggedIn): ?>
+				<?php if ($IsLoggedIn): ?>
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-eye"></i></span>
 					<a href="<?= UIR ?>Attendance/behold/<?= $park_id ?>">Behold!</a>
@@ -476,10 +476,17 @@
 					<div class="pk-schedule-grid">
 						<?php foreach ($parkDayList as $day): ?>
 						<?php
+							if (!function_exists('pk_ordinal')) {
+								function pk_ordinal($n) {
+									$n = (int)$n; $m = $n % 100;
+									if ($m >= 11 && $m <= 13) return $n . 'th';
+									return $n . (['th','st','nd','rd'][$n % 10] ?? 'th');
+								}
+							}
 							switch ($day['Recurrence']) {
 								case 'weekly':        $recText = 'Every ' . $day['WeekDay']; break;
-								case 'week-of-month': $recText = 'Every ' . shortScale::toDigith($day['WeekOfMonth']) . ' ' . $day['WeekDay']; break;
-								case 'monthly':       $recText = 'Monthly on the ' . shortScale::toDigith($day['MonthDay']); break;
+								case 'week-of-month': $recText = 'Every ' . pk_ordinal($day['WeekOfMonth']) . ' ' . $day['WeekDay']; break;
+								case 'monthly':       $recText = 'Monthly on the ' . pk_ordinal($day['MonthDay']); break;
 								default:              $recText = $day['Recurrence'];
 							}
 							switch ($day['Purpose']) {
@@ -608,8 +615,8 @@
 							<?php
 								switch ($pkDay['Recurrence']) {
 									case 'weekly':        $pkDayRec = 'Every ' . $pkDay['WeekDay']; break;
-									case 'week-of-month': $pkDayRec = 'Every ' . shortScale::toDigith($pkDay['WeekOfMonth']) . ' ' . $pkDay['WeekDay']; break;
-									case 'monthly':       $pkDayRec = 'Monthly on the ' . shortScale::toDigith($pkDay['MonthDay']); break;
+									case 'week-of-month': $pkDayRec = 'Every ' . pk_ordinal($pkDay['WeekOfMonth']) . ' ' . $pkDay['WeekDay']; break;
+									case 'monthly':       $pkDayRec = 'Monthly on the ' . pk_ordinal($pkDay['MonthDay']); break;
 									default:              $pkDayRec = $pkDay['Recurrence'];
 								}
 								$pkPurposeLabels = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
@@ -861,13 +868,11 @@
 
 			<!-- Hall of Arms Tab -->
 			<?php
-				$_isOwnPark = isset($this->__session->user_id)
-					&& (int)$this->__session->user_id > 0
-					&& (int)($this->__session->park_id ?? 0) === (int)$park_id;
+				$_isOwnPark = !empty($IsOwnPark);
 				$_currentUserHasHeraldry = true;
 				if ($_isOwnPark) {
 					foreach ($allPlayers as $_cp) {
-						if ((int)$_cp['MundaneId'] === (int)$this->__session->user_id) {
+						if ((int)$_cp['MundaneId'] === (int)$CurrentUserId) {
 							$_currentUserHasHeraldry = (bool)$_cp['HasHeraldry'];
 							break;
 						}
@@ -914,7 +919,7 @@
 				<div class="pk-hoa-cta">
 					<i class="fas fa-shield-alt pk-hoa-cta-icon"></i>
 					<div class="pk-hoa-cta-body">
-						<strong>Your arms should be here!</strong> Visit <a href="<?= UIR ?>Player/profile/<?= (int)$this->__session->user_id ?>">your profile</a> to upload your own heraldry. Don't have heraldry of your own? Reach out to your park or kingdom Regent to be connected with heraldic resources who can help.
+						<strong>Your arms should be here!</strong> Visit <a href="<?= UIR ?>Player/profile/<?= (int)$CurrentUserId ?>">your profile</a> to upload your own heraldry. Don't have heraldry of your own? Reach out to your park or kingdom Regent to be connected with heraldic resources who can help.
 					</div>
 				</div>
 				<?php endif; ?>
@@ -998,7 +1003,7 @@
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>
 			<div class="pk-tab-panel" id="pk-tab-recommendations" style="display:none">
-				<?php if ($LoggedIn): ?>
+				<?php if ($IsLoggedIn): ?>
 				<div class="pk-tab-toolbar">
 					<button class="pk-btn pk-btn-secondary" onclick="pkOpenRecModal()">
 						<i class="fas fa-star"></i> Recommend an Award
@@ -1037,7 +1042,7 @@
 							<?php if (!empty($CanManagePark)): ?>
 							<td class="pk-rec-actions">
 								<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-									data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
+									data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
 									<i class="fas fa-medal"></i> Grant
 								</button>
 								<button class="pk-rec-dismiss-btn"
@@ -1094,7 +1099,7 @@ var PkConfig = {
 	},
 };
 </script>
-<?php if ($LoggedIn): ?>
+<?php if ($IsLoggedIn): ?>
 <div id="pk-award-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -1665,13 +1670,13 @@ var PkConfig = {
 <?php if (!empty($CanManagePark)): ?>
 <!-- Heraldry Upload Modal -->
 <div id="pk-heraldry-overlay">
-	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
-		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-camera" style="margin-right:8px;color:#2c5282"></i>Change Heraldry</h3>
-			<button class="pn-modal-close-btn" id="pk-heraldry-close-btn" aria-label="Close">&times;</button>
+	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-camera" style="margin-right:8px;color:#2c5282"></i>Change Heraldry</h3>
+			<button class="pk-modal-close-btn" id="pk-heraldry-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<!-- Step: select -->
-		<div class="pn-modal-body" id="pk-heraldry-step-select">
+		<div class="pk-modal-body" id="pk-heraldry-step-select">
 			<label class="pn-upload-area" for="pk-heraldry-file-input" style="cursor:pointer">
 				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
 				Click to choose an image
@@ -1694,12 +1699,12 @@ var PkConfig = {
 <?php endif; ?>
 		</div>
 		<!-- Step: uploading -->
-		<div class="pn-modal-body" id="pk-heraldry-step-uploading" style="display:none;text-align:center;padding:40px 20px">
+		<div class="pk-modal-body" id="pk-heraldry-step-uploading" style="display:none;text-align:center;padding:40px 20px">
 			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1"></i>
 			<p style="margin-top:12px;color:#718096">Uploading&hellip;</p>
 		</div>
 		<!-- Step: done -->
-		<div class="pn-modal-body" id="pk-heraldry-step-done" style="display:none;text-align:center;padding:40px 20px">
+		<div class="pk-modal-body" id="pk-heraldry-step-done" style="display:none;text-align:center;padding:40px 20px">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78"></i>
 			<p style="margin-top:12px;color:#48bb78;font-weight:600">Updated! Refreshing&hellip;</p>
 		</div>

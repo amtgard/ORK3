@@ -61,12 +61,15 @@
      ZONE 1: Hero Header
      ============================================= -->
 <div class="kn-hero">
-	<div class="kn-hero-bg" style="background-image: url('<?= $heraldryUrl ?>')"></div>
+	<div class="kn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="kn-hero-content">
 
 		<div class="kn-heraldry-wrap">
 			<div class="kn-heraldry-frame<?= !empty($CanManageKingdom) ? ' kn-heraldry-editable' : '' ?>">
-				<img class="heraldry-img" src="<?= $heraldryUrl ?>" alt="<?= htmlspecialchars($kingdom_name) ?>" />
+				<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>"
+				     alt="<?= htmlspecialchars($kingdom_name) ?>"
+				     crossorigin="anonymous"
+				     onload="typeof knApplyHeroColor==='function'&&knApplyHeroColor(this)">
 			</div>
 			<?php if (!empty($CanManageKingdom)): ?>
 			<button class="kn-heraldry-edit-btn" onclick="knOpenHeraldryModal()" title="Change heraldry">
@@ -187,7 +190,7 @@
 					<span class="kn-link-icon"><i class="fas fa-search"></i></span>
 					<a href="<?= UIR ?>Search/kingdom/<?= $kingdom_id ?>">Search Players</a>
 				</li>
-				<?php if ($LoggedIn): ?>
+				<?php if ($IsLoggedIn): ?>
 					<li>
 						<span class="kn-link-icon"><i class="fas fa-medal"></i></span>
 						<a href="<?= UIR ?>Award/kingdom/<?= $kingdom_id ?>">Enter Awards</a>
@@ -645,7 +648,7 @@
 		<!-- Recommendations Tab -->
 		<?php if ($ShowRecsTab ?? false): ?>
 		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
-			<?php if ($LoggedIn): ?>
+			<?php if ($IsLoggedIn): ?>
 			<div class="pk-tab-toolbar">
 				<button class="kn-btn kn-btn-secondary" onclick="knOpenRecModal()">
 					<i class="fas fa-star"></i> Recommend an Award
@@ -798,7 +801,7 @@ var KnConfig = {
 	adminRecsPublic: <?= !empty($AwardRecsPublic) ? 'true' : 'false' ?>,
 };
 </script>
-<?php if ($LoggedIn): ?>
+<?php if ($IsLoggedIn): ?>
 <div id="kn-award-overlay">
 	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="kn-modal-header">
@@ -1675,6 +1678,56 @@ var KnConfig = {
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <?php endif; ?>
 <script>
+function knApplyHeroColor(img) {
+	var canvas = document.createElement('canvas');
+	canvas.width = 60; canvas.height = 60;
+	var ctx = canvas.getContext('2d');
+	try {
+		ctx.drawImage(img, 0, 0, 60, 60);
+		var px = ctx.getImageData(0, 0, 60, 60).data;
+		var buckets = {};
+		for (var i = 0; i < px.length; i += 4) {
+			var r = px[i], g = px[i+1], b = px[i+2], a = px[i+3];
+			if (a < 120) continue;
+			if (r > 215 && g > 215 && b > 215) continue;
+			if (r < 25  && g < 25  && b < 25)  continue;
+			var key = (r >> 4) + ',' + (g >> 4) + ',' + (b >> 4);
+			buckets[key] = (buckets[key] || 0) + 1;
+		}
+		var best = null, bestN = 0;
+		for (var k in buckets) { if (buckets[k] > bestN) { bestN = buckets[k]; best = k; } }
+		if (!best) return;
+		var parts = best.split(',');
+		var dr = parseInt(parts[0]) * 16 + 8;
+		var dg = parseInt(parts[1]) * 16 + 8;
+		var db = parseInt(parts[2]) * 16 + 8;
+		var rf = dr/255, gf = dg/255, bf = db/255;
+		var max = Math.max(rf,gf,bf), min = Math.min(rf,gf,bf);
+		var h = 0, s = 0, l = (max+min)/2;
+		if (max !== min) {
+			var d = max - min;
+			s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+			if      (max === rf) h = (gf-bf)/d + (gf < bf ? 6 : 0);
+			else if (max === gf) h = (bf-rf)/d + 2;
+			else                 h = (rf-gf)/d + 4;
+			h /= 6;
+		}
+		var finalS = Math.max(s, 0.28);
+		var hDeg   = Math.round(h * 360);
+		var sPct   = Math.round(finalS * 100);
+		var heroEl = document.querySelector('.kn-hero');
+		if (heroEl) {
+			heroEl.style.backgroundColor = 'hsl(' + hDeg + ',' + sPct + '%,18%)';
+		}
+		document.documentElement.style.setProperty('--kn-hue', hDeg);
+		document.documentElement.style.setProperty('--kn-sat', sPct + '%');
+		document.documentElement.style.setProperty(
+			'--kn-page-tint', 'rgba(' + dr + ',' + dg + ',' + db + ',0.05)'
+		);
+	} catch(e) { /* CORS or tainted canvas — keep default */ }
+}
+</script>
+<script>
 (function() {
 	var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
 	if (!kingdomId) return;
@@ -1734,7 +1787,7 @@ var KnConfig = {
 			if (footTp) footTp.textContent = totalTp;
 			if (footTm) footTm.textContent = totalTm;
 		})
-		.catch(function() {});
+		.catch(function(err) { console.error('Kingdom park_averages_json failed:', err); });
 
 	// ---- Players tab: lazy-load on first click ----
 	function knHtmlEsc(s) {

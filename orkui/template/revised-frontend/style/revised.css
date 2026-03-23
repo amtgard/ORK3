@@ -2421,6 +2421,7 @@
 	background: transparent;
 	border: none;
 	padding: 0;
+	border-radius: 0;
 }
 .pk-officers-inline {
 	color: rgba(255,255,255,0.85);
@@ -3186,6 +3187,8 @@
 #pk-award-overlay.pk-open, #pk-rec-overlay.pk-open { opacity:1; pointer-events:auto; }
 #pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
 #pk-award-overlay .pk-modal-header, #pk-rec-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+/* Reset global h1-h6 box styles for all pk modal titles */
+.pk-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
 #pk-award-overlay .pk-modal-title, #pk-rec-overlay .pk-modal-title { font-size:16px; font-weight:700; color:#1a202c; margin:0; }
 #pk-award-overlay .pk-modal-close-btn, #pk-rec-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
 #pk-award-overlay .pk-modal-close-btn:hover, #pk-rec-overlay .pk-modal-close-btn:hover { color:#4a5568; }
@@ -3259,7 +3262,7 @@
 	border-bottom: 1px solid #e2e8f0;
 	background: #f7fafc;
 }
-.pk-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
+.pk-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
 .pk-emod-close {
 	background: none; border: none; font-size: 20px; cursor: pointer;
 	color: #718096; padding: 2px 6px; border-radius: 4px; line-height: 1;
@@ -5048,7 +5051,7 @@
 #pk-heraldry-overlay.pk-open,
 #pk-moveplayer-overlay.pk-open,
 #pk-mergeplayer-overlay.pk-open { opacity: 1; pointer-events: auto; }
-#pk-heraldry-overlay.pk-open .pn-modal-box { transform: translateY(0) scale(1); opacity: 1; }
+#pk-heraldry-overlay.pk-open .pk-modal-box { transform: translateY(0) scale(1); opacity: 1; }
 #pk-heraldry-overlay .pk-modal-box,
 #pk-moveplayer-overlay .pk-modal-box,
 #pk-mergeplayer-overlay .pk-modal-box {

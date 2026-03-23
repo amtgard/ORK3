@@ -4520,6 +4520,7 @@ $(document).ready(function() {
 
 });
 (function() {
+    if (typeof PkConfig === 'undefined') return;
     if (!document.getElementById('pk-award-overlay')) return;
     var UIR_JS = PkConfig.uir;
     var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
@@ -4987,6 +4988,7 @@ $(document).ready(function() {
     });
 })();
 (function() {
+    if (typeof PkConfig === 'undefined') return;
     if (!document.getElementById('pk-rec-overlay')) return;
     var UIR_JS      = PkConfig.uir;
     var PARK_ID     = PkConfig.parkId;
@@ -5810,6 +5812,7 @@ if (typeof EcConfig !== 'undefined') (function() {
 // ============================================================
 // Parknew — Attendance Modal (pk-att-)
 $(document).ready(function() {
+    if (typeof PkConfig === 'undefined') return;
     if (!document.getElementById('pk-att-overlay')) return;
 
     var ADD_URL    = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/add';

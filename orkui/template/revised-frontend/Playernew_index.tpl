@@ -245,16 +245,16 @@
      ZONE 1: Profile Hero Header
      ============================================= -->
 <div class="pn-hero">
-	<div class="pn-hero-bg" style="background-image: url('<?= $heraldryUrl ?>')"></div>
+	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-content">
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
-			<img class="heraldry-img" src="<?= $imageUrl ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
+			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
 			<button class="pn-img-edit-btn" onclick="pnOpenImgModal('photo')" title="Update player photo"><i class="fas fa-camera"></i></button>
 		</div>
 		<?php else: ?>
 		<div class="pn-avatar">
-			<img class="heraldry-img" src="<?= $imageUrl ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
+			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
 		</div>
 		<?php endif; ?>
 		<div class="pn-hero-info">
@@ -409,11 +409,11 @@
 			<div style="text-align: center;">
 				<?php if ($canEditImages): ?>
 				<div class="pn-editable-img" style="border-radius:4px;max-width:100%;">
-					<img class="heraldry-img" src="<?= $heraldryUrl ?>" alt="Heraldry" style="max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain; display: block;" />
+					<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>" alt="Heraldry" style="max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain; display: block;" />
 					<button class="pn-img-edit-btn" onclick="pnOpenImgModal('heraldry')" title="Update heraldry"><i class="fas fa-camera"></i></button>
 				</div>
 				<?php else: ?>
-				<img class="heraldry-img" src="<?= $heraldryUrl ?>" alt="Heraldry" style="max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain;" />
+				<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>" alt="Heraldry" style="max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain;" />
 				<?php endif; ?>
 			</div>
 		</div>

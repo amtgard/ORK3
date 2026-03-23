@@ -348,6 +348,7 @@ class Controller_Player extends Controller {
 		}
 
 		global $DB;
+		$DB->Clear();
 		$playerParkId = (int)$this->data['Player']['ParkId'];
 		$officerSql   = "SELECT o.role, o.park_id,
 			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park') ELSE 'Kingdom' END AS entity_type,
@@ -425,6 +426,7 @@ class Controller_Player extends Controller {
 			'TotalAttendance'   => count($_att),
 			'TotalAwards'       => 0,
 			'TotalTitles'       => 0,
+			'HighestClassLevel' => 0,
 			'LastPlayedClass'   => !empty($_att[0]['ClassName']) ? $_att[0]['ClassName'] : '',
 		];
 		if (is_array($this->data['Details']['Awards'])) {
@@ -556,6 +558,7 @@ class Controller_Player extends Controller {
 
 		// AwardId → KingdomAwardId map for current kingdom (pre-match historical award dropdowns)
 		global $DB;
+		$DB->Clear();
 		$rs = $DB->DataSet(
 			'SELECT kingdomaward_id, award_id FROM ork_kingdomaward WHERE kingdom_id = ' . (int)$this->session->kingdom_id . ' AND is_title = 0'
 		);

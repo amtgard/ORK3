@@ -48,7 +48,6 @@ class Controller_Kingdom extends Controller {
 		$this->data['kingdom_officers'] = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
 		$this->data['IsPrinz'] = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
 		// [TOURNAMENTS HIDDEN] $this->data['kingdom_tournaments'] = [];
-		logtrace("index($kingdom_id = null)", $this->data['kingdom_tournaments']);
 	}
 
 	public function park_monthly_json($kingdom_id = null) {
@@ -302,23 +301,21 @@ class Controller_Kingdom extends Controller {
 			ORDER BY cd.event_start, p.name, e.name";
 		$evtResult    = $DB->DataSet($evtSql);
 		$eventSummary = [];
-		if ($evtResult) {
-			do {
-				$eid = (int)($evtResult->event_id ?? 0);
-				if ($eid) {
-					$eventSummary[] = [
-						'EventId'      => $eid,
-						'Name'         => $evtResult->name,
-						'ParkName'     => $evtResult->park_name,
-						'NextDate'     => $evtResult->event_start,
-						'NextDetailId' => (int)$evtResult->next_detail_id,
-						'HasHeraldry'  => (int)$evtResult->has_heraldry,
-						'ParkAbbr'     => $evtResult->park_abbr,
-						'RsvpCount'    => (int)$evtResult->rsvp_count,
-						'_IsParkEvent' => (int)$evtResult->park_id > 0,
-					];
-				}
-			} while ($evtResult->Next());
+		while ($evtResult && $evtResult->Next()) {
+			$eid = (int)($evtResult->event_id ?? 0);
+			if ($eid) {
+				$eventSummary[] = [
+					'EventId'      => $eid,
+					'Name'         => $evtResult->name,
+					'ParkName'     => $evtResult->park_name,
+					'NextDate'     => $evtResult->event_start,
+					'NextDetailId' => (int)$evtResult->next_detail_id,
+					'HasHeraldry'  => (int)$evtResult->has_heraldry,
+					'ParkAbbr'     => $evtResult->park_abbr,
+					'RsvpCount'    => (int)$evtResult->rsvp_count,
+					'_IsParkEvent' => (int)$evtResult->park_id > 0,
+				];
+			}
 		}
 		$this->data['event_summary'] = $eventSummary;
 
