@@ -329,6 +329,8 @@ class Controller_EventAjax extends Controller {
 		$role_name     = trim($_POST['RoleName']      ?? '');
 		$can_manage    = (int)(bool)($_POST['CanManage']    ?? 0);
 		$can_attendance = (int)(bool)($_POST['CanAttendance'] ?? 0);
+		$can_schedule   = (int)(bool)($_POST['CanSchedule']   ?? 0);
+		$can_feast      = (int)(bool)($_POST['CanFeast']      ?? 0);
 
 		if (!valid_id($mundane_id)) {
 			echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
@@ -344,9 +346,9 @@ class Controller_EventAjax extends Controller {
 		$DB->Clear(); // reset stale bound params from prior ORM queries in this request
 		$DB->Execute(
 			'INSERT INTO ' . DB_PREFIX . 'event_staff
-			(event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance)
-			VALUES (' . $detail_id . ', ' . $mundane_id . ', \'' . $role_safe . '\', ' . $can_manage . ', ' . $can_attendance . ')
-			ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage), can_attendance = VALUES(can_attendance)'
+			(event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast)
+			VALUES (' . $detail_id . ', ' . $mundane_id . ', \'' . $role_safe . '\', ' . $can_manage . ', ' . $can_attendance . ', ' . $can_schedule . ', ' . $can_feast . ')
+			ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage), can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule), can_feast = VALUES(can_feast)'
 		);
 		$DB->Clear();
 		$idrow = $DB->DataSet('SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $mundane_id . ' ORDER BY event_staff_id DESC LIMIT 1');
@@ -358,6 +360,8 @@ class Controller_EventAjax extends Controller {
 			'RoleName'      => $role_name,
 			'CanManage'     => $can_manage,
 			'CanAttendance' => $can_attendance,
+			'CanSchedule'   => $can_schedule,
+			'CanFeast'      => $can_feast,
 		]]);
 		exit;
 	}
@@ -413,7 +417,7 @@ class Controller_EventAjax extends Controller {
 		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
 			global $DB;
 			$DB->Clear();
-			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND (can_manage = 1 OR can_schedule = 1) LIMIT 1');
 			if (!($staffRow && $staffRow->Next())) {
 				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
 			}
@@ -501,7 +505,7 @@ class Controller_EventAjax extends Controller {
 		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
 			global $DB;
 			$DB->Clear();
-			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND (can_manage = 1 OR can_schedule = 1) LIMIT 1');
 			if (!($staffRow && $staffRow->Next())) {
 				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
 			}
@@ -535,7 +539,7 @@ class Controller_EventAjax extends Controller {
 		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
 			global $DB;
 			$DB->Clear();
-			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND (can_manage = 1 OR can_schedule = 1) LIMIT 1');
 			if (!($staffRow && $staffRow->Next())) {
 				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
 			}
@@ -603,6 +607,161 @@ class Controller_EventAjax extends Controller {
 			'Description'     => $description,
 			'Category'        => $category,
 			'Leads'           => $leadsOut,
+		]]);
+		exit;
+	}
+
+
+	public function add_meal($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+
+		$params    = explode('/', $p ?? '');
+		$event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+
+		if (!valid_id($event_id) || !valid_id($detail_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']); exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND (can_manage = 1 OR can_feast = 1) LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
+			}
+		}
+
+		$title     = trim($_POST['Title']     ?? '');
+		$cost      = trim($_POST['Cost']      ?? '');
+		$menu      = trim($_POST['Menu']      ?? '');
+		$dietary   = trim($_POST['Dietary']   ?? '');
+		$allergens = trim($_POST['Allergens'] ?? '');
+
+		if (!$title) { echo json_encode(['status' => 1, 'error' => 'A title is required.']); exit; }
+
+		$title_safe     = str_replace(["'", '\\'], ["''", '\\\\'], $title);
+		$menu_safe      = str_replace(["'", '\\'], ["''", '\\\\'], $menu);
+		$dietary_safe   = str_replace(["'", '\\'], ["''", '\\\\'], $dietary);
+		$allergens_safe = str_replace(["'", '\\'], ["''", '\\\\'], $allergens);
+		$cost_sql       = (strlen($cost) > 0 && is_numeric($cost)) ? round((float)$cost, 2) : 'NULL';
+
+		global $DB;
+		$DB->Clear();
+		$DB->Execute(
+			'INSERT INTO ' . DB_PREFIX . 'event_meal (event_calendardetail_id, title, cost, menu, dietary, allergens)
+			VALUES (' . $detail_id . ', \'' . $title_safe . '\', ' . $cost_sql . ', \'' . $menu_safe . '\', \'' . $dietary_safe . '\', \'' . $allergens_safe . '\')'
+		);
+		$DB->Clear();
+		$idrow = $DB->DataSet('SELECT event_meal_id FROM ' . DB_PREFIX . 'event_meal WHERE event_calendardetail_id = ' . $detail_id . ' ORDER BY event_meal_id DESC LIMIT 1');
+		$meal_id = ($idrow && $idrow->Next()) ? (int)$idrow->event_meal_id : 0;
+
+		$cost_out = (strlen($cost) > 0 && is_numeric($cost)) ? round((float)$cost, 2) : null;
+		echo json_encode(['status' => 0, 'meal' => [
+			'EventMealId' => $meal_id,
+			'Title'       => $title,
+			'Cost'        => $cost_out,
+			'Menu'        => $menu,
+			'Dietary'     => $dietary,
+			'Allergens'   => $allergens,
+		]]);
+		exit;
+	}
+
+	public function remove_meal($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+
+		$params    = explode('/', $p ?? '');
+		$event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+		$meal_id   = (int)($_POST['MealId'] ?? 0);
+
+		if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($meal_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']); exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND (can_manage = 1 OR can_feast = 1) LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
+			}
+		}
+
+		global $DB;
+		$DB->Clear();
+		$DB->Execute(
+			'DELETE FROM ' . DB_PREFIX . 'event_meal WHERE event_meal_id = ' . $meal_id . ' AND event_calendardetail_id = ' . $detail_id
+		);
+		echo json_encode(['status' => 0]);
+		exit;
+	}
+
+	public function edit_meal($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+
+		$params    = explode('/', $p ?? '');
+		$event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+		$meal_id   = (int)($_POST['MealId'] ?? 0);
+
+		if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($meal_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']); exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND (can_manage = 1 OR can_feast = 1) LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
+			}
+		}
+
+		$title     = trim($_POST['Title']     ?? '');
+		$cost      = trim($_POST['Cost']      ?? '');
+		$menu      = trim($_POST['Menu']      ?? '');
+		$dietary   = trim($_POST['Dietary']   ?? '');
+		$allergens = trim($_POST['Allergens'] ?? '');
+
+		if (!$title) { echo json_encode(['status' => 1, 'error' => 'A title is required.']); exit; }
+
+		$title_safe     = str_replace(["'", '\\'], ["''", '\\\\'], $title);
+		$menu_safe      = str_replace(["'", '\\'], ["''", '\\\\'], $menu);
+		$dietary_safe   = str_replace(["'", '\\'], ["''", '\\\\'], $dietary);
+		$allergens_safe = str_replace(["'", '\\'], ["''", '\\\\'], $allergens);
+		$cost_sql       = (strlen($cost) > 0 && is_numeric($cost)) ? round((float)$cost, 2) : 'NULL';
+
+		global $DB;
+		$DB->Clear();
+		$DB->Execute(
+			'UPDATE ' . DB_PREFIX . 'event_meal
+			SET title = \'' . $title_safe . '\', cost = ' . $cost_sql . ', menu = \'' . $menu_safe . '\',
+			    dietary = \'' . $dietary_safe . '\', allergens = \'' . $allergens_safe . '\'
+			WHERE event_meal_id = ' . $meal_id . ' AND event_calendardetail_id = ' . $detail_id
+		);
+
+		$cost_out = (strlen($cost) > 0 && is_numeric($cost)) ? round((float)$cost, 2) : null;
+		echo json_encode(['status' => 0, 'meal' => [
+			'EventMealId' => $meal_id,
+			'Title'       => $title,
+			'Cost'        => $cost_out,
+			'Menu'        => $menu,
+			'Dietary'     => $dietary,
+			'Allergens'   => $allergens,
 		]]);
 		exit;
 	}
