@@ -80,9 +80,164 @@
 	foreach (is_array($Details['Attendance']) ? $Details['Attendance'] : [] as $_att) {
 		if (!empty($_att['ClassId'])) { $_lastClassId = (int)$_att['ClassId']; break; }
 	}
+
+	// Class → Paragon award map (used by My Amtgard + Class Levels tabs)
+	$pnClassToParagon = [
+		1=>37, 2=>38, 3=>39, 4=>40, 5=>41, 6=>241, 7=>42, 8=>43,
+		9=>44, 10=>45, 11=>46, 12=>47, 14=>242, 15=>49, 16=>50, 17=>51,
+	];
+	$pnHeldAwardIds = [];
+	if (is_array($Details['Awards'])) {
+		foreach ($Details['Awards'] as $_pa) {
+			$_aid = (int)($_pa['AwardId'] ?? 0);
+			if ($_aid > 0) $pnHeldAwardIds[$_aid] = true;
+		}
+	}
+
+	// My Amtgard dashboard pre-computation (own profile only)
+	if ($isOwnProfile) {
+		$_maDash_att = is_array($Details['Attendance']) ? $Details['Attendance'] : [];
+		$_maDash_awd = is_array($Details['Awards'])     ? $Details['Awards']     : [];
+		$_maDash_cls = is_array($Details['Classes'])    ? $Details['Classes']    : [];
+		usort($_maDash_att, function($a, $b) { return strtotime($b['Date']) - strtotime($a['Date']); });
+		usort($_maDash_awd, function($a, $b) { return strtotime($b['Date']) - strtotime($a['Date']); });
+		// First credit date (oldest attendance)
+		$_maFirstDate = null;
+		foreach ($_maDash_att as $_fa) {
+			if (!empty($_fa['Date']) && $_fa['Date'] !== '1970-01-01') {
+				if ($_maFirstDate === null || strtotime($_fa['Date']) < strtotime($_maFirstDate))
+					$_maFirstDate = $_fa['Date'];
+			}
+		}
+		// 3 most recently signed-in classes (by last attendance date)
+		$_maRecentClassIds = [];
+		foreach ($_maDash_att as $_fa) {
+			$_fcid = (int)($_fa['ClassId'] ?? 0);
+			if ($_fcid > 0 && !isset($_maRecentClassIds[$_fcid])) {
+				$_maRecentClassIds[$_fcid] = true;
+				if (count($_maRecentClassIds) >= 3) break;
+			}
+		}
+		$_maClassMap = [];
+		foreach ($_maDash_cls as $_mc) { $_maClassMap[(int)$_mc['ClassId']] = $_mc; }
+		$_maClasses = [];
+		foreach (array_keys($_maRecentClassIds) as $_rcid) {
+			if (isset($_maClassMap[$_rcid]) && ((int)($_maClassMap[$_rcid]['Credits'] ?? 0) + (int)($_maClassMap[$_rcid]['Reconciled'] ?? 0)) > 0)
+				$_maClasses[] = $_maClassMap[$_rcid];
+		}
+		// Open recs
+		$_maOpenRecs = array_values(array_filter(
+			is_array($AwardRecommendations) ? $AwardRecommendations : [],
+			function($r) { return empty($r['Awarded']); }
+		));
+		// Alerts
+		$_maAlerts = [];
+		$_duesThrough = $Player['DuesThrough'] ?? '';
+		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time())
+			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-exclamation-circle','msg'=>'Your dues have lapsed.'];
+		if (empty($Player['Waivered']))
+			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
+		if ($passwordExpired)
+			$_maAlerts[] = ['type'=>'danger','icon'=>'fa-key','msg'=>'Your password has expired.'];
+		elseif ($passwordSoon) {
+			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
+			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . "."];
+		}
+		// Level helpers
+		function _ma_level($credits) {
+			if ($credits >= 53) return 6;
+			if ($credits >= 34) return 5;
+			if ($credits >= 21) return 4;
+			if ($credits >= 12) return 3;
+			if ($credits >= 5)  return 2;
+			return 1;
+		}
+		function _ma_progress($credits) {
+			$t = [0,5,12,21,34,53];
+			if ($credits >= 53) return 100;
+			for ($i = count($t)-1; $i >= 0; $i--)
+				if ($credits >= $t[$i]) return round(($credits-$t[$i])/($t[$i+1]-$t[$i])*100);
+			return 0;
+		}
+	}
 ?>
 
 <style>:root { --pn-hero-bg: <?= $isSuspended ? '#9b2c2c' : '#2c5282' ?>; }</style>
+<style>
+/* ===== My Amtgard Dashboard ===== */
+.pna-alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.pna-alert{display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-radius:6px;font-size:12.5px;line-height:1.4}
+.pna-alert i{flex-shrink:0;margin-top:2px}
+.pna-alert-warning{background:#fffbeb;border:1px solid #f6e05e;color:#744210}
+.pna-alert-danger{background:#fff5f5;border:1px solid #fc8181;color:#742a2a}
+.pna-alert-info{background:#ebf8ff;border:1px solid #90cdf4;color:#2a4365}
+.pna-layout{display:flex;gap:16px;align-items:flex-start}
+.pna-sidebar{flex:0 0 260px;display:flex;flex-direction:column;gap:12px}
+.pna-feed{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+.pna-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
+.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pna-card-title a.pna-card-more{margin-left:auto;font-weight:600;font-size:11px;color:#4299e1;text-decoration:none;text-transform:none;letter-spacing:0}
+.pna-card-title a.pna-card-more:hover{text-decoration:underline}
+.pna-tenure{text-align:center;padding:6px 0 2px}
+.pna-tenure-years{font-size:44px;font-weight:800;color:#2c5282;line-height:1}
+.pna-tenure-label{font-size:13px;color:#718096;margin-top:2px}
+.pna-tenure-since{font-size:11px;color:#a0aec0;margin-top:6px}
+@keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
+.pna-card-anni{animation:pna-card-glow 3s ease infinite}
+.pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
+.pna-class-row{margin-bottom:10px}
+.pna-class-row:last-child{margin-bottom:0}
+.pna-class-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.pna-class-name{font-size:12px;font-weight:600;color:#2d3748}
+.pna-class-level{font-size:11px;font-weight:700;color:#276749}
+.pna-bar-wrap{height:6px;background:#edf2f7;border-radius:4px;overflow:hidden}
+.pna-bar{height:100%;background:linear-gradient(90deg,#48bb78,#276749);border-radius:4px;transition:width .4s ease}
+.pna-bar-max{background:linear-gradient(90deg,#f6ad55,#dd6b20)}
+.pna-class-credits{font-size:10px;color:#a0aec0;margin-top:3px}
+.pna-paragon-dot{color:#b7791f;font-size:10px;margin-left:3px}
+.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #f7fafc}
+.pna-officer-row:last-child{border-bottom:none}
+.pna-officer-title{font-size:12px;font-weight:600;color:#2d3748}
+.pna-officer-entity{font-size:11px;color:#4299e1;text-decoration:none}
+.pna-officer-entity:hover{text-decoration:underline}
+.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #edf2f7}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12.5px}
+.pna-feed-row:last-child{border-bottom:none}
+.pna-feed-date{flex-shrink:0;color:#a0aec0;font-size:11px;min-width:46px}
+.pna-feed-label{flex:1;color:#2d3748;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pna-feed-label a{color:#2d3748;text-decoration:none}
+.pna-feed-label a:hover{text-decoration:underline}
+.pna-feed-sub{flex-shrink:0;color:#718096;font-size:11px}
+.pna-feed-more{font-size:11px;color:#718096;padding-top:6px;text-align:center}
+.pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.pna-sparkline{display:flex;gap:3px;align-items:flex-end;height:34px;margin-bottom:2px}
+.pna-spark-week{flex:1;border-radius:2px;min-width:0}
+.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:#718096;flex-wrap:wrap}
+.pna-spark-swatch{width:12px;height:12px;display:inline-block;border-radius:2px;vertical-align:middle}
+.pna-spark-on{background:#48bb78}
+.pna-spark-off{background:#edf2f7;border:1px solid #e2e8f0}
+.pna-spark-swatch-on{background:#48bb78}
+.pna-spark-swatch-off{background:#edf2f7;border:1px solid #cbd5e0}
+.pna-ev-cols{display:flex;gap:10px}
+.pna-ev-col{flex:1;min-width:0}
+.pna-ev-col-hdr{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+.pna-spark-months{display:flex;gap:3px;margin-top:2px}
+.pna-spark-month-lbl{flex:1;font-size:9px;color:#a0aec0;text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
+@media(max-width:700px){
+.pna-layout{flex-direction:column}
+.pna-sidebar{flex:none;width:100%}
+.pna-ev-cols{flex-direction:column}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0}
+.pna-card{padding:12px 13px}
+.pna-tenure-years{font-size:36px}
+}
+@media(max-width:420px){
+.pna-feed-sub{display:none}
+.pna-spark-month-lbl{font-size:8px}
+.pna-card{padding:10px 11px}
+.pna-tenure-years{font-size:30px}
+.pna-congrats-banner{font-size:11.5px;padding:7px 10px}
+}
+</style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
@@ -416,7 +571,12 @@
 	<div class="pn-main">
 		<div class="pn-tabs">
 			<ul class="pn-tab-nav">
-				<li class="pn-tab-active" data-tab="awards">
+				<?php if ($isOwnProfile): ?>
+				<li class="pn-tab-active" data-tab="myamtgard">
+					<i class="fas fa-home"></i><span class="pn-tab-label"> My Amtgard</span>
+				</li>
+				<?php endif; ?>
+				<li<?= $isOwnProfile ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
 					<i class="fas fa-medal"></i><span class="pn-tab-label"> Awards</span> <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
 				</li>
 				<li data-tab="titles">
@@ -441,10 +601,220 @@
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
 			</ul>
-			<div class="pn-active-tab-label" id="pn-active-tab-label">Awards</div>
+			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : 'Awards' ?></div>
+
+			<!-- My Amtgard Tab (own profile default) -->
+			<?php if ($isOwnProfile): ?>
+			<div class="pn-tab-panel" id="pn-tab-myamtgard">
+				<?php
+				// Alerts strip
+				?>
+				<?php if (!empty($_maAlerts)): ?>
+				<div class="pna-alerts">
+					<?php foreach ($_maAlerts as $_al): ?>
+					<div class="pna-alert pna-alert-<?= $_al['type'] ?>">
+						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?></span>
+					</div>
+					<?php endforeach; ?>
+				</div>
+				<?php endif; ?>
+
+				<div class="pna-layout">
+
+					<!-- Sidebar -->
+					<div class="pna-sidebar">
+
+						<!-- Tenure -->
+						<?php if ($_maFirstDate): ?>
+						<?php
+							$_maYears = (int)floor((time() - strtotime($_maFirstDate)) / (365.25 * 86400));
+							// Days since last anniversary (show glow for 14 days AFTER)
+							$_maAnnivMonth  = (int)date('n', strtotime($_maFirstDate));
+							$_maAnnivDay    = (int)date('j', strtotime($_maFirstDate));
+							$_maLastAnniv   = mktime(0,0,0, $_maAnnivMonth, $_maAnnivDay, (int)date('Y'));
+							if ($_maLastAnniv > strtotime('today')) $_maLastAnniv = mktime(0,0,0, $_maAnnivMonth, $_maAnnivDay, (int)date('Y')-1);
+							$_maDaysSince   = (int)floor((strtotime('today') - $_maLastAnniv) / 86400);
+							$_maIsAnnivWeek = $_maDaysSince <= 14 && $_maYears >= 1;
+							$_maCardCls     = $_maIsAnnivWeek ? ' pna-card-anni' : '';
+						?>
+						<div class="pna-card<?= $_maCardCls ?>">
+							<div class="pna-card-title"><i class="fas fa-birthday-cake"></i> Amtgard Tenure</div>
+							<?php if ($_maIsAnnivWeek): ?>
+							<div class="pna-anni-banner">🎂 Happy Amt-iversary! 🎂</div>
+							<?php endif; ?>
+							<div class="pna-tenure">
+								<div class="pna-tenure-years"><?= $_maYears >= 1 ? $_maYears : '&lt;1' ?></div>
+								<div class="pna-tenure-label">year<?= $_maYears !== 1 ? 's' : '' ?></div>
+								<div class="pna-tenure-since">First credit <?= date('M j, Y', strtotime($_maFirstDate)) ?></div>
+							</div>
+						</div>
+						<?php endif; ?>
+
+						<!-- Class Progress -->
+						<?php if (!empty($_maClasses)): ?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab('classes');return false;">All &rarr;</a></div>
+							<div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>
+							<?php foreach ($_maClasses as $_mc):
+								$_mcTotal = (int)($_mc['Credits'] ?? 0) + (int)($_mc['Reconciled'] ?? 0);
+								$_mcLvl   = _ma_level($_mcTotal);
+								$_mcPct   = _ma_progress($_mcTotal);
+								$_mcMax   = $_mcTotal >= 53;
+								$_mcNext  = [0,5,12,21,34,53][$_mcLvl] ?? 53;
+								$_mcPar   = $pnClassToParagon[$_mc['ClassId']] ?? null;
+								$_mcHasPar = $_mcPar && isset($pnHeldAwardIds[$_mcPar]);
+							?>
+							<div class="pna-class-row">
+								<div class="pna-class-header">
+									<span class="pna-class-name"><?= htmlspecialchars($_mc['ClassName']) ?><?= $_mcHasPar ? ' <span class="pna-paragon-dot" title="Paragon"><i class="fas fa-crown"></i></span>' : '' ?></span>
+									<span class="pna-class-level">L<?= $_mcLvl ?><?= $_mcMax ? ' <i class="fas fa-star" style="color:#dd6b20" title="Max level"></i>' : '' ?></span>
+								</div>
+								<div class="pna-bar-wrap"><div class="pna-bar<?= $_mcMax ? ' pna-bar-max' : '' ?>" style="width:<?= $_mcPct ?>%"></div></div>
+								<div class="pna-class-credits"><?= $_mcTotal ?> cr<?= !$_mcMax ? ' &middot; ' . $_mcNext . ' for L' . ($_mcLvl+1) : '' ?></div>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						<?php endif; ?>
+
+						<!-- Officer Roles -->
+						<?php if (!empty($OfficerRoles)): ?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-crown"></i> Current Offices</div>
+							<?php foreach ($OfficerRoles as $_or): ?>
+							<div class="pna-officer-row">
+								<span class="pna-officer-title"><?= htmlspecialchars($_or['entity_type'] . ' ' . $_or['role']) ?></span>
+								<span class="pna-officer-entity"><?= htmlspecialchars($_or['entity_name'] ?? '') ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						<?php endif; ?>
+
+					</div><!-- /.pna-sidebar -->
+
+					<!-- Feed -->
+					<div class="pna-feed">
+
+						<!-- 26-week sparkline -->
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-chart-bar"></i> 26-Week Attendance</div>
+							<div class="pna-sparkline" id="pna-sparkline"></div>
+							<div class="pna-spark-months" id="pna-spark-months"></div>
+							<div class="pna-spark-legend">
+								<span class="pna-spark-swatch pna-spark-swatch-on"></span> Attended
+								&nbsp;<span class="pna-spark-swatch pna-spark-swatch-off"></span> Not signed in
+							</div>
+						</div>
+
+						<!-- Recent Sign-ins (60 days) -->
+						<?php
+						$_ma60 = date('Y-m-d', strtotime('-60 days'));
+						$_maRecAtt = array_slice(array_values(array_filter($_maDash_att, function($a) use ($_ma60) {
+							return !empty($a['Date']) && $a['Date'] >= $_ma60;
+						})), 0, 5);
+						?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-calendar-check"></i> Recent Sign-ins <a class="pna-card-more" href="#" onclick="pnActivateTab('attendance');return false;">All <?= $Stats['TotalAttendance'] ?> &rarr;</a></div>
+							<?php if (!empty($_maRecAtt)): ?>
+							<?php foreach ($_maRecAtt as $_ra): ?>
+							<div class="pna-feed-row">
+								<span class="pna-feed-date"><?= date('M j', strtotime($_ra['Date'])) ?></span>
+								<span class="pna-feed-label"><?= htmlspecialchars($_ra['ClassName'] ?? '—') ?></span>
+								<?php if (!empty($_ra['ParkName'])): ?><span class="pna-feed-sub"><?= htmlspecialchars($_ra['ParkName']) ?></span><?php endif; ?>
+							</div>
+							<?php endforeach; ?>
+							<?php else: ?>
+							<div style="font-size:12px;color:#718096;line-height:1.5;">
+								We've missed you! Check out the next events and park days in your
+								<a href="<?= UIR ?>Kingdom/profile/<?= (int)($KingdomId ?? $this->__session->kingdom_id) ?>" style="color:#4299e1;">kingdom</a>.
+							</div>
+							<?php endif; ?>
+						</div>
+
+						<!-- Recent Awards (60 days) -->
+						<?php
+						$_ma60awd = date('Y-m-d', strtotime('-60 days'));
+						$_maRecAwd = array_slice(array_values(array_filter($_maDash_awd, function($a) use ($_ma60awd) {
+							return !$a['IsTitle'] && !empty($a['Date']) && $a['Date'] >= $_ma60awd;
+						})), 0, 5);
+						?>
+						<?php if (!empty($_maRecAwd)): ?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-medal"></i> Recent Awards <a class="pna-card-more" href="#" onclick="pnActivateTab('awards');return false;">All <?= $Stats['TotalAwards'] ?> &rarr;</a></div>
+							<div class="pna-congrats-banner"><i class="fas fa-trophy"></i> Congratulations on your recent awards!</div>
+							<?php foreach ($_maRecAwd as $_aw): ?>
+							<div class="pna-feed-row">
+								<span class="pna-feed-date"><?= date('M j, Y', strtotime($_aw['Date'])) ?></span>
+								<?php $_awName = trimlen($_aw['CustomAwardName'] ?? '') > 0 ? $_aw['CustomAwardName'] : (trimlen($_aw['KingdomAwardName'] ?? '') > 0 ? $_aw['KingdomAwardName'] : ($_aw['Name'] ?? '—')); ?>
+								<span class="pna-feed-label"><?= htmlspecialchars($_awName) ?></span>
+								<?php if (!empty($_aw['GivenBy'])): ?><span class="pna-feed-sub">by <?= htmlspecialchars($_aw['GivenBy']) ?></span><?php endif; ?>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						<?php endif; ?>
+
+						<!-- Upcoming Events: two-column -->
+						<?php if (!empty($UpcomingRsvps) || !empty($KingdomEvents)): ?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-ticket-alt"></i> Upcoming Events</div>
+							<div class="pna-ev-cols">
+								<div class="pna-ev-col">
+									<div class="pna-ev-col-hdr">My RSVPs</div>
+									<?php if (!empty($UpcomingRsvps)): ?>
+									<?php foreach (array_slice($UpcomingRsvps, 0, 4) as $_rv): ?>
+									<div class="pna-feed-row">
+										<span class="pna-feed-date"><?= date('M j', strtotime($_rv['EventStart'])) ?></span>
+										<span class="pna-feed-label"><a href="<?= UIR ?>Event/detail/<?= $_rv['EventId'] ?>/<?= $_rv['EventCalendarDetailId'] ?>"><?= htmlspecialchars($_rv['EventName']) ?></a></span>
+									</div>
+									<?php endforeach; ?>
+									<?php else: ?>
+									<div style="font-size:11px;color:#a0aec0;">No upcoming RSVPs.</div>
+									<?php endif; ?>
+								</div>
+								<div class="pna-ev-col">
+									<div class="pna-ev-col-hdr">Events to Check Out</div>
+									<?php if (!empty($KingdomEvents)): ?>
+									<?php foreach (array_slice($KingdomEvents, 0, 4) as $_ke): ?>
+									<div class="pna-feed-row">
+										<span class="pna-feed-date"><?= date('M j', strtotime($_ke['EventStart'])) ?></span>
+										<span class="pna-feed-label"><a href="<?= UIR ?>Event/detail/<?= $_ke['EventId'] ?>/<?= $_ke['EventCalendarDetailId'] ?>"><?= htmlspecialchars($_ke['EventName']) ?></a></span>
+									</div>
+									<?php endforeach; ?>
+									<?php else: ?>
+									<div style="font-size:11px;color:#a0aec0;">No other upcoming events.</div>
+									<?php endif; ?>
+								</div>
+							</div>
+						</div>
+						<?php endif; ?>
+
+
+						<!-- My Associates -->
+						<?php if (!empty($MyAssociates)): ?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-user-friends"></i> My Associates</div>
+							<?php
+							$_maCurPeerage = null;
+							$_maPeerageLabels = ['Squire' => 'Squires', 'Man-At-Arms' => 'Men/Women-at-Arms', 'Lords-Page' => 'Lords-Pages', 'Page' => 'Pages'];
+							?>
+							<?php foreach ($MyAssociates as $_as): ?>
+							<?php if ($_as['Peerage'] !== $_maCurPeerage): ?>
+							<div class="pna-assoc-group"><?= htmlspecialchars($_maPeerageLabels[$_as['Peerage']] ?? $_as['Peerage']) ?></div>
+							<?php $_maCurPeerage = $_as['Peerage']; endif; ?>
+							<div class="pna-feed-row">
+								<span class="pna-feed-label"><a href="<?= UIR ?>Player/profile/<?= (int)$_as['RecipientId'] ?>"><?= htmlspecialchars($_as['Persona']) ?></a></span>
+								<span class="pna-feed-sub"><?= htmlspecialchars($_as['TitleName']) ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						<?php endif; ?>
+
+					</div><!-- /.pna-feed -->
+				</div><!-- /.pna-layout -->
+			</div><!-- /#pn-tab-myamtgard -->
+			<?php endif; // isOwnProfile ?>
 
 			<!-- Awards Tab -->
-			<div class="pn-tab-panel" id="pn-tab-awards">
+			<div class="pn-tab-panel" id="pn-tab-awards"<?= $isOwnProfile ? ' style="display:none"' : '' ?>>
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 				?>
@@ -958,26 +1328,7 @@
 				<?php
 					$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
 					// class_id → Paragon award_id
-					$pnClassToParagon = [
-						1  => 37,  // Anti-Paladin → Paragon Anti-Paladin
-						2  => 38,  // Archer       → Paragon Archer
-						3  => 39,  // Assassin     → Paragon Assassin
-						4  => 40,  // Barbarian    → Paragon Barbarian
-						5  => 41,  // Bard         → Paragon Bard
-						6  => 241, // Color        → Paragon Color
-						7  => 42,  // Druid        → Paragon Druid
-						8  => 43,  // Healer       → Paragon Healer
-						9  => 44,  // Monk         → Paragon Monk
-						10 => 45,  // Monster      → Paragon Monster
-						11 => 46,  // Paladin      → Paragon Paladin
-						12 => 47,  // Peasant      → Paragon Peasant
-						14 => 242, // Reeve        → Paragon Reeve
-						15 => 49,  // Scout        → Paragon Scout
-						16 => 50,  // Warrior      → Paragon Warrior
-						17 => 51,  // Wizard       → Paragon Wizard
-					];
-					// $pnHeldAwardIds is built in the Awards tab block above
-					$pnHeldAwardIds = isset($pnHeldAwardIds) ? $pnHeldAwardIds : [];
+					// $pnClassToParagon and $pnHeldAwardIds are pre-computed in the template preamble
 				?>
 				<?php if ($canEditAdmin): ?>
 				<div class="pn-tab-toolbar">
@@ -1653,6 +2004,37 @@ pnSortDesc($('#pn-awards-table'), 2, 'date');     pnPaginate($('#pn-awards-table
 pnSortDesc($('#pn-titles-table'), 2, 'date');     pnPaginate($('#pn-titles-table'), 1);
 pnSortDesc($('#pn-attendance-table'), 0, 'date'); pnPaginate($('#pn-attendance-table'), 1);
 pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
+// 26-week sparkline
+(function() {
+	var el = document.getElementById('pna-sparkline');
+	if (!el) return;
+	var dates = (typeof PnConfig !== 'undefined' && PnConfig.attendanceDates) ? PnConfig.attendanceDates : [];
+	var attended = {};
+	dates.forEach(function(d) { attended[d] = true; });
+	var now = new Date(); now.setHours(0,0,0,0);
+	var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+	var html = '', mhtml = '', prevMonth = -1;
+	for (var w = 25; w >= 0; w--) {
+		var wkStart = new Date(now); wkStart.setDate(wkStart.getDate() - (w * 7) - wkStart.getDay());
+		var wkEnd   = new Date(wkStart); wkEnd.setDate(wkEnd.getDate() + 6);
+		var hit = false;
+		for (var d2 = new Date(wkStart); d2 <= wkEnd; d2.setDate(d2.getDate() + 1)) {
+			var ds = d2.getFullYear() + '-' + String(d2.getMonth()+1).padStart(2,'0') + '-' + String(d2.getDate()).padStart(2,'0');
+			if (attended[ds]) { hit = true; break; }
+		}
+		var ht = hit ? 34 : 10;
+		var cls = hit ? 'pna-spark-on' : 'pna-spark-off';
+		var label = 'Week of ' + wkStart.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+		html += '<div class="pna-spark-week ' + cls + '" title="' + label + '" style="height:' + ht + 'px"></div>';
+		var wkMonth = wkStart.getMonth();
+		var lbl = (wkMonth !== prevMonth) ? months[wkMonth] : '';
+		mhtml += '<div class="pna-spark-month-lbl">' + lbl + '</div>';
+		prevMonth = wkMonth;
+	}
+	el.innerHTML = html;
+	var mel = document.getElementById('pna-spark-months');
+	if (mel) mel.innerHTML = mhtml;
+})();
 </script>
 
 <?php if ($canEditAdmin): ?>

@@ -1222,7 +1222,7 @@ class Player extends Ork3 {
 			$awards->clear();
 			$awards->kingdomaward_id = $request['KingdomAwardId'];
     		$awards->award_id = $request['AwardId'];
-			$awards->custom_name = $request['CustomName'];
+			$awards->custom_name = $request['CustomName'] ?? '';
 			$awards->mundane_id = $request['RecipientId'];
 			$awards->rank = $request['Rank'];
 			$awards->date = $request['Date'];

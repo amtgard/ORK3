@@ -470,9 +470,43 @@ class Controller_Player extends Controller {
 		}
 		$this->data['PreloadOfficers'] = $preloadOfficers;
 
-		$this->data['UpcomingRsvps'] = $this->Event->get_upcoming_rsvps((int)$id);
-		$this->data['IsOwnProfile']  = $uid === (int)$id;
+		$this->data['UpcomingRsvps']   = $this->Event->get_upcoming_rsvps((int)$id);
+		$this->data['KingdomEvents']   = ($uid === (int)$id) ? $this->Event->get_kingdom_upcoming_events((int)$this->session->kingdom_id, (int)$id) : [];
+		$this->data['IsOwnProfile']    = $uid === (int)$id;
 		$this->data['Player']['ParkName'] = $this->session->park_name;
+
+		if ($uid === (int)$id) {
+			global $DB;
+			$DB->Clear();
+			$__assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
+				IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date
+				FROM ork_awards ma
+				JOIN ork_award a ON a.award_id = ma.award_id
+				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+				JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
+				WHERE ma.given_by_id = $uid
+					AND (a.peerage IN ('Squire','Man-At-Arms','Page','Lords-Page')
+						OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+					AND (ma.revoked = 0 OR ma.revoked IS NULL)
+				ORDER BY CASE a.peerage
+					WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
+					WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
+			$__assocResult = $DB->DataSet($__assocSql);
+			$__assocs = [];
+			if ($__assocResult) {
+				while ($__assocResult->Next()) {
+					$__assocs[] = [
+						'RecipientId' => (int)$__assocResult->RecipientId,
+						'Persona'     => $__assocResult->Persona,
+						'TitleName'   => $__assocResult->TitleName,
+						'Peerage'     => $__assocResult->Peerage,
+						'Date'        => $__assocResult->Date,
+					];
+				}
+			}
+			$DB->Clear();
+			$this->data['MyAssociates'] = $__assocs;
+		}
 	}
 
 

@@ -139,6 +139,33 @@ class Model_Event extends Model {
 		return $list;
 	}
 
+	function get_kingdom_upcoming_events($kingdom_id, $exclude_mundane_id) {
+		global $DB;
+		$DB->Clear();
+		$r = $DB->DataSet(
+			"SELECT DISTINCT cd.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end" .
+			" FROM " . DB_PREFIX . "event_calendardetail cd" .
+			" JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id" .
+			" WHERE e.kingdom_id = " . (int)$kingdom_id .
+			" AND cd.event_start > NOW()" .
+			" AND cd.event_calendardetail_id NOT IN (" .
+			"   SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_rsvp WHERE mundane_id = " . (int)$exclude_mundane_id .
+			" )" .
+			" ORDER BY cd.event_start ASC LIMIT 6"
+		);
+		$list = [];
+		while ($r->Next()) {
+			$list[] = [
+				'EventCalendarDetailId' => $r->event_calendardetail_id,
+				'EventId'               => $r->event_id,
+				'EventName'             => $r->event_name,
+				'EventStart'            => $r->event_start,
+				'EventEnd'              => $r->event_end,
+			];
+		}
+		return $list;
+	}
+
 	function delete_event($token, $event_id) {
 		$r = $this->Event->DeleteEvent(array('Token' => $token, 'EventId' => (int)$event_id));
 		return $r;
