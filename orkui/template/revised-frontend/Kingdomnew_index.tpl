@@ -520,6 +520,17 @@
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
 										<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+										<?php
+											$_mRsvp = !empty($event['MonarchRsvp']);
+											$_rRsvp = !empty($event['RegentRsvp']);
+											if ($_mRsvp && $_rRsvp) $_crownTip = 'Monarch &amp; Regent in Attendance';
+											elseif ($_mRsvp)          $_crownTip = 'Monarch in Attendance';
+											elseif ($_rRsvp)          $_crownTip = 'Regent in Attendance';
+											else                      $_crownTip = '';
+										?>
+										<?php if ($_crownTip): ?>
+											<span class="kn-royal-badge" title="<?= $_crownTip ?>"><i class="fas fa-crown"></i></span>
+										<?php endif; ?>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
 									<td style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
@@ -1729,6 +1740,17 @@ var KnConfig = {
 	</div>
 </div>
 
+<style>
+.kn-royal-badge {
+	display: inline-flex; align-items: center;
+	color: #b7791f; margin-left: 5px;
+	font-size: 11px; cursor: default;
+	position: relative; top: -1px;
+}
+.kn-cal-royal-crown {
+	color: #b7791f; margin-left: 4px; font-size: 10px; cursor: default;
+}
+</style>
 <!-- Move Player Modal -->
 <style>
 .kn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
