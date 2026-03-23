@@ -250,13 +250,17 @@ class Controller_Event extends Controller {
 		// Check if current user is event staff with elevated permissions for this occurrence
 		$uid_staff_can_manage     = false;
 		$uid_staff_can_attendance = false;
+		$uid_staff_can_schedule   = false;
+		$uid_staff_can_feast      = false;
 		if ($uid > 0 && valid_id($detail_id)) {
 			global $DB;
 			$DB->Clear();
-			$selfStaff = $DB->DataSet('SELECT can_manage, can_attendance FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' LIMIT 1');
+			$selfStaff = $DB->DataSet('SELECT can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' LIMIT 1');
 			if ($selfStaff && $selfStaff->Next()) {
 				$uid_staff_can_manage     = (bool)(int)$selfStaff->can_manage;
 				$uid_staff_can_attendance = (bool)(int)$selfStaff->can_attendance;
+				$uid_staff_can_schedule   = (bool)(int)$selfStaff->can_schedule;
+				$uid_staff_can_feast      = (bool)(int)$selfStaff->can_feast;
 			}
 		}
 
@@ -518,6 +522,10 @@ class Controller_Event extends Controller {
 			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage);
 		$this->data['CanManageAttendance'] = $uid > 0
 			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) || $uid_staff_can_attendance);
+		$this->data['CanManageSchedule'] = $uid > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_schedule);
+		$this->data['CanManageFeast'] = $uid > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_feast);
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
@@ -529,7 +537,7 @@ class Controller_Event extends Controller {
 		$DB->Clear();
 		$staffRows = $DB->DataSet(
 			'SELECT s.event_staff_id AS EventStaffId, s.mundane_id AS MundaneId, m.persona AS Persona,
-			        s.role_name AS RoleName, s.can_manage AS CanManage, s.can_attendance AS CanAttendance
+			        s.role_name AS RoleName, s.can_manage AS CanManage, s.can_attendance AS CanAttendance, s.can_schedule AS CanSchedule, s.can_feast AS CanFeast
 			FROM ' . DB_PREFIX . 'event_staff s
 			LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
 			WHERE s.event_calendardetail_id = ' . $detail_id . '
@@ -545,6 +553,8 @@ class Controller_Event extends Controller {
 					'RoleName'      => $staffRows->RoleName,
 					'CanManage'     => (int)$staffRows->CanManage,
 					'CanAttendance' => (int)$staffRows->CanAttendance,
+					'CanSchedule'   => (int)$staffRows->CanSchedule,
+					'CanFeast'      => (int)$staffRows->CanFeast,
 				];
 			}
 		}
@@ -621,6 +631,29 @@ class Controller_Event extends Controller {
 			}
 		}
 		$this->data['EventFees'] = $feeList;
+
+		// Load feast meals for this occurrence
+		$DB->Clear();
+		$mealRows = $DB->DataSet(
+			'SELECT event_meal_id AS EventMealId, title AS Title, cost AS Cost, menu AS Menu, dietary AS Dietary, allergens AS Allergens
+			FROM ' . DB_PREFIX . 'event_meal
+			WHERE event_calendardetail_id = ' . $detail_id . '
+			ORDER BY event_meal_id'
+		);
+		$mealList = [];
+		if ($mealRows) {
+			while ($mealRows->Next()) {
+				$mealList[] = [
+					'EventMealId' => (int)$mealRows->EventMealId,
+					'Title'       => $mealRows->Title,
+					'Cost'        => $mealRows->Cost !== null ? (float)$mealRows->Cost : null,
+					'Menu'        => $mealRows->Menu,
+					'Dietary'     => $mealRows->Dietary ?? '',
+					'Allergens'   => $mealRows->Allergens ?? '',
+				];
+			}
+		}
+		$this->data['MealList'] = $mealList;
 	}
 
 	public function create( $p = null ) {

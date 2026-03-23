@@ -2373,6 +2373,19 @@ function knRenderCalendar() {
             info.jsEvent.preventDefault();
             if (info.event.url) window.location.href = info.event.url;
         },
+        eventDidMount: function(info) {
+            var rp = info.event.extendedProps && info.event.extendedProps.royalPresence;
+            if (!rp) return;
+            var tip = rp === 'both'    ? 'Monarch & Regent in Attendance'
+                    : rp === 'monarch' ? 'Monarch in Attendance'
+                    :                    'Regent in Attendance';
+            var crown = document.createElement('span');
+            crown.className = 'kn-cal-royal-crown';
+            crown.title = tip;
+            crown.innerHTML = ' <i class="fas fa-crown"></i>';
+            var titleEl = info.el.querySelector('.fc-event-title');
+            if (titleEl) titleEl.appendChild(crown);
+        },
         dayCellDidMount: function(info) {
             if (typeof KnConfig === 'undefined' || !KnConfig.loggedIn) return;
             var top = info.el.querySelector('.fc-daygrid-day-top');
@@ -7171,7 +7184,7 @@ $(document).ready(function() {
     };
 
     // ---- Staff Modal ----
-    if (EvConfig.canManageStaff) {
+    if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
         var gid = function(id) { return document.getElementById(id); };
         var evStaffAcTimer = null;
 
@@ -7183,6 +7196,8 @@ $(document).ready(function() {
             gid('ev-staff-player-id').value = '';
             gid('ev-staff-can-manage').checked = false;
             gid('ev-staff-can-attendance').checked = false;
+            if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = false;
+            if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = false;
             gid('ev-staff-error').style.display = 'none';
             gid('ev-staff-ac').classList.remove('kn-ac-open');
             modal.style.display = 'flex';
@@ -7313,6 +7328,8 @@ $(document).ready(function() {
             var mundaneId  = gid('ev-staff-player-id').value;
             var canManage  = gid('ev-staff-can-manage').checked ? 1 : 0;
             var canAtt     = gid('ev-staff-can-attendance').checked ? 1 : 0;
+            var canSched   = gid('ev-staff-can-schedule') && gid('ev-staff-can-schedule').checked ? 1 : 0;
+            var canFeast   = gid('ev-staff-can-feast')    && gid('ev-staff-can-feast').checked    ? 1 : 0;
             var errEl      = gid('ev-staff-error');
             var saveBtn    = gid('ev-staff-save-btn');
 
@@ -7330,6 +7347,8 @@ $(document).ready(function() {
             fd.append('RoleName',      role);
             fd.append('CanManage',     canManage);
             fd.append('CanAttendance', canAtt);
+            fd.append('CanSchedule',   canSched);
+            fd.append('CanFeast',      canFeast);
 
             fetch(EvConfig.uir + 'EventAjax/add_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
                 method: 'POST', body: fd,
@@ -7347,6 +7366,8 @@ $(document).ready(function() {
                         '<td>' + s.RoleName + '</td>' +
                         '<td>' + (s.CanManage ? chk : x) + '</td>' +
                         '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
+                        '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
+                        '<td>' + (s.CanFeast ? chk : x) + '</td>' +
                         '<td class="ev-del-cell"><button class="ev-del-link" title="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button></td>' +
                         '</tr>';
                     var tbody = gid('ev-staff-tbody');
@@ -7807,8 +7828,8 @@ $(document).ready(function() {
                             // Build a new day section and insert in chronological order
                             var dateStr = s.StartTime.substring(0, 10);
                             var dayLabel = evFmtDayHeader(dateStr);
-                            var delTh = EvConfig.canManage ? '<th class="ev-del-cell"></th>' : '';
-                            var delCol = EvConfig.canManage ? '<col style="width:56px">' : '';
+                            var delTh = EvConfig.canManageSchedule ? '<th class="ev-del-cell"></th>' : '';
+                            var delCol = EvConfig.canManageSchedule ? '<col style="width:56px">' : '';
                             var newSection = '<div class="ev-sched-day-section" data-date="' + dateStr + '">' +
                                 '<div class="ev-sched-day-header">' + dayLabel + '</div>' +
                                 '<table class="ev-table ev-sched-table" id="ev-schedule-table-' + dateKey + '">' +
