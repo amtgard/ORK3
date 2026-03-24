@@ -225,6 +225,7 @@ class Event  extends Ork3 {
 			$newDetail->country        = $request['Country'];
 			$newDetail->map_url        = $request['MapUrl'];
 			$newDetail->map_url_name   = $request['MapUrlName'];
+			if (!empty($request['EventType'])) $newDetail->event_type = $request['EventType'];
 			$newDetail->modified       = date('Y-m-d H:i:s');
 			$newDetail->google_geocode = $details ? $details['Geocode']  : null;
 			$newDetail->location       = $details ? $details['Location'] : null;
@@ -429,6 +430,7 @@ class Event  extends Ork3 {
 				}
 				$this->detail->map_url = $request['MapUrl'];
 				$this->detail->map_url_name = $request['MapUrlName'];
+				$this->detail->event_type = $request['EventType'] ?? null;
 				$this->detail->modified = date('Y-m-d H:i:s');
 				$this->detail->google_geocode = $details ? $details['Geocode'] : null;
 				$this->detail->location = $details ? $details['Location'] : null;

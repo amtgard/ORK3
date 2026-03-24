@@ -52,6 +52,8 @@
 	$locationDisplay = implode(', ', array_filter([$address, $city, $province, $country]));
 	$mapQueryAddress = implode(', ', array_filter([$address, $city, $province, $postalCode, $country]));
 
+	$eventType = $cd['EventType'] ?? '';
+
 	// Park address fallback (used when event has no address)
 	$atParkAddress    = trim($AtParkAddress    ?? '');
 	$atParkCity       = trim($AtParkCity       ?? '');
@@ -361,6 +363,15 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 					<i class="fas fa-<?= $parkId > 0 ? 'tree' : 'crown' ?>"></i>
 					<?= $parkId > 0 ? 'Park Event' : 'Kingdom Event' ?>
 				</span>
+				<?php
+				$_etIcons = ['Coronation'=>'fa-crown','Midreign'=>'fa-star-half-alt','Endreign'=>'fa-star','Crown Qualifications'=>'fa-trophy','Meeting'=>'fa-users','Althing'=>'fa-landmark','Interkingdom Event'=>'fa-globe','Weaponmaster'=>'fa-fist-raised','Warmaster'=>'fa-shield-alt','Dragonmaster'=>'fa-dragon','Other'=>'fa-calendar'];
+				$_etIcon = $_etIcons[$eventType ?? ''] ?? 'fa-calendar';
+				?>
+				<?php if (!empty($eventType)): ?>
+				<span class="ev-badge ev-badge-purple">
+					<i class="fas <?= $_etIcon ?>"></i> <?= htmlspecialchars($eventType) ?>
+				</span>
+				<?php endif; ?>
 			</div>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
@@ -549,6 +560,21 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 		</div>
 		<?php endif; ?>
 
+
+	<?php $externalLinks = $ExternalLinks ?? []; ?>
+	<?php if (!empty($externalLinks)): ?>
+	<div class="ev-card">
+		<h4><i class="fas fa-link" style="margin-right:5px"></i>Links</h4>
+		<?php foreach ($externalLinks as $_el): ?>
+		<?php if (trim($_el['Url']) && trim($_el['Title'])): ?>
+		<a href="<?= htmlspecialchars($_el['Url']) ?>" target="_blank" class="ev-map-btn" style="margin-top:6px">
+			<i class="<?= htmlspecialchars($_el['Icon']) ?>"></i> <?= htmlspecialchars($_el['Title']) ?>
+		</a>
+		<?php endif; ?>
+		<?php endforeach; ?>
+	</div>
+	<?php endif; ?>
+
 	</div><!-- /.ev-sidebar -->
 
 	<?php // ---- MAIN CONTENT ---- ?>
@@ -645,6 +671,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				'Class'             => ['icon' => 'fa-graduation-cap',  'color' => '#1565c0', 'bg' => '#e3f2fd'],
 				'Feast and Food'    => ['icon' => 'fa-utensils',        'color' => '#e65100', 'bg' => '#fff3e0'],
 				'Court'             => ['icon' => 'fa-crown',           'color' => '#4e342e', 'bg' => '#efebe9'],
+				'Meeting'           => ['icon' => 'fa-users',           'color' => '#276749', 'bg' => '#f0fff4'],
 				'Other'             => ['icon' => 'fa-star',            'color' => '#757575', 'bg' => '#fafafa'],
 			];
 			?>
@@ -684,11 +711,16 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 					</thead>
 					<tbody id="ev-schedule-tbody-<?= $dayKey ?>">
 						<?php foreach ($dayItems as $item): ?>
-						<?php $evCat = $item['Category'] ?? 'Other'; $evCatCfg = $evSchedCategories[$evCat] ?? $evSchedCategories['Other']; ?>
-						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
+						<?php
+							$evCat        = $item['Category'] ?? 'Other';
+							$evCatCfg     = $evSchedCategories[$evCat] ?? $evSchedCategories['Other'];
+							$evSecCat     = $item['SecondaryCategory'] ?? '';
+							$evSecCatCfg  = $evSecCat ? ($evSchedCategories[$evSecCat] ?? $evSchedCategories['Other']) : null;
+						?>
+						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['StartTime'])) ?></td>
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['EndTime'])) ?></td>
-							<td><i class="fas <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>;margin-right:5px" title="<?= htmlspecialchars($evCat) ?>"></i><?= htmlspecialchars($item['Title']) ?></td>
+							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" title="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" title="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
 							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Playernew/index/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
 							<td><?= htmlspecialchars($item['Description']) ?></td>
@@ -1125,11 +1157,28 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				<?php endif; ?>
 
 				<div class="ev-modal-section">
-					<h4>Event Name</h4>
+					<h4>Event Name &amp; Type</h4>
 					<div class="ev-modal-row">
-						<div class="ev-modal-field ev-field-full">
+						<div class="ev-modal-field" style="flex:2">
 							<label>Name</label>
 							<input type="text" name="EventName" value="<?= htmlspecialchars($info['Name'] ?? '') ?>" required>
+						</div>
+						<div class="ev-modal-field" style="flex:1">
+							<label>Event Type</label>
+							<select name="EventType">
+								<option value="">-- None --</option>
+								<option value="Coronation"<?= ($eventType === 'Coronation') ? ' selected' : '' ?>>Coronation</option>
+								<option value="Midreign"<?= ($eventType === 'Midreign') ? ' selected' : '' ?>>Midreign</option>
+								<option value="Endreign"<?= ($eventType === 'Endreign') ? ' selected' : '' ?>>Endreign</option>
+								<option value="Crown Qualifications"<?= ($eventType === 'Crown Qualifications') ? ' selected' : '' ?>>Crown Qualifications</option>
+								<option value="Meeting"<?= ($eventType === 'Meeting') ? ' selected' : '' ?>>Meeting</option>
+								<option value="Althing"<?= ($eventType === 'Althing') ? ' selected' : '' ?>>Althing</option>
+								<option value="Interkingdom Event"<?= ($eventType === 'Interkingdom Event') ? ' selected' : '' ?>>Interkingdom Event</option>
+								<option value="Weaponmaster"<?= ($eventType === 'Weaponmaster') ? ' selected' : '' ?>>Weaponmaster</option>
+								<option value="Warmaster"<?= ($eventType === 'Warmaster') ? ' selected' : '' ?>>Warmaster</option>
+								<option value="Dragonmaster"<?= ($eventType === 'Dragonmaster') ? ' selected' : '' ?>>Dragonmaster</option>
+								<option value="Other"<?= ($eventType === 'Other') ? ' selected' : '' ?>>Other</option>
+							</select>
 						</div>
 					</div>
 				</div>
@@ -1172,20 +1221,13 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 					</div>
 				</div>
 
-				<div class="ev-modal-section">
-					<h4>Website Link</h4>
-					<div class="ev-modal-row">
-						<div class="ev-modal-field">
-							<label>URL</label>
-							<input type="text" name="Url"
-								value="<?= htmlspecialchars($websiteUrl) ?>" placeholder="https://…">
-						</div>
-						<div class="ev-modal-field">
-							<label>Link Text</label>
-							<input type="text" name="UrlName"
-								value="<?= htmlspecialchars($websiteName) ?>" placeholder="Event Website">
-						</div>
-					</div>
+				<div class="ev-modal-section" id="ev-links-section">
+					<h4>External Links</h4>
+					<div id="ev-links-list" style="margin-bottom:8px"></div>
+					<button type="button" onclick="evLinksAdd()" style="background:#ebf8ff;border:1px solid #90cdf4;color:#2b6cb0;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer">
+						<i class="fas fa-plus"></i> Add Link
+					</button>
+					<input type="hidden" name="ExternalLinks" id="ev-links-json">
 				</div>
 
 				<div class="ev-modal-section">
@@ -1403,7 +1445,10 @@ var EvConfig = {
 	eventEnd:   '<?= $eventEnd   ? date('Y-m-d\TH:i', strtotime($eventEnd))   : '' ?>',
 	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona']]; }, $StaffList ?? [])) ?>,
 	hasFees:    true,
-	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees)) ?>
+	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees)) ?>,
+	hasLinks:   true,
+	links:      <?= json_encode(array_map(function($l) { return ['Title' => $l['Title'], 'Url' => $l['Url'], 'Icon' => $l['Icon']]; }, $ExternalLinks ?? [])) ?>,
+	linksListId:'ev-links-list',
 };
 </script>
 <?php if ($canManageStaff): ?>
@@ -1605,7 +1650,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		<div class="ev-modal-body">
 			<div class="ev-modal-row">
 				<div class="ev-modal-field">
-					<label>Category</label>
+					<label>Primary Category <span style="cursor:help;color:#a0aec0;font-size:11px;border-bottom:1px dotted #a0aec0" title="The primary category will determine schedule color coding.">(?)</span></label>
 					<select id="ev-sched-category" style="width:100%">
 						<option value="Administrative">Administrative</option>
 						<option value="Tournament">Tournament</option>
@@ -1614,10 +1659,28 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 						<option value="Class">Class</option>
 						<option value="Feast and Food">Feast and Food</option>
 						<option value="Court">Court</option>
-						<option value="Other" selected>Other</option>
+						<option value="Meeting">Meeting</option>
+						<option value="Other">Other</option>
 					</select>
 				</div>
 				<div class="ev-modal-field">
+					<label>Secondary Category <span style="font-size:11px;font-weight:400;color:#a0aec0">(optional)</span></label>
+					<select id="ev-sched-secondary-category" style="width:100%">
+						<option value="">— None —</option>
+						<option value="Administrative">Administrative</option>
+						<option value="Tournament">Tournament</option>
+						<option value="Battlegame">Battlegame</option>
+						<option value="Arts and Sciences">Arts and Sciences</option>
+						<option value="Class">Class</option>
+						<option value="Feast and Food">Feast and Food</option>
+						<option value="Court">Court</option>
+						<option value="Meeting">Meeting</option>
+						<option value="Other">Other</option>
+					</select>
+				</div>
+			</div>
+			<div class="ev-modal-row">
+				<div class="ev-modal-field ev-field-full">
 					<label>Title <span style="color:#e53e3e">*</span></label>
 					<input type="text" id="ev-sched-title" placeholder="Evening Feast, Battlegame, etc." autocomplete="off" style="width:100%">
 				</div>

@@ -428,9 +428,11 @@ class Controller_EventAjax extends Controller {
 		$end_time    = trim($_POST['EndTime']     ?? '');
 		$location    = trim($_POST['Location']    ?? '');
 		$description = trim($_POST['Description'] ?? '');
-		$category    = trim($_POST['Category']    ?? 'Other');
-		$allowed_cats = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Other'];
+		$category           = trim($_POST['Category']           ?? 'Other');
+		$secondary_category = trim($_POST['SecondaryCategory']  ?? '');
+		$allowed_cats = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Meeting','Other'];
 		if (!in_array($category, $allowed_cats)) $category = 'Other';
+		if ($secondary_category !== '' && !in_array($secondary_category, $allowed_cats)) $secondary_category = '';
 
 		if (!$title)      { echo json_encode(['status' => 1, 'error' => 'A title is required.']); exit; }
 		if (!$start_time) { echo json_encode(['status' => 1, 'error' => 'A start time is required.']); exit; }
@@ -444,7 +446,8 @@ class Controller_EventAjax extends Controller {
 		$title_safe       = str_replace(["'", '\\'], ["''", '\\\\'], $title);
 		$location_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $location);
 		$description_safe = str_replace(["'", '\\'], ["''", '\\\\'], $description);
-		$category_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $category);
+		$category_safe           = str_replace(["'", '\\'], ["''", '\\\\'], $category);
+		$secondary_category_safe = str_replace(["'", '\\'], ["''", '\\\\'], $secondary_category);
 		$start_fmt = date('Y-m-d H:i:s', $startTs);
 		$end_fmt   = date('Y-m-d H:i:s', $endTs);
 
@@ -452,8 +455,8 @@ class Controller_EventAjax extends Controller {
 		$DB->Clear();
 		$DB->Execute(
 			'INSERT INTO ' . DB_PREFIX . 'event_schedule
-			(event_calendardetail_id, title, start_time, end_time, location, description, category)
-			VALUES (' . $detail_id . ', \'' . $title_safe . '\', \'' . $start_fmt . '\', \'' . $end_fmt . '\', \'' . $location_safe . '\', \'' . $description_safe . '\', \'' . $category_safe . '\')'
+			(event_calendardetail_id, title, start_time, end_time, location, description, category, secondary_category)
+			VALUES (' . $detail_id . ', \'' . $title_safe . '\', \'' . $start_fmt . '\', \'' . $end_fmt . '\', \'' . $location_safe . '\', \'' . $description_safe . '\', \'' . $category_safe . '\', \'' . $secondary_category_safe . '\')'
 		);
 		$DB->Clear();
 		$idrow = $DB->DataSet('SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . $detail_id . ' ORDER BY event_schedule_id DESC LIMIT 1');
@@ -474,14 +477,15 @@ class Controller_EventAjax extends Controller {
 		}
 
 		echo json_encode(['status' => 0, 'schedule' => [
-			'EventScheduleId' => $schedule_id,
-			'Title'           => $title,
-			'StartTime'       => $start_fmt,
-			'EndTime'         => $end_fmt,
-			'Location'        => $location,
-			'Description'     => $description,
-			'Category'        => $category,
-			'Leads'           => $leadsOut,
+			'EventScheduleId'   => $schedule_id,
+			'Title'             => $title,
+			'StartTime'         => $start_fmt,
+			'EndTime'           => $end_fmt,
+			'Location'          => $location,
+			'Description'       => $description,
+			'Category'          => $category,
+			'SecondaryCategory' => $secondary_category,
+			'Leads'             => $leadsOut,
 		]]);
 		exit;
 	}
@@ -550,9 +554,11 @@ class Controller_EventAjax extends Controller {
 		$end_time    = trim($_POST['EndTime']     ?? '');
 		$location    = trim($_POST['Location']    ?? '');
 		$description = trim($_POST['Description'] ?? '');
-		$category    = trim($_POST['Category']    ?? 'Other');
-		$allowed_cats = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Other'];
+		$category           = trim($_POST['Category']           ?? 'Other');
+		$secondary_category = trim($_POST['SecondaryCategory']  ?? '');
+		$allowed_cats = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Meeting','Other'];
 		if (!in_array($category, $allowed_cats)) $category = 'Other';
+		if ($secondary_category !== '' && !in_array($secondary_category, $allowed_cats)) $secondary_category = '';
 
 		if (!$title)      { echo json_encode(['status' => 1, 'error' => 'A title is required.']); exit; }
 		if (!$start_time) { echo json_encode(['status' => 1, 'error' => 'A start time is required.']); exit; }
@@ -566,7 +572,8 @@ class Controller_EventAjax extends Controller {
 		$title_safe       = str_replace(["'", '\\'], ["''", '\\\\'], $title);
 		$location_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $location);
 		$description_safe = str_replace(["'", '\\'], ["''", '\\\\'], $description);
-		$category_safe    = str_replace(["'", '\\'], ["''", '\\\\'], $category);
+		$category_safe           = str_replace(["'", '\\'], ["''", '\\\\'], $category);
+		$secondary_category_safe = str_replace(["'", '\\'], ["''", '\\\\'], $secondary_category);
 		$start_fmt = date('Y-m-d H:i:s', $startTs);
 		$end_fmt   = date('Y-m-d H:i:s', $endTs);
 
@@ -579,7 +586,8 @@ class Controller_EventAjax extends Controller {
 			'end_time = \'' . $end_fmt . '\', ' .
 			'location = \'' . $location_safe . '\', ' .
 			'description = \'' . $description_safe . '\', ' .
-			'category = \'' . $category_safe . '\' ' .
+			'category = \'' . $category_safe . '\', ' .
+			'secondary_category = \'' . $secondary_category_safe . '\' ' .
 			'WHERE event_schedule_id = ' . $schedule_id . ' AND event_calendardetail_id = ' . $detail_id
 		);
 
@@ -599,14 +607,15 @@ class Controller_EventAjax extends Controller {
 		}
 
 		echo json_encode(['status' => 0, 'schedule' => [
-			'EventScheduleId' => $schedule_id,
-			'Title'           => $title,
-			'StartTime'       => $start_fmt,
-			'EndTime'         => $end_fmt,
-			'Location'        => $location,
-			'Description'     => $description,
-			'Category'        => $category,
-			'Leads'           => $leadsOut,
+			'EventScheduleId'   => $schedule_id,
+			'Title'             => $title,
+			'StartTime'         => $start_fmt,
+			'EndTime'           => $end_fmt,
+			'Location'          => $location,
+			'Description'       => $description,
+			'Category'          => $category,
+			'SecondaryCategory' => $secondary_category,
+			'Leads'             => $leadsOut,
 		]]);
 		exit;
 	}
