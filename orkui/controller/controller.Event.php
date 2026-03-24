@@ -336,7 +336,20 @@ class Controller_Event extends Controller {
 						'Country'               => $this->request->Eventnew_edit->Country,
 						'MapUrl'                => $this->request->Eventnew_edit->MapUrl,
 						'MapUrlName'            => $this->request->Eventnew_edit->MapUrlName,
+						'EventType'             => $this->request->Eventnew_edit->EventType,
 					]);
+					// event_type is always saved directly — SetEventDetails blocks all saves when attendance exists,
+					// but event_type is metadata that should be editable at any time.
+					$_evType = trim($this->request->Eventnew_edit->EventType ?? '');
+					$_etAllowed = ['Coronation','Midreign','Endreign','Crown Qualifications','Meeting','Althing','Interkingdom Event','Weaponmaster','Warmaster','Dragonmaster','Other'];
+					if ($_evType === '' || in_array($_evType, $_etAllowed, true)) {
+						global $DB;
+						$DB->Clear();
+						$_evTypeSql = ($_evType === '') ? 'NULL' : "'" . str_replace(["'", '\\'], ["''", '\\\\'], $_evType) . "'";
+						$DB->Execute('UPDATE ' . DB_PREFIX . 'event_calendardetail SET event_type = ' . $_evTypeSql . ' WHERE event_calendardetail_id = ' . $detail_id);
+						$_cdBustKey = Ork3::$Lib->ghettocache->key([$detail_id]);
+						Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $_cdBustKey);
+					}
 					if ( $r['Status'] == 0 ) {
 						$this->request->clear('Eventnew_edit');
 						$cdKey = Ork3::$Lib->ghettocache->key([$detail_id]);
@@ -356,6 +369,20 @@ class Controller_Event extends Controller {
 								$_cost = round((float)($_fee['Cost'] ?? 0), 2);
 								$DB->Clear();
 								$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $detail_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')');
+							}
+						}
+						// Sync external links
+						$_linksJson = trim($_POST['ExternalLinks'] ?? '');
+						$_linksIn = ($_linksJson !== '') ? json_decode($_linksJson, true) : [];
+						$DB->Clear();
+						$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $detail_id);
+						if (is_array($_linksIn)) {
+							foreach ($_linksIn as $_li => $_link) {
+								$_lt  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Title'] ?? ''));
+								$_lu  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Url'] ?? ''));
+								$_lic = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Icon'] ?? 'fas fa-link'));
+								$DB->Clear();
+								$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $detail_id . ', \'' . $_lt . '\', \'' . $_lu . '\', \'' . $_lic . '\', ' . $_li . ')');
 							}
 						}
 						header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
@@ -565,7 +592,8 @@ class Controller_Event extends Controller {
 		$scheduleRows = $DB->DataSet(
 			'SELECT event_schedule_id AS EventScheduleId, title AS Title,
 			        start_time AS StartTime, end_time AS EndTime,
-			        location AS Location, description AS Description, category AS Category
+			        location AS Location, description AS Description, category AS Category,
+			        secondary_category AS SecondaryCategory
 			FROM ' . DB_PREFIX . 'event_schedule
 			WHERE event_calendardetail_id = ' . $detail_id . '
 			ORDER BY start_time'
@@ -580,7 +608,8 @@ class Controller_Event extends Controller {
 					'EndTime'         => $scheduleRows->EndTime,
 					'Location'        => $scheduleRows->Location,
 					'Description'     => $scheduleRows->Description,
-					'Category'        => $scheduleRows->Category,
+					'Category'          => $scheduleRows->Category,
+					'SecondaryCategory' => $scheduleRows->SecondaryCategory ?? '',
 				];
 			}
 		}
@@ -631,6 +660,28 @@ class Controller_Event extends Controller {
 			}
 		}
 		$this->data['EventFees'] = $feeList;
+
+		// Load external links for this occurrence
+		$DB->Clear();
+		$linkRows = $DB->DataSet(
+			'SELECT event_link_id AS EventLinkId, title AS Title, url AS Url, icon AS Icon, sort_order AS SortOrder
+			FROM ' . DB_PREFIX . 'event_links
+			WHERE event_calendardetail_id = ' . $detail_id . '
+			ORDER BY sort_order, event_link_id'
+		);
+		$linkList = [];
+		if ($linkRows) {
+			while ($linkRows->Next()) {
+				$linkList[] = [
+					'EventLinkId' => (int)$linkRows->EventLinkId,
+					'Title'       => $linkRows->Title,
+					'Url'         => $linkRows->Url,
+					'Icon'        => $linkRows->Icon,
+					'SortOrder'   => (int)$linkRows->SortOrder,
+				];
+			}
+		}
+		$this->data['ExternalLinks'] = $linkList;
 
 		// Load feast meals for this occurrence
 		$DB->Clear();
@@ -732,6 +783,7 @@ class Controller_Event extends Controller {
 				'Country'     => $this->request->Eventcreate->Country,
 				'MapUrl'      => $this->request->Eventcreate->MapUrl,
 				'MapUrlName'  => $this->request->Eventcreate->MapUrlName,
+				'EventType'   => $this->request->Eventcreate->EventType,
 			]);
 			if ( $r['Status'] == 0 ) {
 				// Some SOAP implementations return new ID in Detail; fallback to newest detail
@@ -756,6 +808,20 @@ class Controller_Event extends Controller {
 						$_cost = round((float)($_fee['Cost'] ?? 0), 2);
 						$DB->Clear();
 						$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $new_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')');
+					}
+				}
+				// Sync external links
+				$_linksJson2 = trim($_POST['ExternalLinks'] ?? '');
+				$_linksIn2 = ($_linksJson2 !== '') ? json_decode($_linksJson2, true) : [];
+				if (is_array($_linksIn2) && !empty($_linksIn2) && $new_id > 0) {
+					$DB->Clear();
+					$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $new_id);
+					foreach ($_linksIn2 as $_li2 => $_link2) {
+						$_lt2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Title'] ?? ''));
+						$_lu2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Url'] ?? ''));
+						$_lic2 = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Icon'] ?? 'fas fa-link'));
+						$DB->Clear();
+						$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $new_id . ', \'' . $_lt2 . '\', \'' . $_lu2 . '\', \'' . $_lic2 . '\', ' . $_li2 . ')');
 					}
 				}
 				header('Location: ' . UIR . "Event/detail/{$event_id}/{$new_id}");
