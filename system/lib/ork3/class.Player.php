@@ -711,6 +711,59 @@ class Player extends Ork3 {
 			$this->db->query($sql);
     	$sql = "update " . DB_PREFIX ."mundane_note set mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' where mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
+			$sql = "DELETE FROM " . DB_PREFIX . "event_rsvp
+					WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'
+					AND event_calendardetail_id IN (
+						SELECT event_calendardetail_id FROM (
+							SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_rsvp
+							WHERE mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "'
+						) AS existing
+					)";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "event_rsvp SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			// class_reconciliation: unique key on (class_id, mundane_id) — deduplicate first
+			$sql = "DELETE FROM " . DB_PREFIX . "class_reconciliation
+					WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'
+					AND class_id IN (
+						SELECT class_id FROM (
+							SELECT class_id FROM " . DB_PREFIX . "class_reconciliation
+							WHERE mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "'
+						) AS existing
+					)";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "class_reconciliation SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			// whats_new_seen: unique key on (mundane_id, version) — deduplicate first
+			$sql = "DELETE FROM " . DB_PREFIX . "whats_new_seen
+					WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'
+					AND version IN (
+						SELECT version FROM (
+							SELECT version FROM " . DB_PREFIX . "whats_new_seen
+							WHERE mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "'
+						) AS existing
+					)";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "whats_new_seen SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			// Simple transfers
+			$sql = "UPDATE " . DB_PREFIX . "recommendations SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "recommendations SET recommended_by_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE recommended_by_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "dues SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "bracket_officiant SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "participant_mundane SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "game SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "application SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			// idp_auth: delete FROM player's IDP link — TO player keeps their login
+			$sql = "DELETE FROM " . DB_PREFIX . "idp_auth WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
 			return Success();
 		} else {
 			return NoAuthorization();

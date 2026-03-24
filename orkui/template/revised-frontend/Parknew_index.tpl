@@ -988,7 +988,7 @@
 						<ul>
 							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Add Player</a></li>
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
-							<li><a href="<?= UIR ?>Admin/mergeplayer/park/<?= $park_id ?>">Merge Players</a></li>
+							<li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
 						</ul>
 					</div>
@@ -1741,7 +1741,7 @@ var PkConfig = {
 			</div>
 			<div class="pk-acct-field">
 				<label id="pk-moveplayer-player-label">Player <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="pk-moveplayer-player-name" autocomplete="off" placeholder="Search players outside this park…">
+				<input type="text" id="pk-moveplayer-player-name" autocomplete="off" placeholder="Search by name, or KD:PK name…">
 				<input type="hidden" id="pk-moveplayer-player-id">
 				<div class="pk-ac-results" id="pk-moveplayer-player-results"></div>
 			</div>

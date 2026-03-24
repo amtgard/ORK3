@@ -8889,7 +8889,7 @@ window.pnCloseUnitCreateModal = function() {
             if (btnIn)  btnIn.classList.add('pk-mp-active');
             if (btnOut) btnOut.classList.remove('pk-mp-active');
             if (parkSection) parkSection.style.display = 'none';
-            if (playerInput) playerInput.placeholder = 'Search players outside this park…';
+            if (playerInput) playerInput.placeholder = 'Search by name, or KD:PK name\u2026';
             mpParkId = PkConfig.parkId;
         } else {
             if (btnOut) btnOut.classList.add('pk-mp-active');

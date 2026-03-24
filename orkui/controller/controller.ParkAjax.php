@@ -130,7 +130,23 @@ class Controller_ParkAjax extends Controller {
 
 			global $DB;
 			$pid  = (int)$park_id;
-			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
+
+			// Parse optional "KD:PK search term" abbreviation prefix
+			$filterKid = 0;
+			$filterPid = 0;
+			$searchQ   = $q;
+			if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
+				$kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
+				$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+				if ($rs && $rs->Next()) $filterKid = (int)$rs->kingdom_id;
+				if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+					$pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
+					$rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+					if ($rs && $rs->Next()) $filterPid = (int)$rs->park_id;
+				}
+				$searchQ = trim($m[3]);
+			}
+			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
 
 			if ($scope === 'own') {
 				$park_clause = "AND m.park_id = {$pid}";
@@ -138,6 +154,13 @@ class Controller_ParkAjax extends Controller {
 				$park_clause = "AND m.park_id != {$pid}";
 			} else {
 				$park_clause = '';
+			}
+
+			// Abbreviation prefix overrides scope filter when specific kingdom/park matched
+			if ($filterPid > 0) {
+				$park_clause = "AND m.park_id = {$filterPid}";
+			} elseif ($filterKid > 0) {
+				$park_clause = "AND m.kingdom_id = {$filterKid}";
 			}
 
 			$sql = "
