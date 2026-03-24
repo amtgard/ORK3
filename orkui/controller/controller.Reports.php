@@ -704,6 +704,7 @@ class Controller_Reports extends Controller {
 			'KingdomId' => $type === 'Kingdom' ? $id : 0,
 			'ParkId'    => $type === 'Park'    ? $id : 0,
 		));
+		$this->data['filter'] = isset($this->request->filter) ? trim($this->request->filter) : '';
 	}
 
 	public function beltline_explorer($params = null) {

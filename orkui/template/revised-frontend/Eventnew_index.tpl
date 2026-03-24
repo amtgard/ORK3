@@ -220,7 +220,7 @@
 
 		<div class="ev-hero-actions">
 			<a class="ev-btn ev-btn-white"
-				href="<?= UIR ?>Reports/attendance/Event/<?= $eventId ?>/All">
+				href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdomId ?>&filter=<?= urlencode($info['Name'] ?? '') ?>">
 				<i class="fas fa-list-alt"></i> Attendance Report
 			</a>
 			<?php if ($CanManageEvent ?? false): ?>

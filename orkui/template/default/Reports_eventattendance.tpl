@@ -2,6 +2,7 @@
 $events       = $events ?? [];
 $scope_type   = $report_type ?? '';
 $scope_id     = (int)($report_id ?? 0);
+$prefilter    = $filter ?? '';
 
 $total_events     = count($events);
 $total_attendance = 0;
@@ -148,6 +149,9 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 			],
 			language: { search: 'Filter:' }
 		});
+		<?php if (!empty($prefilter)): ?>
+		$('#ea-table_filter input').val(<?= json_encode($prefilter) ?>).trigger('input');
+		<?php endif; ?>
 		$('.rp-btn-export').on('click', function() { dt.button('.buttons-csv').trigger(); });
 		$('.rp-btn-print').on('click', function() { dt.button('.buttons-print').trigger(); });
 	});
