@@ -3753,6 +3753,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .ev-badge-green  { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .ev-badge-gray   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
 .ev-badge-blue   { background: #bee3f8; color: #2a69ac; }
+.ev-badge-purple { background: #e9d8fd; color: #553c9a; }
 
 .ev-owner-inline {
 	color: rgba(255,255,255,0.85);

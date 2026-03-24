@@ -6800,6 +6800,7 @@ $(document).ready(function() {
         if (overlay) overlay.classList.add('ev-modal-open');
         document.body.style.overflow = 'hidden';
         if (typeof evFeesReset === 'function') evFeesReset(EvConfig.fees || []);
+        if (typeof evLinksReset === 'function') evLinksReset(EvConfig.links || []);
     };
     window.evCloseEditModal = function() {
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
@@ -7463,6 +7464,7 @@ $(document).ready(function() {
             'Class':             { icon: 'fa-graduation-cap',  color: '#1565c0', bg: '#e3f2fd' },
             'Feast and Food':    { icon: 'fa-utensils',        color: '#e65100', bg: '#fff3e0' },
             'Court':             { icon: 'fa-crown',           color: '#4e342e', bg: '#efebe9' },
+            'Meeting':           { icon: 'fa-users',           color: '#276749', bg: '#f0fff4' },
             'Other':             { icon: 'fa-star',            color: '#757575', bg: '#fafafa' }
         };
 
@@ -7473,7 +7475,8 @@ $(document).ready(function() {
             gid('ev-sched-id').value           = '';
             gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
             gid('ev-sched-save-label').textContent  = 'Save';
-            gid('ev-sched-category').value    = 'Other';
+            gid('ev-sched-category').value           = 'Other';
+            gid('ev-sched-secondary-category').value = '';
             gid('ev-sched-title').value       = '';
             gid('ev-sched-location').value     = '';
             gid('ev-sched-description').value  = '';
@@ -7565,7 +7568,8 @@ $(document).ready(function() {
             gid('ev-sched-id').value           = scheduleId;
             gid('ev-sched-modal-title').textContent = 'Edit Schedule Item';
             gid('ev-sched-save-label').textContent  = 'Save Changes';
-            gid('ev-sched-category').value    = row.getAttribute('data-category') || 'Other';
+            gid('ev-sched-category').value           = row.getAttribute('data-category') || 'Other';
+            gid('ev-sched-secondary-category').value = row.getAttribute('data-secondary-category') || '';
             gid('ev-sched-title').value       = row.getAttribute('data-title') || '';
             gid('ev-sched-location').value     = row.getAttribute('data-location') || '';
             gid('ev-sched-description').value  = row.getAttribute('data-description') || '';
@@ -7610,9 +7614,11 @@ $(document).ready(function() {
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
 
-            var cat = gid('ev-sched-category').value || 'Other';
+            var cat    = gid('ev-sched-category').value || 'Other';
+            var secCat = gid('ev-sched-secondary-category').value || '';
             var fd = new FormData();
-            fd.append('Category',    cat);
+            fd.append('Category',          cat);
+            fd.append('SecondaryCategory', secCat);
             fd.append('Title',       title);
             fd.append('StartTime',   start.replace('T', ' '));
             fd.append('EndTime',     end.replace('T', ' '));
@@ -7639,7 +7645,15 @@ $(document).ready(function() {
                     var startCell = escHtmlSch(evFmtTime(s.StartTime));
                     var endCell   = escHtmlSch(evFmtTime(s.EndTime));
                     var catCfg = EV_CATEGORIES[s.Category] || EV_CATEGORIES['Other'];
-                    var glyphHtml = '<i class="fas ' + catCfg.icon + '" style="color:' + catCfg.color + ';margin-right:5px" title="' + escHtmlSch(s.Category) + '"></i>';
+                    var glyphHtml = (function(cat, secCat) {
+                        var cfg    = EV_CATEGORIES[cat]    || EV_CATEGORIES['Other'];
+                        var secCfg = secCat ? (EV_CATEGORIES[secCat] || EV_CATEGORIES['Other']) : null;
+                        var p = '<i class="fas fa-fw ' + cfg.icon + '" style="color:' + cfg.color + '" title="' + escHtmlSch(cat) + '"></i>';
+                        var s2 = secCfg
+                            ? '<i class="fas fa-fw ' + secCfg.icon + '" style="color:' + secCfg.color + ';margin-right:4px" title="' + escHtmlSch(secCat) + '"></i>'
+                            : '<span style="display:inline-block;width:1.25em;margin-right:4px"></span>';
+                        return p + s2;
+                    })(s.Category, s.SecondaryCategory || '');
                     var actionCells = '<td class="ev-del-cell">' +
                         '<button class="ev-edit-link" title="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
                         '<button class="ev-del-link" title="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
@@ -7652,8 +7666,9 @@ $(document).ready(function() {
                             row.setAttribute('data-end',         s.EndTime.replace(' ', 'T').substring(0, 16));
                             row.setAttribute('data-location',    s.Location);
                             row.setAttribute('data-description', s.Description);
-                            row.setAttribute('data-category',    s.Category);
-                            row.setAttribute('data-leads',       JSON.stringify(s.Leads || []));
+                            row.setAttribute('data-category',           s.Category);
+                            row.setAttribute('data-secondary-category', s.SecondaryCategory || '');
+                            row.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
                             row.style.background = catCfg.bg;
                             row.cells[0].innerHTML = startCell;
                             row.cells[1].innerHTML = endCell;
@@ -7671,6 +7686,7 @@ $(document).ready(function() {
                             ' data-location="' + s.Location.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-description="' + s.Description.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-category="' + escHtmlSch(s.Category) + '"' +
+                            ' data-secondary-category="' + escHtmlSch(s.SecondaryCategory || '') + '"' +
                             ' data-leads="' + JSON.stringify(s.Leads || []).replace(/"/g,'&quot;') + '"' +
                             ' style="background:' + catCfg.bg + '">' +
                             '<td style="white-space:nowrap">' + startCell + '</td>' +
@@ -7748,8 +7764,10 @@ $(document).ready(function() {
             rows.forEach(function(row) {
                 var cat = row.getAttribute('data-category') || 'Other';
                 present[cat] = true;
+                var sec = row.getAttribute('data-secondary-category') || '';
+                if (sec) present[sec] = true;
             });
-            var order = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Other'];
+            var order = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Meeting','Other'];
             container.innerHTML = '';
             var count = 0;
             order.forEach(function(cat) {
@@ -7787,9 +7805,15 @@ $(document).ready(function() {
                 if (icon) icon.style.color = cfg.color;
             }
             document.querySelectorAll('[id^="ev-schedule-tbody-"] tr').forEach(function(row) {
-                if ((row.getAttribute('data-category') || 'Other') === cat) {
-                    row.style.display = isActive ? 'none' : '';
-                }
+                var primary = row.getAttribute('data-category') || 'Other';
+                var secondary = row.getAttribute('data-secondary-category') || '';
+                if (primary !== cat && secondary !== cat) return;
+                // Re-evaluate visibility: show if any of the row's categories has an active pill
+                var primPill = document.querySelector('#ev-sched-filters [data-cat="' + primary + '"]');
+                var secPill  = secondary ? document.querySelector('#ev-sched-filters [data-cat="' + secondary + '"]') : null;
+                var primActive = primPill ? primPill.classList.contains('ev-sched-pill-active') : true;
+                var secActive  = secPill  ? secPill.classList.contains('ev-sched-pill-active')  : false;
+                row.style.display = (primActive || secActive) ? '' : 'none';
             });
         };
 
@@ -12847,6 +12871,160 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
     };
 
     // Hook form submit to serialize
+    var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+    if (form) {
+        form.addEventListener('submit', function() { serialize(); });
+    }
+
+    render();
+})();
+// ---- External Links management (event detail + create) ----
+(function() {
+    var LINK_ICONS = [
+        { icon: 'fas fa-ticket-alt', label: 'Ticket'    },
+        { icon: 'fab fa-facebook',  label: 'Facebook'  },
+        { icon: 'fab fa-discord',   label: 'Discord'   },
+        { icon: 'fas fa-globe',     label: 'Globe'     },
+        { icon: 'far fa-clipboard', label: 'Clipboard' },
+        { icon: 'fas fa-link',      label: 'Link'      },
+    ];
+
+    var cfg = (typeof EvConfig !== 'undefined' && EvConfig.hasLinks) ? EvConfig
+            : (typeof EcConfig !== 'undefined' && EcConfig.hasLinks) ? EcConfig : null;
+    if (!cfg) return;
+
+    var evLinks = (cfg.links || []).map(function(l) {
+        return { Title: l.Title || '', Url: l.Url || '', Icon: l.Icon || '' };
+    });
+
+    var listId = cfg.linksListId || 'ev-links-list';
+
+    // Close all icon menus on outside click
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('[data-links-icon-btn],[data-links-icon-menu],[data-links-icon-pick]')) {
+            var list = document.getElementById(listId);
+            if (list) list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+        }
+    });
+
+    function render() {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        if (evLinks.length === 0) {
+            list.innerHTML = '<div style="color:#718096;font-size:13px;padding:4px 0">No links added.</div>';
+            serialize();
+            return;
+        }
+        evLinks.forEach(function(link, idx) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+
+            var menuHtml = '<div data-links-icon-menu="' + idx + '" ' +
+                'style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;' +
+                'border:1px solid #cbd5e0;border-radius:6px;padding:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);' +
+                'flex-wrap:wrap;gap:4px;width:160px">' +
+                LINK_ICONS.map(function(li) {
+                    var active = link.Icon === li.icon;
+                    return '<button type="button" title="' + li.label + '" data-links-icon-pick="' + idx + '" data-links-icon-val="' + li.icon + '" ' +
+                        'style="width:34px;height:34px;border:1px solid ' + (active ? '#4299e1' : '#e2e8f0') + ';' +
+                        'border-radius:4px;background:' + (active ? '#ebf8ff' : '#fff') + ';cursor:pointer;' +
+                        'font-size:14px;display:flex;align-items:center;justify-content:center">' +
+                        '<i class="' + li.icon + '"></i></button>';
+                }).join('') +
+                '</div>';
+
+            var titleVal = (link.Title || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+            var urlVal   = (link.Url   || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+            var noIcon = !link.Icon;
+            row.innerHTML =
+                '<div style="position:relative;flex-shrink:0">' +
+                    '<button type="button" data-links-icon-btn="' + idx + '" title="Choose icon" ' +
+                    'style="width:36px;height:34px;border:1px solid ' + (noIcon ? '#fc8181' : '#cbd5e0') + ';' +
+                    'border-radius:4px;background:' + (noIcon ? '#fff5f5' : '#fff') + ';' +
+                    'cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;' +
+                    (noIcon ? 'box-shadow:0 0 0 2px #fed7d7;' : '') + '">' +
+                    (noIcon ? '<i class="fas fa-question" style="color:#fc8181;font-size:13px"></i>' : '<i class="' + link.Icon + '"></i>') +
+                    '</button>' +
+                    menuHtml +
+                '</div>' +
+                '<input type="text" placeholder="Title (e.g. Register Here)" value="' + titleVal + '" ' +
+                'data-links-idx="' + idx + '" data-links-field="Title" ' +
+                'style="flex:1;min-width:0;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<input type="text" placeholder="https://\u2026" value="' + urlVal + '" ' +
+                'data-links-idx="' + idx + '" data-links-field="Url" ' +
+                'style="flex:2;min-width:0;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<button type="button" data-links-remove="' + idx + '" title="Remove" ' +
+                'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1;flex-shrink:0">\xd7</button>';
+
+            list.appendChild(row);
+        });
+
+        list.querySelectorAll('button[data-links-icon-btn]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var i    = parseInt(this.getAttribute('data-links-icon-btn'));
+                var menu = list.querySelector('[data-links-icon-menu="' + i + '"]');
+                if (!menu) return;
+                var showing = menu.style.display === 'flex';
+                list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+                if (!showing) menu.style.display = 'flex';
+            });
+        });
+
+        list.querySelectorAll('button[data-links-icon-pick]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var i   = parseInt(this.getAttribute('data-links-icon-pick'));
+                var val = this.getAttribute('data-links-icon-val');
+                if (!evLinks[i]) return;
+                evLinks[i].Icon = val;
+                list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+                render();
+            });
+        });
+
+        list.querySelectorAll('input[data-links-idx]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                var i = parseInt(this.getAttribute('data-links-idx'));
+                var f = this.getAttribute('data-links-field');
+                if (!evLinks[i]) return;
+                evLinks[i][f] = this.value;
+                serialize();
+            });
+        });
+
+        list.querySelectorAll('button[data-links-remove]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var i = parseInt(this.getAttribute('data-links-remove'));
+                evLinks.splice(i, 1);
+                render();
+            });
+        });
+
+        serialize();
+    }
+
+    function serialize() {
+        var el = document.getElementById('ev-links-json');
+        if (el) el.value = JSON.stringify(evLinks);
+    }
+
+    window.evLinksAdd = function() {
+        evLinks.push({ Title: '', Url: '', Icon: '' });
+        render();
+        var inputs = document.querySelectorAll('#' + listId + ' input[data-links-field="Title"]');
+        if (inputs.length) inputs[inputs.length - 1].focus();
+    };
+
+    window.evLinksReset = function(links) {
+        evLinks = (links || []).map(function(l) {
+            return { Title: l.Title || '', Url: l.Url || '', Icon: l.Icon || '' };
+        });
+        render();
+    };
+
     var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
     if (form) {
         form.addEventListener('submit', function() { serialize(); });

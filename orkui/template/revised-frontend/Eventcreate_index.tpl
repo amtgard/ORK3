@@ -95,6 +95,33 @@
 				<input type="hidden" name="Fees" id="ev-fees-json">
 			</div>
 
+			<?php // ---- Section: Event Type ---- ?>
+			<div class="ec-section">
+				<h4 class="ec-section-title">
+					<i class="fas fa-tag"></i> Event Type
+				</h4>
+				<div class="ec-row">
+					<div class="ec-field ec-full">
+						<label>Event Type</label>
+						<select name="EventType">
+							<option value="">-- None --</option>
+					<option value="Coronation">Coronation</option>
+					<option value="Midreign">Midreign</option>
+					<option value="Endreign">Endreign</option>
+					<option value="Crown Qualifications">Crown Qualifications</option>
+					<option value="Meeting">Meeting</option>
+					<option value="Althing">Althing</option>
+					<option value="Interkingdom Event">Interkingdom Event</option>
+					<option value="Weaponmaster">Weaponmaster</option>
+					<option value="Warmaster">Warmaster</option>
+					<option value="Dragonmaster">Dragonmaster</option>
+					<option value="Other">Other</option>
+						</select>
+						<span class="ec-field-hint">Optional. Categorize this event for display in the hero header.</span>
+					</div>
+				</div>
+			</div>
+
 			<?php // ---- Section: Description ---- ?>
 			<div class="ec-section">
 				<h4 class="ec-section-title">
@@ -164,31 +191,17 @@
 				</div>
 			</div>
 
-			<?php // ---- Section: Links ---- ?>
+			<?php // ---- Section: External Links ---- ?>
 			<div class="ec-section">
 				<h4 class="ec-section-title">
-					<i class="fas fa-link"></i> Links
+					<i class="fas fa-link"></i> External Links
 				</h4>
-				<div class="ec-row">
-					<div class="ec-field">
-						<label>Website URL</label>
-						<input type="text" name="Url" placeholder="https://…">
-					</div>
-					<div class="ec-field">
-						<label>Website Link Text</label>
-						<input type="text" name="UrlName" placeholder="Event Website">
-					</div>
-				</div>
-				<div class="ec-row">
-					<div class="ec-field">
-						<label>Map URL</label>
-						<input type="text" name="MapUrl" placeholder="https://maps.google.com/…">
-					</div>
-					<div class="ec-field">
-						<label>Map Link Text</label>
-						<input type="text" name="MapUrlName" placeholder="Campsite Map">
-					</div>
-				</div>
+				<div id="ec-links-list" style="margin-bottom:8px"></div>
+				<button type="button" onclick="evLinksAdd()" style="background:#ebf8ff;border:1px solid #90cdf4;color:#2b6cb0;border-radius:4px;padding:5px 12px;font-size:13px;cursor:pointer">
+					<i class="fas fa-plus"></i> Add Link
+				</button>
+				<span class="ec-field-hint" style="display:block;margin-top:6px">Add links to registration, social media, or other resources.</span>
+				<input type="hidden" name="ExternalLinks" id="ev-links-json">
 			</div>
 
 			<?php // ---- Action bar ---- ?>
@@ -268,6 +281,9 @@ var EcConfig = {
 	hasFees:     true,
 	fees:        [],
 	feesListId:  'ec-fees-list',
+	hasLinks:    true,
+	links:       [],
+	linksListId: 'ec-links-list',
 };
 function ecCancelAndReturn(ev, eventId) {
 	ev.preventDefault();

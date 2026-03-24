@@ -124,7 +124,8 @@ class SearchService extends Ork3 {
 					'City' => $eventdetail->city,
 					'Country' => $eventdetail->country,
 					'MapUrl' => $eventdetail->map_url,
-					'MapUrlName' => $eventdetail->map_url_name
+					'MapUrlName' => $eventdetail->map_url_name,
+				'EventType'  => $eventdetail->event_type
 				);
 			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $detail);
 		} else {
