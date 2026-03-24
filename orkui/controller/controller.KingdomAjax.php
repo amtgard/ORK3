@@ -701,15 +701,39 @@ class Controller_KingdomAjax extends Controller {
 
 		global $DB;
 		$kid  = $kingdom_id;
-		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
 
-		if ($scope === 'exclude') {
-			$kingdom_clause = "AND m.kingdom_id != {$kid}";
-		} else {
-			$kingdom_clause = "AND m.kingdom_id = {$kid}";
+		// Parse optional "KD:PK search term" prefix to scope results by abbreviation.
+		// When matched, the prefix overrides the scope-based kingdom/park filter entirely.
+		$filterKid = 0;
+		$filterPid = 0;
+		$searchQ   = $q;
+		if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\\*)?\\s+(.+)$/i', $q, $m)) {
+			$kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
+			$rs = $DB->DataSet("SELECT kingdom_id FROM ork_kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+			if ($rs->Next()) { $filterKid = (int)$rs->kingdom_id; }
+			if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+				$pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
+				$rs = $DB->DataSet("SELECT park_id FROM ork_park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+				if ($rs->Next()) { $filterPid = (int)$rs->park_id; }
+			}
+			$searchQ = trim($m[3]);
 		}
 
-		$park_clause = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
+
+		if ($filterPid > 0) {
+			$kingdom_clause = '';
+			$park_clause    = "AND m.park_id = {$filterPid}";
+		} elseif ($filterKid > 0) {
+			$kingdom_clause = "AND m.kingdom_id = {$filterKid}";
+			$park_clause    = '';
+		} elseif ($scope === 'exclude') {
+			$kingdom_clause = "AND m.kingdom_id != {$kid}";
+			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+		} else {
+			$kingdom_clause = "AND m.kingdom_id = {$kid}";
+			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+		}
 
 		$sql = "
 			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,

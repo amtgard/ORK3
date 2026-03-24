@@ -8263,7 +8263,7 @@ window.pnCloseUnitCreateModal = function() {
         var playerLabel = gid('kn-moveplayer-player-label');
         var parkLabel   = gid('kn-moveplayer-park-label');
         if (mode === 'in') {
-            playerInput.placeholder = 'Search players outside this kingdom\u2026';
+            playerInput.placeholder = 'Search by name, or KD:PK name\u2026';
             parkInput.placeholder   = 'Search parks in this kingdom\u2026';
             if (playerLabel) playerLabel.innerHTML = 'Player (outside kingdom) <span style="color:#e53e3e">*</span>';
             if (parkLabel)   parkLabel.innerHTML   = 'Destination Park (in kingdom) <span style="color:#e53e3e">*</span>';
@@ -8321,9 +8321,9 @@ window.pnCloseUnitCreateModal = function() {
         // Player autocomplete
         gid('kn-moveplayer-player-name').addEventListener('input', function() {
             gid('kn-moveplayer-player-id').value = '';
+            clearTimeout(mpPlayerTimer);
             var term = this.value.trim();
             if (term.length < 2) { gid('kn-moveplayer-player-results').classList.remove('kn-ac-open'); return; }
-            clearTimeout(mpPlayerTimer);
             mpPlayerTimer = setTimeout(function() {
                 var scope = (knmpMode === 'in') ? 'exclude' : 'own';
                 fetch(PSEARCH_URL + '&scope=' + scope + '&q=' + encodeURIComponent(term))
@@ -8356,9 +8356,9 @@ window.pnCloseUnitCreateModal = function() {
         // Park autocomplete
         gid('kn-moveplayer-park-name').addEventListener('input', function() {
             gid('kn-moveplayer-park-id').value = '';
+            clearTimeout(mpParkTimer);
             var term = this.value.trim();
             if (term.length < 2) { gid('kn-moveplayer-park-results').classList.remove('kn-ac-open'); return; }
-            clearTimeout(mpParkTimer);
             mpParkTimer = setTimeout(function() {
                 var params = { Action: 'Search/Park', name: term, limit: 10 };
                 if (knmpMode === 'in' || knmpMode === 'within') {

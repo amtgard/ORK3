@@ -631,7 +631,7 @@
 					<ul>
 						<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
 						<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
-						<li><a href="<?= UIR ?>Admin/mergeplayers">Merge Players</a></li>
+						<li><a href="#" onclick="knOpenMergePlayerModal();return false;">Merge Players</a></li>
 						<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspensions</a></li>
 					</ul>
 				</div>
