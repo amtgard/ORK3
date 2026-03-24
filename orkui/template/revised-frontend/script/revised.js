@@ -8435,25 +8435,55 @@ window.pnCloseUnitCreateModal = function() {
         document.body.style.overflow = '';
     }
 
+    function cpShowSearch() {
+        gid('kn-claimpark-search-panel').style.display  = '';
+        gid('kn-claimpark-confirm-panel').style.display = 'none';
+        gid('kn-claimpark-back').style.display          = 'none';
+        gid('kn-claimpark-cancel').style.display        = '';
+        var btn = gid('kn-claimpark-submit');
+        btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
+        btn.disabled  = false;
+    }
+
+    function cpShowConfirm() {
+        var parkName   = gid('kn-claimpark-park-name').value;
+        var fromKingdom = gid('kn-claimpark-source-kingdom').value || '(unknown)';
+        gid('kn-claimpark-confirm-park').textContent = parkName;
+        gid('kn-claimpark-confirm-from').textContent = fromKingdom;
+        gid('kn-claimpark-search-panel').style.display  = 'none';
+        gid('kn-claimpark-confirm-panel').style.display = '';
+        gid('kn-claimpark-back').style.display          = '';
+        gid('kn-claimpark-cancel').style.display        = 'none';
+        var btn = gid('kn-claimpark-submit');
+        btn.innerHTML = '<i class="fas fa-flag"></i> Confirm Transfer';
+        btn.disabled  = false;
+    }
+
     window.knOpenClaimParkModal = function() {
         var ov = gid('kn-claimpark-overlay');
         if (!ov) return;
-        gid('kn-claimpark-park-name').value = '';
-        gid('kn-claimpark-park-id').value   = '';
+        gid('kn-claimpark-park-name').value      = '';
+        gid('kn-claimpark-park-id').value        = '';
+        gid('kn-claimpark-source-kingdom').value = '';
         gid('kn-claimpark-park-results').classList.remove('kn-ac-open');
         gid('kn-claimpark-feedback').style.display = 'none';
+        cpShowSearch();
         ov.classList.add('kn-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { gid('kn-claimpark-park-name').focus(); }, 50);
     };
 
     var cpParkTimer;
+    var cpConfirming = false;
 
     $(document).ready(function() {
         if (!gid('kn-claimpark-overlay')) return;
 
+        acKeyNav(gid('kn-claimpark-park-name'), gid('kn-claimpark-park-results'), 'kn-ac-open', '.kn-ac-item[data-id]');
+
         gid('kn-claimpark-close-btn').addEventListener('click', closeClaimPark);
         gid('kn-claimpark-cancel').addEventListener('click', closeClaimPark);
+        gid('kn-claimpark-back').addEventListener('click', function() { cpConfirming = false; cpShowSearch(); });
         gid('kn-claimpark-overlay').addEventListener('click', function(e) {
             if (e.target === this) closeClaimPark();
         });
@@ -8464,7 +8494,8 @@ window.pnCloseUnitCreateModal = function() {
 
         // Park autocomplete (all parks, no kingdom filter)
         gid('kn-claimpark-park-name').addEventListener('input', function() {
-            gid('kn-claimpark-park-id').value = '';
+            gid('kn-claimpark-park-id').value        = '';
+            gid('kn-claimpark-source-kingdom').value = '';
             var term = this.value.trim();
             if (term.length < 2) { gid('kn-claimpark-park-results').classList.remove('kn-ac-open'); return; }
             clearTimeout(cpParkTimer);
@@ -8473,8 +8504,11 @@ window.pnCloseUnitCreateModal = function() {
                     var el = gid('kn-claimpark-park-results');
                     el.innerHTML = (data && data.length)
                         ? data.map(function(p) {
-                            return '<div class="kn-ac-item" data-id="' + p.ParkId + '" data-name="' + encodeURIComponent(p.Name) + '">'
-                                + p.Name + '</div>';
+                            var label = p.Name + (p.KingdomName ? ' [' + p.KingdomName + ']' : '');
+                            return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.ParkId
+                                + '" data-name="' + encodeURIComponent(p.Name)
+                                + '" data-kingdom="' + encodeURIComponent(p.KingdomName || '') + '">'
+                                + label + '</div>';
                         }).join('')
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
                     el.classList.add('kn-ac-open');
@@ -8484,26 +8518,37 @@ window.pnCloseUnitCreateModal = function() {
         gid('kn-claimpark-park-results').addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
             if (!item) return;
-            gid('kn-claimpark-park-name').value = decodeURIComponent(item.dataset.name);
-            gid('kn-claimpark-park-id').value   = item.dataset.id;
+            gid('kn-claimpark-park-name').value      = decodeURIComponent(item.dataset.name);
+            gid('kn-claimpark-park-id').value        = item.dataset.id;
+            gid('kn-claimpark-source-kingdom').value = decodeURIComponent(item.dataset.kingdom || '');
             this.classList.remove('kn-ac-open');
         });
 
         gid('kn-claimpark-submit').addEventListener('click', function() {
             var parkId = gid('kn-claimpark-park-id').value;
-            if (!parkId) { showFb('Select a park to claim.', false); return; }
+            if (!cpConfirming) {
+                if (!parkId) { showFb('Select a park to claim.', false); return; }
+                cpConfirming = true;
+                cpShowConfirm();
+                return;
+            }
+            // Confirmed — submit
             var btn = this;
             btn.disabled = true;
             $.post(CLAIM_URL, { ParkId: parkId, DestKingdomId: KnConfig.kingdomId }, function(r) {
                 btn.disabled = false;
                 if (r && r.status === 0) {
                     showFb('Park claimed successfully.', true);
-                    setTimeout(closeClaimPark, 1200);
+                    setTimeout(function() { closeClaimPark(); location.reload(); }, 1200);
                 } else {
+                    cpConfirming = false;
+                    cpShowSearch();
                     showFb((r && r.error) ? r.error : 'Claim failed.', false);
                 }
             }, 'json').fail(function() {
                 btn.disabled = false;
+                cpConfirming = false;
+                cpShowSearch();
                 showFb('Request failed. Please try again.', false);
             });
         });

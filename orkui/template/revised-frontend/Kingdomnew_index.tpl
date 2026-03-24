@@ -1661,17 +1661,41 @@ var KnConfig = {
 		</div>
 		<div class="kn-modal-body">
 			<div id="kn-claimpark-feedback" style="display:none"></div>
-			<p style="font-size:13px;color:#718096;margin:0 0 14px">Transfer a park from another kingdom into <strong><?= htmlspecialchars($kingdom_name) ?></strong>.</p>
-			<div class="kn-acct-field">
-				<label>Park to Claim <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="kn-claimpark-park-name" autocomplete="off" placeholder="Search all parks&hellip;">
-				<input type="hidden" id="kn-claimpark-park-id">
-				<div class="kn-ac-results" id="kn-claimpark-park-results"></div>
+			<!-- Step 1: Search -->
+			<div id="kn-claimpark-search-panel">
+				<p style="font-size:13px;color:#718096;margin:0 0 14px">Transfer a park from another kingdom into <strong><?= htmlspecialchars($kingdom_name) ?></strong>.</p>
+				<div class="kn-acct-field" style="position:relative">
+					<label>Park to Claim <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="kn-claimpark-park-name" autocomplete="off" placeholder="Search all parks&hellip;">
+					<input type="hidden" id="kn-claimpark-park-id">
+					<input type="hidden" id="kn-claimpark-source-kingdom">
+					<div class="kn-ac-results" id="kn-claimpark-park-results"></div>
+				</div>
+			</div>
+			<!-- Step 2: Confirm -->
+			<div id="kn-claimpark-confirm-panel" style="display:none">
+				<p style="font-size:14px;color:#2d3748;margin:0 0 16px">Confirm the following transfer:</p>
+				<table style="width:100%;font-size:13px;border-collapse:collapse">
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">Park</td>
+						<td style="padding:6px 0;font-weight:600" id="kn-claimpark-confirm-park"></td>
+					</tr>
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">From</td>
+						<td style="padding:6px 0" id="kn-claimpark-confirm-from"></td>
+					</tr>
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">To</td>
+						<td style="padding:6px 0"><strong><?= htmlspecialchars($kingdom_name) ?></strong></td>
+					</tr>
+				</table>
+				<p style="font-size:12px;color:#e53e3e;margin:16px 0 0">This will move all players in the park to the new kingdom.</p>
 			</div>
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-claimpark-cancel">Cancel</button>
-			<button class="kn-btn kn-btn-primary" id="kn-claimpark-submit"><i class="fas fa-flag"></i> Claim Park</button>
+			<button class="kn-btn-ghost" id="kn-claimpark-back" style="display:none"><i class="fas fa-arrow-left"></i> Back</button>
+			<button class="kn-btn kn-btn-primary" id="kn-claimpark-submit"><i class="fas fa-arrow-right"></i> Review Transfer</button>
 		</div>
 	</div>
 </div>

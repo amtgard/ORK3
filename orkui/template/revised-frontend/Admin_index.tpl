@@ -177,7 +177,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		<div class="cp-section">
 			<div class="cp-section-title"><i class="fas fa-map-marker-alt"></i> Parks</div>
 			<div class="cp-action-grid">
-				<button class="cp-action-card" onclick="cpOpenModal('cp-transferpark-overlay')">
+				<button class="cp-action-card" onclick="cpOpenTransferPark()">
 					<div class="cp-action-icon cp-action-icon-blue"><i class="fas fa-map-signs"></i></div>
 					<div class="cp-action-label">Transfer Park</div>
 					<div class="cp-action-desc">Move a park to a different kingdom</div>
@@ -540,26 +540,50 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	<div class="cp-modal-box">
 		<div class="cp-modal-header">
 			<h3 class="cp-modal-title"><i class="fas fa-map-signs" style="margin-right:8px;color:#2b6cb0"></i>Transfer Park</h3>
-			<button class="cp-modal-close" onclick="cpCloseModal('cp-transferpark-overlay')">&times;</button>
+			<button class="cp-modal-close" id="cp-tp-close-btn">&times;</button>
 		</div>
 		<div class="cp-modal-body">
 			<div class="cp-feedback" id="cp-tp-feedback"></div>
-			<div class="cp-field cp-field-ac">
-				<label>Park to Transfer <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="cp-tp-park-name" autocomplete="off" placeholder="Search all parks…">
-				<input type="hidden" id="cp-tp-park-id">
-				<div class="kn-ac-results" id="cp-tp-park-results"></div>
+			<!-- Step 1: Search -->
+			<div id="cp-tp-search-panel">
+				<div class="cp-field cp-field-ac">
+					<label>Park to Transfer <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="cp-tp-park-name" autocomplete="off" placeholder="Search all parks…">
+					<input type="hidden" id="cp-tp-park-id">
+					<input type="hidden" id="cp-tp-source-kingdom">
+					<div class="kn-ac-results" id="cp-tp-park-results"></div>
+				</div>
+				<div class="cp-field cp-field-ac" style="margin-top:12px">
+					<label>Destination Kingdom <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="cp-tp-kingdom-name" autocomplete="off" placeholder="Search kingdoms…">
+					<input type="hidden" id="cp-tp-kingdom-id">
+					<div class="kn-ac-results" id="cp-tp-kingdom-results"></div>
+				</div>
 			</div>
-			<div class="cp-field cp-field-ac" style="margin-top:12px">
-				<label>Destination Kingdom <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="cp-tp-kingdom-name" autocomplete="off" placeholder="Search kingdoms…">
-				<input type="hidden" id="cp-tp-kingdom-id">
-				<div class="kn-ac-results" id="cp-tp-kingdom-results"></div>
+			<!-- Step 2: Confirm -->
+			<div id="cp-tp-confirm-panel" style="display:none">
+				<p style="font-size:14px;color:#2d3748;margin:0 0 16px">Confirm the following transfer:</p>
+				<table style="width:100%;font-size:13px;border-collapse:collapse">
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">Park</td>
+						<td style="padding:6px 0;font-weight:600" id="cp-tp-confirm-park"></td>
+					</tr>
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">From</td>
+						<td style="padding:6px 0" id="cp-tp-confirm-from"></td>
+					</tr>
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">To</td>
+						<td style="padding:6px 0;font-weight:600" id="cp-tp-confirm-to"></td>
+					</tr>
+				</table>
+				<p style="font-size:12px;color:#e53e3e;margin:16px 0 0">This will move all players in the park to the new kingdom.</p>
 			</div>
 		</div>
 		<div class="cp-modal-footer">
-			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-transferpark-overlay')">Cancel</button>
-			<button class="adm-btn adm-btn-primary" id="cp-tp-submit" disabled><i class="fas fa-map-signs"></i> Transfer Park</button>
+			<button class="adm-btn adm-btn-ghost" id="cp-tp-cancel-btn">Cancel</button>
+			<button class="adm-btn adm-btn-ghost" id="cp-tp-back-btn" style="display:none"><i class="fas fa-arrow-left"></i> Back</button>
+			<button class="adm-btn adm-btn-primary" id="cp-tp-submit" disabled><i class="fas fa-arrow-right"></i> Review Transfer</button>
 		</div>
 	</div>
 </div>
@@ -684,7 +708,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		if (!el) return;
 		el.classList.remove('cp-open');
 		// Reset feedback
-		el.querySelectorAll('.cp-feedback').forEach(function(f) { f.style.display = 'none'; f.textContent = ''; });
+		el.querySelectorAll('.cp-feedback').forEach(function(f) { f.style.display = 'none'; f.innerHTML = ''; });
 	}
 	window.cpOpenModal   = cpOpenModal;
 	window.cpCloseModal  = cpCloseModal;
@@ -711,7 +735,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		var el = document.getElementById(id);
 		if (!el) return;
 		el.className = 'cp-feedback ' + (ok ? 'cp-feedback-ok' : 'cp-feedback-err');
-		el.textContent = msg;
+		el.innerHTML = msg;
 		el.style.display = 'block';
 	}
 
@@ -719,7 +743,8 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	   Autocomplete helper (kn-ac-results pattern)
 	   -------------------------------------------------- */
 	function cpAc(opts) {
-		// opts: { inputId, hiddenId, resultsId, fetchFn, renderItem, onSelect, minLen }
+		// opts: { inputId, hiddenId, resultsId, fetchFn, onSelect(id,name,extra), onClear, minLen }
+		// item shape: { id, label, html, extra? }
 		var input   = document.getElementById(opts.inputId);
 		var hidden  = document.getElementById(opts.hiddenId);
 		var results = document.getElementById(opts.resultsId);
@@ -731,10 +756,17 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			if (!items.length) { acClose(); return; }
 			results.innerHTML = items.map(function(item) {
 				return '<div class="kn-ac-item" tabindex="-1" data-id="' + item.id
-					+ '" data-name="' + encodeURIComponent(item.label) + '">'
-					+ item.html + '</div>';
+					+ '" data-name="' + encodeURIComponent(item.label)
+					+ (item.extra !== undefined ? '" data-extra="' + encodeURIComponent(item.extra) : '')
+					+ '">' + item.html + '</div>';
 			}).join('');
 			results.classList.add('kn-ac-open');
+		}
+		function selectItem(item) {
+			input.value  = decodeURIComponent(item.dataset.name);
+			hidden.value = item.dataset.id;
+			acClose();
+			if (opts.onSelect) opts.onSelect(item.dataset.id, input.value, item.dataset.extra ? decodeURIComponent(item.dataset.extra) : '');
 		}
 		input.addEventListener('input', function() {
 			var term = this.value.trim();
@@ -749,10 +781,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		results.addEventListener('click', function(e) {
 			var item = e.target.closest('.kn-ac-item[data-id]');
 			if (!item) return;
-			input.value  = decodeURIComponent(item.dataset.name);
-			hidden.value = item.dataset.id;
-			acClose();
-			if (opts.onSelect) opts.onSelect(item.dataset.id, input.value);
+			selectItem(item);
 		});
 		document.addEventListener('click', function(e) {
 			if (!e.target.closest('#' + opts.inputId + ', #' + opts.resultsId)) acClose();
@@ -773,7 +802,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				if (focused) focused.classList.remove('kn-ac-focused');
 				prev.classList.add('kn-ac-focused');
 			} else if (e.key === 'Enter' && focused) {
-				e.preventDefault(); focused.click();
+				e.preventDefault(); selectItem(focused);
 			} else if (e.key === 'Escape') {
 				acClose();
 			}
@@ -787,15 +816,21 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 	}
 	function cpSearchParks(q, cb) {
-		var url = UIR + 'SearchAjax/universal?focus=park&q=' + encodeURIComponent(q);
+		var url = UIR + 'SearchAjax/universal&focus=park&q=' + encodeURIComponent(q);
 		fetch(url).then(function(r){return r.json();}).then(function(d) {
 			cb((d.parks || []).map(function(p) {
-				return { id: p.id, label: p.name, html: cpEsc(p.name) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(p.abbr) + ')</span>' };
+				return {
+					id:    p.id,
+					label: p.name,
+					extra: p.kingdom || '',
+					html:  cpEsc(p.name)
+					     + (p.kingdom ? ' <span style="color:#a0aec0;font-size:11px">[' + cpEsc(p.kingdom) + ']</span>' : '')
+				};
 			}));
 		}).catch(function(){cb([]);});
 	}
 	function cpSearchKingdoms(q, cb) {
-		var url = UIR + 'SearchAjax/universal?focus=kingdom&q=' + encodeURIComponent(q);
+		var url = UIR + 'SearchAjax/universal&focus=kingdom&q=' + encodeURIComponent(q);
 		fetch(url).then(function(r){return r.json();}).then(function(d) {
 			cb((d.kingdoms || []).map(function(k) {
 				return { id: k.id, label: k.name, html: cpEsc(k.name) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(k.abbr) + ')</span>' };
@@ -803,7 +838,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		}).catch(function(){cb([]);});
 	}
 	function cpSearchUnits(q, cb) {
-		var url = UIR + 'SearchAjax/universal?focus=unit&q=' + encodeURIComponent(q);
+		var url = UIR + 'SearchAjax/universal&focus=unit&q=' + encodeURIComponent(q);
 		fetch(url).then(function(r){return r.json();}).then(function(d) {
 			cb((d.units || []).map(function(u) {
 				return { id: u.id, label: u.name, html: cpEsc(u.name) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(u.unitType || '') + ')</span>' };
@@ -811,7 +846,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		}).catch(function(){cb([]);});
 	}
 	function cpSearchPlayersGlobal(q, cb, includeInactive) {
-		var url = UIR + 'SearchAjax/universal?focus=player&q=' + encodeURIComponent(q) + (includeInactive ? '&inactive=1' : '');
+		var url = UIR + 'SearchAjax/universal&focus=player&q=' + encodeURIComponent(q) + (includeInactive ? '&inactive=1' : '');
 		fetch(url).then(function(r){return r.json();}).then(function(d) {
 			cb((d.players || []).map(function(p) {
 				return {
@@ -968,28 +1003,86 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	/* ==================================================
 	   TRANSFER PARK
 	   ================================================== */
-	function cpTpCheck() {
-		var pk = document.getElementById('cp-tp-park-id').value;
-		var kd = document.getElementById('cp-tp-kingdom-id').value;
-		document.getElementById('cp-tp-submit').disabled = !(pk && kd);
-	}
-	cpAc({ inputId:'cp-tp-park-name',    hiddenId:'cp-tp-park-id',    resultsId:'cp-tp-park-results',    fetchFn:cpSearchParks,    onSelect:cpTpCheck, onClear:cpTpCheck });
-	cpAc({ inputId:'cp-tp-kingdom-name', hiddenId:'cp-tp-kingdom-id', resultsId:'cp-tp-kingdom-results', fetchFn:cpSearchKingdoms, onSelect:cpTpCheck, onClear:cpTpCheck });
-	document.getElementById('cp-tp-submit').addEventListener('click', function() {
-		var parkId    = document.getElementById('cp-tp-park-id').value;
-		var kingdomId = document.getElementById('cp-tp-kingdom-id').value;
-		if (!parkId || !kingdomId) return;
-		var btn = this;
-		cpPost(UIR + 'Admin/ajax/transferpark', { ParkId: parkId, KingdomId: kingdomId },
-			btn, 'cp-tp-feedback', function() {
-				cpShowFeedback('cp-tp-feedback',
-					'Park transferred. <a href="' + UIR + 'Park/profile/' + parkId + '">View park</a> · ' +
-					'<a href="' + UIR + 'Kingdom/profile/' + kingdomId + '">View kingdom</a>', true);
-				['cp-tp-park-name','cp-tp-kingdom-name'].forEach(function(id){document.getElementById(id).value='';});
-				['cp-tp-park-id','cp-tp-kingdom-id'].forEach(function(id){document.getElementById(id).value='';});
+	(function() {
+		var confirming = false;
+
+		function tpReset(clearFields) {
+			confirming = false;
+			document.getElementById('cp-tp-search-panel').style.display  = '';
+			document.getElementById('cp-tp-confirm-panel').style.display = 'none';
+			document.getElementById('cp-tp-back-btn').style.display      = 'none';
+			document.getElementById('cp-tp-cancel-btn').style.display    = '';
+			var btn = document.getElementById('cp-tp-submit');
+			btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
+			if (clearFields) {
+				['cp-tp-park-name','cp-tp-kingdom-name'].forEach(function(id) { document.getElementById(id).value = ''; });
+				['cp-tp-park-id','cp-tp-kingdom-id','cp-tp-source-kingdom'].forEach(function(id) { document.getElementById(id).value = ''; });
 				btn.disabled = true;
-			});
-	});
+			} else {
+				tpCheck();
+			}
+		}
+
+		function tpShowConfirm() {
+			var parkName   = document.getElementById('cp-tp-park-name').value;
+			var fromKingdom = document.getElementById('cp-tp-source-kingdom').value || '(unknown)';
+			var toKingdom  = document.getElementById('cp-tp-kingdom-name').value;
+			document.getElementById('cp-tp-confirm-park').textContent = parkName;
+			document.getElementById('cp-tp-confirm-from').textContent = fromKingdom;
+			document.getElementById('cp-tp-confirm-to').textContent   = toKingdom;
+			document.getElementById('cp-tp-search-panel').style.display  = 'none';
+			document.getElementById('cp-tp-confirm-panel').style.display = '';
+			document.getElementById('cp-tp-back-btn').style.display      = '';
+			document.getElementById('cp-tp-cancel-btn').style.display    = 'none';
+			var btn = document.getElementById('cp-tp-submit');
+			btn.innerHTML = '<i class="fas fa-map-signs"></i> Confirm Transfer';
+			btn.disabled  = false;
+		}
+
+		function tpCheck() {
+			var pk = document.getElementById('cp-tp-park-id').value;
+			var kd = document.getElementById('cp-tp-kingdom-id').value;
+			document.getElementById('cp-tp-submit').disabled = !(pk && kd);
+		}
+
+		cpAc({
+			inputId:   'cp-tp-park-name',
+			hiddenId:  'cp-tp-park-id',
+			resultsId: 'cp-tp-park-results',
+			fetchFn:   cpSearchParks,
+			onSelect:  function(id, name, extra) {
+				document.getElementById('cp-tp-source-kingdom').value = extra || '';
+				tpCheck();
+			},
+			onClear: tpCheck
+		});
+		cpAc({ inputId:'cp-tp-kingdom-name', hiddenId:'cp-tp-kingdom-id', resultsId:'cp-tp-kingdom-results', fetchFn:cpSearchKingdoms, onSelect:tpCheck, onClear:tpCheck });
+
+		document.getElementById('cp-tp-close-btn').addEventListener('click',  function() { cpCloseModal('cp-transferpark-overlay'); });
+		document.getElementById('cp-tp-cancel-btn').addEventListener('click', function() { cpCloseModal('cp-transferpark-overlay'); });
+		document.getElementById('cp-tp-back-btn').addEventListener('click',   function() { tpReset(); });
+
+		window.cpOpenTransferPark = function() { tpReset(true); cpOpenModal('cp-transferpark-overlay'); setTimeout(function() { document.getElementById('cp-tp-park-name').focus(); }, 50); };
+
+		document.getElementById('cp-tp-submit').addEventListener('click', function() {
+			var parkId    = document.getElementById('cp-tp-park-id').value;
+			var kingdomId = document.getElementById('cp-tp-kingdom-id').value;
+			if (!parkId || !kingdomId) return;
+			if (!confirming) {
+				confirming = true;
+				tpShowConfirm();
+				return;
+			}
+			var btn = this;
+			cpPost(UIR + 'Admin/ajax/transferpark', { ParkId: parkId, KingdomId: kingdomId },
+				btn, 'cp-tp-feedback', function() {
+					cpShowFeedback('cp-tp-feedback',
+						'Park transferred. <a href="' + UIR + 'Park/profile/' + parkId + '">View park</a> · ' +
+						'<a href="' + UIR + 'Kingdom/profile/' + kingdomId + '">View kingdom</a>', true);
+					tpReset(true);
+				});
+		});
+	})();
 
 	/* ==================================================
 	   MIGRATE PARK MEMBERS (merge park)

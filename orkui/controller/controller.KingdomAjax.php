@@ -356,9 +356,14 @@ class Controller_KingdomAjax extends Controller {
 			if (!valid_id($park_id))         { echo json_encode(['status' => 1, 'error' => 'Select a park.']);                    exit; }
 			if (!valid_id($dest_kingdom_id)) { echo json_encode(['status' => 1, 'error' => 'Destination kingdom is required.']); exit; }
 			$r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			if ($r['Status'] == 0) {
+				$bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $dest_kingdom_id]);
+				Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages',        $bustKey);
+				Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
+				echo json_encode(['status' => 0]);
+			} else {
+				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			}
 
 		} elseif ($action === 'addrecommendation') {
 			if (!isset($this->session->user_id)) { echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']); exit; }
