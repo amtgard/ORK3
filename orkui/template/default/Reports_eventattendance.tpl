@@ -75,6 +75,11 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 	<!-- ── Table ──────────────────────────────────────────────── -->
 	<div class="rp-body">
 		<div class="rp-main" style="flex:1;min-width:0">
+			<div id="ea-table-loading" style="text-align:center;padding:40px 0;color:#a0aec0">
+				<i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:10px"></i>
+				Loading&hellip;
+			</div>
+			<div id="ea-table-wrap" style="opacity:0">
 			<table id="ea-table" class="display rp-table" style="width:100%">
 				<thead>
 					<tr>
@@ -121,6 +126,7 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 <?php endforeach; ?>
 				</tbody>
 			</table>
+			</div><!-- /ea-table-wrap -->
 		</div>
 	</div>
 
@@ -147,11 +153,15 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 				{ extend: 'csv',   text: 'Export CSV' },
 				{ extend: 'print', text: 'Print' }
 			],
-			language: { search: 'Filter:' }
+			language: { search: 'Filter:' },
+			initComplete: function() {
+				$('#ea-table-loading').hide();
+				$('#ea-table-wrap').css('opacity', '1');
+				<?php if (!empty($prefilter)): ?>
+				$('#ea-table_filter input').val(<?= json_encode($prefilter) ?>).trigger('input');
+				<?php endif; ?>
+			}
 		});
-		<?php if (!empty($prefilter)): ?>
-		$('#ea-table_filter input').val(<?= json_encode($prefilter) ?>).trigger('input');
-		<?php endif; ?>
 		$('.rp-btn-export').on('click', function() { dt.button('.buttons-csv').trigger(); });
 		$('.rp-btn-print').on('click', function() { dt.button('.buttons-print').trigger(); });
 	});
