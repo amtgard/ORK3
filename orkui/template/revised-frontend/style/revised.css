@@ -307,6 +307,8 @@
 	border-radius: 6px;
 	padding: 10px 12px;
 	margin-bottom: 18px;
+	max-height: 220px;
+	overflow-y: auto;
 }
 .pn-dues-modal-current-title {
 	font-weight: 600;

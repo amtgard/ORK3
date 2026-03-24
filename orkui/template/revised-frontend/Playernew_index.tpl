@@ -461,7 +461,7 @@
 
 		<!-- Dues -->
 		<div class="pn-card">
-			<h4><i class="fas fa-receipt"></i> Dues<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesModal()" title="Add dues entry"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
+			<h4><i class="fas fa-receipt"></i> Dues<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesModal()" title="Add dues entry"><i class="fas fa-pencil-alt"></i></button><?php elseif (isset($this->__session->user_id)): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesHistoryModal()" title="View dues history"><i class="fas fa-history"></i></button><?php endif; ?></h4>
 			<?php if (is_array($Dues) && count($Dues) > 0): ?>
 				<table class="pn-mini-table">
 					<thead>
@@ -1576,7 +1576,7 @@
      ============================================= -->
 <?php if ($canEditAdmin): ?>
 <div class="pn-overlay" id="pn-dues-overlay">
-	<div class="pn-modal-box" style="width:460px;max-width:calc(100vw - 40px);">
+	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-receipt" style="margin-right:8px;color:#2c5282"></i>Add Dues Entry</h3>
 			<button class="pn-modal-close-btn" id="pn-dues-close-btn" aria-label="Close">&times;</button>
@@ -1585,25 +1585,36 @@
 		<div class="pn-acct-modal-body">
 			<div class="pn-form-error" id="pn-dues-error"></div>
 
-			<!-- Current dues -->
+			<!-- All dues history -->
 			<div class="pn-dues-modal-current">
-				<div class="pn-dues-modal-current-title"><i class="fas fa-history" style="margin-right:5px"></i>Current Active Dues</div>
-				<?php if (is_array($Dues) && count($Dues) > 0): ?>
+				<div class="pn-dues-modal-current-title"><i class="fas fa-history" style="margin-right:5px"></i>Dues History</div>
+				<?php if (is_array($AllDues) && count($AllDues) > 0): ?>
 				<table class="pn-dues-modal-table">
-					<thead><tr><th>Park</th><th>Paid Through</th><th>Lifetime</th><?php if ($canEditAdmin): ?><th></th><?php endif; ?></tr></thead>
+					<thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th><?php if ($canEditAdmin): ?><th></th><?php endif; ?></tr></thead>
 					<tbody>
-					<?php foreach ($Dues as $d): ?>
+					<?php foreach ($AllDues as $d):
+						if ($d['DuesForLife'] == 1) {
+							$status = '<span class="pn-dues-life">Lifetime</span>';
+						} elseif (!empty($d['Revoked'])) {
+							$status = '<span style="color:#e53e3e">Revoked</span>';
+						} elseif (!empty($d['DuesUntil']) && strtotime($d['DuesUntil']) < time()) {
+							$status = '<span style="color:#999">Expired</span>';
+						} else {
+							$status = '<span style="color:#38a169">Active</span>';
+						}
+					?>
 						<tr>
 							<td><?= htmlspecialchars($d['ParkName']) ?></td>
-							<td><?= $d['DuesForLife'] == 1 ? '<span class="pn-dues-life">Lifetime</span>' : htmlspecialchars($d['DuesUntil']) ?></td>
-							<td><?= $d['DuesForLife'] == 1 ? 'Yes' : 'No' ?></td>
-							<?php if ($canEditAdmin): ?><td><button class="pn-dues-revoke-btn" data-dues-id="<?= (int)$d['DuesId'] ?>">Revoke</button></td><?php endif; ?>
+							<td><?= htmlspecialchars($d['DuesFrom'] ?? '—') ?></td>
+							<td><?= $d['DuesForLife'] == 1 ? '—' : htmlspecialchars($d['DuesUntil']) ?></td>
+							<td><?= $status ?></td>
+							<?php if ($canEditAdmin): ?><td><?php if (empty($d['Revoked'])): ?><button class="pn-dues-revoke-btn" data-dues-id="<?= (int)$d['DuesId'] ?>">Revoke</button><?php endif; ?></td><?php endif; ?>
 						</tr>
 					<?php endforeach; ?>
 					</tbody>
 				</table>
 				<?php else: ?>
-				<div class="pn-dues-modal-empty">No active dues on record</div>
+				<div class="pn-dues-modal-empty">No dues records on file</div>
 				<?php endif; ?>
 			</div>
 
@@ -1635,6 +1646,52 @@
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-dues-cancel">Cancel</button>
 			<button class="pn-btn pn-btn-primary" id="pn-dues-save"><i class="fas fa-save"></i> Add Dues</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<!-- =============================================
+     Dues History Modal (read-only, logged-in users)
+     ============================================= -->
+<?php if (isset($this->__session->user_id) && !$canEditAdmin): ?>
+<div class="pn-overlay" id="pn-dues-history-overlay">
+	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-receipt" style="margin-right:8px;color:#2c5282"></i>Dues History</h3>
+			<button class="pn-modal-close-btn" id="pn-dues-history-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-acct-modal-body">
+			<?php if (is_array($AllDues) && count($AllDues) > 0): ?>
+			<table class="pn-dues-modal-table">
+				<thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th></tr></thead>
+				<tbody>
+				<?php foreach ($AllDues as $d):
+					if ($d['DuesForLife'] == 1) {
+						$status = '<span class="pn-dues-life">Lifetime</span>';
+					} elseif (!empty($d['Revoked'])) {
+						$status = '<span style="color:#e53e3e">Revoked</span>';
+					} elseif (!empty($d['DuesUntil']) && strtotime($d['DuesUntil']) < time()) {
+						$status = '<span style="color:#999">Expired</span>';
+					} else {
+						$status = '<span style="color:#38a169">Active</span>';
+					}
+				?>
+					<tr>
+						<td><?= htmlspecialchars($d['ParkName']) ?></td>
+						<td><?= htmlspecialchars($d['DuesFrom'] ?? '—') ?></td>
+						<td><?= $d['DuesForLife'] == 1 ? '—' : htmlspecialchars($d['DuesUntil']) ?></td>
+						<td><?= $status ?></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+			<?php else: ?>
+			<div class="pn-dues-modal-empty">No dues records on file</div>
+			<?php endif; ?>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-dues-history-cancel">Close</button>
 		</div>
 	</div>
 </div>

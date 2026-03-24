@@ -1029,6 +1029,29 @@ if (PnConfig.recError) {
         });
     })();
 
+    // ---- Dues History Modal (read-only, logged-in non-admins) ----
+    (function() {
+        if (!document.getElementById('pn-dues-history-overlay')) return;
+        function gid(id) { return document.getElementById(id); }
+        window.pnOpenDuesHistoryModal = function() {
+            gid('pn-dues-history-overlay').classList.add('pn-open');
+            document.body.style.overflow = 'hidden';
+        };
+        function close() {
+            gid('pn-dues-history-overlay').classList.remove('pn-open');
+            document.body.style.overflow = '';
+        }
+        gid('pn-dues-history-close-btn').addEventListener('click', close);
+        gid('pn-dues-history-cancel').addEventListener('click', close);
+        gid('pn-dues-history-overlay').addEventListener('click', function(e) {
+            if (e.target === this) close();
+        });
+        document.addEventListener('keydown', function(e) {
+            if ((e.key === 'Escape' || e.keyCode === 27) && gid('pn-dues-history-overlay').classList.contains('pn-open'))
+                close();
+        });
+    })();
+
     // ---- Edit Qualifications Modal ----
     (function() {
         if (!PnConfig.canEditAdmin) return;
