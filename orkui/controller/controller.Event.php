@@ -245,7 +245,8 @@ class Controller_Event extends Controller {
 		}
 
 		if ( $action === 'rsvp' && $uid > 0 ) {
-			$this->Event->toggle_rsvp($detail_id, $uid);
+			$status = isset($_POST['status']) && $_POST['status'] === 'interested' ? 'interested' : 'going';
+			$this->Event->set_rsvp($detail_id, $uid, $status);
 			header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
 			return;
 		}

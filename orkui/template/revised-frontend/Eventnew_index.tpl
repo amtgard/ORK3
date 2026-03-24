@@ -87,8 +87,9 @@
 	$defaultParkId      = $DefaultParkId            ?? 0;
 	$defaultCredits     = $DefaultAttendanceCredits ?? 1;
 
-	$rsvpCount     = (int)($RsvpCount     ?? 0);
-	$userAttending = (bool)($UserAttending ?? false);
+	$rsvpCounts    = is_array($RsvpCount ?? null) ? $RsvpCount : ['going' => 0, 'interested' => 0, 'total' => (int)($RsvpCount ?? 0)];
+	$rsvpCount     = $rsvpCounts['total'];
+	$userAttending = $UserAttending ?? false; // false or 'going' or 'interested'
 	$rsvpList      = $RsvpList ?? [];
 	$canManage           = $CanManageEvent ?? false;
 	$canManageAttendance = $CanManageAttendance ?? false;
@@ -228,11 +229,16 @@
 			</button>
 			<?php endif; ?>
 			<?php if ($loggedIn && $isUpcoming): ?>
-			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0">
-				<button type="submit" class="ev-btn <?= $userAttending ? 'ev-btn-secondary' : 'ev-btn-outline' ?>"
-					onclick="gtag('event','event_rsvp',{action:'<?= $userAttending ? 'cancel' : 'confirm' ?>'})">
-					<i class="fas <?= $userAttending ? 'fa-times-circle' : 'fa-check-circle' ?>"></i>
-					<?= $userAttending ? 'Cancel RSVP' : 'RSVP' ?>
+			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0;display:inline-flex;gap:6px">
+				<button type="submit" name="status" value="going"
+					class="ev-btn <?= $userAttending === 'going' ? 'ev-btn-primary' : 'ev-btn-outline' ?>"
+					onclick="gtag('event','event_rsvp',{action:'going'})">
+					<i class="fas fa-check-circle"></i> <?= $userAttending === 'going' ? 'Going ✓' : 'Going' ?>
+				</button>
+				<button type="submit" name="status" value="interested"
+					class="ev-btn <?= $userAttending === 'interested' ? 'ev-btn-secondary' : 'ev-btn-outline' ?>"
+					onclick="gtag('event','event_rsvp',{action:'interested'})">
+					<i class="fas fa-star"></i> <?= $userAttending === 'interested' ? 'Interested ✓' : 'Interested' ?>
 				</button>
 			</form>
 			<?php endif; ?>
@@ -527,19 +533,29 @@
 			<?php // ---- RSVPs Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-rsvp">
 				<p style="font-size:.95em;color:#4a5568;margin:0 0 12px">
-					<i class="fas fa-users" style="margin-right:5px;color:#276749"></i>
-					<strong><?= $rsvpCount ?></strong> <?= $rsvpCount === 1 ? 'RSVP' : 'RSVPs' ?>
+					<i class="fas fa-check-circle" style="margin-right:4px;color:#276749"></i>
+					<strong><?= $rsvpCounts['going'] ?></strong> Going
+					&nbsp;&nbsp;
+					<i class="fas fa-star" style="margin-right:4px;color:#b7791f"></i>
+					<strong><?= $rsvpCounts['interested'] ?></strong> Interested
 				</p>
 				<?php if ($canManageAttendance): ?>
 					<?php if (count($rsvpList) > 0): ?>
 					<table class="ev-table">
 						<thead>
-							<tr><th>Player</th><th></th></tr>
+							<tr><th>Player</th><th>Status</th><th></th></tr>
 						</thead>
 						<tbody>
 							<?php foreach ($rsvpList as $attendee): ?>
 							<tr>
 								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a></td>
+								<td style="white-space:nowrap">
+									<?php if ($attendee['Status'] === 'going'): ?>
+										<i class="fas fa-check-circle" style="color:#276749;margin-right:4px"></i>Going
+									<?php else: ?>
+										<i class="fas fa-star" style="color:#b7791f;margin-right:4px"></i>Interested
+									<?php endif; ?>
+								</td>
 								<td style="text-align:right;white-space:nowrap">
 									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button" data-mundane="<?= (int)$attendee['MundaneId'] ?>"
 										<?php if (!isset($checkedInIds[$attendee['MundaneId']])): ?>

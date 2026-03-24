@@ -57,29 +57,37 @@ class Model_Event extends Model {
 	
 	function get_rsvp($detail_id, $mundane_id) {
 		global $DB;
-		$rsvp = new yapo($DB, DB_PREFIX . 'event_rsvp');
-		$rsvp->clear();
-		$rsvp->event_calendardetail_id = (int)$detail_id;
-		$rsvp->mundane_id = (int)$mundane_id;
-		return $rsvp->find();
+		$DB->Clear();
+		$r = $DB->DataSet("SELECT status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " AND mundane_id = " . (int)$mundane_id . " LIMIT 1");
+		if ($r && $r->Next()) return $r->status;
+		return false;
+	}
+
+	// Sets RSVP to $status ('going'|'interested'). If already that status, removes it (toggle off).
+	function set_rsvp($detail_id, $mundane_id, $status) {
+		global $DB;
+		$status = in_array($status, ['going', 'interested']) ? $status : 'going';
+		$DB->Clear();
+		$existing = $DB->DataSet("SELECT rsvp_id, status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " AND mundane_id = " . (int)$mundane_id . " LIMIT 1");
+		if ($existing && $existing->Next()) {
+			if ($existing->status === $status) {
+				// Same status — toggle off
+				$DB->Clear();
+				$DB->Execute("DELETE FROM " . DB_PREFIX . "event_rsvp WHERE rsvp_id = " . (int)$existing->rsvp_id);
+				return false;
+			}
+			// Different status — update
+			$DB->Clear();
+			$DB->Execute("UPDATE " . DB_PREFIX . "event_rsvp SET status = '" . $status . "', modified = NOW() WHERE rsvp_id = " . (int)$existing->rsvp_id);
+			return $status;
+		}
+		$DB->Clear();
+		$DB->Execute("INSERT INTO " . DB_PREFIX . "event_rsvp (event_calendardetail_id, mundane_id, status) VALUES (" . (int)$detail_id . ", " . (int)$mundane_id . ", '" . $status . "')");
+		return $status;
 	}
 
 	function toggle_rsvp($detail_id, $mundane_id) {
-		global $DB;
-		$rsvp = new yapo($DB, DB_PREFIX . 'event_rsvp');
-		$rsvp->clear();
-		$rsvp->event_calendardetail_id = (int)$detail_id;
-		$rsvp->mundane_id = (int)$mundane_id;
-		if ($rsvp->find()) {
-			$rsvp->delete();
-			return false;
-		}
-		$insert = new yapo($DB, DB_PREFIX . 'event_rsvp');
-		$insert->clear();
-		$insert->event_calendardetail_id = (int)$detail_id;
-		$insert->mundane_id = (int)$mundane_id;
-		$insert->save();
-		return true;
+		return $this->set_rsvp($detail_id, $mundane_id, 'going');
 	}
 
 	function remove_rsvp($detail_id, $mundane_id) {
@@ -98,18 +106,22 @@ class Model_Event extends Model {
 	function get_rsvp_count($detail_id) {
 		global $DB;
 		$DB->Clear();
-		$r = $DB->DataSet("SELECT COUNT(*) as cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id);
-		if ($r && $r->Next()) return (int)$r->cnt;
-		return 0;
+		$r = $DB->DataSet("SELECT status, COUNT(*) as cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " GROUP BY status");
+		$counts = ['going' => 0, 'interested' => 0, 'total' => 0];
+		if ($r) while ($r->Next()) {
+			$counts[$r->status] = (int)$r->cnt;
+			$counts['total'] += (int)$r->cnt;
+		}
+		return $counts;
 	}
 
 	function get_rsvp_list($detail_id) {
 		global $DB;
 		$DB->Clear();
-		$r = $DB->DataSet("SELECT m.mundane_id, m.persona FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY m.persona");
+		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
 		$list = [];
-		while ($r->Next()) {
-			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona];
+		if ($r) while ($r->Next()) {
+			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status];
 		}
 		return $list;
 	}

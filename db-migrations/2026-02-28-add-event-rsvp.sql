@@ -2,6 +2,7 @@ CREATE TABLE `ork_event_rsvp` (
     `rsvp_id` int(11) NOT NULL AUTO_INCREMENT,
     `event_calendardetail_id` int(11) NOT NULL,
     `mundane_id` int(11) NOT NULL,
+    `status` ENUM('going', 'interested') NOT NULL DEFAULT 'going',
     `modified` timestamp NOT NULL DEFAULT current_timestamp(),
     PRIMARY KEY (`rsvp_id`),
     UNIQUE KEY `detail_mundane` (`event_calendardetail_id`, `mundane_id`),

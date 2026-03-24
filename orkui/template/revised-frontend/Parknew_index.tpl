@@ -588,7 +588,8 @@
 							<tr>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="date">Next Date</th>
-								<th data-sorttype="numeric">RSVPs</th>
+								<th data-sorttype="numeric">Going</th>
+							<th data-sorttype="numeric">Interested</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -608,7 +609,8 @@
 								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
 									<?= 0 == $event['NextDate'] ? '' : date('M. j, Y', strtotime($event['NextDate'])) ?>
 								</td>
-								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpCount'] ?? 0) ?></td>
+								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
+							<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
 							</tr>
 							<?php endforeach; ?>
 							<?php foreach ($parkDayList as $pkDay): ?>

@@ -399,12 +399,12 @@
 							<button class="kn-filter-toggle kn-filter-on" data-filter="park-event">Park Events</button>
 							<button class="kn-filter-toggle" data-filter="park-day">Park Days</button>
 						</div>
-						<div class="kn-sub-wrap" id="kn-sub-wrap">
+						<div class="kn-sub-wrap" id="kn-sub-wrap" style="position:relative">
 							<button class="kn-view-btn" id="kn-sub-btn" title="Subscribe to calendar"
-								onclick="document.getElementById('kn-sub-pop').classList.toggle('kn-sub-open');event.stopPropagation();">
+								onclick="var p=document.getElementById('kn-sub-pop');p.style.display=p.style.display==='block'?'none':'block';event.stopPropagation();">
 								<i class="fas fa-rss"></i>
 							</button>
-							<div class="kn-sub-pop" id="kn-sub-pop">
+							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:500;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px">
 								<div class="kn-sub-pop-title"><i class="fas fa-calendar-check" style="margin-right:5px"></i>Subscribe to Events</div>
 								<div class="kn-sub-pop-row">
 									<input class="kn-sub-url-input" id="kn-sub-url-input" type="text"
@@ -449,7 +449,8 @@
 								<th data-sorttype="date">Next Date</th>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="text">Park</th>
-								<th data-sorttype="numeric">RSVPs</th>
+								<th data-sorttype="numeric">Going</th>
+							<th data-sorttype="numeric">Interested</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -468,7 +469,8 @@
 										<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
-									<td style="text-align:center"><?= (int)($event['RsvpCount'] ?? 0) ?></td>
+									<td style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
+								<td style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
 								</tr>
 							<?php endforeach; ?>
 						<?php foreach ($kingdom_park_days ?? [] as $day): ?>
@@ -1534,11 +1536,11 @@ var KnConfig = {
 /* Subscribe popover */
 .kn-sub-wrap { position:relative; }
 .kn-sub-pop {
-	display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:200;
+	display:none !important; position:absolute; top:calc(100% + 6px); right:0; z-index:200;
 	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
 	box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:12px 14px; width:280px; font-size:13px;
 }
-.kn-sub-pop.kn-sub-open { display:block; }
+.kn-sub-pop.kn-sub-open { display:block !important; }
 .kn-sub-pop-title {
 	font-weight:700; color:#2d3748; margin-bottom:8px; font-size:12px;
 	text-transform:uppercase; letter-spacing:.05em;
@@ -1951,7 +1953,7 @@ function knApplyHeroColor(img) {
 		var wrap = document.getElementById('kn-sub-wrap');
 		if (wrap && !wrap.contains(e.target)) {
 			var pop = document.getElementById('kn-sub-pop');
-			if (pop) pop.classList.remove('kn-sub-open');
+			if (pop) pop.style.display = 'none';
 		}
 	});
 
