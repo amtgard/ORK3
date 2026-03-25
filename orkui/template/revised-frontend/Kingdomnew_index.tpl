@@ -1011,6 +1011,7 @@ var KnConfig = {
 			<div class="kn-acct-field">
 				<label for="kn-addpark-abbr">Abbreviation <span style="color:#e53e3e">*</span> <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(up to 4 alphanumeric characters)</span></label>
 				<input type="text" id="kn-addpark-abbr" placeholder="e.g. ED" maxlength="4" />
+				<div id="kn-addpark-abbr-warn" style="display:none;color:#c05621;font-size:12px;margin-top:4px"></div>
 			</div>
 			<div class="kn-acct-field">
 				<label for="kn-addpark-title">Park Type <span style="color:#e53e3e">*</span></label>
@@ -1048,6 +1049,7 @@ var KnConfig = {
 			<div class="kn-acct-field">
 				<label for="kn-editpark-abbr">Abbreviation <span style="color:#e53e3e">*</span> <span style="color:#a0aec0;font-size:11px;text-transform:none;letter-spacing:0">(up to 4 alphanumeric characters)</span></label>
 				<input type="text" id="kn-editpark-abbr" maxlength="4" />
+				<div id="kn-editpark-abbr-warn" style="display:none;color:#c05621;font-size:12px;margin-top:4px"></div>
 			</div>
 			<div class="kn-acct-field">
 				<label for="kn-editpark-title">Park Type <span style="color:#e53e3e">*</span></label>
@@ -1200,8 +1202,7 @@ var KnConfig = {
 						<i class="fas fa-save"></i> Save Sponsor
 					</button>
 					<button class="kn-admin-save-btn" id="kn-admin-prinz-promote"
-						style="background:#c05621;border-color:#c05621"
-						onclick="knAdminConfirm('Convert to Kingdom', 'Remove this principality\'s sponsor and make it a full kingdom?', function() { knAdminSetParent(0); })">
+						style="background:#c05621;border-color:#c05621">
 						<i class="fas fa-crown"></i> Convert to Kingdom
 					</button>
 				</div>

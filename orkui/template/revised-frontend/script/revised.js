@@ -2875,6 +2875,8 @@ $(document).ready(function() {
         nameEl.value = '';
         gid('kn-addpark-abbr').value  = '';
         gid('kn-addpark-title').value = '';
+        var addWarn = gid('kn-addpark-abbr-warn');
+        if (addWarn) addWarn.style.display = 'none';
         knAddParkHideFeedback();
         gid('kn-addpark-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
@@ -2913,6 +2915,27 @@ $(document).ready(function() {
             });
         });
 
+        var addAbbrTimer = null;
+        var addAbbrEl = gid('kn-addpark-abbr');
+        if (addAbbrEl) {
+            addAbbrEl.addEventListener('input', function() {
+                var warn = gid('kn-addpark-abbr-warn');
+                clearTimeout(addAbbrTimer);
+                var abbr = this.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (!abbr) { if (warn) warn.style.display = 'none'; return; }
+                addAbbrTimer = setTimeout(function() {
+                    $.post(KnConfig.uir + 'ParkAjax/kingdom/' + KnConfig.kingdomId + '/checkabbr',
+                        { Abbreviation: abbr },
+                        function(r) {
+                            if (warn) {
+                                warn.style.display = r.taken ? '' : 'none';
+                                if (r.taken) warn.textContent = '\u26a0\ufe0f "' + abbr + '" is already used by another park in this kingdom.';
+                            }
+                        }, 'json');
+                }, 400);
+            });
+        }
+
         var cancelBtn = gid('kn-addpark-cancel');
         if (cancelBtn) cancelBtn.addEventListener('click', knCloseAddParkModal);
         var closeBtn = gid('kn-addpark-close-btn');
@@ -2936,6 +2959,7 @@ $(document).ready(function() {
     if (!KnConfig.canManage) return;
 
     var EDIT_URL = KnConfig.uir + 'ParkAjax/kingdom/' + KnConfig.kingdomId + '/editpark';
+    var editParkCurrentId = 0;
 
     // Index lookup by ParkId
     var parkIndex = {};
@@ -2969,11 +2993,14 @@ $(document).ready(function() {
         var park = parkIndex[parkId];
         if (!park) return;
 
+        editParkCurrentId = park.ParkId;
         idEl.value = park.ParkId;
         gid('kn-editpark-name').value  = park.Name;
         gid('kn-editpark-abbr').value  = park.Abbreviation;
         gid('kn-editpark-title').value = park.ParkTitleId;
         gid('kn-editpark-active').checked = (park.Active === 'Active');
+        var editWarn = gid('kn-editpark-abbr-warn');
+        if (editWarn) editWarn.style.display = 'none';
         knEditParkHideFeedback();
         gid('kn-editpark-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
@@ -3017,6 +3044,27 @@ $(document).ready(function() {
                 knEditParkShowFeedback('Request failed. Please try again.', false);
             });
         });
+
+        var editAbbrTimer = null;
+        var editAbbrEl = gid('kn-editpark-abbr');
+        if (editAbbrEl) {
+            editAbbrEl.addEventListener('input', function() {
+                var warn = gid('kn-editpark-abbr-warn');
+                clearTimeout(editAbbrTimer);
+                var abbr = this.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (!abbr) { if (warn) warn.style.display = 'none'; return; }
+                editAbbrTimer = setTimeout(function() {
+                    $.post(KnConfig.uir + 'ParkAjax/kingdom/' + KnConfig.kingdomId + '/checkabbr',
+                        { Abbreviation: abbr, ExcludeParkId: editParkCurrentId },
+                        function(r) {
+                            if (warn) {
+                                warn.style.display = r.taken ? '' : 'none';
+                                if (r.taken) warn.textContent = '\u26a0\ufe0f "' + abbr + '" is already used by another park in this kingdom.';
+                            }
+                        }, 'json');
+                }, 400);
+            });
+        }
 
         var cancelBtn = gid('kn-editpark-cancel');
         if (cancelBtn) cancelBtn.addEventListener('click', knCloseEditParkModal);
@@ -3868,7 +3916,28 @@ $(document).ready(function() {
         abbrInp.value     = park.Abbreviation || '';
         abbrInp.maxLength = 3;
         abbrInp.dataset.field = 'Abbreviation';
+        var abbrWarn = document.createElement('span');
+        abbrWarn.textContent = '\u26a0\ufe0f';
+        abbrWarn.style.cssText = 'visibility:hidden;color:#c05621;margin-left:4px;cursor:default';
+        abbrWarn.title = '';
         abbrTd.appendChild(abbrInp);
+        abbrTd.appendChild(abbrWarn);
+        (function(inp, warn, pid) {
+            var t = null;
+            inp.addEventListener('input', function() {
+                clearTimeout(t);
+                var abbr = inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (!abbr) { warn.style.visibility = 'hidden'; return; }
+                t = setTimeout(function() {
+                    $.post(KnConfig.uir + 'ParkAjax/kingdom/' + KnConfig.kingdomId + '/checkabbr',
+                        { Abbreviation: abbr, ExcludeParkId: pid },
+                        function(r) {
+                            warn.style.visibility = r.taken ? 'visible' : 'hidden';
+                            warn.title = r.taken ? '"' + abbr + '" is already used by another park in this kingdom.' : '';
+                        }, 'json');
+                }, 400);
+            });
+        })(abbrInp, abbrWarn, park.ParkId);
 
         // Active toggle
         var activeTd  = document.createElement('td');
@@ -3911,29 +3980,34 @@ $(document).ready(function() {
         if (!btn) return;
         btn.addEventListener('click', function() {
             clearFeedback('kn-admin-parks-feedback');
-            var data = {};
+            var parks = [];
             document.querySelectorAll('#kn-admin-parks-tbody tr').forEach(function(row) {
-                var pid = row.dataset.parkId;
+                var pid = parseInt(row.dataset.parkId, 10);
+                if (!pid) return;
+                var p = { ParkId: pid };
                 row.querySelectorAll('[data-field]').forEach(function(inp) {
-                    var f = inp.dataset.field;
-                    if (inp.type === 'checkbox') {
-                        if (inp.checked) data[f + '[' + pid + ']'] = 'YES';
-                    } else {
-                        data[f + '[' + pid + ']'] = inp.value;
-                    }
+                    p[inp.dataset.field] = (inp.type === 'checkbox') ? (inp.checked ? 'YES' : '') : inp.value;
                 });
+                parks.push(p);
             });
-            if (!Object.keys(data).length) { feedback('kn-admin-parks-feedback', 'No data to save.', false); return; }
+            if (!parks.length) { feedback('kn-admin-parks-feedback', 'No data to save.', false); return; }
             btn.disabled = true;
-            $.post(BASE_URL + 'updateparks', data, function(r) {
-                btn.disabled = false;
-                if (r && r.status === 0) {
-                    feedback('kn-admin-parks-feedback', 'Parks saved!', true);
-                    _knDirty = true;
-                } else {
-                    feedback('kn-admin-parks-feedback', (r && r.error) ? r.error : 'Save failed.', false);
-                }
-            }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-parks-feedback', 'Request failed.', false); });
+            $.ajax({
+                url: BASE_URL + 'updateparks',
+                type: 'POST',
+                data: { ParksJson: JSON.stringify(parks) },
+                dataType: 'json',
+                success: function(r) {
+                    btn.disabled = false;
+                    if (r && r.status === 0) {
+                        feedback('kn-admin-parks-feedback', 'Parks saved!', true);
+                        _knDirty = true;
+                    } else {
+                        feedback('kn-admin-parks-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    }
+                },
+                error: function() { btn.disabled = false; feedback('kn-admin-parks-feedback', 'Request failed.', false); }
+            });
         });
     }
 

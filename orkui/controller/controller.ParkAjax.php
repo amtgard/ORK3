@@ -412,6 +412,18 @@ class Controller_ParkAjax extends Controller {
 			} else {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			}
+		} elseif ($action === 'checkabbr') {
+			$abbr        = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$excludeId   = (int)($_POST['ExcludeParkId'] ?? 0);
+			if (!strlen($abbr)) { echo json_encode(['status' => 0, 'taken' => false]); exit; }
+			global $DB;
+			$DB->Clear();
+			$excludeClause = $excludeId > 0 ? " AND park_id != {$excludeId}" : '';
+			$rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = {$kingdom_id}{$excludeClause} LIMIT 1");
+			echo ($rs && $rs->Next())
+				? json_encode(['status' => 0, 'taken' => true])
+				: json_encode(['status' => 0, 'taken' => false]);
+
 		} elseif ($action === 'addauth') {
 			$uid = (int)$this->session->user_id;
 			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {

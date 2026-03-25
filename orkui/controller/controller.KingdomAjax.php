@@ -233,26 +233,23 @@ class Controller_KingdomAjax extends Controller {
 
 		} elseif ($action === 'updateparks') {
 			$this->load_model('Kingdom');
-			$names  = $_POST['ParkName']     ?? [];
-			$titles = $_POST['ParkTitle']    ?? [];
-			$abbrs  = $_POST['Abbreviation'] ?? [];
-			$active = $_POST['Active']       ?? [];
+			$parks = json_decode($_POST['ParksJson'] ?? '[]', true);
 
-			if (empty($titles)) {
+			if (!is_array($parks) || empty($parks)) {
 				echo json_encode(['status' => 1, 'error' => 'No park data provided.']);
 				exit;
 			}
 
 			$request = [];
-			foreach ($titles as $park_id => $title_id) {
-				$park_id = (int)$park_id;
+			foreach ($parks as $park) {
+				$park_id = (int)($park['ParkId'] ?? 0);
 				if (!valid_id($park_id)) continue;
 				$request[] = [
 					'ParkId'      => $park_id,
-					'ParkName'    => trim($names[$park_id]  ?? ''),
-					'ParkTitleId' => (int)$title_id,
-					'Abbreviation'=> strtoupper(trim($abbrs[$park_id] ?? '')),
-					'Active'      => !empty($active[$park_id]) ? 'Active' : 'Retired',
+					'ParkName'    => trim($park['ParkName']    ?? ''),
+					'ParkTitleId' => (int)($park['ParkTitle']  ?? 0),
+					'Abbreviation'=> strtoupper(trim($park['Abbreviation'] ?? '')),
+					'Active'      => !empty($park['Active']) ? 'Active' : 'Retired',
 				];
 			}
 

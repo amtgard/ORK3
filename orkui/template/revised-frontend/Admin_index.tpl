@@ -713,6 +713,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			<div class="cp-field" style="margin-top:12px">
 				<label for="cp-crpk-abbr">Abbreviation <span style="color:#e53e3e">*</span> <span style="color:#a0aec0;font-size:11px">(up to 4 alphanumeric characters)</span></label>
 				<input type="text" id="cp-crpk-abbr" placeholder="e.g. ED" maxlength="4" autocomplete="off">
+				<div id="cp-crpk-abbr-warn" style="display:none;color:#c05621;font-size:12px;margin-top:4px"></div>
 			</div>
 			<div class="cp-field" style="margin-top:12px">
 				<label for="cp-crpk-type">Park Type <span style="color:#e53e3e">*</span></label>
@@ -1178,6 +1179,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			fetchFn: cpSearchKingdoms,
 			onSelect: function(id) {
 				kingdomId = id;
+				document.getElementById('cp-crpk-abbr').dispatchEvent(new Event('input'));
 				var sel = document.getElementById('cp-crpk-type');
 				sel.innerHTML = '<option value="">Loading…</option>';
 				sel.disabled = true;
@@ -1205,6 +1207,8 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				var sel = document.getElementById('cp-crpk-type');
 				sel.innerHTML = '<option value="">— select kingdom first —</option>';
 				sel.disabled = true;
+				var warn = document.getElementById('cp-crpk-abbr-warn');
+				if (warn) warn.style.display = 'none';
 				cpCrpkCheckReady();
 			}
 		});
@@ -1219,6 +1223,26 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 
 		['cp-crpk-name', 'cp-crpk-abbr', 'cp-crpk-type'].forEach(function(id) {
 			document.getElementById(id).addEventListener('input', cpCrpkCheckReady);
+		});
+
+		var crpkAbbrTimer = null;
+		document.getElementById('cp-crpk-abbr').addEventListener('input', function() {
+			var warn = document.getElementById('cp-crpk-abbr-warn');
+			clearTimeout(crpkAbbrTimer);
+			var abbr = this.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+			if (!abbr || !kingdomId) { if (warn) warn.style.display = 'none'; return; }
+			crpkAbbrTimer = setTimeout(function() {
+				var fd = new FormData();
+				fd.append('Abbreviation', abbr);
+				fetch(UIR + 'ParkAjax/kingdom/' + kingdomId + '/checkabbr', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(r) {
+						if (warn) {
+							warn.style.display = r.taken ? '' : 'none';
+							if (r.taken) warn.textContent = '\u26a0\ufe0f "' + abbr + '" is already used by another park in this kingdom.';
+						}
+					});
+			}, 400);
 		});
 
 		document.getElementById('cp-crpk-submit').addEventListener('click', function() {
