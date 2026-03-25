@@ -338,6 +338,7 @@ class Controller_ParkAjax extends Controller
             $award_id     = (int)($_POST['KingdomAwardId']  ?? 0);
             $rank         = (int)($_POST['Rank']            ?? 0);
             $reason       = trim($_POST['Reason']           ?? '');
+            $anonymous    = !empty($_POST['Anonymous'])     ? 1 : 0;
             if (!valid_id($mundane_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
                 exit;
@@ -357,6 +358,7 @@ class Controller_ParkAjax extends Controller
                 'Rank'           => $rank > 0 ? $rank : null,
                 'GivenById'      => $this->session->user_id,
                 'Reason'         => $reason,
+                'Anonymous'      => $anonymous,
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])

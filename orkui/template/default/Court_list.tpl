@@ -13,8 +13,8 @@ $statusColor = ['draft' => '#718096', 'published' => '#2b6cb0', 'complete' => '#
 $statusBg    = ['draft' => '#edf2f7', 'published' => '#ebf8ff', 'complete' => '#f0fff4'];
 
 $backUrl = $context === 'park'
-    ? UIR . 'Park/index/' . $park_id
-    : UIR . 'Kingdom/index/' . $kingdom_id;
+    ? UIR . 'Park/profile/' . $park_id
+    : UIR . 'Kingdom/profile/' . $kingdom_id;
 ?>
 <style>
 .cp-page { max-width: 900px; margin: 24px auto; padding: 0 16px; font-family: inherit; }

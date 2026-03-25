@@ -329,6 +329,7 @@ class Controller_Player extends Controller
                             'KingdomAwardId' => $this->request->Player_profile->KingdomAwardId,
                             'Rank'           => $this->request->Player_profile->Rank,
                             'Reason'         => $this->request->Player_profile->Reason,
+                            'Anonymous'      => !empty($this->request->Player_profile->Anonymous) ? 1 : 0,
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {

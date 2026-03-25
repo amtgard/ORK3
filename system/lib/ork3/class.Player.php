@@ -2867,6 +2867,7 @@ class Player extends Ork3
             $awardRec->date_recommended = date('Y-m-d');
             $awardRec->recommended_by_id = $mundane_id;
             $awardRec->reason = $request['Reason'];
+            $awardRec->mask_giver = !empty($request['Anonymous']) ? 1 : 0;
             $awardRec->save();
             $this->bust_player_award_recs_cache($request['MundaneId']);
             return Success('Recommendation Added!');

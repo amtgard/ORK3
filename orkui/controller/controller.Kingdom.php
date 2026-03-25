@@ -1097,6 +1097,15 @@ class Controller_Kingdom extends Controller
             $this->data['SystemAwards'] = $sysAwards;
         }
 
+        $this->data['CallerIsOrkAdmin']    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
+        $this->data['CanManageCourt']      = $uid > 0 && Ork3::$Lib->court->canManage($uid, (int)$kingdom_id, 0);
+        $this->data['CourtList']           = [];
+        $this->data['CourtUpcomingEvents'] = [];
+        if ($this->data['CanManageCourt']) {
+            $this->data['CourtList']           = Ork3::$Lib->court->getCourtList((int)$kingdom_id, 0);
+            $this->data['CourtUpcomingEvents'] = Ork3::$Lib->court->getUpcomingEvents((int)$kingdom_id);
+        }
+
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
         $this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
         $this->data['IcsUrl'] = UIR . 'Kingdom/ics/' . $kingdom_id;

@@ -528,6 +528,7 @@ class Report extends Ork3
 			order by m.persona, a.name, recs.rank, m.persona";
         $r = $this->db->query($sql);
         $response = array();
+        $viewerIsAdmin = $viewer_id > 0 && Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_ADMIN, 0, AUTH_EDIT);
         if ($r !== false && $r->size() > 0) {
             // First pass: collect raw rows + rec_ids/meta (for seconds wiring below)
             // plus the set of (mundane_id, ladder_award_id) we'll need Master-peerage lookups for.
@@ -617,6 +618,8 @@ class Report extends Ork3
                         }
                     }
                 }
+                $isAnon        = ((int)$row->mask_giver === 1);
+                $hideSubmitter = $isAnon && !$viewerIsAdmin;
                 $response['AwardRecommendations'][] = array(
                     'RecommendationsId' => $row->recommendations_id,
                     'MundaneId' => $row->mundane_id,
@@ -625,8 +628,9 @@ class Report extends Ork3
                     'Rank' => $row->rank,
                     'AwardName' => $row->award_name,
                     'Reason' => $row->reason,
-                    'RecommendedByName' => $row->recommended_by_persona,
-                    'RecommendedById' => $row->recommended_by_id,
+                    'IsAnonymous' => $isAnon,
+                    'RecommendedByName' => $hideSubmitter ? null : $row->recommended_by_persona,
+                    'RecommendedById'   => $hideSubmitter ? null : $row->recommended_by_id,
                     'MaskGiver' => $row->mask_giver,
                     'KingdomAwardId' => $row->ka_kaward_id,
                     'AwardId' => $recAwardId,

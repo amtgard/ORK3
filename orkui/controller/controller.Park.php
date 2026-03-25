@@ -483,6 +483,7 @@ class Controller_Park extends Controller
             ? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
             : true;
         $this->data['AwardRecsPublic'] = $recsPublic;
+        $this->data['CallerIsOrkAdmin'] = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
 
         $this->data['AwardRecommendations'] = [];
         $canManagePark = $this->data['CanManagePark'] ?? false;

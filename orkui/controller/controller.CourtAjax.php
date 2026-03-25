@@ -70,9 +70,7 @@ class Controller_CourtAjax extends Controller {
                      ' . $date_val . ', ' . $event_val . ', ' . $uid . ')'
         );
         $DB->Clear();
-        $row = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court
-                              WHERE kingdom_id = ' . $kingdom_id . ' AND created_by = ' . $uid . '
-                              ORDER BY court_id DESC LIMIT 1');
+        $row = $DB->DataSet('SELECT LAST_INSERT_ID() AS court_id');
         $court_id = ($row && $row->Next()) ? (int)$row->court_id : 0;
 
         $this->jsonOut(['status' => 0, 'court_id' => $court_id, 'name' => $name]);
@@ -367,7 +365,9 @@ class Controller_CourtAjax extends Controller {
         );
         if (!$ca || !$ca->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
 
-        [$uid, $court] = $this->requireCourtAuth((int)$ca->court_id);
+        $uid = $this->requireLogin();
+        if (!Ork3::$Lib->court->canManage($uid, (int)$ca->c_kingdom_id, (int)$ca->c_park_id))
+            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
 
         if ($ca->court_status !== 'published')
             $this->jsonOut(['status' => 1, 'error' => 'Court must be published to grant awards.']);

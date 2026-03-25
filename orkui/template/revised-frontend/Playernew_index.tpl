@@ -97,6 +97,7 @@
 		   );
 	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
+	$callerIsOrkAdmin = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_EDIT);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
@@ -3889,6 +3890,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<label for="pn-rec-reason">Reason <span class="required-indicator">*</span></label>
 					<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 					<span class="pn-char-count" id="pn-rec-char-count">400 characters remaining</span>
+				</div>
+				<div style="margin-top:12px">
+					<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+						<input type="checkbox" name="Anonymous" id="pn-rec-anon" value="1" style="width:16px;height:16px;cursor:pointer">
+						<span>Submit Anonymously</span>
+					</label>
+					<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 				</div>
 			</form>
 		</div>

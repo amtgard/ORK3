@@ -23,8 +23,8 @@ $nextLabel = ['draft' => 'Publish', 'published' => 'Mark Complete'];
 
 // Context back-link
 $backUrl = ($court['ParkId'] ?? 0) > 0
-    ? UIR . 'Court/list/park/' . $court['ParkId']
-    : UIR . 'Court/list/kingdom/' . $court['KingdomId'];
+    ? UIR . 'Park/profile/' . $court['ParkId'] . '?tab=court'
+    : UIR . 'Kingdom/profile/' . $court['KingdomId'] . '?tab=court';
 $backLabel = ($court['ParkId'] ?? 0) > 0
     ? ($court['ParkName'] ?? 'Park') . ' Courts'
     : ($court['KingdomName'] ?? 'Kingdom') . ' Courts';
@@ -54,13 +54,17 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-badge { display: inline-block; padding: 4px 11px; border-radius: 12px; font-size: 12px; font-weight: 700; }
 
 /* Published mode: Grant / Skip */
-.cp-grant-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.cp-grant-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .cp-btn-grant { background: #276749; color: #fff; border: none; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background .1s; }
 .cp-btn-grant:hover { background: #22543d; }
 .cp-btn-skip  { background: #edf2f7; color: #718096; border: 1px solid #cbd5e0; padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background .1s; }
 .cp-btn-skip:hover  { background: #e2e8f0; color: #4a5568; }
 .cp-award-row.cp-granted { opacity: .6; }
 .cp-award-row.cp-skipped  { opacity: .45; }
+.cp-award-row.cp-granted .cp-award-row-main,
+.cp-award-row.cp-skipped  .cp-award-row-main { padding-top: 5px; padding-bottom: 5px; }
+.cp-award-row.cp-granted .cp-reorder-btns,
+.cp-award-row.cp-skipped  .cp-reorder-btns { visibility: hidden; }
 
 /* Award status badge (small) */
 .cp-aw-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
@@ -79,13 +83,24 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-award-list { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
 .cp-award-row { background: #fff; border-bottom: 1px solid #edf2f7; }
 .cp-award-row:last-child { border-bottom: none; }
-.cp-award-row-main { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; }
+.cp-award-row-main { display: grid; grid-template-columns: 20px 150px 1fr 240px 95px 160px; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; }
 .cp-award-row-main:hover { background: #f7fafc; }
-.cp-award-drag { color: #cbd5e0; cursor: grab; font-size: 14px; flex-shrink: 0; }
-.cp-award-recipient { font-weight: 700; color: #2d3748; font-size: 14px; min-width: 140px; }
-.cp-award-name { color: #4a5568; font-size: 13px; flex: 1; }
-.cp-award-rank { color: #718096; font-size: 12px; flex-shrink: 0; }
-.cp-award-flags { display: flex; gap: 6px; flex-shrink: 0; }
+.cp-award-drag { color: #cbd5e0; cursor: grab; font-size: 14px; }
+.cp-award-recipient { font-weight: 700; color: #2d3748; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-award-name { color: #4a5568; font-size: 13px; display: flex; align-items: center; gap: 5px; min-width: 0; }
+.cp-award-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 1; }
+.cp-note-btn { background: none; border: none; cursor: pointer; color: #a0aec0; font-size: 12px; padding: 0 2px; flex-shrink: 0; line-height: 1; transition: color .15s; }
+.cp-note-btn:hover { color: #4a5568; }
+#cp-note-popup { position: fixed; background: #2d3748; color: #e2e8f0; font-size: 12px; line-height: 1.55; border-radius: 6px; padding: 10px 12px; max-width: 280px; z-index: 1200; box-shadow: 0 4px 16px rgba(0,0,0,.3); display: none; }
+#cp-note-popup-text { white-space: pre-wrap; word-break: break-word; display: block; }
+#cp-note-popup-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+#cp-note-popup-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #a0aec0; }
+#cp-note-popup-close { background: none; border: none; color: #718096; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; margin-left: 12px; flex-shrink: 0; }
+#cp-note-popup-close:hover { color: #fff; }
+.cp-award-rank { color: #718096; font-size: 12px; }
+.cp-award-flags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cp-award-status-col { display: flex; align-items: center; justify-content: flex-end; }
+.cp-award-row-main > .fa-chevron-down { justify-self: end; }
 .cp-flag-local { background: #fff3cd; color: #856404; border: 1px solid #ffc107; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .cp-flag-rec { background: #e8f4fd; color: #1a6e9a; border: 1px solid #bee3f8; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .cp-type-ladder { background: #faf5ff; color: #6b46c1; border: 1px solid #d6bcfa; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
@@ -163,7 +178,7 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 
 /* Autocomplete */
 .cp-ac-wrap { position: relative; }
-.cp-ac-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e0; border-radius: 5px; box-shadow: 0 4px 12px rgba(0,0,0,.1); z-index: 100; max-height: 200px; overflow-y: auto; display: none; }
+.cp-ac-dropdown { position: fixed; top: 0; left: 0; width: 0; background: #fff; border: 1px solid #cbd5e0; border-radius: 5px; box-shadow: 0 4px 12px rgba(0,0,0,.1); z-index: 1100; max-height: 200px; overflow-y: auto; display: none; }
 .cp-ac-item { padding: 8px 12px; cursor: pointer; font-size: 13px; }
 .cp-ac-item:hover { background: #ebf8ff; }
 
@@ -384,7 +399,8 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                 $typeClass = 'cp-type-award'; $typeIcon = 'fa-award'; $typeLabel = 'Award';
             }
         ?>
-        <div class="cp-award-row" id="cp-aw-<?= (int)$aw['CourtAwardId'] ?>"
+        <div class="cp-award-row<?= $ast === 'given' ? ' cp-granted' : ($ast === 'cancelled' ? ' cp-skipped' : '') ?>"
+             id="cp-aw-<?= (int)$aw['CourtAwardId'] ?>"
              data-court-award-id="<?= (int)$aw['CourtAwardId'] ?>"
              data-sort="<?= (int)$aw['SortOrder'] ?>">
             <div class="cp-award-row-main" onclick="<?= $courtSt === 'published' ? '' : 'cpToggleAward(' . (int)$aw['CourtAwardId'] . ')' ?>">
@@ -394,9 +410,9 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                 </div>
                 <div class="cp-award-recipient"><?= htmlspecialchars($aw['Persona']) ?><?php if (!empty($aw['ParkAbbrev'])): ?> <span style="font-size:11px;font-weight:400;color:#718096;letter-spacing:.2px"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?></div>
                 <div class="cp-award-name">
-                    <?= htmlspecialchars($aw['AwardName']) ?>
-                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?>
-                    <span style="color:#a0aec0"> &mdash; Rank <?= (int)$aw['Rank'] ?></span>
+                    <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?><?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span style="color:#a0aec0"> &mdash; Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?></span>
+                    <?php if (!empty($aw['Notes'])): ?>
+                    <button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>
                     <?php endif; ?>
                 </div>
                 <div class="cp-award-flags">
@@ -407,13 +423,17 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                     <?php if ($aw['RecommendationsId']): ?>
                     <span class="cp-flag-rec"><i class="fas fa-star"></i> From Rec</span>
                     <?php endif; ?>
-                    <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
+                    <?php if ($courtSt === 'draft'): ?>
                     <span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)">
                         <i class="fas fa-print"></i>
                     </span>
                     <span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="<?= $aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)">
                         <i class="fas fa-medal"></i>
                     </span>
+                    <?php endif; ?>
+                </div>
+                <div class="cp-award-status-col">
+                    <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
                 </div>
                 <?php if ($courtSt === 'published' && !in_array($ast, ['given','cancelled'])): ?>
                 <div class="cp-grant-actions" onclick="event.stopPropagation()">
@@ -664,6 +684,14 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     </div>
 </div>
 
+<div id="cp-note-popup" style="position:fixed">
+    <div id="cp-note-popup-header">
+        <span id="cp-note-popup-title">Monarchy Note</span>
+        <button id="cp-note-popup-close" onclick="cpDismissNote()" title="Close">&times;</button>
+    </div>
+    <span id="cp-note-popup-text"></span>
+</div>
+
 <script>
 (function() {
     var uir      = '<?= UIR ?>';
@@ -724,7 +752,7 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     window.cpMoveAward = function(caid, dir) {
         var list  = gid('cp-award-list');
         var rows  = Array.from(list.querySelectorAll('.cp-award-row'));
-        var idx   = rows.findIndex(function(r) { return parseInt(r.dataset.courtAwardId) === caid; });
+        var idx   = rows.findIndex(function(r) { return parseInt(r.dataset.courtAwardId, 10) === caid; });
         var swap  = idx + dir;
         if (swap < 0 || swap >= rows.length) return;
         if (dir === -1) rows[swap].before(rows[idx]);
@@ -811,14 +839,14 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
         if (cpPrintingListActive) {
             // Snapshot current DOM order so we can restore it
             cpPrintingListSavedOrder = Array.from(list.querySelectorAll('.cp-award-row'))
-                .map(function(r) { return parseInt(r.dataset.courtAwardId); });
+                .map(function(r) { return parseInt(r.dataset.courtAwardId, 10); });
 
             // Get all rows with their scroll status
             var rows = Array.from(list.querySelectorAll('.cp-award-row'));
             var withScroll = [], noScroll = [];
             rows.forEach(function(row) {
                 var icon = row.querySelector('.cp-tracking-icon[data-type="scroll"]');
-                var st = icon ? parseInt(icon.dataset.status) : 0;
+                var st = icon ? parseInt(icon.dataset.status, 10) : 0;
                 if (st === 1) withScroll.unshift(row);       // red — needs printing → top
                 else if (st === 2) withScroll.push(row);     // green — done → after red
                 else noScroll.push(row);                     // gray — not tracked
@@ -876,7 +904,7 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 
     function cpSaveOrder() {
         var rows  = Array.from(document.querySelectorAll('#cp-award-list .cp-award-row'));
-        var order = rows.map(function(r) { return parseInt(r.dataset.courtAwardId); });
+        var order = rows.map(function(r) { return parseInt(r.dataset.courtAwardId, 10); });
         var fd    = new FormData();
         fd.append('CourtId', courtId);
         fd.append('Order',   JSON.stringify(order));
@@ -906,6 +934,26 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                         flagsEl.insertBefore(span, flagsEl.firstChild);
                     } else if (!ptl && existing) {
                         existing.remove();
+                    }
+                }
+                // Update note bubble
+                var nameEl = document.querySelector('#cp-aw-' + caid + ' .cp-award-name');
+                if (nameEl) {
+                    var existingNoteBtn = nameEl.querySelector('.cp-note-btn');
+                    if (notes) {
+                        if (!existingNoteBtn) {
+                            var nb = document.createElement('button');
+                            nb.className = 'cp-note-btn';
+                            nb.title = 'View note';
+                            nb.innerHTML = '<i class="fas fa-comment-alt"></i>';
+                            nb.dataset.note = notes;
+                            nb.addEventListener('click', function(e) { e.stopPropagation(); cpShowNote(this); });
+                            nameEl.appendChild(nb);
+                        } else {
+                            existingNoteBtn.dataset.note = notes;
+                        }
+                    } else if (existingNoteBtn) {
+                        existingNoteBtn.remove();
                     }
                 }
                 // Flash save confirmation
@@ -1071,7 +1119,7 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     };
 
     window.cpToggleRec = function(el) {
-        var rid = parseInt(el.dataset.recId);
+        var rid = parseInt(el.dataset.recId, 10);
         var idx = selectedRecs.indexOf(rid);
         if (idx === -1) { selectedRecs.push(rid); el.classList.add('selected'); }
         else { selectedRecs.splice(idx, 1); el.classList.remove('selected'); }
@@ -1152,7 +1200,7 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     window.cpSubmitAdhoc = function() {
         var mundaneId = gid('cp-adhoc-mundane-id').value;
         var kaId      = gid('cp-adhoc-award').value;
-        var rank      = gid('cp-adhoc-rank-wrap').style.display !== 'none' ? parseInt(gid('cp-adhoc-rank').value) : 0;
+        var rank      = gid('cp-adhoc-rank-wrap').style.display !== 'none' ? parseInt(gid('cp-adhoc-rank').value, 10) : 0;
         var notes     = gid('cp-adhoc-notes').value.trim();
         var ptl       = gid('cp-adhoc-ptl').checked ? 1 : 0;
         var errEl     = gid('cp-adhoc-error');
@@ -1202,12 +1250,14 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
             '<button class="cp-reorder-btn" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',1)">&#9660;</button>' +
             '</div>' +
             '<div class="cp-award-recipient">' + esc(aw.Persona) + (aw.ParkAbbrev ? ' <span style="font-size:11px;font-weight:400;color:#718096;letter-spacing:.2px">' + esc(aw.ParkAbbrev) + '</span>' : '') + '</div>' +
-            '<div class="cp-award-name">' + esc(aw.AwardName) + rankStr + '</div>' +
-            '<div class="cp-award-flags">' + typeBadge + ptlBadge + recBadge +
-            '<span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span>' +
-            '<span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span>' +
-            '<span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span>' +
+            '<div class="cp-award-name"><span class="cp-award-name-text">' + esc(aw.AwardName) + rankStr + '</span>' +
+            (aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>' : '') +
             '</div>' +
+            '<div class="cp-award-flags">' + typeBadge + ptlBadge + recBadge +
+            (courtStatus === 'draft' ? '<span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span>' +
+            '<span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span>' : '') +
+            '</div>' +
+            '<div class="cp-award-status-col"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span></div>' +
             '<i class="fas fa-chevron-down" style="color:#cbd5e0;font-size:12px;flex-shrink:0"></i></div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
@@ -1280,6 +1330,14 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     };
 
     // ---- Autocomplete ----
+    // Position a fixed dropdown under its input — safe inside modals with overflow-y: auto
+    function cpPositionAc(input, drop) {
+        var r = input.getBoundingClientRect();
+        drop.style.top   = (r.bottom + 2) + 'px';
+        drop.style.left  = r.left + 'px';
+        drop.style.width = r.width + 'px';
+    }
+
     var cpAcTimer = null;
     window.cpAcSearch = function(input, dropdownId, hiddenId) {
         var q = input.value.trim();
@@ -1294,6 +1352,7 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                 drop.innerHTML = '';
                 if (!data || !data.length) {
                     drop.innerHTML = '<div class="cp-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                    cpPositionAc(input, drop);
                     drop.style.display = 'block';
                     return;
                 }
@@ -1308,17 +1367,42 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                     });
                     drop.appendChild(div);
                 });
+                cpPositionAc(input, drop);
                 drop.style.display = 'block';
             })
             .catch(function() { drop.style.display = 'none'; });
         }, 200);
     };
 
-    // Close dropdowns on outside click
+    // ---- Note popup ----
+    window.cpShowNote = function(btn) {
+        var popup = gid('cp-note-popup');
+        gid('cp-note-popup-text').textContent = btn.dataset.note || '';
+        popup.style.display = 'block';
+        var r  = btn.getBoundingClientRect();
+        var pw = popup.offsetWidth;
+        var ph = popup.offsetHeight;
+        var top = r.bottom + 6;
+        if (top + ph > window.innerHeight - 10) top = r.top - ph - 6;
+        var left = r.left;
+        if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+        popup.style.top  = Math.max(10, top)  + 'px';
+        popup.style.left = Math.max(10, left) + 'px';
+    };
+    window.cpDismissNote = function() {
+        var popup = gid('cp-note-popup');
+        if (popup) popup.style.display = 'none';
+    };
+
+    // Close dropdowns and note popup on outside click
     document.addEventListener('click', function(e) {
         document.querySelectorAll('.cp-ac-dropdown').forEach(function(d) {
             if (!d.parentElement.contains(e.target)) d.style.display = 'none';
         });
+        var popup = gid('cp-note-popup');
+        if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && !e.target.closest('.cp-note-btn')) {
+            popup.style.display = 'none';
+        }
     });
 
     // Close modals on backdrop / Escape
@@ -1327,9 +1411,12 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
         if (el) el.addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
     });
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal'].forEach(function(id) {
-            var el = gid(id); if (el) el.style.display = 'none';
-        });
+        if (e.key === 'Escape') {
+            cpDismissNote();
+            ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal'].forEach(function(id) {
+                var el = gid(id); if (el) el.style.display = 'none';
+            });
+        }
     });
 })();
 

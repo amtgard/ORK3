@@ -1372,7 +1372,16 @@
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($rec['AwardName']) ?></td>
 							<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
-							<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
+							<td>
+									<?php if (!empty($rec['IsAnonymous']) && !($CallerIsOrkAdmin ?? false)): ?>
+										<span style="color:#718096;font-style:italic">Anonymous</span>
+									<?php elseif (!empty($rec['IsAnonymous']) && ($CallerIsOrkAdmin ?? false)): ?>
+										<a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars((string)$rec['RecommendedByName']) ?></a>
+										<span style="color:#a0aec0;font-size:11px">(anon)</span>
+									<?php elseif (!empty($rec['RecommendedById'])): ?>
+										<a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a>
+									<?php else: ?>&mdash;<?php endif; ?>
+								</td>
 							<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
 							<td class="pk-rec-notes">
 <?php if (!empty($rec['Reason'])): ?>
@@ -1893,6 +1902,13 @@ var PkBannerConfig = {
 				<label for="pk-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
 				<input type="text" id="pk-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 				<span class="pk-char-count" id="pk-rec-char-count">400 characters remaining</span>
+			</div>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+					<input type="checkbox" id="pk-rec-anon" value="1" style="width:16px;height:16px;cursor:pointer">
+					<span>Submit Anonymously</span>
+				</label>
+				<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 			</div>
 		</div>
 		<div class="pk-modal-footer">
