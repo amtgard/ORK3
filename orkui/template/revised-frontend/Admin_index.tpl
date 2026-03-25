@@ -541,7 +541,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			<div class="cp-feedback" id="cp-mkp-feedback"></div>
 			<div class="cp-warning">
 				<i class="fas fa-exclamation-triangle"></i>
-				<div>This moves <strong>all members</strong> of the source park to the destination park and closes out the source park's permissions. This cannot be undone.</div>
+				<div>This moves <strong>all members</strong> of the source park to the destination park and deletes all officer roles and park-level permission grants for the source park. This cannot be undone.</div>
 			</div>
 			<div class="cp-field cp-field-ac">
 				<label>Source Park (will be emptied) <span style="color:#e53e3e">*</span></label>

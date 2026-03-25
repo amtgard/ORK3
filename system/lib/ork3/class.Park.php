@@ -57,6 +57,8 @@ class Park extends Ork3
       $this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "officer where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+			$sql = "delete from " . DB_PREFIX . "authorization where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
+			$this->db->query( $sql );
       /*
 			$sql = "delete from " . DB_PREFIX . "park where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );

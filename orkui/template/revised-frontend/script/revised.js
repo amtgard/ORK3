@@ -6503,13 +6503,6 @@ function setupPronounPicker(cfg) {
         gid('kn-addplayer-waiver-row').style.display = 'none';
         ov.querySelectorAll('input[type=radio]').forEach(function(r) { if (r.value === '0') r.checked = true; });
         hideFeedback(gid('kn-addplayer-feedback'));
-        // Reset pronoun fields
-        var knApPronounSel = gid('kn-addplayer-pronounid');
-        if (knApPronounSel) knApPronounSel.value = '';
-        var knApPronounHid = gid('kn-addplayer-pronouncustom');
-        if (knApPronounHid) knApPronounHid.value = '';
-        var knApPronounPanel = gid('kn-addplayer-pronoun-picker');
-        if (knApPronounPanel) knApPronounPanel.style.display = 'none';
         // Populate park dropdown once
         var sel = gid('kn-addplayer-park');
         if (!sel.dataset.built) {
@@ -6581,10 +6574,6 @@ function setupPronounPicker(cfg) {
             fd.append('Waivered',   waivered   ? waivered.value   : '0');
             var waiverFile = gid('kn-addplayer-waiver');
             if (waiverFile && waiverFile.files[0]) fd.append('Waiver', waiverFile.files[0]);
-            var knApPronounId  = gid('kn-addplayer-pronounid');
-            var knApPronounCus = gid('kn-addplayer-pronouncustom');
-            if (knApPronounId  && knApPronounId.value)  fd.append('PronounId',     knApPronounId.value);
-            if (knApPronounCus && knApPronounCus.value) fd.append('PronounCustom', knApPronounCus.value);
 
             $.ajax({
                 url:         CREATE_URL + parkId + '/create',
@@ -6609,14 +6598,6 @@ function setupPronounPicker(cfg) {
         });
     });
 
-    setupPronounPicker({
-        toggleId: 'kn-addplayer-pronoun-custom-btn', panelId: 'kn-addplayer-pronoun-picker',
-        previewId: 'kn-addplayer-pronoun-preview',   applyId: 'kn-addplayer-pronoun-apply',
-        clearId:   'kn-addplayer-pronoun-clear',     hiddenId: 'kn-addplayer-pronouncustom',
-        standardSelId: 'kn-addplayer-pronounid',
-        subjectId: 'kn-ap-p-subject', objectId: 'kn-ap-p-object', possId: 'kn-ap-p-possessive',
-        posspId: 'kn-ap-p-possessivepronoun', reflexId: 'kn-ap-p-reflexive',
-    });
 })();
 
 // ---- Add Player Modal (Parknew) ----
@@ -6645,13 +6626,6 @@ function setupPronounPicker(cfg) {
         gid('pk-addplayer-waiver-row').style.display = 'none';
         ov.querySelectorAll('input[type=radio]').forEach(function(r) { if (r.value === '0') r.checked = true; });
         hideFeedback(gid('pk-addplayer-feedback'));
-        // Reset pronoun fields
-        var pkApPronounSel = gid('pk-addplayer-pronounid');
-        if (pkApPronounSel) pkApPronounSel.value = '';
-        var pkApPronounHid = gid('pk-addplayer-pronouncustom');
-        if (pkApPronounHid) pkApPronounHid.value = '';
-        var pkApPronounPanel = gid('pk-addplayer-pronoun-picker');
-        if (pkApPronounPanel) pkApPronounPanel.style.display = 'none';
         ov.classList.add('pk-addplayer-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { gid('pk-addplayer-persona').focus(); }, 50);
@@ -6708,10 +6682,6 @@ function setupPronounPicker(cfg) {
             fd.append('Waivered',   waivered   ? waivered.value   : '0');
             var waiverFile = gid('pk-addplayer-waiver');
             if (waiverFile && waiverFile.files[0]) fd.append('Waiver', waiverFile.files[0]);
-            var pkApPronounId  = gid('pk-addplayer-pronounid');
-            var pkApPronounCus = gid('pk-addplayer-pronouncustom');
-            if (pkApPronounId  && pkApPronounId.value)  fd.append('PronounId',     pkApPronounId.value);
-            if (pkApPronounCus && pkApPronounCus.value) fd.append('PronounCustom', pkApPronounCus.value);
 
             $.ajax({
                 url:         CREATE_URL,
@@ -6736,14 +6706,6 @@ function setupPronounPicker(cfg) {
         });
     });
 
-    setupPronounPicker({
-        toggleId: 'pk-addplayer-pronoun-custom-btn', panelId: 'pk-addplayer-pronoun-picker',
-        previewId: 'pk-addplayer-pronoun-preview',   applyId: 'pk-addplayer-pronoun-apply',
-        clearId:   'pk-addplayer-pronoun-clear',     hiddenId: 'pk-addplayer-pronouncustom',
-        standardSelId: 'pk-addplayer-pronounid',
-        subjectId: 'pk-ap-p-subject', objectId: 'pk-ap-p-object', possId: 'pk-ap-p-possessive',
-        posspId: 'pk-ap-p-possessivepronoun', reflexId: 'pk-ap-p-reflexive',
-    });
 })();
 
 // ---- Playernew: Award Edit + Delete ----
