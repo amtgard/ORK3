@@ -8605,6 +8605,7 @@ window.pnCloseUnitCreateModal = function() {
     }
 
     function cpShowSearch() {
+        cpAbbrData = null;
         gid('kn-claimpark-search-panel').style.display  = '';
         gid('kn-claimpark-confirm-panel').style.display = 'none';
         gid('kn-claimpark-back').style.display          = 'none';
@@ -8614,11 +8615,24 @@ window.pnCloseUnitCreateModal = function() {
         btn.disabled  = false;
     }
 
-    function cpShowConfirm() {
-        var parkName   = gid('kn-claimpark-park-name').value;
+    function cpShowConfirm(abbr, taken, conflictName) {
+        var parkName    = gid('kn-claimpark-park-name').value;
         var fromKingdom = gid('kn-claimpark-source-kingdom').value || '(unknown)';
         gid('kn-claimpark-confirm-park').textContent = parkName;
         gid('kn-claimpark-confirm-from').textContent = fromKingdom;
+        gid('kn-claimpark-confirm-abbr').textContent = abbr;
+        var warnEl  = gid('kn-claimpark-abbr-warning');
+        var fieldEl = gid('kn-claimpark-abbr-field');
+        if (taken) {
+            gid('kn-claimpark-abbr-conflict-abbr').textContent = abbr;
+            gid('kn-claimpark-abbr-conflict-name').textContent = conflictName;
+            gid('kn-claimpark-new-abbr').value = abbr;
+            warnEl.style.display  = 'flex';
+            fieldEl.style.display = '';
+        } else {
+            warnEl.style.display  = 'none';
+            fieldEl.style.display = 'none';
+        }
         gid('kn-claimpark-search-panel').style.display  = 'none';
         gid('kn-claimpark-confirm-panel').style.display = '';
         gid('kn-claimpark-back').style.display          = '';
@@ -8631,6 +8645,8 @@ window.pnCloseUnitCreateModal = function() {
     window.knOpenClaimParkModal = function() {
         var ov = gid('kn-claimpark-overlay');
         if (!ov) return;
+        cpAbbrData = null;
+        cpConfirming = false;
         gid('kn-claimpark-park-name').value      = '';
         gid('kn-claimpark-park-id').value        = '';
         gid('kn-claimpark-source-kingdom').value = '';
@@ -8644,6 +8660,7 @@ window.pnCloseUnitCreateModal = function() {
 
     var cpParkTimer;
     var cpConfirming = false;
+    var cpAbbrData   = null;
 
     $(document).ready(function() {
         if (!gid('kn-claimpark-overlay')) return;
@@ -8697,14 +8714,46 @@ window.pnCloseUnitCreateModal = function() {
             var parkId = gid('kn-claimpark-park-id').value;
             if (!cpConfirming) {
                 if (!parkId) { showFb('Select a park to claim.', false); return; }
-                cpConfirming = true;
-                cpShowConfirm();
+                var btn = this;
+                btn.disabled  = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+                var fd = new FormData();
+                fd.append('ParkId', parkId);
+                fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/checkparkabbr', { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d.status !== 0) {
+                            btn.disabled  = false;
+                            btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
+                            showFb(d.error || 'Error checking abbreviation.', false);
+                            return;
+                        }
+                        cpAbbrData   = { abbr: d.abbr, taken: d.taken, conflictName: d.conflictName };
+                        cpConfirming = true;
+                        cpShowConfirm(d.abbr, d.taken, d.conflictName);
+                    })
+                    .catch(function() {
+                        btn.disabled  = false;
+                        btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
+                        showFb('Error checking abbreviation. Please try again.', false);
+                    });
                 return;
             }
-            // Confirmed — submit
+            // Confirmed — validate abbreviation if conflict exists
+            if (cpAbbrData && cpAbbrData.taken) {
+                var newAbbr = gid('kn-claimpark-new-abbr').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (newAbbr.length < 2 || newAbbr.length > 3) {
+                    showFb('Please enter a 2–3 character abbreviation.', false);
+                    return;
+                }
+            }
+            var postData = { ParkId: parkId, DestKingdomId: KnConfig.kingdomId };
+            if (cpAbbrData && cpAbbrData.taken) {
+                postData.Abbreviation = gid('kn-claimpark-new-abbr').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+            }
             var btn = this;
             btn.disabled = true;
-            $.post(CLAIM_URL, { ParkId: parkId, DestKingdomId: KnConfig.kingdomId }, function(r) {
+            $.post(CLAIM_URL, postData, function(r) {
                 btn.disabled = false;
                 if (r && r.status === 0) {
                     showFb('Park claimed successfully.', true);

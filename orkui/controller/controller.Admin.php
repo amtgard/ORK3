@@ -2053,15 +2053,33 @@ class Controller_Admin extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'checkparkabbr') {
+			$park_id    = (int)($_POST['ParkId']    ?? 0);
+			$kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+			if (!$park_id || !$kingdom_id) { echo json_encode(['status' => 1, 'error' => 'Missing parameters.']); exit; }
+			global $DB;
+			$DB->Clear();
+			$rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
+			if (!$rs || !$rs->Next()) { echo json_encode(['status' => 1, 'error' => 'Park not found.']); exit; }
+			$abbr = strtoupper($rs->abbreviation);
+			$DB->Clear();
+			$abbrEsc = mysql_real_escape_string($abbr);
+			$rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
+			$taken = ($rs2 && $rs2->Next());
+			echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
+			exit;
+
 		} elseif ($action === 'transferpark') {
 			$this->load_model('Park');
 			$park_id    = (int)($_POST['ParkId']    ?? 0);
 			$kingdom_id = (int)($_POST['KingdomId'] ?? 0);
 			if (!$park_id || !$kingdom_id) { echo json_encode(['status' => 1, 'error' => 'Park and destination kingdom are required.']); exit; }
+			$new_abbr   = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
 			$r = $this->Park->TransferPark([
-				'Token'     => $this->session->token,
-				'ParkId'    => $park_id,
-				'KingdomId' => $kingdom_id,
+				'Token'        => $this->session->token,
+				'ParkId'       => $park_id,
+				'KingdomId'    => $kingdom_id,
+				'Abbreviation' => $new_abbr,
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])

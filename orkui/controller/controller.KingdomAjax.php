@@ -346,13 +346,29 @@ class Controller_KingdomAjax extends Controller {
 				? json_encode(['status' => 0, 'parkId' => $dest_park_id])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'checkparkabbr') {
+			$park_id = (int)($_POST['ParkId'] ?? 0);
+			if (!valid_id($park_id)) { echo json_encode(['status' => 1, 'error' => 'Missing park ID.']); exit; }
+			global $DB;
+			$DB->Clear();
+			$rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
+			if (!$rs || !$rs->Next()) { echo json_encode(['status' => 1, 'error' => 'Park not found.']); exit; }
+			$abbr = strtoupper($rs->abbreviation);
+			$DB->Clear();
+			$abbrEsc = mysql_real_escape_string($abbr);
+			$rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
+			$taken = ($rs2 && $rs2->Next());
+			echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
+			exit;
+
 		} elseif ($action === 'claimpark') {
 			$this->load_model('Park');
 			$park_id         = (int)($_POST['ParkId']        ?? 0);
 			$dest_kingdom_id = (int)($_POST['DestKingdomId'] ?? $kingdom_id);
 			if (!valid_id($park_id))         { echo json_encode(['status' => 1, 'error' => 'Select a park.']);                    exit; }
 			if (!valid_id($dest_kingdom_id)) { echo json_encode(['status' => 1, 'error' => 'Destination kingdom is required.']); exit; }
-			$r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id]);
+			$new_abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id, 'Abbreviation' => $new_abbr]);
 			if ($r['Status'] == 0) {
 				$bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $dest_kingdom_id]);
 				Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages',        $bustKey);

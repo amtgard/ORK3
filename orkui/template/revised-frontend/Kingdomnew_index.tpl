@@ -1692,7 +1692,19 @@ var KnConfig = {
 						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">To</td>
 						<td style="padding:6px 0"><strong><?= htmlspecialchars($kingdom_name) ?></strong></td>
 					</tr>
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">Abbreviation</td>
+						<td style="padding:6px 0;font-family:monospace" id="kn-claimpark-confirm-abbr"></td>
+					</tr>
 				</table>
+				<div id="kn-claimpark-abbr-warning" style="display:none;margin-top:12px;padding:10px 12px;background:#fff5f5;border:1px solid #feb2b2;border-radius:6px;font-size:13px;color:#c53030;gap:8px;align-items:flex-start">
+					<i class="fas fa-exclamation-triangle" style="margin-top:2px;flex-shrink:0"></i>
+					<div>The abbreviation <strong id="kn-claimpark-abbr-conflict-abbr"></strong> is already used by <strong id="kn-claimpark-abbr-conflict-name"></strong> in this kingdom. Enter a new abbreviation for this park.</div>
+				</div>
+				<div id="kn-claimpark-abbr-field" style="display:none;margin-top:12px">
+					<label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">New Abbreviation <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="kn-claimpark-new-abbr" maxlength="3" autocomplete="off" style="width:80px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px;text-transform:uppercase" placeholder="e.g. ABC">
+				</div>
 				<p style="font-size:12px;color:#e53e3e;margin:16px 0 0">This will move all players in the park to the new kingdom.</p>
 			</div>
 		</div>

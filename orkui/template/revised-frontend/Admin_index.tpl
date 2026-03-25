@@ -518,7 +518,19 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">To</td>
 						<td style="padding:6px 0;font-weight:600" id="cp-tp-confirm-to"></td>
 					</tr>
+					<tr>
+						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">Abbreviation</td>
+						<td style="padding:6px 0;font-family:monospace" id="cp-tp-confirm-abbr"></td>
+					</tr>
 				</table>
+				<div id="cp-tp-abbr-warning" class="cp-warning" style="display:none;margin-top:12px">
+					<i class="fas fa-exclamation-triangle"></i>
+					<div>The abbreviation <strong id="cp-tp-abbr-conflict-abbr"></strong> is already used by <strong id="cp-tp-abbr-conflict-name"></strong> in the destination kingdom. Enter a new abbreviation for this park.</div>
+				</div>
+				<div id="cp-tp-abbr-field" style="display:none;margin-top:12px">
+					<label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">New Abbreviation <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="cp-tp-new-abbr" maxlength="3" autocomplete="off" style="width:80px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px;text-transform:uppercase" placeholder="e.g. ABC">
+				</div>
 				<p style="font-size:12px;color:#e53e3e;margin:16px 0 0">This will move all players in the park to the new kingdom.</p>
 			</div>
 		</div>
@@ -1008,9 +1020,11 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	   ================================================== */
 	(function() {
 		var confirming = false;
+		var tpAbbrData = null;
 
 		function tpReset(clearFields) {
 			confirming = false;
+			tpAbbrData = null;
 			document.getElementById('cp-tp-search-panel').style.display  = '';
 			document.getElementById('cp-tp-confirm-panel').style.display = 'none';
 			document.getElementById('cp-tp-back-btn').style.display      = 'none';
@@ -1026,13 +1040,26 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			}
 		}
 
-		function tpShowConfirm() {
-			var parkName   = document.getElementById('cp-tp-park-name').value;
+		function tpShowConfirm(abbr, taken, conflictName) {
+			var parkName    = document.getElementById('cp-tp-park-name').value;
 			var fromKingdom = document.getElementById('cp-tp-source-kingdom').value || '(unknown)';
-			var toKingdom  = document.getElementById('cp-tp-kingdom-name').value;
+			var toKingdom   = document.getElementById('cp-tp-kingdom-name').value;
 			document.getElementById('cp-tp-confirm-park').textContent = parkName;
 			document.getElementById('cp-tp-confirm-from').textContent = fromKingdom;
 			document.getElementById('cp-tp-confirm-to').textContent   = toKingdom;
+			document.getElementById('cp-tp-confirm-abbr').textContent = abbr;
+			var warnEl  = document.getElementById('cp-tp-abbr-warning');
+			var fieldEl = document.getElementById('cp-tp-abbr-field');
+			if (taken) {
+				document.getElementById('cp-tp-abbr-conflict-abbr').textContent = abbr;
+				document.getElementById('cp-tp-abbr-conflict-name').textContent = conflictName;
+				document.getElementById('cp-tp-new-abbr').value = abbr;
+				warnEl.style.display  = '';
+				fieldEl.style.display = '';
+			} else {
+				warnEl.style.display  = 'none';
+				fieldEl.style.display = 'none';
+			}
 			document.getElementById('cp-tp-search-panel').style.display  = 'none';
 			document.getElementById('cp-tp-confirm-panel').style.display = '';
 			document.getElementById('cp-tp-back-btn').style.display      = '';
@@ -1072,12 +1099,45 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			var kingdomId = document.getElementById('cp-tp-kingdom-id').value;
 			if (!parkId || !kingdomId) return;
 			if (!confirming) {
-				confirming = true;
-				tpShowConfirm();
+				var btn = this;
+				btn.disabled  = true;
+				btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+				var fd = new FormData();
+				fd.append('ParkId', parkId);
+				fd.append('KingdomId', kingdomId);
+				fetch(UIR + 'Admin/ajax/checkparkabbr', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(d) {
+						if (d.status !== 0) {
+							btn.disabled  = false;
+							btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
+							cpShowFeedback('cp-tp-feedback', d.error || 'Error checking abbreviation.', false);
+							return;
+						}
+						tpAbbrData = { abbr: d.abbr, taken: d.taken, conflictName: d.conflictName };
+						confirming = true;
+						tpShowConfirm(d.abbr, d.taken, d.conflictName);
+					})
+					.catch(function() {
+						btn.disabled  = false;
+						btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
+						cpShowFeedback('cp-tp-feedback', 'Error checking abbreviation. Please try again.', false);
+					});
 				return;
 			}
+			if (tpAbbrData && tpAbbrData.taken) {
+				var newAbbr = document.getElementById('cp-tp-new-abbr').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+				if (newAbbr.length < 2 || newAbbr.length > 3) {
+					cpShowFeedback('cp-tp-feedback', 'Please enter a 2–3 character abbreviation.', false);
+					return;
+				}
+			}
+			var postData = { ParkId: parkId, KingdomId: kingdomId };
+			if (tpAbbrData && tpAbbrData.taken) {
+				postData.Abbreviation = document.getElementById('cp-tp-new-abbr').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+			}
 			var btn = this;
-			cpPost(UIR + 'Admin/ajax/transferpark', { ParkId: parkId, KingdomId: kingdomId },
+			cpPost(UIR + 'Admin/ajax/transferpark', postData,
 				btn, 'cp-tp-feedback', function() {
 					cpShowFeedback('cp-tp-feedback',
 						'Park transferred. <a href="' + UIR + 'Park/profile/' + parkId + '">View park</a> · ' +
