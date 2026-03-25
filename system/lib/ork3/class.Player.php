@@ -533,7 +533,12 @@ class Player extends Ork3 {
 				$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
 				$this->mundane->password_salt = md5(rand().microtime());
 				$this->mundane->park_member_since = date('Y-m-d');
+				$this->mundane->token                = md5(uniqid(rand(), true));
+				$this->mundane->xtoken               = md5(uniqid(rand(), true));
+				$this->mundane->waiver_ext           = '';
+				$this->mundane->reeve_qualified_until = '0000-00-00';
 				$this->mundane->save();
+				$new_mundane_id = (int)$this->mundane->mundane_id;
 
 				Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
 
@@ -594,10 +599,10 @@ class Player extends Ork3 {
 				}
 				$this->mundane->save();
 				if (strlen($request['Heraldry'])) {
-					$request['MundaneId'] = $this->mundane->mundane_id;
+					$request['MundaneId'] = $new_mundane_id;
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
 				}
-				return Success($this->mundane->mundane_id);
+				return Success($new_mundane_id);
 			} else {
 				return InvalidParameter();
 			}
