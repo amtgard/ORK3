@@ -378,6 +378,8 @@ class Controller_Kingdom extends Controller {
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 		$this->data['CanAddPark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, (int)$kingdom_id, AUTH_CREATE);
+		$this->data['IsOrkAdmin'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 
 		$knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
@@ -414,9 +416,17 @@ class Controller_Kingdom extends Controller {
 				$this->data['ParkTitleId_options'][$pt['ParkTitleId']] = $pt['Title'];
 			}
 
+			$parentKingdomId   = (int)($kd['KingdomInfo']['ParentKingdomId'] ?? 0);
+			$parentKingdomName = '';
+			if ($parentKingdomId > 0) {
+				$parentKingdomName = $this->Kingdom->get_kingdom_name($parentKingdomId);
+			}
 			$this->data['AdminInfo'] = [
-				'Name'         => $kd['KingdomInfo']['KingdomName']  ?? '',
-				'Abbreviation' => $kd['KingdomInfo']['Abbreviation'] ?? '',
+				'Name'             => $kd['KingdomInfo']['KingdomName']  ?? '',
+				'Abbreviation'     => $kd['KingdomInfo']['Abbreviation'] ?? '',
+				'IsPrincipality'   => !empty($kd['KingdomInfo']['IsPrincipality']),
+				'ParentKingdomId'  => $parentKingdomId,
+				'ParentKingdomName'=> $parentKingdomName,
 			];
 
 			$adminConfig = [];

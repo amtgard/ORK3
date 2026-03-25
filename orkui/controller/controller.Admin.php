@@ -20,6 +20,8 @@ class Controller_Admin extends Controller {
 		unset($this->session->kingdom_name);
 		unset($this->session->park_name);
 		unset($this->session->park_id);
+		unset($this->data['menu']['kingdom']);
+		unset($this->data['menu']['park']);
 
 		$this->data['ActiveKingdomSummary'] = $this->Report->GetActiveKingdomsSummary();
 		$this->data['TotalActivePlayers'] = $this->Report->GetDistinctActivePlayerCount(26);
@@ -2078,6 +2080,45 @@ class Controller_Admin extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'checkabbr') {
+			$abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$excludeId = (int)($_POST['ExcludeKingdomId'] ?? 0);
+			if (!strlen($abbr)) { echo json_encode(['status' => 0, 'taken' => false]); exit; }
+			global $DB;
+			$DB->Clear();
+			$excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
+			$rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
+			echo ($rs && $rs->Next())
+				? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
+				: json_encode(['status' => 0, 'taken' => false]);
+
+		} elseif ($action === 'createkingdom') {
+			$this->load_model('Kingdom');
+			$name   = trim($_POST['Name'] ?? '');
+			$abbr   = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$parentId = (int)($_POST['ParentKingdomId'] ?? 0);
+			if (!strlen($name)) { echo json_encode(['status' => 1, 'error' => 'Kingdom must have a name.']); exit; }
+			if (!strlen($abbr)) { echo json_encode(['status' => 1, 'error' => 'Kingdom must have an abbreviation.']); exit; }
+			$r = $this->Kingdom->create_kingdom([
+				'Token'                   => $this->session->token,
+				'Name'                    => $name,
+				'Abbreviation'            => $abbr,
+				'ParentKingdomId'         => $parentId,
+				'AttendancePeriodType'    => in_array($_POST['AttendancePeriodType'] ?? '', ['week','month']) ? $_POST['AttendancePeriodType'] : 'week',
+				'AttendancePeriod'        => max(1, (int)($_POST['AttendancePeriod']        ?? 26)),
+				'AttendanceWeeklyMinimum' => max(0, (int)($_POST['AttendanceWeeklyMinimum'] ?? 2)),
+				'AttendanceDailyMinimum'  => max(0, (int)($_POST['AttendanceDailyMinimum']  ?? 6)),
+				'AttendanceCreditMinimum' => max(0, (int)($_POST['AttendanceCreditMinimum'] ?? 9)),
+				'MonthlyCreditMaximum'    => max(0, (int)($_POST['MonthlyCreditMaximum']    ?? 4)),
+				'DuesPeriodType'          => in_array($_POST['DuesPeriodType'] ?? '', ['week','month']) ? $_POST['DuesPeriodType'] : 'month',
+				'DuesPeriod'              => max(1, (int)($_POST['DuesPeriod']   ?? 6)),
+				'DuesAmount'              => max(0, (float)($_POST['DuesAmount'] ?? 6)),
+				'KingdomDuesTake'         => max(0, (float)($_POST['KingdomDuesTake'] ?? 1)),
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'kingdomId' => (int)($r['Detail'] ?? 0)])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} else {

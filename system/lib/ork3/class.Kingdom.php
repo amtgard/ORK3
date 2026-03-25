@@ -498,6 +498,39 @@ class Kingdom  extends Ork3 {
 		return $response;
 	}
 
+	public function SetKingdomParent($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			$kingdom_id = (int)$request['KingdomId'];
+			$parent_id  = (int)$request['ParentKingdomId'];
+			// Cannot make a kingdom its own parent or create a circular reference
+			if ($parent_id === $kingdom_id) {
+				return InvalidParameter('A kingdom cannot be its own parent.');
+			}
+			$this->kingdom->clear();
+			$this->kingdom->kingdom_id = $kingdom_id;
+			if (!$this->kingdom->find()) {
+				return InvalidParameter('Kingdom not found.');
+			}
+			if ($parent_id > 0) {
+				$this->kingdom->clear();
+				$this->kingdom->kingdom_id = $parent_id;
+				if (!$this->kingdom->find()) {
+					return InvalidParameter('Parent kingdom not found.');
+				}
+				$this->kingdom->clear();
+				$this->kingdom->kingdom_id = $kingdom_id;
+				$this->kingdom->find();
+			}
+			$this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
+			$this->kingdom->parent_kingdom_id = $parent_id;
+			$this->kingdom->modified = date('Y-m-d H:i:s', time());
+			$this->kingdom->save();
+			return Success();
+		}
+		return NoAuthorization();
+	}
+
 	public function GetOfficers($request) {
 		$kingdom_id = mysql_real_escape_string($request['KingdomId']);
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);

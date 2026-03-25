@@ -3324,6 +3324,42 @@ $(document).ready(function() {
     function wireDetails() {
         var btn = gid('kn-admin-details-save');
         if (!btn) return;
+
+        function checkDetailsReady() {
+            var name = (gid('kn-admin-name').value || '').trim();
+            var abbr = (gid('kn-admin-abbr').value || '').replace(/[^A-Za-z0-9]/g, '');
+            btn.disabled = !(name && abbr);
+        }
+        gid('kn-admin-name').addEventListener('input', checkDetailsReady);
+        gid('kn-admin-abbr').addEventListener('input', checkDetailsReady);
+
+        var abbrWarnTimer = null;
+        var abbrInput = gid('kn-admin-abbr');
+        if (abbrInput) {
+            abbrInput.addEventListener('input', function() {
+                var warn = gid('kn-admin-abbr-warn');
+                clearTimeout(abbrWarnTimer);
+                var abbr = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                if (!abbr) { if (warn) warn.style.display = 'none'; return; }
+                abbrWarnTimer = setTimeout(function() {
+                    var fd = new FormData();
+                    fd.append('Abbreviation', abbr);
+                    fd.append('ExcludeKingdomId', KnConfig.kingdomId);
+                    fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/checkabbr', { method: 'POST', body: fd })
+                        .then(function(r) { return r.json(); })
+                        .then(function(r) {
+                            if (!warn) return;
+                            if (r.taken) {
+                                warn.textContent = '\u26a0\ufe0f "' + abbr + '" is already used by ' + r.name + '.';
+                                warn.style.display = '';
+                            } else {
+                                warn.style.display = 'none';
+                            }
+                        });
+                }, 400);
+            });
+        }
+
         btn.addEventListener('click', function() {
             clearFeedback('kn-admin-details-feedback');
             var name = (gid('kn-admin-name').value || '').trim();
@@ -3901,6 +3937,102 @@ $(document).ready(function() {
         });
     }
 
+    // ── Section: Principality (ORK Admins only) ──────────────
+    function wirePrinz() {
+        if (!KnConfig.isOrkAdmin) return;
+        wireToggle('kn-admin-hdr-prinz', 'kn-admin-body-prinz', 'kn-admin-chev-prinz');
+
+        // Autocomplete for parent kingdom search
+        var parentId = KnConfig.adminInfo.ParentKingdomId || 0;
+        var nameInput = gid('kn-admin-prinz-parent-name');
+        var hiddenInput = gid('kn-admin-prinz-parent-id');
+        if (nameInput) {
+            $(nameInput).autocomplete({
+                source: function(req, res) {
+                    $.getJSON(KnConfig.httpService + 'Search/SearchService.php',
+                        { Action: 'Search/Kingdom', name: req.term },
+                        function(data) {
+                            res($.map(data || [], function(k) {
+                                return { label: k.Name + (k.Abbreviation ? ' (' + k.Abbreviation + ')' : ''), value: k.KingdomId };
+                            }));
+                        }
+                    );
+                },
+                focus: function(e, ui) { $(nameInput).val(ui.item.label); return false; },
+                select: function(e, ui) {
+                    $(nameInput).val(ui.item.label);
+                    parentId = ui.item.value;
+                    if (hiddenInput) hiddenInput.value = parentId;
+                    var demoteBtn = gid('kn-admin-prinz-demote');
+                    if (demoteBtn) demoteBtn.disabled = false;
+                    return false;
+                },
+                change: function(e, ui) {
+                    if (!ui.item) {
+                        parentId = 0;
+                        if (hiddenInput) hiddenInput.value = 0;
+                        var demoteBtn = gid('kn-admin-prinz-demote');
+                        if (demoteBtn) demoteBtn.disabled = true;
+                    }
+                    return false;
+                },
+                delay: 250, minLength: 2
+            });
+        }
+
+        function doSetParent(newParentId, successMsg) {
+            var fd = new FormData();
+            fd.append('ParentKingdomId', newParentId);
+            fetch(BASE_URL + 'setparent', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (r && r.status === 0) {
+                        feedback('kn-admin-prinz-feedback', successMsg, true);
+                        _knDirty = true;
+                    } else {
+                        feedback('kn-admin-prinz-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    }
+                })
+                .catch(function() { feedback('kn-admin-prinz-feedback', 'Request failed.', false); });
+        }
+
+        // Change sponsor (principality mode)
+        var sponsorSaveBtn = gid('kn-admin-prinz-sponsor-save');
+        if (sponsorSaveBtn) {
+            sponsorSaveBtn.addEventListener('click', function() {
+                clearFeedback('kn-admin-prinz-feedback');
+                var newParentId = parseInt(gid('kn-admin-prinz-parent-id').value || '0', 10);
+                if (!newParentId) { feedback('kn-admin-prinz-feedback', 'Please select a sponsor kingdom.', false); return; }
+                doSetParent(newParentId, 'Sponsor kingdom updated.');
+            });
+        }
+
+        // Convert to kingdom
+        var promoteBtn = gid('kn-admin-prinz-promote');
+        if (promoteBtn) {
+            promoteBtn.addEventListener('click', function() {
+                knConfirm('Remove this principality\'s sponsor and make it a full kingdom?', function() {
+                    clearFeedback('kn-admin-prinz-feedback');
+                    doSetParent(0, 'Converted to kingdom. Reload to see updated status.');
+                }, 'Convert to Kingdom');
+            });
+        }
+
+        // Make principality (kingdom mode)
+        var demoteBtn = gid('kn-admin-prinz-demote');
+        if (demoteBtn) {
+            demoteBtn.addEventListener('click', function() {
+                var newParentId = parseInt(gid('kn-admin-prinz-parent-id').value || '0', 10);
+                if (!newParentId) { feedback('kn-admin-prinz-feedback', 'Please select a sponsor kingdom.', false); return; }
+                var parentName = (gid('kn-admin-prinz-parent-name') || {}).value || 'the selected kingdom';
+                knConfirm('Make this a principality sponsored by ' + parentName + '?', function() {
+                    clearFeedback('kn-admin-prinz-feedback');
+                    doSetParent(newParentId, 'Converted to principality. Reload to see updated status.');
+                }, 'Make Principality');
+            });
+        }
+    }
+
     // ── Wire everything in ready() ────────────────────────────
     $(document).ready(function() {
         wireToggle('kn-admin-hdr-details', 'kn-admin-body-details', 'kn-admin-chev-details');
@@ -3911,6 +4043,7 @@ $(document).ready(function() {
         wireToggle('kn-admin-hdr-ops',     'kn-admin-body-ops',     'kn-admin-chev-ops');
 
         wireDetails();
+        wirePrinz();
         wireConfig();
         wireTitles();
         wireAwards();

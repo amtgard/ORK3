@@ -539,6 +539,35 @@ class Controller_KingdomAjax extends Controller {
 				$titles[] = ['ParkTitleId' => (int)$pt['ParkTitleId'], 'Title' => $pt['Title']];
 			}
 			echo json_encode(['status' => 0, 'titles' => $titles]);
+
+		} elseif ($action === 'setparent') {
+		$uid = (int)($this->session->user_id ?? 0);
+		if (!$uid || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			echo json_encode(['status' => 5, 'error' => 'Unauthorized']); exit;
+		}
+		$this->load_model('Kingdom');
+		$parentId = (int)($_POST['ParentKingdomId'] ?? 0);
+		$r = $this->Kingdom->set_kingdom_parent([
+			'Token'           => $this->session->token,
+			'KingdomId'       => $kingdom_id,
+			'ParentKingdomId' => $parentId,
+		]);
+		echo ($r['Status'] == 0)
+			? json_encode(['status' => 0])
+			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+	} elseif ($action === 'checkabbr') {
+			$abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$excludeId = (int)($_POST['ExcludeKingdomId'] ?? 0);
+			if (!strlen($abbr)) { echo json_encode(['status' => 0, 'taken' => false]); exit; }
+			global $DB;
+			$DB->Clear();
+			$excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
+			$rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
+			echo ($rs && $rs->Next())
+				? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
+				: json_encode(['status' => 0, 'taken' => false]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

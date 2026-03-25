@@ -133,11 +133,11 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		<div class="cp-section">
 			<div class="cp-section-title"><i class="fas fa-crown"></i> Kingdoms</div>
 			<div class="cp-action-grid">
-				<a class="cp-action-card" href="<?= UIR ?>Admin/createkingdom">
+				<button class="cp-action-card" onclick="cpOpenModal('cp-createkingdom-overlay')">
 					<div class="cp-action-icon cp-action-icon-blue"><i class="fas fa-plus-circle"></i></div>
 					<div class="cp-action-label">Create Kingdom</div>
 					<div class="cp-action-desc">Add a new kingdom or principality</div>
-				</a>
+				</button>
 				<button class="cp-action-card" onclick="cpOpenModal('cp-createpark-overlay')">
 					<div class="cp-action-icon cp-action-icon-green"><i class="fas fa-tree"></i></div>
 					<div class="cp-action-label">Create Park</div>
@@ -164,11 +164,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-icon cp-action-icon-purple"><i class="fas fa-compress-arrows-alt"></i></div>
 					<div class="cp-action-label">Merge Players</div>
 					<div class="cp-action-desc">Combine two duplicate player records</div>
-				</button>
-				<button class="cp-action-card" onclick="cpOpenModal('cp-suspend-overlay')">
-					<div class="cp-action-icon cp-action-icon-orange"><i class="fas fa-user-clock"></i></div>
-					<div class="cp-action-label">Suspend Player</div>
-					<div class="cp-action-desc">Issue or lift a player suspension</div>
 				</button>
 				</div>
 		</div>
@@ -482,59 +477,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	</div>
 </div>
 
-<!-- ---- Suspend Player ---- -->
-<div class="cp-overlay" id="cp-suspend-overlay">
-	<div class="cp-modal-box" style="width:560px">
-		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-user-clock" style="margin-right:8px;color:#c05621"></i>Suspend / Unsuspend Player</h3>
-			<button class="cp-modal-close" onclick="cpCloseModal('cp-suspend-overlay')">&times;</button>
-		</div>
-		<div class="cp-modal-body">
-			<div class="cp-feedback" id="cp-susp-feedback"></div>
-			<div class="cp-field cp-field-ac">
-				<label>Player <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="cp-susp-player-name" autocomplete="off" placeholder="Search all players…">
-				<input type="hidden" id="cp-susp-player-id">
-				<div class="kn-ac-results" id="cp-susp-player-results"></div>
-			</div>
-			<div class="cp-field" style="margin-top:4px">
-				<label>Action</label>
-				<div class="cp-radio-group">
-					<label><input type="radio" name="cp-susp-action" value="1" checked> Suspend</label>
-					<label><input type="radio" name="cp-susp-action" value="0"> Unsuspend / Restore</label>
-				</div>
-			</div>
-			<div id="cp-susp-details">
-				<div class="cp-field-row">
-					<div class="cp-field">
-						<label>Suspended At</label>
-						<input type="date" id="cp-susp-at">
-					</div>
-					<div class="cp-field">
-						<label>Suspended Until</label>
-						<input type="date" id="cp-susp-until">
-					</div>
-				</div>
-				<div class="cp-field">
-					<label>Reason / Comment</label>
-					<textarea id="cp-susp-reason" rows="2" style="resize:vertical" placeholder="Reason for suspension…"></textarea>
-				</div>
-				<div class="cp-field">
-					<label>Propagate to local groups</label>
-					<div class="cp-radio-group">
-						<label><input type="radio" name="cp-susp-prop" value="0" checked> No</label>
-						<label><input type="radio" name="cp-susp-prop" value="1"> Yes</label>
-					</div>
-				</div>
-			</div>
-		</div>
-		<div class="cp-modal-footer">
-			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-suspend-overlay')">Cancel</button>
-			<button class="adm-btn adm-btn-primary" id="cp-susp-submit"><i class="fas fa-user-clock"></i> <span id="cp-susp-submit-label">Suspend Player</span></button>
-		</div>
-	</div>
-</div>
-
 <!-- ---- Transfer Park ---- -->
 <div class="cp-overlay" id="cp-transferpark-overlay">
 	<div class="cp-modal-box">
@@ -654,6 +596,100 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	</div>
 </div>
 
+
+<!-- ---- Create Kingdom ---- -->
+<div class="cp-overlay" id="cp-createkingdom-overlay">
+	<div class="cp-modal-box" style="width:560px">
+		<div class="cp-modal-header">
+			<h3 class="cp-modal-title"><i class="fas fa-crown" style="margin-right:8px;color:#2b6cb0"></i>Create Kingdom</h3>
+			<button class="cp-modal-close" onclick="cpCloseModal('cp-createkingdom-overlay')">&times;</button>
+		</div>
+		<div class="cp-modal-body" style="overflow:visible">
+			<div class="cp-feedback" id="cp-crkn-feedback"></div>
+			<div class="cp-field-row">
+				<div class="cp-field">
+					<label for="cp-crkn-name">Name <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="cp-crkn-name" placeholder="e.g. Iron Mountains" maxlength="100" autocomplete="off">
+				</div>
+				<div class="cp-field" style="max-width:120px">
+					<label for="cp-crkn-abbr">Abbreviation <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="cp-crkn-abbr" placeholder="e.g. IM" maxlength="3" autocomplete="off" style="text-transform:uppercase">
+					<div id="cp-crkn-abbr-warn" style="display:none;color:#c05621;font-size:12px;margin-top:4px"></div>
+				</div>
+			</div>
+			<div class="cp-field" style="margin-top:12px">
+				<label><input type="checkbox" id="cp-crkn-is-prinz"> &nbsp;This is a Principality</label>
+			</div>
+			<div class="cp-field cp-field-ac" id="cp-crkn-prinz-row" style="display:none;margin-top:12px">
+				<label>Parent Kingdom <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="cp-crkn-parent-name" autocomplete="off" placeholder="Search kingdoms…">
+				<input type="hidden" id="cp-crkn-parent-id">
+				<div class="kn-ac-results" id="cp-crkn-parent-results"></div>
+			</div>
+			<details style="margin-top:16px">
+				<summary style="cursor:pointer;font-weight:600;color:#4a5568;font-size:13px">Advanced Settings</summary>
+				<div style="margin-top:12px">
+					<div class="cp-field-row">
+						<div class="cp-field">
+							<label for="cp-crkn-att-type">Attendance Period Type</label>
+							<select id="cp-crkn-att-type">
+								<option value="week" selected>Week</option>
+								<option value="month">Month</option>
+							</select>
+						</div>
+						<div class="cp-field">
+							<label for="cp-crkn-att-period">Attendance Period</label>
+							<input type="number" id="cp-crkn-att-period" value="26" min="1" max="52">
+						</div>
+					</div>
+					<div class="cp-field-row" style="margin-top:8px">
+						<div class="cp-field">
+							<label for="cp-crkn-att-weekly-min">Weekly Min</label>
+							<input type="number" id="cp-crkn-att-weekly-min" value="2" min="0">
+						</div>
+						<div class="cp-field">
+							<label for="cp-crkn-att-daily-min">Daily Min</label>
+							<input type="number" id="cp-crkn-att-daily-min" value="6" min="0">
+						</div>
+						<div class="cp-field">
+							<label for="cp-crkn-att-credit-min">Credit Min</label>
+							<input type="number" id="cp-crkn-att-credit-min" value="9" min="0">
+						</div>
+						<div class="cp-field">
+							<label for="cp-crkn-monthly-credit-max">Monthly Credit Max</label>
+							<input type="number" id="cp-crkn-monthly-credit-max" value="4" min="0">
+						</div>
+					</div>
+					<div class="cp-field-row" style="margin-top:8px">
+						<div class="cp-field">
+							<label for="cp-crkn-dues-type">Dues Period Type</label>
+							<select id="cp-crkn-dues-type">
+								<option value="month" selected>Month</option>
+								<option value="week">Week</option>
+							</select>
+						</div>
+						<div class="cp-field">
+							<label for="cp-crkn-dues-period">Dues Period</label>
+							<input type="number" id="cp-crkn-dues-period" value="6" min="1">
+						</div>
+						<div class="cp-field">
+							<label for="cp-crkn-dues-amount">Dues Amount</label>
+							<input type="number" id="cp-crkn-dues-amount" value="6" min="0" step="0.01">
+						</div>
+						<div class="cp-field">
+							<label for="cp-crkn-dues-take">Kingdom Take</label>
+							<input type="number" id="cp-crkn-dues-take" value="1" min="0" step="0.01">
+						</div>
+					</div>
+				</div>
+			</details>
+		</div>
+		<div class="cp-modal-footer">
+			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-createkingdom-overlay')">Cancel</button>
+			<button class="adm-btn adm-btn-primary" id="cp-crkn-submit" disabled><i class="fas fa-plus"></i> Create Kingdom</button>
+		</div>
+	</div>
+</div>
 
 <!-- ---- Create Park ---- -->
 <div class="cp-overlay" id="cp-createpark-overlay">
@@ -967,40 +1003,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	});
 
 	/* ==================================================
-	   SUSPEND PLAYER
-	   ================================================== */
-	cpAc({ inputId:'cp-susp-player-name', hiddenId:'cp-susp-player-id', resultsId:'cp-susp-player-results',
-		fetchFn: function(q, cb) { cpSearchPlayersGlobal(q, cb, true); } }); // include inactive/suspended
-	// Toggle suspend/unsuspend label and detail fields
-	document.querySelectorAll('input[name="cp-susp-action"]').forEach(function(r) {
-		r.addEventListener('change', function() {
-			var isSuspend = this.value === '1';
-			document.getElementById('cp-susp-details').style.display = isSuspend ? '' : 'none';
-			document.getElementById('cp-susp-submit-label').textContent = isSuspend ? 'Suspend Player' : 'Unsuspend Player';
-		});
-	});
-	document.getElementById('cp-susp-submit').addEventListener('click', function() {
-		var pid = document.getElementById('cp-susp-player-id').value;
-		if (!pid) { cpShowFeedback('cp-susp-feedback', 'Please select a player.', false); return; }
-		var action = document.querySelector('input[name="cp-susp-action"]:checked').value;
-		var prop   = document.querySelector('input[name="cp-susp-prop"]:checked');
-		var btn = this;
-		cpPost(UIR + 'Admin/ajax/suspendplayer', {
-			MundaneId:            pid,
-			Suspended:            action,
-			SuspendedAt:          document.getElementById('cp-susp-at').value,
-			SuspendedUntil:       document.getElementById('cp-susp-until').value,
-			Suspension:           document.getElementById('cp-susp-reason').value.trim(),
-			SuspensionPropagates: prop ? prop.value : '0',
-		}, btn, 'cp-susp-feedback', function() {
-			var label = action === '1' ? 'suspended' : 'unsuspended';
-			cpShowFeedback('cp-susp-feedback', 'Player has been ' + label + '. <a href="' + UIR + 'Reports/suspended">View suspended players</a>', true);
-			document.getElementById('cp-susp-player-name').value = '';
-			document.getElementById('cp-susp-player-id').value = '';
-		});
-	});
-
-	/* ==================================================
 	   TRANSFER PARK
 	   ================================================== */
 	(function() {
@@ -1234,6 +1236,89 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				btn, 'cp-crpk-feedback', function(r) {
 					window.location.href = UIR + 'Park/profile/' + r.parkId;
 				});
+		});
+	})();
+
+	/* ==================================================
+	   CREATE KINGDOM
+	   ================================================== */
+	(function() {
+		var parentId = '';
+		document.getElementById('cp-crkn-is-prinz').addEventListener('change', function() {
+			var row = document.getElementById('cp-crkn-prinz-row');
+			row.style.display = this.checked ? '' : 'none';
+			if (!this.checked) {
+				document.getElementById('cp-crkn-parent-name').value = '';
+				document.getElementById('cp-crkn-parent-id').value = '';
+				parentId = '';
+			}
+			cpCrknCheckReady();
+		});
+		function cpCrknCheckReady() {
+			var name    = document.getElementById('cp-crkn-name').value.trim();
+			var abbr    = document.getElementById('cp-crkn-abbr').value.trim();
+			var isPrinz = document.getElementById('cp-crkn-is-prinz').checked;
+			var ok = name && abbr && (!isPrinz || parentId);
+			document.getElementById('cp-crkn-submit').disabled = !ok;
+		}
+
+		cpAc({
+			inputId: 'cp-crkn-parent-name',
+			hiddenId: 'cp-crkn-parent-id',
+			resultsId: 'cp-crkn-parent-results',
+			fetchFn: cpSearchKingdoms,
+			onSelect: function(id) { parentId = id; cpCrknCheckReady(); },
+			onClear:  function()   { parentId = ''; cpCrknCheckReady(); }
+		});
+
+		document.getElementById('cp-crkn-name').addEventListener('input', cpCrknCheckReady);
+		document.getElementById('cp-crkn-abbr').addEventListener('input', cpCrknCheckReady);
+		document.getElementById('cp-crkn-is-prinz').addEventListener('change', cpCrknCheckReady);
+
+		var abbrTimer = null;
+		document.getElementById('cp-crkn-abbr').addEventListener('input', function() {
+			var warn = document.getElementById('cp-crkn-abbr-warn');
+			clearTimeout(abbrTimer);
+			var abbr = this.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+			if (!abbr) { if (warn) warn.style.display = 'none'; return; }
+			abbrTimer = setTimeout(function() {
+				cpPost(UIR + 'Admin/ajax/checkabbr', { Abbreviation: abbr }, null, null, function(r) {
+					if (!warn) return;
+					if (r.taken) {
+						warn.textContent = '\u26a0\ufe0f "' + abbr + '" is already used by ' + r.name + '.';
+						warn.style.display = '';
+					} else {
+						warn.style.display = 'none';
+					}
+				});
+			}, 400);
+		});
+
+		document.getElementById('cp-crkn-submit').addEventListener('click', function() {
+			var name   = document.getElementById('cp-crkn-name').value.trim();
+			var abbr   = document.getElementById('cp-crkn-abbr').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+			var isPrinz = document.getElementById('cp-crkn-is-prinz').checked;
+			if (!name) { cpShowFeedback('cp-crkn-feedback', 'Kingdom must have a name.', false); return; }
+			if (!abbr) { cpShowFeedback('cp-crkn-feedback', 'Kingdom must have an abbreviation.', false); return; }
+			if (isPrinz && !parentId) { cpShowFeedback('cp-crkn-feedback', 'Please select a parent kingdom.', false); return; }
+			var btn = this;
+			cpPost(UIR + 'Admin/ajax/createkingdom', {
+				Name:                   name,
+				Abbreviation:           abbr,
+				ParentKingdomId:        isPrinz ? parentId : 0,
+				AttendancePeriodType:   document.getElementById('cp-crkn-att-type').value,
+				AttendancePeriod:       document.getElementById('cp-crkn-att-period').value,
+				AttendanceWeeklyMinimum:  document.getElementById('cp-crkn-att-weekly-min').value,
+				AttendanceDailyMinimum:   document.getElementById('cp-crkn-att-daily-min').value,
+				AttendanceCreditMinimum:  document.getElementById('cp-crkn-att-credit-min').value,
+				MonthlyCreditMaximum:     document.getElementById('cp-crkn-monthly-credit-max').value,
+				DuesPeriodType:   document.getElementById('cp-crkn-dues-type').value,
+				DuesPeriod:       document.getElementById('cp-crkn-dues-period').value,
+				DuesAmount:       document.getElementById('cp-crkn-dues-amount').value,
+				KingdomDuesTake:  document.getElementById('cp-crkn-dues-take').value,
+			}, btn, 'cp-crkn-feedback', function(r) {
+				window.location.href = UIR + 'Kingdom/profile/' + r.kingdomId;
+			});
 		});
 	})();
 
