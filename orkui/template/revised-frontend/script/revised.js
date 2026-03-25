@@ -4092,19 +4092,6 @@ $(document).ready(function() {
             });
         }
 
-        // Make principality (kingdom mode)
-        var demoteBtn = gid('kn-admin-prinz-demote');
-        if (demoteBtn) {
-            demoteBtn.addEventListener('click', function() {
-                var newParentId = parseInt(gid('kn-admin-prinz-parent-id').value || '0', 10);
-                if (!newParentId) { feedback('kn-admin-prinz-feedback', 'Please select a sponsor kingdom.', false); return; }
-                var parentName = (gid('kn-admin-prinz-parent-name') || {}).value || 'the selected kingdom';
-                knConfirm('Make this a principality sponsored by ' + parentName + '?', function() {
-                    clearFeedback('kn-admin-prinz-feedback');
-                    doSetParent(newParentId, 'Converted to principality. Reload to see updated status.');
-                }, 'Make Principality');
-            });
-        }
     }
 
     // ── Wire everything in ready() ────────────────────────────

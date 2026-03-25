@@ -1174,16 +1174,15 @@ var KnConfig = {
 				</div>
 			</div>
 
-			<!-- ── Panel: Principality (ORK Admins only) ── -->
-		<?php if (!empty($IsOrkAdmin)): ?>
+			<!-- ── Panel: Principality (ORK Admins only, shown only when this entity is a principality) ── -->
+		<?php if (!empty($IsOrkAdmin) && !empty($AdminInfo['IsPrincipality'])): ?>
 		<div class="kn-admin-panel" id="kn-admin-panel-prinz">
 			<button class="kn-admin-panel-hdr" id="kn-admin-hdr-prinz" aria-expanded="false">
-				<span><i class="fas fa-crown" style="margin-right:6px;color:#a0aec0"></i>Principality / Kingdom Status</span>
+				<span><i class="fas fa-crown" style="margin-right:6px;color:#a0aec0"></i>Principality Status</span>
 				<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-prinz"></i>
 			</button>
 			<div class="kn-admin-panel-body" id="kn-admin-body-prinz" style="display:none">
 				<div id="kn-admin-prinz-feedback" class="kn-admin-feedback" style="display:none"></div>
-				<?php if (!empty($AdminInfo['IsPrincipality'])): ?>
 				<p style="margin:0 0 12px;font-size:13px;color:#4a5568">
 					This is a <strong>Principality</strong> sponsored by
 					<strong><?= htmlspecialchars($AdminInfo['ParentKingdomName']) ?></strong>.
@@ -1206,22 +1205,6 @@ var KnConfig = {
 						<i class="fas fa-crown"></i> Convert to Kingdom
 					</button>
 				</div>
-				<?php else: ?>
-				<p style="margin:0 0 12px;font-size:13px;color:#4a5568">
-					This is a <strong>Kingdom</strong>. You can make it a principality by selecting a sponsor kingdom below.
-				</p>
-				<div class="kn-admin-field cp-field-ac">
-					<label>Sponsor Kingdom <span style="color:#e53e3e">*</span></label>
-					<input type="text" id="kn-admin-prinz-parent-name" autocomplete="off" placeholder="Search kingdoms…">
-					<input type="hidden" id="kn-admin-prinz-parent-id">
-					<div class="kn-ac-results" id="kn-admin-prinz-parent-results"></div>
-				</div>
-				<div style="margin-top:12px">
-					<button class="kn-admin-save-btn" id="kn-admin-prinz-demote" disabled>
-						<i class="fas fa-sitemap"></i> Make Principality
-					</button>
-				</div>
-				<?php endif; ?>
 			</div>
 		</div>
 		<?php endif; ?>
