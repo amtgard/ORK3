@@ -4,6 +4,7 @@ $_od_total = count($_od_rows);
 $_od_mode  = ($OfficerDirectoryMode ?? 'kingdoms') === 'parks' ? 'parks' : 'kingdoms';
 $_od_label = $_od_mode === 'parks' ? 'Park' : 'Kingdom';
 $_od_entity_url_prefix = $_od_mode === 'parks' ? 'Park/profile/' : 'Kingdom/profile/';
+$_od_admin = !empty($IsOrkAdmin);
 
 /* Count vacancies per role */
 $_vacant = ['Monarch' => 0, 'Regent' => 0, 'PM' => 0, 'Champion' => 0, 'GMR' => 0];
@@ -107,23 +108,25 @@ foreach ($_od_rows as $_r) {
 			</thead>
 			<tbody>
 <?php
-function _od_cell($persona, $id, $uir, $given = '', $surname = '', $email = '') {
+function _od_cell($persona, $id, $uir, $given = '', $surname = '', $email = '', $admin = false) {
 	if (empty($persona) || !$id) return '<span class="od-vacant-badge">Vacant</span>';
-	$real = trim($given . ' ' . $surname);
-	$out  = '<a class="od-officer-link" href="' . $uir . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
-	if ($real)  $out .= '<span class="od-real-name">'  . htmlspecialchars($real)  . '</span>';
-	if ($email) $out .= '<a class="od-email-link" href="mailto:' . htmlspecialchars($email) . '">' . htmlspecialchars($email) . '</a>';
+	$out = '<a class="od-officer-link" href="' . $uir . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
+	if ($admin) {
+		$real = trim($given . ' ' . $surname);
+		if ($real)  $out .= '<span class="od-real-name">'  . htmlspecialchars($real)  . '</span>';
+		if ($email) $out .= '<a class="od-email-link" href="mailto:' . htmlspecialchars($email) . '">' . htmlspecialchars($email) . '</a>';
+	}
 	return $out;
 }
 foreach ($_od_rows as $row):
 ?>
 				<tr>
 					<td><a class="od-officer-link" href="<?=UIR?><?=$_od_entity_url_prefix?><?=$row['KingdomId']?>"><?=htmlspecialchars($row['KingdomName'])?></a></td>
-					<td><?=_od_cell($row['MonarchPersona'],  $row['MonarchId'],  UIR, $row['MonarchGiven'],  $row['MonarchSurname'],  $row['MonarchEmail'])?></td>
-					<td><?=_od_cell($row['RegentPersona'],   $row['RegentId'],   UIR, $row['RegentGiven'],   $row['RegentSurname'],   $row['RegentEmail'])?></td>
-					<td><?=_od_cell($row['PMPersona'],       $row['PMId'],       UIR, $row['PMGiven'],       $row['PMSurname'],       $row['PMEmail'])?></td>
-					<td><?=_od_cell($row['ChampionPersona'], $row['ChampionId'], UIR, $row['ChampionGiven'], $row['ChampionSurname'], $row['ChampionEmail'])?></td>
-					<td><?=_od_cell($row['GMRPersona'],      $row['GMRId'],      UIR, $row['GMRGiven'],      $row['GMRSurname'],      $row['GMREmail'])?></td>
+					<td><?=_od_cell($row['MonarchPersona'],  $row['MonarchId'],  UIR, $row['MonarchGiven'],  $row['MonarchSurname'],  $row['MonarchEmail'],  $_od_admin)?></td>
+					<td><?=_od_cell($row['RegentPersona'],   $row['RegentId'],   UIR, $row['RegentGiven'],   $row['RegentSurname'],   $row['RegentEmail'],   $_od_admin)?></td>
+					<td><?=_od_cell($row['PMPersona'],       $row['PMId'],       UIR, $row['PMGiven'],       $row['PMSurname'],       $row['PMEmail'],       $_od_admin)?></td>
+					<td><?=_od_cell($row['ChampionPersona'], $row['ChampionId'], UIR, $row['ChampionGiven'], $row['ChampionSurname'], $row['ChampionEmail'], $_od_admin)?></td>
+					<td><?=_od_cell($row['GMRPersona'],      $row['GMRId'],      UIR, $row['GMRGiven'],      $row['GMRSurname'],      $row['GMREmail'],      $_od_admin)?></td>
 				</tr>
 <?php endforeach; ?>
 			</tbody>
