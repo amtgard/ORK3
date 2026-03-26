@@ -427,6 +427,7 @@ class Controller_Kingdom extends Controller {
 				'IsPrincipality'   => !empty($kd['KingdomInfo']['IsPrincipality']),
 				'ParentKingdomId'  => $parentKingdomId,
 				'ParentKingdomName'=> $parentKingdomName,
+				'Active'           => $kd['KingdomInfo']['Active'] ?? 'Active',
 			];
 
 			$adminConfig = [];

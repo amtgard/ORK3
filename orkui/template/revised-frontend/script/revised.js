@@ -4094,6 +4094,42 @@ $(document).ready(function() {
 
     }
 
+    // ── Section: Active Status (ORK Admins only) ──────────────
+    function wireStatus() {
+        var btn = gid('kn-admin-status-toggle');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            var isActive = btn.dataset.active === '1';
+            var newActive = isActive ? 'Retired' : 'Active';
+            var label = isActive ? 'mark this as inactive' : 'restore this to active';
+            knConfirm('Are you sure you want to ' + label + '?', function() {
+                clearFeedback('kn-admin-ops-feedback');
+                var fd = new FormData();
+                fd.append('Active', newActive);
+                fetch(BASE_URL + 'setstatus', { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(r) {
+                        if (r && r.status === 0) {
+                            btn.dataset.active = newActive === 'Active' ? '1' : '0';
+                            gid('kn-admin-status-label').textContent = newActive === 'Active' ? 'Active' : 'Inactive';
+                            if (newActive === 'Active') {
+                                btn.innerHTML = '<i class="fas fa-ban"></i> Mark Inactive';
+                                btn.classList.add('kn-admin-ops-btn-danger');
+                            } else {
+                                btn.innerHTML = '<i class="fas fa-check-circle"></i> Restore to Active';
+                                btn.classList.remove('kn-admin-ops-btn-danger');
+                            }
+                            feedback('kn-admin-ops-feedback', newActive === 'Active' ? 'Restored to active.' : 'Marked inactive.', true);
+                            _knDirty = true;
+                        } else {
+                            feedback('kn-admin-ops-feedback', (r && r.error) ? r.error : 'Request failed.', false);
+                        }
+                    })
+                    .catch(function() { feedback('kn-admin-ops-feedback', 'Request failed.', false); });
+            }, newActive === 'Active' ? 'Restore' : 'Mark Inactive');
+        });
+    }
+
     // ── Wire everything in ready() ────────────────────────────
     $(document).ready(function() {
         wireToggle('kn-admin-hdr-details', 'kn-admin-body-details', 'kn-admin-chev-details');
@@ -4105,6 +4141,7 @@ $(document).ready(function() {
 
         wireDetails();
         wirePrinz();
+        wireStatus();
         wireConfig();
         wireTitles();
         wireAwards();

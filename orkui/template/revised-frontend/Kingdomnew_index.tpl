@@ -1395,6 +1395,23 @@ var KnConfig = {
 							<i class="fas fa-eraser"></i> Reset Waivers
 						</button>
 					</div>
+					<?php if (!empty($IsOrkAdmin)):
+						$isActive = ($AdminInfo['Active'] ?? 'Active') === 'Active'; ?>
+					<div class="kn-admin-ops-row">
+						<div class="kn-admin-ops-info">
+							<strong>Active Status</strong>
+							<p>This <?= $IsPrinz ? 'principality' : 'kingdom' ?> is currently <strong id="kn-admin-status-label"><?= $isActive ? 'Active' : 'Inactive' ?></strong>.</p>
+						</div>
+						<button class="kn-admin-ops-btn<?= $isActive ? ' kn-admin-ops-btn-danger' : '' ?>"
+							id="kn-admin-status-toggle" data-active="<?= $isActive ? '1' : '0' ?>">
+							<?php if ($isActive): ?>
+								<i class="fas fa-ban"></i> Mark Inactive
+							<?php else: ?>
+								<i class="fas fa-check-circle"></i> Restore to Active
+							<?php endif; ?>
+						</button>
+					</div>
+					<?php endif; ?>
 				</div>
 			</div>
 			<?php endif; ?>

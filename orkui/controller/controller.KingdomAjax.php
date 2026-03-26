@@ -65,6 +65,19 @@ class Controller_KingdomAjax extends Controller {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			}
 
+		} elseif ($action === 'setstatus') {
+			if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+				echo json_encode(['status' => 5, 'error' => 'Unauthorized']); exit;
+			}
+			$this->load_model('Kingdom');
+			$active = trim($_POST['Active'] ?? '') === 'Active' ? 'Active' : 'Retired';
+			$r = $active === 'Active'
+				? $this->Kingdom->RestoreKingdom(['Token' => $this->session->token, 'KingdomId' => $kingdom_id])
+				: $this->Kingdom->RetireKingdom(['Token'  => $this->session->token, 'KingdomId' => $kingdom_id]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'active' => $active])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'setdetails') {
 			$this->load_model('Kingdom');
 			$name = trim($_POST['Name'] ?? '');
