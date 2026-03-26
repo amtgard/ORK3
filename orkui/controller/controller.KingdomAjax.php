@@ -828,4 +828,49 @@ class Controller_KingdomAjax extends Controller {
 		echo json_encode($results);
 		exit;
 	}
+
+	public function suspendplayer($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+		$uid = (int)$this->session->user_id;
+		$mid = (int)($_POST['MundaneId'] ?? 0);
+		if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Select a player.']); exit; }
+
+		// Determine the player's kingdom so we can check auth
+		global $DB;
+		$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
+		if (!$rs || !$rs->Next()) { echo json_encode(['status' => 1, 'error' => 'Player not found.']); exit; }
+		$player_kingdom_id = (int)$rs->kingdom_id;
+
+		$isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$isKingdomEditor = valid_id($player_kingdom_id)
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
+		if (!$isAdmin && !$isKingdomEditor) {
+			echo json_encode(['status' => 5, 'error' => 'Unauthorized']); exit;
+		}
+
+		$suspended  = (int)($_POST['Suspended']  ?? 1);
+		$byId       = (int)($_POST['SuspendedById'] ?? 0);
+		$at         = trim($_POST['SuspendedAt']    ?? '');
+		$until      = trim($_POST['SuspendedUntil'] ?? '');
+		$reason     = trim($_POST['Suspension']    ?? '');
+		$propagates = (int)($_POST['SuspensionPropagates'] ?? 0);
+		$this->load_model('Player');
+		$r = $this->Player->suspend_player([
+			'Token'                => $this->session->token,
+			'MundaneId'            => $mid,
+			'Suspended'            => (bool)$suspended,
+			'SuspendedById'        => $byId ?: $uid,
+			'SuspendedAt'          => $at,
+			'SuspendedUntil'       => $until,
+			'Suspension'           => $reason,
+			'SuspensionPropagates' => $propagates,
+		]);
+		echo ($r === null || (isset($r['Status']) && $r['Status'] == 0))
+			? json_encode(['status' => 0])
+			: json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+		exit;
+	}
 }

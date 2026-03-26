@@ -341,6 +341,10 @@
 			<h4><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="pk-link-list">
 				<li>
+					<span class="pk-link-icon"><i class="fas fa-search"></i></span>
+					<a href="<?= UIR ?>Search/park/<?= $park_id ?>">Search Players</a>
+				</li>
+				<li>
 					<span class="pk-link-icon"><i class="fas fa-image"></i></span>
 					<a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Heraldry</a>
 				</li>

@@ -143,9 +143,9 @@
 			<h1 class="sr-header-title">Player Search</h1>
 			<div class="sr-header-sub">
 				<?php if (!empty($KingdomId) || !empty($ParkId)): ?>
-					Searching within <?= !empty($ParkId) ? 'this park' : 'this kingdom' ?>
+					Searching within <?= !empty($ParkId) ? 'this park' : 'this kingdom' ?> &mdash; includes inactive players
 				<?php else: ?>
-					Search across all of Amtgard
+					Search across all of Amtgard &mdash; includes inactive players
 				<?php endif; ?>
 			</div>
 		</div>

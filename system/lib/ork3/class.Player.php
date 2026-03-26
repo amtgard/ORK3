@@ -831,14 +831,14 @@ class Player extends Ork3 {
 		}
 
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT))) {
+				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT)
+					|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN))) {
 			$this->mundane->suspended = $request['Suspended'];
 			if (!$request['Suspended']) {
-				$this->mundane->suspended_by_id = 0;
-				$this->mundane->suspended_at = "0000-00-00";
-				$this->mundane->suspended_until = "0000-00-00";
-				$this->mundane->suspension= "";
-				$this->mundane->suspension_propagates = 1;
+				$mid_safe = (int)$this->mundane->mundane_id;
+				$this->db->query("UPDATE " . DB_PREFIX . "mundane SET suspended = 0, suspended_by_id = NULL, suspended_at = NULL, suspended_until = NULL, suspension = NULL, suspension_propagates = 1 WHERE mundane_id = {$mid_safe}");
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], null);
+				return;
 			} else {
 				$this->mundane->suspended_by_id = $request['SuspendedById'];
 				$this->mundane->suspended_at = $request['SuspendedAt'];

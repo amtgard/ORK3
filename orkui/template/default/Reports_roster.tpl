@@ -464,7 +464,7 @@ $(function() {
 </div>
 <script>
 (function() {
-	var _suspUrl    = '<?= UIR ?>Admin/suspendplayer/submit';
+	var _suspUrl    = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
 	var _pendingMid = null;
 
 	function showOverlay(mid) {
@@ -489,7 +489,7 @@ $(function() {
 		btn.disabled = true;
 		var fd = new FormData();
 		fd.append('MundaneId', _pendingMid);
-		fd.append('Suspended', '1'); // presence of Suspended → unsuspend
+		fd.append('Suspended', '0'); // 0 = unsuspend
 		fetch(_suspUrl, { method: 'POST', body: fd, redirect: 'follow' })
 			.catch(function() {})
 			.finally(function() { window.location.reload(); });
@@ -555,7 +555,7 @@ $(function() {
 </div>
 <script>
 (function() {
-	var _suspUrl       = '<?= UIR ?>Admin/suspendplayer/submit';
+	var _suspUrl       = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
 	var _suspendatorId = <?= (int)$this->__session->user_id ?>;
 	var _fpFrom, _fpUntil;
 
@@ -644,7 +644,7 @@ $(function() {
 		if (!indefinite) fd.append('SuspendedUntil', until);
 		fd.append('Suspension',        comment);
 		fd.append('SuspensionPropagates', propagates);
-		// No 'Suspended' field → controller treats as suspend/update
+		fd.append('Suspended', '1'); // 1 = suspend/update
 
 		fetch(_suspUrl, { method: 'POST', body: fd, redirect: 'follow' })
 			.then(function() { window.location.reload(); })
@@ -740,7 +740,7 @@ $(function() {
 (function() {
 	var _kingdomId  = <?= (int)$_scopeId ?>;
 	var _suspendatorId = <?= (int)$this->__session->user_id ?>;
-	var _suspUrl    = '<?= UIR ?>Admin/suspendplayer/submit';
+	var _suspUrl    = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
 	var _parksUrl   = '<?= UIR ?>KingdomAjax/kingdom/' + _kingdomId + '/getparks';
 	var _searchUrl  = '<?= UIR ?>KingdomAjax/playersearch/' + _kingdomId;
 	var _parksLoaded = false;
@@ -914,7 +914,7 @@ $(function() {
 		if (!indefinite) fd.append('SuspendedUntil', until);
 		fd.append('Suspension',   comment);
 		fd.append('SuspensionPropagates', document.getElementById('sp-propagates').checked ? '1' : '0');
-		// No 'Suspended' field → controller sets suspended = true
+		fd.append('Suspended', '1'); // 1 = suspend
 
 		fetch(_suspUrl, { method: 'POST', body: fd, redirect: 'follow' })
 			.then(function() { window.location.reload(); })
