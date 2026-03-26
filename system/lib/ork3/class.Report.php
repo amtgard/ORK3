@@ -332,6 +332,7 @@ class Report  extends Ork3 {
 						'KingdomName' => $r->kingdom_name,
 						'Rank' => $r->rank,
 						'AwardName' => $r->award_name,
+						'Peerage' => $r->peerage,
 						'EnteredBy' => $r->by_whom_persona,
 						'EnteredById' => $r->by_whom_id
 					);

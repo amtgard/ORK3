@@ -1,12 +1,16 @@
 <?php
 /* ── Pre-compute stats & scope ────────────────────────────── */
 $total          = 0;
+$total_knights  = 0;
+$total_masters  = 0;
 $unique_parks   = [];
 $unique_kingdoms = [];
 
 if (is_array($Awards)) {
 	foreach ($Awards as $award) {
 		$total++;
+		if (($award['Peerage'] ?? '') === 'Knight') $total_knights++;
+		if (($award['Peerage'] ?? '') === 'Master') $total_masters++;
 		if (!empty($award['ParkId']))    $unique_parks[$award['ParkId']] = true;
 		if (!empty($award['KingdomId'])) $unique_kingdoms[$award['KingdomId']] = true;
 	}
@@ -48,9 +52,6 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
 
 <div class="rp-root">
@@ -80,7 +81,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 	<!-- ── Context strip ──────────────────────────────────── -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Players within <?=$scope_label ? htmlspecialchars($scope_label) : 'this ' . $scope_noun ?> who hold a Knight or Master-level peerage award.</span>
+		<span>Players <?=$scope_label ? 'within ' . htmlspecialchars($scope_label) : 'across all Kingdoms' ?> who hold a Knight or Master-level peerage award.</span>
 	</div>
 
 	<!-- ── Stats row ──────────────────────────────────────── -->
@@ -88,8 +89,22 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas <?=$report_icon?>"></i></div>
 			<div class="rp-stat-number"><?=$total?></div>
-			<div class="rp-stat-label"><?=htmlspecialchars($report_title)?></div>
+			<div class="rp-stat-label">Total</div>
 		</div>
+<?php if ($total_knights > 0) : ?>
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-chess-king"></i></div>
+			<div class="rp-stat-number"><?=$total_knights?></div>
+			<div class="rp-stat-label">Knights</div>
+		</div>
+<?php endif; ?>
+<?php if ($total_masters > 0) : ?>
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-crown"></i></div>
+			<div class="rp-stat-number"><?=$total_masters?></div>
+			<div class="rp-stat-label">Masters</div>
+		</div>
+<?php endif; ?>
 <?php if (!isset($this->__session->kingdom_id)) : ?>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-chess-rook"></i></div>
@@ -149,6 +164,10 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 						<span class="rp-col-guide-name">Award</span>
 						<span class="rp-col-guide-desc">The Knight or Master peerage title held by the player.</span>
 					</div>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Date Given</span>
+						<span class="rp-col-guide-desc">The date the award was granted.</span>
+					</div>
 				</div>
 			</div>
 
@@ -156,7 +175,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
-			<table id="kam-report-table" class="display" style="width:100%;display:none">
+			<table id="kam-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
 <?php if (!isset($this->__session->kingdom_id)) : ?>
@@ -167,6 +186,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <?php endif; ?>
 						<th>Persona</th>
 						<th>Award</th>
+						<th>Date Given</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -181,6 +201,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <?php 		endif; ?>
 					<td><a href='<?=UIR.'Player/profile/'.$award['MundaneId']?>'><?=htmlspecialchars($award['Persona'])?></a></td>
 					<td><?=htmlspecialchars($award['AwardName'])?></td>
+					<td><?=htmlspecialchars($award['Date'] ?? '')?></td>
 				</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
@@ -198,9 +219,6 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
-<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
 
 <script>
 $(function() {
@@ -216,20 +234,13 @@ $(function() {
 		pageLength: 25,
 		order: <?php
 			$sortOrder = [];
-			if (!isset($this->__session->park_id)) {
-				$parkCol    = !isset($this->__session->kingdom_id) ? 1 : 0;
-				$sortOrder[] = [$parkCol, 'asc'];
-			}
-			$personaCol = (!isset($this->__session->kingdom_id) ? 1 : 0)
-				+ (!isset($this->__session->park_id) ? 1 : 0);
-			$sortOrder[] = [$personaCol, 'asc'];
+			$col = 0;
+			if (!isset($this->__session->kingdom_id)) { $sortOrder[] = [$col, 'asc']; $col++; }
+			if (!isset($this->__session->park_id))    { $sortOrder[] = [$col, 'asc']; $col++; }
+			$sortOrder[] = [$col, 'asc']; // Persona
 			echo json_encode($sortOrder);
 		?>,
-		fixedHeader : { headerOffset: 48 },
-		responsive  : true,
-		scrollX     : true,
-		fixedColumns: { left: 1 },
-		initComplete: function() { $('#kam-report-table').show(); }
+		scrollX     : true
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });

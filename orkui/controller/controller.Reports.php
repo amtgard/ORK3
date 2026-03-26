@@ -105,7 +105,10 @@ class Controller_Reports extends Controller {
 			$this->data[ 'page_title' ] = "Park Awards";
 		}
 		if (isset($this->request->Ladder))
-			$ladder = $this->request->Ladder;
+			$ladder = (int)$this->request->Ladder;
+		$global = empty($type);
+		if ($global && (!isset($ladder) || $ladder < 7))
+			$ladder = 7;
 		$this->template = 'Reports_playerawards.tpl';
 		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
 	}

@@ -229,6 +229,10 @@ if ($_isOrkAdmin) {
 					</div>
 <?php if ($is_suspended) : ?>
 					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Propagates</span>
+						<span class="rp-col-guide-desc">Whether the suspension applies across all Kingdoms.</span>
+					</div>
+					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Suspended At</span>
 						<span class="rp-col-guide-desc">Date the suspension was recorded in the system.</span>
 					</div>
@@ -239,10 +243,6 @@ if ($_isOrkAdmin) {
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Comments</span>
 						<span class="rp-col-guide-desc">Reason or notes attached to the suspension.</span>
-					</div>
-					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Propagates</span>
-						<span class="rp-col-guide-desc">Whether the suspension applies across all Kingdoms.</span>
 					</div>
 <?php endif; ?>
 <?php if ($is_duespaid) : ?>
@@ -277,6 +277,9 @@ if ($_isOrkAdmin) {
 						<th>Park</th>
 <?php endif; ?>
 						<th>Persona</th>
+<?php if ($_canRemoveAny) : ?>
+						<th class="rp-col-actions">Actions</th>
+<?php endif; ?>
 <?php if (!empty($canViewMundane)) : ?>
 						<th>Mundane</th>
 <?php endif; ?>
@@ -293,15 +296,12 @@ if ($_isOrkAdmin) {
 <?php endif; ?>
 						<th>Suspended Until</th>
 <?php if ($is_suspended) : ?>
+						<th class="rp-col-propagates">Propagates</th>
 						<th>Suspendator</th>
 						<th>Comments</th>
-						<th class="rp-col-propagates">Propagates</th>
 <?php endif; ?>
-<?php if ($_canRemoveAny) : ?>
-						<th>Actions</th>
-<?php endif; ?>
-					</tr>
-				</thead>
+				</tr>
+			</thead>
 				<tbody>
 <?php if (is_array($roster)) : ?>
 <?php 	foreach ($roster as $player) : ?>
@@ -313,6 +313,27 @@ if ($_isOrkAdmin) {
 					<td><a href='<?=UIR.'Park/profile/'.$player['ParkId']?>'><?=htmlspecialchars($player['ParkName'])?></a></td>
 <?php 		endif; ?>
 					<td><a href='<?=UIR.'Player/profile/'.$player['MundaneId']?>'><?= trimlen($player['Persona']) > 0 ? htmlspecialchars($player['Persona']) : '<i>No Persona</i>' ?></a></td>
+<?php 		if ($_canRemoveAny) : ?>
+				<td><?php if ($_isOrkAdmin || !empty($_canRemoveMap[(int)$player['MundaneId']])) : ?>
+					<a class="rp-action-link rp-edit-suspension"
+						href="#"
+						data-mundane-id="<?=(int)$player['MundaneId']?>"
+						data-persona="<?=htmlspecialchars($player['Persona'] ?? '')?>"
+						data-suspended-at="<?=htmlspecialchars($player['SuspendedAt'] ?? '')?>"
+						data-suspended-until="<?=htmlspecialchars($player['SuspendedUntil'] ?? '')?>"
+						data-suspension="<?=htmlspecialchars($player['Suspension'] ?? '')?>"
+						data-propagates="<?= isset($player['SuspensionPropagates']) ? (int)$player['SuspensionPropagates'] : '' ?>">
+						<i class="fas fa-pencil-alt" style="margin-right:3px"></i> Edit
+					</a>
+					&nbsp;·&nbsp;
+					<a class="rp-action-link rp-remove-suspension"
+						href="#"
+						data-mundane-id="<?=(int)$player['MundaneId']?>"
+						data-persona="<?=htmlspecialchars($player['Persona'] ?? 'this player')?>">
+						<i class="fas fa-ban" style="margin-right:3px"></i> Remove
+					</a>
+				<?php endif; ?></td>
+<?php 		endif; ?>
 <?php if (!empty($canViewMundane)) : ?>
 					<td><?= $player['Displayable'] == 0 ? "<span class='restricted-player-display'>Restricted</span>" : htmlspecialchars($player['Surname'].', '.$player['GivenName']) ?></td>
 <?php endif; ?>
@@ -329,35 +350,14 @@ if ($_isOrkAdmin) {
 <?php 		endif; ?>
 					<td><?php if (!empty($player['Suspended'])) { $_until = $player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; } ?></td>
 <?php 		if ($is_suspended) : ?>
-					<td><?=htmlspecialchars($player['Suspendator'] ?? '')?></td>
-					<td><?=htmlspecialchars($player['Suspension']  ?? '')?></td>
 					<td><?php
 					$_prop = $player['SuspensionPropagates'] ?? null;
 					if ($_prop === null)  echo '<span style="color:#a0aec0">—</span>';
 					elseif ($_prop)       echo '<span title="Propagates to all Kingdoms" style="color:#2d3748">Yes</span>';
 					else                  echo '<span title="Local only" style="color:#a0aec0">No</span>';
 				?></td>
-<?php 		endif; ?>
-<?php 		if ($_canRemoveAny) : ?>
-					<td><?php if ($_isOrkAdmin || !empty($_canRemoveMap[(int)$player['MundaneId']])) : ?>
-						<a class="rp-action-link rp-edit-suspension"
-							href="#"
-							data-mundane-id="<?=(int)$player['MundaneId']?>"
-							data-persona="<?=htmlspecialchars($player['Persona'] ?? '')?>"
-							data-suspended-at="<?=htmlspecialchars($player['SuspendedAt'] ?? '')?>"
-							data-suspended-until="<?=htmlspecialchars($player['SuspendedUntil'] ?? '')?>"
-							data-suspension="<?=htmlspecialchars($player['Suspension'] ?? '')?>"
-							data-propagates="<?= isset($player['SuspensionPropagates']) ? (int)$player['SuspensionPropagates'] : '' ?>">
-							<i class="fas fa-pencil-alt" style="margin-right:3px"></i> Edit
-						</a>
-						&nbsp;·&nbsp;
-						<a class="rp-action-link rp-remove-suspension"
-							href="#"
-							data-mundane-id="<?=(int)$player['MundaneId']?>"
-							data-persona="<?=htmlspecialchars($player['Persona'] ?? 'this player')?>">
-							<i class="fas fa-ban" style="margin-right:3px"></i> Remove
-						</a>
-					<?php endif; ?></td>
+					<td><?=htmlspecialchars($player['Suspendator'] ?? '')?></td>
+					<td><?=htmlspecialchars($player['Suspension']  ?? '')?></td>
 <?php 		endif; ?>
 				</tr>
 <?php 	endforeach; ?>
@@ -400,10 +400,11 @@ $(function() {
 			{ targets: '.rp-col-propagates', responsivePriority: 2 },
 <?php endif; ?>
 <?php if ($_canRemoveAny) : ?>
-			{ targets: [-1], orderable: false, searchable: false, className: 'no-export' }
+			{ targets: '.rp-col-actions', orderable: false, searchable: false, className: 'no-export' }
 <?php endif; ?>
 		],
-		pageLength: 25,
+		scrollX    : true,
+		pageLength : 25,
 		order: <?php
 			$_colIdx    = 0;
 			$sortOrder  = [];
@@ -416,10 +417,11 @@ $(function() {
 			$sortOrder[] = [$_colIdx, 'asc'];        // Persona
 			echo json_encode($sortOrder);
 		?>,
-		fixedHeader : { headerOffset: 48 },
+		fixedHeader : <?= $is_suspended ? 'false' : '{ headerOffset: 48 }' ?>,
 		initComplete: function() {
 			$('#rp-roster-loading').hide();
 			$('#rp-roster-table-wrap').css('opacity', '1');
+			this.api().columns.adjust();
 		}
 	});
 
@@ -433,12 +435,11 @@ $(function() {
 		<?php if (!isset($this->__session->kingdom_id)) { echo 'idx++;'; } ?>
 		<?php if (!isset($this->__session->park_id)) { echo 'idx++;'; } ?>
 		idx++; // Persona
+		<?php if ($_canRemoveAny) { echo 'idx++;'; } ?>
 		<?php if (!empty($canViewMundane)) { echo 'idx++;'; } ?>
 		idx++; // Last Sign-in
 		idx++; // Suspended At
 		idx++; // Suspended Until
-		idx++; // Suspendator
-		idx++; // Comments
 		return idx; // Propagates
 	})();
 	$.fn.dataTable.ext.search.push(function(settings, data) {

@@ -258,14 +258,14 @@
 	color: #a0aec0;
 }
 
-/* ---- Bottom row: Principalities + Find (3:1) ---- */
+/* ---- Bottom: Principalities then Reports and Utilities ---- */
 .hm-bottom-row {
 	display: flex;
-	gap: 28px;
-	align-items: flex-start;
+	flex-direction: column;
+	gap: 20px;
 }
-.hm-bottom-main { flex: 3 1 0; min-width: 0; }
-.hm-bottom-side { flex: 1 1 0; min-width: 200px; }
+.hm-bottom-main { min-width: 0; }
+.hm-bottom-side { min-width: 0; }
 
 /* ---- Events list ---- */
 .hm-events-list {
@@ -404,9 +404,11 @@
 
 /* ---- Responsive ---- */
 @media (max-width: 900px) {
-	.hm-bottom-row { flex-direction: column; }
-	.hm-bottom-main, .hm-bottom-side { flex: unset; width: 100%; min-width: 0; }
+	.hm-bottom-main, .hm-bottom-side { width: 100%; }
 	.hm-kingdoms-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
+@media (max-width: 700px) {
+	.hm-map-label { display: none; }
 }
 @media (max-width: 600px) {
 	.hm-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
@@ -458,7 +460,10 @@
 <div class="hm-section">
 	<div class="hm-section-header">
 		<span class="hm-section-title"><i class="fas fa-crown"></i> Kingdoms</span>
-		<a class="hm-find-item" href="<?= UIR ?>Atlas"><i class="fas fa-map-marked-alt"></i> Kingdom Map</a>
+		<div style="display:flex;gap:8px;align-items:center;">
+			<a class="hm-find-item" href="https://play.amtgard.com" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt"></i> Find a Chapter</a>
+			<a class="hm-find-item hm-map-btn" href="<?= UIR ?>Atlas"><i class="fas fa-map-marked-alt"></i><span class="hm-map-label"> Kingdom Map</span></a>
+		</div>
 	</div>
 	<div class="hm-kingdoms-grid">
 		<?php foreach ($hmKingdoms as $k): ?>
@@ -489,7 +494,7 @@
 </div>
 
 <!-- =============================================
-     Bottom: Principalities (3/4) + Find (1/4)
+     Bottom: Principalities, then Reports and Utilities
      ============================================= -->
 <div class="hm-bottom-row">
 
@@ -514,10 +519,10 @@
 	</div>
 	<?php endif; ?>
 
-	<!-- Find sidebar -->
+	<!-- Reports and Utilities -->
 	<div class="hm-bottom-side">
 		<div class="hm-section-header">
-			<span class="hm-section-title"><i class="fas fa-search"></i> Find</span>
+			<span class="hm-section-title"><i class="fas fa-search"></i> Reports and Utilities</span>
 		</div>
 		<div class="hm-find-list">
 			<a class="hm-find-item" href="<?= UIR ?>Search/index">
@@ -531,12 +536,19 @@
 			<a class="hm-find-item" href="<?= UIR ?>Search/event">
 				<i class="fas fa-flag"></i> Find Events
 			</a>
-			<a class="hm-find-item" href="<?= UIR ?>Atlas">
-				<i class="fas fa-map-marked-alt"></i> Kingdom Map
+			<a class="hm-find-item" href="<?= UIR ?>Reports/suspended">
+				<i class="fas fa-ban"></i> Suspended Players
 			</a>
-			<a class="hm-find-item" href="https://play.amtgard.com" target="_blank" rel="noopener">
-				<i class="fas fa-map-marker-alt"></i> Find a Chapter Near You
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Reports/kingdom_officer_directory">
+				<i class="fas fa-crown"></i> Kingdom Officer Directory
 			</a>
+<?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Reports/knights_and_masters">
+				<i class="fas fa-award"></i> Knights &amp; Masters
+			</a>
+<?php endif; ?>
 		</div>
 	</div>
 

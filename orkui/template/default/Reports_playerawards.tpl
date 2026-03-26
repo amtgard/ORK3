@@ -37,9 +37,6 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
 
 <div class="rp-root">
@@ -153,6 +150,10 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
+			<div id="awards-loading" style="text-align:center;padding:40px 0;">
+				<i class="fas fa-spinner fa-spin fa-2x" style="color:#999;"></i>
+			</div>
+			<div id="awards-table-wrap" style="opacity:0;overflow-x:auto;">
 			<table id="awards-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
@@ -189,6 +190,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <?php endif; ?>
 				</tbody>
 			</table>
+			</div><!-- /awards-table-wrap -->
 		</div><!-- /rp-table-area -->
 
 	</div><!-- /rp-body -->
@@ -201,9 +203,6 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
-<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
 
 <script>
 $(function() {
@@ -218,8 +217,7 @@ $(function() {
 			{ extend: 'print', exportOptions: { columns: ':visible' } }
 		],
 		columnDefs: [
-			{ targets: [dateCol], type: 'date', className: 'dt-right' },
-			{ targets: [0], responsivePriority: 1 }
+			{ targets: [dateCol], type: 'date', className: 'dt-right' }
 		],
 		pageLength: 25,
 		order: <?php
@@ -233,10 +231,11 @@ $(function() {
 			$sortOrder[] = [$personaCol, 'asc'];
 			echo json_encode($sortOrder);
 		?>,
-		fixedHeader : { headerOffset: 48 },
-		responsive  : true,
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		initComplete: function() {
+			$('#awards-loading').hide();
+			$('#awards-table-wrap').css('opacity', 1);
+		}
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
