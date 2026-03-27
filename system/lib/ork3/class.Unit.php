@@ -271,7 +271,7 @@ class Unit extends Ork3 {
 				$mundane->save();
 			}
 
-			Ork3::$Lib->authorization->add_auth_h(array('MundaneId'=>$mundane_id, 'Type'=>AUTH_UNIT, 'Id' => $this->unit->unit_id, 'Role' => AUTH_EDIT));
+			Ork3::$Lib->authorization->add_auth_h(array('MundaneId'=>$mundane_id, 'Type'=>AUTH_UNIT, 'Id' => $this->unit->unit_id, 'Role' => AUTH_CREATE));
 
 			$request['MundaneId'] = $mundane_id;
 			switch ($this->unit->type) {

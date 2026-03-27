@@ -66,7 +66,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 	<!-- ── Context strip ──────────────────────────────────── -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>All awards on record for players within <?=$scope_label ? htmlspecialchars($scope_label) : 'this ' . $scope_noun ?>, including Knights, Masters, and ladder awards.</span>
+		<span>All awards on record for players within <?=$scope_label ? htmlspecialchars($scope_label) : 'this ' . $scope_noun ?>, including Knights, Masters, and ladder awards<?php if (!empty($LadderMinimum)) { echo ' at level ' . (int)$LadderMinimum . ' and above'; } ?>. <?php if (!empty($LadderMinimum) && !$scope_label && empty($IsOrkAdmin)): ?>To view awards below level 7, contact an ORK Administrator.<?php endif; ?></span>
 	</div>
 
 	<!-- ── Stats row ──────────────────────────────────────── -->

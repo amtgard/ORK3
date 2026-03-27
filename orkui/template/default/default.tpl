@@ -549,6 +549,16 @@
 				<i class="fas fa-award"></i> Knights &amp; Masters
 			</a>
 <?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Reports/player_awards&Ladder=8">
+				<i class="fas fa-medal"></i> All Awards 8 and Up
+			</a>
+<?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Reports/class_masters">
+				<i class="fas fa-graduation-cap"></i> Class Masters/Paragons
+			</a>
+<?php endif; ?>
 		</div>
 	</div>
 

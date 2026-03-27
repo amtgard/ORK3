@@ -107,8 +107,12 @@ class Controller_Reports extends Controller {
 		if (isset($this->request->Ladder))
 			$ladder = (int)$this->request->Ladder;
 		$global = empty($type);
-		if ($global && (!isset($ladder) || $ladder < 7))
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$isOrkAdmin = $uid && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if ($global && !$isOrkAdmin && (!isset($ladder) || $ladder < 7))
 			$ladder = 7;
+		$this->data['LadderMinimum'] = $ladder ?? null;
+		$this->data['IsOrkAdmin'] = $isOrkAdmin;
 		$this->template = 'Reports_playerawards.tpl';
 		$this->data['Awards'] = $this->Reports->kingdom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
 	}
@@ -147,6 +151,7 @@ class Controller_Reports extends Controller {
 	}
 
 	public function class_masters($params=null) {
+		$this->data[ 'page_title' ] = "Kingdom Wide Class Masters/Paragons";
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;

@@ -5,6 +5,7 @@ $_members  = $Unit['Members']['Roster'] ?? [];
 $_unit_id  = (int)($_unit['UnitId'] ?? 0);
 $_type     = $_unit['Type'] ?? 'Unit';
 $_name     = $_unit['Name'] ?? '';
+$page_title = $_name;
 $_desc     = $_unit['Description'] ?? '';
 $_history  = $_unit['History'] ?? '';
 $_url      = $_unit['Url'] ?? '';

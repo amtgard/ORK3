@@ -598,7 +598,11 @@ class Authorization extends Ork3
 	{
 		logtrace('add_auth_h', $request);
 		$this->auth->clear();
-		$this->auth->mundane_id = $request['MundaneId'];
+		$this->auth->mundane_id  = $request['MundaneId'];
+		$this->auth->park_id     = 0;
+		$this->auth->kingdom_id  = 0;
+		$this->auth->event_id    = 0;
+		$this->auth->unit_id     = 0;
 		switch ($request['Type']) {
 			case AUTH_PARK:
 				$this->auth->park_id = $request['Id'];
