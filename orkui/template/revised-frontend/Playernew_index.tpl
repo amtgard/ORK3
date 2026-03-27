@@ -55,9 +55,9 @@
 		}
 	}
 
-	// Same check, but visible to the player themselves (not just admins)
+	// Same check, visible to anyone viewing the profile
 	$hasHistoricalTip = false;
-	if (($isOwnProfile || $canEditAdmin) && is_array($Details['Awards'])) {
+	if (is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_ha) {
 			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
 				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
@@ -223,7 +223,7 @@
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
 .pna-spark-month-lbl{flex:1;font-size:9px;color:#a0aec0;text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
 @media(max-width:700px){
-.pna-layout{flex-direction:column}
+.pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
 .pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0}
@@ -912,8 +912,8 @@
 						</div>
 						<?php if ($hasHistoricalTip): ?>
 						<div class="pn-hist-tip-btn" tabindex="0" role="button" aria-label="Historical awards info">
-							?
-							<div class="pn-hist-tip-text">Should these numbers look different? You have historically imported awards that need to be reconciled! Contact your Monarch or Prime Minister and ask them to use the Reconcile Historical Awards tool on your legacy awards.</div>
+							<i class="fas fa-exclamation-triangle"></i>
+							<div class="pn-hist-tip-text"><?php if ($isOwnProfile): ?>Should these numbers look different? You have historically imported awards that need to be reconciled! Contact your Monarch or Prime Minister and ask them to use the Reconcile Historical Awards tool on your legacy awards.<?php else: ?>This player has historically imported awards that may not be fully reconciled. Progress bars may not reflect their complete award history.<?php endif; ?></div>
 						</div>
 						<?php endif; ?>
 					</div>

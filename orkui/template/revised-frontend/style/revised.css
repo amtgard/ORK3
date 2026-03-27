@@ -557,12 +557,12 @@
 	width: 26px;
 	height: 26px;
 	border-radius: 50%;
-	background: #ebf8ff;
-	color: #2b6cb0;
+	background: #fffbeb;
+	color: #b45309;
 	font-size: 13px;
 	font-weight: 700;
 	cursor: help;
-	border: 1px solid #bee3f8;
+	border: 1px solid #fcd34d;
 	position: relative;
 	flex-shrink: 0;
 	margin-top: 4px;

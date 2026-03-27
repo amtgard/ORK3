@@ -349,10 +349,10 @@
 					<a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Heraldry</a>
 				</li>
 				<?php if ($IsLoggedIn): ?>
-				<li>
+				<?php /* <li>
 					<span class="pk-link-icon"><i class="fas fa-eye"></i></span>
 					<a href="<?= UIR ?>Attendance/behold/<?= $park_id ?>">Behold!</a>
-				</li>
+				</li> */ ?>
 				<?php endif; ?>
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-users"></i></span>

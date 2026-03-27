@@ -341,9 +341,12 @@
 
 /* ---- Find sidebar ---- */
 .hm-find-list {
-	display: flex;
-	flex-direction: column;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
 	gap: 6px;
+}
+@media (max-width: 500px) {
+	.hm-find-list { grid-template-columns: 1fr; }
 }
 .hm-find-item {
 	display: flex;

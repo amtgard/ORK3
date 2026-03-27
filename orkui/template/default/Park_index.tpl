@@ -9,7 +9,7 @@
 <?php if ($LoggedIn) : ?>
 		<li><a href='<?=UIR ?>Attendance/park/<?=$park_id ?>'>Enter Attendance</a></li>
 		<li><a href='<?=UIR ?>Award/park/<?=$park_id ?>'>Enter Awards</a></li>
-		<li><a href='<?=UIR ?>Attendance/behold/<?=$park_id ?>'>Behold!</a></li>
+		<?php /* <li><a href='<?=UIR ?>Attendance/behold/<?=$park_id ?>'>Behold!</a></li> */ ?>
 <?php endif ; ?>
 		<li><a href='<?=UIR ?>Search/park/<?=$park_id ?>'>Search Players</a></li>
 		<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Park Heraldry, Players</a></li>

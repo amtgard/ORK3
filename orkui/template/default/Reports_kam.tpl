@@ -175,6 +175,10 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
+			<div id="kam-loading" style="text-align:center;padding:40px 0;">
+				<i class="fas fa-spinner fa-spin fa-2x" style="color:#999;"></i>
+			</div>
+			<div id="kam-table-wrap" style="opacity:0;">
 			<table id="kam-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
@@ -207,6 +211,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <?php endif; ?>
 				</tbody>
 			</table>
+			</div><!-- /kam-table-wrap -->
 		</div><!-- /rp-table-area -->
 
 	</div><!-- /rp-body -->
@@ -240,7 +245,11 @@ $(function() {
 			$sortOrder[] = [$col, 'asc']; // Persona
 			echo json_encode($sortOrder);
 		?>,
-		scrollX     : true
+		scrollX: true,
+		initComplete: function() {
+			$('#kam-loading').hide();
+			$('#kam-table-wrap').css('opacity', 1);
+		}
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });

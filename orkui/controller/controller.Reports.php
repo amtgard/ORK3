@@ -702,11 +702,18 @@ class Controller_Reports extends Controller {
 		$this->data['report_type'] = $type;
 		$this->data['report_id']   = $id;
 
+		unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['reports']);
 		if ($type === 'Park') {
-			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . $id . '&tab=reports';
+			$this->load_model('Park');
+			$scopeName = $this->Park->get_park_name($id) ?: 'Park';
+			$this->data['menu']['park']    = array('url' => UIR . 'Park/profile/' . $id,                  'display' => $scopeName);
+			$this->data['menu']['reports'] = array('url' => UIR . 'Park/profile/' . $id . '&tab=reports', 'display' => 'Reports');
 			$this->data['page_title'] = 'Park Event Attendance';
 		} else {
-			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . $id . '&tab=reports';
+			$this->load_model('Kingdom');
+			$scopeName = $this->Kingdom->get_kingdom_name($id) ?: 'Kingdom';
+			$this->data['menu']['kingdom'] = array('url' => UIR . 'Kingdom/profile/' . $id,                  'display' => $scopeName);
+			$this->data['menu']['reports'] = array('url' => UIR . 'Kingdom/profile/' . $id . '&tab=reports', 'display' => 'Reports');
 			$this->data['page_title'] = 'Kingdom Event Attendance';
 		}
 

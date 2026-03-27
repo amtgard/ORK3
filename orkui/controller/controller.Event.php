@@ -183,6 +183,7 @@ class Controller_Event extends Controller {
 		$this->data['detail_id']  = $detail_id;
 		$this->data['page_title'] = $info['Name'] ?? $this->data['page_title'];
 
+		unset($this->data['menu']['kingdom'], $this->data['menu']['park'], $this->data['menu']['event']);
 		if ( !empty($info['KingdomId']) )
 			$this->data['menu']['kingdom'] = [
 				'url'     => UIR . 'Kingdom/profile/' . $info['KingdomId'],
