@@ -26,8 +26,16 @@ class Controller_Search extends Controller {
 	
 	public function unit() {
 		header('X-Robots-Tag: noindex, nofollow');
-		if (isset($this->request->KingdomId)) $this->data['KingdomId'] = $this->request->KingdomId;
-		if (isset($this->request->ParkId)) $this->data['ParkId'] = $this->request->ParkId;
+		if (isset($this->request->KingdomId)) {
+			$this->data['KingdomId'] = $this->request->KingdomId;
+			$this->load_model('Kingdom');
+			$this->data['ScopeLabel'] = $this->Kingdom->get_kingdom_name((int)$this->request->KingdomId) ?: null;
+		}
+		if (isset($this->request->ParkId)) {
+			$this->data['ParkId'] = $this->request->ParkId;
+			$this->load_model('Park');
+			$this->data['ScopeLabel'] = $this->Park->get_park_name((int)$this->request->ParkId) ?: null;
+		}
 	}
 
 	public function unitsearch() {

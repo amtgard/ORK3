@@ -611,7 +611,7 @@
 						<h5><i class="fas fa-search"></i> Find</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Search/kingdom/<?= $kingdom_id ?>">Players</a></li>
-							<li><a href="<?= UIR ?>Search/unit&KingdomId=<?= $kingdom_id ?>">Companies &amp; Households</a></li>
+							<li><a href="<?= UIR ?>Unit/unitlist&KingdomId=<?= $kingdom_id ?>">Companies &amp; Households</a></li>
 							<li><a href="<?= UIR ?>Search/event&KingdomId=<?= $kingdom_id ?>">Events</a></li>
 							<li><a href="<?= UIR ?>Unit/unitlist&KingdomId=<?= $kingdom_id ?>">Unit List</a></li>
 						</ul>

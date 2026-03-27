@@ -225,7 +225,7 @@ jQuery(document).ready(function($) {
 	<h3>Find</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Search/kingdom/<?=$kingdom_id ?>'>Players</a></li>
-		<li><a href='<?=UIR ?>Search/unit&KingdomId=<?=$kingdom_id ?>'>Companies &amp; Households</a></li>
+		<li><a href='<?=UIR ?>Unit/unitlist&KingdomId=<?=$kingdom_id ?>'>Companies &amp; Households</a></li>
 		<li><a href='<?=UIR ?>Search/event&KingdomId=<?=$kingdom_id ?>'>Events</a></li>
 	</ul>
 </div>

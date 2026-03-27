@@ -117,7 +117,7 @@ $_scope_pid  = (int)($ScopeParkId    ?? 0);
 		<div class="rp-header-left">
 			<div class="rp-header-icon-title">
 				<i class="fas fa-shield-alt rp-header-icon"></i>
-				<h1 class="rp-header-title">Units</h1>
+				<h1 class="rp-header-title">Companies &amp; Households</h1>
 			</div>
 <?php if ($_ul_scoped): ?>
 			<div class="rp-header-scope">

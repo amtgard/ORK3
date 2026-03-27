@@ -126,7 +126,7 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 	<!-- Subheader -->
 	<div class="rp-context" style="border-radius:0;border-left:none;border-right:none;border-top:none;">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>An <strong>active</strong> unit has at least one member with a sign-in recorded in the past 12 months.</span>
+		<span><?php if (!empty($ScopeLabel)): ?>Showing companies &amp; households within <strong><?= htmlspecialchars($ScopeLabel) ?></strong>. <?php endif; ?>An <strong>active</strong> unit has at least one member with a sign-in recorded in the past 12 months.</span>
 	</div>
 
 	<!-- Stats row (populated by JS) -->
@@ -168,7 +168,6 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 			<button class="rp-filter-pill active" data-type="">All Types</button>
 			<button class="rp-filter-pill" data-type="Company">Companies</button>
 			<button class="rp-filter-pill" data-type="Household">Households</button>
-			<button class="rp-filter-pill" data-type="Event">Events</button>
 			<button class="rp-filter-pill" id="su-pill-inactive" data-inactive="0" style="margin-left:8px;">
 				<i class="fas fa-eye-slash" style="font-size:10px;"></i> Include Inactive
 			</button>

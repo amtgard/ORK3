@@ -209,7 +209,7 @@
 	<h3>Find</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Search/park/<?=$park_id ?>'>Players</a></li>
-		<li><a href='<?=UIR ?>Search/unit&ParkId=<?=$park_id ?>'>Companies &amp; Households</a></li>
+		<li><a href='<?=UIR ?>Unit/unitlist&ParkId=<?=$park_id ?>'>Companies &amp; Households</a></li>
 		<li><a href='<?=UIR ?>Search/event&ParkId=<?=$park_id ?>'>Events</a></li>
 	</ul>
 </div>

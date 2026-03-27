@@ -529,7 +529,7 @@
 				<i class="fas fa-user"></i> Search Players
 			</a>
 <?php if (!empty($LoggedIn)): ?>
-			<a class="hm-find-item" href="<?= UIR ?>Search/unit">
+			<a class="hm-find-item" href="<?= UIR ?>Unit/unitlist">
 				<i class="fas fa-users"></i> Companies &amp; Households
 			</a>
 			<?php endif; ?>
