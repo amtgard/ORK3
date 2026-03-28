@@ -6121,31 +6121,99 @@ $(document).ready(function() {
 
     function gid(id) { return document.getElementById(id); }
 
+    // --- Entered-today table helpers ---
+    function pkEnteredRow(entry) {
+        var className = pkClassNames[entry.ClassId] || '';
+        var tr = document.createElement('tr');
+        tr.dataset.attendanceId = entry.AttendanceId || 0;
+        tr.dataset.mundaneId = entry.MundaneId || 0;
+        var td1 = document.createElement('td'); td1.textContent = entry.Persona;
+        var td2 = document.createElement('td'); td2.textContent = className;
+        var td3 = document.createElement('td'); td3.textContent = entry.Credits || 1;
+        var td4 = document.createElement('td');
+        if (entry.AttendanceId) {
+            var btn = document.createElement('button');
+            btn.className = 'pk-att-del-btn'; btn.title = 'Remove';
+            btn.innerHTML = '<i class="fas fa-times"></i>';
+            btn.addEventListener('click', function() { pkDeleteEnteredRow(btn); });
+            td4.appendChild(btn);
+        }
+        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+        return tr;
+    }
+
+    window.pkDeleteEnteredRow = function(btn) {
+        var tr  = btn.closest('tr');
+        var aid = parseInt(tr.dataset.attendanceId, 10);
+        var mid = parseInt(tr.dataset.mundaneId, 10);
+        if (!aid) return;
+        btn.disabled = true;
+        $.post(PkConfig.uir + 'AttendanceAjax/attendance/' + aid + '/delete', {}, function(r) {
+            if (r && r.status === 0) {
+                if (mid) delete pkAttEntered[mid];
+                tr.remove();
+                var tbody = gid('pk-att-entered-tbody');
+                if (tbody && !tbody.rows.length) {
+                    gid('pk-att-entered-table').style.display = 'none';
+                    gid('pk-att-entered-empty').style.display = '';
+                }
+                pkRefreshEnteredCount();
+                pkUpdateQuickAddEntered();
+            } else {
+                btn.disabled = false;
+                pkAttShowFeedback((r && r.error) ? r.error : 'Delete failed.', false);
+            }
+        }, 'json').fail(function() {
+            btn.disabled = false;
+            pkAttShowFeedback('Request failed.', false);
+        });
+    };
+
+    function pkRefreshEnteredCount() {
+        var tbody   = gid('pk-att-entered-tbody');
+        var countEl = gid('pk-att-entered-count');
+        if (!countEl || !tbody) return;
+        var n = tbody.rows.length;
+        countEl.textContent = n > 0 ? '(' + n + ')' : '';
+    }
+
+    // --- Credits memory ---
+    function pkGetSavedCredits() { return parseFloat(localStorage.getItem('pk_att_credits') || '1') || 1; }
+    function pkSaveCredits(n) { var v = parseFloat(n); if (v > 0) localStorage.setItem('pk_att_credits', v); }
+    function pkSyncCredits(val) {
+        var n = parseFloat(val); if (!(n > 0)) return;
+        var srch = gid('pk-att-search-credits');
+        if (srch && srch !== document.activeElement) srch.value = n;
+        pkSaveCredits(n);
+    }
+
     // --- Fetch and display entries already on the registry for a given date ---
     function pkFetchDayEntered(date, cb) {
-        var ul      = gid('pk-att-added-list');
-        var section = gid('pk-att-added-section');
+        var tbody   = gid('pk-att-entered-tbody');
+        var table   = gid('pk-att-entered-table');
+        var empty   = gid('pk-att-entered-empty');
+        var countEl = gid('pk-att-entered-count');
         $.getJSON(GETDAY_URL, { date: date }, function(r) {
             pkAttEntered = {};
-            // Rebuild pkLastClass from recentAttendees, then supplement from today's entries
             pkLastClass = {};
             (PkConfig.recentAttendees || []).forEach(function(a) {
                 if (a.ClassId) pkLastClass[a.MundaneId] = a.ClassId;
             });
-            // Clear entire list — DB response is authoritative (includes session-added entries)
-            ul.innerHTML = '';
-            if (r && r.status === 0 && r.entries) {
+            tbody.innerHTML = '';
+            if (r && r.status === 0 && r.entries && r.entries.length) {
                 r.entries.forEach(function(e) {
                     pkAttEntered[e.MundaneId] = true;
                     if (e.ClassId && !pkLastClass[e.MundaneId]) pkLastClass[e.MundaneId] = e.ClassId;
-                    var li = document.createElement('li');
-                    li.className = 'pk-att-prior';
-                    var cn = e.ClassId ? pkClassNames[e.ClassId] : '';
-                    li.textContent = e.Persona + (cn ? ' – ' + cn : '');
-                    ul.appendChild(li);
+                    tbody.appendChild(pkEnteredRow(e));
                 });
+                table.style.display = '';
+                empty.style.display = 'none';
+                if (countEl) countEl.textContent = '(' + r.entries.length + ')';
+            } else {
+                table.style.display = 'none';
+                empty.style.display = '';
+                if (countEl) countEl.textContent = '';
             }
-            section.style.display = ul.children.length ? '' : 'none';
             pkUpdateQuickAddEntered();
             if (cb) cb();
         }).fail(function() {
@@ -6173,29 +6241,103 @@ $(document).ready(function() {
         if (empty) empty.style.display = (tbody.dataset.built && visible === 0) ? '' : 'none';
     }
 
+    // --- Inline calendar ---
+    var pkCalViewYear, pkCalViewMonth;
+    var MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var DAYS_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+    function pkDateFromValue(val) {
+        var p = val.split('-');
+        return new Date(+p[0], +p[1] - 1, +p[2]);
+    }
+    function pkToIso(d) {
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function pkFormatDateDisplay(val) {
+        var d = pkDateFromValue(val);
+        return DAYS_SHORT[d.getDay()] + ', ' + MONTHS_LONG[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+    }
+    function pkRenderCal() {
+        var selected = gid('pk-att-date').value;
+        var todayIso = pkToIso(new Date());
+        gid('pk-att-cal-month').textContent = MONTHS_LONG[pkCalViewMonth] + ' ' + pkCalViewYear;
+        var days = gid('pk-att-cal-days');
+        days.innerHTML = '';
+        var firstDay = new Date(pkCalViewYear, pkCalViewMonth, 1).getDay();
+        var daysInMonth = new Date(pkCalViewYear, pkCalViewMonth + 1, 0).getDate();
+        for (var i = 0; i < firstDay; i++) {
+            var blank = document.createElement('span');
+            blank.className = 'pk-att-cal-day pk-cal-other';
+            days.appendChild(blank);
+        }
+        for (var d = 1; d <= daysInMonth; d++) {
+            var iso = pkCalViewYear + '-' + String(pkCalViewMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+            var cell = document.createElement('span');
+            cell.className = 'pk-att-cal-day';
+            if (iso === selected) cell.classList.add('pk-cal-selected');
+            else if (iso === todayIso) cell.classList.add('pk-cal-today');
+            cell.textContent = d;
+            cell.dataset.iso = iso;
+            days.appendChild(cell);
+        }
+    }
+    function pkOpenCal() {
+        var val = gid('pk-att-date').value;
+        var d = val ? pkDateFromValue(val) : new Date();
+        pkCalViewYear  = d.getFullYear();
+        pkCalViewMonth = d.getMonth();
+        pkRenderCal();
+        gid('pk-att-cal').style.display = '';
+        gid('pk-att-date-display').classList.add('pk-cal-open');
+        gid('pk-att-date-display').setAttribute('aria-expanded', 'true');
+    }
+    function pkCloseCal() {
+        gid('pk-att-cal').style.display = 'none';
+        gid('pk-att-date-display').classList.remove('pk-cal-open');
+        gid('pk-att-date-display').setAttribute('aria-expanded', 'false');
+    }
+    function pkSetDate(val, cb) {
+        gid('pk-att-date').value = val;
+        gid('pk-att-date-label').textContent = pkFormatDateDisplay(val);
+        pkCloseCal();
+        pkAttEntered = {};
+        var qaTbody = gid('pk-att-qa-tbody');
+        if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
+        if (gid('pk-att-panel-recent') && gid('pk-att-panel-recent').style.display !== 'none') {
+            pkBuildQuickAddRows();
+        }
+        pkFetchDayEntered(val, cb);
+    }
+
     // --- Open / Close ---
     window.pkOpenAttendanceModal = function() {
-        var today = new Date().toISOString().slice(0, 10);
-        gid('pk-att-date').value = today;
-        gid('pk-att-credits-default').value = '1';
-        gid('pk-att-search-credits').value  = '1';
+        var today = pkToIso(new Date());
+        pkCloseCal();
+        gid('pk-att-search-credits').value = pkGetSavedCredits();
         pkBuildClassOptions();
         gid('pk-att-player-name').value = '';
         gid('pk-att-player-id').value   = '';
         pkAttHideFeedback();
-        // Collapse quick-add and reset rows so they rebuild fresh on next expand
-        var qaWrap    = gid('pk-att-qa-wrap');
-        var qaToggle  = gid('pk-att-qa-toggle');
-        var qaChevron = gid('pk-att-qa-chevron');
-        var qaTbody   = gid('pk-att-qa-tbody');
-        if (qaWrap)    { qaWrap.style.display = 'none'; }
-        if (qaToggle)  { qaToggle.setAttribute('aria-expanded', 'false'); }
-        if (qaChevron) { qaChevron.classList.remove('pk-att-open'); }
-        if (qaTbody)   { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
+        // Reset to Search tab and clear quick-add rows so they rebuild fresh
+        document.querySelectorAll('#pk-att-overlay .pk-att-tab').forEach(function(t) { t.classList.remove('pk-att-tab-active'); });
+        document.querySelectorAll('#pk-att-overlay .pk-att-tab-panel').forEach(function(p) { p.style.display = 'none'; });
+        var searchTab = gid('pk-att-tab-search');
+        if (searchTab) searchTab.classList.add('pk-att-tab-active');
+        var searchPanel = gid('pk-att-panel-search');
+        if (searchPanel) searchPanel.style.display = '';
+        // Reset scope buttons to global
+        pkAttScope = null;
+        var btnP = gid('pk-att-scope-park'), btnK = gid('pk-att-scope-kingdom');
+        if (btnP) btnP.classList.remove('pk-att-scope-active');
+        if (btnK) btnK.classList.remove('pk-att-scope-active');
+        var nameInput = gid('pk-att-player-name');
+        if (nameInput) nameInput.placeholder = 'Search by name or KD:PK\u2026';
+        var qaTbody = gid('pk-att-qa-tbody');
+        if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
         gtag('event', 'park_attendance_open', { source: 'park_info' });
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
-        pkFetchDayEntered(today, function() {
+        pkSetDate(today, function() {
             setTimeout(function() { gid('pk-att-player-name').focus(); }, 50);
         });
     };
@@ -6268,18 +6410,18 @@ $(document).ready(function() {
 
     // --- Quick-add submit ---
     function pkQuickAdd(tr, attendee, btn) {
-        var classId = tr.querySelector('.pk-att-qa-select').value;
-        var credits = tr.querySelector('.pk-att-qa-credits').value;
+        var classId = parseInt(tr.querySelector('.pk-att-qa-select').value, 10);
+        var credits = parseFloat(tr.querySelector('.pk-att-qa-credits').value) || 1;
         if (!classId) { pkAttShowFeedback('Select a class for ' + attendee.Persona + '.', false); return; }
         btn.disabled = true; btn.textContent = '\u2026';
         pkSubmit(
             { AttendanceDate: gid('pk-att-date').value, MundaneId: attendee.MundaneId, ClassId: classId, Credits: credits },
-            function(ok, err) {
+            function(ok, err, aid) {
                 if (ok) {
                     pkAttEntered[attendee.MundaneId] = true;
                     tr.classList.add('pk-att-done');
                     btn.parentNode.innerHTML = '<span class="pk-att-qa-done-mark">\u2713</span>';
-                    pkAttRecorded(attendee.Persona, pkClassNames[parseInt(tr.querySelector('.pk-att-qa-select').value, 10)]);
+                    pkAttRecorded({ AttendanceId: aid, MundaneId: attendee.MundaneId, Persona: attendee.Persona, ClassId: classId, Credits: credits });
                     pkAttHideFeedback();
                 } else {
                     btn.disabled = false; btn.textContent = '+';
@@ -6293,22 +6435,22 @@ $(document).ready(function() {
     gid('pk-att-add-btn').addEventListener('click', function() {
         var pid  = gid('pk-att-player-id').value;
         var name = gid('pk-att-player-name').value.trim();
-        var cls  = gid('pk-att-class-select').value;
-        var cred = gid('pk-att-search-credits').value;
+        var cls  = parseInt(gid('pk-att-class-select').value, 10);
+        var cred = parseFloat(gid('pk-att-search-credits').value) || 1;
         if (!pid)  { pkAttShowFeedback('Search for and select a player.', false); return; }
         if (!cls)  { pkAttShowFeedback('Select a class.', false); return; }
         var btn = gid('pk-att-add-btn');
         btn.disabled = true;
         pkSubmit(
             { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred },
-            function(ok, err) {
+            function(ok, err, aid) {
                 btn.disabled = false;
                 if (ok) {
                     var midInt = parseInt(pid, 10);
                     pkAttEntered[midInt] = true;
-                    pkLastClass[midInt]  = parseInt(cls, 10);
+                    pkLastClass[midInt]  = cls;
                     pkAttShowFeedback('Added: ' + name, true);
-                    pkAttRecorded(name, pkClassNames[parseInt(cls, 10)]);
+                    pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred });
                     gid('pk-att-player-name').value = '';
                     gid('pk-att-player-id').value   = '';
                     pkUpdateQuickAddEntered();
@@ -6322,9 +6464,9 @@ $(document).ready(function() {
     // --- Core AJAX ---
     function pkSubmit(data, cb) {
         $.post(ADD_URL, data, function(r) {
-            if (r && r.status === 0) { gtag('event', 'attendance_add', { method: 'quick_add' }); cb(true, null); }
-            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.');
-        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.'); });
+            if (r && r.status === 0) { gtag('event', 'attendance_add', { method: 'quick_add' }); cb(true, null, r.attendanceId || 0); }
+            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0);
+        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0); });
     }
 
     // --- Feedback helpers ---
@@ -6335,37 +6477,90 @@ $(document).ready(function() {
         el.style.display = '';
     }
     function pkAttHideFeedback() { gid('pk-att-feedback').style.display = 'none'; }
-    function pkAttRecorded(name, className) {
-        var ul = gid('pk-att-added-list');
-        var li = document.createElement('li');
-        li.textContent = name + (className ? ' – ' + className : '');
-        ul.prepend(li);
-        gid('pk-att-added-section').style.display = '';
+    function pkAttRecorded(entry) {
+        var tbody = gid('pk-att-entered-tbody');
+        var table = gid('pk-att-entered-table');
+        var empty = gid('pk-att-entered-empty');
+        tbody.insertBefore(pkEnteredRow(entry), tbody.firstChild);
+        table.style.display = '';
+        empty.style.display = 'none';
+        pkRefreshEnteredCount();
+        pkSaveCredits(entry.Credits);
     }
 
-    // --- Collapsible toggle ---
-    gid('pk-att-qa-toggle').addEventListener('click', function() {
-        var wrap    = gid('pk-att-qa-wrap');
-        var chevron = gid('pk-att-qa-chevron');
-        var open    = wrap.style.display !== 'none';
-        wrap.style.display = open ? 'none' : '';
-        chevron.classList.toggle('pk-att-open', !open);
-        this.setAttribute('aria-expanded', String(!open));
-        if (!open) pkBuildQuickAddRows();
+    // --- Tab switching ---
+    Array.prototype.forEach.call(document.querySelectorAll('#pk-att-overlay .pk-att-tab'), function(tab) {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('#pk-att-overlay .pk-att-tab').forEach(function(t) { t.classList.remove('pk-att-tab-active'); });
+            document.querySelectorAll('#pk-att-overlay .pk-att-tab-panel').forEach(function(p) { p.style.display = 'none'; });
+            tab.classList.add('pk-att-tab-active');
+            gid(tab.dataset.panel).style.display = '';
+            if (tab.dataset.panel === 'pk-att-panel-recent') pkBuildQuickAddRows();
+        });
     });
 
-    // --- Credits default sync ---
-    gid('pk-att-credits-default').addEventListener('change', function() {
-        gid('pk-att-search-credits').value = this.value;
+    // --- Credits: save to localStorage on change ---
+    gid('pk-att-search-credits').addEventListener('input', function() { pkSyncCredits(this.value); });
+
+    // --- Inline calendar events ---
+    gid('pk-att-date-display').addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (gid('pk-att-cal').style.display === 'none') pkOpenCal(); else pkCloseCal();
+    });
+    gid('pk-att-cal-prev').addEventListener('click', function(e) {
+        e.stopPropagation();
+        pkCalViewMonth--; if (pkCalViewMonth < 0) { pkCalViewMonth = 11; pkCalViewYear--; }
+        pkRenderCal();
+    });
+    gid('pk-att-cal-next').addEventListener('click', function(e) {
+        e.stopPropagation();
+        pkCalViewMonth++; if (pkCalViewMonth > 11) { pkCalViewMonth = 0; pkCalViewYear++; }
+        pkRenderCal();
+    });
+    gid('pk-att-cal-days').addEventListener('click', function(e) {
+        var cell = e.target.closest('.pk-att-cal-day');
+        if (!cell || cell.classList.contains('pk-cal-other') || !cell.dataset.iso) return;
+        pkSetDate(cell.dataset.iso);
+    });
+    gid('pk-att-cal-today').addEventListener('click', function(e) {
+        e.stopPropagation();
+        pkSetDate(pkToIso(new Date()));
+    });
+    // Close calendar when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!gid('pk-att-cal') || gid('pk-att-cal').style.display === 'none') return;
+        if (!gid('pk-att-cal').contains(e.target) && e.target !== gid('pk-att-date-display')) {
+            pkCloseCal();
+        }
     });
 
-    // --- Date change: re-fetch entries and reset quick-add rows ---
-    gid('pk-att-date').addEventListener('change', function() {
-        pkAttEntered = {};
-        var qaTbody = gid('pk-att-qa-tbody');
-        if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
-        pkFetchDayEntered(this.value);
-    });
+    // --- Search scope buttons (park / kingdom / global) ---
+    var pkAttScope = null; // null = global, 'park', 'kingdom'
+    (function() {
+        var btnPark    = gid('pk-att-scope-park');
+        var btnKingdom = gid('pk-att-scope-kingdom');
+        var input      = gid('pk-att-player-name');
+        if (!btnPark || !btnKingdom || !input) return;
+        var placeholders = {
+            'park':    'Search within your park\u2026',
+            'kingdom': 'Search within your kingdom\u2026',
+            null:      'Search by name or KD:PK\u2026'
+        };
+        function pkSetScope(scope) {
+            pkAttScope = scope;
+            btnPark.classList.toggle('pk-att-scope-active',    scope === 'park');
+            btnKingdom.classList.toggle('pk-att-scope-active', scope === 'kingdom');
+            input.placeholder = placeholders[scope];
+            input.focus();
+        }
+        btnPark.addEventListener('click', function() {
+            pkSetScope(pkAttScope === 'park' ? null : 'park');
+        });
+        btnKingdom.addEventListener('click', function() {
+            pkSetScope(pkAttScope === 'kingdom' ? null : 'kingdom');
+        });
+        pkSetScope(null);
+    }());
 
     // --- Close handlers ---
     gid('pk-att-close-btn').addEventListener('click', pkCloseAttendanceModal);
@@ -6385,34 +6580,50 @@ $(document).ready(function() {
     var pkAttAC = $('#pk-att-player-name').autocomplete({
         source: function(req, res) {
             var s = req.term;
-            $.when(
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 8 }),
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 8 }),
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, limit: 8 })
-            ).done(function(parkRes, kingRes, allRes) {
-                var seen = {}, parkItems = [], kingItems = [], otherItems = [];
-                $.each(parkRes[0] || [], function(i, v) {
+            function toItems(list) {
+                var items = [];
+                $.each(list || [], function(i, v) {
                     if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                    seen[v.MundaneId] = true;
-                    parkItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                    items.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
                 });
-                $.each(kingRes[0] || [], function(i, v) {
-                    if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                    if (seen[v.MundaneId]) return;
-                    seen[v.MundaneId] = true;
-                    kingItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                return items;
+            }
+            if (pkAttScope === 'park') {
+                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 12 })
+                    .done(function(r) { res(toItems(r)); });
+            } else if (pkAttScope === 'kingdom') {
+                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 12 })
+                    .done(function(r) { res(toItems(r)); });
+            } else {
+                $.when(
+                    $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 8 }),
+                    $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 8 }),
+                    $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, limit: 8 })
+                ).done(function(parkRes, kingRes, allRes) {
+                    var seen = {}, parkItems = [], kingItems = [], otherItems = [];
+                    $.each(parkRes[0] || [], function(i, v) {
+                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
+                        seen[v.MundaneId] = true;
+                        parkItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                    });
+                    $.each(kingRes[0] || [], function(i, v) {
+                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
+                        if (seen[v.MundaneId]) return;
+                        seen[v.MundaneId] = true;
+                        kingItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                    });
+                    $.each(allRes[0] || [], function(i, v) {
+                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
+                        if (seen[v.MundaneId]) return;
+                        otherItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                    });
+                    var sep = { label: '', name: '', value: null, separator: true };
+                    var items = parkItems;
+                    if (kingItems.length) { if (items.length) items.push(sep); items = items.concat(kingItems); }
+                    if (otherItems.length) { if (items.length) items.push(sep); items = items.concat(otherItems); }
+                    res(items);
                 });
-                $.each(allRes[0] || [], function(i, v) {
-                    if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                    if (seen[v.MundaneId]) return;
-                    otherItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
-                });
-                var sep = { label: '', name: '', value: null, separator: true };
-                var items = parkItems;
-                if (kingItems.length) { if (items.length) items.push(sep); items = items.concat(kingItems); }
-                if (otherItems.length) { if (items.length) items.push(sep); items = items.concat(otherItems); }
-                res(items);
-            });
+            }
         },
         focus: function(e, ui) { if (!ui.item.value) return false; $('#pk-att-player-name').val(ui.item.name); return false; },
         select: function(e, ui) {

@@ -1231,83 +1231,109 @@ var PkConfig = {
 	</div>
 </div>
 <div id="pk-att-overlay">
-	<div class="pk-modal-box" style="width:620px;max-width:calc(100vw - 40px);">
+	<div class="pk-modal-box">
 
-		<div class="pk-modal-header">
-			<div class="pk-att-header-content">
-				<h3 class="pk-modal-title">
-					<i class="fas fa-clipboard-list" style="margin-right:8px;color:#2b6cb0"></i>Enter Attendance
-				</h3>
-				<div class="pk-att-header-fields">
-					<div class="pk-att-hfield">
-						<label>Date</label>
-						<input type="date" id="pk-att-date">
-					</div>
-					<div class="pk-att-hfield pk-att-hfield-sm">
-						<label>Credits</label>
-						<input type="number" id="pk-att-credits-default" min="0.5" step="0.5" value="1">
-					</div>
-				</div>
-			</div>
+		<div class="pk-modal-header" style="padding:12px 20px">
+			<h3 class="pk-modal-title">
+				<i class="fas fa-clipboard-list" style="margin-right:8px;color:#2b6cb0"></i>Enter Attendance
+			</h3>
 			<button class="pk-modal-close-btn" id="pk-att-close-btn" aria-label="Close">&times;</button>
 		</div>
 
 		<div class="pk-modal-body" id="pk-att-body">
 
+			<div class="pk-att-date-row">
+				<button type="button" class="pk-att-date-display" id="pk-att-date-display" aria-haspopup="true" aria-expanded="false">
+					<i class="fas fa-calendar-alt"></i>
+					<span id="pk-att-date-label"></span>
+				</button>
+				<input type="hidden" id="pk-att-date">
+			</div>
+			<div class="pk-att-cal" id="pk-att-cal" style="display:none">
+				<div class="pk-att-cal-hdr">
+					<button type="button" class="pk-att-cal-nav" id="pk-att-cal-prev">&#8249;</button>
+					<span class="pk-att-cal-month" id="pk-att-cal-month"></span>
+					<button type="button" class="pk-att-cal-nav" id="pk-att-cal-next">&#8250;</button>
+				</div>
+				<div class="pk-att-cal-dow">
+					<span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+				</div>
+				<div class="pk-att-cal-days" id="pk-att-cal-days"></div>
+				<div class="pk-att-cal-footer">
+					<button type="button" class="pk-att-cal-today-btn" id="pk-att-cal-today">Today</button>
+				</div>
+			</div>
+
 			<div class="pk-att-feedback" id="pk-att-feedback" style="display:none"></div>
 
-			<!-- Search & Add -->
-			<div class="pk-att-section pk-att-search-section">
-				<div class="pk-att-section-label">
-					<i class="fas fa-search" style="margin-right:6px;color:#a0aec0"></i>Add by Name
-				</div>
-				<div class="pk-att-search-row">
-					<div class="pk-att-field pk-att-field-grow">
-						<label>Player</label>
-						<input type="text" id="pk-att-player-name" autocomplete="off" placeholder="Search players...">
-						<input type="hidden" id="pk-att-player-id">
-					</div>
-					<div class="pk-att-field pk-att-field-class">
-						<label>Class</label>
-						<select id="pk-att-class-select">
-							<option value="">— class —</option>
-						</select>
-					</div>
-					<div class="pk-att-field pk-att-field-sm">
-						<label>Credits</label>
-						<input type="number" id="pk-att-search-credits" min="0.5" step="0.5" value="1">
-					</div>
-					<div class="pk-att-field pk-att-field-btn">
-						<label>&nbsp;</label>
-						<button class="pk-btn pk-btn-primary" id="pk-att-add-btn">
-							<i class="fas fa-plus"></i> Add
-						</button>
-					</div>
-				</div>
-			</div>
-
-			<!-- Quick Add (collapsible, collapsed by default) -->
-			<div class="pk-att-section">
-				<button class="pk-att-toggle" id="pk-att-qa-toggle" aria-expanded="false">
-					<span><i class="fas fa-users" style="margin-right:6px;color:#a0aec0"></i>Quick Add &mdash; Recent Attendees</span>
-					<i class="fas fa-chevron-down pk-att-chevron" id="pk-att-qa-chevron"></i>
+			<!-- Tab bar -->
+			<div class="pk-att-tabs">
+				<button class="pk-att-tab pk-att-tab-active" id="pk-att-tab-search" data-panel="pk-att-panel-search">
+					<i class="fas fa-search"></i> Search
 				</button>
-				<div class="pk-att-qa-wrap" id="pk-att-qa-wrap" style="display:none">
-					<table class="pk-att-qa-table">
-						<thead><tr><th>Player</th><th>Class</th><th data-short="Cr.">Credits</th><th></th></tr></thead>
-						<tbody id="pk-att-qa-tbody"></tbody>
-					</table>
-					<div class="pk-att-qa-empty" id="pk-att-qa-empty" style="display:none">
-						No recent attendees in the last 90 days.
+				<button class="pk-att-tab" id="pk-att-tab-recent" data-panel="pk-att-panel-recent">
+					<i class="fas fa-users"></i> Recent Attendees
+				</button>
+			</div>
+
+			<!-- Search panel -->
+			<div class="pk-att-tab-panel" id="pk-att-panel-search">
+				<div class="pk-att-search-section-inner">
+					<div class="pk-att-scope-btns">
+						<button type="button" class="pk-att-scope-btn" id="pk-att-scope-park">Search Park</button>
+						<button type="button" class="pk-att-scope-btn" id="pk-att-scope-kingdom">Search Kingdom</button>
+					</div>
+					<div class="pk-att-search-row">
+						<div class="pk-att-field pk-att-field-grow">
+							<label>Player</label>
+							<input type="text" id="pk-att-player-name" autocomplete="off">
+							<input type="hidden" id="pk-att-player-id">
+						</div>
+						<div class="pk-att-field pk-att-field-class">
+							<label>Class</label>
+							<select id="pk-att-class-select">
+								<option value="">— class —</option>
+							</select>
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="pk-att-search-credits" min="0.5" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="pk-btn pk-btn-primary" id="pk-att-add-btn">
+								<i class="fas fa-plus"></i> Add
+							</button>
+						</div>
 					</div>
 				</div>
 			</div>
 
-			<!-- Entered today -->
-			<div class="pk-att-added-section" id="pk-att-added-section" style="display:none">
-				<div class="pk-att-section-label">Entered today</div>
-				<ul class="pk-att-added-list" id="pk-att-added-list"></ul>
+			<!-- Recent Attendees panel -->
+			<div class="pk-att-tab-panel" id="pk-att-panel-recent" style="display:none">
+				<table class="pk-att-qa-table">
+					<thead><tr><th>Player</th><th>Class</th><th data-short="Cr.">Credits</th><th></th></tr></thead>
+					<tbody id="pk-att-qa-tbody"></tbody>
+				</table>
+				<div class="pk-att-qa-empty" id="pk-att-qa-empty" style="display:none">
+					No recent attendees in the last 90 days.
+				</div>
 			</div>
+
+			<!-- Entered today (always visible, shared by both tabs) -->
+			<div class="pk-att-entered-section">
+				<div class="pk-att-section-label">
+					<i class="fas fa-list-check" style="margin-right:6px;color:#a0aec0"></i>Entered today
+					<span class="pk-att-entered-count" id="pk-att-entered-count"></span>
+				</div>
+				<div id="pk-att-entered-empty" class="pk-att-qa-empty">No entries yet for this date.</div>
+				<table class="pk-att-entered-table" id="pk-att-entered-table" style="display:none">
+					<thead><tr><th>Player</th><th>Class</th><th>Cr.</th><th></th></tr></thead>
+					<tbody id="pk-att-entered-tbody"></tbody>
+				</table>
+			</div>
+
+
 
 		</div><!-- /.pk-modal-body -->
 

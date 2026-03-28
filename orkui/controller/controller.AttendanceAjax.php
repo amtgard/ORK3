@@ -46,15 +46,18 @@ class Controller_AttendanceAjax extends Controller {
 			$entries = [];
 			foreach ($r['Attendance'] ?? [] as $att) {
 				$mid = (int)$att['MundaneId'];
-				if (isset($seen[$mid])) continue;
-				$seen[$mid] = true;
-				$entries[] = [
-					'MundaneId' => $mid,
-					'Persona'   => (string)($att['Persona'] ?? $att['AttendancePersona'] ?? ''),
-					'ClassId'   => (int)($att['ClassId'] ?? 0),
+				$aid = (int)($att['AttendanceId'] ?? $att['attendance_id'] ?? 0);
+				if (isset($seen[$mid]) && $seen[$mid] >= $aid) continue;
+				$seen[$mid] = $aid;
+				$entries[$mid] = [
+					'AttendanceId' => $aid,
+					'MundaneId'   => $mid,
+					'Persona'     => (string)($att['Persona'] ?? $att['AttendancePersona'] ?? ''),
+					'ClassId'     => (int)($att['ClassId'] ?? 0),
+					'Credits'     => (float)($att['Credits'] ?? 1),
 				];
 			}
-			echo json_encode(['status' => 0, 'entries' => $entries]);
+			echo json_encode(['status' => 0, 'entries' => array_values($entries)]);
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}
