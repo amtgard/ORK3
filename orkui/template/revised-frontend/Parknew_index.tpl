@@ -934,6 +934,11 @@
 
 			<!-- Reports Tab -->
 			<div class="pk-tab-panel" id="pk-tab-reports" style="display:none">
+				<?php if (!$LoggedIn): ?>
+				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
+					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
+				</div>
+				<?php endif; ?>
 				<div class="pk-reports-mobile-notice">
 					<i class="fas fa-info-circle"></i>
 					Some reports may not display as expected on mobile. For best results, view reports on a full screen device.
@@ -943,6 +948,7 @@
 						<h5><i class="fas fa-users"></i> Players</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/roster/Park&id=<?= $park_id ?>">Player Roster</a></li>
+							<?php if ($LoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/inactive/Park&id=<?= $park_id ?>">Inactive Players</a></li>
 							<li><a href="<?= UIR ?>Reports/active/Park&id=<?= $park_id ?>">Active Players</a></li>
 							<li><a href="<?= UIR ?>Reports/dues/Park&id=<?= $park_id ?>">Dues Paid</a></li>
@@ -954,6 +960,7 @@
 							<li><a href="<?= UIR ?>Reports/reeve&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
+							<?php endif; ?>
 						</ul>
 					</div>
 					<div class="kn-report-group">

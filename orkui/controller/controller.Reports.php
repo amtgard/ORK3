@@ -5,6 +5,21 @@ class Controller_Reports extends Controller {
 
 	public function __construct($call=null, $method=null) {
 		parent::__construct($call, $method);
+		$public_reports = [
+			'roster',
+			'kingdom_officer_directory',
+			'knights_and_masters',
+			'knights_list',
+			'masters_list',
+			'attendance',
+			'event_attendance',
+			'park_attendance_explorer',
+			'new_player_attendance',
+		];
+		if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
+			header('Location: ' . UIR . 'Login');
+			exit;
+		}
 		$back_url = UIR . 'Reports';
 		if (isset($this->session->park_id) && valid_id($this->session->park_id)) {
 			$back_url = UIR . 'Park/profile/' . (int)$this->session->park_id . '&tab=reports';

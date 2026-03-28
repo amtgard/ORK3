@@ -545,6 +545,11 @@
 
 			<!-- Reports Tab -->
 			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
+				<?php if (!$LoggedIn): ?>
+				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
+					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
+				</div>
+				<?php endif; ?>
 				<div class="pk-reports-mobile-notice">
 					<i class="fas fa-info-circle"></i>
 					<span>Some reports may not display as expected on mobile. For best results, view reports on a full screen device.</span>
@@ -555,6 +560,7 @@
 						<h5><i class="fas fa-users"></i> Players</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/roster/Kingdom&id=<?= $kingdom_id ?>">Player Roster</a></li>
+							<?php if ($LoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/active/Kingdom&id=<?= $kingdom_id ?>">Active Players</a></li>
 							<li><a href="<?= UIR ?>Reports/dues/Kingdom&id=<?= $kingdom_id ?>">Dues Paid</a></li>
 							<li><a href="<?= UIR ?>Reports/waivered/Kingdom&id=<?= $kingdom_id ?>">Waivered</a></li>
@@ -564,6 +570,7 @@
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?= $kingdom_id ?>">Waivered Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/reeve/Kingdom&id=<?= $kingdom_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
+							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
 					</div>
@@ -571,33 +578,42 @@
 					<div class="kn-report-group">
 						<h5><i class="fas fa-medal"></i> Awards</h5>
 						<ul>
+							<?php if ($LoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Award Recommendations</a></li>
+							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
+							<?php if ($LoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
 							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>">Class Masters/Paragons</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
-						<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
+							<?php endif; ?>
 						</ul>
 					</div>
 
 					<div class="kn-report-group">
 						<h5><i class="fas fa-calendar-check"></i> Attendance</h5>
 						<ul>
+							<?php if ($LoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Weeks/1">Past Week</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/1">Past Month</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/3">Past 3 Months</a></li>
+							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/6">Past 6 Months</a></li>
+							<?php if ($LoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/12">Past 12 Months</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/All">All Time</a></li>
+							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdom_id ?>"><i class="fas fa-calendar-alt"></i> Event Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/park_attendance_explorer"><i class="fas fa-chart-bar"></i> Park Attendance Explorer</a></li>
 							<li><a href="<?= UIR ?>Reports/new_player_attendance"><i class="fas fa-user-plus"></i> New Player Attendance</a></li>
 						</ul>
 					</div>
 
+					<?php if ($LoggedIn): ?>
 					<div class="kn-report-group">
 						<h5><i class="fas fa-ellipsis-h"></i> Other</h5>
 						<ul>
@@ -606,6 +622,7 @@
 							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
 						</ul>
 					</div>
+					<?php endif; ?>
 
 					<div class="kn-report-group">
 						<h5><i class="fas fa-search"></i> Find</h5>
