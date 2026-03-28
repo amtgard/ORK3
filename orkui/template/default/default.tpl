@@ -562,6 +562,16 @@
 				<i class="fas fa-graduation-cap"></i> Class Masters/Paragons
 			</a>
 <?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Admin/new_player_attendance">
+				<i class="fas fa-user-plus"></i> New Player Attendance
+			</a>
+<?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Admin/topparks">
+				<i class="fas fa-trophy"></i> Top Parks by Attendance
+			</a>
+<?php endif; ?>
 		</div>
 	</div>
 

@@ -15,6 +15,7 @@ class Controller_Reports extends Controller {
 			'event_attendance',
 			'park_attendance_explorer',
 			'new_player_attendance',
+			'suspended',
 		];
 		if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
 			header('Location: ' . UIR . 'Login');
