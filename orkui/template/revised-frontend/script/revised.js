@@ -5642,7 +5642,7 @@ $(document).ready(function() {
                     var row = btn.closest('tr');
                     if (row) row.remove();
                     var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-rsvp"] .ev-tab-count');
-                    if (cnt) cnt.textContent = Math.max(0, parseInt(cnt.textContent || '0') - 1);
+                    if (cnt) cnt.textContent = '(' + Math.max(0, (parseInt(cnt.textContent.replace(/[^0-9]/g, '')) || 0) - 1) + ')';
                 } else {
                     confirm.remove();
                     btn.style.display = '';
@@ -5676,23 +5676,30 @@ $(document).ready(function() {
                 }
                 evCloseCheckinModal();
                 if (data.attendance) {
-                    var newRow = '<tr>' +
-                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + data.attendance.MundaneId + '">' + data.attendance.Persona + '</a></td>' +
-                        '<td><a href="' + EvConfig.uir + 'Kingdom/profile/' + data.attendance.KingdomId + '">' + data.attendance.KingdomName + '</a></td>' +
-                        '<td><a href="' + EvConfig.uir + 'Park/profile/' + data.attendance.ParkId + '">' + data.attendance.ParkName + '</a></td>' +
-                        '<td>' + data.attendance.ClassName + '</td>' +
-                        '<td>' + data.attendance.Credits + '</td>' +
-                        '<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="' + EvConfig.uir + 'Event/detail/' + EvConfig.eventId + '/' + EvConfig.detailId + '/delete/' + data.attendance.AttendanceId + '" onclick="return confirm(\'Remove this attendance record?\')">&times;</a></td>' +
+                    var att = data.attendance;
+                    var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
+                    var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
+                    var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
+                    var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
+                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
+                        '<td>' + kingCell + '</td>' +
+                        '<td>' + parkCell + '</td>' +
+                        '<td>' + escHtml(att.ClassName || '') + '</td>' +
+                        '<td>' + escHtml(att.Credits || '') + '</td>' +
+                        '<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a></td>' +
                     '</tr>';
-                    var tableBody = document.querySelector('#ev-tab-attendance .ev-table tbody');
+                    var tableBody = document.querySelector('#ev-attendance-table tbody');
                     if (tableBody) {
                         tableBody.insertAdjacentHTML('beforeend', newRow);
+                    } else {
                         var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
-                        if (emptyMsg) emptyMsg.style.display = 'none';
-                        var cnt = document.querySelector('#ev-tab-attendance-nav .ev-tab-count');
-                        if (!cnt) cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-attendance"] .ev-tab-count');
-                        if (cnt) cnt.textContent = parseInt(cnt.textContent || '0') + 1;
+                        var tableHtml = '<table class="display" id="ev-attendance-table" style="width:100%">' +
+                            '<thead><tr><th>Player</th><th>Kingdom</th><th>Park</th><th>Class</th><th>Credits</th><th class="ev-del-cell"></th></tr></thead>' +
+                            '<tbody>' + newRow + '</tbody></table>';
+                        if (emptyMsg) { emptyMsg.outerHTML = tableHtml; }
                     }
+                    var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-attendance"] .ev-tab-count');
+                    if (cnt) cnt.textContent = '(' + ((parseInt(cnt.textContent.replace(/[^0-9]/g, '')) || 0) + 1) + ')';
                 }
             } else {
                 alert(data.error || 'Check-in failed. Please try again.');
@@ -5722,7 +5729,7 @@ $(document).ready(function() {
                 var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
                 var kingCell  = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
                 var parkCell  = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-                var newRow = '<tr data-att-id="' + att.AttendanceId + '">' +
+                var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
                     '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
                     '<td>' + kingCell + '</td>' +
                     '<td>' + parkCell + '</td>' +
@@ -5745,12 +5752,21 @@ $(document).ready(function() {
                     if (emptyMsg) { emptyMsg.outerHTML = tableHtml; }
                 }
 
+                // Mark RSVP check-in button as checked in if this player has an RSVP
+                var rsvpBtn = document.querySelector('.ev-checkin-btn[data-mundane="' + att.MundaneId + '"]');
+                if (rsvpBtn) {
+                    rsvpBtn.classList.add('ev-checkin-done');
+                    rsvpBtn.disabled = true;
+                    rsvpBtn.removeAttribute('onclick');
+                    rsvpBtn.innerHTML = '<i class="fas fa-user-check"></i> Checked In';
+                }
+
                 form.reset();
                 $('#ev-PlayerName').val('');
                 $('#ev-MundaneId').val('');
 
                 var tabCount = document.querySelector('[data-tab="ev-tab-attendance"] .ev-tab-count');
-                if (tabCount) { tabCount.textContent = parseInt(tabCount.textContent || '0') + 1; }
+                if (tabCount) { tabCount.textContent = '(' + ((parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0) + 1) + ')'; }
             } else {
                 var errorDiv = document.querySelector('.ev-att-form .ev-error') || document.createElement('div');
                 errorDiv.className = 'ev-error';

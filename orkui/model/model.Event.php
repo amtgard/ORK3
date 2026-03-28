@@ -118,10 +118,10 @@ class Model_Event extends Model {
 	function get_rsvp_list($detail_id) {
 		global $DB;
 		$DB->Clear();
-		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
+		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status, p.abbreviation AS park_abbr, k.abbreviation AS kingdom_abbr FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
 		$list = [];
 		if ($r) while ($r->Next()) {
-			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status];
+			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status, 'KingdomAbbr' => $r->kingdom_abbr, 'ParkAbbr' => $r->park_abbr];
 		}
 		return $list;
 	}

@@ -411,12 +411,12 @@
 				</li>
 				<li data-tab="ev-tab-attendance" onclick="evShowTab(this,'ev-tab-attendance')">
 					<i class="fas fa-clipboard-list"></i><span class="ev-tab-label"> Attendance</span>
-					<span class="ev-tab-count"><?= $attendeeCount ?></span>
+					<span class="ev-tab-count">(<?= $attendeeCount ?>)</span>
 				</li>
 				<?php /* [TOURNAMENTS HIDDEN] tab */ ?>
 				<li data-tab="ev-tab-rsvp" onclick="evShowTab(this,'ev-tab-rsvp')">
 					<i class="fas fa-calendar-check"></i><span class="ev-tab-label"> RSVPs</span>
-					<span class="ev-tab-count"><?= $rsvpCount ?></span>
+					<span class="ev-tab-count">(<?= $rsvpCount ?>)</span>
 				</li>
 				<?php if ($hasMapTab): ?>
 				<li data-tab="ev-tab-map" onclick="evShowTab(this,'ev-tab-map')">
@@ -503,7 +503,7 @@
 					</thead>
 					<tbody>
 						<?php foreach ($attendanceList as $att): ?>
-						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>">
+						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>" data-mundane-id="<?= (int)$att['MundaneId'] ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a></td>
 							<td><?php if (!empty($att['KingdomId'])): ?><a href="<?= UIR ?>Kingdom/profile/<?= (int)$att['KingdomId'] ?>"><?= htmlspecialchars($att['KingdomName']) ?></a><?php else: ?><?= htmlspecialchars($att['KingdomName'] ?? '') ?><?php endif; ?></td>
 							<td><?php if (!empty($att['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$att['ParkId'] ?>"><?= htmlspecialchars($att['ParkName']) ?></a><?php else: ?><?= htmlspecialchars($att['ParkName'] ?? '') ?><?php endif; ?></td>
@@ -548,7 +548,7 @@
 						<tbody>
 							<?php foreach ($rsvpList as $attendee): ?>
 							<tr>
-								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a></td>
+								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a><?php if (!empty($attendee['KingdomAbbr']) || !empty($attendee['ParkAbbr'])): ?> <span style="font-size:.8em;color:#718096">(<?= htmlspecialchars($attendee['KingdomAbbr'] ?? '') ?>:<?= htmlspecialchars($attendee['ParkAbbr'] ?? '') ?>)</span><?php endif; ?></td>
 								<td style="white-space:nowrap">
 									<?php if ($attendee['Status'] === 'going'): ?>
 										<i class="fas fa-check-circle" style="color:#276749;margin-right:4px"></i>Going
@@ -557,7 +557,9 @@
 									<?php endif; ?>
 								</td>
 								<td style="text-align:right;white-space:nowrap">
-									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button" data-mundane="<?= (int)$attendee['MundaneId'] ?>"
+									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button"
+										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
+										data-persona="<?= htmlspecialchars($attendee['Persona'], ENT_QUOTES) ?>"
 										<?php if (!isset($checkedInIds[$attendee['MundaneId']])): ?>
 										onclick="evOpenCheckinModal(<?= (int)$attendee['MundaneId'] ?>, <?= htmlspecialchars(json_encode($attendee['Persona']), ENT_QUOTES) ?>)"
 										<?php else: ?>disabled<?php endif; ?>>
@@ -941,9 +943,20 @@ function evConfirmAttDelete(e, link) {
 			.then(function(data) {
 				if (data.status === 0) {
 					var row = link.closest('tr');
+					var mundaneId = row ? row.dataset.mundaneId : null;
 					if (row) row.remove();
+					if (mundaneId) {
+						var rsvpBtn = document.querySelector('.ev-checkin-btn[data-mundane="' + mundaneId + '"]');
+						if (rsvpBtn) {
+							rsvpBtn.classList.remove('ev-checkin-done');
+							rsvpBtn.disabled = false;
+							var persona = rsvpBtn.dataset.persona || '';
+							rsvpBtn.setAttribute('onclick', 'evOpenCheckinModal(' + mundaneId + ', ' + JSON.stringify(persona) + ')');
+							rsvpBtn.innerHTML = '<i class="fas fa-user-check"></i> Check In';
+						}
+					}
 					var tabCount = document.querySelector('[data-tab="ev-tab-attendance"] .ev-tab-count');
-					if (tabCount) { tabCount.textContent = Math.max(0, parseInt(tabCount.textContent || '0') - 1); }
+					if (tabCount) { tabCount.textContent = '(' + Math.max(0, (parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0) - 1) + ')'; }
 				} else {
 					link.textContent = '×';
 					alert(data.error || 'Could not remove attendance.');
