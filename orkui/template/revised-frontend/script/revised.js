@@ -6235,6 +6235,16 @@ $(document).ready(function() {
             } else {
                 tr.style.display = '';
                 visible++;
+                // Restore + button if it was replaced with a ✓ after a successful add
+                if (tr.classList.contains('pk-att-done')) {
+                    tr.classList.remove('pk-att-done');
+                    var addedBtn = tr.querySelector('.pk-att-qa-added');
+                    if (addedBtn) {
+                        addedBtn.disabled = false;
+                        addedBtn.textContent = '+';
+                        addedBtn.classList.remove('pk-att-qa-added');
+                    }
+                }
             }
         });
         var empty = gid('pk-att-qa-empty');
@@ -6337,9 +6347,7 @@ $(document).ready(function() {
         gtag('event', 'park_attendance_open', { source: 'park_info' });
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
-        pkSetDate(today, function() {
-            setTimeout(function() { gid('pk-att-player-name').focus(); }, 50);
-        });
+        pkSetDate(today);
     };
     window.pkCloseAttendanceModal = function() {
         gid('pk-att-overlay').classList.remove('pk-att-open');
@@ -6420,7 +6428,7 @@ $(document).ready(function() {
                 if (ok) {
                     pkAttEntered[attendee.MundaneId] = true;
                     tr.classList.add('pk-att-done');
-                    btn.parentNode.innerHTML = '<span class="pk-att-qa-done-mark">\u2713</span>';
+                    btn.disabled = true; btn.textContent = '\u2713'; btn.classList.add('pk-att-qa-added');
                     pkAttRecorded({ AttendanceId: aid, MundaneId: attendee.MundaneId, Persona: attendee.Persona, ClassId: classId, Credits: credits });
                     pkAttHideFeedback();
                 } else {
@@ -6449,7 +6457,7 @@ $(document).ready(function() {
                     var midInt = parseInt(pid, 10);
                     pkAttEntered[midInt] = true;
                     pkLastClass[midInt]  = cls;
-                    pkAttShowFeedback('Added: ' + name, true);
+                    pkAttHideFeedback();
                     pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred });
                     gid('pk-att-player-name').value = '';
                     gid('pk-att-player-id').value   = '';
@@ -6640,6 +6648,9 @@ $(document).ready(function() {
         },
         change: function(e, ui) { if (!ui.item) $('#pk-att-player-id').val(''); return false; },
         delay: 250, minLength: 2,
+    });
+    $('#pk-att-player-name').on('input', function() {
+        if (!$(this).val()) { pkAttAC.autocomplete('close'); $('#pk-att-player-id').val(''); }
     });
     pkAttAC.data('autocomplete')._renderItem = function(ul, item) {
         if (item.separator) {

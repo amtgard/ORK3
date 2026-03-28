@@ -6618,6 +6618,7 @@ p {
     max-width: 0;
     overflow: hidden;
     opacity: 0;
+    visibility: hidden;
     width: 200px;
     border: none;
     border-bottom: 1px solid rgba(255,255,255,0.4);
@@ -6626,11 +6627,11 @@ p {
     font-size: 12px;
     padding: 2px 4px;
     outline: none;
-    transition: max-width 0.3s ease, opacity 0.2s ease, margin-left 0.3s ease;
+    transition: max-width 0.3s ease, opacity 0.2s ease, margin-left 0.3s ease, visibility 0s 0.3s;
 }
 .nav-search-input::placeholder { color: rgba(255,255,255,0.5); }
 #nav-search-wrap:hover .nav-search-input,
-#nav-search-wrap.nav-search-open .nav-search-input { max-width: 200px; opacity: 1; margin-left: 6px; }
+#nav-search-wrap.nav-search-open .nav-search-input { max-width: 200px; opacity: 1; margin-left: 6px; visibility: visible; transition: max-width 0.3s ease, opacity 0.2s ease, margin-left 0.3s ease, visibility 0s 0s; }
 #nav-search-input-wrap { position: relative; display: flex; align-items: center; }
 #nav-search-dropdown {
     display: none;
