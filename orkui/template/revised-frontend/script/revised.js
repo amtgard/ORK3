@@ -5600,12 +5600,25 @@ $(document).ready(function() {
         if (e.key === 'Escape') { evCloseEditModal(); evCloseCheckinModal(); }
     });
 
+    function evGetSavedCredits() {
+        return parseFloat(localStorage.getItem('ev_credits_default')) || 1;
+    }
+    function evSaveCredits(val) {
+        var n = parseFloat(val);
+        if (n > 0) localStorage.setItem('ev_credits_default', n);
+    }
     window.evOpenCheckinModal = function(mundaneId, personaName) {
         document.getElementById('ev-checkin-mundane-id').value = mundaneId;
         document.getElementById('ev-checkin-name').textContent = personaName;
+        var creditsInput = document.querySelector('#ev-checkin-form [name="Credits"]');
+        if (creditsInput) creditsInput.value = evGetSavedCredits();
         var overlay = document.getElementById('ev-checkin-modal');
         if (overlay) overlay.classList.add('ev-modal-open');
         document.body.style.overflow = 'hidden';
+        setTimeout(function() {
+            var classSelect = document.querySelector('#ev-checkin-form [name="ClassId"]');
+            if (classSelect) classSelect.focus();
+        }, 50);
     };
     window.evCloseCheckinModal = function() {
         var overlay = document.getElementById('ev-checkin-modal');
@@ -5666,6 +5679,7 @@ $(document).ready(function() {
         .then(function(response) { return response.json(); })
         .then(function(data) {
             if (data.status === 0) {
+                evSaveCredits(form.querySelector('[name="Credits"]').value);
                 var mundaneId = form.querySelector('[name="MundaneId"]').value;
                 var rsvpBtn = document.querySelector('.ev-checkin-btn[data-mundane="' + mundaneId + '"]');
                 if (rsvpBtn) {
@@ -5725,6 +5739,7 @@ $(document).ready(function() {
         .then(function(response) { return response.json(); })
         .then(function(data) {
             if (data.status === 0 && data.attendance) {
+                evSaveCredits(form.querySelector('[name="Credits"]').value);
                 var att = data.attendance;
                 var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
                 var kingCell  = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
@@ -5762,6 +5777,8 @@ $(document).ready(function() {
                 }
 
                 form.reset();
+                var creditsField = form.querySelector('[name="Credits"]');
+                if (creditsField) creditsField.value = evGetSavedCredits();
                 $('#ev-PlayerName').val('');
                 $('#ev-MundaneId').val('');
 

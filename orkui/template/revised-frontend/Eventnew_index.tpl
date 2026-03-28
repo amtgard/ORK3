@@ -108,6 +108,9 @@
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <style>
+.ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
+.ev-icon-btn { background: #fff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 9px; font-size: 13px; color: #4a5568; cursor: pointer; transition: background .15s, border-color .15s; line-height: 1; }
+.ev-icon-btn:hover { background: #edf2f7; border-color: #cbd5e0; }
 .ev-modal-btn-delete {
 	background: #fff0f0; border: 1px solid #fc8181; color: #c53030;
 	padding: 8px 14px; border-radius: 5px; font-size: 13px; font-weight: 600;
@@ -444,6 +447,10 @@
 			<?php // ---- Attendance Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-attendance">
 
+				<div class="ev-export-bar">
+					<button class="ev-icon-btn" title="Export CSV" onclick="evExportAttendanceCsv()"><i class="fas fa-download"></i></button>
+					<button class="ev-icon-btn" title="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>
+				</div>
 				<?php if ($canManageAttendance): ?>
 				<div class="ev-att-form">
 					<h4><i class="fas fa-plus-circle" style="margin-right:6px;color:#276749"></i>Add Attendance</h4>
@@ -471,7 +478,7 @@
 							</div>
 							<div class="ev-form-field">
 								<label>Credits</label>
-								<input type="text" id="ev-Credits" name="Credits" style="width:55px"
+								<input type="text" id="ev-Credits" name="Credits" style="width:55px" oninput="evSyncCredits(this.value)"
 									value="<?= (float)($attendanceForm['Credits'] ?? $defaultCredits) ?>">
 							</div>
 							<div class="ev-form-field" style="justify-content:flex-end">
@@ -532,16 +539,29 @@
 
 			<?php // ---- RSVPs Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-rsvp">
-				<p style="font-size:.95em;color:#4a5568;margin:0 0 12px">
-					<i class="fas fa-check-circle" style="margin-right:4px;color:#276749"></i>
-					<strong><?= $rsvpCounts['going'] ?></strong> Going
-					&nbsp;&nbsp;
-					<i class="fas fa-star" style="margin-right:4px;color:#b7791f"></i>
-					<strong><?= $rsvpCounts['interested'] ?></strong> Interested
-				</p>
+				<div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 12px">
+					<p style="font-size:.95em;color:#4a5568;margin:0">
+						<i class="fas fa-check-circle" style="margin-right:4px;color:#276749"></i>
+						<strong><?= $rsvpCounts['going'] ?></strong> Going
+						&nbsp;&nbsp;
+						<i class="fas fa-star" style="margin-right:4px;color:#b7791f"></i>
+						<strong><?= $rsvpCounts['interested'] ?></strong> Interested
+					</p>
+					<div style="display:flex;gap:6px">
+						<button class="ev-icon-btn" title="Export CSV" onclick="evExportRsvpCsv()"><i class="fas fa-download"></i></button>
+						<button class="ev-icon-btn" title="Print" onclick="evPrintRsvp()"><i class="fas fa-print"></i></button>
+					</div>
+				</div>
 				<?php if ($canManageAttendance): ?>
 					<?php if (count($rsvpList) > 0): ?>
-					<table class="ev-table">
+					<div style="margin-bottom:10px;position:relative;">
+						<i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#a0aec0;font-size:12px;pointer-events:none"></i>
+						<input type="text" id="ev-rsvp-search" placeholder="Filter by name…" oninput="evFilterRsvp(this.value)"
+							style="width:100%;box-sizing:border-box;padding:6px 28px 6px 28px;border:1px solid #e2e8f0;border-radius:5px;font-size:13px;color:#2d3748;">
+						<button id="ev-rsvp-clear" onclick="evClearRsvpSearch()" title="Clear search"
+							style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:#a0aec0;font-size:14px;cursor:pointer;padding:0;line-height:1;">&times;</button>
+					</div>
+					<table class="ev-table" id="ev-rsvp-table">
 						<thead>
 							<tr><th>Player</th><th>Status</th><th></th></tr>
 						</thead>
@@ -788,6 +808,9 @@
 	</div>
 </div><!-- /.ev-edit-modal -->
 
+<?php endif; ?>
+
+<?php if ($canManageAttendance): ?>
 <div class="ev-modal-overlay" id="ev-checkin-modal">
 	<div class="ev-modal">
 		<div class="ev-modal-header">
@@ -811,7 +834,7 @@
 					</div>
 					<div class="ev-modal-field" style="max-width:100px">
 						<label>Credits</label>
-						<input type="number" name="Credits" value="1" min="0.25" step="0.25">
+						<input type="number" name="Credits" value="1" min="0.25" step="0.25" oninput="evSyncCredits(this.value)">
 					</div>
 				</div>
 			</div>
@@ -836,12 +859,16 @@ function evPositionDelTooltip(wrap) {
 	tip.style.top  = (r.top + window.scrollY) + 'px';
 }
 
+var _evSavedCredits = parseFloat(localStorage.getItem('ev_credits_default')) || null;
+if (_evSavedCredits) { var _evCr = document.getElementById('ev-Credits'); if (_evCr) _evCr.value = _evSavedCredits; }
 var EvConfig = {
 	uir:        '<?= UIR ?>',
 	httpService:'<?= HTTP_SERVICE ?>',
 	canManage:  <?= !empty($canManage) ? 'true' : 'false' ?>,
 	eventId:    <?= $eventId ?>,
-	detailId:   <?= $detailId ?>
+	detailId:   <?= $detailId ?>,
+	eventName:  <?= json_encode($info['Name'] ?? 'Event') ?>,
+	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>
 };
 </script>
 <?php if ($canManage): ?>
@@ -964,6 +991,96 @@ function evConfirmAttDelete(e, link) {
 			})
 			.catch(function() { link.textContent = '×'; alert('Request failed.'); });
 	});
+}
+function evExportCsv(filename, headers, rows) {
+	var lines = [headers.map(function(h) { return '"' + h.replace(/"/g,'""') + '"'; }).join(',')];
+	rows.forEach(function(row) { lines.push(row.map(function(v) { return '"' + String(v).replace(/"/g,'""') + '"'; }).join(',')); });
+	var a = document.createElement('a');
+	a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+	a.download = filename;
+	a.click();
+}
+function evSyncCredits(val) {
+	var n = parseFloat(val);
+	if (!(n > 0)) return;
+	var modal = document.querySelector('#ev-checkin-form [name="Credits"]');
+	var form  = document.getElementById('ev-Credits');
+	if (modal && modal !== document.activeElement) modal.value = n;
+	if (form  && form  !== document.activeElement) form.value  = n;
+	if (typeof evSaveCredits === 'function') evSaveCredits(n);
+}
+function evFilterRsvp(q) {
+	q = q.toLowerCase();
+	document.querySelectorAll('#ev-rsvp-table tbody tr').forEach(function(tr) {
+		tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+	});
+	var clr = document.getElementById('ev-rsvp-clear');
+	if (clr) clr.style.display = q ? '' : 'none';
+}
+function evClearRsvpSearch() {
+	var inp = document.getElementById('ev-rsvp-search');
+	if (inp) { inp.value = ''; inp.focus(); }
+	evFilterRsvp('');
+}
+function evPrintSection(contentHtml, title) {
+	var w = window.open('', '_blank', 'width=800,height=600');
+	w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + title + '</title><style>' +
+		'body{font-family:Arial,sans-serif;font-size:13px;color:#1a202c;padding:20px}' +
+		'h2{margin:0 0 4px;font-size:16px}' +
+		'.ev-print-sub{font-size:12px;color:#718096;margin:0 0 14px}' +
+		'table{border-collapse:collapse;width:100%}' +
+		'th,td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;font-size:12px}' +
+		'th{background:#f7fafc;font-weight:700}' +
+		'tr:nth-child(even) td{background:#f7fafc}' +
+		'a{color:inherit;text-decoration:none}' +
+		'@media print{body{padding:0}}' +
+	'</style></head><body>' + contentHtml + '</body></html>');
+	w.document.close();
+	setTimeout(function() { w.print(); }, 250);
+}
+function evPrintAttendance() {
+	var tbl = document.querySelector('#ev-attendance-table');
+	var tblHtml = '<p>No attendance recorded.</p>';
+	if (tbl) {
+		var clone = tbl.cloneNode(true);
+		clone.querySelectorAll('tr').forEach(function(tr) {
+			var last = tr.lastElementChild;
+			if (last) last.remove();
+		});
+		tblHtml = clone.outerHTML;
+	}
+	var sub = EvConfig.eventDate || '';
+	var header = '<h2>' + (EvConfig.eventName || 'Event') + ' — Attendance</h2>' + (sub ? '<p class="ev-print-sub">' + sub + '</p>' : '');
+	evPrintSection(header + tblHtml, 'Attendance');
+}
+function evPrintRsvp() {
+	var tbl = document.querySelector('#ev-rsvp-table');
+	var going = document.querySelector('#ev-tab-rsvp .fa-check-circle')?.parentElement?.textContent?.trim() || '';
+	var sub = (EvConfig.eventDate || '') + (going ? '  ·  ' + going : '');
+	var header = '<h2>' + (EvConfig.eventName || 'Event') + ' — RSVPs</h2>' + (sub ? '<p class="ev-print-sub">' + sub + '</p>' : '');
+	evPrintSection(header + (tbl ? tbl.outerHTML : '<p>No RSVPs.</p>'), 'RSVPs');
+}
+function evCsvSlug() {
+	var name = (EvConfig.eventName || 'event').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+	var date = EvConfig.eventDate || '';
+	return (date ? date + '-' : '') + name;
+}
+function evExportAttendanceCsv() {
+	var rows = [];
+	document.querySelectorAll('#ev-attendance-table tbody tr').forEach(function(tr) {
+		var c = tr.querySelectorAll('td');
+		rows.push([c[0]?c[0].textContent.trim():'', c[1]?c[1].textContent.trim():'', c[2]?c[2].textContent.trim():'', c[3]?c[3].textContent.trim():'', c[4]?c[4].textContent.trim():'']);
+	});
+	evExportCsv(evCsvSlug() + '-attendance.csv', ['Player','Kingdom','Park','Class','Credits'], rows);
+}
+function evExportRsvpCsv() {
+	var rows = [];
+	document.querySelectorAll('#ev-rsvp-table tbody tr').forEach(function(tr) {
+		if (tr.style.display === 'none') return;
+		var c = tr.querySelectorAll('td');
+		rows.push([c[0]?c[0].textContent.trim():'', c[1]?c[1].textContent.trim():'']);
+	});
+	evExportCsv(evCsvSlug() + '-rsvps.csv', ['Player','Status'], rows);
 }
 function evConfirmDeleteOccurrence(e, form) {
 	e.preventDefault();

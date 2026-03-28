@@ -1028,6 +1028,22 @@ class Controller_Admin extends Controller {
 			}
 		}
 
+		// Set breadcrumbs from the actual entity, not the logged-in user's session kingdom/park
+		unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
+		if ($type === 'Kingdom') {
+			$this->data['menu']['kingdom'] = ['url' => $url, 'display' => $name];
+		} elseif ($type === 'Park') {
+			$this->data['menu']['park'] = ['url' => $url, 'display' => $name];
+		} elseif ($type === 'Event') {
+			if (!empty($evKingdomId)) {
+				$this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $evKingdomId, 'display' => $inheritedKingdomName];
+			}
+			if (!empty($evParkId)) {
+				$this->data['menu']['park'] = ['url' => UIR . 'Park/profile/' . $evParkId, 'display' => $inheritedParkName];
+			}
+			$this->data['menu']['event'] = ['url' => $url, 'display' => $name];
+		}
+
 		$this->data['PermType']         = $type;
 		$this->data['PermId']           = $id;
 		$this->data['PermName']         = $name;
