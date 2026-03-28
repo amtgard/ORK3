@@ -4,6 +4,9 @@
 // the modal once on their next page load, then not again until the version changes.
 define('WHATS_NEW_VERSION', '2026-03-22');
 
+// Application version — shown in the site footer.
+define('ORK_VERSION', '3.5.0');
+
 $WHATS_NEW_ITEMS = [
 	['icon' => 'fas fa-user', 'title' => 'New Player Profiles', 'body' => 'Player profiles have a fresh new look with stats, awards, titles, attendance, and more all in one place.'],
 	['icon' => 'fas fa-chess-rook', 'title' => 'New Kingdom Profiles', 'body' => 'Kingdom pages now show parks, events, tournaments, a live map, and reports in a redesigned layout.'],

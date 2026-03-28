@@ -375,10 +375,10 @@
 	</script>
 
 	
+<?php require_once(DIR_UI . 'whats_new_content.php'); ?>
 <?php if ($this->__session->token != null) : ?>
 <?php
 // --- What's New modal ---
-require_once(DIR_UI . 'whats_new_content.php');
 $__wnUid = (int)$this->__session->user_id;
 $DB->Clear();
 $__wnRow = $DB->DataSet("SELECT id FROM ork_whats_new_seen WHERE mundane_id = " . $__wnUid . " AND version = '" . WHATS_NEW_VERSION . "' LIMIT 1");
@@ -420,6 +420,12 @@ document.getElementById('wn-overlay').addEventListener('click', function(e) {
 </script>
 <?php endif; ?>
 <?php endif; ?>
+
+<footer style="margin-top:40px;padding:18px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:11px;color:#94a3b8;text-align:center;line-height:1.7;">
+  Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
+  &nbsp;&middot;&nbsp;
+  ORK v<?=ORK_VERSION?>
+</footer>
 
 </body>
 </html>
