@@ -508,6 +508,14 @@ class Controller_Park extends Controller
         $this->data['ViewerCircleAwardIds'] = $uid > 0 ? Ork3::$Lib->player->GetCircleAwardIds($uid) : array();
         $this->data['ViewerHasCircle']      = !empty($this->data['ViewerCircleAwardIds']);
 
+        $this->data['CanManageCourt']      = $uid > 0 && Ork3::$Lib->court->canManage($uid, (int)$this->session->kingdom_id, (int)$park_id);
+        $this->data['CourtList']           = [];
+        $this->data['CourtUpcomingEvents'] = [];
+        if ($this->data['CanManageCourt']) {
+            $this->data['CourtList']           = Ork3::$Lib->court->getCourtList((int)$this->session->kingdom_id, (int)$park_id);
+            $this->data['CourtUpcomingEvents'] = Ork3::$Lib->court->getUpcomingEvents((int)$this->session->kingdom_id);
+        }
+
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
         $this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
     }

@@ -525,10 +525,34 @@ class Controller_KingdomAjax extends Controller
                 ? json_encode(['status' => 0])
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-        } elseif ($action === 'geteventtemplates') {
-            global $DB;
-            $kid = $kingdom_id;
-            $sql = "SELECT e.event_id, e.name, p.park_id, p.name AS park_name
+		} elseif ($action === 'snoozerecommendation') {
+			$this->load_model('Player');
+			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
+			$r = $this->Player->snooze_recommendation([
+				'Token'             => $this->session->token,
+				'RecommendationsId' => $rec_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'unsnoozerecommendation') {
+			$this->load_model('Player');
+			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
+			$r = $this->Player->unsnooze_recommendation([
+				'Token'             => $this->session->token,
+				'RecommendationsId' => $rec_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'geteventtemplates') {
+			global $DB;
+			$kid = $kingdom_id;
+			$sql = "SELECT e.event_id, e.name, p.park_id, p.name AS park_name
 			        FROM ork_event e
 			        LEFT JOIN ork_park p ON p.park_id = e.park_id
 			        WHERE e.kingdom_id = $kid ORDER BY e.name";

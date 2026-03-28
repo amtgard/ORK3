@@ -143,6 +143,6 @@ class Controller_Court extends Controller {
         $this->data['HeraldryUrl']  = $heraldryUrl;
         $this->data['HasHeraldry']  = $hasHeraldry;
 
-        $this->template = HTTP_TEMPLATE . 'default/Court_detail.tpl';
+        $this->template = 'Court_detail.tpl';
     }
 }

@@ -230,10 +230,12 @@ class Controller_CourtAjax extends Controller {
 
         $this->requireCourtAuth((int)$r->court_id);
 
-        $notes         = trim($_POST['Notes']        ?? '');
-        $pass_to_local = (int)($_POST['PassToLocal'] ?? 0) ? 1 : 0;
-        $status        = trim($_POST['Status']       ?? 'planned');
-        $allowed       = ['planned', 'announced', 'given', 'cancelled'];
+        $notes            = trim($_POST['Notes']          ?? '');
+        $pass_to_local    = (int)($_POST['PassToLocal']    ?? 0) ? 1 : 0;
+        $status           = trim($_POST['Status']          ?? 'planned');
+        $scroll_maker_id  = (int)($_POST['ScrollMakerId']  ?? 0);
+        $regalia_maker_id = (int)($_POST['RegaliaMakerId'] ?? 0);
+        $allowed          = ['planned', 'announced', 'given', 'cancelled'];
         if (!in_array($status, $allowed)) $status = 'planned';
 
         $DB->Clear();
@@ -241,7 +243,9 @@ class Controller_CourtAjax extends Controller {
             'UPDATE ' . DB_PREFIX . 'court_award SET
              notes = \'' . $this->esc($notes) . '\',
              pass_to_local = ' . $pass_to_local . ',
-             status = \'' . $status . '\'
+             status = \'' . $status . '\',
+             scroll_maker_id  = ' . ($scroll_maker_id  > 0 ? $scroll_maker_id  : 'NULL') . ',
+             regalia_maker_id = ' . ($regalia_maker_id > 0 ? $regalia_maker_id : 'NULL') . '
              WHERE court_award_id = ' . $court_award_id
         );
         $this->jsonOut(['status' => 0, 'notes' => $notes, 'pass_to_local' => $pass_to_local, 'award_status' => $status]);

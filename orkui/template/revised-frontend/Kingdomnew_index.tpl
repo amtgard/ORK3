@@ -979,6 +979,33 @@
 		</div>
 		<?php endif; ?>
 
+		<!-- Add to Court modal -->
+		<?php if ($CanManageCourt ?? false): ?>
+		<div id="kn-addcourt-overlay" class="kn-overlay">
+			<div class="kn-modal-box" style="max-width:420px">
+				<button class="kn-modal-close-btn" id="kn-addcourt-close-btn" aria-label="Close">&times;</button>
+				<h3 style="margin-top:0">Add to Court</h3>
+				<p id="kn-addcourt-desc" style="margin:4px 0 12px;color:#4a5568;font-size:13px"></p>
+				<div class="pk-acct-field">
+					<label for="kn-addcourt-select">Select Court</label>
+					<select id="kn-addcourt-select" style="width:100%;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:13px">
+						<option value="">— choose a court —</option>
+						<?php foreach ($CourtList ?? [] as $court): ?>
+						<option value="<?= (int)$court['CourtId'] ?>">
+							<?= htmlspecialchars($court['Name']) ?><?= $court['CourtDate'] ? ' (' . htmlspecialchars($court['CourtDate']) . ')' : '' ?>
+						</option>
+						<?php endforeach; ?>
+					</select>
+				</div>
+				<div class="pk-form-error" id="kn-addcourt-error" style="display:none"></div>
+				<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+					<button class="pk-btn-ghost" id="kn-addcourt-cancel">Cancel</button>
+					<button class="kn-btn kn-btn-primary" id="kn-addcourt-submit" disabled>Add to Court</button>
+				</div>
+			</div>
+		</div>
+		<?php endif; ?>
+
 		<!-- Court Planner Tab -->
 		<?php if ($CanManageCourt ?? false): ?>
 		<div class="kn-tab-panel" id="kn-tab-court" style="display:none">
@@ -996,6 +1023,11 @@
 			.kn-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
 			.kn-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
 			.kn-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
+			.kn-rec-age-badge { font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; margin-left:4px; }
+			.kn-rec-age-green  { background:#c6f6d5; color:#22543d; }
+			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
+			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
+			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
 			</style>
 			<div class="kn-cp-toolbar">
 				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
@@ -1360,7 +1392,7 @@ var KnBannerConfig = {
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-award-cancel">Close</button>
-			<div style="display:flex;gap:8px">
+			<div style="display:flex;gap:8px" id="kn-award-footer-normal">
 				<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
 					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
 				</button>
@@ -1368,6 +1400,9 @@ var KnBannerConfig = {
 					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
 				</button>
 			</div>
+			<button class="kn-btn kn-btn-primary" id="kn-award-save-next" disabled style="display:none">
+				<i class="fas fa-arrow-right"></i> Add and Next
+			</button>
 		</div>
 	</div>
 </div>
@@ -2465,6 +2500,17 @@ tr:hover .kn-copy-link { opacity: 1; }
 #kn-moveplayer-overlay .kn-modal-body { overflow:visible; }
 #kn-moveplayer-overlay .kn-acct-field { position:relative; }
 #kn-moveplayer-overlay .kn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
+/* Rec actions dropdown */
+.kn-rec-actions-wrap { position:relative; display:inline-block; text-align:left; }
+.kn-rec-actions-toggle { background:#edf2f7; border:1px solid #cbd5e0; color:#4a5568; border-radius:5px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.kn-rec-actions-toggle:hover { background:#e2e8f0; }
+.kn-rec-actions-drop { display:none; position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid #e2e8f0; border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:1000; min-width:150px; overflow:hidden; }
+.kn-rec-actions-drop.open { display:block; }
+.kn-rec-actions-drop button { display:block; width:100%; text-align:left; padding:8px 14px; background:none; border:none; border-bottom:1px solid #f0f4f8; font-size:13px; cursor:pointer; color:#2d3748; white-space:nowrap; }
+.kn-rec-actions-drop button:last-child { border-bottom:none; }
+.kn-rec-actions-drop button:hover { background:#f7fafc; }
+.kn-rec-actions-drop button.pk-btn-primary { color:#276749; font-weight:700; }
+.kn-rec-actions-drop button.pk-rec-oncourt { color:#2b6cb0; }
 /* Subscribe popover */
 .kn-sub-wrap { position:relative; }
 .kn-sub-pop {
@@ -3067,6 +3113,10 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 		if (wrap && !wrap.contains(e.target)) {
 			var pop = document.getElementById('kn-sub-pop');
 			if (pop) pop.style.setProperty('display', 'none', 'important');
+		}
+		// Close any open rec action dropdowns
+		if (!e.target.closest('.kn-rec-actions-wrap')) {
+			document.querySelectorAll('.kn-rec-actions-drop.open').forEach(function(d) { d.classList.remove('open'); });
 		}
 	});
 

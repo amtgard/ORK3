@@ -210,6 +210,14 @@ class Model_Player extends Model {
 		return $this->Player->RestoreAwardRecommendation($request);
 	}
 
+	function snooze_recommendation($request) {
+		return $this->Player->SnoozeAwardRecommendation($request);
+	}
+
+	function unsnooze_recommendation($request) {
+		return $this->Player->UnsnoozeAwardRecommendation($request);
+	}
+
 	function remove_heraldry($request) {
 		return $this->Player->RemoveHeraldry($request);
 	}

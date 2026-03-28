@@ -144,14 +144,22 @@ class Court {
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
                     ca.recommendations_id, ca.sort_order, ca.pass_to_local,
                     ca.notes, ca.status, ca.scroll_status, ca.regalia_status,
+                    ca.scroll_maker_id, ca.regalia_maker_id,
+                    sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona,
                     m.persona, p.abbreviation AS park_abbrev,
                     IFNULL(ka.name, a.name) AS award_name,
-                    a.is_ladder, IFNULL(a.is_title, 0) AS is_title
+                    a.is_ladder, IFNULL(a.is_title, 0) AS is_title,
+                    rec.reason AS rec_reason, rec.mask_giver,
+                    rb.persona AS rec_by_persona
              FROM ' . DB_PREFIX . 'court_award ca
              LEFT JOIN ' . DB_PREFIX . 'mundane m      ON m.mundane_id         = ca.mundane_id
              LEFT JOIN ' . DB_PREFIX . 'park p          ON p.park_id            = m.park_id
              LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id   = ca.kingdomaward_id
              LEFT JOIN ' . DB_PREFIX . 'award a         ON a.award_id           = ka.award_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane sm      ON sm.mundane_id        = ca.scroll_maker_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane rm      ON rm.mundane_id        = ca.regalia_maker_id
+             LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane rb      ON rb.mundane_id        = rec.recommended_by_id
              WHERE ca.court_id = ' . (int)$court_id . '
              ORDER BY ca.sort_order, ca.court_award_id'
         );
@@ -176,6 +184,12 @@ class Court {
                     'Status'            => $rs->status,
                     'ScrollStatus'      => (int)$rs->scroll_status,
                     'RegaliaStatus'     => (int)$rs->regalia_status,
+                    'ScrollMakerId'      => $rs->scroll_maker_id ? (int)$rs->scroll_maker_id : null,
+                    'ScrollMakerPersona' => $rs->scroll_maker_persona ?? '',
+                    'RegaliaMakerId'     => $rs->regalia_maker_id ? (int)$rs->regalia_maker_id : null,
+                    'RegaliaMakerPersona' => $rs->regalia_maker_persona ?? '',
+                    'RecReason'         => $rs->rec_reason ?? '',
+                    'RecByPersona'      => (isset($rs->mask_giver) && (int)$rs->mask_giver) ? null : ($rs->rec_by_persona ?? null),
                     'Artisans'          => [],
                 ];
             }
@@ -237,6 +251,7 @@ class Court {
              LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka  ON ka.kingdomaward_id = recs.kingdomaward_id
              LEFT JOIN ' . DB_PREFIX . 'award a          ON a.award_id         = ka.award_id
              WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0)
+               AND m.active = 1 AND (m.suspended IS NULL OR m.suspended = 0)
                AND ' . $location_clause . '
              HAVING (
                  SELECT COUNT(aw.awards_id) FROM ' . DB_PREFIX . 'awards aw

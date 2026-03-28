@@ -505,6 +505,11 @@ class Report extends Ork3
 			recs.mask_giver,
 			recs.deleted_at,
 			recs.deleted_by,
+			recs.snoozed_monarch_id,
+			recs.snoozed_regent_id,
+			(SELECT COALESCE(MAX(CASE WHEN role='Monarch' THEN mundane_id END), 0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id) AS current_monarch_id,
+			(SELECT COALESCE(MAX(CASE WHEN role='Regent'  THEN mundane_id END), 0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id) AS current_regent_id,
+			(SELECT COUNT(*) FROM " . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') AS on_court_count,
 			ka.award_id as ka_award_id,
 			ka.kingdomaward_id as ka_kaward_id,
 			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
@@ -524,65 +529,72 @@ class Report extends Ork3
 			LEFT join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = recs.recommended_by_id
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-			WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0) $location_clause
+			WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0)
+			  AND m.active = 1 AND (m.suspended IS NULL OR m.suspended = 0)
+			  $location_clause
 			order by m.persona, a.name, recs.rank, m.persona";
-        $r = $this->db->query($sql);
-        $response = array();
-        $viewerIsAdmin = $viewer_id > 0 && Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_ADMIN, 0, AUTH_EDIT);
-        if ($r !== false && $r->size() > 0) {
-            // First pass: collect raw rows + rec_ids/meta (for seconds wiring below)
-            // plus the set of (mundane_id, ladder_award_id) we'll need Master-peerage lookups for.
-            $rawRows = array();
-            $rec_ids = array();
-            $rec_meta_by_id = array();  // for ViewerCanSecond eligibility check
-            $ladderMap = Award::GetLadderMasterMap();
-            $masterIdSet = array();
-            foreach ($ladderMap as $lInfo) {
-                foreach ((array)$lInfo['MasterAwardIds'] as $mAid) {
-                    $masterIdSet[(int)$mAid] = true;
-                }
-            }
-            $needMundaneIds = array();
-            while ($r->next()) {
-                $row = (object)[
-                    'recommendations_id' => $r->recommendations_id,
-                    'mundane_id'         => (int)$r->mundane_id,
-                    'persona'            => $r->persona,
-                    'date_recommended'   => $r->date_recommended,
-                    'rank'               => $r->rank,
-                    'award_name'         => $r->award_name,
-                    'reason'             => $r->reason,
-                    'recommended_by_persona' => $r->recommended_by_persona,
-                    'recommended_by_id'      => $r->recommended_by_id,
-                    'mask_giver'         => (int)$r->mask_giver,
-                    'ka_kaward_id'       => (int)$r->ka_kaward_id,
-                    'ka_award_id'        => (int)$r->ka_award_id,
-                    'recs_award_id'      => (int)$r->award_id,
-                    'park_id'            => $r->park_id,
-                    'kingdom_id'         => $r->kingdom_id,
-                    'park_name'          => $r->park_name,
-                    'kingdom_name'       => $r->kingdom_name,
-                    'kacount'            => (int)$r->kacount,
-                    'awcount'            => (int)$r->awcount,
-                    'player_ka_rank'     => (int)$r->player_ka_rank,
-                    'player_ka_date'     => $r->player_ka_date,
-                    'a_is_ladder'        => (int)$r->a_is_ladder,
-                    'a_is_title'         => (int)$r->a_is_title,
-                ];
-                $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
-                if (isset($ladderMap[$recAwardId])) {
-                    $needMundaneIds[$row->mundane_id] = true;
-                }
-                $rid = (int)$row->recommendations_id;
-                $rec_ids[] = $rid;
-                $rec_meta_by_id[$rid] = array(
-                    'mundane_id' => $row->mundane_id,
-                    'recommended_by_id' => (int)$row->recommended_by_id,
-                    'kingdomaward_id' => $row->ka_kaward_id,
-                    'rank' => (int)$row->rank,
-                );
-                $rawRows[] = $row;
-            }
+		$r = $this->db->query($sql);
+		$response = array();
+		$viewerIsAdmin = $viewer_id > 0 && Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_ADMIN, 0, AUTH_EDIT);
+		if ($r !== false && $r->size() > 0) {
+			// First pass: collect raw rows + rec_ids/meta (for seconds wiring below)
+			// plus the set of (mundane_id, ladder_award_id) we'll need Master-peerage lookups for.
+			$rawRows = array();
+			$rec_ids = array();
+			$rec_meta_by_id = array();  // for ViewerCanSecond eligibility check
+			$ladderMap = Award::GetLadderMasterMap();
+			$masterIdSet = array();
+			foreach ($ladderMap as $lInfo) {
+				foreach ((array)$lInfo['MasterAwardIds'] as $mAid) {
+					$masterIdSet[(int)$mAid] = true;
+				}
+			}
+			$needMundaneIds = array();
+			while ($r->next()) {
+				$row = (object)[
+					'recommendations_id' => $r->recommendations_id,
+					'mundane_id'         => (int)$r->mundane_id,
+					'persona'            => $r->persona,
+					'date_recommended'   => $r->date_recommended,
+					'rank'               => $r->rank,
+					'award_name'         => $r->award_name,
+					'reason'             => $r->reason,
+					'recommended_by_persona' => $r->recommended_by_persona,
+					'recommended_by_id'      => $r->recommended_by_id,
+					'mask_giver'         => (int)$r->mask_giver,
+					'ka_kaward_id'       => (int)$r->ka_kaward_id,
+					'ka_award_id'        => (int)$r->ka_award_id,
+					'recs_award_id'      => (int)$r->award_id,
+					'park_id'            => $r->park_id,
+					'kingdom_id'         => $r->kingdom_id,
+					'park_name'          => $r->park_name,
+					'kingdom_name'       => $r->kingdom_name,
+					'kacount'            => (int)$r->kacount,
+					'awcount'            => (int)$r->awcount,
+					'player_ka_rank'     => (int)$r->player_ka_rank,
+					'player_ka_date'     => $r->player_ka_date,
+					'a_is_ladder'        => (int)$r->a_is_ladder,
+					'a_is_title'         => (int)$r->a_is_title,
+					'snoozed_monarch_id' => $r->snoozed_monarch_id,
+					'snoozed_regent_id'  => $r->snoozed_regent_id,
+					'current_monarch_id' => (int)$r->current_monarch_id,
+					'current_regent_id'  => (int)$r->current_regent_id,
+					'on_court_count'     => (int)$r->on_court_count,
+				];
+				$recAwardId = $row->ka_award_id ?: $row->recs_award_id;
+				if (isset($ladderMap[$recAwardId])) {
+					$needMundaneIds[$row->mundane_id] = true;
+				}
+				$rid = (int)$row->recommendations_id;
+				$rec_ids[] = $rid;
+				$rec_meta_by_id[$rid] = array(
+					'mundane_id' => $row->mundane_id,
+					'recommended_by_id' => (int)$row->recommended_by_id,
+					'kingdomaward_id' => $row->ka_kaward_id,
+					'rank' => (int)$row->rank,
+				);
+				$rawRows[] = $row;
+			}
 
             // Second pass: batch-fetch Master-peerage holdings for any mundanes whose recs target a ladder.
             $heldMasters = array(); // mundane_id => [master_award_id => true]
@@ -600,54 +612,64 @@ class Report extends Ork3
                 }
             }
 
-            // Final pass: build response, flipping AlreadyHas when a Master peerage covers a ladder rec.
-            // Custom awards (base Award with is_ladder=0 AND is_title=0) can legitimately be held many
-            // times, so they must never be filtered out as "already has".
-            $response['AwardRecommendations'] = array();
-            foreach ($rawRows as $row) {
-                $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
-                $isCustom   = ($row->a_is_ladder === 0 && $row->a_is_title === 0);
-                $alreadyHas = $isCustom ? false : ($row->kacount > 0 || $row->awcount > 0);
-                $coveredByMaster = false;
-                if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
-                    foreach ((array)$ladderMap[$recAwardId]['MasterAwardIds'] as $mAid) {
-                        if (!empty($heldMasters[$row->mundane_id][(int)$mAid])) {
-                            $alreadyHas = true;
-                            $coveredByMaster = true;
-                            break;
-                        }
-                    }
-                }
-                $isAnon        = ((int)$row->mask_giver === 1);
-                $hideSubmitter = $isAnon && !$viewerIsAdmin;
-                $response['AwardRecommendations'][] = array(
-                    'RecommendationsId' => $row->recommendations_id,
-                    'MundaneId' => $row->mundane_id,
-                    'Persona' => $row->persona,
-                    'DateRecommended' => $row->date_recommended,
-                    'Rank' => $row->rank,
-                    'AwardName' => $row->award_name,
-                    'Reason' => $row->reason,
-                    'IsAnonymous' => $isAnon,
-                    'RecommendedByName' => $hideSubmitter ? null : $row->recommended_by_persona,
-                    'RecommendedById'   => $hideSubmitter ? null : $row->recommended_by_id,
-                    'MaskGiver' => $row->mask_giver,
-                    'KingdomAwardId' => $row->ka_kaward_id,
-                    'AwardId' => $recAwardId,
-                    'ParkId' => $row->park_id,
-                    'KingdomId' => $row->kingdom_id,
-                    'ParkName' => $row->park_name,
-                    'KingdomName' => $row->kingdom_name,
-                    'AlreadyHas' => $alreadyHas,
-                    'CoveredByMaster' => $coveredByMaster,
-                    'CurrentRank' => $alreadyHas ? ($row->player_ka_rank ?: null) : null,
-                    'CurrentRankDate' => $alreadyHas ? $row->player_ka_date : null,
-                    'Seconds' => array(),
-                    'SecondsCount' => 0,
-                    'ViewerCanSecond' => false,
-                    'ViewerCanEditReason' => false,
-                );
-            }
+			// Final pass: build response, flipping AlreadyHas when a Master peerage covers a ladder rec.
+			// Custom awards (base Award with is_ladder=0 AND is_title=0) can legitimately be held many
+			// times, so they must never be filtered out as "already has".
+			$response['AwardRecommendations'] = array();
+			foreach ($rawRows as $row) {
+				$recAwardId = $row->ka_award_id ?: $row->recs_award_id;
+				$isCustom   = ($row->a_is_ladder === 0 && $row->a_is_title === 0);
+				$alreadyHas = $isCustom ? false : ($row->kacount > 0 || $row->awcount > 0);
+				$coveredByMaster = false;
+				if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
+					foreach ((array)$ladderMap[$recAwardId]['MasterAwardIds'] as $mAid) {
+						if (!empty($heldMasters[$row->mundane_id][(int)$mAid])) {
+							$alreadyHas = true;
+							$coveredByMaster = true;
+							break;
+						}
+					}
+				}
+				$isAnon        = ((int)$row->mask_giver === 1);
+				$hideSubmitter = $isAnon && !$viewerIsAdmin;
+				$isSnoozed     = $row->snoozed_monarch_id !== null
+					&& (int)$row->snoozed_monarch_id === (int)$row->current_monarch_id
+					&& (int)$row->snoozed_regent_id  === (int)$row->current_regent_id;
+				$ageDays = 0;
+				if (!empty($row->date_recommended)) {
+					try { $ageDays = (int)(new DateTime())->diff(new DateTime($row->date_recommended))->days; } catch (\Throwable $e) {}
+				}
+				$response['AwardRecommendations'][] = array(
+					'RecommendationsId' => $row->recommendations_id,
+					'MundaneId' => $row->mundane_id,
+					'Persona' => $row->persona,
+					'DateRecommended' => $row->date_recommended,
+					'Rank' => $row->rank,
+					'AwardName' => $row->award_name,
+					'Reason' => $row->reason,
+					'IsAnonymous' => $isAnon,
+					'RecommendedByName' => $hideSubmitter ? null : $row->recommended_by_persona,
+					'RecommendedById'   => $hideSubmitter ? null : $row->recommended_by_id,
+					'MaskGiver' => $row->mask_giver,
+					'KingdomAwardId' => $row->ka_kaward_id,
+					'AwardId' => $recAwardId,
+					'ParkId' => $row->park_id,
+					'KingdomId' => $row->kingdom_id,
+					'ParkName' => $row->park_name,
+					'KingdomName' => $row->kingdom_name,
+					'AlreadyHas' => $alreadyHas,
+					'CoveredByMaster' => $coveredByMaster,
+					'CurrentRank' => $alreadyHas ? ($row->player_ka_rank ?: null) : null,
+					'CurrentRankDate' => $alreadyHas ? $row->player_ka_date : null,
+					'Seconds' => array(),
+					'SecondsCount' => 0,
+					'ViewerCanSecond' => false,
+					'ViewerCanEditReason' => false,
+					'IsSnoozed' => $isSnoozed,
+					'IsOnCourt' => $row->on_court_count > 0,
+					'AgeDays'   => $ageDays,
+				);
+			}
 
             // Batch-fetch all active seconds (IsMine = false; applyViewerFlags sets it per-viewer).
             $seconds_by_rec = Ork3::$Lib->player->GetSecondsForRecommendations($rec_ids, 0);

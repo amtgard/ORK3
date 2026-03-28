@@ -2876,11 +2876,69 @@ class Player extends Ork3
         }
     }
 
-    public function DeleteAwardRecommendation($request)
-    {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
-            return NoAuthorization();
-        }
+	public function SnoozeAwardRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		$rec_id = (int)($request['RecommendationsId'] ?? 0);
+		if (!$rec_id) return InvalidParameter();
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $rec_id;
+		if (!$awardRec->find()) return InvalidParameter('Recommendation not found.');
+
+		// Auth: must be park admin for recipient's park
+		$recipientInfo = $this->player_info($awardRec->mundane_id);
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT))
+			return NoAuthorization();
+
+		// Resolve current monarch and regent for the recipient's park
+		$pid = (int)$recipientInfo['ParkId'];
+		$sql = "SELECT
+			COALESCE(MAX(CASE WHEN role='Monarch' THEN mundane_id END), 0) AS monarch_id,
+			COALESCE(MAX(CASE WHEN role='Regent'  THEN mundane_id END), 0) AS regent_id
+			FROM " . DB_PREFIX . "officer WHERE park_id = {$pid}";
+		$r = $this->db->query($sql);
+		$monarch_id = 0; $regent_id = 0;
+		if ($r && $r->size() > 0 && $r->next()) {
+			$monarch_id = (int)$r->monarch_id;
+			$regent_id  = (int)$r->regent_id;
+		}
+
+		$awardRec->snoozed_by_id      = $mundane_id;
+		$awardRec->snoozed_monarch_id = $monarch_id;
+		$awardRec->snoozed_regent_id  = $regent_id;
+		$awardRec->save();
+		return Success('Recommendation snoozed.');
+	}
+
+	public function UnsnoozeAwardRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		$rec_id = (int)($request['RecommendationsId'] ?? 0);
+		if (!$rec_id) return InvalidParameter();
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $rec_id;
+		if (!$awardRec->find()) return InvalidParameter('Recommendation not found.');
+
+		$recipientInfo = $this->player_info($awardRec->mundane_id);
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT))
+			return NoAuthorization();
+
+		$awardRec->snoozed_by_id      = null;
+		$awardRec->snoozed_monarch_id = null;
+		$awardRec->snoozed_regent_id  = null;
+		$awardRec->save();
+		return Success('Recommendation unsnoozed.');
+	}
+
+	public function DeleteAwardRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
 
         if (valid_id($request['RequestedBy'])) {
             $can_delete_recommendation = false;

@@ -212,6 +212,25 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-sb-toggle-btn.active { background: #2c5282; border-color: #2c5282; color: #fff; }
 .cp-sb-toggle-btn.active:hover { background: #2a4a7f; }
 @media (max-width: 800px) { .cp-body { flex-direction: column; } .cp-sidebar { width: 100%; } }
+@media print {
+    body > *:not(#cp-script-overlay) { display: none !important; }
+    #cp-script-overlay { display: block !important; font-family: Georgia, serif; padding: 16px 24px; }
+}
+#cp-script-overlay { display: none; }
+.cp-script-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+.cp-script-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cp-script-table td { padding: 4px 8px 4px 0; vertical-align: top; border-bottom: 1px solid #eee; line-height: 1.35; }
+.cp-script-table td:first-child { color: #aaa; font-size: 10px; width: 24px; white-space: nowrap; padding-right: 6px; }
+.cp-script-td-name { font-weight: 700; font-size: 13px; white-space: nowrap; width: 18%; }
+.cp-script-td-award { color: #2d3748; width: 20%; }
+.cp-script-td-rec { color: #4a5568; font-style: italic; }
+.cp-script-td-rec strong { font-style: normal; color: #2d3748; }
+
+.cp-status-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px; color:#4a5568; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 14px; margin-bottom:14px; }
+.cp-status-sep { color:#cbd5e0; }
+.cp-stat-ready { color:#276749; font-weight:600; }
+.cp-stat-wip   { color:#c05621; font-weight:600; }
+.cp-stat-none  { color:#718096; }
 </style>
 
 <?php if ($error): ?>
@@ -288,6 +307,28 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
         </div>
     </div>
 </div>
+
+<?php
+$_scroll_counts  = [0=>0, 1=>0, 2=>0];
+$_regalia_counts = [0=>0, 1=>0, 2=>0];
+foreach ($courtAwards ?? [] as $_ca) {
+    $_scroll_counts[min(2, max(0, (int)($_ca['ScrollStatus'] ?? 0)))]++;
+    $_regalia_counts[min(2, max(0, (int)($_ca['RegaliaStatus'] ?? 0)))]++;
+}
+$_total_awards = count($courtAwards ?? []);
+?>
+
+<?php if (!$error): ?>
+<div class="cp-page" style="padding-top:0;padding-bottom:0;margin-bottom:0">
+<div class="cp-status-bar">
+    <span><?= $_total_awards ?> award<?= $_total_awards !== 1 ? 's' : '' ?></span>
+    <span class="cp-status-sep"> &middot; </span>
+    <span>Scrolls: <span class="cp-stat-ready"><?= $_scroll_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_scroll_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_scroll_counts[0] ?> not started</span></span>
+    <span class="cp-status-sep"> &middot; </span>
+    <span>Regalia: <span class="cp-stat-ready"><?= $_regalia_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_regalia_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_regalia_counts[0] ?> not started</span></span>
+</div>
+</div>
+<?php endif; ?>
 
 <div class="cp-page"><div class="cp-body">
 
@@ -374,6 +415,11 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                 <i class="fas fa-plus"></i> Add Ad-hoc Award
             </button>
         </div>
+        <?php endif; ?>
+        <?php if (in_array($courtSt, ['published', 'complete'])): ?>
+        <button class="cp-btn cp-btn-outline" id="cp-script-btn" onclick="cpOpenScript()">
+            <i class="fas fa-scroll"></i> Court Script
+        </button>
         <?php endif; ?>
     </div>
 
@@ -470,6 +516,36 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
                                 <option value="<?= $sv ?>" <?= $ast === $sv ? 'selected' : '' ?>><?= $sl ?></option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scroll / Regalia Makers -->
+                <div class="cp-expand-grid" style="margin-top:8px">
+                    <div>
+                        <div class="cp-expand-label">Scroll Maker</div>
+                        <div style="position:relative">
+                            <input type="text" id="cp-scroll-maker-text-<?= $caid ?>"
+                                   class="cp-maker-ac" data-drop="cp-scroll-drop-<?= $caid ?>" data-hidden="cp-scroll-maker-id-<?= $caid ?>"
+                                   placeholder="Search by persona…"
+                                   value="<?= htmlspecialchars($aw['ScrollMakerPersona'] ?? '') ?>"
+                                   autocomplete="off"
+                                   style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px">
+                            <input type="hidden" id="cp-scroll-maker-id-<?= $caid ?>" value="<?= (int)($aw['ScrollMakerId'] ?? 0) ?>">
+                            <div id="cp-scroll-drop-<?= $caid ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="cp-expand-label">Regalia Maker</div>
+                        <div style="position:relative">
+                            <input type="text" id="cp-regalia-maker-text-<?= $caid ?>"
+                                   class="cp-maker-ac" data-drop="cp-regalia-drop-<?= $caid ?>" data-hidden="cp-regalia-maker-id-<?= $caid ?>"
+                                   placeholder="Search by persona…"
+                                   value="<?= htmlspecialchars($aw['RegaliaMakerPersona'] ?? '') ?>"
+                                   autocomplete="off"
+                                   style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px">
+                            <input type="hidden" id="cp-regalia-maker-id-<?= $caid ?>" value="<?= (int)($aw['RegaliaMakerId'] ?? 0) ?>">
+                            <div id="cp-regalia-drop-<?= $caid ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
                         </div>
                     </div>
                 </div>
@@ -698,13 +774,15 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     var courtId     = <?= (int)($court['CourtId'] ?? 0) ?>;
     var kidId       = <?= (int)($court['KingdomId'] ?? 0) ?>;
     var courtStatus = <?= json_encode($court['Status'] ?? 'draft') ?>;
-    var courtAwards = <?= json_encode($courtAwards) ?>;
+    var courtAwards = window.courtAwards = <?= json_encode($courtAwards) ?>;
+    var courtMeta   = window.courtMeta   = { name: <?= json_encode($court['Name'] ?? '') ?>, date: <?= json_encode($court['CourtDate'] ?? '') ?> };
     var currentArtisanCourtAwardId = 0;
 
     // ---- Utilities ----
     function esc(s) {
         return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+    window.esc = esc;
     function gid(id) { return document.getElementById(id); }
     function post(url, fd) {
         return fetch(uir + url, {
@@ -913,14 +991,18 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 
     // ---- Save award (notes, pass_to_local, status) ----
     window.cpSaveAward = function(caid) {
-        var notes  = gid('cp-notes-' + caid).value;
-        var ptl    = gid('cp-ptl-' + caid).checked ? 1 : 0;
-        var status = gid('cp-status-' + caid).value;
+        var notes          = gid('cp-notes-' + caid).value;
+        var ptl            = gid('cp-ptl-' + caid).checked ? 1 : 0;
+        var status         = gid('cp-status-' + caid).value;
+        var scrollMakerEl  = gid('cp-scroll-maker-id-'  + caid);
+        var regaliaMakerEl = gid('cp-regalia-maker-id-' + caid);
         var fd     = new FormData();
-        fd.append('CourtAwardId', caid);
-        fd.append('Notes',        notes);
-        fd.append('PassToLocal',  ptl);
-        fd.append('Status',       status);
+        fd.append('CourtAwardId',  caid);
+        fd.append('Notes',         notes);
+        fd.append('PassToLocal',   ptl);
+        fd.append('Status',        status);
+        fd.append('ScrollMakerId',  scrollMakerEl  ? (parseInt(scrollMakerEl.value,  10) || 0) : 0);
+        fd.append('RegaliaMakerId', regaliaMakerEl ? (parseInt(regaliaMakerEl.value, 10) || 0) : 0);
         post('CourtAjax/update_award', fd).then(function(d) {
             if (d.status === 0) {
                 // Update Pass-to-Local badge in row header
@@ -1265,6 +1347,10 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
             '<div><div class="cp-expand-label">Pass to Local</div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px"><input type="checkbox" id="cp-ptl-' + aw.CourtAwardId + '" style="width:auto"' + (aw.PassToLocal ? ' checked' : '') + '><span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>' +
             '<div style="margin-top:14px"><div class="cp-expand-label">Status</div><select id="cp-status-' + aw.CourtAwardId + '" style="width:auto;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><option value="planned" selected>Planned</option><option value="announced">Announced</option><option value="given">Given</option><option value="cancelled">Cancelled</option></select></div></div>' +
             '</div>' +
+            '<div class="cp-expand-grid" style="margin-top:8px">' +
+            '<div><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
+            '<div><div class="cp-expand-label">Regalia Maker</div><div style="position:relative"><input type="text" id="cp-regalia-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-regalia-drop-' + aw.CourtAwardId + '" data-hidden="cp-regalia-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-regalia-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-regalia-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
+            '</div>' +
             '<div style="margin-bottom:10px"><div class="cp-expand-label" style="margin-bottom:6px">Contributing Artisans</div><div id="cp-artisans-' + aw.CourtAwardId + '"></div>' +
             '<button class="cp-btn-sm cp-btn-outline" style="margin-top:6px" onclick="cpOpenArtisanModal(' + aw.CourtAwardId + ')"><i class="fas fa-plus"></i> Add Artisan</button></div>' +
             '<div class="cp-expand-actions">' +
@@ -1328,6 +1414,13 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
             else alert(d.error || 'Could not remove.');
         });
     };
+
+    // ---- Maker autocomplete (delegated) ----
+    document.addEventListener('input', function(e) {
+        var el = e.target;
+        if (!el.classList.contains('cp-maker-ac')) return;
+        cpAcSearch(el, el.dataset.drop, el.dataset.hidden);
+    });
 
     // ---- Autocomplete ----
     // Position a fixed dropdown under its input — safe inside modals with overflow-y: auto
@@ -1449,4 +1542,67 @@ window.cpApplyHeroColor = function(img) {
             if (hero) hero.style.backgroundColor = 'hsl('+(h*360).toFixed(0)+','+(s*100).toFixed(0)+'%,'+(l*100).toFixed(0)+'%)';
         } catch(e) {}
 };
+
+
+    // ---- Court Script ----
+    function cpOpenScript() {
+        var overlay = document.getElementById('cp-script-overlay');
+        if (!overlay) return;
+        // Title and date
+        var titleEl = document.getElementById('cp-script-title');
+        var dateEl  = document.getElementById('cp-script-date');
+        if (titleEl) titleEl.textContent = courtMeta.name || 'Court';
+        if (dateEl) {
+            if (courtMeta.date) {
+                var d = new Date(courtMeta.date + 'T00:00:00');
+                dateEl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            } else {
+                dateEl.textContent = '';
+            }
+        }
+        // Build award entries
+        var awardsEl = document.getElementById('cp-script-awards');
+        if (awardsEl) {
+            awardsEl.innerHTML = '';
+            var active = courtAwards.filter(function(a) { return a.Status !== 'cancelled'; });
+            active.forEach(function(a, i) {
+                var awardLabel = a.AwardName || '';
+                if (a.Rank) awardLabel += ' (Rank ' + a.Rank + ')';
+                var recText = '';
+                if (a.RecReason) {
+                    recText = a.RecByPersona
+                        ? '<strong>From ' + esc(a.RecByPersona) + ':</strong> ' + esc(a.RecReason)
+                        : esc(a.RecReason);
+                } else if (a.Notes) {
+                    recText = esc(a.Notes);
+                }
+                var row = document.createElement('tr');
+                row.innerHTML =
+                    '<td>' + (i + 1) + '</td>' +
+                    '<td class="cp-script-td-name">' + esc(a.Persona || '') + '</td>' +
+                    '<td class="cp-script-td-award">' + esc(awardLabel) + '</td>' +
+                    '<td class="cp-script-td-rec">' + recText + '</td>';
+                awardsEl.appendChild(row);
+            });
+        }
+        // Move overlay to be a direct child of <body> so the print CSS selector
+        // (body > *:not(#cp-script-overlay)) can correctly hide everything else
+        // while showing the overlay. Then use afterprint to clean up.
+        document.body.appendChild(overlay);
+        window.addEventListener('afterprint', function onAfterPrint() {
+            window.removeEventListener('afterprint', onAfterPrint);
+            overlay.style.display = 'none';
+        });
+        window.print();
+    }
 </script>
+
+<div id="cp-script-overlay">
+    <div class="cp-script-header">
+        <h1 id="cp-script-title" style="background:transparent;border:none;padding:0;border-radius:0;text-shadow:none"></h1>
+        <p id="cp-script-date" style="color:#718096;margin:4px 0 0"></p>
+    </div>
+    <table class="cp-script-table">
+        <tbody id="cp-script-awards"></tbody>
+    </table>
+</div>
