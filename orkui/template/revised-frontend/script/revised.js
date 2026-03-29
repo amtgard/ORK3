@@ -5520,14 +5520,41 @@ $(document).ready(function() {
             return (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
         }
 
+        function evUpdateAddBtn() {
+            var pid  = document.getElementById('ev-MundaneId');
+            var cls  = document.getElementById('ev-ClassId');
+            var cred = document.getElementById('ev-Credits');
+            var btn  = document.querySelector('#ev-attendance-form button[type="submit"]');
+            if (!btn) return;
+            btn.disabled = !(pid && parseInt(pid.value, 10) > 0 && cls && cls.value && cred && parseFloat(cred.value) > 0);
+        }
+
+        var evSubmitBtn = document.querySelector('#ev-attendance-form button[type="submit"]');
+        if (evSubmitBtn) evSubmitBtn.disabled = true;
+
+        var evClassSel = document.getElementById('ev-ClassId');
+        if (evClassSel) evClassSel.addEventListener('change', evUpdateAddBtn);
+        var evCredits = document.getElementById('ev-Credits');
+        if (evCredits) evCredits.addEventListener('input', evUpdateAddBtn);
+
+        function evAttendedIds() {
+            var ids = {};
+            document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]').forEach(function(tr) {
+                ids[parseInt(tr.dataset.mundaneId, 10)] = true;
+            });
+            return ids;
+        }
+
         $('#ev-PlayerName').autocomplete({
             source: function(req, res) {
+                var attended = evAttendedIds();
                 $.getJSON(EvConfig.httpService + 'Search/SearchService.php',
                     { Action: 'Search/Player', type: 'all', search: req.term, limit: 15 },
                     function(data) {
                         res($.map(data, function(v) {
+                            if (attended[parseInt(v.MundaneId, 10)]) return null;
                             var abbr = evAttAbbr(v);
-                            return { label: v.Persona + (abbr ? ' — ' + abbr : ''), name: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox };
+                            return { label: v.Persona + (abbr ? ' — ' + abbr : ''), name: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox, suspended: !!(v.PenaltyBox || v.Suspended) };
                         }));
                     });
             },
@@ -5536,10 +5563,25 @@ $(document).ready(function() {
             select: function(e,ui) {
                 $('#ev-PlayerName').val(ui.item.name);
                 $('#ev-MundaneId').val(ui.item.value.split('|')[0]);
+                evUpdateAddBtn();
                 return false;
             },
-            change: function(e,ui) { if(!ui.item) { $('#ev-MundaneId').val(''); } return false; }
+            change: function(e,ui) { if(!ui.item) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); } return false; }
         });
+        $('#ev-PlayerName').on('input', function() {
+            if (!$(this).val()) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); }
+        });
+        $('#ev-PlayerName').data('autocomplete')._renderItem = function(ul, item) {
+            var a = $('<a>');
+            if (item.suspended) {
+                a.addClass('pk-att-ac-suspended').html(
+                    '<i class="fas fa-ban" style="margin-right:5px;font-size:11px"></i>' + $('<span>').text(item.label).html()
+                );
+            } else {
+                a.text(item.label);
+            }
+            return $('<li></li>').data('item.autocomplete', item).append(a).appendTo(ul);
+        };
     });
 
     // ---- Hero dominant-color tint ----
@@ -5796,8 +5838,11 @@ $(document).ready(function() {
             console.error('Add attendance failed:', error);
         })
         .finally(function() {
-            submitBtn.disabled = false;
             submitBtn.innerHTML = initialBtnContent;
+            var pid  = document.getElementById('ev-MundaneId');
+            var cls  = document.getElementById('ev-ClassId');
+            var cred = document.getElementById('ev-Credits');
+            submitBtn.disabled = !(pid && parseInt(pid.value, 10) > 0 && cls && cls.value && cred && parseFloat(cred.value) > 0);
         });
     };
 })();
@@ -6328,6 +6373,7 @@ $(document).ready(function() {
         gid('pk-att-player-name').value = '';
         gid('pk-att-player-id').value   = '';
         pkAttHideFeedback();
+        pkAttUpdateAddBtn();
         // Reset to Search tab and clear quick-add rows so they rebuild fresh
         document.querySelectorAll('#pk-att-overlay .pk-att-tab').forEach(function(t) { t.classList.remove('pk-att-tab-active'); });
         document.querySelectorAll('#pk-att-overlay .pk-att-tab-panel').forEach(function(p) { p.style.display = 'none'; });
@@ -6437,6 +6483,16 @@ $(document).ready(function() {
     }
 
     // --- Search-add submit ---
+    function pkAttUpdateAddBtn() {
+        var pid  = gid('pk-att-player-id').value;
+        var cls  = gid('pk-att-class-select').value;
+        var cred = parseFloat(gid('pk-att-search-credits').value);
+        gid('pk-att-add-btn').disabled = !(pid && cls && cred > 0);
+    }
+    gid('pk-att-add-btn').disabled = true;
+    gid('pk-att-class-select').addEventListener('change', pkAttUpdateAddBtn);
+    gid('pk-att-search-credits').addEventListener('input', pkAttUpdateAddBtn);
+
     gid('pk-att-add-btn').addEventListener('click', function() {
         var pid  = gid('pk-att-player-id').value;
         var name = gid('pk-att-player-name').value.trim();
@@ -6449,7 +6505,6 @@ $(document).ready(function() {
         pkSubmit(
             { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred },
             function(ok, err, aid) {
-                btn.disabled = false;
                 if (ok) {
                     var midInt = parseInt(pid, 10);
                     pkAttEntered[midInt] = true;
@@ -6462,6 +6517,7 @@ $(document).ready(function() {
                 } else {
                     pkAttShowFeedback(err, false);
                 }
+                pkAttUpdateAddBtn();
             }
         );
     });
@@ -6500,6 +6556,7 @@ $(document).ready(function() {
             document.querySelectorAll('#pk-att-overlay .pk-att-tab-panel').forEach(function(p) { p.style.display = 'none'; });
             tab.classList.add('pk-att-tab-active');
             gid(tab.dataset.panel).style.display = '';
+            $('#pk-att-player-name').autocomplete('close');
             if (tab.dataset.panel === 'pk-att-panel-recent') pkBuildQuickAddRows();
         });
     });
@@ -6589,7 +6646,7 @@ $(document).ready(function() {
                 var items = [];
                 $.each(list || [], function(i, v) {
                     if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                    items.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                    items.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
                 });
                 return items;
             }
@@ -6609,18 +6666,18 @@ $(document).ready(function() {
                     $.each(parkRes[0] || [], function(i, v) {
                         if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
                         seen[v.MundaneId] = true;
-                        parkItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                        parkItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
                     });
                     $.each(kingRes[0] || [], function(i, v) {
                         if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
                         if (seen[v.MundaneId]) return;
                         seen[v.MundaneId] = true;
-                        kingItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                        kingItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
                     });
                     $.each(allRes[0] || [], function(i, v) {
                         if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
                         if (seen[v.MundaneId]) return;
-                        otherItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId });
+                        otherItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
                     });
                     var sep = { label: '', name: '', value: null, separator: true };
                     var items = parkItems;
@@ -6641,19 +6698,28 @@ $(document).ready(function() {
                 pkBuildClassOptions();
                 gid('pk-att-class-select').value = String(lastCls);
             }
+            pkAttUpdateAddBtn();
             return false;
         },
-        change: function(e, ui) { if (!ui.item) $('#pk-att-player-id').val(''); return false; },
+        change: function(e, ui) { if (!ui.item) { $('#pk-att-player-id').val(''); pkAttUpdateAddBtn(); } return false; },
         delay: 250, minLength: 2,
     });
     $('#pk-att-player-name').on('input', function() {
-        if (!$(this).val()) { pkAttAC.autocomplete('close'); $('#pk-att-player-id').val(''); }
+        if (!$(this).val()) { pkAttAC.autocomplete('close'); $('#pk-att-player-id').val(''); pkAttUpdateAddBtn(); }
     });
     pkAttAC.data('autocomplete')._renderItem = function(ul, item) {
         if (item.separator) {
             return $('<li class="pk-att-ac-sep">').appendTo(ul);
         }
-        return $('<li></li>').data('item.autocomplete', item).append($('<a>').text(item.label)).appendTo(ul);
+        var a = $('<a>');
+        if (item.suspended) {
+            a.addClass('pk-att-ac-suspended').html(
+                '<i class="fas fa-ban" style="margin-right:5px;font-size:11px"></i>' + $('<span>').text(item.label).html()
+            );
+        } else {
+            a.text(item.label);
+        }
+        return $('<li></li>').data('item.autocomplete', item).append(a).appendTo(ul);
     };
 });
 
