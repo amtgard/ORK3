@@ -937,6 +937,14 @@ class Controller_Player extends Controller
             'corpora' => Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'corpora'),
         ];
         $this->data['QualPlayerId']  = (int)$id;
+
+        $playerKnConfigs = Common::get_configs($playerKingdomId, CFG_KINGDOM);
+        $this->data['QualTestReeveEnabled'] = isset($playerKnConfigs['QualTestReeveEnabled'])
+            ? (bool)(int)$playerKnConfigs['QualTestReeveEnabled']['Value']
+            : false;
+        $this->data['QualTestCorporaEnabled'] = isset($playerKnConfigs['QualTestCorporaEnabled'])
+            ? (bool)(int)$playerKnConfigs['QualTestCorporaEnabled']['Value']
+            : false;
     }
 
 

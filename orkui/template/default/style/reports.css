@@ -223,6 +223,12 @@
 	margin-top    : 3px;
 }
 
+.rp-stat-hint {
+	font-size  : 10px;
+	color      : var(--rp-text-hint);
+	margin-top : 2px;
+}
+
 
 /* ── Charts / graphs placeholder ────────────────────────── */
 /* Hidden by default; show by adding .rp-charts-visible      */

@@ -1529,9 +1529,11 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<li data-tab="classes">
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
+				<?php if (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled)): ?>
 				<li data-tab="tests">
 					<i class="fas fa-clipboard-check"></i><span class="pn-tab-label"> Tests</span>
 				</li>
+				<?php endif; ?>
 			</ul>
 			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards') ?></div>
 
@@ -2577,9 +2579,10 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			</div>
 
 			<!-- Tests Tab -->
+			<?php if (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled)): ?>
 			<div class="pn-tab-panel" id="pn-tab-tests" style="display:none">
 				<?php
-					$_qualTypes = ['reeve' => "Reeve's Test", 'corpora' => 'Corpora Test'];
+					$_qualTypes = array_filter(['reeve' => "Reeve's Test", 'corpora' => 'Corpora Test'], function($k) use ($QualTestReeveEnabled, $QualTestCorporaEnabled) { return ($k === 'reeve') ? !empty($QualTestReeveEnabled) : !empty($QualTestCorporaEnabled); }, ARRAY_FILTER_USE_KEY);
 					$_qualResults = is_array($QualResults ?? null) ? $QualResults : [];
 					$_qualKingdomId = $QualKingdomId ?? 0;
 					$_qualCanManage = $QualCanManage ?? false;
@@ -2645,6 +2648,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<?php endforeach; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 		</div>
 	</div>
@@ -5605,6 +5609,12 @@ pnRenderSparkline();
 .pn-quiz-loading { text-align: center; padding: 32px 0; color: #718096; }
 .pn-quiz-error-msg { background: #fed7d7; border: 1px solid #fc8181; color: #9b2c2c;
                      padding: 10px 14px; border-radius: 4px; font-size: 0.88rem; margin-bottom: 10px; display: none; }
+.pn-quiz-instructions { padding: 16px 0; }
+.pn-quiz-instructions-icon { text-align: center; font-size: 2.5rem; color: #2b6cb0; margin-bottom: 12px; }
+.pn-quiz-instructions-body { font-size: 0.92rem; color: #2d3748; line-height: 1.65; margin-bottom: 20px; white-space: pre-line; }
+.pn-quiz-instructions-meta { font-size: 0.82rem; color: #718096; margin-bottom: 18px; }
+.pn-quiz-instructions-meta strong { color: #2d3748; }
+.pn-quiz-begin-row { text-align: center; }
 </style>
 <div class="pn-overlay" id="pn-quiz-overlay">
 	<div class="pn-modal-box">
@@ -5615,6 +5625,18 @@ pnRenderSparkline();
 		<div class="pn-modal-body" id="pn-quiz-body">
 			<div class="pn-quiz-loading" id="pn-quiz-loading"><i class="fas fa-spinner fa-spin"></i> Loading questions&hellip;</div>
 			<div class="pn-quiz-error-msg" id="pn-quiz-error"></div>
+
+			<!-- Instructions view -->
+			<div id="pn-quiz-instructions-view" style="display:none">
+				<div class="pn-quiz-instructions">
+					<div class="pn-quiz-instructions-icon"><i class="fas fa-info-circle"></i></div>
+					<div class="pn-quiz-instructions-body" id="pn-quiz-instructions-text"></div>
+					<div class="pn-quiz-instructions-meta" id="pn-quiz-instructions-meta"></div>
+					<div class="pn-quiz-begin-row">
+						<button class="pn-btn pn-btn-primary" id="pn-quiz-begin-btn"><i class="fas fa-play-circle" style="margin-right:6px;"></i>Begin Test</button>
+					</div>
+				</div>
+			</div>
 
 			<!-- Question view -->
 			<div id="pn-quiz-question-view" style="display:none">
@@ -5690,6 +5712,10 @@ pnRenderSparkline();
 	var resultScore  = document.getElementById('pn-quiz-result-score');
 	var resultDetail = document.getElementById('pn-quiz-result-detail');
 	var resultExpiry = document.getElementById('pn-quiz-result-expiry');
+	var instrView    = document.getElementById('pn-quiz-instructions-view');
+	var instrText    = document.getElementById('pn-quiz-instructions-text');
+	var instrMeta    = document.getElementById('pn-quiz-instructions-meta');
+	var beginBtn     = document.getElementById('pn-quiz-begin-btn');
 
 	var questions      = [];
 	var answers        = {};
@@ -5711,6 +5737,7 @@ pnRenderSparkline();
 		overlay.classList.add('pn-open');
 		showLoading(true);
 		errorMsg.style.display = 'none';
+		instrView.style.display = 'none';
 		questionView.style.display = 'none';
 		resultView.style.display = 'none';
 
@@ -5724,10 +5751,25 @@ pnRenderSparkline();
 				if (j.status !== 0) { showError(j.error || 'Unable to load test questions.'); return; }
 				questions   = j.questions;
 				passPercent = j.pass_percent;
-				renderQuestion(0);
+				if (j.instructions) {
+					showInstructions(j.instructions);
+				} else {
+					renderQuestion(0);
+				}
 			})
 			.catch(function() { showLoading(false); showError('Network error. Please try again.'); });
 	}
+
+	function showInstructions(text) {
+		instrText.innerHTML = escHtml(text);
+		instrMeta.innerHTML = '<strong>' + questions.length + '</strong> question' + (questions.length !== 1 ? 's' : '') + ' &middot; <strong>' + passPercent + '%</strong> required to pass';
+		instrView.style.display = 'block';
+	}
+
+	beginBtn.addEventListener('click', function() {
+		instrView.style.display = 'none';
+		renderQuestion(0);
+	});
 
 	function renderQuestion(idx) {
 		var q     = questions[idx];

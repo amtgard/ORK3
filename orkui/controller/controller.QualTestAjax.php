@@ -35,6 +35,15 @@ class Controller_QualTestAjax extends Controller {
         return str_replace(["'", '\\'], ["''", '\\\\'], $v);
     }
 
+    private function requireTestEnabled($kingdom_id, $test_type) {
+        $key = ($test_type === 'corpora') ? 'QualTestCorporaEnabled' : 'QualTestReeveEnabled';
+        $configs = Common::get_configs($kingdom_id, CFG_KINGDOM);
+        $enabled = isset($configs[$key]) ? (bool)(int)$configs[$key]['Value'] : false;
+        if (!$enabled) {
+            $this->jsonOut(['status' => 1, 'error' => 'This test type is not enabled for this kingdom.']);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // saveconfig
     // POST: KingdomId, TestType, QuestionCount, PassPercent, ValidDays
@@ -51,8 +60,9 @@ class Controller_QualTestAjax extends Controller {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $valid_until)) $valid_until = null;
         $max_retakes     = max(0, (int)($_POST['MaxRetakes']     ?? 0));
         $share_questions = empty($_POST['ShareQuestions']) ? 0 : 1;
+        $instructions    = $_POST['Instructions'] ?? null;
 
-        Ork3::$Lib->qualtest->saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until, $max_retakes, $share_questions);
+        Ork3::$Lib->qualtest->saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until, $max_retakes, $share_questions, $instructions);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -356,6 +366,8 @@ class Controller_QualTestAjax extends Controller {
 
         if (!valid_id($kingdom_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid kingdom.']);
 
+        $this->requireTestEnabled($kingdom_id, $test_type);
+
         $config = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
 
         // Retake limit check
@@ -378,6 +390,7 @@ class Controller_QualTestAjax extends Controller {
             'questions'     => $questions,
             'pass_percent'  => $config['PassPercent'],
             'question_count'=> count($questions),
+            'instructions'  => $config['Instructions'] ?? null,
         ]);
     }
 
@@ -392,6 +405,8 @@ class Controller_QualTestAjax extends Controller {
         $test_type  = $_POST['TestType'] ?? 'reeve';
 
         if (!valid_id($kingdom_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid kingdom.']);
+
+        $this->requireTestEnabled($kingdom_id, $test_type);
 
         $raw_answers = json_decode($_POST['Answers'] ?? '{}', true);
         if (!is_array($raw_answers) || empty($raw_answers))

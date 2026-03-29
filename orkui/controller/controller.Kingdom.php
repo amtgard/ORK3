@@ -941,6 +941,14 @@ class Controller_Kingdom extends Controller
         // Qualification Tests module: gate the Tests management UI.
         $this->data['CanManageTests'] = $uid > 0 && Ork3::$Lib->qualtest->canManage($uid, (int)$kingdom_id);
 
+        // Qualification Tests config toggles (per-kingdom enable of reeve/corpora tests).
+        $this->data['QualTestReeveEnabled'] = isset($knConfigs['QualTestReeveEnabled'])
+            ? (bool)(int)$knConfigs['QualTestReeveEnabled']['Value']
+            : false;
+        $this->data['QualTestCorporaEnabled'] = isset($knConfigs['QualTestCorporaEnabled'])
+            ? (bool)(int)$knConfigs['QualTestCorporaEnabled']['Value']
+            : false;
+
         // Gate the "Voting Eligible" Players-nav link by whether this kingdom has
         // voting rules defined. Single source of truth lives in
         // Model_Reports::supported_voting_kingdom_ids() — don't hardcode the list here.

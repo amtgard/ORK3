@@ -516,6 +516,36 @@ class Controller_Reports extends Controller
         $this->data['page_title']        = "Corpora Qualified";
     }
 
+    public function reeve_test_results($type = null)
+    {
+        $this->template = 'Reports_reeve_test_results.tpl';
+        $kingdom_id = ($type == 'Kingdom' && valid_id($this->request->id)) ? (int)$this->request->id : null;
+        if (!$kingdom_id) {
+            return;
+        }
+        $this->data['results']    = Ork3::$Lib->qualtest->getTestResults($kingdom_id, 'reeve');
+        $this->data['stats']      = Ork3::$Lib->qualtest->getTestReportStats($kingdom_id, 'reeve');
+        $this->data['ScopeType']  = 'kingdom';
+        $this->data['ScopeId']    = $kingdom_id;
+        $this->data['TestType']   = 'reeve';
+        $this->data['page_title'] = "Reeve's Test Results";
+    }
+
+    public function corpora_test_results($type = null)
+    {
+        $this->template = 'Reports_corpora_test_results.tpl';
+        $kingdom_id = ($type == 'Kingdom' && valid_id($this->request->id)) ? (int)$this->request->id : null;
+        if (!$kingdom_id) {
+            return;
+        }
+        $this->data['results']    = Ork3::$Lib->qualtest->getTestResults($kingdom_id, 'corpora');
+        $this->data['stats']      = Ork3::$Lib->qualtest->getTestReportStats($kingdom_id, 'corpora');
+        $this->data['ScopeType']  = 'kingdom';
+        $this->data['ScopeId']    = $kingdom_id;
+        $this->data['TestType']   = 'corpora';
+        $this->data['page_title'] = "Corpora Test Results";
+    }
+
     public function inactive($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;

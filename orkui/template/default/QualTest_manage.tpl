@@ -152,6 +152,14 @@
 						</span>
 					</div>
 					<?php endif; ?>
+					<div class="qt-form-row" style="align-items:flex-start;">
+						<label style="padding-top:6px;">Instructions</label>
+						<div style="flex:1;min-width:0;">
+							<textarea name="Instructions" rows="4" style="width:100%;padding:5px 8px;border:1px solid var(--rp-border);border-radius:4px;font-size:0.9rem;font-family:inherit;resize:vertical;"
+								placeholder="Optional instructions shown before the test begins."><?= htmlspecialchars($cfg['Instructions'] ?? '') ?></textarea>
+							<div style="font-size:0.75rem;color:var(--rp-text-muted);margin-top:3px;">Shown as the first card when a player begins the test. Line breaks will be preserved.</div>
+						</div>
+					</div>
 					<div class="qt-save-row">
 						<button type="submit" class="qt-save-btn"><i class="fas fa-save"></i> Save Settings</button>
 						<span class="qt-saved-msg"><i class="fas fa-check-circle"></i> Saved</span>

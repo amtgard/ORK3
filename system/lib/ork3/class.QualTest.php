@@ -137,6 +137,7 @@ class QualTest {
                 'ValidUntil'    => $rs->valid_until ?? null,
                 'MaxRetakes'    => (int)$rs->max_retakes,
                 'ShareQuestions'=> (int)$rs->share_questions,
+                'Instructions'  => $rs->instructions ?? null,
             ];
         }
         return [
@@ -149,13 +150,14 @@ class QualTest {
             'ValidUntil'    => null,
             'MaxRetakes'    => 0,
             'ShareQuestions'=> 0,
+            'Instructions'  => null,
         ];
     }
 
     /**
      * Upsert test config for a kingdom+type.
      */
-    public function saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until = null, $max_retakes = 0, $share_questions = 0) {
+    public function saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until = null, $max_retakes = 0, $share_questions = 0, $instructions = null) {
         $test_type      = $this->sanitizeType($test_type);
         $kingdom_id     = (int)$kingdom_id;
         $question_count = max(1, (int)$question_count);
@@ -172,6 +174,9 @@ class QualTest {
         $until_sql       = $safe_until ? '\'' . $safe_until . '\'' : 'NULL';
         $max_retakes     = max(0, (int)$max_retakes);
         $share_questions = ($test_type === 'reeve' && $share_questions) ? 1 : 0;
+        $instructions_sql = ($instructions !== null && trim($instructions) !== '')
+            ? "'" . addslashes(trim($instructions)) . "'"
+            : 'NULL';
 
         $this->db->Clear();
         $exists = $this->db->DataSet(
@@ -187,15 +192,16 @@ class QualTest {
                      valid_days     = ' . $valid_days . ',
                      valid_until    = ' . $until_sql . ',
                      max_retakes    = ' . $max_retakes . ',
-                     share_questions= ' . $share_questions . '
+                     share_questions= ' . $share_questions . ',
+                     instructions   = ' . $instructions_sql . '
                  WHERE kingdom_id = ' . $kingdom_id . ' AND test_type = \'' . $test_type . '\''
             );
         } else {
             $this->db->Clear();
             $this->db->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'qual_config
-                 (kingdom_id, test_type, question_count, pass_percent, valid_days, valid_until, max_retakes, share_questions)
-                 VALUES (' . $kingdom_id . ', \'' . $test_type . '\', ' . $question_count . ', ' . $pass_percent . ', ' . $valid_days . ', ' . $until_sql . ', ' . $max_retakes . ', ' . $share_questions . ')'
+                 (kingdom_id, test_type, question_count, pass_percent, valid_days, valid_until, max_retakes, share_questions, instructions)
+                 VALUES (' . $kingdom_id . ', \'' . $test_type . '\', ' . $question_count . ', ' . $pass_percent . ', ' . $valid_days . ', ' . $until_sql . ', ' . $max_retakes . ', ' . $share_questions . ', ' . $instructions_sql . ')'
             );
         }
         return true;
@@ -892,6 +898,134 @@ class QualTest {
             'DELETE FROM ' . DB_PREFIX . 'qual_report WHERE qual_question_id = ' . (int)$question_id
         );
         return true;
+    }
+
+    // -----------------------------------------------------------------------
+    // Kingdom Test Result Reports
+    // -----------------------------------------------------------------------
+
+    /**
+     * Get all test completions for a kingdom+type, ordered most recent first.
+     * Returns array of rows with: PassedAt, Persona, ParkName, ParkId, MundaneId, ScorePercent, ExpiresAt, PassPercent, FlagCount
+     */
+    public function getTestResults($kingdom_id, $test_type) {
+        $kingdom_id = (int)$kingdom_id;
+        $test_type  = $this->sanitizeType($test_type);
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT r.passed_at, r.score_percent, r.expires_at,
+                    m.mundane_id, m.persona, m.park_id,
+                    p.name AS park_name,
+                    cfg.pass_percent
+             FROM ' . DB_PREFIX . 'qual_result r
+             JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.player_id
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+             LEFT JOIN ' . DB_PREFIX . 'qual_config cfg
+                    ON cfg.kingdom_id = r.kingdom_id AND cfg.test_type = r.test_type
+             WHERE r.kingdom_id = ' . $kingdom_id . '
+               AND r.test_type = \'' . $test_type . '\'
+             ORDER BY r.passed_at DESC'
+        );
+
+        $rows = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $rows[] = [
+                    'PassedAt'     => $rs->passed_at,
+                    'MundaneId'    => (int)$rs->mundane_id,
+                    'Persona'      => $rs->persona,
+                    'ParkId'       => (int)$rs->park_id,
+                    'ParkName'     => $rs->park_name ?: '',
+                    'ScorePercent' => (int)$rs->score_percent,
+                    'ExpiresAt'    => $rs->expires_at,
+                    'PassPercent'  => (int)($rs->pass_percent ?: 70),
+                ];
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Get summary stats for a kingdom+type test report header.
+     * Returns: ActiveQualified, ActivePlayers, PassRate6Mo, ActiveQuestions, FlaggedQuestions
+     */
+    public function getTestReportStats($kingdom_id, $test_type) {
+        $kingdom_id = (int)$kingdom_id;
+        $test_type  = $this->sanitizeType($test_type);
+        $now = date('Y-m-d H:i:s');
+        $six_months_ago = date('Y-m-d H:i:s', strtotime('-6 months'));
+
+        // Active players: signed in within the past 6 months
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT COUNT(DISTINCT a.mundane_id) AS cnt
+             FROM ' . DB_PREFIX . 'attendance a
+             JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = a.mundane_id
+             JOIN ' . DB_PREFIX . 'park pk ON pk.park_id = m.park_id
+             WHERE pk.kingdom_id = ' . $kingdom_id . '
+               AND a.date >= \'' . $six_months_ago . '\''
+        );
+        $activePlayers = ($rs && $rs->Next()) ? (int)$rs->cnt : 0;
+
+        // Currently qualified (expires_at > now)
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT COUNT(*) AS cnt
+             FROM ' . DB_PREFIX . 'qual_result r
+             JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.player_id
+             JOIN ' . DB_PREFIX . 'park pk ON pk.park_id = m.park_id
+             WHERE r.kingdom_id = ' . $kingdom_id . '
+               AND r.test_type = \'' . $test_type . '\'
+               AND r.expires_at > \'' . $now . '\'
+               AND pk.kingdom_id = ' . $kingdom_id
+        );
+        $activeQualified = ($rs && $rs->Next()) ? (int)$rs->cnt : 0;
+
+        // Pass rate in past 6 months: count of results where score >= pass_percent / total results
+        // We need the pass_percent from config
+        $config = $this->getConfig($kingdom_id, $test_type);
+        $passPercent = (int)$config['PassPercent'];
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT COUNT(*) AS total,
+                    SUM(CASE WHEN r.score_percent >= ' . $passPercent . ' THEN 1 ELSE 0 END) AS passed
+             FROM ' . DB_PREFIX . 'qual_result r
+             WHERE r.kingdom_id = ' . $kingdom_id . '
+               AND r.test_type = \'' . $test_type . '\'
+               AND r.passed_at >= \'' . $six_months_ago . '\''
+        );
+        $totalAttempts = 0;
+        $passedAttempts = 0;
+        if ($rs && $rs->Next()) {
+            $totalAttempts  = (int)$rs->total;
+            $passedAttempts = (int)$rs->passed;
+        }
+
+        // Active questions
+        $activeQuestions = $this->countActiveQuestions($kingdom_id, $test_type);
+
+        // Flagged questions (questions with at least one report)
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT COUNT(DISTINCT rp.qual_question_id) AS cnt
+             FROM ' . DB_PREFIX . 'qual_report rp
+             JOIN ' . DB_PREFIX . 'qual_question q ON q.qual_question_id = rp.qual_question_id
+             WHERE q.kingdom_id = ' . $kingdom_id . '
+               AND q.test_type = \'' . $test_type . '\'
+               AND q.status = \'active\''
+        );
+        $flaggedQuestions = ($rs && $rs->Next()) ? (int)$rs->cnt : 0;
+
+        return [
+            'ActiveQualified'  => $activeQualified,
+            'ActivePlayers'    => $activePlayers,
+            'PassRate6Mo'      => $totalAttempts > 0 ? round(($passedAttempts / $totalAttempts) * 100) : 0,
+            'PassRate6MoTotal' => $totalAttempts,
+            'ActiveQuestions'  => $activeQuestions,
+            'FlaggedQuestions' => $flaggedQuestions,
+        ];
     }
 
     // -----------------------------------------------------------------------
