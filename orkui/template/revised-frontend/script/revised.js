@@ -6806,12 +6806,6 @@ function setupPronounPicker(cfg) {
     $(document).ready(function() {
         if (!gid('kn-addplayer-overlay')) return;
 
-        document.querySelectorAll('input[name="kn-addplayer-waivered"]').forEach(function(r) {
-            r.addEventListener('change', function() {
-                gid('kn-addplayer-waiver-row').style.display = this.value === '1' ? '' : 'none';
-            });
-        });
-
         gid('kn-addplayer-close-btn').addEventListener('click', knCloseAddPlayerModal);
         gid('kn-addplayer-cancel').addEventListener('click',    knCloseAddPlayerModal);
         gid('kn-addplayer-overlay').addEventListener('click', function(e) {
@@ -6915,12 +6909,6 @@ function setupPronounPicker(cfg) {
 
     $(document).ready(function() {
         if (!gid('pk-addplayer-overlay')) return;
-
-        document.querySelectorAll('input[name="pk-addplayer-waivered"]').forEach(function(r) {
-            r.addEventListener('change', function() {
-                gid('pk-addplayer-waiver-row').style.display = this.value === '1' ? '' : 'none';
-            });
-        });
 
         gid('pk-addplayer-close-btn').addEventListener('click', pkCloseAddPlayerModal);
         gid('pk-addplayer-cancel').addEventListener('click',    pkCloseAddPlayerModal);
