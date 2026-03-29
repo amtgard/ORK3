@@ -424,7 +424,7 @@ document.getElementById('wn-overlay').addEventListener('click', function(e) {
 <footer style="margin-top:40px;padding:18px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:11px;color:#94a3b8;text-align:center;line-height:1.7;">
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
-  ORK v<?=ORK_VERSION?>
+  <a href="<?=UIR?>ReleaseNotes" style="color:#94a3b8;text-decoration:none;border-bottom:1px dotted #94a3b8;">ORK v<?=ORK_VERSION?></a>
 </footer>
 
 </body>
