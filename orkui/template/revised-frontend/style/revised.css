@@ -4647,10 +4647,11 @@
 .pk-att-del-btn:disabled { opacity:0.4; cursor:default; }
 .pk-att-entered-count { font-size:11px; font-weight:400; color:#a0aec0; margin-left:6px; text-transform:none; letter-spacing:0; }
 /* Search scope buttons */
-.pk-att-scope-btns { display:flex; gap:6px; margin-bottom:10px; }
-.pk-att-scope-btn { padding:4px 12px; border:1px solid #cbd5e0; border-radius:20px; background:#fff; font-size:12px; font-weight:600; color:#718096; cursor:pointer; transition:background 0.15s, color 0.15s, border-color 0.15s; }
-.pk-att-scope-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
-.pk-att-scope-btn.pk-att-scope-active { background:#ebf8ff; border-color:#63b3ed; color:#2b6cb0; }
+.pk-att-scope-btns { display:flex; margin-bottom:10px; border:1px solid #cbd5e0; border-radius:6px; overflow:hidden; }
+.pk-att-scope-btn { flex:1; padding:5px 0; border:none; border-right:1px solid #cbd5e0; background:#fff; font-size:12px; font-weight:600; color:#718096; cursor:pointer; transition:background 0.15s, color 0.15s; }
+.pk-att-scope-btn:last-child { border-right:none; }
+.pk-att-scope-btn:hover { background:#f7fafc; color:#2b6cb0; }
+.pk-att-scope-btn.pk-att-scope-active { background:#ebf8ff; color:#2b6cb0; }
 /* Mobile bottom-sheet */
 @media (max-width: 640px) {
   #pk-att-overlay { align-items:flex-end; }

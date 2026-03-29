@@ -6335,13 +6335,10 @@ $(document).ready(function() {
         if (searchTab) searchTab.classList.add('pk-att-tab-active');
         var searchPanel = gid('pk-att-panel-search');
         if (searchPanel) searchPanel.style.display = '';
-        // Reset scope buttons to global
-        pkAttScope = null;
-        var btnP = gid('pk-att-scope-park'), btnK = gid('pk-att-scope-kingdom');
-        if (btnP) btnP.classList.remove('pk-att-scope-active');
-        if (btnK) btnK.classList.remove('pk-att-scope-active');
+        // Reset scope to park (default)
+        pkSetScope('park');
         var nameInput = gid('pk-att-player-name');
-        if (nameInput) nameInput.placeholder = 'Search by name or KD:PK\u2026';
+        if (nameInput) nameInput.placeholder = 'Search within your park\u2026';
         var qaTbody = gid('pk-att-qa-tbody');
         if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
         gtag('event', 'park_attendance_open', { source: 'park_info' });
@@ -6543,31 +6540,26 @@ $(document).ready(function() {
     });
 
     // --- Search scope buttons (park / kingdom / global) ---
-    var pkAttScope = null; // null = global, 'park', 'kingdom'
+    var pkAttScope = 'park';
+    var pkScopePlaceholders = {
+        'park':    'Search within your park\u2026',
+        'kingdom': 'Search within your kingdom\u2026',
+        'global':  'Search by name or KD:PK\u2026'
+    };
+    function pkSetScope(scope) {
+        pkAttScope = scope;
+        ['park', 'kingdom', 'global'].forEach(function(s) {
+            var btn = gid('pk-att-scope-' + s);
+            if (btn) btn.classList.toggle('pk-att-scope-active', s === scope);
+        });
+        var input = gid('pk-att-player-name');
+        if (input) input.placeholder = pkScopePlaceholders[scope];
+    }
     (function() {
-        var btnPark    = gid('pk-att-scope-park');
-        var btnKingdom = gid('pk-att-scope-kingdom');
-        var input      = gid('pk-att-player-name');
-        if (!btnPark || !btnKingdom || !input) return;
-        var placeholders = {
-            'park':    'Search within your park\u2026',
-            'kingdom': 'Search within your kingdom\u2026',
-            null:      'Search by name or KD:PK\u2026'
-        };
-        function pkSetScope(scope) {
-            pkAttScope = scope;
-            btnPark.classList.toggle('pk-att-scope-active',    scope === 'park');
-            btnKingdom.classList.toggle('pk-att-scope-active', scope === 'kingdom');
-            input.placeholder = placeholders[scope];
-            input.focus();
-        }
-        btnPark.addEventListener('click', function() {
-            pkSetScope(pkAttScope === 'park' ? null : 'park');
+        ['park', 'kingdom', 'global'].forEach(function(s) {
+            var btn = gid('pk-att-scope-' + s);
+            if (btn) btn.addEventListener('click', function() { pkSetScope(s); });
         });
-        btnKingdom.addEventListener('click', function() {
-            pkSetScope(pkAttScope === 'kingdom' ? null : 'kingdom');
-        });
-        pkSetScope(null);
     }());
 
     // --- Close handlers ---

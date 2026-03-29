@@ -373,11 +373,7 @@ $show_chart = $total > 0;
 					<div style="color:#dc2626;font-size:0.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px;"><?=$Error?></div>
 <?php endif; ?>
 					<form method="post" action="<?=UIR?>Attendance/park/<?=$Id?>/new">
-						<div class="att-form-group">
-							<label class="att-form-label" for="AttendanceDate">Date</label>
-							<input class="att-form-input" type="text" name="AttendanceDate" id="AttendanceDate"
-								value="<?=trimlen($Attendance_park['AttendanceDate'])?$Attendance_park['AttendanceDate']:$AttendanceDate?>">
-						</div>
+						<input type="hidden" name="AttendanceDate" id="AttendanceDate" value="<?=htmlspecialchars($AttendanceDate)?>">
 						<div class="att-form-group">
 							<label class="att-form-label" for="KingdomName">Player's Kingdom</label>
 							<input class="att-form-input" type="text" name="KingdomName" id="KingdomName"
@@ -534,13 +530,9 @@ $show_chart = $total > 0;
 <script>
 $(function() {
 <?php if ($CanAddAttendance) : ?>
-	/* ── Datepicker ──────────────────────────────────── */
-	$('#AttendanceDate').datepicker({ dateFormat: 'yy-mm-dd', onSelect: attCheckSubmit });
-
 	/* ── Submit button validation ────────────────────── */
 	function attCheckSubmit() {
-		var ok = $('#AttendanceDate').val().trim() !== ''
-			&& parseInt($('#MundaneId').val(), 10) > 0
+		var ok = parseInt($('#MundaneId').val(), 10) > 0
 			&& $('#ClassId').val() !== ''
 			&& $('#Credits').val().trim() !== '';
 		$('#att-submit-btn').prop('disabled', !ok);
@@ -618,9 +610,9 @@ $(function() {
 					}
 				});
 				if (suggestions.length > 0 && (kingdomOutsiders.length > 0 || globalOutsiders.length > 0))
-					suggestions.push({ label: '', value: null, separator: true });
+					suggestions.push({ label: kingdomOutsiders.length > 0 ? '── Kingdom ──' : '── Global ──', value: null, separator: true });
 				if (kingdomOutsiders.length > 0 && globalOutsiders.length > 0)
-					kingdomOutsiders.push({ label: '', value: null, separator: true });
+					kingdomOutsiders.push({ label: '── Global ──', value: null, separator: true });
 				response(suggestions.concat(kingdomOutsiders).concat(globalOutsiders));
 			});
 		},
@@ -638,7 +630,7 @@ $(function() {
 
 	playerAC.data('autocomplete')._renderItem = function(ul, item) {
 		if (item.separator)
-			return $('<li class="ui-autocomplete-separator">').text('── Kingdom ──').appendTo(ul);
+			return $('<li class="ui-autocomplete-separator">').text(item.label).appendTo(ul);
 		return $('<li></li>').data('item.autocomplete', item).append($('<a>').text(item.label)).appendTo(ul);
 	};
 

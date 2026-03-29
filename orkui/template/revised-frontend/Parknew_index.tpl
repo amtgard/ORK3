@@ -1272,7 +1272,7 @@ var PkConfig = {
 					<i class="fas fa-search"></i> Search
 				</button>
 				<button class="pk-att-tab" id="pk-att-tab-recent" data-panel="pk-att-panel-recent">
-					<i class="fas fa-users"></i> Recent Attendees
+					<i class="fas fa-users"></i> Recent Park Attendees
 				</button>
 			</div>
 
@@ -1280,8 +1280,9 @@ var PkConfig = {
 			<div class="pk-att-tab-panel" id="pk-att-panel-search">
 				<div class="pk-att-search-section-inner">
 					<div class="pk-att-scope-btns">
-						<button type="button" class="pk-att-scope-btn" id="pk-att-scope-park">Search Park</button>
-						<button type="button" class="pk-att-scope-btn" id="pk-att-scope-kingdom">Search Kingdom</button>
+						<button type="button" class="pk-att-scope-btn pk-att-scope-active" id="pk-att-scope-park">Park</button>
+						<button type="button" class="pk-att-scope-btn" id="pk-att-scope-kingdom">Kingdom</button>
+						<button type="button" class="pk-att-scope-btn" id="pk-att-scope-global">Global</button>
 					</div>
 					<div class="pk-att-search-row">
 						<div class="pk-att-field pk-att-field-grow">
@@ -1323,7 +1324,7 @@ var PkConfig = {
 			<!-- Entered today (always visible, shared by both tabs) -->
 			<div class="pk-att-entered-section">
 				<div class="pk-att-section-label">
-					<i class="fas fa-list-check" style="margin-right:6px;color:#a0aec0"></i>Entered today
+					<i class="fas fa-list-check" style="margin-right:6px;color:#a0aec0"></i>Attendance
 					<span class="pk-att-entered-count" id="pk-att-entered-count"></span>
 				</div>
 				<div id="pk-att-entered-empty" class="pk-att-qa-empty">No entries yet for this date.</div>
