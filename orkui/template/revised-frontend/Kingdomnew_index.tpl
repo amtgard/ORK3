@@ -309,6 +309,7 @@
 								<div class="kn-park-tile-img-wrap">
 									<?php if (!empty($park['_pinned'])): ?><span class="kn-park-pin-badge">Your Park</span><?php endif; ?>
 									<img src="<?= $tileHeraldry ?>"
+										loading="lazy"
 										onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
 										alt="<?= htmlspecialchars($park['ParkName']) ?>">
 								</div>
@@ -349,6 +350,7 @@
 									<tr class="kn-row-link<?= !empty($park['_pinned']) ? ' kn-pinned-row' : '' ?>" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>'">
 										<td class="kn-col-nowrap">
 											<img class="kn-thumb"
+												loading="lazy"
 												src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
 												onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
 												alt="">
@@ -463,6 +465,7 @@
 									</td>
 									<td class="kn-col-nowrap">
 										<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
+											loading="lazy"
 											src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
@@ -532,6 +535,7 @@
 					<?php foreach ($principalityList as $prinz): ?>
 						<div class="kn-prinz-row">
 							<img class="kn-prinz-heraldry"
+								loading="lazy"
 								src="<?= HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prinz['KingdomId'])) ?>"
 								onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'"
 								alt="">
@@ -1862,7 +1866,7 @@ function knApplyHeroColor(img) {
 	function knPlayerCardHtml(p, uir) {
 		var initial = (p.persona || '?').charAt(0).toUpperCase();
 		var avatarHtml = p.avatarUrl
-			? '<img src="' + knHtmlEsc(p.avatarUrl) + '" alt="" onerror="knAvatarFallback(this,\'' + initial + '\')">'
+			? '<img src="' + knHtmlEsc(p.avatarUrl) + '" loading="lazy" alt="" onerror="knAvatarFallback(this,\'' + initial + '\')">'
 			: initial;
 		var hbgAttr  = p.heraldryUrl ? ' style="--hbg:url(\'' + knHtmlEsc(p.heraldryUrl) + '\')"' : '';
 		var hbgClass = p.heraldryUrl ? ' kn-player-card-hbg' : '';

@@ -603,9 +603,10 @@
 									<div class="pk-tiny-heraldry">
 										<?php if ($event['HasHeraldry'] == 1): ?>
 											<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
+											     loading="lazy"
 											     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
 										<?php else: ?>
-											<img src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
+											<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
 										<?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
 									</div>
@@ -712,6 +713,7 @@
 										<?php if ($avatarSrc): ?>
 											<img src="<?= htmlspecialchars($avatarSrc) ?>"
 											     alt=""
+											     loading="lazy"
 											     onerror="pkAvatarFallback(this,'<?= $initial ?>')">
 										<?php else: ?>
 											<?= $initial ?>
@@ -763,6 +765,7 @@
 										<div class="pk-player-avatar">
 											<?php if ($avatarSrc): ?>
 												<img src="<?= htmlspecialchars($avatarSrc) ?>"
+												     loading="lazy"
 												     alt=""
 												     onerror="pkAvatarFallback(this,'<?= $initial ?>')">
 											<?php else: ?>
