@@ -6553,7 +6553,12 @@ $(document).ready(function() {
             if (btn) btn.classList.toggle('pk-att-scope-active', s === scope);
         });
         var input = gid('pk-att-player-name');
-        if (input) input.placeholder = pkScopePlaceholders[scope];
+        if (input) {
+            input.placeholder = pkScopePlaceholders[scope];
+            if (input.value.trim().length >= 2) {
+                $(input).autocomplete('search', input.value);
+            }
+        }
     }
     (function() {
         ['park', 'kingdom', 'global'].forEach(function(s) {
