@@ -231,10 +231,8 @@ class Kingdom  extends Ork3 {
 						'Length'=>$parktitle->period_length
 					);
 			} while ($parktitle->next());
-			$response['Status'] = Success();
-			return $response;
 		}
-		$response['Status'] = InvalidParameter();
+		$response['Status'] = Success();
 		return $response;
 	}
 	

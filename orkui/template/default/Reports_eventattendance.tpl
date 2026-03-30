@@ -17,6 +17,25 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<style>
+.rp-stats-filter-notice {
+	display: none;
+	font-size: 12px;
+	color: #92400e;
+	background: #fffbeb;
+	border: 1px solid #fde68a;
+	border-radius: 6px;
+	padding: 6px 14px;
+	margin-bottom: 10px;
+	text-align: center;
+}
+.rp-stats-filter-notice.ea-visible { display: block; }
+.rp-stats-row.ea-stats-muted .rp-stat-card {
+	opacity: 0.4;
+	filter: grayscale(0.5);
+	transition: opacity 0.2s, filter 0.2s;
+}
+</style>
 
 <div class="rp-root">
 
@@ -49,7 +68,10 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 <?php else: ?>
 
 	<!-- ── Stats row ──────────────────────────────────────────── -->
-	<div class="rp-stats-row">
+	<div class="rp-stats-filter-notice" id="ea-stats-notice">
+		<i class="fas fa-filter"></i> Stats reflect all <?=$total_events?> events &mdash; not the current filter
+	</div>
+	<div class="rp-stats-row" id="ea-stats-row">
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-calendar-alt"></i></div>
 			<div class="rp-stat-number"><?=$total_events?></div>
@@ -157,11 +179,19 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 			initComplete: function() {
 				$('#ea-table-loading').hide();
 				$('#ea-table-wrap').css('opacity', '1');
-				<?php if (!empty($prefilter)): ?>
-				$('#ea-table_filter input').val(<?= json_encode($prefilter) ?>).trigger('input');
-				<?php endif; ?>
 			}
 		});
+		<?php if (!empty($prefilter)): ?>
+		dt.search(<?= json_encode($prefilter) ?>).draw();
+		$('#ea-table_filter input').val(<?= json_encode($prefilter) ?>);
+		<?php endif; ?>
+		function syncStatsMuted() {
+			var active = $('#ea-table_filter input').val() !== '';
+			$('#ea-stats-row').toggleClass('ea-stats-muted', active);
+			$('#ea-stats-notice').toggleClass('ea-visible', active);
+		}
+		syncStatsMuted();
+		dt.on('search.dt', syncStatsMuted);
 		$('.rp-btn-export').on('click', function() { dt.button('.buttons-csv').trigger(); });
 		$('.rp-btn-print').on('click', function() { dt.button('.buttons-print').trigger(); });
 	});

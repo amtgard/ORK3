@@ -4,6 +4,7 @@ class Controller_ReleaseNotes extends Controller {
 
 	public function __construct($call=null, $method=null) {
 		parent::__construct($call, $method);
+		unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
 		$this->data['menu']['releasenotes'] = array('url' => UIR . 'ReleaseNotes', 'display' => 'Release Notes');
 		$this->data['no_index'] = true;
 	}

@@ -963,18 +963,35 @@ var EvConfig = {
     }
 })();
 <?php if (count($attendanceList) > 0): ?>
-$(function() {
-	$('#ev-attendance-table').DataTable({
-		dom: 'lfrtip',
-		order: [[0, 'asc']],
-		columnDefs: [
+(function() {
+	var _evAttDt = null;
+	function initEvAttDt() {
+		if (_evAttDt || !$.fn || !$.fn.DataTable) return;
+		_evAttDt = $('#ev-attendance-table').DataTable({
+			dom: 'lfrtip',
+			order: [[0, 'asc']],
+			autoWidth: false,
+			columnDefs: [
 <?php if ($canManageAttendance): ?>
-			{ targets: [-1], orderable: false, searchable: false }
+				{ targets: [-1], orderable: false, searchable: false }
 <?php endif; ?>
-		],
-		pageLength: 25
+			],
+			pageLength: 25
+		});
+		window._evAttDt = _evAttDt;
+	}
+	var _origEvShowTab = window.evShowTab;
+	window.evShowTab = function(li, tabId) {
+		if (typeof _origEvShowTab === 'function') _origEvShowTab(li, tabId);
+		if (tabId === 'ev-tab-attendance') {
+			setTimeout(function() { initEvAttDt(); }, 0);
+		}
+	};
+	// Init now if the attendance tab is already visible on page load
+	$(function() {
+		if (document.querySelector('#ev-tab-attendance.ev-tab-visible')) initEvAttDt();
 	});
-});
+})();
 <?php endif; ?>
 <?php if ($canManage && ($CalendarDetailCount ?? 1) > 1): ?>
 (function() {
@@ -1009,7 +1026,10 @@ function evConfirmAttDelete(e, link) {
 				if (data.status === 0) {
 					var row = link.closest('tr');
 					var mundaneId = row ? row.dataset.mundaneId : null;
-					if (row) row.remove();
+					if (row) {
+						if (window._evAttDt) { window._evAttDt.row(row).remove().draw(false); }
+						else { row.remove(); }
+					}
 					if (mundaneId) {
 						var rsvpBtn = document.querySelector('.ev-checkin-btn[data-mundane="' + mundaneId + '"]');
 						if (rsvpBtn) {

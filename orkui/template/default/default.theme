@@ -172,23 +172,6 @@
 		</div>
 	</nav>
 
-	<div id="sidr">
-		<ul>
-			<ul>
-				<li><a href='https://www.facebook.com/mORKmobile/posts/2275859462673190'>Get the ORK Mobile!</a></li>
-<?php foreach ($menu as $k => $item) : ?>
-				<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a></li>
-<?php endforeach; ?>
-<?php if ($this->__session->token == null) : ?>
-				<li><a href='<?=UIR;?>Login'>Login</a></li>
-<?php else : ?>
-<?php $__sideUid = (int)$this->__session->user_id; ?>
-				<li><a href='<?=UIR;?>Player/profile/<?=$__sideUid?>'><?=htmlspecialchars($this->__session->user_name)?></a></li>
-				<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"'>Logout</button></li>
-<?php endif; ?>
-			</ul>
-		</ul>
-	</div>
 
 	<script>
 	// ---- Search toggle ----
@@ -212,9 +195,6 @@
 	var nsUir = '<?= UIR ?>';
 
 	$(document).ready(function() {
-		// ---- Sidr mobile menu ----
-		$('#simple-menu').sidr();
-
 		// ---- Dropdowns: close on outside click ----
 		$(document).on('click.navDropdowns', function(e) {
 			['nav-avatar-wrap', 'nav-resources-wrap'].forEach(function(id) {

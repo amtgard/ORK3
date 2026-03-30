@@ -560,10 +560,9 @@ class Controller_KingdomAjax extends Controller {
 			}
 			echo json_encode(['status' => 0, 'parks' => $parks]);
 		} elseif ($action === 'parktitles') {
-			$this->load_model('Kingdom');
-			$result = $this->Kingdom->get_park_info($kingdom_id);
+			$result = Ork3::$Lib->kingdom->GetKingdomParkTitles(['KingdomId' => $kingdom_id]);
 			$titles = [];
-			foreach ($result['Titles'] ?? [] as $pt) {
+			foreach ($result['ParkTitles'] ?? [] as $pt) {
 				$titles[] = ['ParkTitleId' => (int)$pt['ParkTitleId'], 'Title' => $pt['Title']];
 			}
 			echo json_encode(['status' => 0, 'titles' => $titles]);
