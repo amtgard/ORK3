@@ -440,6 +440,8 @@ CREATE TABLE IF NOT EXISTS `ork_kingdom` (
   `abbreviation` varchar(3) NOT NULL,
   `has_heraldry` tinyint(1) NOT NULL DEFAULT '0',
   `parent_kingdom_id` int(11) NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `url` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `modified` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `active` enum('Active','Retired') NOT NULL DEFAULT 'Active',
   PRIMARY KEY (`kingdom_id`),

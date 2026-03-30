@@ -97,6 +97,8 @@ class Controller_KingdomAjax extends Controller {
 				'KingdomId'    => $kingdom_id,
 				'Name'         => $name,
 				'Abbreviation' => $abbr,
+				'Description'  => trim($_POST['Description'] ?? ''),
+				'Url'          => trim($_POST['Url'] ?? ''),
 			];
 
 			if (!empty($_FILES['Heraldry']['tmp_name']) && is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {

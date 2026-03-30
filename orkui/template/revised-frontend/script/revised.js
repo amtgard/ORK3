@@ -3334,11 +3334,57 @@ $(document).ready(function() {
 
     // ── Open / Close ──────────────────────────────────────────
     var _knDirty = false;
+    var _knPending = new Set();
+
+    var _knPanelNames = {
+        'kn-admin-body-details': 'Kingdom Details',
+        'kn-admin-body-config':  'Configuration',
+        'kn-admin-body-titles':  'Park Titles',
+        'kn-admin-body-awards':  'Awards',
+        'kn-admin-body-parks':   'Parks',
+    };
+
+    var _knPanelSaveBtn = {
+        'kn-admin-body-details': 'kn-admin-details-save',
+        'kn-admin-body-config':  'kn-admin-config-save',
+        'kn-admin-body-titles':  'kn-admin-titles-save',
+        'kn-admin-body-parks':   'kn-admin-parks-save',
+    };
+
+    function knMarkPending(panelId) {
+        _knPending.add(panelId);
+        var btnId = _knPanelSaveBtn[panelId];
+        var btn = btnId && gid(btnId);
+        if (btn) btn.classList.add('kn-save-dirty');
+    }
+    function knClearPending(panelId) {
+        _knPending.delete(panelId);
+        var btnId = _knPanelSaveBtn[panelId];
+        var btn = btnId && gid(btnId);
+        if (btn) btn.classList.remove('kn-save-dirty');
+    }
+
+    function knWirePendingPanel(panelId) {
+        var panel = gid(panelId);
+        if (!panel) return;
+        panel.addEventListener('input',  function() { knMarkPending(panelId); });
+        panel.addEventListener('change', function() { knMarkPending(panelId); });
+    }
 
     window.knOpenAdminModal = function() {
         var overlay = gid('kn-admin-overlay');
         if (!overlay) return;
         _knDirty = false;
+        _knPending.clear();
+        Object.values(_knPanelSaveBtn).forEach(function(btnId) {
+            var btn = gid(btnId);
+            if (btn) btn.classList.remove('kn-save-dirty');
+        });
+        // Restore details fields to their last-saved server values
+        gid('kn-admin-body-details').querySelectorAll('[data-original]').forEach(function(el) {
+            if (el.tagName === 'TEXTAREA') el.value = el.dataset.original;
+            else el.value = el.dataset.original;
+        });
         buildConfig();
         buildTitles();
         buildAwards();
@@ -3349,6 +3395,14 @@ $(document).ready(function() {
     function knCloseAdminModal() {
         var overlay = gid('kn-admin-overlay');
         if (!overlay) return;
+        if (_knPending.size > 0) {
+            var names = Array.from(_knPending).map(function(id) { return _knPanelNames[id] || id; });
+            knConfirm('You have unsaved changes in: ' + names.join(', ') + '. Close anyway?', function() {
+                _knPending.clear();
+                knCloseAdminModal();
+            }, 'Unsaved Changes');
+            return;
+        }
         overlay.classList.remove('kn-open');
         document.body.style.overflow = '';
         if (_knDirty) { _knDirty = false; setTimeout(function() { location.reload(); }, 0); }
@@ -3415,9 +3469,15 @@ $(document).ready(function() {
             if (!name) { feedback('kn-admin-details-feedback', 'Kingdom name is required.', false); return; }
             if (!abbr) { feedback('kn-admin-details-feedback', 'Abbreviation is required.', false); return; }
 
+            var description = (gid('kn-admin-description').value || '').trim();
+
             var fd = new FormData();
+            var url = (gid('kn-admin-url').value || '').trim();
+
             fd.append('Name',         name);
             fd.append('Abbreviation', abbr);
+            fd.append('Description',  description);
+            fd.append('Url',          url);
 
             btn.disabled = true;
             $.ajax({
@@ -3431,6 +3491,10 @@ $(document).ready(function() {
                     btn.disabled = false;
                     if (r && r.status === 0) {
                         feedback('kn-admin-details-feedback', 'Details saved!', true);
+                        knClearPending('kn-admin-body-details');
+                        gid('kn-admin-body-details').querySelectorAll('[data-original]').forEach(function(el) {
+                            el.dataset.original = el.value;
+                        });
                         _knDirty = true;
                     } else {
                         feedback('kn-admin-details-feedback', (r && r.error) ? r.error : 'Save failed.', false);
@@ -3550,7 +3614,7 @@ $(document).ready(function() {
                     if (r && r.status === 0) {
                         saveRecs(function(ok, err) {
                             btn.disabled = false;
-                            if (ok) feedback('kn-admin-config-feedback', 'Configuration saved!', true);
+                            if (ok) { knClearPending('kn-admin-body-config'); feedback('kn-admin-config-feedback', 'Configuration saved!', true); }
                             else feedback('kn-admin-config-feedback', err, false);
                         });
                     } else {
@@ -3666,6 +3730,7 @@ $(document).ready(function() {
             $.post(BASE_URL + 'setparktitles', data, function(r) {
                 btn.disabled = false;
                 if (r && r.status === 0) {
+                    knClearPending('kn-admin-body-titles');
                     feedback('kn-admin-titles-feedback', 'Park titles saved!', true);
                     _knDirty = true;
                     document.querySelectorAll('#kn-admin-titles-table tfoot [data-field]').forEach(function(inp) {
@@ -4000,6 +4065,7 @@ $(document).ready(function() {
                 success: function(r) {
                     btn.disabled = false;
                     if (r && r.status === 0) {
+                        knClearPending('kn-admin-body-parks');
                         feedback('kn-admin-parks-feedback', 'Parks saved!', true);
                         _knDirty = true;
                     } else {
@@ -4154,6 +4220,9 @@ $(document).ready(function() {
         var doneBtn = gid('kn-admin-done-btn');
         if (doneBtn) doneBtn.addEventListener('click', knCloseAdminModal);
 
+        // Wire unsaved-change tracking on all editable panels
+        Object.keys(_knPanelNames).forEach(knWirePendingPanel);
+
         var overlay = gid('kn-admin-overlay');
         if (overlay) {
             overlay.addEventListener('click', function(e) {
@@ -4163,9 +4232,7 @@ $(document).ready(function() {
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('kn-admin-overlay') && gid('kn-admin-overlay').classList.contains('kn-open')) {
-                var wasDirty = _knDirty;
                 knCloseAdminModal();
-                if (wasDirty) setTimeout(function() { location.reload(); }, 0);
             }
         });
     });

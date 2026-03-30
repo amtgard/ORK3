@@ -424,6 +424,8 @@ class Controller_Kingdom extends Controller {
 			$this->data['AdminInfo'] = [
 				'Name'             => $kd['KingdomInfo']['KingdomName']  ?? '',
 				'Abbreviation'     => $kd['KingdomInfo']['Abbreviation'] ?? '',
+				'Description'      => $kd['KingdomInfo']['Description']  ?? '',
+				'Url'              => $kd['KingdomInfo']['Url']          ?? '',
 				'IsPrincipality'   => !empty($kd['KingdomInfo']['IsPrincipality']),
 				'ParentKingdomId'  => $parentKingdomId,
 				'ParentKingdomName'=> $parentKingdomName,

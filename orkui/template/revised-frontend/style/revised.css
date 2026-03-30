@@ -1511,6 +1511,9 @@
 .kn-officer-list li { font-size: 13px; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
 .kn-officer-list li:last-child { border-bottom: none; }
 .kn-officer-role { font-size: 11px; color: #718096; display: block; }
+.kn-description-body { font-size: 13px; color: #4a5568; line-height: 1.2; white-space: pre-wrap; }
+.kn-description-url { display:block; margin-top:8px; font-size:12px; color:var(--kn-accent-mid); word-break:break-all; text-decoration:none; }
+.kn-description-url:hover { text-decoration:underline; }
 .kn-officer-name a { color: var(--kn-accent-mid); text-decoration: none; }
 .kn-officer-name a:hover { text-decoration: underline; }
 
@@ -4761,9 +4764,11 @@
 .kn-admin-feedback { padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; }
 .kn-admin-ok  { background:#f0fff4; border:1px solid #c6f6d5; color:var(--kn-accent); }
 .kn-admin-err { background:#fff5f5; border:1px solid #fed7d7; color:#c53030; }
-.kn-admin-save-btn { padding:7px 16px; background:var(--kn-accent-mid); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; margin-top:4px; }
-.kn-admin-save-btn:hover { background:#2c5282; }
+.kn-admin-save-btn { padding:7px 16px; background:#a0aec0; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; margin-top:4px; transition:background 0.2s, box-shadow 0.2s; }
+.kn-admin-save-btn:hover { background:#718096; }
 .kn-admin-save-btn:disabled { opacity:0.5; cursor:default; }
+.kn-admin-save-btn.kn-save-dirty { background:var(--kn-accent-mid); box-shadow:0 0 0 3px rgba(43,108,176,0.25); }
+.kn-admin-save-btn.kn-save-dirty:hover { background:#2c5282; }
 .kn-admin-add-btn { padding:6px 14px; background:none; border:1px dashed #cbd5e0; color:#718096; border-radius:6px; font-size:12px; cursor:pointer; margin-top:10px; }
 .kn-admin-add-btn:hover { background:#f7fafc; border-color:#a0aec0; }
 .kn-admin-table { width:100%; border-collapse:collapse; font-size:13px; margin-bottom:10px; }

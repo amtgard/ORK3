@@ -34,6 +34,8 @@ class Kingdom  extends Ork3 {
 			$response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id>0?1:0;
 			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
 			$response['KingdomInfo']['Active'] = $this->kingdom->active;
+			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
+			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
@@ -255,6 +257,8 @@ class Kingdom  extends Ork3 {
 			$response['KingdomInfo']['Active'] = $this->kingdom->active;
 			$response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id>0?1:0;
 			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
+			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
+			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
 			
 			// Fetch configs
 			$response['KingdomConfiguration'] = Common::get_configs($request['KingdomId']);
@@ -467,6 +471,8 @@ class Kingdom  extends Ork3 {
 			if ($this->kingdom->find()) {
 				$this->kingdom->name = strlen($request['Name'])>0?$request['Name']:$this->kingdom->name;
 				$this->kingdom->abbreviation = strlen($request['Abbreviation'])>0?$request['Abbreviation']:$this->kingdom->abbreviation;
+				if (isset($request['Description'])) $this->kingdom->description = $request['Description'];
+				if (isset($request['Url'])) $this->kingdom->url = $request['Url'];
 				$this->kingdom->modified = date("Y-m-d H:i:s", time());
 				$this->kingdom->save();
 				

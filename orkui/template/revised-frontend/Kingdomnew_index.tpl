@@ -182,6 +182,19 @@
 		</div>
 		<?php endif; ?>
 
+		<?php
+			$_knDescription = $kingdom_info['Info']['KingdomInfo']['Description'] ?? '';
+		?>
+		<?php if (!empty($_knDescription)): ?>
+		<div class="kn-card kn-description-card">
+			<h4><i class="fas fa-info-circle"></i> About</h4>
+			<div class="kn-description-body"><?= htmlspecialchars($_knDescription) ?></div>
+			<?php if (!empty($kingdom_info['Info']['KingdomInfo']['Url'] ?? '')): ?>
+			<a class="kn-description-url" href="<?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?>" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:4px;font-size:11px"></i><?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?></a>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
+
 		<!-- Quick Links -->
 		<div class="kn-card">
 			<h4><i class="fas fa-link"></i> Quick Links</h4>
@@ -1182,12 +1195,20 @@ var KnConfig = {
 					<div id="kn-admin-details-feedback" class="kn-admin-feedback" style="display:none"></div>
 					<div class="kn-admin-field">
 						<label for="kn-admin-name">Kingdom Name</label>
-						<input type="text" id="kn-admin-name" value="<?= htmlspecialchars($AdminInfo['Name'] ?? '') ?>">
+						<input type="text" id="kn-admin-name" value="<?= htmlspecialchars($AdminInfo['Name'] ?? '') ?>" data-original="<?= htmlspecialchars($AdminInfo['Name'] ?? '') ?>">
 					</div>
 					<div class="kn-admin-field">
 						<label for="kn-admin-abbr">Abbreviation <span class="kn-admin-hint-inline">(letters &amp; numbers only)</span></label>
-						<input type="text" id="kn-admin-abbr" value="<?= htmlspecialchars($AdminInfo['Abbreviation'] ?? '') ?>" maxlength="8">
+						<input type="text" id="kn-admin-abbr" value="<?= htmlspecialchars($AdminInfo['Abbreviation'] ?? '') ?>" data-original="<?= htmlspecialchars($AdminInfo['Abbreviation'] ?? '') ?>" maxlength="8">
 						<div id="kn-admin-abbr-warn" style="display:none;color:#c05621;font-size:12px;margin-top:4px"></div>
+					</div>
+					<div class="kn-admin-field">
+						<label for="kn-admin-description">Description <span class="kn-admin-hint-inline">(optional)</span></label>
+						<textarea id="kn-admin-description" rows="4" style="resize:vertical" data-original="<?= htmlspecialchars($AdminInfo['Description'] ?? '') ?>"><?= htmlspecialchars($AdminInfo['Description'] ?? '') ?></textarea>
+					</div>
+					<div class="kn-admin-field">
+						<label for="kn-admin-url">Website URL <span class="kn-admin-hint-inline">(optional)</span></label>
+						<input type="url" id="kn-admin-url" value="<?= htmlspecialchars($AdminInfo['Url'] ?? '') ?>" data-original="<?= htmlspecialchars($AdminInfo['Url'] ?? '') ?>" placeholder="https://">
 					</div>
 					<button class="kn-admin-save-btn" id="kn-admin-details-save"<?= (empty($AdminInfo['Name']) || empty($AdminInfo['Abbreviation'])) ? ' disabled' : '' ?>>
 						<i class="fas fa-save"></i> Save Details
