@@ -32,12 +32,16 @@
 	.wn-header-icon { font-size:28px; color:#4299e1; }
 	.wn-title { font-size:20px; font-weight:700; color:#2d3748; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
 	.wn-subtitle { font-size:12px; color:#718096; margin-top:3px; font-style:italic; }
+	.wn-date { font-size:11px; color:#a0aec0; margin-top:1px; font-style:italic; }
 	.wn-items { list-style:none; margin:0 0 24px; padding:0; display:flex; flex-direction:column; gap:14px; }
 	.wn-item { display:flex; gap:14px; align-items:flex-start; }
 	.wn-item-icon { color:#4299e1; font-size:18px; margin-top:2px; min-width:20px; }
 	.wn-item-title { font-weight:600; color:#2d3748; font-size:14px; }
 	.wn-item-body { color:#4a5568; font-size:13px; line-height:1.5; margin-top:2px; }
-	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; display:block; margin:0 auto; }
+	.wn-footer { display:flex; align-items:center; justify-content:center; gap:12px; }
+	.wn-all-versions { background:none; color:#4299e1; border:1px solid #4299e1; border-radius:7px; padding:10px 20px; font-size:15px; cursor:pointer; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; }
+	.wn-all-versions:hover { background:#ebf8ff; }
+	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; }
 	.wn-dismiss:hover { background:#3182ce; }
 	</style>
 </head>
@@ -385,16 +389,25 @@ $__wnRow = $DB->DataSet("SELECT id FROM ork_whats_new_seen WHERE mundane_id = " 
 $__wnShow = !($__wnRow && $__wnRow->Next());
 $DB->Clear();
 ?>
-<?php if ($__wnShow): ?>
+<?php
+$__currentRelease = null;
+foreach ($WHATS_NEW_ITEMS as $__release) {
+    if ($__release['date'] === WHATS_NEW_VERSION) { $__currentRelease = $__release; break; }
+}
+?>
+<?php if ($__wnShow && $__currentRelease): ?>
 <div class="wn-overlay wn-open" id="wn-overlay">
   <div class="wn-modal">
     <div class="wn-header">
       <span class="wn-header-icon"><i class="fas fa-star"></i></span>
-      <span class="wn-title">What&rsquo;s New on the ORK?</span>
-      <span class="wn-subtitle">Version 3.5: The Dragon Release</span>
+      <div>
+        <span class="wn-title">What&rsquo;s New on the ORK?</span>
+        <span class="wn-subtitle">Version <?=htmlspecialchars($__currentRelease['version'])?></span>
+        <span class="wn-date"><?=htmlspecialchars($__currentRelease['date'])?></span>
+      </div>
     </div>
     <ul class="wn-items">
-    <?php foreach ($WHATS_NEW_ITEMS as $__item): ?>
+    <?php foreach ($__currentRelease['items'] as $__item): ?>
       <li class="wn-item">
         <span class="wn-item-icon"><i class="<?=htmlspecialchars($__item['icon'])?>"></i></span>
         <div>
@@ -404,7 +417,10 @@ $DB->Clear();
       </li>
     <?php endforeach; ?>
     </ul>
-    <button class="wn-dismiss" onclick="wnDismiss()">Got it!</button>
+    <div class="wn-footer">
+      <a class="wn-all-versions" href="<?=UIR?>ReleaseNotes" onclick="wnDismiss()">See All Versions</a>
+      <button class="wn-dismiss" onclick="wnDismiss()">Got it!</button>
+    </div>
   </div>
 </div>
 <script>

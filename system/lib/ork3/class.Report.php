@@ -2496,7 +2496,7 @@ class Report  extends Ork3 {
 		$r = $this->db->query($sql);
 		$relationships = array();
 		if ($r !== false && $r->size() > 0) {
-			while ($r->next()) {
+			do {
 				$relationships[] = array(
 					'RecipientId'      => $r->recipient_id,
 					'RecipientPersona' => $r->recipient_persona,
@@ -2506,7 +2506,7 @@ class Report  extends Ork3 {
 					'Peerage'          => $r->peerage,
 					'Date'             => $r->date,
 				);
-			}
+			} while ($r->next());
 		}
 
 		// Knights for the dropdown — kingdom-scoped so the selector stays useful.
@@ -2525,12 +2525,12 @@ class Report  extends Ork3 {
 		$kr = $this->db->query($knights_sql);
 		$knights = array();
 		if ($kr !== false && $kr->size() > 0) {
-			while ($kr->next()) {
+			do {
 				$knights[] = array(
 					'MundaneId' => $kr->mundane_id,
 					'Persona'   => $kr->persona,
 				);
-			}
+			} while ($kr->next());
 		}
 
 		// All knight awards globally — IDs for the crown icon + type names for display.
@@ -2545,7 +2545,7 @@ class Report  extends Ork3 {
 		$all_knight_ids = array();
 		$knight_types   = array(); // mundane_id => [type, ...]
 		if ($akr !== false && $akr->size() > 0) {
-			while ($akr->next()) {
+			do {
 				$mid  = (int)$akr->mundane_id;
 				$name = $akr->knight_name;
 				// Strip common "Knight of (the) " prefixes to get just the type
@@ -2555,7 +2555,7 @@ class Report  extends Ork3 {
 				if (!in_array($type, $knight_types[$mid] ?? array())) {
 					$knight_types[$mid][] = $type;
 				}
-			}
+			} while ($akr->next());
 			$all_knight_ids = array_unique($all_knight_ids);
 		}
 

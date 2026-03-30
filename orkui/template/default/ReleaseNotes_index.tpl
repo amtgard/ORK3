@@ -102,7 +102,7 @@ $version = $ork_version ?? '3.x';
 		<div class="rp-header-left">
 			<div class="rp-header-icon-title">
 				<i class="fas fa-bullhorn rp-header-icon"></i>
-				<h1 class="rp-header-title">Release Notes</h1>
+				<h1 class="rp-header-title">ORK Release Notes</h1>
 			</div>
 			<div class="rp-header-scope">
 				<span style="color:rgba(255,255,255,0.65);">ORK v<?=htmlspecialchars($version)?></span>
