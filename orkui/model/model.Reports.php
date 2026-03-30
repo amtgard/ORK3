@@ -102,6 +102,15 @@ class Model_Reports extends Model {
 		return $r;
 	}
 
+	function get_distinct_player_stats($type, $id, $period, $num_periods) {
+		if ('All' == $period) {
+			$r = $this->Report->GetDistinctPlayerStats(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1));
+		} else {
+			$r = $this->Report->GetDistinctPlayerStats(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'Periods'=>$num_periods, 'PerWeeks'=>$period=='Weeks'?1:0, 'PerMonths'=>$period=='Months'?1:0));
+		}
+		return $r;
+	}
+
 	function get_authorization_list($type, $id, $officers) {
 		$request = array(
 				'Type' => $type,

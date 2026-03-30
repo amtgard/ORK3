@@ -240,6 +240,7 @@ class Controller_Reports extends Controller {
 			$num_periods = $params[3];
 		$this->data['attendance_summary'] = $this->Reports->get_attendance_summary($type, $id, $period, $num_periods);
 		$this->data['attendance_periodical'] = $this->Reports->get_periodical_summary($type, $id, $period, $num_periods, 'week');
+		$this->data['distinct_stats'] = $this->Reports->get_distinct_player_stats($type, $id, $period, $num_periods);
 		$this->data['Type'] = $type;
 	}
 

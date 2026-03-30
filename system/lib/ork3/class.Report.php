@@ -641,12 +641,12 @@ class Report  extends Ork3 {
 		    case 'date':
 		    default:
     		        $by_period = 'ssa.date';
-                    $group_period = 'a.date';
+                    $group_period = 'a.date, a.event_calendardetail_id';
                 break;
         }
 
 
-		$sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
+		$sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, count(DISTINCT a.mundane_id) as distinct_players, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
 					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
 					from
@@ -677,6 +677,7 @@ class Report  extends Ork3 {
 						'Year' => $r->year,
 						'Week' => $r->week,
 						'Attendees' => $r->attendees,
+						'DistinctPlayers' => $r->distinct_players,
 						'EventCalendarDetailId' => $r->event_calendardetail_id,
 						'EventId' => $r->event_id,
 						'ParkId' => $r->park_id,
@@ -1303,6 +1304,49 @@ class Report  extends Ork3 {
 			'ActiveKingdomsSummaryList' => $report
 		);
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
+	public function GetDistinctPlayerStats($request) {
+		$where = '';
+		if (valid_id($request['EventId'])) $where = "AND a.event_id = '" . mysql_real_escape_string($request['EventId']) . "'";
+		if (valid_id($request['KingdomId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		if (valid_id($request['ParkId'])) $where = "AND a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
+		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['PrincipalityId']) . "'";
+
+		if ($request['PerWeeks'] == 1)
+			$per_period = date('Y-m-d', strtotime("-{$request['Periods']} week"));
+		if ($request['PerMonths'] == 1)
+			$per_period = date('Y-m-d', strtotime("-{$request['Periods']} month"));
+
+		$sql_total = "SELECT COUNT(DISTINCT a.mundane_id) AS total_distinct
+			FROM " . DB_PREFIX . "attendance a
+			WHERE a.date > '$per_period' AND a.date <= NOW() AND a.mundane_id > 0 $where";
+
+		$sql_avg = "SELECT AVG(weekly_unique) AS avg_per_week FROM (
+			SELECT COUNT(DISTINCT a.mundane_id) AS weekly_unique
+			FROM " . DB_PREFIX . "attendance a
+			WHERE a.date > '$per_period' AND a.date <= NOW() AND a.mundane_id > 0 $where
+			GROUP BY a.date_year, a.date_week3
+		) sub";
+
+		$total = 0;
+		$avg = 0;
+
+		$r = $this->db->query($sql_total);
+		if ($r && $r->next()) {
+			$total = (int)$r->total_distinct;
+		}
+
+		$r = $this->db->query($sql_avg);
+		if ($r && $r->next()) {
+			$avg = round((float)$r->avg_per_week, 1);
+		}
+
+		return array(
+			'Status' => Success(),
+			'TotalDistinctPlayers' => $total,
+			'AvgDistinctPerWeek' => $avg
+		);
 	}
 
 	public function GetDistinctActivePlayerCount($weeks = 26) {
