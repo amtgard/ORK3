@@ -1,4 +1,5 @@
 <?php
+	require_once(DIR_LIB . 'Parsedown.php');
 	/* -----------------------------------------------
 	   Pre-process template data
 	   ----------------------------------------------- */
@@ -188,7 +189,7 @@
 		<?php if (!empty($_knDescription)): ?>
 		<div class="kn-card kn-description-card">
 			<h4><i class="fas fa-info-circle"></i> About</h4>
-			<div class="kn-description-body"><?= htmlspecialchars($_knDescription) ?></div>
+			<div class="kn-description-body"><?= preg_replace('/<img[^>]*>/i', '', (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($_knDescription)) ?></div>
 			<?php if (!empty($kingdom_info['Info']['KingdomInfo']['Url'] ?? '')): ?>
 			<a class="kn-description-url" href="<?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?>" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:4px;font-size:11px"></i><?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?></a>
 			<?php endif; ?>
@@ -1203,7 +1204,10 @@ var KnConfig = {
 						<div id="kn-admin-abbr-warn" style="display:none;color:#c05621;font-size:12px;margin-top:4px"></div>
 					</div>
 					<div class="kn-admin-field">
-						<label for="kn-admin-description">Description <span class="kn-admin-hint-inline">(optional)</span></label>
+						<label for="kn-admin-description" style="display:flex;align-items:center;gap:6px;">
+						Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
+						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('kn-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+					</label>
 						<textarea id="kn-admin-description" rows="4" style="resize:vertical" data-original="<?= htmlspecialchars($AdminInfo['Description'] ?? '') ?>"><?= htmlspecialchars($AdminInfo['Description'] ?? '') ?></textarea>
 					</div>
 					<div class="kn-admin-field">
@@ -1468,6 +1472,35 @@ var KnConfig = {
 </div>
 
 <?php endif; ?>
+
+<!-- Markdown Help Modal -->
+<div id="kn-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
+	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-markdown" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<button class="kn-modal-close-btn" onclick="document.getElementById('kn-md-help-overlay').classList.remove('kn-open')">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="padding:16px 20px">
+			<table class="kn-md-help-table">
+				<thead><tr><th>You type</th><th>Result</th></tr></thead>
+				<tbody>
+					<tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+					<tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+					<tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+					<tr><td><code>[link](https://...)</code></td><td><a href="#">link</a></td></tr>
+					<tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+					<tr><td><code>- item</code></td><td>• Bullet list</td></tr>
+					<tr><td><code>1. item</code></td><td>1. Numbered list</td></tr>
+					<tr><td><code># Heading</code></td><td><strong>Large heading</strong></td></tr>
+					<tr><td><code>## Heading</code></td><td><strong>Smaller heading</strong></td></tr>
+					<tr><td><code>&gt; quote</code></td><td><em>Blockquote</em></td></tr>
+					<tr><td>Blank line</td><td>New paragraph</td></tr>
+					<tr><td>Single newline</td><td>Line break</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
 
 <!-- Confirmation Modal (shared) -->
 <div id="kn-confirm-overlay">

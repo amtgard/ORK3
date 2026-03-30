@@ -846,6 +846,7 @@
 }
 .pn-btn-primary { background: #2c5282; color: #fff; }
 .pn-btn-primary:hover:not(:disabled) { background: #2a4a7f; }
+.pn-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 .pn-btn-secondary { background: #edf2f7; color: #4a5568; }
 .pn-btn-secondary:hover:not(:disabled) { background: #e2e8f0; }
 .pn-btn:disabled, .pn-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
@@ -1511,9 +1512,22 @@
 .kn-officer-list li { font-size: 13px; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
 .kn-officer-list li:last-child { border-bottom: none; }
 .kn-officer-role { font-size: 11px; color: #718096; display: block; }
-.kn-description-body { font-size: 13px; color: #4a5568; line-height: 1.2; white-space: pre-wrap; }
+.kn-description-body { font-size: 13px; color: #4a5568; line-height: 1.5; }
+.kn-description-body p { margin: 0 0 8px; }
+.kn-description-body p:last-child { margin-bottom: 0; }
+.kn-description-body ul, .kn-description-body ol { margin: 0 0 8px; padding-left: 18px; }
+.kn-description-body a { color: var(--kn-accent-mid); }
+.kn-description-body strong { font-weight: 700; }
+.kn-description-body em { font-style: italic; }
 .kn-description-url { display:block; margin-top:8px; font-size:12px; color:var(--kn-accent-mid); word-break:break-all; text-decoration:none; }
 .kn-description-url:hover { text-decoration:underline; }
+.kn-md-help-btn { background:none; border:1px solid #cbd5e0; border-radius:50%; width:16px; height:16px; font-size:10px; font-weight:700; color:#718096; cursor:pointer; line-height:1; padding:0; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.kn-md-help-btn:hover { background:#ebf8ff; border-color:#90cdf4; color:#2b6cb0; }
+.kn-md-help-table { width:100%; border-collapse:collapse; font-size:13px; }
+.kn-md-help-table th { text-align:left; font-size:11px; font-weight:700; color:#718096; text-transform:uppercase; letter-spacing:0.04em; padding:0 8px 8px; border-bottom:2px solid #e2e8f0; }
+.kn-md-help-table td { padding:6px 8px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+.kn-md-help-table tr:last-child td { border-bottom:none; }
+.kn-md-help-table code { background:#f7fafc; border:1px solid #e2e8f0; border-radius:3px; padding:1px 4px; font-size:12px; }
 .kn-officer-name a { color: var(--kn-accent-mid); text-decoration: none; }
 .kn-officer-name a:hover { text-decoration: underline; }
 
@@ -3831,7 +3845,8 @@
 	font-weight: 600;
 	cursor: pointer;
 }
-.ev-modal-btn-save:hover { background: #2c5282; }
+.ev-modal-btn-save:hover:not(:disabled) { background: #2c5282; }
+.ev-modal-btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ---- Event page mobile ---- */
 @media (max-width: 768px) {
@@ -4799,6 +4814,12 @@
 .kn-admin-award-row-fields .kn-admin-field { margin-bottom:0; }
 
 /* ---- Confirmation modal ---- */
+#kn-md-help-overlay, #pk-md-help-overlay, #ev-md-help-overlay, #un-md-help-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:11000; opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
+#kn-md-help-overlay.kn-open, #pk-md-help-overlay.kn-open, #ev-md-help-overlay.kn-open, #un-md-help-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
+#kn-md-help-overlay .kn-modal-box, #pk-md-help-overlay .kn-modal-box, #ev-md-help-overlay .kn-modal-box, #un-md-help-overlay .kn-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-md-help-overlay .kn-modal-header, #pk-md-help-overlay .kn-modal-header, #ev-md-help-overlay .kn-modal-header, #un-md-help-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+#kn-md-help-overlay .kn-modal-close-btn, #pk-md-help-overlay .kn-modal-close-btn, #ev-md-help-overlay .kn-modal-close-btn, #un-md-help-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
+#kn-md-help-overlay .kn-modal-close-btn:hover, #pk-md-help-overlay .kn-modal-close-btn:hover, #ev-md-help-overlay .kn-modal-close-btn:hover, #un-md-help-overlay .kn-modal-close-btn:hover { color:#4a5568; }
 #kn-confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:1200; opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-confirm-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
 #kn-confirm-overlay .kn-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }

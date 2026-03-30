@@ -1,4 +1,10 @@
 <?php
+require_once(DIR_LIB . 'Parsedown.php');
+function un_markdown(string $text): string {
+	$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($text);
+	return preg_replace('/<img[^>]*>/i', '', $html);
+}
+
 /* ── Data prep ─────────────────────────────────────────── */
 $_unit     = $Unit['Details']['Unit'] ?? [];
 $_members  = $Unit['Members']['Roster'] ?? [];
@@ -18,7 +24,7 @@ foreach ($_members as $_m) {
 	if (!empty($_m['LastSignIn']) && $_m['LastSignIn'] >= $_cutoff) $_active++;
 }
 
-$_can_edit   = !empty($LoggedIn);
+$_can_edit   = !empty($CanEdit);
 $_err        = $SaveError ?? '';
 $_base_url   = UIR . "Unit/index/$_unit_id";
 
@@ -385,8 +391,8 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 				</button>
 				<?php endif; ?>
 			</h4>
-			<div style="font-size:13px;line-height:1.7;color:#4a5568;">
-				<?=nl2br($_desc)?>
+			<div class="kn-description-body" style="font-size:13px;color:#4a5568;">
+				<?=un_markdown($_desc)?>
 			</div>
 		</div>
 <?php endif; ?>
@@ -401,8 +407,8 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 				</button>
 				<?php endif; ?>
 			</h4>
-			<div style="font-size:13px;line-height:1.7;color:#4a5568;">
-				<?=nl2br(htmlspecialchars(str_replace(['\r\n', '\r', '\n'], "\n", $_history)))?>
+			<div class="kn-description-body" style="font-size:13px;color:#4a5568;">
+				<?=un_markdown($_history)?>
 			</div>
 		</div>
 <?php endif; ?>
@@ -646,7 +652,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-pen"></i> Edit Unit Details</h3>
-			<button class="pn-modal-close-btn" onclick="unCloseModal('un-modal-details')">&times;</button>
+			<button class="pn-modal-close-btn" onclick="unCloseDetailsModal()">&times;</button>
 		</div>
 		<form method="post" action="<?=htmlspecialchars($_base_url)?>" enctype="multipart/form-data">
 			<input type="hidden" name="Action" value="save_details">
@@ -675,22 +681,57 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					<input type="url" name="Url" value="<?=htmlspecialchars($_url)?>" placeholder="https://…">
 				</div>
 				<div class="pn-acct-field">
-					<label>Description</label>
+					<label style="display:flex;align-items:center;gap:6px;">
+						Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
+						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('un-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+					</label>
 					<textarea name="Description" rows="4"><?=htmlspecialchars($_desc)?></textarea>
 				</div>
 				<div class="pn-acct-field">
-					<label>History</label>
+					<label style="display:flex;align-items:center;gap:6px;">
+						History <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
+						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('un-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+					</label>
 					<textarea name="History" rows="4"><?=htmlspecialchars($_history)?></textarea>
 				</div>
 			</div>
 			<div class="pn-modal-footer">
 				<button type="button" class="pn-btn pn-btn-secondary"
-					onclick="unCloseModal('un-modal-details')">Cancel</button>
-				<button type="submit" class="pn-btn pn-btn-primary">
+					onclick="unCloseDetailsModal()">Cancel</button>
+				<button type="submit" class="pn-btn pn-btn-primary" id="un-details-save-btn" disabled>
 					<i class="fas fa-save"></i> Save
 				</button>
 			</div>
 		</form>
+	</div>
+</div>
+
+<!-- ── Markdown Help Modal ─────────────────── -->
+<div id="un-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
+	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-hashtag" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<button class="kn-modal-close-btn" onclick="document.getElementById('un-md-help-overlay').classList.remove('kn-open')">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="padding:16px 20px">
+			<table class="kn-md-help-table">
+				<thead><tr><th>You type</th><th>Result</th></tr></thead>
+				<tbody>
+					<tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+					<tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+					<tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+					<tr><td><code>[link](https://...)</code></td><td><a href="#">link</a></td></tr>
+					<tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+					<tr><td><code>- item</code></td><td>• Bullet list</td></tr>
+					<tr><td><code>1. item</code></td><td>1. Numbered list</td></tr>
+					<tr><td><code># Heading</code></td><td><strong>Large heading</strong></td></tr>
+					<tr><td><code>## Heading</code></td><td><strong>Smaller heading</strong></td></tr>
+					<tr><td><code>&gt; quote</code></td><td><em>Blockquote</em></td></tr>
+					<tr><td>Blank line</td><td>New paragraph</td></tr>
+					<tr><td>Single newline</td><td>Line break</td></tr>
+				</tbody>
+			</table>
+		</div>
 	</div>
 </div>
 
@@ -810,6 +851,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 
 <?php endif; ?>
 
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -897,6 +939,66 @@ function unOpenModal(id) {
 function unCloseModal(id) {
 	document.getElementById(id).classList.remove('pn-open');
 }
+
+// ── Details modal dirty tracking ──
+var _unDetailsForm = document.getElementById('un-modal-details') && document.querySelector('#un-modal-details form');
+var _unDetailsOriginals = {};
+var _unDetailsSaveBtn = document.getElementById('un-details-save-btn');
+
+(function() {
+	var form = document.querySelector('#un-modal-details form');
+	if (!form) return;
+	_unDetailsForm = form;
+	form.querySelectorAll('input, textarea').forEach(function(el) {
+		if (el.name) _unDetailsOriginals[el.name] = el.value;
+	});
+	form.querySelectorAll('input, textarea').forEach(function(el) {
+		el.addEventListener('input', unCheckDetailsDirty);
+		el.addEventListener('change', unCheckDetailsDirty);
+	});
+})();
+
+function unCheckDetailsDirty() {
+	if (!_unDetailsForm) return;
+	var dirty = false;
+	_unDetailsForm.querySelectorAll('input, textarea').forEach(function(el) {
+		if (el.name && _unDetailsOriginals.hasOwnProperty(el.name) && el.value !== _unDetailsOriginals[el.name]) dirty = true;
+	});
+	if (_unDetailsSaveBtn) _unDetailsSaveBtn.disabled = !dirty;
+}
+
+function unRestoreDetailsForm() {
+	if (!_unDetailsForm) return;
+	_unDetailsForm.querySelectorAll('input, textarea').forEach(function(el) {
+		if (el.name && _unDetailsOriginals.hasOwnProperty(el.name)) el.value = _unDetailsOriginals[el.name];
+	});
+	if (_unDetailsSaveBtn) _unDetailsSaveBtn.disabled = true;
+}
+
+function unCloseDetailsModal() {
+	if (_unDetailsSaveBtn && !_unDetailsSaveBtn.disabled) {
+		pnConfirm({ title: 'Unsaved Changes', message: 'You have unsaved changes. Discard them?', confirmText: 'Discard', danger: true }, function() {
+			unRestoreDetailsForm();
+			unCloseModal('un-modal-details');
+		});
+		return;
+	}
+	unCloseModal('un-modal-details');
+}
+document.addEventListener('keydown', function(e) {
+	if (e.key === 'Escape') {
+		if (document.getElementById('un-md-help-overlay').classList.contains('kn-open')) {
+			document.getElementById('un-md-help-overlay').classList.remove('kn-open');
+		} else if (document.getElementById('un-modal-details').classList.contains('pn-open')) {
+			unCloseDetailsModal();
+		} else {
+			['un-modal-add-member', 'un-modal-edit-member', 'un-modal-add-manager'].forEach(function(id) {
+				unCloseModal(id);
+			});
+		}
+	}
+}, true);
+
 function unConvertType(targetType) {
 	var btn = document.getElementById('un-convert-btn');
 	btn.disabled = true;

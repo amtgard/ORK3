@@ -5689,15 +5689,62 @@ $(document).ready(function() {
     evApplyHeroColor();
 
     // ---- Edit modal ----
+    var _evEditOriginals = {};
+    var _evEditForm = document.getElementById('ev-edit-form');
+    var _evEditSaveBtn = document.getElementById('ev-edit-save-btn');
+
+    if (_evEditForm) {
+        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+            if (el.name) _evEditOriginals[el.name] = el.value;
+        });
+        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+            el.addEventListener('input', evCheckEditDirty);
+            el.addEventListener('change', evCheckEditDirty);
+        });
+    }
+
+    function evCheckEditDirty() {
+        if (!_evEditForm) return;
+        var dirty = false;
+        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+            if (el.name && _evEditOriginals.hasOwnProperty(el.name) && el.value !== _evEditOriginals[el.name]) {
+                dirty = true;
+            }
+        });
+        if (_evEditSaveBtn) _evEditSaveBtn.disabled = !dirty;
+    }
+
+    function evRestoreEditForm() {
+        if (!_evEditForm) return;
+        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+            if (el.name && _evEditOriginals.hasOwnProperty(el.name)) {
+                el.value = _evEditOriginals[el.name];
+                if (el._flatpickr) el._flatpickr.setDate(el.value, false);
+            }
+        });
+        if (_evEditSaveBtn) _evEditSaveBtn.disabled = true;
+    }
+
+    function evActuallyCloseEditModal() {
+        var overlay = document.getElementById('ev-edit-modal');
+        if (overlay) overlay.classList.remove('ev-modal-open');
+        document.body.style.overflow = '';
+    }
+
     window.evOpenEditModal = function() {
         var overlay = document.getElementById('ev-edit-modal');
         if (overlay) overlay.classList.add('ev-modal-open');
         document.body.style.overflow = 'hidden';
     };
     window.evCloseEditModal = function() {
-        var overlay = document.getElementById('ev-edit-modal');
-        if (overlay) overlay.classList.remove('ev-modal-open');
-        document.body.style.overflow = '';
+        if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
+            pnConfirm({ title: 'Unsaved Changes', message: 'You have unsaved changes. Discard them?', confirmText: 'Discard', danger: true }, function() {
+                evRestoreEditForm();
+                evActuallyCloseEditModal();
+            });
+            return;
+        }
+        evActuallyCloseEditModal();
     };
     // Close on backdrop click
     document.addEventListener('click', function(e) {
@@ -8263,6 +8310,19 @@ function setupPronounPicker(cfg) {
     }
 
     var _pkDirty = false;
+    var _pkDetailsPending = false;
+
+    function pkMarkDetailsDirty() {
+        _pkDetailsPending = true;
+        var btn = gid('pk-admin-details-save');
+        if (btn) btn.classList.add('kn-save-dirty');
+    }
+
+    function pkClearDetailsDirty() {
+        _pkDetailsPending = false;
+        var btn = gid('pk-admin-details-save');
+        if (btn) btn.classList.remove('kn-save-dirty');
+    }
 
     window.pkOpenAdminModal = function() {
         var d = PkConfig.parkDetails || {};
@@ -8279,6 +8339,7 @@ function setupPronounPicker(cfg) {
         Object.keys(fields).forEach(function(id) {
             var el = gid(id); if (el) el.value = fields[id];
         });
+        pkClearDetailsDirty();
         pkClearFeedback('pk-admin-details-feedback');
         pkClearFeedback('pk-admin-ops-feedback');
         var overlay = gid('pk-admin-overlay');
@@ -8286,10 +8347,21 @@ function setupPronounPicker(cfg) {
         if (overlay) { overlay.classList.add('pk-admin-open'); document.body.style.overflow = 'hidden'; }
     };
 
-    function pkCloseAdminModal() {
+    function pkActuallyClose() {
         var overlay = gid('pk-admin-overlay');
         if (overlay) { overlay.classList.remove('pk-admin-open'); document.body.style.overflow = ''; }
         if (_pkDirty) { _pkDirty = false; setTimeout(function() { location.reload(); }, 0); }
+    }
+
+    function pkCloseAdminModal() {
+        if (_pkDetailsPending) {
+            knConfirm('You have unsaved changes in Details. Close anyway?', function() {
+                pkClearDetailsDirty();
+                pkActuallyClose();
+            }, 'Unsaved Changes');
+            return;
+        }
+        pkActuallyClose();
     }
 
     $(document).ready(function() {
@@ -8305,10 +8377,15 @@ function setupPronounPicker(cfg) {
         document.addEventListener('keydown', function(e) {
             var ov = gid('pk-admin-overlay');
             if (e.key === 'Escape' && ov && ov.classList.contains('pk-admin-open')) {
-                var wasDirty = _pkDirty;
                 pkCloseAdminModal();
-                if (wasDirty) setTimeout(function() { location.reload(); }, 0);
             }
+        });
+
+        // Dirty tracking on Details fields
+        ['pk-editdetails-url', 'pk-editdetails-address', 'pk-editdetails-city',
+         'pk-editdetails-province', 'pk-editdetails-postalcode', 'pk-editdetails-mapurl',
+         'pk-editdetails-description', 'pk-editdetails-directions'].forEach(function(id) {
+            var el = gid(id); if (el) el.addEventListener('input', pkMarkDetailsDirty);
         });
 
         // Save Details
@@ -8335,6 +8412,7 @@ function setupPronounPicker(cfg) {
                     saveBtn.disabled = false;
                     if (data.status === 0) {
                         pkFeedback('pk-admin-details-feedback', 'Details saved!', true);
+                        pkClearDetailsDirty();
                         _pkDirty = true;
                     } else {
                         pkFeedback('pk-admin-details-feedback', data.error || 'Error saving details.', false);

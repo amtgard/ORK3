@@ -58,15 +58,11 @@
 
 	$firstTab = 'about';
 
-	// Auto-link URLs in plain text fields
-	function pk_autolink(string $text): string {
-		$escaped = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
-		$linked  = preg_replace(
-			'~https?://[^\s<>\"]+~',
-			'<a href="$0" target="_blank" rel="noopener noreferrer">$0</a>',
-			$escaped
-		);
-		return nl2br($linked);
+	// Render Markdown for display (no images)
+	require_once(DIR_LIB . 'Parsedown.php');
+	function pk_markdown(string $text): string {
+		$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($text);
+		return preg_replace('/<img[^>]*>/i', '', $html);
 	}
 
 
@@ -429,7 +425,7 @@
 					<?php if (!empty($description)): ?>
 					<div class="pk-about-section">
 						<div class="pk-about-label">About</div>
-						<div class="pk-about-text"><?= pk_autolink($description) ?></div>
+						<div class="pk-about-text kn-description-body"><?= pk_markdown($description) ?></div>
 					</div>
 					<?php endif; ?>
 
@@ -443,7 +439,7 @@
 						</div>
 						<?php endif; ?>
 						<?php if (!empty($directions)): ?>
-						<div class="pk-about-text"><?= pk_autolink($directions) ?></div>
+						<div class="pk-about-text kn-description-body"><?= pk_markdown($directions) ?></div>
 						<?php endif; ?>
 					</div>
 					<?php endif; ?>
@@ -1818,6 +1814,35 @@ var PkConfig = {
 	</div>
 </div>
 
+<!-- Markdown Help Modal -->
+<div id="pk-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
+	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-hashtag" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<button class="kn-modal-close-btn" onclick="document.getElementById('pk-md-help-overlay').classList.remove('kn-open')">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="padding:16px 20px">
+			<table class="kn-md-help-table">
+				<thead><tr><th>You type</th><th>Result</th></tr></thead>
+				<tbody>
+					<tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+					<tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+					<tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+					<tr><td><code>[link](https://...)</code></td><td><a href="#">link</a></td></tr>
+					<tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+					<tr><td><code>- item</code></td><td>• Bullet list</td></tr>
+					<tr><td><code>1. item</code></td><td>1. Numbered list</td></tr>
+					<tr><td><code># Heading</code></td><td><strong>Large heading</strong></td></tr>
+					<tr><td><code>## Heading</code></td><td><strong>Smaller heading</strong></td></tr>
+					<tr><td><code>&gt; quote</code></td><td><em>Blockquote</em></td></tr>
+					<tr><td>Blank line</td><td>New paragraph</td></tr>
+					<tr><td>Single newline</td><td>Line break</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
 <!-- Park Administration Modal -->
 <div id="pk-admin-overlay">
 	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
@@ -1866,12 +1891,18 @@ var PkConfig = {
 						</div>
 					</div>
 					<div class="kn-admin-field">
-						<label for="pk-editdetails-description">Description</label>
-						<textarea id="pk-editdetails-description" rows="4" placeholder="About this park..."></textarea>
+						<label for="pk-editdetails-description" style="display:flex;align-items:center;gap:6px;">
+							Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
+							<button type="button" class="kn-md-help-btn" onclick="document.getElementById('pk-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+						</label>
+						<textarea id="pk-editdetails-description" rows="4" placeholder="About this park..." data-original=""></textarea>
 					</div>
 					<div class="kn-admin-field">
-						<label for="pk-editdetails-directions">Directions</label>
-						<textarea id="pk-editdetails-directions" rows="3" placeholder="How to find us..."></textarea>
+						<label for="pk-editdetails-directions" style="display:flex;align-items:center;gap:6px;">
+							Directions <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
+							<button type="button" class="kn-md-help-btn" onclick="document.getElementById('pk-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+						</label>
+						<textarea id="pk-editdetails-directions" rows="3" placeholder="How to find us..." data-original=""></textarea>
 					</div>
 					<button class="kn-admin-save-btn" id="pk-admin-details-save">
 						<i class="fas fa-save"></i> Save Details

@@ -215,7 +215,7 @@ class Event  extends Ork3 {
 			$newDetail->price          = $request['Price'];
 			$newDetail->event_start    = $request['EventStart'];
 			$newDetail->event_end      = $request['EventEnd'];
-			$newDetail->description    = Common::make_safe_html($request['Description']);
+			$newDetail->description    = trim($request['Description']);
 			$newDetail->url            = $request['Url'];
 			$newDetail->url_name       = $request['UrlName'];
 			$newDetail->address        = isset($details['Address'])    ? $details['Address']    : $request['Address'];
@@ -387,7 +387,7 @@ class Event  extends Ork3 {
 				$this->detail->price = $request['Price'];
 				$this->detail->event_start = $request['EventStart'];
 				$this->detail->event_end = $request['EventEnd'];
-				$this->detail->description = Common::make_safe_html($request['Description']);
+				$this->detail->description = trim($request['Description']);
 				$this->detail->url = $request['Url'];
 				$this->detail->url_name = $request['UrlName'];
 				if ($hasAddress) {

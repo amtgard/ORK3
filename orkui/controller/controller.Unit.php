@@ -179,7 +179,9 @@ class Controller_Unit extends Controller {
 		$this->data['ScopeKingdomId'] = $_scope_kingdom_id;
 		$this->data['ScopeParkId']    = $_scope_park_id;
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT)) {
+		$_canEdit = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
+		$this->data['CanEdit'] = $_canEdit;
+		if ($_canEdit) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
 		$from_player = valid_id($this->request->from_player) ? (int)$this->request->from_player : null;

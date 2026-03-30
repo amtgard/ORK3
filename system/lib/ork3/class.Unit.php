@@ -247,8 +247,8 @@ class Unit extends Ork3 {
 			$this->unit->clear();
 			$this->unit->name = $request['Name'];
 			$this->unit->type = $request['Type'];
-			$this->unit->description = strip_tags($request['Description'], "<p><br><ul><li><b><i>");
-			$this->unit->history = strip_tags($request['History'], "<p><br><ul><li><b><i>");
+			$this->unit->description = trim($request['Description']);
+			$this->unit->history = trim($request['History']);
 			$this->unit->url = $request['Url'];
 			$this->unit->modified = date("Y-m-d H:i:s");
 			$this->unit->save();
@@ -299,8 +299,8 @@ class Unit extends Ork3 {
 			$this->unit->unit_id = $request['UnitId'];
 			$this->unit->find();
 			$this->unit->name = $request['Name'];
-			$this->unit->description = strip_tags($request['Description'], "<p><br><ul><li><b><i>");
-			$this->unit->history = strip_tags($request['History'], "<p><br><ul><li><b><i>");
+			$this->unit->description = trim($request['Description']);
+			$this->unit->history = trim($request['History']);
 			$this->unit->url = $request['Url'];
 			$this->unit->save();
 			if (strlen($request['Heraldry'])) {
