@@ -15,10 +15,12 @@ class Controller_Player extends Controller {
 		$this->data['Player'] = $this->Player->fetch_player($id);
 
 		$park_info = $this->Park->get_park_info($this->data['Player']['ParkId']);
-		$this->session->park_name = $park_info['ParkInfo']['ParkName'];
-		$this->session->park_id = $park_info['ParkInfo']['ParkId'];
-		$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
-		$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
+		if (!empty($park_info['ParkInfo']['ParkId'])) {
+			$this->session->park_name = $park_info['ParkInfo']['ParkName'];
+			$this->session->park_id = $park_info['ParkInfo']['ParkId'];
+			$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
+			$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
+		}
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
@@ -46,6 +48,8 @@ class Controller_Player extends Controller {
 		
 		$params = explode('/',$id);
 		$id = $params[0];
+		$action = '';
+		$roastbeef = '';
 		if (count($params) > 1)
 			$action = $params[1];
 		if (count($params) > 2)
@@ -76,6 +80,7 @@ class Controller_Player extends Controller {
 						}
 						break;
 					case 'update':
+						$pi_imdata = '';
 						if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
 							if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("h_%06d", $id))) {
 								$h_im = file_get_contents(DIR_TMP . sprintf("h_%06d", $id));
@@ -206,7 +211,7 @@ class Controller_Player extends Controller {
 		$this->data['ShowRecsTab']          = $recsPublic || $canEdit;
 		$this->data['AwardRecommendations'] = [];
 		if ($this->data['ShowRecsTab'] || $uid > 0) {
-			$recs = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+			$recs = $this->Reports->recommended_awards(array('PlayerId'=>$id, 'KingdomId'=>0, 'ParkId'=>0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0));
 			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
 		}
 
@@ -290,7 +295,7 @@ class Controller_Player extends Controller {
 							header('Location: ' . UIR . "Login/login/Player/profile/$id");
 						} else {
 							$msg = urlencode($r['Error'] . ': ' . $r['Detail']);
-							header('Location: ' . UIR . "Player/profile/{$id}&rec_error={$msg}");
+							header('Location: ' . UIR . "Player/profile/{$id}?rec_error={$msg}");
 						}
 						exit;
 					case 'deleterecommendation':
@@ -309,7 +314,7 @@ class Controller_Player extends Controller {
 					case 'quitunit':
 						$r = $this->Unit->retire_unit_member([
 							'UnitMundaneId' => $roastbeef,
-							'UnitId'        => $id,
+							'UnitId'        => 0,
 							'Token'         => $this->session->token,
 						]);
 						break;
@@ -395,6 +400,7 @@ class Controller_Player extends Controller {
 				  AND (aw.officer_role != 'none' OR ka.is_title = 1)
 				ORDER BY a.revoked_at DESC, a.date DESC";
 			foreach (['RevokedAwards' => $revokedAwardsSql, 'RevokedTitles' => $revokedTitlesSql] as $key => $sql) {
+				$DB->Clear();
 				$result = $DB->DataSet($sql);
 				$rows = [];
 				if ($result->Size() > 0) {
@@ -414,6 +420,7 @@ class Controller_Player extends Controller {
 			}
 		}
 
+		$DB->Clear();
 		$adminCheck = $DB->DataSet(
 			"SELECT 1 FROM ork_authorization
 			 WHERE mundane_id = " . (int)$id . "
@@ -480,7 +487,6 @@ class Controller_Player extends Controller {
 		$this->data['Player']['ParkName'] = $this->session->park_name;
 
 		if ($uid === (int)$id) {
-			global $DB;
 			$DB->Clear();
 			$__assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
 				IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date

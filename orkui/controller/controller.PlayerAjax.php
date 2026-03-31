@@ -317,6 +317,7 @@ class Controller_PlayerAjax extends Controller {
 
 		} elseif ($action === 'awardranks') {
 			global $DB;
+			$DB->Clear();
 			$pid = (int)$player_id;
 			$rs  = $DB->DataSet("
 				SELECT ka.award_id, MAX(aw.rank) AS max_rank

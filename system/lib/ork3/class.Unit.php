@@ -196,8 +196,8 @@ class Unit extends Ork3 {
 	    list($member_id, $unit_id) = $this->_translate_unitmundane($request['UnitMundaneId']);
 	    logtrace('Retire Member:', array($member_id, $unit_id));
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE)
-				|| $mundane_id == $member_id) {
+				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE)
+					|| $mundane_id == $member_id)) {
 			$this->members->clear();
 			$this->members->unit_mundane_id = $request['UnitMundaneId'];
 			$this->members->find();

@@ -11,7 +11,8 @@
 			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_EDIT)) {
 				$can_delete_recommendation = true;
 			}
-		} else if (isset($this->__session->kingdom_id)) {
+		}
+		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
 			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_EDIT)) {
 				$can_delete_recommendation = true;
 			}
@@ -34,7 +35,7 @@
 			}
 		}
 	}
-	$beltIconUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/assets/images/belt.svg';
+	$beltIconUrl = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/belt.svg';
 
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
@@ -311,7 +312,7 @@
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
 					<i class="fas fa-info-circle"></i>
-					Suspended <?= $Player['SuspendedAt'] ?> &mdash; Until <?php $_until = $Player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?>
+					Suspended <?= htmlspecialchars($Player['SuspendedAt'] ?? '') ?> &mdash; Until <?php $_until = $Player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?>
 					<?php if (!empty($Player['Suspension'])): ?>
 						&mdash; <?= htmlspecialchars($Player['Suspension']) ?>
 					<?php endif; ?>
@@ -395,11 +396,11 @@
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Member Since</span>
-				<span class="pn-detail-value"><?= $Player['ParkMemberSince'] ?></span>
+				<span class="pn-detail-value"><?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?></span>
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Last Sign-In</span>
-				<span class="pn-detail-value"><?= ($Player['LastSignInDate'] ? $Player['LastSignInDate'] : 'N/A') ?></span>
+				<span class="pn-detail-value"><?= $Player['LastSignInDate'] ? htmlspecialchars($Player['LastSignInDate']) : 'N/A' ?></span>
 			</div>
 		</div>
 
@@ -474,12 +475,12 @@
 					<tbody>
 						<?php foreach ($Dues as $d): ?>
 							<tr>
-								<td><?= $d['ParkName'] ?></td>
+								<td><?= htmlspecialchars($d['ParkName']) ?></td>
 								<td>
 									<?php if ($d['DuesForLife'] == 1): ?>
 										<span class="pn-dues-life">Lifetime</span>
 									<?php else: ?>
-										<?= $d['DuesUntil'] ?>
+										<?= htmlspecialchars($d['DuesUntil']) ?>
 									<?php endif; ?>
 								</td>
 								<td>
@@ -547,7 +548,7 @@
 				<?php foreach ($unitList as $unit): ?>
 					<div class="pn-unit-row">
 						<a class="pn-unit-link" href="<?= UIR ?>Unit/index/<?= $unit['UnitId'] ?>&from_player=<?= (int)$Player['MundaneId'] ?>"><?= htmlspecialchars($unit['Name'] ?? '') ?: '(Unnamed)' ?></a>
-						<span class="pn-unit-type"><?= ucfirst($unit['Type']) ?></span>
+						<span class="pn-unit-type"><?= htmlspecialchars(ucfirst($unit['Type'] ?? '')) ?></span>
 						<?php if ($canEditAdmin || $isOwnProfile): ?>
 						<span class="pn-delete-cell pn-unit-quit-cell">
 							<a class="pn-delete-link pn-confirm-quit-unit" href="#" title="Leave unit">&times;</a>
@@ -587,7 +588,7 @@
 				</li>
 				<?php
 				$_allRecs  = is_array($AwardRecommendations) ? $AwardRecommendations : [];
-				$_myRecs   = array_values(array_filter($_allRecs, function($r) { return $this->__session->user_id == $r['RecommendedById']; }));
+				$_myRecs   = array_values(array_filter($_allRecs, function($r) { return (int)$this->__session->user_id === (int)$r['RecommendedById']; }));
 				$_recList  = $ShowRecsTab ? $_allRecs : $_myRecs;
 				$_showRecs = $ShowRecsTab || count($_myRecs) > 0;
 			?>
@@ -943,15 +944,15 @@
 							<tr>
 								<td class="pn-col-nowrap">
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
-									<?= $displayName ?>
-									<?php if ($displayName != $detail['Name']): ?><span class="pn-award-base">[<?= $detail['Name'] ?>]</span><?php endif; ?>
+									<?= htmlspecialchars($displayName) ?>
+									<?php if ($displayName != $detail['Name']): ?><span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span><?php endif; ?>
 								</td>
 								<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
-								<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= substr($detail['GivenBy'], 0, 30) ?></a></td>
-								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; elseif (trimlen($detail['ParkName']) > 0) echo $detail['ParkName'] . (trimlen($detail['KingdomName']) > 0 ? ', ' . $detail['KingdomName'] : ''); else echo $detail['KingdomName']; ?></td>
-								<td><?= $detail['Note'] ?></td>
-								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+								<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= htmlspecialchars(substr($detail['GivenBy'], 0, 30)) ?></a></td>
+								<td><?php if (valid_id($detail['EventId'])) echo htmlspecialchars($detail['EventName']); elseif (trimlen($detail['ParkName']) > 0) echo htmlspecialchars($detail['ParkName']) . (trimlen($detail['KingdomName']) > 0 ? ', ' . htmlspecialchars($detail['KingdomName']) : ''); else echo htmlspecialchars($detail['KingdomName']); ?></td>
+								<td><?= htmlspecialchars($detail['Note']) ?></td>
+								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= htmlspecialchars($detail['EnteredBy']) ?></a></td>
 								<?php if ($canEditAdmin): ?>
 								<td class="pn-award-actions-cell">
 									<?php $awardData = json_encode([
@@ -1056,27 +1057,27 @@
 							<?php foreach ($filteredTitles as $detail): ?>
 								<tr>
 									<td class="pn-col-nowrap">
-										<?= trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName'] ?>
+										<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
+										<?= htmlspecialchars($displayName) ?>
 										<?php
-											$displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName'];
 											if ($displayName != $detail['Name']): ?>
-												<span class="pn-award-base">[<?= $detail['Name'] ?>]</span>
+												<span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span>
 										<?php endif; ?>
 									</td>
 									<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 									<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
-									<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= substr($detail['GivenBy'], 0, 30) ?></a></td>
+									<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= htmlspecialchars(substr($detail['GivenBy'], 0, 30)) ?></a></td>
 									<td>
 										<?php
 											if (valid_id($detail['EventId'])) {
-												echo $detail['EventName'];
+												echo htmlspecialchars($detail['EventName']);
 											} else {
-												echo (trimlen($detail['ParkName']) > 0) ? $detail['ParkName'] . ', ' . $detail['KingdomName'] : $detail['KingdomName'];
+												echo (trimlen($detail['ParkName']) > 0) ? htmlspecialchars($detail['ParkName']) . ', ' . htmlspecialchars($detail['KingdomName']) : htmlspecialchars($detail['KingdomName']);
 											}
 										?>
 									</td>
-									<td><?= $detail['Note'] ?></td>
-									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+									<td><?= htmlspecialchars($detail['Note']) ?></td>
+									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= htmlspecialchars($detail['EnteredBy']) ?></a></td>
 									<?php if ($canEditAdmin): ?>
 									<td class="pn-award-actions-cell">
 										<?php $titleData = json_encode([
@@ -1191,10 +1192,10 @@
 											<a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['Date'] ?></a>
 										<?php endif; ?>
 									</td>
-									<td><a href="<?= UIR ?>Kingdom/profile/<?= $detail['KingdomId'] ?>"><?= $detail['KingdomName'] ?></a></td>
-									<td><a href="<?= UIR ?>Park/profile/<?= $detail['ParkId'] ?>"><?= $detail['ParkName'] ?></a></td>
-									<td><a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['EventName'] ?></a></td>
-									<td><?= trimlen($detail['Flavor']) > 0 ? $detail['Flavor'] : $detail['ClassName'] ?></td>
+									<td><a href="<?= UIR ?>Kingdom/profile/<?= $detail['KingdomId'] ?>"><?= htmlspecialchars($detail['KingdomName']) ?></a></td>
+									<td><a href="<?= UIR ?>Park/profile/<?= $detail['ParkId'] ?>"><?= htmlspecialchars($detail['ParkName']) ?></a></td>
+									<td><a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= htmlspecialchars($detail['EventName']) ?></a></td>
+									<td><?= trimlen($detail['Flavor']) > 0 ? htmlspecialchars($detail['Flavor']) : htmlspecialchars($detail['ClassName']) ?></td>
 									<td class="pn-col-numeric"><?= $detail['Credits'] ?></td>
 									<?php if ($canEditAdmin): ?>
 									<td class="pn-award-actions-cell">
@@ -1245,10 +1246,10 @@
 						<tbody>
 							<?php foreach ($_recList as $rec): ?>
 								<tr>
-									<td><?= $rec['AwardName'] ?></td>
-									<td class="pn-col-numeric"><?= valid_id($rec['Rank']) ? $rec['Rank'] : '' ?></td>
-									<td class="pn-col-nowrap"><?= $rec['DateRecommended'] ?></td>
-									<td><a href="<?= UIR ?>Player/profile/<?= $rec['RecommendedById'] ?>"><?= $rec['RecommendedByName'] ?></a></td>
+									<td><?= htmlspecialchars($rec['AwardName']) ?></td>
+									<td class="pn-col-numeric"><?= valid_id($rec['Rank']) ? (int)$rec['Rank'] : '' ?></td>
+									<td class="pn-col-nowrap"><?= htmlspecialchars($rec['DateRecommended']) ?></td>
+									<td><a href="<?= UIR ?>Player/profile/<?= $rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a></td>
 									<td><?= htmlspecialchars($rec['Reason']) ?></td>
 									<?php if ($this->__session->user_id): ?>
 										<td style="white-space:nowrap">
@@ -1299,9 +1300,9 @@
 						<tbody>
 							<?php foreach ($notesList as $note): ?>
 								<tr data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>">
-									<td><?= $note['Note'] ?></td>
-									<td><?= $note['Description'] ?></td>
-									<td class="pn-col-nowrap"><?= $note['Date'] . (strtotime($note['DateComplete']) > 0 ? (' - ' . $note['DateComplete']) : '') ?></td>
+									<td><?= htmlspecialchars($note['Note'] ?? '') ?></td>
+									<td><?= htmlspecialchars($note['Description'] ?? '') ?></td>
+									<td class="pn-col-nowrap"><?= htmlspecialchars($note['Date'] ?? '') . (strtotime($note['DateComplete'] ?? '') > 0 ? (' - ' . htmlspecialchars($note['DateComplete'])) : '') ?></td>
 									<?php if ($canEditAdmin): ?>
 									<td class="pn-award-actions-cell">
 										<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"
@@ -2157,7 +2158,6 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 <style>
 #pn-player-att-overlay .pn-modal-body { overflow:visible; }
 #pn-player-att-overlay .pn-acct-field { position:relative; }
-#pn-player-att-overlay .pn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
 </style>
 <div class="pn-overlay" id="pn-player-att-overlay">
 	<div class="pn-modal-box" style="width:440px;max-width:calc(100vw - 40px);">
@@ -2243,7 +2243,6 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 .pn-mp-toggle-btn.pn-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
 #pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
 #pn-moveplayer-overlay .pn-acct-field { position:relative; }
-#pn-moveplayer-overlay .pn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
 .pn-mp-player-locked { background:#f7fafc; border:1px solid #e2e8f0; border-radius:4px; padding:8px 12px; color:#4a5568; font-size:0.95rem; }
 </style>
 <div class="pn-overlay" id="pn-moveplayer-overlay">

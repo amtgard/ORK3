@@ -1729,7 +1729,7 @@ class Player extends Ork3 {
 	}
 
 	public function get_latest_attendance_date($mundane_id) {
-		$sql = "select max(date) as latest_date from " . DB_PREFIX . "attendance where mundane_id = '" . mysql_real_escape_string($mundane_id) . "'";
+		$sql = "select max(date) as latest_date from " . DB_PREFIX . "attendance where mundane_id = " . (int)$mundane_id;
 		$r = $this->db->query($sql);
 		if ($r === false || $r->size() == 0) {
 			return null;
