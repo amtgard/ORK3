@@ -60,9 +60,11 @@
 
 	// Render Markdown for display (no images)
 	require_once(DIR_LIB . 'Parsedown.php');
-	function pk_markdown(string $text): string {
-		$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($text);
-		return preg_replace('/<img[^>]*>/i', '', $html);
+	if (!function_exists('pk_markdown')) {
+		function pk_markdown(string $text): string {
+			$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($text);
+			return preg_replace('/<img[^>]*>/i', '', $html);
+		}
 	}
 
 
@@ -493,7 +495,7 @@
 							}
 							switch ($day['Purpose']) {
 								case 'fighter-practice': $purposeLabel = 'Fighter Practice'; $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
-								case 'arts-day':         $purposeLabel = 'A&amp;S Day';       $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
+								case 'arts-day':         $purposeLabel = 'A&S Day';       $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
 								case 'other':            $purposeLabel = 'Other';             $purposeCls = 'purpose-other';   $iconCls = 'icon-other';   $iconFa = 'fa-star';       break;
 								default:                 $purposeLabel = 'Park Day';          $purposeCls = '';                $iconCls = '';             $iconFa = 'fa-shield-alt';
 							}
@@ -636,6 +638,7 @@
 									<?= htmlspecialchars($pkDayRec) ?> &middot; <?= date('g:i A', strtotime($pkDay['Time'])) ?>
 								</td>
 								<td class="pk-date-col" style="text-align:center;color:#a0aec0">&mdash;</td>
+								<td class="pk-date-col" style="text-align:center;color:#a0aec0">&mdash;</td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -738,8 +741,8 @@
 						</div>
 
 						<!-- Period 1+ (hidden; revealed by Load More) -->
-						<?php foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
-						<div class="pk-period-block" id="pk-players-block-<?= $pkPeriod ?>" style="display:none">
+						<?php $_pkCardIdx = 1; foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
+						<div class="pk-period-block" id="pk-players-block-<?= $_pkCardIdx ?>" style="display:none">
 							<div class="pk-period-label"><?= $pkPeriod * 6 ?>–<?= ($pkPeriod + 1) * 6 ?> months ago</div>
 							<div class="pk-players-grid">
 								<?php foreach ($pkPeriodPlayers as $p): ?>
@@ -790,7 +793,7 @@
 								<?php endforeach; ?>
 							</div>
 						</div>
-						<?php endforeach; ?>
+						<?php $_pkCardIdx++; endforeach; ?>
 
 						<?php if (count($playerPeriods) > 1): ?>
 						<div class="pk-load-more-wrap" data-next="1" data-group="pk-players">
@@ -836,8 +839,8 @@
 							</tbody>
 						</table>
 						<!-- Hidden row templates for older periods -->
-						<?php foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
-						<template id="pk-players-tmpl-<?= $pkPeriod ?>">
+						<?php $_pkListIdx = 1; foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
+						<template id="pk-players-tmpl-<?= $_pkListIdx ?>">
 							<?php foreach ($pkPeriodPlayers as $p): ?>
 							<tr onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
 								<td>
@@ -857,7 +860,7 @@
 							</tr>
 							<?php endforeach; ?>
 						</template>
-						<?php endforeach; ?>
+						<?php $_pkListIdx++; endforeach; ?>
 						<?php if (count($playerPeriods) > 1): ?>
 						<div class="pk-load-more-wrap pk-load-more-list" data-next="1">
 							<button class="pk-load-more-btn" onclick="pkLoadMoreList('pk-players-table', 'pk-players-tmpl', this)">
@@ -935,7 +938,7 @@
 
 			<!-- Reports Tab -->
 			<div class="pk-tab-panel" id="pk-tab-reports" style="display:none">
-				<?php if (!$LoggedIn): ?>
+				<?php if (!$IsLoggedIn): ?>
 				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
 					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
 				</div>
@@ -949,7 +952,7 @@
 						<h5><i class="fas fa-users"></i> Players</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/roster/Park&id=<?= $park_id ?>">Player Roster</a></li>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/inactive/Park&id=<?= $park_id ?>">Inactive Players</a></li>
 							<li><a href="<?= UIR ?>Reports/active/Park&id=<?= $park_id ?>">Active Players</a></li>
 							<li><a href="<?= UIR ?>Reports/dues/Park&id=<?= $park_id ?>">Dues Paid</a></li>
@@ -967,20 +970,20 @@
 					<div class="kn-report-group">
 						<h5><i class="fas fa-calendar-check"></i> Attendance</h5>
 						<ul>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/Weeks/1">Past Week</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/Months/1">Past Month</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/Months/3">Past 3 Months</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/Months/6">Past 6 Months</a></li>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/Months/12">Past 12 Months</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Park/<?= $park_id ?>/All">All Time</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/event_attendance/Park/<?= $park_id ?>"><i class="fas fa-calendar-alt"></i> Event Attendance</a></li>
 						</ul>
 					</div>
-					<?php if ($LoggedIn): ?>
+					<?php if ($IsLoggedIn): ?>
 					<div class="kn-report-group">
 						<h5><i class="fas fa-medal"></i> Awards</h5>
 						<ul>

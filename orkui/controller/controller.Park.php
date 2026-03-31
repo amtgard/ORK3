@@ -177,7 +177,7 @@ class Controller_Park extends Controller
 	$rosterResult = $DB->DataSet($rosterSql);
 		$parkPlayers  = [];
 		if ($rosterResult && $rosterResult->Size() > 0) {
-			while ($rosterResult->Next()) {
+			do {
 				$parkPlayers[] = [
 					'MundaneId'    => (int)$rosterResult->mundane_id,
 					'Persona'      => $rosterResult->persona,
@@ -188,27 +188,25 @@ class Controller_Park extends Controller
 					'LastClass'    => $rosterResult->last_class,
 					'OfficerRoles' => $rosterResult->officer_roles,
 				];
-			}
+			} while ($rosterResult->Next());
 		}
 		$this->data['park_players'] = $parkPlayers;
 
 		// Monthly average: unique players per month over past year (matches Kingdomnew formula)
 		$monthlyAvgSql = "
-			SELECT COUNT(*) AS total_player_months
-			FROM (
-				SELECT 1
-				FROM ork_attendance a
-				WHERE a.park_id = {$pid}
-				  AND a.date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
-				  AND a.mundane_id > 0
-				GROUP BY a.date_year, a.date_month, a.mundane_id
-			) monthly_uniques";
+			SELECT COUNT(DISTINCT a.mundane_id, a.date_year, a.date_month) AS total_player_months,
+			       COUNT(DISTINCT a.date_year, a.date_month) AS active_months
+			FROM ork_attendance a
+			WHERE a.park_id = {$pid}
+			  AND a.date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+			  AND a.mundane_id > 0";
 		$DB->Clear();
-	$maResult = $DB->DataSet($monthlyAvgSql);
+		$maResult = $DB->DataSet($monthlyAvgSql);
 		$this->data['MonthlyAvg'] = 0;
 		if ($maResult && $maResult->Next()) {
-			$_totalPM = (int)$maResult->total_player_months;
-			if ($_totalPM > 0) $this->data['MonthlyAvg'] = round($_totalPM / 12, 1);
+			$_totalPM      = (int)$maResult->total_player_months;
+			$_activeMonths = (int)$maResult->active_months;
+			if ($_totalPM > 0 && $_activeMonths > 0) $this->data['MonthlyAvg'] = round($_totalPM / $_activeMonths, 1);
 		}
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;

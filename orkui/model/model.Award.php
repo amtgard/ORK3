@@ -45,14 +45,14 @@ class Model_Award extends Model {
             if (!empty($ladder)) {
                 $options .= "<optgroup label='Common Awards'>";
                 foreach ($ladder as $award) {
-                    $options .= "<option value='$award[KingdomAwardId]' data-is-ladder='1' data-award-id='$award[AwardId]'>$award[KingdomAwardName]</option>";
+                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "' data-is-ladder='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
                 }
                 $options .= "</optgroup>";
             }
             if (!empty($other)) {
                 $options .= "<optgroup label='Awards'>";
                 foreach ($other as $award) {
-                    $options .= "<option value='$award[KingdomAwardId]'>$award[KingdomAwardName]</option>";
+                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
                 }
                 $options .= "</optgroup>";
             }
