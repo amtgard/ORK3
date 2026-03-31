@@ -186,7 +186,9 @@
 					<?php else: ?>
 					<li>Edit park name, heraldry, schedule &amp; settings</li>
 					<li>Set and vacate officer roles at the park</li>
+					<li>Add, move, and merge players within the park</li>
 					<li>Add and manage park events</li>
+					<li>Enter awards and manage award recommendations</li>
 					<li>Track park attendance</li>
 					<li>Edit player records within the park</li>
 					<li>Grant and revoke park-level permissions for others</li>
@@ -197,17 +199,19 @@
 				<div class="ap-role-block-title"><span class="ap-role ap-role-edit">Edit</span></div>
 				<ul>
 					<?php if ($type === 'Kingdom'): ?>
-					<li>View the Admin Panel link</li>
-					<li>Toggle award recommendation visibility</li>
-					<li>Cannot manage kingdom data or grant permissions</li>
+					<li>Track kingdom attendance (add and remove)</li>
+					<li>Track kingdom event attendance (add and remove)</li>
+					<li>Edit player records within the kingdom</li>
+					<li>Cannot manage kingdom settings, events, awards, or grant permissions</li>
 					<?php elseif ($type === 'Event'): ?>
 					<li>Add and remove event attendance</li>
 					<li>Manage RSVPs</li>
 					<li>Cannot edit event details, heraldry, or grant permissions</li>
 					<?php else: ?>
-					<li>View the Admin Panel link</li>
+					<li>Track park attendance (add and remove)</li>
+					<li>Track park event attendance (add and remove)</li>
 					<li>Edit player records within the park</li>
-					<li>Cannot manage park data or grant permissions</li>
+					<li>Cannot manage park settings, events, awards, or grant permissions</li>
 					<?php endif; ?>
 				</ul>
 			</div>
@@ -376,7 +380,9 @@
 				<ul>
 					<li>Edit park name, heraldry, schedule &amp; settings</li>
 					<li>Set and vacate officer roles at the park</li>
+					<li>Add, move, and merge players within the park</li>
 					<li>Add and manage park events</li>
+					<li>Enter awards and manage award recommendations</li>
 					<li>Track park attendance</li>
 					<li>Edit player records within the park</li>
 					<li>Grant and revoke park-level permissions for others</li>
@@ -385,9 +391,10 @@
 			<div class="ap-role-block">
 				<div class="ap-role-block-title"><span class="ap-role ap-role-edit">Edit</span></div>
 				<ul>
-					<li>View the Admin Panel link</li>
+					<li>Track park attendance (add and remove)</li>
+					<li>Track park event attendance (add and remove)</li>
 					<li>Edit player records within the park</li>
-					<li>Cannot manage park data or grant permissions</li>
+					<li>Cannot manage park settings, events, awards, or grant permissions</li>
 				</ul>
 			</div>
 			<div class="ap-role-block">

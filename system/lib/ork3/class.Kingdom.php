@@ -175,7 +175,7 @@ class Kingdom  extends Ork3 {
 
 	public function EditAward($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
 			$this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
 			$this->kingdomaward->clear();
 			$this->kingdomaward->kingdom_id = $request['KingdomId'];
@@ -195,9 +195,9 @@ class Kingdom  extends Ork3 {
 		}
 	}
 
-	public function RemoveAward($request) { 
+	public function RemoveAward($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
 			$this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
 			$this->kingdomaward->kingdom_id = $request['KingdomId'];
 			$this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];

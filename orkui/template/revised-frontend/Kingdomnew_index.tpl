@@ -100,6 +100,11 @@
 		</div>
 
 		<div class="kn-hero-actions">
+			<?php if ($CanEditKingdom ?? false): ?>
+				<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Attendance/kingdom/<?= (int)($kingdom_id ?? 0) ?>">
+					<i class="fas fa-clipboard-list"></i> Enter Attendance
+				</a>
+			<?php endif; ?>
 			<?php if ($CanManageKingdom ?? false): ?>
 				<button class="kn-btn kn-btn-outline" onclick="knOpenAwardModal()">
 					<i class="fas fa-medal"></i> Enter Awards
@@ -821,6 +826,7 @@ var KnConfig = {
 	httpService:      '<?= HTTP_SERVICE ?>',
 	kingdomId:        <?= (int)($kingdom_id ?? 0) ?>,
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
+	canEdit:          <?= !empty($CanEditKingdom)   ? 'true' : 'false' ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,

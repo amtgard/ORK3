@@ -217,6 +217,8 @@ class Controller_Park extends Controller
 		$this->data['IsOwnPark']     = $uid > 0 && (int)($this->session->park_id ?? 0) === (int)$park_id;
 		$this->data['CanManagePark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_EDIT);
+		$this->data['CanAdminPark']  = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
 
 		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])

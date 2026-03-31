@@ -374,6 +374,8 @@ class Controller_Kingdom extends Controller {
 				$this->data['UserParkId'] = (int)$upRow->park_id;
 			}
 		}
+		$this->data['CanEditKingdom']   = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 		$this->data['CanAddPark'] = $uid > 0

@@ -1265,7 +1265,7 @@ class Player extends Ork3 {
         }
 
 		if (valid_id($mundane_id)
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
 			if (valid_id($request['ParkId'])) {
 				$Park = new Park();
 				$park_info = $Park->GetParkShortInfo($request);
@@ -1364,7 +1364,7 @@ class Player extends Ork3 {
 		if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
 			$mundane = $this->player_info($awards->mundane_id);
 			if (valid_id($mundane_id)
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
 
 				$this->revoke_award($awards, $request["Revocation"], $mundane_id);
 
@@ -1385,7 +1385,7 @@ class Player extends Ork3 {
 		if (valid_id($request['AwardsId']) && $awards->find()) {
 			$mundane = $this->player_info($awards->mundane_id);
 			if (valid_id($mundane_id)
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
 				if (valid_id($request['ParkId'])) {
 					$Park = new Park();
 					$info = $Park->GetParkShortInfo(array( 'ParkId' => $request['ParkId'] ));
@@ -1510,7 +1510,7 @@ class Player extends Ork3 {
 		if (valid_id($request['AwardsId']) && $awards->find()) {
 			$mundane = $this->player_info($awards->mundane_id);
 			if (valid_id($mundane_id)
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
 
 					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 
@@ -1709,7 +1709,7 @@ class Player extends Ork3 {
 
 			if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
 				$recipientInfo = $this->player_info($awardRec->mundane_id);
-				if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+				if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
 					$can_delete_recommendation = true;
 				}
 				if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {

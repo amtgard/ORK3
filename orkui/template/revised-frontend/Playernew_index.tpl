@@ -8,12 +8,12 @@
 	$can_delete_recommendation = false;
 	if($this->__session->user_id) {
 		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_EDIT)) {
+			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_CREATE)) {
 				$can_delete_recommendation = true;
 			}
 		}
 		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_EDIT)) {
+			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_CREATE)) {
 				$can_delete_recommendation = true;
 			}
 		}
@@ -40,12 +40,13 @@
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
 	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
+	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
 	// Check if player has any reconcilable historical awards
 	$hasHistorical = false;
-	if ($canEditAdmin && is_array($Details['Awards'])) {
+	if ($canManageAwards && is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_ha) {
 			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
 				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
@@ -819,7 +820,7 @@
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 				?>
-				<?php if ($canEditAdmin): ?>
+				<?php if ($canManageAwards): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAwardModal('awards')"><i class="fas fa-plus"></i> Add Award</button>
 					<?php if ($hasHistorical): ?>
@@ -936,7 +937,7 @@
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canEditAdmin): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+							<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
@@ -949,11 +950,11 @@
 								</td>
 								<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
-								<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= htmlspecialchars(substr($detail['GivenBy'], 0, 30)) ?></a></td>
-								<td><?php if (valid_id($detail['EventId'])) echo htmlspecialchars($detail['EventName']); elseif (trimlen($detail['ParkName']) > 0) echo htmlspecialchars($detail['ParkName']) . (trimlen($detail['KingdomName']) > 0 ? ', ' . htmlspecialchars($detail['KingdomName']) : ''); else echo htmlspecialchars($detail['KingdomName']); ?></td>
-								<td><?= htmlspecialchars($detail['Note']) ?></td>
-								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= htmlspecialchars($detail['EnteredBy']) ?></a></td>
-								<?php if ($canEditAdmin): ?>
+								<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= substr($detail['GivenBy'], 0, 30) ?></a></td>
+								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; elseif (trimlen($detail['ParkName']) > 0) echo $detail['ParkName'] . (trimlen($detail['KingdomName']) > 0 ? ', ' . $detail['KingdomName'] : ''); else echo $detail['KingdomName']; ?></td>
+								<td><?= $detail['Note'] ?></td>
+								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+								<?php if ($canManageAwards): ?>
 								<td class="pn-award-actions-cell">
 									<?php $awardData = json_encode([
 										'AwardsId'      => (int)$detail['AwardsId'],
@@ -993,7 +994,7 @@
 				</table>
 				<div id="pn-award-search-empty" class="pn-empty" style="display:none">No awards match your search</div>
 				<?php endif; ?>
-				<?php if ($canEditAdmin && !empty($RevokedAwards)): ?>
+				<?php if ($canManageAwards && !empty($RevokedAwards)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Awards</h4>
 					<table class="pn-table pn-sortable" id="pn-revoked-awards-table">
@@ -1026,7 +1027,7 @@
 
 			<!-- Titles Tab -->
 			<div class="pn-tab-panel" id="pn-tab-titles" style="display:none">
-				<?php if ($canEditAdmin): ?>
+				<?php if ($canManageAwards): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAwardModal('officers')"><i class="fas fa-plus"></i> Add Title</button>
 				</div>
@@ -1050,7 +1051,7 @@
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canEditAdmin): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -1076,9 +1077,9 @@
 											}
 										?>
 									</td>
-									<td><?= htmlspecialchars($detail['Note']) ?></td>
-									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= htmlspecialchars($detail['EnteredBy']) ?></a></td>
-									<?php if ($canEditAdmin): ?>
+									<td><?= $detail['Note'] ?></td>
+									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
+									<?php if ($canManageAwards): ?>
 									<td class="pn-award-actions-cell">
 										<?php $titleData = json_encode([
 											'AwardsId'       => (int)$detail['AwardsId'],
@@ -1120,7 +1121,7 @@
 				<?php else: ?>
 					<div class="pn-empty">No titles recorded</div>
 				<?php endif; ?>
-				<?php if ($canEditAdmin && !empty($RevokedTitles)): ?>
+				<?php if ($canManageAwards && !empty($RevokedTitles)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Titles</h4>
 					<table class="pn-table pn-sortable" id="pn-revoked-titles-table">
@@ -1253,7 +1254,7 @@
 									<td><?= htmlspecialchars($rec['Reason']) ?></td>
 									<?php if ($this->__session->user_id): ?>
 										<td style="white-space:nowrap">
-											<?php if ($canEditAdmin && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
+											<?php if ($canManageAwards && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
 												<a class="pn-rec-give-link" href="#"
 													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>"
 												><i class="fas fa-plus"></i> Give</a>
@@ -1331,7 +1332,7 @@
 					// class_id → Paragon award_id
 					// $pnClassToParagon and $pnHeldAwardIds are pre-computed in the template preamble
 				?>
-				<?php if ($canEditAdmin): ?>
+				<?php if ($canManageAwards): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-sm pn-btn-secondary" onclick="pnOpenReconcileModal()"><i class="fas fa-sliders-h"></i> Edit Reconciliation</button>
 				</div>
@@ -1770,7 +1771,7 @@
 <!-- =============================================
      Add Award / Add Title Modal
      ============================================= -->
-<?php if ($canEditAdmin): ?>
+<?php if ($canManageAwards): ?>
 <div class="pn-overlay" id="pn-award-overlay">
 	<div class="pn-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
@@ -1877,7 +1878,7 @@
 <!-- =============================================
      Award Edit Modal
      ============================================= -->
-<?php if ($canEditAdmin): ?>
+<?php if ($canManageAwards): ?>
 <div class="pn-overlay" id="pn-award-edit-overlay">
 	<div class="pn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
@@ -2040,6 +2041,7 @@ var PnConfig = {
 	canEditImages:  <?= !empty($canEditImages)  ? 'true' : 'false' ?>,
 	canEditAccount: <?= !empty($canEditAccount) ? 'true' : 'false' ?>,
 	canEditAdmin:   <?= !empty($canEditAdmin)   ? 'true' : 'false' ?>,
+	canManageAwards:<?= !empty($canManageAwards) ? 'true' : 'false' ?>,
 	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
@@ -2095,7 +2097,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 })();
 </script>
 
-<?php if ($canEditAdmin): ?>
+<?php if ($canManageAwards): ?>
 <!-- Revoke Award Modal -->
 <div class="pn-overlay" id="pn-award-revoke-overlay">
 	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px);">

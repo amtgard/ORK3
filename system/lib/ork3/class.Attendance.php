@@ -226,11 +226,11 @@ class Attendance  extends Ork3 {
 				return AUTH_EVENT;
 			}
 		} else if (valid_id($request['ParkId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
 				return AUTH_PARK;
       }
 		} else if (valid_id($request['KingdomId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
 				return AUTH_KINGDOM;
 			}
 		}else {

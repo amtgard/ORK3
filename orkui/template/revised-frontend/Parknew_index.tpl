@@ -175,13 +175,13 @@
 		<!-- Heraldry -->
 		<div class="pk-hero-left">
 			<?php $displayHeraldryUrl = $hasHeraldry ? $heraldryUrl : HTTP_PARK_HERALDRY . '00000.jpg'; ?>
-			<div class="pk-heraldry-frame<?= !empty($CanManagePark) ? ' pk-heraldry-editable' : '' ?>">
+			<div class="pk-heraldry-frame<?= !empty($CanAdminPark) ? ' pk-heraldry-editable' : '' ?>">
 
 				<img class="heraldry-img" src="<?= htmlspecialchars($displayHeraldryUrl) ?>"
 				     alt="<?= htmlspecialchars($park_name) ?> heraldry"
 				     crossorigin="anonymous"
 				     onload="typeof pkApplyHeroColor==='function'&&!<?= $parkIsInactive ? 'true' : 'false' ?>&&pkApplyHeroColor(this)">
-				<?php if (!empty($CanManagePark)): ?>
+				<?php if (!empty($CanAdminPark)): ?>
 				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" title="Change heraldry">
 					<i class="fas fa-camera"></i>
 				</button>
@@ -233,6 +233,8 @@
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAttendanceModal()">
 						<i class="fas fa-clipboard-list"></i> Enter Attendance
 					</button>
+				<?php endif; ?>
+				<?php if (!empty($CanAdminPark)): ?>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
 					</button>
@@ -291,7 +293,7 @@
 		<div class="pk-card">
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if (!empty($CanManagePark)): ?>
+				<?php if (!empty($CanAdminPark)): ?>
 				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" title="Edit officers">
 					<i class="fas fa-pencil-alt"></i>
 				</button>
@@ -405,7 +407,7 @@
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
-				<?php if (!empty($CanManagePark)): ?>
+				<?php if (!empty($CanAdminPark)): ?>
 				<li data-pktab="admin">
 					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin Tasks</span>
 				</li>
@@ -466,7 +468,7 @@
 				<div class="pk-about-section pk-about-schedule">
 					<div class="pk-about-label" style="display:flex;align-items:center;justify-content:space-between;">
 						<span><i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0;"></i>Schedule</span>
-						<?php if (!empty($CanManagePark)): ?>
+						<?php if (!empty($CanAdminPark)): ?>
 						<button class="pk-btn pk-btn-primary pk-btn-sm" onclick="pkOpenAddDayModal()">
 							<i class="fas fa-plus"></i> Add Park Day
 						</button>
@@ -511,7 +513,7 @@
 							}
 						?>
 						<div class="pk-schedule-card">
-				<?php if (!empty($CanManagePark)): ?>
+				<?php if (!empty($CanAdminPark)): ?>
 				<button class="pk-schedule-card-del" data-park-day-id="<?= (int)$day['ParkDayId'] ?>" title="Remove park day">&times;</button>
 				<?php endif; ?>
 							<div class="pk-schedule-icon <?= $iconCls ?>">
@@ -569,8 +571,8 @@
 							<button class="pk-filter-toggle" data-filter="park-day">Park Days</button>
 						</div>
 						<?php endif; ?>
-						<?php if ($CanManagePark): ?>
-						<button onclick="pkOpenEventModal()" style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
+						<?php if ($CanAdminPark): ?>
+						<button onclick="pkOpenEventModal()"style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
 						</button>
 						<?php endif; ?>
@@ -668,7 +670,7 @@
 									<i class="fas fa-list"></i> List
 								</button>
 							</div>
-							<?php if ($CanManagePark ?? false): ?>
+							<?php if ($CanAdminPark ?? false): ?>
 							<div class="plr-action-group">
 								<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
 								<div class="plr-gear-wrap">
@@ -996,7 +998,7 @@
 			</div>
 
 			<!-- Admin Tab -->
-			<?php if (!empty($CanManagePark)): ?>
+			<?php if (!empty($CanAdminPark)): ?>
 			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
 				<div class="kn-report-cols">
 					<div class="kn-report-group">
@@ -1041,7 +1043,7 @@
 								<th data-short="Rec. By">Recommended By</th>
 								<th>Date</th>
 								<th>Notes</th>
-								<?php if (!empty($CanManagePark)): ?><th></th><?php endif; ?>
+								<?php if (!empty($CanAdminPark)): ?><th></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody id="pk-recs-tbody">
@@ -1057,7 +1059,7 @@
 							<span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span>
 <?php else: ?>&mdash;<?php endif; ?>
 						</td>
-							<?php if (!empty($CanManagePark)): ?>
+							<?php if (!empty($CanAdminPark)): ?>
 							<td class="pk-rec-actions">
 								<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
 									data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
@@ -1094,6 +1096,7 @@ var PkConfig = {
 	parkName:       <?= json_encode($park_name ?? '') ?>,
 	kingdomId:      <?= (int)($kingdom_id ?? 0) ?>,
 	canManage:      <?= !empty($CanManagePark) ? 'true' : 'false' ?>,
+	canAdmin:       <?= !empty($CanAdminPark)  ? 'true' : 'false' ?>,
 	loggedIn:       <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	calEvents:      <?= json_encode(array_values($pkCalEvents ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	calParkDays:    <?= json_encode(array_values($pkCalParkDays ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1102,7 +1105,7 @@ var PkConfig = {
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	classes:         <?= json_encode(array_values($Classes         ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	recentAttendees: <?= json_encode(array_values($RecentAttendees ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:     <?= json_encode(!empty($CanManagePark) ? array_map(function($o) {
+	officerList:     <?= json_encode(!empty($CanAdminPark) ? array_map(function($o) {
 		return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
 	}, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkDetails: {
@@ -1391,7 +1394,7 @@ var PkConfig = {
 
 <?php endif; ?>
 
-<?php if ($CanManagePark ?? false): ?>
+<?php if ($CanAdminPark ?? false): ?>
 
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
@@ -1421,7 +1424,7 @@ var PkConfig = {
 
 <?php endif; ?>
 
-<?php if ($CanManagePark ?? false): ?>
+<?php if ($CanAdminPark ?? false): ?>
 <!-- Add Player Modal -->
 <div id="pk-addplayer-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
@@ -1499,7 +1502,7 @@ var PkConfig = {
 <!-- =============================================
      Parknew: Edit Officers Modal
      ============================================= -->
-<?php if (!empty($CanManagePark)): ?>
+<?php if (!empty($CanAdminPark)): ?>
 <div id="pk-editoff-overlay">
 	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -1660,7 +1663,7 @@ var PkConfig = {
 </div>
 <?php endif; ?>
 
-<?php if (!empty($CanManagePark)): ?>
+<?php if (!empty($CanAdminPark)): ?>
 <!-- Heraldry Upload Modal -->
 <div id="pk-heraldry-overlay">
 	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
@@ -1951,7 +1954,7 @@ $(function() {
 			order: [[4, 'desc']],
 			columnDefs: [
 				{ targets: [4], type: 'date' },
-				<?php if (!empty($CanManagePark)): ?>
+				<?php if (!empty($CanAdminPark)): ?>
 				{ targets: [-1], orderable: false, searchable: false },
 				<?php endif; ?>
 			],

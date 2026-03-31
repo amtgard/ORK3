@@ -1133,7 +1133,7 @@ if (PnConfig.recError) {
 
     // ---- Add Award / Add Title Modal ----
     (function() {
-        if (!PnConfig.canEditAdmin) return;
+        if (!PnConfig.canManageAwards) return;
         var AWARD_URL = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/addaward';
         var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
         var KINGDOM_ID = PnConfig.kingdomId;
@@ -7052,7 +7052,7 @@ function setupPronounPicker(cfg) {
 
 // ---- Add Player Modal (Parknew) ----
 (function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var CREATE_URL = PkConfig.uir + 'PlayerAjax/park/' + PkConfig.parkId + '/create';
 
@@ -7154,7 +7154,7 @@ function setupPronounPicker(cfg) {
 
 // ---- Playernew: Award Edit + Delete ----
 (function() {
-    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+    if (typeof PnConfig === 'undefined' || !PnConfig.canManageAwards) return;
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7621,7 +7621,7 @@ function setupPronounPicker(cfg) {
 
 // ---- Parknew: Edit Officers ----
 (function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var OFFICER_ROLES = ['Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'];
     var SET_URL    = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setofficers';
@@ -7822,7 +7822,7 @@ function setupPronounPicker(cfg) {
 
 // ---- Parknew: Park Day Management ----
 (function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var ADD_DAY_URL    = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/addparkday';
     var DELETE_DAY_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deleteparkday';
@@ -7990,7 +7990,7 @@ function setupPronounPicker(cfg) {
 
 // ---- Playernew: Revoke Award ----
 (function() {
-    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+    if (typeof PnConfig === 'undefined' || !PnConfig.canManageAwards) return;
 
     function gid(id) { return document.getElementById(id); }
 
@@ -8278,7 +8278,7 @@ function setupPronounPicker(cfg) {
 
 // ---- Parknew: Park Administration ----
 (function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     function gid(id) { return document.getElementById(id); }
     var AJAX_BASE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/';
@@ -8653,7 +8653,7 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
 
 // ---- Playernew: Revoke All Awards ----
 (function() {
-    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+    if (typeof PnConfig === 'undefined' || !PnConfig.canManageAwards) return;
 
     function gid(id) { return document.getElementById(id); }
     var countdownTimer = null;
@@ -8747,7 +8747,7 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
 
 // ---- Playernew: Class Reconciliation ----
 (function() {
-    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+    if (typeof PnConfig === 'undefined' || !PnConfig.canManageAwards) return;
 
     function gid(id) { return document.getElementById(id); }
 
@@ -9403,7 +9403,7 @@ window.pnCloseUnitCreateModal = function() {
 
 // ---- Parknew: Heraldry Upload Modal ----
 (function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var UPLOAD_URL  = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setheraldry';
     var REMOVE_URL  = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/removeheraldry';
@@ -9525,7 +9525,7 @@ window.pnCloseUnitCreateModal = function() {
 
 // ---- Parknew: Move Player Modal ----
 (function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
     var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&q=';
@@ -9765,7 +9765,7 @@ window.pnCloseUnitCreateModal = function() {
 
 // ---- Merge Players Modal (Parknew) ----
 (function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canManage) return;
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var MERGE_URL  = PkConfig.uir + 'PlayerAjax/merge';
     var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
