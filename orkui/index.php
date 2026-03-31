@@ -28,6 +28,21 @@ $Request = new Request();
 if ( empty( $_REQUEST[ 'Route' ] ) ) {
     $_REQUEST[ 'Route' ] = '';
 }
+
+// Redirect legacy index routes to their profile equivalents
+$_legacyRedirects = [
+    'Park/index/'    => 'Park/profile/',
+    'Kingdom/index/' => 'Kingdom/profile/',
+    'Player/index/'  => 'Player/profile/',
+];
+foreach ($_legacyRedirects as $_old => $_new) {
+    if (strncasecmp($_REQUEST['Route'], $_old, strlen($_old)) === 0) {
+        $remainder = substr($_REQUEST['Route'], strlen($_old));
+        header('Location: ' . UIR . $_new . $remainder, true, 301);
+        exit;
+    }
+}
+
 $route = explode( '/', $_REQUEST[ "Route" ] );
 logtrace( 'Index: Route', $route );
 Ork3::$Lib->session = $Session;
