@@ -130,6 +130,7 @@
 	color: #2d3748;
 }
 .hm-section-title i { margin-right: 7px; color: #4a5568; }
+.hm-section-hint { font-size: 12px; color: #718096; font-style: italic; }
 .hm-view-all {
 	font-size: 13px;
 	color: #2b6cb0;
@@ -526,6 +527,9 @@
 	<div class="hm-bottom-side">
 		<div class="hm-section-header">
 			<span class="hm-section-title"><i class="fas fa-search"></i> Reports and Utilities</span>
+			<?php if (empty($LoggedIn)): ?>
+			<span class="hm-section-hint">More available when logged in</span>
+			<?php endif; ?>
 		</div>
 		<div class="hm-find-list">
 			<a class="hm-find-item" href="<?= UIR ?>Search/index">

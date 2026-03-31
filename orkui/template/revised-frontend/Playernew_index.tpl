@@ -184,6 +184,8 @@
 .pna-tenure-years{font-size:44px;font-weight:800;color:#2c5282;line-height:1}
 .pna-tenure-label{font-size:13px;color:#718096;margin-top:2px}
 .pna-tenure-since{font-size:11px;color:#a0aec0;margin-top:6px}
+.pna-tenure-info-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#ebf4ff;color:#2b6cb0;font-size:10px;cursor:help;border:1px solid #bee3f8;position:relative;z-index:10;flex-shrink:0;margin-top:8px;vertical-align:middle}
+.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
@@ -678,6 +680,7 @@
 								<div class="pna-tenure-label">year<?= $_maYears !== 1 ? 's' : '' ?></div>
 								<div class="pna-tenure-since">First credit <?= date('M j, Y', strtotime($_maFirstDate)) ?></div>
 							</div>
+							<div class="pna-tenure-info-btn" tabindex="0" role="button" aria-label="Tenure info"><i class="fas fa-info"></i><div class="pna-tenure-info-text">This is based on your first Amtgard credit date. If it is incorrect, reach out to your PM to set your Amtgard Birth Date correctly.</div></div>
 						</div>
 						<?php endif; ?>
 
@@ -1428,6 +1431,13 @@
 			<div class="pn-form-error" id="pn-img-error"></div>
 			<div style="text-align:center;margin-top:10px">
 				<button class="pn-btn" id="pn-img-remove-btn" type="button" style="background:transparent;color:#e53e3e;border:1px solid #feb2b2;font-size:12px;padding:4px 14px;"><i class="fas fa-trash"></i> <span id="pn-img-remove-label">Remove Image</span></button>
+				<div id="pn-img-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+					<span id="pn-img-remove-confirm-text">Remove this image?</span>
+					<div style="margin-top:8px;display:flex;gap:8px">
+						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('pn-img-remove-confirm').style.display='none'">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-sm" id="pn-img-remove-confirm-btn" style="background:#e53e3e;color:#fff">Yes, Remove</button>
+					</div>
+				</div>
 			</div>
 		</div>
 
@@ -2059,6 +2069,29 @@ if (is_array($Details['Awards'])) {
      JavaScript
      ============================================= -->
 <script>
+(function() {
+    var btn = document.querySelector('.pna-tenure-info-btn');
+    if (!btn) return;
+    var tip = btn.querySelector('.pna-tenure-info-text');
+    if (!tip) return;
+    function show() {
+        var r = btn.getBoundingClientRect();
+        tip.style.display = 'block';
+        var left = r.left + r.width / 2 - 130;
+        if (left < 8) left = 8;
+        if (left + 260 > window.innerWidth - 8) left = window.innerWidth - 268;
+        var top = r.top - tip.offsetHeight - 8;
+        if (top < 8) top = r.bottom + 8;
+        tip.style.left = left + 'px';
+        tip.style.top  = top + 'px';
+    }
+    function hide() { tip.style.display = 'none'; }
+    btn.addEventListener('mouseenter', show);
+    btn.addEventListener('focus',      show);
+    btn.addEventListener('mouseleave', hide);
+    btn.addEventListener('blur',       hide);
+})();
+
 var PnConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',

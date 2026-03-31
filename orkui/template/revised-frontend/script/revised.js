@@ -496,6 +496,8 @@ if (PnConfig.recError) {
             gid('pn-img-file-input').value = '';
             gid('pn-img-resize-notice').textContent = '';
             var errEl = gid('pn-img-error'); errEl.style.display = 'none'; errEl.textContent = '';
+            var confirmPanel = gid('pn-img-remove-confirm');
+            if (confirmPanel) confirmPanel.style.display = 'none';
             showStep('pn-img-step-select');
             gid('pn-img-overlay').classList.add('pn-open');
             document.body.style.overflow = 'hidden';
@@ -764,8 +766,20 @@ if (PnConfig.recError) {
         if (removeBtn) {
             removeBtn.addEventListener('click', function() {
                 var label = (imgType === 'photo') ? 'player photo' : 'heraldry';
-                if (!confirm('Remove the ' + label + '? This cannot be undone.')) return;
-                removeBtn.disabled = true;
+                var title = (imgType === 'photo') ? 'Remove Photo' : 'Remove Heraldry';
+                var confirmPanel = gid('pn-img-remove-confirm');
+                var confirmText  = gid('pn-img-remove-confirm-text');
+                if (confirmText) confirmText.textContent = 'Remove the ' + label + '?';
+                if (confirmPanel) confirmPanel.style.display = confirmPanel.style.display === 'none' ? '' : 'none';
+            });
+        }
+        var confirmOkBtn = gid('pn-img-remove-confirm-btn');
+        if (confirmOkBtn) {
+            confirmOkBtn.addEventListener('click', function() {
+                var confirmPanel = gid('pn-img-remove-confirm');
+                if (confirmPanel) confirmPanel.style.display = 'none';
+                var removeBtn = gid('pn-img-remove-btn');
+                if (removeBtn) removeBtn.disabled = true;
                 var action = (imgType === 'photo') ? 'removeimage' : 'removeheraldry';
                 fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/' + action, { method: 'POST' })
                     .then(function(r) { return r.json(); })
@@ -774,12 +788,12 @@ if (PnConfig.recError) {
                             showStep('pn-img-step-success');
                             setTimeout(function() { window.location.reload(); }, 1400);
                         } else {
-                            removeBtn.disabled = false;
+                            if (removeBtn) removeBtn.disabled = false;
                             showError((result && result.error) ? result.error : 'Remove failed.');
                         }
                     })
                     .catch(function() {
-                        removeBtn.disabled = false;
+                        if (removeBtn) removeBtn.disabled = false;
                         showError('Request failed.');
                     });
             });

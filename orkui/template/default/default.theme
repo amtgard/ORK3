@@ -151,20 +151,8 @@
 				</button>
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
-<?php if (isset($menu['admin']) && strpos($menu['admin']['url'], 'Admin/unit/') === false): ?>
-					<?php
-						$__adminUrl = $menu['admin']['url'];
-						if      (strpos($__adminUrl, 'Admin/player/')   !== false) $__adminLabel = 'Old Admin Player';
-						elseif  (strpos($__adminUrl, 'Admin/kingdom/')  !== false) $__adminLabel = 'Old Admin Kingdom';
-						elseif  (strpos($__adminUrl, 'Admin/park/')     !== false) $__adminLabel = 'Old Admin Park';
-						elseif  (strpos($__adminUrl, 'Admin/event/')    !== false) $__adminLabel = 'Old Admin Event';
-						else                                                       $__adminLabel = 'Old Admin Panel';
-					?>
-					<div class='nav-dropdown-divider'></div>
-					<a href='<?=$__adminUrl?>'><i class='fas fa-cog'></i> <?=$__adminLabel?></a>
-<?php endif; ?>
 <?php if (Ork3::$Lib->authorization->HasAuthority($__navUid, AUTH_ADMIN, 0, AUTH_ADMIN)): ?>
-					<?php if (!isset($menu['admin'])): ?><div class='nav-dropdown-divider'></div><?php endif; ?>
+					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Admin'><i class='fas fa-shield-alt'></i> ORK Admin</a>
 <?php endif; ?>
 					<div class='nav-dropdown-divider'></div>
