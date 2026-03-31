@@ -2,7 +2,10 @@
 <html>
 	<head>
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
-		<link rel="icon" href="/favicon.jpeg">
+		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
+		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
+		<link rel="apple-touch-icon" sizes="180x180" href="<?= HTTP_ASSETS ?>images/favicon-180x180.png">
+		<link rel="manifest" href="/assets/site.webmanifest">
 		<?php if ($no_index) : ?>
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
