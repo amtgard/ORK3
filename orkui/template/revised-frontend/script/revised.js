@@ -1795,7 +1795,7 @@ function knLoadMoreList(tableId, tmplBase, btn) {
 
 // ---- Activate a tab by name (used by buttons + links) ----
 function knActivateTab(tab) {
-    if (tab === 'recommendations') gtag('event', 'recommendation_view', { section: 'kingdom' });
+    if (tab === 'recommendations') { if (typeof gtag === 'function') gtag('event', 'recommendation_view', { section: 'kingdom' }); }
     $('.kn-tab-nav li').removeClass('kn-tab-active');
     var $activeTab = $('.kn-tab-nav li[data-kntab="' + tab + '"]');
     $activeTab.addClass('kn-tab-active');
@@ -2371,7 +2371,7 @@ $(document).ready(function() {
             + String(today.getDate()).padStart(2, '0');
         setAwardType('awards');
         checkRequired();
-        gtag('event', 'award_entry_open', { section: 'kingdom' });
+        if (typeof gtag === 'function') gtag('event', 'award_entry_open', { section: 'kingdom' });
         gid('kn-award-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
         gid('kn-award-player-text').focus();
@@ -2387,7 +2387,7 @@ $(document).ready(function() {
 
     // Pre-populate award modal from a recommendation row
     window.knGiveFromRec = function(rec) {
-        gtag('event', 'recommendation_give');
+        if (typeof gtag === 'function') gtag('event', 'recommendation_give');
         knOpenAwardModal();
         if (rec.Persona || rec.MundaneId) {
             gid('kn-award-player-text').value = rec.Persona || '';
@@ -2460,7 +2460,7 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (d.status === 0) {
-                        gtag('event', 'recommendation_dismiss', { section: 'kingdom' });
+                        if (typeof gtag === 'function') gtag('event', 'recommendation_dismiss', { section: 'kingdom' });
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
                         alert(d.error || 'Failed to dismiss recommendation.');
@@ -4306,7 +4306,7 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(r) {
                 if (r && r.status === 0) {
-                    gtag('event', 'kingdom_heraldry_remove', { status: 'success' });
+                    if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_remove', { status: 'success' });
                     window.location.reload();
                 } else {
                     alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
@@ -4336,17 +4336,17 @@ $(document).ready(function() {
                     .then(function(r) {
                         if (upl) upl.style.display = 'none';
                         if (r && r.status === 0) {
-                            gtag('event', 'kingdom_heraldry_upload', { status: 'success' });
+                            if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'success' });
                             if (done) done.style.display = '';
                             setTimeout(function() { window.location.reload(); }, 1200);
                         } else {
-                            gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
+                            if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
                             if (sel) sel.style.display = '';
                             alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
                         }
                     })
                     .catch(function() {
-                        gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
+                        if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
                         if (upl) upl.style.display = 'none';
                         if (sel) sel.style.display = '';
                         alert('Request failed. Please try again.');
@@ -4604,7 +4604,7 @@ function pkApplyHeroColor(img) {
 
 // ---- Tab activation ----
 function pkActivateTab(tab) {
-    if (tab === 'recommendations') gtag('event', 'recommendation_view', { section: 'park' });
+    if (tab === 'recommendations' && typeof gtag === 'function') gtag('event', 'recommendation_view', { section: 'park' });
     $('.pk-tab-nav li').removeClass('pk-tab-active');
     var $pkTab = $('.pk-tab-nav li[data-pktab="' + tab + '"]');
     $pkTab.addClass('pk-tab-active');
@@ -9378,25 +9378,31 @@ window.pnCloseUnitCreateModal = function() {
         makePlayerSearch('kn-merge-remove-name', 'kn-merge-remove-id', 'kn-merge-remove-results', 'kn-merge-keep-id');
 
         gid('kn-mergeplayer-submit').addEventListener('click', function() {
+            var btn        = gid('kn-mergeplayer-submit');
             var keepId     = gid('kn-merge-keep-id').value;
             var removeId   = gid('kn-merge-remove-id').value;
             var keepName   = gid('kn-merge-keep-name').value.trim();
             var removeName = gid('kn-merge-remove-name').value.trim();
             if (!keepId || !removeId) { showFb('Select both players.', false); return; }
-            if (!confirm('Merge "' + removeName + '" INTO "' + keepName + '"?\n\n"' + removeName + '" will be permanently deleted and all data transferred to "' + keepName + '".\n\nThis CANNOT be undone.')) return;
-            btn.disabled = true;
-            $.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
-                btn.disabled = false;
-                if (r && r.status === 0) {
-                    showFb('“' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
-                    setTimeout(function() { closeModal(); location.reload(); }, 2200);
-                } else {
-                    showFb((r && r.error) ? r.error : 'Merge failed.', false);
-                }
-            }, 'json').fail(function() {
-                btn.disabled = false;
-                showFb('Request failed. Please try again.', false);
-            });
+            knConfirm(
+                'Merge “' + removeName + '” INTO “' + keepName + '”?\n\n”' + removeName + '” will be permanently deleted and all data transferred to “' + keepName + '”.\n\nThis CANNOT be undone.',
+                function() {
+                    btn.disabled = true;
+                    $.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
+                        btn.disabled = false;
+                        if (r && r.status === 0) {
+                            showFb('”' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
+                            setTimeout(function() { closeModal(); location.reload(); }, 2200);
+                        } else {
+                            showFb((r && r.error) ? r.error : 'Merge failed.', false);
+                        }
+                    }, 'json').fail(function() {
+                        btn.disabled = false;
+                        showFb('Request failed. Please try again.', false);
+                    });
+                },
+                'Confirm Merge'
+            );
         });
     });
 })();
@@ -9898,21 +9904,26 @@ window.pnCloseUnitCreateModal = function() {
             var keepName   = gid('pk-merge-keep-name').value.trim();
             var removeName = gid('pk-merge-remove-name').value.trim();
             if (!keepId || !removeId) { showFb('Select both players.', false); return; }
-            if (!confirm('Merge "' + removeName + '" INTO "' + keepName + '"?\n\n"' + removeName + '" will be permanently deleted and all data transferred to "' + keepName + '".\n\nThis CANNOT be undone.')) return;
             var btn = this;
-            btn.disabled = true;
-            $.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
-                btn.disabled = false;
-                if (r && r.status === 0) {
-                    showFb('“' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
-                    setTimeout(function() { closeModal(); location.reload(); }, 2200);
-                } else {
-                    showFb((r && r.error) ? r.error : 'Merge failed.', false);
-                }
-            }, 'json').fail(function() {
-                btn.disabled = false;
-                showFb('Request failed. Please try again.', false);
-            });
+            knConfirm(
+                'Merge “' + removeName + '” INTO “' + keepName + '”?\n\n”' + removeName + '” will be permanently deleted and all data transferred to “' + keepName + '”.\n\nThis CANNOT be undone.',
+                function() {
+                    btn.disabled = true;
+                    $.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
+                        btn.disabled = false;
+                        if (r && r.status === 0) {
+                            showFb('”' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
+                            setTimeout(function() { closeModal(); location.reload(); }, 2200);
+                        } else {
+                            showFb((r && r.error) ? r.error : 'Merge failed.', false);
+                        }
+                    }, 'json').fail(function() {
+                        btn.disabled = false;
+                        showFb('Request failed. Please try again.', false);
+                    });
+                },
+                'Confirm Merge'
+            );
         });
     });
 })();

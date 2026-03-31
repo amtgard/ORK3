@@ -351,11 +351,20 @@ class Controller_KingdomAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 	} elseif ($action === 'moveplayer') {
+			$uid = (int)$this->session->user_id;
 			$this->load_model('Player');
 			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);
 			$dest_park_id = (int)($_POST['DestParkId'] ?? 0);
 			if (!valid_id($mundane_id))   { echo json_encode(['status' => 1, 'error' => 'Select a player.']);           exit; }
 			if (!valid_id($dest_park_id)) { echo json_encode(['status' => 1, 'error' => 'Select a destination park.']); exit; }
+			// Auth: look up player's current kingdom and require kingdom-level authority over it
+			global $DB;
+			$DB->Clear();
+			$plrKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mundane_id} LIMIT 1");
+			$player_kingdom_id = ($plrKingdom && $plrKingdom->Next()) ? (int)$plrKingdom->kingdom_id : 0;
+			if (!$player_kingdom_id || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized to move this player.']); exit;
+			}
 			$r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0, 'parkId' => $dest_park_id])

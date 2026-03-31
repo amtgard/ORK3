@@ -377,6 +377,10 @@ class Controller_ParkAjax extends Controller {
 		}
 
 		if ($action === 'create') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, $kingdom_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']); exit;
+			}
 			$this->load_model('Park');
 			$name    = trim($_POST['Name'] ?? '');
 			$abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
@@ -412,6 +416,10 @@ class Controller_ParkAjax extends Controller {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			}
 		} elseif ($action === 'editpark') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']); exit;
+			}
 			$this->load_model('Park');
 			$park_id = (int)($_POST['ParkId'] ?? 0);
 			$name    = trim($_POST['Name'] ?? '');
@@ -422,6 +430,13 @@ class Controller_ParkAjax extends Controller {
 			if (!valid_id($park_id)) {
 				echo json_encode(['status' => 1, 'error' => 'Invalid park ID.']);
 				exit;
+			}
+			// Verify the park belongs to this kingdom
+			global $DB;
+			$DB->Clear();
+			$pkCheck = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} AND kingdom_id = {$kingdom_id} LIMIT 1");
+			if (!$pkCheck || !$pkCheck->Next()) {
+				echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']); exit;
 			}
 			if (!strlen($name)) {
 				echo json_encode(['status' => 1, 'error' => 'Park must have a name.']);

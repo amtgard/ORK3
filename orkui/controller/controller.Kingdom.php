@@ -16,10 +16,7 @@ class Controller_Kingdom extends Controller {
 		$this->data['kingdom_id'] = $id;
 		$this->session->kingdom_id = $id;
 
-		if (isset($this->request->kingdom_name)) {
-			$this->session->kingdom_name = $this->request->kingdom_name;
-		} else if (!isset($this->session->kingdom_name)) {
-			// Direct link
+		if (!isset($this->session->kingdom_name)) {
 			$this->session->kingdom_name = $this->Kingdom->get_kingdom_name($id);
 		}
 		$this->data['kingdom_name'] = $this->session->kingdom_name;
@@ -300,6 +297,7 @@ class Controller_Kingdom extends Controller {
 			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
 			WHERE e.kingdom_id = {$kid}
 			ORDER BY cd.event_start, p.name, e.name";
+		$DB->Clear();
 		$evtResult    = $DB->DataSet($evtSql);
 		$eventSummary = [];
 		while ($evtResult && $evtResult->Next()) {
@@ -329,13 +327,18 @@ class Controller_Kingdom extends Controller {
 			WHERE p.kingdom_id = {$kid}
 			  AND p.active = 'Active'
 			ORDER BY p.name, pd.week_day, pd.time";
+		$DB->Clear();
 		$pdResult = $DB->DataSet($pdSql);
 		$parkDays = [];
 		if ($pdResult && $pdResult->Size() > 0) {
 			while ($pdResult->Next()) {
 				switch ($pdResult->recurrence) {
 					case 'weekly':       $recText = 'Every ' . $pdResult->week_day; break;
-					case 'week-of-month': $recText = 'Every ' . (int)$pdResult->week_of_month . '. ' . $pdResult->week_day; break;
+					case 'week-of-month':
+					$n = (int)$pdResult->week_of_month;
+					$sfx = ($n % 100 >= 11 && $n % 100 <= 13) ? 'th' : (['th','st','nd','rd','th','th','th','th','th','th'][$n % 10] ?? 'th');
+					$recText = 'Every ' . $n . $sfx . ' ' . $pdResult->week_day;
+					break;
 					case 'monthly':      $recText = 'Monthly, day ' . (int)$pdResult->month_day; break;
 					default:             $recText = ucfirst($pdResult->recurrence);
 				}
@@ -369,6 +372,7 @@ class Controller_Kingdom extends Controller {
 		$this->data['UserParkId'] = 0;
 		if ($uid > 0) {
 			global $DB;
+			$DB->Clear();
 			$upRow = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $uid LIMIT 1");
 			if ($upRow && $upRow->Next() && $upRow->park_id) {
 				$this->data['UserParkId'] = (int)$upRow->park_id;
@@ -552,7 +556,7 @@ class Controller_Kingdom extends Controller {
 					$lines[] = self::ics_fold('LOCATION:' . self::ics_escape($location));
 				}
 				if (!empty($result->url)) {
-					$lines[] = self::ics_fold('URL:' . $result->url);
+					$lines[] = self::ics_fold('URL:' . self::ics_escape(preg_replace('/[\r\n]/', '', $result->url)));
 				}
 				$lines[] = 'END:VEVENT';
 			}

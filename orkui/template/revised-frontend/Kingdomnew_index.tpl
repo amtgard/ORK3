@@ -160,7 +160,7 @@
 		<!-- Officers -->
 		<?php if (count($officerList) > 0 || ($CanManageKingdom ?? false)): ?>
 		<div class="kn-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+			<h4 style="display:flex;align-items:center;justify-content:space-between;background:transparent;border:none;padding:0;border-radius:0;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if ($CanManageKingdom ?? false): ?>
 				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" title="Edit officers">
@@ -193,7 +193,7 @@
 		?>
 		<?php if (!empty($_knDescription)): ?>
 		<div class="kn-card kn-description-card">
-			<h4><i class="fas fa-info-circle"></i> About</h4>
+			<h4 style="background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-info-circle"></i> About</h4>
 			<div class="kn-description-body"><?= preg_replace('/<img[^>]*>/i', '', (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($_knDescription)) ?></div>
 			<?php if (!empty($kingdom_info['Info']['KingdomInfo']['Url'] ?? '')): ?>
 			<a class="kn-description-url" href="<?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?>" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:4px;font-size:11px"></i><?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?></a>
@@ -203,7 +203,7 @@
 
 		<!-- Quick Links -->
 		<div class="kn-card">
-			<h4><i class="fas fa-link"></i> Quick Links</h4>
+			<h4 style="background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="kn-link-list">
 				<li>
 					<span class="kn-link-icon"><i class="fas fa-search"></i></span>
@@ -410,7 +410,7 @@
 			<!-- Events Tab -->
 			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
@@ -422,7 +422,7 @@
 						</div>
 						<div class="kn-sub-wrap" id="kn-sub-wrap" style="position:relative">
 							<button class="kn-view-btn" id="kn-sub-btn" title="Subscribe to calendar"
-								onclick="var p=document.getElementById('kn-sub-pop');p.style.display=p.style.display==='block'?'none':'block';event.stopPropagation();">
+								onclick="var p=document.getElementById('kn-sub-pop');p.classList.toggle('kn-sub-open');event.stopPropagation();">
 								<i class="fas fa-rss"></i>
 							</button>
 							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:500;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px">
@@ -501,7 +501,7 @@
 								<td class="kn-col-nowrap">
 									<i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0"></i>
 									<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:#4a5568;margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
-									<?= htmlspecialchars($day['Purpose']) ?> — <?= date('g:i A', strtotime($day['Time'])) ?>
+									<?= htmlspecialchars($day['Purpose']) ?> — <?= (!empty($day['Time'])) ? date('g:i A', strtotime($day['Time'])) : '' ?>
 								</td>
 								<td><?= htmlspecialchars($day['ParkName']) ?></td>
 							</tr>
@@ -559,7 +559,7 @@
 								onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'"
 								alt="">
 							<div class="kn-prinz-name">
-								<a href="<?= UIR ?>Kingdom/profile/<?= $prinz['KingdomId'] ?>&kingdom_name=<?= urlencode($prinz['Name']) ?>"><?= htmlspecialchars($prinz['Name']) ?></a>
+								<a href="<?= UIR ?>Kingdom/profile/<?= $prinz['KingdomId'] ?>"><?= htmlspecialchars($prinz['Name']) ?></a>
 							</div>
 						</div>
 					<?php endforeach; ?>
@@ -568,7 +568,7 @@
 
 			<!-- Reports Tab -->
 			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
-				<?php if (!$LoggedIn): ?>
+				<?php if (!$IsLoggedIn): ?>
 				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
 					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
 				</div>
@@ -583,7 +583,7 @@
 						<h5><i class="fas fa-users"></i> Players</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Reports/roster/Kingdom&id=<?= $kingdom_id ?>">Player Roster</a></li>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/active/Kingdom&id=<?= $kingdom_id ?>">Active Players</a></li>
 							<li><a href="<?= UIR ?>Reports/dues/Kingdom&id=<?= $kingdom_id ?>">Dues Paid</a></li>
 							<li><a href="<?= UIR ?>Reports/waivered/Kingdom&id=<?= $kingdom_id ?>">Waivered</a></li>
@@ -601,11 +601,11 @@
 					<div class="kn-report-group">
 						<h5><i class="fas fa-medal"></i> Awards</h5>
 						<ul>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Award Recommendations</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
 							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
@@ -620,13 +620,13 @@
 					<div class="kn-report-group">
 						<h5><i class="fas fa-calendar-check"></i> Attendance</h5>
 						<ul>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Weeks/1">Past Week</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/1">Past Month</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/3">Past 3 Months</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/6">Past 6 Months</a></li>
-							<?php if ($LoggedIn): ?>
+							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/12">Past 12 Months</a></li>
 							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/All">All Time</a></li>
 							<?php endif; ?>
@@ -636,7 +636,7 @@
 						</ul>
 					</div>
 
-					<?php if ($LoggedIn): ?>
+					<?php if ($IsLoggedIn): ?>
 					<div class="kn-report-group">
 						<h5><i class="fas fa-ellipsis-h"></i> Other</h5>
 						<ul>
@@ -834,9 +834,9 @@ var KnConfig = {
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	preloadOfficers:  <?= json_encode($PreloadOfficers ?? []) ?>,
-	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
-	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
+	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	isOrkAdmin:      <?= !empty($IsOrkAdmin) ? 'true' : 'false' ?>,
 	adminInfo:       <?= json_encode($AdminInfo       ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminConfig:     <?= json_encode($AdminConfig     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1801,56 +1801,6 @@ var KnConfig = {
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <?php endif; ?>
 <script>
-function knApplyHeroColor(img) {
-	var canvas = document.createElement('canvas');
-	canvas.width = 60; canvas.height = 60;
-	var ctx = canvas.getContext('2d');
-	try {
-		ctx.drawImage(img, 0, 0, 60, 60);
-		var px = ctx.getImageData(0, 0, 60, 60).data;
-		var buckets = {};
-		for (var i = 0; i < px.length; i += 4) {
-			var r = px[i], g = px[i+1], b = px[i+2], a = px[i+3];
-			if (a < 120) continue;
-			if (r > 215 && g > 215 && b > 215) continue;
-			if (r < 25  && g < 25  && b < 25)  continue;
-			var key = (r >> 4) + ',' + (g >> 4) + ',' + (b >> 4);
-			buckets[key] = (buckets[key] || 0) + 1;
-		}
-		var best = null, bestN = 0;
-		for (var k in buckets) { if (buckets[k] > bestN) { bestN = buckets[k]; best = k; } }
-		if (!best) return;
-		var parts = best.split(',');
-		var dr = parseInt(parts[0]) * 16 + 8;
-		var dg = parseInt(parts[1]) * 16 + 8;
-		var db = parseInt(parts[2]) * 16 + 8;
-		var rf = dr/255, gf = dg/255, bf = db/255;
-		var max = Math.max(rf,gf,bf), min = Math.min(rf,gf,bf);
-		var h = 0, s = 0, l = (max+min)/2;
-		if (max !== min) {
-			var d = max - min;
-			s = l > 0.5 ? d/(2-max-min) : d/(max+min);
-			if      (max === rf) h = (gf-bf)/d + (gf < bf ? 6 : 0);
-			else if (max === gf) h = (bf-rf)/d + 2;
-			else                 h = (rf-gf)/d + 4;
-			h /= 6;
-		}
-		var finalS = Math.max(s, 0.28);
-		var hDeg   = Math.round(h * 360);
-		var sPct   = Math.round(finalS * 100);
-		var heroEl = document.querySelector('.kn-hero');
-		if (heroEl) {
-			heroEl.style.backgroundColor = 'hsl(' + hDeg + ',' + sPct + '%,18%)';
-		}
-		document.documentElement.style.setProperty('--kn-hue', hDeg);
-		document.documentElement.style.setProperty('--kn-sat', sPct + '%');
-		document.documentElement.style.setProperty(
-			'--kn-page-tint', 'rgba(' + dr + ',' + dg + ',' + db + ',0.05)'
-		);
-	} catch(e) { /* CORS or tainted canvas — keep default */ }
-}
-</script>
-<script>
 (function() {
 	var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
 	if (!kingdomId) return;
@@ -1960,11 +1910,11 @@ function knApplyHeroColor(img) {
 	var knPlayersLoaded = false;
 	function knLoadPlayers() {
 		if (knPlayersLoaded) return;
-		knPlayersLoaded = true;
 		var uir = '<?= UIR ?>';
 		fetch(uir + 'Kingdom/players_json/' + kingdomId)
 			.then(function(r) { return r.json(); })
 			.then(function(data) {
+				knPlayersLoaded = true;
 				var players  = data.players || [];
 				var nowTs    = Math.floor(Date.now() / 1000);
 				var periods  = {};
@@ -2032,6 +1982,7 @@ function knApplyHeroColor(img) {
 				if (loadEl) loadEl.style.display = 'none';
 			})
 			.catch(function() {
+				knPlayersLoaded = false;
 				var loadEl = document.getElementById('kn-players-loading');
 				if (loadEl) loadEl.innerHTML = '<span style="color:#e53e3e">Failed to load players.</span>';
 			});
@@ -2074,7 +2025,7 @@ function knApplyHeroColor(img) {
 		var wrap = document.getElementById('kn-sub-wrap');
 		if (wrap && !wrap.contains(e.target)) {
 			var pop = document.getElementById('kn-sub-pop');
-			if (pop) pop.style.display = 'none';
+			if (pop) pop.classList.remove('kn-sub-open');
 		}
 	});
 

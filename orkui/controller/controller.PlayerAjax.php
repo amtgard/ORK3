@@ -343,6 +343,7 @@ class Controller_PlayerAjax extends Controller {
 			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
 			exit;
 		}
+		$uid     = (int)$this->session->user_id;
 		$from_id = (int)($_POST['FromMundaneId'] ?? 0);
 		$to_id   = (int)($_POST['ToMundaneId']   ?? 0);
 		if (!valid_id($from_id) || !valid_id($to_id)) {
@@ -351,6 +352,22 @@ class Controller_PlayerAjax extends Controller {
 		}
 		if ($from_id === $to_id) {
 			echo json_encode(['status' => 1, 'error' => 'Cannot merge a player with themselves.']);
+			exit;
+		}
+		// Auth: caller must have kingdom-level authority over at least one of the players' kingdoms
+		global $DB;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id IN ({$from_id}, {$to_id})");
+		$authorized = false;
+		while ($rs && $rs->Next()) {
+			$kid = (int)$rs->kingdom_id;
+			if ($kid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kid, AUTH_CREATE)) {
+				$authorized = true;
+				break;
+			}
+		}
+		if (!$authorized) {
+			echo json_encode(['status' => 5, 'error' => 'Not authorized to merge these players.']);
 			exit;
 		}
 		$this->load_model('Player');
