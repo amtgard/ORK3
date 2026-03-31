@@ -211,6 +211,13 @@
 .pna-feed-sub{flex-shrink:0;color:#718096;font-size:11px}
 .pna-feed-more{font-size:11px;color:#718096;padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
+.pna-welcome-banner-icon{font-size:32px;flex-shrink:0;line-height:1}
+.pna-welcome-banner-body{flex:1;min-width:0}
+.pna-welcome-banner-title{font-size:18px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em}
+.pna-welcome-banner-sub{font-size:13px;opacity:.85;line-height:1.5}
+.pna-welcome-banner-tips{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+.pna-welcome-tip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 10px;font-size:12px;display:flex;align-items:center;gap:5px}
 .pna-sparkline{display:flex;gap:3px;align-items:flex-end;height:34px;margin-bottom:2px}
 .pna-spark-week{flex:1;border-radius:2px;min-width:0}
 .pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:#718096;flex-wrap:wrap}
@@ -285,6 +292,9 @@
 				<?php else: ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-minus-circle"></i> Inactive</span>
 				<?php endif; ?>
+				<?php if (!empty($Player['IsNewPlayer'])): ?>
+					<span class="pn-badge pn-badge-blue"><i class="fas fa-star"></i> New Player</span>
+				<?php endif; ?>
 				<?php if ($isSuspended): ?>
 					<span class="pn-badge pn-badge-red"><i class="fas fa-ban"></i> Suspended</span>
 				<?php endif; ?>
@@ -296,10 +306,12 @@
 				<?php if ($Player['Restricted'] == 1): ?>
 					<span class="pn-badge pn-badge-orange"><i class="fas fa-exclamation-triangle"></i> Restricted</span>
 				<?php endif; ?>
-				<?php if (!empty($Player['DuesThrough'])): ?>
+				<?php if (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time()): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
+				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
+					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Expired</span>
 				<?php else: ?>
-					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Lapsed</span>
+					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> No Dues on File</span>
 				<?php endif; ?>
 				<?php if (!empty($OfficerRoles)): ?>
 					<?php foreach ($OfficerRoles as $office): ?>
@@ -608,6 +620,23 @@
 			<!-- My Amtgard Tab (own profile default) -->
 			<?php if ($isOwnProfile): ?>
 			<div class="pn-tab-panel" id="pn-tab-myamtgard">
+
+				<?php if (!empty($Player['IsNewPlayer'])): ?>
+				<div class="pna-welcome-banner">
+					<div class="pna-welcome-banner-icon">⚔️</div>
+					<div class="pna-welcome-banner-body">
+						<div class="pna-welcome-banner-title">Welcome to Amtgard, <?= htmlspecialchars($Player['Persona']) ?>!</div>
+						<div class="pna-welcome-banner-sub">We're glad you've joined <?= htmlspecialchars($Player['ParkName'] ?? 'your park') ?>. This page is your personal dashboard — track your attendance, class progress, awards, and more as you play.</div>
+						<div class="pna-welcome-banner-tips">
+							<span class="pna-welcome-tip"><i class="fas fa-clipboard-list"></i> Attend park days to earn credits</span>
+							<span class="pna-welcome-tip"><i class="fas fa-shield-alt"></i> Credits advance your class levels</span>
+							<span class="pna-welcome-tip"><i class="fas fa-camera"></i> Upload a Player Photo</span>
+							<span class="pna-welcome-tip"><i class="fas fa-calendar-alt"></i> Navigate to your Kingdom to check for Events</span>
+						</div>
+					</div>
+				</div>
+				<?php endif; ?>
+
 				<?php
 				// Alerts strip
 				?>
@@ -726,7 +755,7 @@
 							<?php endforeach; ?>
 							<?php else: ?>
 							<div style="font-size:12px;color:#718096;line-height:1.5;">
-								We've missed you! Check out the next events and park days in your
+								No recent sign-ins. Check out the next events and park days in your
 								<a href="<?= UIR ?>Kingdom/profile/<?= (int)($KingdomId ?? $this->__session->kingdom_id) ?>" style="color:#4299e1;">kingdom</a>.
 							</div>
 							<?php endif; ?>

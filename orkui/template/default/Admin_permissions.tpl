@@ -2,7 +2,7 @@
 	$type       = $PermType      ?? 'Kingdom';
 	$entityId   = (int)($PermId  ?? 0);
 	$entityName = $PermName      ?? '';
-	$entityUrl  = $PermUrl       ?? (UIR . ($type === 'Kingdom' ? 'Kingdom/index/' : 'Park/index/') . $entityId);
+	$entityUrl  = $PermUrl       ?? (UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $entityId);
 	$auths      = is_array($PermAuths)     ? $PermAuths     : [];
 	$parkAuths  = is_array($PermParkAuths) ? $PermParkAuths : [];
 	$ajaxBaseMap = [
@@ -254,7 +254,7 @@
 				<?php if ($eventCreator): ?>
 				<tr>
 					<td>
-						<strong><?= htmlspecialchars($eventCreator['Persona']) ?></strong>
+						<strong><a href="<?= UIR ?>Player/profile/<?= (int)$eventCreator['MundaneId'] ?>" style="color:inherit;text-decoration:none"><?= htmlspecialchars($eventCreator['Persona']) ?></a></strong>
 						<?php if (!empty($eventCreator['GivenName']) || !empty($eventCreator['Surname'])): ?>
 							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($eventCreator['GivenName'] . ' ' . $eventCreator['Surname'])) ?></span>
 						<?php endif; ?>
@@ -267,9 +267,13 @@
 				<?php foreach ($inheritedParkAuths as $a): ?>
 				<tr>
 					<td>
-						<strong><?= htmlspecialchars($a['Persona']) ?></strong>
+						<?php if ((int)$a['MundaneId'] > 0): ?>
+						<strong><a href="<?= UIR ?>Player/profile/<?= (int)$a['MundaneId'] ?>" style="color:inherit;text-decoration:none"><?= htmlspecialchars($a['Persona']) ?></a></strong>
 						<?php if (!empty($a['GivenName']) || !empty($a['Surname'])): ?>
 							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($a['GivenName'] . ' ' . $a['Surname'])) ?></span>
+						<?php endif; ?>
+						<?php else: ?>
+						<span style="color:var(--rp-text-hint);font-style:italic">(Vacant)</span>
 						<?php endif; ?>
 					</td>
 					<td style="color:var(--rp-text-muted);font-size:12px"><i class="fas fa-tree" style="margin-right:4px"></i><?= htmlspecialchars($inheritedParkName) ?> (Park)</td>
@@ -284,9 +288,13 @@
 				<?php foreach ($inheritedKingdomAuths as $a): ?>
 				<tr>
 					<td>
-						<strong><?= htmlspecialchars($a['Persona']) ?></strong>
+						<?php if ((int)$a['MundaneId'] > 0): ?>
+						<strong><a href="<?= UIR ?>Player/profile/<?= (int)$a['MundaneId'] ?>" style="color:inherit;text-decoration:none"><?= htmlspecialchars($a['Persona']) ?></a></strong>
 						<?php if (!empty($a['GivenName']) || !empty($a['Surname'])): ?>
 							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($a['GivenName'] . ' ' . $a['Surname'])) ?></span>
+						<?php endif; ?>
+						<?php else: ?>
+						<span style="color:var(--rp-text-hint);font-style:italic">(Vacant)</span>
 						<?php endif; ?>
 					</td>
 					<td style="color:var(--rp-text-muted);font-size:12px"><i class="fas fa-chess-rook" style="margin-right:4px"></i><?= htmlspecialchars($inheritedKingdomName) ?> (Kingdom)</td>
@@ -327,12 +335,16 @@
 				<?php foreach ($auths as $a): ?>
 				<tr id="ap-row-<?= (int)$a['AuthorizationId'] ?>">
 					<td>
-						<strong><?= htmlspecialchars($a['Persona']) ?></strong>
+						<?php if ((int)$a['MundaneId'] > 0): ?>
+						<strong><a href="<?= UIR ?>Player/profile/<?= (int)$a['MundaneId'] ?>" style="color:inherit;text-decoration:none"><?= htmlspecialchars($a['Persona']) ?></a></strong>
 						<?php if (!empty($a['GivenName']) || !empty($a['Surname'])): ?>
 							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($a['GivenName'] . ' ' . $a['Surname'])) ?></span>
 						<?php endif; ?>
 						<?php if (!empty($a['UserName'])): ?>
 							<div style="font-size:11px;color:var(--rp-text-hint)"><?= htmlspecialchars($a['UserName']) ?></div>
+						<?php endif; ?>
+						<?php else: ?>
+						<span style="color:var(--rp-text-hint);font-style:italic">(Vacant)</span>
 						<?php endif; ?>
 					</td>
 					<td><span class="ap-role ap-role-<?= htmlspecialchars($a['Role']) ?>"><?= htmlspecialchars(ucfirst($a['Role'])) ?></span></td>
@@ -425,7 +437,7 @@
 				<?php foreach ($parkAuthsByPark as $parkName => $entries): ?>
 				<tr class="ap-park-row">
 					<td colspan="5">
-						<a href="<?= UIR ?>Park/index/<?= (int)$entries[0]['ParkId'] ?>" style="color:var(--rp-text-muted);text-decoration:none;">
+						<a href="<?= UIR ?>Park/profile/<?= (int)$entries[0]['ParkId'] ?>" style="color:var(--rp-text-muted);text-decoration:none;">
 							<i class="fas fa-tree" style="margin-right:5px;opacity:.6"></i><?= htmlspecialchars($parkName) ?>
 						</a>
 					</td>
@@ -433,12 +445,16 @@
 				<?php foreach ($entries as $a): ?>
 				<tr id="ap-row-<?= (int)$a['AuthorizationId'] ?>">
 					<td>
-						<strong><?= htmlspecialchars($a['Persona']) ?></strong>
+						<?php if ((int)$a['MundaneId'] > 0): ?>
+						<strong><a href="<?= UIR ?>Player/profile/<?= (int)$a['MundaneId'] ?>" style="color:inherit;text-decoration:none"><?= htmlspecialchars($a['Persona']) ?></a></strong>
 						<?php if (!empty($a['GivenName']) || !empty($a['Surname'])): ?>
 							<span style="color:var(--rp-text-muted);font-size:12px"> — <?= htmlspecialchars(trim($a['GivenName'] . ' ' . $a['Surname'])) ?></span>
 						<?php endif; ?>
 						<?php if (!empty($a['UserName'])): ?>
 							<div style="font-size:11px;color:var(--rp-text-hint)"><?= htmlspecialchars($a['UserName']) ?></div>
+						<?php endif; ?>
+						<?php else: ?>
+						<span style="color:var(--rp-text-hint);font-style:italic">(Vacant)</span>
 						<?php endif; ?>
 					</td>
 					<td><span class="ap-role ap-role-<?= htmlspecialchars($a['Role']) ?>"><?= htmlspecialchars(ucfirst($a['Role'])) ?></span></td>

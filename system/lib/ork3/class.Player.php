@@ -227,6 +227,24 @@ class Player extends Ork3 {
 				return strtotime($a['DuesUntil']) - strtotime($b['DuesUntil']);
 			});
 			$old_dues_through = (!empty($dues)) ? $dues[sizeof($dues)-1]['DuesUntil']: '';
+			// Also fetch all non-revoked dues (including expired) to find the most recent expiry date
+			$all_dues = $this->GetDues(['MundaneId' => $this->mundane->mundane_id, 'ExcludeRevoked' => 1]);
+			usort($all_dues, function($a, $b) {
+				return strtotime($a['DuesUntil']) - strtotime($b['DuesUntil']);
+			});
+			$last_dues_through = (!empty($all_dues)) ? $all_dues[sizeof($all_dues)-1]['DuesUntil'] : '';
+			// Determine if player is new: fewer than 4 total credits AND at least one credit within the last 14 days
+			$mid = (int)$this->mundane->mundane_id;
+			$att_row = $this->db->query(
+				"SELECT SUM(credits) AS total_credits, SUM(CASE WHEN date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY) THEN credits ELSE 0 END) AS recent_credits" .
+				" FROM " . DB_PREFIX . "attendance WHERE mundane_id = $mid AND credits > 0"
+			);
+			$att_row->next();
+			$total_credits  = (float)($att_row->total_credits  ?? 0);
+			$recent_credits = (float)($att_row->recent_credits ?? 0);
+			$park_member_since = $this->mundane->park_member_since;
+			$is_new_player  = $total_credits < 4 && ($total_credits === 0.0 || $recent_credits > 0)
+				&& !empty($park_member_since) && strtotime($park_member_since) >= strtotime('-14 days');
 			$this->pronoun->clear();
 			$this->pronoun->pronoun_id = $this->mundane->pronoun_id;
 			$this->pronoun->find();
@@ -264,6 +282,7 @@ class Player extends Ork3 {
 					'CorporaQualified' => $this->mundane->corpora_qualified,
 					'CorporaQualifiedUntil' => $this->mundane->corpora_qualified_until,
 					'DuesThrough' => $old_dues_through, //Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->kingdom_id, $this->mundane->park_id, 0),
+				'LastDuesThrough' => $last_dues_through,
 					'HasHeraldry' => $this->mundane->has_heraldry,
 					'Heraldry' => $heraldry['Url'] . '?' . strtotime($this->mundane->modified),
 					'HasImage' => $this->mundane->has_image,
@@ -273,6 +292,7 @@ class Player extends Ork3 {
 					'PasswordExpires' => $this->mundane->password_expires,
 					//'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
 					'ParkMemberSince' => $this->mundane->park_member_since,
+					'IsNewPlayer' => $is_new_player,
 					'DuesPaidList' => $dues
 				);
 			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
