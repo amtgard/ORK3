@@ -167,6 +167,11 @@ if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
+			<div id="rp-classmasters-loading" style="text-align:center;padding:48px 32px;color:#a0aec0">
+				<i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:10px"></i>
+				Loading report&hellip;
+			</div>
+			<div id="rp-classmasters-table-wrap" style="opacity:0">
 			<table id="classmasters-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
@@ -201,6 +206,7 @@ if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 <?php endif; ?>
 				</tbody>
 			</table>
+			</div><!-- /rp-classmasters-table-wrap -->
 		</div><!-- /rp-table-area -->
 
 	</div><!-- /rp-body -->
@@ -246,7 +252,11 @@ $(function() {
 		?>,
 		fixedHeader : { headerOffset: 48 },
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedColumns: { left: 1 },
+		initComplete: function() {
+			$('#rp-classmasters-loading').hide();
+			$('#rp-classmasters-table-wrap').css('opacity', '1');
+		}
 	});
 
 	/* ── Class pill filter ──────────────────────────────── */

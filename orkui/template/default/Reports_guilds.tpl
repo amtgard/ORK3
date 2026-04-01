@@ -168,6 +168,11 @@ if (isset($this->__session->park_id) && !empty($Guilds)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
+			<div id="rp-guilds-loading" style="text-align:center;padding:48px 32px;color:#a0aec0">
+				<i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:10px"></i>
+				Loading report&hellip;
+			</div>
+			<div id="rp-guilds-table-wrap" style="opacity:0">
 			<table id="guilds-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
@@ -200,6 +205,7 @@ if (isset($this->__session->park_id) && !empty($Guilds)) {
 <?php endif; ?>
 				</tbody>
 			</table>
+			</div><!-- /rp-guilds-table-wrap -->
 		</div><!-- /rp-table-area -->
 
 	</div><!-- /rp-body -->
@@ -235,7 +241,11 @@ $(function() {
 		order: [[0, 'asc'], [attendanceCol, 'desc']],
 		fixedHeader : { headerOffset: 48 },
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedColumns: { left: 1 },
+		initComplete: function() {
+			$('#rp-guilds-loading').hide();
+			$('#rp-guilds-table-wrap').css('opacity', '1');
+		}
 	});
 
 	/* ── Guild pill filter ──────────────────────────────── */

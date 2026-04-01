@@ -151,6 +151,11 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 		<!-- Table area -->
 		<div class="rp-table-area">
+			<div id="rp-customawards-loading" style="text-align:center;padding:48px 32px;color:#a0aec0">
+				<i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:10px"></i>
+				Loading report&hellip;
+			</div>
+			<div id="rp-customawards-table-wrap" style="opacity:0">
 			<table id="customawards-report-table" class="display" style="width:100%">
 				<thead>
 					<tr>
@@ -183,6 +188,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <?php endif; ?>
 				</tbody>
 			</table>
+			</div><!-- /rp-customawards-table-wrap -->
 		</div><!-- /rp-table-area -->
 
 	</div><!-- /rp-body -->
@@ -225,7 +231,11 @@ $(function() {
 		fixedHeader : { headerOffset: 48 },
 		responsive  : true,
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedColumns: { left: 1 },
+		initComplete: function() {
+			$('#rp-customawards-loading').hide();
+			$('#rp-customawards-table-wrap').css('opacity', '1');
+		}
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });

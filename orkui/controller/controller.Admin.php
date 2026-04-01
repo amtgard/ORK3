@@ -4,7 +4,8 @@ class Controller_Admin extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
-		if (!isset($this->session->user_id)) {
+		$_publicMethods = array('topparks');
+		if (!isset($this->session->user_id) && !in_array($call, $_publicMethods)) {
 			error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
 			header( 'Location: '.UIR."Login" );
 		} else {
@@ -1889,7 +1890,15 @@ class Controller_Admin extends Controller {
 		}
 	}
 
-	public function kingdom($id) {
+	public function kingdom($id = null) {
+		if (empty($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/kingdom/' . (int)$id);
+			exit;
+		}
+		if (!valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->kingdom_route($id);
 		$r = $this->Kingdom->get_kingdom_details($id);
 		foreach ($r as $key => $detail) {
@@ -1901,7 +1910,15 @@ class Controller_Admin extends Controller {
 		$this->data['park_summary'] = $r;
 	}
 
-	public function park($id) {
+	public function park($id = null) {
+		if (empty($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/park/' . (int)$id);
+			exit;
+		}
+		if (!valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->park_route($id);
 		$r = $this->Park->get_park_info($id);
 		foreach ($r as $key => $detail) {
@@ -1962,7 +1979,11 @@ class Controller_Admin extends Controller {
 
 		if (!isset($this->session->user_id)) {
 			header('Location: ' . UIR . "Login/login/Admin/resetwaivers/$type/$id");
-			return;
+			exit;
+		}
+		if (!in_array($type, array('kingdom', 'park')) || !valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
 		}
 
 		$request = array('Token' => $this->session->token);

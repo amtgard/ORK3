@@ -64,6 +64,12 @@ class Controller_Reports extends Controller {
 	}
 
 	function playerheraldry($kingdom_id=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && !valid_id($kingdom_id) && !valid_id($this->request->ParkId)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_PLAYER_DEFAULT;
 		$this->data['HeraldryType'] = 'Mundane';
@@ -86,6 +92,12 @@ class Controller_Reports extends Controller {
 	}
 
 	function eventheraldry($kingdom_id=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && !valid_id($kingdom_id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_EVENT_DEFAULT;
 		$this->data['HeraldryType'] = 'Event';
@@ -97,6 +109,12 @@ class Controller_Reports extends Controller {
 	}
 
 	public function guilds($param=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!isset($this->request->KingdomId) && !isset($this->request->ParkId))) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;
@@ -150,6 +168,12 @@ class Controller_Reports extends Controller {
 	}
 
 	public function player_award_recommendations($params=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;
@@ -260,6 +284,12 @@ class Controller_Reports extends Controller {
     }
 
 	public function active($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
         $kingdom_config = $this->kingdom_config($type);
 		$this->data['page_title'] ="Active Player Roster";
         $this->data['active_players'] = $this->Reports->active_players(
@@ -304,6 +334,12 @@ class Controller_Reports extends Controller {
 	}
 
     public function masters($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
         $this->_peerage_waivered_duespaid('Master', $type, true, null);
     	$this->template = 'Reports_masters.tpl';
 		$this->data['page_title'] ="Active Masters";
@@ -335,6 +371,12 @@ class Controller_Reports extends Controller {
     }
 
 	public function roster($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
 		$this->data['page_title'] = "Player Roster";
 		$_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
@@ -380,6 +422,12 @@ class Controller_Reports extends Controller {
 	}
 
 	public function inactive($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->template = 'Reports_inactive.tpl';
 		$this->data['roster']     = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 0);
 		$this->data['ScopeType']  = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
@@ -388,12 +436,24 @@ class Controller_Reports extends Controller {
 	}
 
 	public function waivered($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->template = 'Reports_roster.tpl';
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 1);
 		$this->data['page_title'] ="Waivered Player Roster";
 	}
 
 	public function unwaivered($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->template = 'Reports_roster.tpl';
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, 0);
 		$this->data['page_title'] ="Unwaivered Player Roster";
@@ -401,6 +461,10 @@ class Controller_Reports extends Controller {
 
 	/* Old broken dues functionality */
 	public function duespaid($type=null) {
+		if (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_duespaid'] = 1;
 		$this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 1, 0, 2);
@@ -408,6 +472,10 @@ class Controller_Reports extends Controller {
 
 	/* New Cooler Dues functionality */
 	public function dues($type=null) {
+		if (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		// TODO: totally dupe and change up this template
 		$this->template = 'Reports_dues.tpl';
 		$this->data['roster'] = $this->Reports->dues_paid_list($type, $this->request->id);
@@ -516,6 +584,10 @@ class Controller_Reports extends Controller {
 	}
 
 	public function new_player_attendance($params = null) {
+		if (empty($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Reports/new_player_attendance');
+			exit;
+		}
 		$this->template = 'Reports_newplayerattendance.tpl';
 		$this->data['page_title'] = "New Player Attendance";
 
@@ -566,6 +638,10 @@ class Controller_Reports extends Controller {
 	}
 
 	public function park_attendance_explorer($params = null) {
+		if (empty($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Reports/park_attendance_explorer');
+			exit;
+		}
 		$this->template = 'Reports_parkattendanceexplorer.tpl';
 		$this->data['page_title'] = "Park Attendance Explorer";
 
@@ -712,8 +788,8 @@ class Controller_Reports extends Controller {
 		$id    = isset($parts[1]) ? (int)$parts[1] : 0;
 
 		if (!in_array($type, array('Kingdom', 'Park')) || !valid_id($id)) {
-			$this->data['error'] = 'Invalid scope or ID.';
-			return;
+			header('Location: ' . UIR);
+			exit;
 		}
 
 		$this->data['report_type'] = $type;
@@ -770,6 +846,11 @@ class Controller_Reports extends Controller {
 
 
 	public function ladder_grid($params = null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if (!isset($this->request->KingdomId) && !isset($this->request->ParkId)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		global $DB;
 
 		$kingdom_id = 0;
