@@ -43,6 +43,11 @@ class Controller_Player extends Controller {
 	}
 
 	public function index($id = null) {
+		if (!valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
 		$this->load_model('Unit');
 		$this->load_model('Event');
 		
