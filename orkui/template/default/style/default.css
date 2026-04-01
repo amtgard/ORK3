@@ -551,16 +551,6 @@ a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-cont
 
 
 @media (max-width: 425px) {
-	#simple-menu {
-		display: inline-block;
-		position: fixed;
-		right: 8px;
-		top: 0px;
-		line-height: 30px;
-	}
-	#newmenu {
-		display: none;	
-	}
   #sidr input {
 		border-width: 0 0 1px 0;
 		border-color: #eee;
@@ -629,3 +619,18 @@ table.tablesorter tbody tr.normal-row td {
 	background: #eee;
 	color: #000;
   }
+
+/* === iOS Input Auto-Zoom Prevention === */
+@media (max-width: 768px) {
+    .form-container input[type="text"],
+    .form-container input[type="password"],
+    .form-container input[type="email"],
+    .form-container input[type="search"],
+    .form-container select,
+    .form-container textarea {
+        font-size: 16px;
+    }
+    .nav-search-input {
+        font-size: 16px;
+    }
+}

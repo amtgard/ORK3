@@ -911,6 +911,10 @@
 	background: #fff;
 	transition: border-color 0.15s;
 }
+.pn-acct-field select {
+	appearance: none;
+	-webkit-appearance: none;
+}
 .pn-acct-field input:focus,
 .pn-acct-field select:focus {
 	outline: none;
@@ -1211,6 +1215,8 @@
 	padding: 3px 6px;
 	font-size: 13px;
 	outline: none;
+	appearance: none;
+	-webkit-appearance: none;
 }
 .pn-pagesize-select:focus { border-color: #90cdf4; }
 /* Award search bar */
@@ -2073,7 +2079,7 @@
 	.kn-map-directions-wrap { width: 100%; }
 	.kn-map-sidebar-wrap { width: 100%; }
 	.kn-map-sidebar-card { height: auto; min-height: 120px; }
-	#kn-map { height: 320px; }
+	#kn-map { height: min(320px, 50svh); }
 	#kn-map-directions { max-height: 200px; }
 }
 
@@ -2241,7 +2247,7 @@
 /* Reuse modal structure for kn- award modal */
 #kn-award-overlay, #kn-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-award-overlay.kn-open, #kn-rec-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #kn-award-overlay .kn-modal-header, #kn-rec-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
 #kn-award-overlay .kn-modal-title, #kn-rec-overlay .kn-modal-title { font-size:16px; font-weight:700; color:#1a202c; margin:0; }
 #kn-award-overlay .kn-modal-close-btn, #kn-rec-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; line-height:1; padding:0 4px; }
@@ -2259,6 +2265,8 @@
 #kn-rec-overlay .pk-acct-field input[type=date],
 #kn-rec-overlay .pk-acct-field select,
 #kn-rec-overlay .pk-acct-field textarea { width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box; }
+#kn-award-overlay .kn-acct-field select,
+#kn-rec-overlay .pk-acct-field select { appearance:none; -webkit-appearance:none; }
 #kn-award-overlay .kn-acct-field input:focus,
 #kn-award-overlay .kn-acct-field select:focus,
 #kn-award-overlay .kn-acct-field textarea:focus,
@@ -3225,7 +3233,7 @@
 /* Reuse pn- overlay/modal styles for pk- award modal */
 #pk-award-overlay, #pk-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-award-overlay.pk-open, #pk-rec-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #pk-award-overlay .pk-modal-header, #pk-rec-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
 /* Reset global h1-h6 box styles for all pk modal titles */
 .pk-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
@@ -5640,6 +5648,45 @@ table.dataTable.pk-recs-table tbody tr.even:hover,
 table.dataTable.adm-table tbody tr.odd:hover,
 table.dataTable.adm-table tbody tr.even:hover {
 	background-color: #edf2f7;
+}
+
+/* === iOS Input Auto-Zoom Prevention (Revised Frontend) === */
+@media (max-width: 768px) {
+    .kn-player-search-input,
+    .pk-player-search-input,
+    .pn-award-search-input,
+    .kn-emod-input,
+    .pk-emod-input,
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+    .pn-pagesize-select,
+    .kn-pagesize-select,
+    .pk-pagesize-select {
+        font-size: 16px !important;
+    }
+}
+
+/* === Touch Device: Always-Visible Hover-Only Buttons === */
+@media (hover: none), (pointer: coarse) {
+    .pn-img-edit-btn { opacity: 1; }
+    .pn-unit-quit-cell { opacity: 1; }
+    .kn-heraldry-edit-btn { opacity: 1; }
+    .pk-heraldry-edit-btn { opacity: 1; }
+}
+
+/* === Park Profile: 425px Hero Breakpoint === */
+@media (max-width: 425px) {
+    .pk-hero-content { flex-direction: column; text-align: center; padding: 16px; }
+    .pk-heraldry-frame { width: 80px; height: 80px; }
 }
 
 /* === Accessibility: Reduced Motion === */

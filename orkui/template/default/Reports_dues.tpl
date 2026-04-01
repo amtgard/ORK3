@@ -43,8 +43,7 @@ if (isset($this->__session->park_id) && !empty($players)) {
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
+
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
 
 <div class="rp-root">
@@ -141,7 +140,7 @@ if (isset($this->__session->park_id) && !empty($players)) {
 <?php endif; ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Waivered</span>
-						<span class="rp-col-guide-desc">Whether a signed waiver is on file.</span>
+						<span class="rp-col-guide-desc">Whether a signed waiver is on file. <span style="color:#744210;background:#fffbeb;border-radius:3px;padding:1px 5px;font-size:0.85em;">Unwaivered players are marked in yellow.</span></span>
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Suspended</span>
@@ -215,8 +214,7 @@ if (isset($this->__session->park_id) && !empty($players)) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+
 
 <script>
 $(function() {
@@ -238,15 +236,10 @@ $(function() {
 			{ extend: 'csv',   filename: 'Dues Paid List', exportOptions: { columns: ':visible' } },
 			{ extend: 'print', exportOptions: { columns: ':visible' } }
 		],
-		columnDefs: [
-			{ targets: [0], responsivePriority: 1 }
-		],
 		pageLength: 25,
 		order: [[0, 'asc'], [1, 'asc'], [2, 'asc']],
-		fixedHeader : { headerOffset: 48 },
-		responsive  : true,
-		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedHeader: { headerOffset: document.getElementById('newmenu') ? document.getElementById('newmenu').offsetHeight : 0 },
+		autoWidth: true
 	});
 
 	/* ── Filter pill toggles ─────────────────────────────── */

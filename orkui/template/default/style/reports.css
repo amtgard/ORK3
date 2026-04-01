@@ -338,6 +338,7 @@
 	border-radius: 8px;
 	padding     : 14px 16px;
 	box-shadow  : 0 1px 3px rgba(0,0,0,0.04);
+	overflow-x  : auto;
 }
 
 /* DataTables toolbar row */
@@ -580,4 +581,11 @@
 	.rp-stat-card {
 		flex    : 1 1 calc(50% - 7px);
 	}
+}
+
+@media (max-width: 768px) {
+    .rp-table-area .dataTables_wrapper .dataTables_filter input,
+    .rp-table-area .dataTables_wrapper .dataTables_length select {
+        font-size: 16px;
+    }
 }

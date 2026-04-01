@@ -847,7 +847,7 @@ var KnConfig = {
 </script>
 <?php if ($IsLoggedIn): ?>
 <div id="kn-award-overlay">
-	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
+	<div class="kn-modal-box">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title" id="kn-award-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award</h3>
 			<button class="kn-modal-close-btn" id="kn-award-close-btn" aria-label="Close">&times;</button>
@@ -960,7 +960,7 @@ var KnConfig = {
 
 <!-- Recommend Award Modal -->
 <div id="kn-rec-overlay">
-	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
+	<div class="kn-modal-box">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title"><i class="fas fa-star" style="margin-right:8px;color:#d69e2e"></i>Make a Recommendation</h3>
 			<button class="kn-modal-close-btn" id="kn-rec-close-btn" aria-label="Close">&times;</button>
