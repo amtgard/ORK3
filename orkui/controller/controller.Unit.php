@@ -163,7 +163,7 @@ class Controller_Unit extends Controller {
 					header('Location: ' . UIR . "Unit/index/$unit_id");
 					exit;
 				} else {
-					$this->data['SaveError'] = $r['Error'] . ': ' . $r['Detail'];
+					$this->data['SaveError'] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
 				}
 			}
 		}
@@ -194,19 +194,24 @@ class Controller_Unit extends Controller {
 			$unit_list_url = UIR . ($this->session->unit_list_ref ?: 'Unit/unitlist');
 			$this->data['menu']['units'] = array( 'url' => $unit_list_url, 'display' => 'Units' );
 		}
-		$this->data['menu']['unit']  = array( 'url' => UIR."Unit/index/$unit_id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] );
+		$this->data['menu']['unit']  = array( 'url' => UIR."Unit/index/$unit_id", 'display' => $this->data['Unit']['Details']['Unit']['Name'] ?? 'Unit' );
 	}
 	
 	public function create($mundane_id) {
+		$mundane_id = (int)$mundane_id;
 		if (trimlen($this->request->Action) > 0) {
 			$this->request->save('Unit_create', true);
 			if (!isset($this->session->user_id)) {
 				header( 'Location: '.UIR.'Login/login/Unit/create/' . $mundane_id );
+				exit;
 			} else {
-				if ($_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
+				$h_imdata = null;
+				$heraldry_mime = '';
+				if (isset($_FILES['Heraldry']) && $_FILES['Heraldry']['size'] > 0 && Common::supported_mime_types($_FILES['Heraldry']['type'])) {
+					$heraldry_mime = $_FILES['Heraldry']['type'];
 					if (move_uploaded_file($_FILES['Heraldry']['tmp_name'], DIR_TMP . sprintf("um_%05d", $mundane_id))) {
 						$h_im = file_get_contents(DIR_TMP . sprintf("um_%05d", $mundane_id));
-						$h_imdata = base64_encode($h_im); 
+						$h_imdata = base64_encode($h_im);
 					} else {
 						$Status = array(
 							'Status' => 1000,
@@ -217,7 +222,7 @@ class Controller_Unit extends Controller {
 				}
 				$r = $this->Unit->create_unit(array(
 						'Heraldry' => $h_imdata,
-						'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+						'HeraldryMimeType' => $heraldry_mime,
 						'Name' => $this->request->Unit_create->Name,
 						'Type' => $this->request->Unit_create->Type,
 						'Description' => $this->request->Unit_create->Description,
