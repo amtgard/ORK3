@@ -407,6 +407,17 @@
 				<?php endif; ?>
 			</div>
 
+			<style>
+			.kn-sub-pop-title{font-weight:700;color:#2d3748;margin-bottom:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+			.kn-sub-pop-row{display:flex;gap:4px;margin-bottom:8px}
+			.kn-sub-url-input{flex:1;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;color:#4a5568;background:#f7fafc;min-width:0}
+			.kn-sub-copy-btn{padding:4px 8px;border:1px solid #e2e8f0;border-radius:4px;background:#edf2f7;cursor:pointer;color:#4a5568;font-size:12px}
+			.kn-sub-copy-btn:hover{background:#e2e8f0}
+			.kn-sub-gcal-btn{display:block;text-align:center;background:#4285f4;color:#fff;border-radius:5px;padding:7px 10px;font-size:12px;font-weight:600;text-decoration:none;margin-bottom:2px}
+			.kn-sub-gcal-btn:hover{background:#3367d6;color:#fff}
+			.kn-sub-webcal-btn{display:block;margin-top:6px;font-size:11px;color:#718096;text-align:center;text-decoration:none}
+			.kn-sub-webcal-btn:hover{color:#4a5568}
+			</style>
 			<!-- Events Tab -->
 			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -422,7 +433,7 @@
 						</div>
 						<div class="kn-sub-wrap" id="kn-sub-wrap" style="position:relative">
 							<button class="kn-view-btn" id="kn-sub-btn" title="Subscribe to calendar"
-								onclick="(function(btn){var p=document.getElementById('kn-sub-pop');var r=btn.getBoundingClientRect();p.style.top=(r.bottom+6)+'px';p.style.right=(window.innerWidth-r.right)+'px';p.style.display=p.style.display==='none'?'block':'none';event.stopPropagation();})(this)">
+								onclick="(function(btn){var p=document.getElementById('kn-sub-pop');var r=btn.getBoundingClientRect();p.style.top=(r.bottom+6)+'px';p.style.right=(window.innerWidth-r.right)+'px';var show=p.style.display==='none';p.style.setProperty('display',show?'block':'none','important');event.stopPropagation();})(this)">
 								<i class="fas fa-rss"></i>
 							</button>
 							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px">
@@ -2025,7 +2036,7 @@ var KnConfig = {
 		var wrap = document.getElementById('kn-sub-wrap');
 		if (wrap && !wrap.contains(e.target)) {
 			var pop = document.getElementById('kn-sub-pop');
-			if (pop) pop.style.display = 'none';
+			if (pop) pop.style.setProperty('display', 'none', 'important');
 		}
 	});
 
