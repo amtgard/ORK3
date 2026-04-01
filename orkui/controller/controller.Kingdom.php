@@ -532,7 +532,8 @@ class Controller_Kingdom extends Controller {
 		$lines[] = self::ics_fold('X-WR-CALNAME:' . self::ics_escape($knName) . ' Events');
 
 		if ($result) {
-			while ($result->Next()) {
+			do {
+				if ((int)$result->event_calendardetail_id === 0) continue;
 				$dtstart = self::ics_dt($result->event_start);
 				$rawEnd  = $result->event_end;
 				$dtend   = (!empty($rawEnd) && $rawEnd !== '0000-00-00 00:00:00')
@@ -559,7 +560,7 @@ class Controller_Kingdom extends Controller {
 					$lines[] = self::ics_fold('URL:' . self::ics_escape(preg_replace('/[\r\n]/', '', $result->url)));
 				}
 				$lines[] = 'END:VEVENT';
-			}
+			} while ($result->Next());
 		}
 
 		$lines[] = 'END:VCALENDAR';

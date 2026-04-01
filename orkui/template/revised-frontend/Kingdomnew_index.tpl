@@ -422,10 +422,10 @@
 						</div>
 						<div class="kn-sub-wrap" id="kn-sub-wrap" style="position:relative">
 							<button class="kn-view-btn" id="kn-sub-btn" title="Subscribe to calendar"
-								onclick="var p=document.getElementById('kn-sub-pop');p.classList.toggle('kn-sub-open');event.stopPropagation();">
+								onclick="(function(btn){var p=document.getElementById('kn-sub-pop');var r=btn.getBoundingClientRect();p.style.top=(r.bottom+6)+'px';p.style.right=(window.innerWidth-r.right)+'px';p.style.display=p.style.display==='none'?'block':'none';event.stopPropagation();})(this)">
 								<i class="fas fa-rss"></i>
 							</button>
-							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:500;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px">
+							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px">
 								<div class="kn-sub-pop-title"><i class="fas fa-calendar-check" style="margin-right:5px"></i>Subscribe to Events</div>
 								<div class="kn-sub-pop-row">
 									<input class="kn-sub-url-input" id="kn-sub-url-input" type="text"
@@ -1621,7 +1621,7 @@ var KnConfig = {
 /* Subscribe popover */
 .kn-sub-wrap { position:relative; }
 .kn-sub-pop {
-	display:none !important; position:absolute; top:calc(100% + 6px); right:0; z-index:200;
+	display:none !important; position:fixed; z-index:9000;
 	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
 	box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:12px 14px; width:280px; font-size:13px;
 }
@@ -2007,7 +2007,7 @@ var KnConfig = {
 		}
 	});
 
-	function knCopyIcsUrl() {
+	window.knCopyIcsUrl = function() {
 		var inp = document.getElementById('kn-sub-url-input');
 		if (!inp) return;
 		inp.select();
@@ -2025,7 +2025,7 @@ var KnConfig = {
 		var wrap = document.getElementById('kn-sub-wrap');
 		if (wrap && !wrap.contains(e.target)) {
 			var pop = document.getElementById('kn-sub-pop');
-			if (pop) pop.classList.remove('kn-sub-open');
+			if (pop) pop.style.display = 'none';
 		}
 	});
 
