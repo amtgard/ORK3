@@ -27,11 +27,24 @@
 		<div id='downtime-banner' style="position:fixed;top:0;left:0;right:0;z-index:1000001;background:#b91c1c;color:#fff;text-align:center;padding:8px 16px;font-size:0.9rem;font-weight:600;letter-spacing:0.01em;">
 			&#9888; <strong>ORK Server Downtime Thursday, April 2nd, 6pm Eastern</strong> until the ORK 3.5 (Dragon) upgrade is complete
 		</div>
-		<style>
-			#newmenu { top: 37px !important; }
-			#theme_container { margin-top: 77px !important; }
-			@media (max-width: 767px) { #theme_container { margin-top: 67px !important; } }
-		</style>
+		<script>
+			function applyBannerOffset() {
+				var banner    = document.getElementById('downtime-banner');
+				var nav       = document.getElementById('newmenu');
+				var mobileBtn = document.getElementById('simple-menu');
+				var container = document.getElementById('theme_container');
+				if (!banner) return;
+				var bh = banner.offsetHeight;
+				if (nav)       nav.style.setProperty('top', bh + 'px', 'important');
+				if (mobileBtn) mobileBtn.style.setProperty('top', bh + 'px', 'important');
+				// Content must clear the banner plus whichever nav is visible below it
+				var navH = (nav && nav.offsetHeight && getComputedStyle(nav).display !== 'none') ? nav.offsetHeight : 0;
+				var btnH = (mobileBtn && getComputedStyle(mobileBtn).display !== 'none') ? mobileBtn.offsetHeight : 0;
+				if (container) container.style.setProperty('margin-top', (bh + Math.max(navH, btnH)) + 'px', 'important');
+			}
+			document.addEventListener('DOMContentLoaded', applyBannerOffset);
+			window.addEventListener('resize', applyBannerOffset);
+		</script>
 		<div id='theme_container'>
 
 <?php
