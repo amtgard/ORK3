@@ -1742,6 +1742,8 @@ class Report  extends Ork3 {
 
 		$r = $this->db->query($sql);
 		$response = array('Status' => Success(), 'Attendance' => array());
+		$kingdom_unique_players = 0;
+		$kingdom_unique_members = 0;
 		if ($r !== false && $r->size() > 0) {
 			do {
 				$response['Attendance'][] = array(
@@ -1755,6 +1757,26 @@ class Report  extends Ork3 {
 					'MonthsInPeriod' => $r->months_in_period
 				);
 			} while ($r->next());
+		}
+
+		// Kingdom-wide unique counts — dedicated query to avoid double-counting cross-park visitors
+		$sql_kw = "SELECT
+					COUNT(DISTINCT a2.mundane_id) as kingdom_unique_players,
+					COUNT(DISTINCT CASE WHEN m2.park_id = a2.park_id THEN a2.mundane_id END) as kingdom_unique_members
+				FROM " . DB_PREFIX . "attendance a2
+					INNER JOIN " . DB_PREFIX . "park p2 ON a2.park_id = p2.park_id
+					LEFT JOIN " . DB_PREFIX . "mundane m2 ON a2.mundane_id = m2.mundane_id
+				WHERE a2.kingdom_id = '$kingdom_id'
+					AND a2.date >= '$start_date'
+					AND a2.date <= '$end_date'
+					AND a2.park_id > 0
+					AND p2.active = 'Active'";
+
+		$r_kw = $this->db->query($sql_kw);
+		if ($r_kw !== false) {
+			$r_kw->next(); // DataSet() pre-fetches, but guard against edge cases where it doesn't
+			$kingdom_unique_players = (int)($r_kw->kingdom_unique_players ?? 0);
+			$kingdom_unique_members = (int)($r_kw->kingdom_unique_members ?? 0);
 		}
 
 		// Second query: count of park members with 2+/3+/4+ sign-ins per park per period
@@ -1800,25 +1822,11 @@ class Report  extends Ork3 {
 		}
 		unset($row);
 
-		// Summary query: kingdom-wide distinct player/member counts (avoids per-park summation double-counting visitors)
-		$sql_summary = "SELECT
-					COUNT(DISTINCT a.mundane_id) as unique_players,
-					COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END) as unique_members
-				FROM " . DB_PREFIX . "attendance a
-					INNER JOIN " . DB_PREFIX . "park p ON a.park_id = p.park_id
-					LEFT JOIN " . DB_PREFIX . "mundane m ON a.mundane_id = m.mundane_id
-				WHERE a.kingdom_id = '$kingdom_id'
-					AND a.date >= '$start_date'
-					AND a.date <= '$end_date'
-					AND a.park_id > 0
-					AND p.active = 'Active'";
-
-		$r_summary = $this->db->query($sql_summary);
-		$response['Summary'] = array('UniquePlayers' => 0, 'UniqueMembers' => 0);
-		if ($r_summary !== false && $r_summary->size() > 0) {
-			$response['Summary']['UniquePlayers'] = (int)$r_summary->unique_players;
-			$response['Summary']['UniqueMembers'] = (int)$r_summary->unique_members;
-		}
+		// Kingdom-wide unique counts from dedicated query
+		$response['Summary'] = array(
+			'UniquePlayers' => $kingdom_unique_players,
+			'UniqueMembers' => $kingdom_unique_members,
+		);
 
 		logtrace("Report->ParkAttendanceAllParks()", array($this->db->lastSql, $request));
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cache_key, $response);

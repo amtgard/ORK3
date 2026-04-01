@@ -1954,7 +1954,7 @@ class Controller_Admin extends Controller {
 		$limit = intval($limit) > 0 ? intval($limit) : 25;
 		$start_date = isset($this->request->StartDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->StartDate)
 			? $this->request->StartDate
-			: date("Y-m-d", strtotime("-12 month"));
+			: date("Y-m-d", strtotime("-6 month"));
 		$end_date = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
 			? $this->request->EndDate
 			: date("Y-m-d");

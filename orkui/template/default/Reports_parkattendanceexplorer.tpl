@@ -333,7 +333,7 @@ $(function() {
 			{ extend: 'print', exportOptions: { columns: ':visible' } }
 		],
 		columnDefs: [
-			{ targets: spNumericCols, type: 'num', className: 'dt-right' },
+			{ targets: spNumericCols, type: 'num', className: 'dt-center' },
 			{ targets: [0], responsivePriority: 1 }
 		],
 		pageLength: 25,
@@ -364,4 +364,6 @@ $(function() {
 .rp-section-heading { font-size: 1rem; font-weight: 700; color: var(--rp-text); margin: 0 0 12px; padding: 0; background: none; border: none; }
 .rp-empty-state   { color: var(--rp-text-muted); font-style: italic; padding: 24px 0; text-align: center; }
 .rp-row-summary td { background-color: #f7fafc !important; font-weight: 600; border-top: 2px solid var(--rp-border) !important; }
+#explorer-singlepark-table th:nth-child(n+4),
+#explorer-singlepark-table td:nth-child(n+4) { text-align: center !important; }
 </style>
