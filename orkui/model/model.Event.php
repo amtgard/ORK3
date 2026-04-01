@@ -24,13 +24,24 @@ class Model_Event extends Model {
 		$r = $this->Event->GetEvent(array('EventId'=>$event_id));
 		if ($r['Status']['Status'] == 0) {
 			$ret = $r;
-			$r = $this->Event->GetEventDetails(array('EventId'=>$event_id));
-			$ret['CalendarEventDetails'] = $r['CalendarEventDetails'];
-			$r = $this->Search->Search_Event(null, null, null, null, null, 1, $event_id);
-			$ret['EventInfo'] = $r;
-			$event = $this->Event->GetEvent(array('EventId'=>$event_id));
-			$ret['HeraldryUrl'] = $event['HeraldryUrl'];
-			$ret['HasHeraldry'] = $event['HasHeraldry'];
+
+			$detailsResult = $this->Event->GetEventDetails(array('EventId'=>$event_id));
+			if (isset($detailsResult['Status']['Status']) && $detailsResult['Status']['Status'] == 0) {
+				$ret['CalendarEventDetails'] = $detailsResult['CalendarEventDetails'];
+			} else {
+				$ret['CalendarEventDetails'] = array();
+			}
+
+			$searchResult = $this->Search->Search_Event(null, null, null, null, null, 1, $event_id);
+			if (is_array($searchResult)) {
+				$ret['EventInfo'] = $searchResult;
+			} else {
+				$ret['EventInfo'] = array();
+			}
+
+			// Reuse the first GetEvent() result ($r) instead of calling GetEvent() again
+			$ret['HeraldryUrl'] = $r['HeraldryUrl'] ?? '';
+			$ret['HasHeraldry'] = $r['HasHeraldry'] ?? false;
 			
 			return $ret;
 		} else {
@@ -68,21 +79,28 @@ class Model_Event extends Model {
 		global $DB;
 		$status = in_array($status, ['going', 'interested']) ? $status : 'going';
 		$DB->Clear();
+		$DB->Execute('START TRANSACTION');
 		$existing = $DB->DataSet("SELECT rsvp_id, status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " AND mundane_id = " . (int)$mundane_id . " LIMIT 1");
 		if ($existing && $existing->Next()) {
 			if ($existing->status === $status) {
 				// Same status — toggle off
 				$DB->Clear();
-				$DB->Execute("DELETE FROM " . DB_PREFIX . "event_rsvp WHERE rsvp_id = " . (int)$existing->rsvp_id);
+				$ok = $DB->Execute("DELETE FROM " . DB_PREFIX . "event_rsvp WHERE rsvp_id = " . (int)$existing->rsvp_id);
+				if ($ok === false) { $DB->Execute('ROLLBACK'); return false; }
+				$DB->Execute('COMMIT');
 				return false;
 			}
 			// Different status — update
 			$DB->Clear();
-			$DB->Execute("UPDATE " . DB_PREFIX . "event_rsvp SET status = '" . $status . "', modified = NOW() WHERE rsvp_id = " . (int)$existing->rsvp_id);
+			$ok = $DB->Execute("UPDATE " . DB_PREFIX . "event_rsvp SET status = '" . $status . "', modified = NOW() WHERE rsvp_id = " . (int)$existing->rsvp_id);
+			if ($ok === false) { $DB->Execute('ROLLBACK'); return false; }
+			$DB->Execute('COMMIT');
 			return $status;
 		}
 		$DB->Clear();
-		$DB->Execute("INSERT INTO " . DB_PREFIX . "event_rsvp (event_calendardetail_id, mundane_id, status) VALUES (" . (int)$detail_id . ", " . (int)$mundane_id . ", '" . $status . "')");
+		$ok = $DB->Execute("INSERT INTO " . DB_PREFIX . "event_rsvp (event_calendardetail_id, mundane_id, status) VALUES (" . (int)$detail_id . ", " . (int)$mundane_id . ", '" . $status . "')");
+		if ($ok === false) { $DB->Execute('ROLLBACK'); return false; }
+		$DB->Execute('COMMIT');
 		return $status;
 	}
 

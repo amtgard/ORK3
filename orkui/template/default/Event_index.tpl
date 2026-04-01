@@ -61,11 +61,19 @@
 				<td><?=$detail['UrlName'] ?> <a href='<?=$detail['Url'] ?>'>[ Link ]</a></td>
 				<td>
 					<?php
-					$location = json_decode(stripslashes($detail['Location']));
-					$location = ((isset($location->location))?$location->location:$location->bounds->northeast);
-					$address = json_decode($detail['Geocode'], true);
+					$_loc_raw = json_decode(stripslashes($detail['Location']));
+					$_loc = null;
+					if ($_loc_raw) {
+						$_loc = isset($_loc_raw->location) ? $_loc_raw->location : (isset($_loc_raw->bounds, $_loc_raw->bounds->northeast) ? $_loc_raw->bounds->northeast : null);
+					}
+					$_address = json_decode($detail['Geocode'], true);
+					$_fmt_addr = isset($_address['results'][0]['formatted_address']) ? $_address['results'][0]['formatted_address'] : '';
 					?>
-					<a target='_new' href="http://maps.google.com/maps?q=@<?= $location->lat . ',' . $location->lng ?>"><?=$address['results'][0]['formatted_address']; ?></a>
+					<?php if ($_loc && $_fmt_addr) : ?>
+					<a target='_new' href="http://maps.google.com/maps?q=@<?= $_loc->lat . ',' . $_loc->lng ?>"><?= htmlspecialchars($_fmt_addr) ?></a>
+					<?php elseif ($_fmt_addr) : ?>
+					<?= htmlspecialchars($_fmt_addr) ?>
+					<?php endif; ?>
 				</td>
 				<td>
 			<?php if (trimlen($detail['MapUrlName']) > 0) : ?>

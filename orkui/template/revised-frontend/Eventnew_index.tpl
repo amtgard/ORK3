@@ -409,7 +409,7 @@
 	<div class="ev-main">
 
 		<?php if (!empty($Error)): ?>
-		<div class="ev-error"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i><?= $Error ?></div>
+		<div class="ev-error"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i><?= htmlspecialchars($Error ?? '') ?></div>
 		<?php endif; ?>
 
 		<div class="ev-tabs">

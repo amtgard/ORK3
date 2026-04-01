@@ -44,7 +44,13 @@ class Controller_Event extends Controller {
 
 		if ($uid > 0 && isset($this->request->rsvp_detail_id)) {
 			$detail_id = (int)$this->request->rsvp_detail_id;
-			$this->Event->toggle_rsvp($detail_id, $uid);
+			// Ownership check: verify this detail belongs to the current event
+			global $DB;
+			$DB->Clear();
+			$ownerCheck = $DB->DataSet("SELECT event_id FROM " . DB_PREFIX . "event_calendardetail WHERE event_calendardetail_id = " . $detail_id . " AND event_id = " . (int)$event_id . " LIMIT 1");
+			if ($ownerCheck && $ownerCheck->Size() > 0 && $ownerCheck->Next()) {
+				$this->Event->toggle_rsvp($detail_id, $uid);
+			}
 			header('Location: ' . UIR . 'Event/index/' . $event_id);
 			return;
 		}
@@ -54,13 +60,41 @@ class Controller_Event extends Controller {
 		$this->data['CanManageEvent'] = $can_manage;
 
 		$rsvp_data = [];
-		foreach ($this->data['EventDetails']['CalendarEventDetails'] ?? [] as $detail) {
-			$detail_id = $detail['EventCalendarDetailId'];
-			$rsvp_data[$detail_id] = [
-				'Count'         => $this->Event->get_rsvp_count($detail_id),
-				'UserAttending' => $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false,
-				'List'          => $can_manage ? $this->Event->get_rsvp_list($detail_id) : [],
-			];
+		$allDetails = $this->data['EventDetails']['CalendarEventDetails'] ?? [];
+		if (!empty($allDetails)) {
+			$detailIds = array_map(function($d) { return (int)$d['EventCalendarDetailId']; }, $allDetails);
+			$idList    = implode(',', $detailIds);
+			global $DB;
+			$DB->Clear();
+			$countResult = $DB->DataSet("SELECT event_calendardetail_id, status, COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id IN ($idList) GROUP BY event_calendardetail_id, status");
+			$rsvpCounts = [];
+			if ($countResult) {
+				while ($countResult->Next()) {
+					$did = (int)$countResult->event_calendardetail_id;
+					if (!isset($rsvpCounts[$did])) $rsvpCounts[$did] = ['going' => 0, 'interested' => 0, 'total' => 0];
+					$rsvpCounts[$did][$countResult->status] = (int)$countResult->cnt;
+					$rsvpCounts[$did]['total'] += (int)$countResult->cnt;
+				}
+			}
+			$userRsvp = [];
+			if ($uid > 0) {
+				$DB->Clear();
+				$userResult = $DB->DataSet("SELECT event_calendardetail_id, status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id IN ($idList) AND mundane_id = " . $uid);
+				if ($userResult) {
+					while ($userResult->Next()) {
+						$userRsvp[(int)$userResult->event_calendardetail_id] = $userResult->status;
+					}
+				}
+			}
+			foreach ($allDetails as $detail) {
+				$did = (int)$detail['EventCalendarDetailId'];
+				$counts = $rsvpCounts[$did] ?? ['going' => 0, 'interested' => 0, 'total' => 0];
+				$rsvp_data[$did] = [
+					'Count'         => $counts['total'],
+					'UserAttending' => $userRsvp[$did] ?? false,
+					'List'          => $can_manage ? $this->Event->get_rsvp_list($did) : [],
+				];
+			}
 		}
 		$this->data['RsvpData'] = $rsvp_data;
 	}
@@ -85,6 +119,8 @@ class Controller_Event extends Controller {
 			'url'     => '',
 			'display' => $details['Name'],
 		];
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$can_manage = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
 		if ( $can_manage ) {
 			$this->data['menu']['admin'] = [
 				'url'      => UIR . 'Admin/event/' . $event_id,

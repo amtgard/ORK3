@@ -38,7 +38,7 @@
 		</div>
 
 		<div class="ec-banner-info">
-			<div class="ec-banner-label"><i class="fas fa-plus-circle" style="margin-right:4px"></i>New Scheduled Occurrence</div>
+			<div class="ec-banner-label"><i class="fas fa-plus-circle" style="margin-right:4px"></i>New Event</div>
 			<h1 class="ec-banner-name"><?= $eventName ?></h1>
 			<div class="ec-banner-crumb">
 				<?= $eventName ?>
@@ -59,7 +59,7 @@
 
 		<?php if (!empty($Error)): ?>
 		<div class="ec-error">
-			<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i><?= $Error ?>
+			<i class="fas fa-exclamation-triangle" style="margin-right:6px"></i><?= htmlspecialchars($Error ?? '') ?>
 		</div>
 		<?php endif; ?>
 
@@ -77,7 +77,7 @@
 					</div>
 					<div class="ec-field">
 						<label>End Date &amp; Time</label>
-						<input type="text" name="EndDate" id="ec-fp-end" autocomplete="off"<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
+						<input type="text" name="EndDate" id="ec-fp-end" autocomplete="off" required<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
 					</div>
 					<div class="ec-field ec-sm">
 						<label>Price ($)</label>
@@ -192,7 +192,7 @@
 						Cancel
 					</a>
 					<button type="submit" class="ec-btn-submit" id="ec-submit-btn">
-						<i class="fas fa-calendar-plus"></i> Create Occurrence
+						<i class="fas fa-calendar-plus"></i> Create Event
 					</button>
 				</div>
 			</div>
@@ -216,6 +216,8 @@ function ecFpAddTitle(label, calEl) {
 var _ecFpOpts = {
 	enableTime: true,
 	dateFormat: 'Y-m-d\\TH:i',
+	altInput: true,
+	altFormat: 'F j, Y  h:i K',
 	minuteIncrement: 10,
 	time_24hr: false
 };

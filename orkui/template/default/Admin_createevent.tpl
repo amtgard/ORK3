@@ -69,7 +69,7 @@
         <input type='text' value="<?=htmlentities(isset($Admin_event['AtParkName'])?$Admin_event['AtParkName']:$this->__session->park_name) ?>" name='AtParkName' id='AtParkName' />
         <input type='hidden' name='AtParkId' value='<?=isset($Admin_event['AtParkId'])?$Admin_event['AtParkId']:$this->__session->park_id ?>' id='AtParkId' />
         <input type='hidden' name='KingdomId' value='<?=$this->__session->kingdom_id ?>' id='KingdomId' />
-        <input type='hidden' name='ParkId' value='<?=$this->__session->kingdom_id ?>' id='ParkId' />
+        <input type='hidden' name='ParkId' value='<?=$this->__session->park_id ?>' id='ParkId' />
         <input type='hidden' name='MundaneId' value='<?=$Admin_event['MundaneId'] ?>' id='MundaneId' />
         <input type='hidden' name='UnitId' value='<?=$Admin_event['UnitId'] ?>' id='UnitId' />
       </span>

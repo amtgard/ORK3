@@ -249,6 +249,7 @@ class Event  extends Ork3 {
 		}
 		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
 			if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
+				$this->db->query('START TRANSACTION');
 				if ($request['Current']) {
 					$sql = 'update ' . DB_PREFIX . 'event_calendardetail set current = 0 where event_id = ' . $event_id;
 					$this->db->query($sql);
@@ -258,7 +259,12 @@ class Event  extends Ork3 {
 				$this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
 				$this->detail->find();
 				$this->detail->current = 1;
-				$this->detail->save();
+				$saveResult = $this->detail->save();
+				if (!$saveResult) {
+					$this->db->query('ROLLBACK');
+					return ProcessingError('Failed to set current detail.');
+				}
+				$this->db->query('COMMIT');
 				
 				logtrace("SetCurrent()", array($request, $this->detail->lastSql()));
 				
@@ -294,16 +300,28 @@ class Event  extends Ork3 {
 	}
 	
   public function PlayAmtgard($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		if (!$mundane_id || $mundane_id <= 0) {
+			return NoAuthorization();
+		}
+
 		$key = Ork3::$Lib->ghettocache->key($request);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
 			return $cache;
 
-    $latitude = $request['latitude'];
-    $longitude = $request['longitude'];
+    $latitude  = (float)($request['latitude']  ?? 0);
+    $longitude = (float)($request['longitude'] ?? 0);
     $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
-    $end = date("Y-m-d", strtotime($request['end']));
-    $distance = isset($request['distance']) ? $request['distance'] : 25;
-    $limit = isset($request['limit']) ? $request['limit'] : 12;
+    $end = date("Y-m-d", strtotime($request['end'] ?? $request['start'] ?? 'now + 90 days'));
+    // Validate dates are proper Y-m-d format
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) {
+        $start = date("Y-m-d");
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+        $end = date("Y-m-d", strtotime('+90 days'));
+    }
+    $distance = max(1, (float)($request['distance'] ?? 25));
+    $limit    = min(100, max(1, (int)($request['limit'] ?? 12)));
     
     $sql = "SELECT 
               k.kingdom_id, p.park_id, k.name kingdom_name, p.name park_name, cd.event_id, cd.event_calendardetail_id,
@@ -340,7 +358,7 @@ class Event  extends Ork3 {
 						'UnitName' => $r->unit_name,
 						'Description' => $r->description,
 						'EventName' => $r->event_name,
-						'Url' => $r->Url,
+						'Url' => $r->url,
 						'UrlName' => $r->url_name,
 						'Address' => $r->address,
 						'Province' => $r->province,
