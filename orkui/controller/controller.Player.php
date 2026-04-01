@@ -40,8 +40,13 @@ class Controller_Player extends Controller {
 	}
 	
 	public function index($id = null) {
+		if (!valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
 		$this->load_model('Unit');
-		
+
 		$params = explode('/',$id);
 		$id = $params[0];
 		if (count($params) > 1)
