@@ -7,6 +7,7 @@ class Controller_Attendance extends Controller {
 
 		$this->load_model('Park');
 		$this->data[ 'no_index' ] = true;
+		header('X-Robots-Tag: noindex, nofollow');
 		
 		switch ($call) {
 			case 'kingdom':

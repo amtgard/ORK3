@@ -29,6 +29,7 @@ class Controller_Reports extends Controller {
 		}
 		$this->data['menu']['reports'] = array( 'url' => $back_url, 'display' => 'Reports' );
 		$this->data[ 'no_index' ] = true;
+		header('X-Robots-Tag: noindex, nofollow');
 	}
 
 	public function index($action = null) {

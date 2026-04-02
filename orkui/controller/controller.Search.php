@@ -4,6 +4,8 @@ class Controller_Search extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
+		$this->data['no_index'] = true;
+		header('X-Robots-Tag: noindex, nofollow');
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		if ($_uid > 0 && valid_id($this->session->park_id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
