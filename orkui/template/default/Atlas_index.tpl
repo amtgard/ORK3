@@ -1,5 +1,13 @@
 <?php
 // ── Pre-compute park location data server-side ──────────────────────────────
+require_once(DIR_LIB . 'Parsedown.php');
+if (!function_exists('at_map_markdown')) {
+	function at_map_markdown(string $text): string {
+		$clean = str_replace(['<br />', '<br/>', '<br>'], "\n", $text);
+		$html  = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($clean);
+		return preg_replace('/<img[^>]*>/i', '', $html);
+	}
+}
 $atParks        = [];
 $atKingdomIds   = [];
 foreach ((array)($Parks['Parks'] ?? []) as $details) {
@@ -10,8 +18,8 @@ foreach ((array)($Parks['Parks'] ?? []) as $details) {
 	if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
 	if ((int)($details['KingdomId'] ?? 0) <= 0 || empty($details['KingdomName'])) continue;
 	$_isTopKingdom = ((int)($details['ParentKingdomId'] ?? 0) === 0);
-	$dirText  = htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $details['Directions'] ?? ''));
-	$descText = htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $details['Description'] ?? ''));
+	$dirText  = at_map_markdown($details['Directions'] ?? '');
+	$descText = at_map_markdown($details['Description'] ?? '');
 	$city     = htmlspecialchars(trim($details['City'] ?? ''));
 	$province = htmlspecialchars(trim($details['Province'] ?? ''));
 	$atParks[] = [
@@ -193,6 +201,12 @@ $atKingdomCount = count($atKingdomIds);
 .at-park-section-text {
 	font-size:13px; color:#4a5568; line-height:1.55; margin:0;
 }
+.at-park-section-text p { margin:0 0 8px; }
+.at-park-section-text p:last-child { margin-bottom:0; }
+.at-park-section-text ul, .at-park-section-text ol { margin:0 0 8px; padding-left:18px; }
+.at-park-section-text strong { font-weight:700; }
+.at-park-section-text em { font-style:italic; }
+.at-park-section-text a { color:#2b6cb0; }
 .at-park-divider {
 	border:none; border-top:1px solid #e2e8f0; margin:0;
 }
@@ -350,14 +364,14 @@ function atRenderSidebar(loc) {
 	if (loc.dir) {
 		bodyHtml += '<div class="at-park-section">'
 			+ '<div class="at-park-section-label"><i class="fas fa-directions" style="margin-right:4px"></i>Directions</div>'
-			+ '<p class="at-park-section-text">' + loc.dir.replace(/\n/g, '<br>') + '</p>'
+			+ '<div class="at-park-section-text">' + loc.dir + '</div>'
 			+ '</div>';
 	}
 	if (loc.desc) {
 		if (bodyHtml) bodyHtml += '<hr class="at-park-divider">';
 		bodyHtml += '<div class="at-park-section">'
 			+ '<div class="at-park-section-label"><i class="fas fa-info-circle" style="margin-right:4px"></i>About</div>'
-			+ '<p class="at-park-section-text">' + loc.desc.replace(/\n/g, '<br>') + '</p>'
+			+ '<div class="at-park-section-text">' + loc.desc + '</div>'
 			+ '</div>';
 	}
 	bodyHtml += '<a href="?Route=Park/profile/' + loc.id + '" class="at-park-profile-btn">'

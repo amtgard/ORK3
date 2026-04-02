@@ -35,6 +35,13 @@
 	$knPlayerPeriods = [];
 
 	// Pre-compute map location data (server-side; embedded as JSON for lazy map init)
+	if (!function_exists('kn_map_markdown')) {
+		function kn_map_markdown(string $text): string {
+			$clean = str_replace(['<br />', '<br/>', '<br>'], "\n", $text);
+			$html  = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($clean);
+			return preg_replace('/<img[^>]*>/i', '', $html);
+		}
+	}
 	$knMapLocations = [];
 	foreach ((array)$map_parks as $p) {
 		$loc = @json_decode(stripslashes((string)$p['Location']));
@@ -49,8 +56,8 @@
 			'city'     => htmlspecialchars(trim($p['City'] ?? '')),
 			'province' => htmlspecialchars(trim($p['Province'] ?? '')),
 			'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
-			'dir'      => htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Directions'] ?? '')),
-			'desc'     => htmlspecialchars(str_replace(['<br />', '<br/>', '<br>'], '', $p['Description'] ?? '')),
+			'dir'      => kn_map_markdown($p['Directions'] ?? ''),
+			'desc'     => kn_map_markdown($p['Description'] ?? ''),
 		];
 	}
 ?>

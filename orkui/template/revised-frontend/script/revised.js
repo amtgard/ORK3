@@ -1694,14 +1694,14 @@ function knRenderMapSidebar(loc) {
     if (loc.dir) {
         bodyHtml += '<div class="kn-park-section">'
             + '<div class="kn-park-section-label"><i class="fas fa-directions" style="margin-right:4px"></i>Directions</div>'
-            + '<p class="kn-park-section-text">' + loc.dir.replace(/\n/g, '<br>') + '</p>'
+            + '<div class="kn-park-section-text kn-description-body">' + loc.dir + '</div>'
             + '</div>';
     }
     if (loc.desc) {
         if (bodyHtml) bodyHtml += '<hr class="kn-park-divider">';
         bodyHtml += '<div class="kn-park-section">'
             + '<div class="kn-park-section-label"><i class="fas fa-info-circle" style="margin-right:4px"></i>About</div>'
-            + '<p class="kn-park-section-text">' + loc.desc.replace(/\n/g, '<br>') + '</p>'
+            + '<div class="kn-park-section-text kn-description-body">' + loc.desc + '</div>'
             + '</div>';
     }
     bodyHtml += '<a href="?Route=Park/profile/' + loc.id + '" class="kn-park-profile-btn">'
