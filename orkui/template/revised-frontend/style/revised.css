@@ -5214,7 +5214,7 @@
 }
 #pk-moveplayer-overlay .pk-ac-results,
 #pk-mergeplayer-overlay .pk-ac-results {
-    position: fixed; left: 0; right: 0; z-index: var(--z-modal-top, 1200);
+    z-index: var(--z-modal-top, 1200);
 }
 #pk-heraldry-overlay .pk-acct-field label,
 #pk-moveplayer-overlay .pk-acct-field label,
