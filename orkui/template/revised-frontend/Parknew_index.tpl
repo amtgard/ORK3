@@ -344,10 +344,12 @@
 					<span class="pk-link-icon"><i class="fas fa-search"></i></span>
 					<a href="<?= UIR ?>Search/park/<?= $park_id ?>">Search Players</a>
 				</li>
+				<?php if ($IsLoggedIn): ?>
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-image"></i></span>
 					<a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Heraldry</a>
 				</li>
+				<?php endif; ?>
 				<?php if ($IsLoggedIn): ?>
 				<?php /* <li>
 					<span class="pk-link-icon"><i class="fas fa-eye"></i></span>
