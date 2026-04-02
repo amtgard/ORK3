@@ -7,6 +7,7 @@ class Controller_Admin extends Controller {
 		$_publicMethods = array('topparks');
 		if (!isset($this->session->user_id) && !in_array($call, $_publicMethods)) {
 			error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
+			header('X-Robots-Tag: noindex, nofollow');
 			header( 'Location: '.UIR."Login" );
 		} else {
 			$this->load_model('Park');
