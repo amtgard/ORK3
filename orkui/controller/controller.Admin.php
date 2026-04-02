@@ -4,8 +4,10 @@ class Controller_Admin extends Controller {
 
 	public function __construct($call=null, $id=null) {
 		parent::__construct($call, $id);
-		if (!isset($this->session->user_id)) {
-			logtrace('Header redirect: no user id', null);
+		$_publicMethods = array('topparks');
+		if (!isset($this->session->user_id) && !in_array($call, $_publicMethods)) {
+			error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
+			header('X-Robots-Tag: noindex, nofollow');
 			header( 'Location: '.UIR."Login" );
 		} else {
 			$this->load_model('Park');
@@ -20,8 +22,77 @@ class Controller_Admin extends Controller {
 		unset($this->session->kingdom_name);
 		unset($this->session->park_name);
 		unset($this->session->park_id);
+		unset($this->data['menu']['kingdom']);
+		unset($this->data['menu']['park']);
 
 		$this->data['ActiveKingdomSummary'] = $this->Report->GetActiveKingdomsSummary();
+		$this->data['TotalActivePlayers'] = $this->Report->GetDistinctActivePlayerCount(26);
+
+		// Year-over-year trend stats
+		$thisYearStart = date('Y') . '-01-01';
+		$lastYearStart = (date('Y') - 1) . '-01-01';
+		$lastYearEnd   = date('Y-m-d', strtotime('-1 year')); // same day last year
+		$now1yr        = date('Y-m-d');
+		$prev1yrStart  = date('Y-m-d', strtotime('-2 years'));
+		$prev1yrEnd    = date('Y-m-d', strtotime('-1 year'));
+		global $DB;
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT
+			  (SELECT COUNT(*) FROM " . DB_PREFIX . "awards WHERE entered_at >= '$thisYearStart' AND entered_at < '$now1yr') AS awards_cur,
+			  (SELECT COUNT(*) FROM " . DB_PREFIX . "awards WHERE entered_at >= '$lastYearStart' AND entered_at < '$lastYearEnd') AS awards_prev,
+			  (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance WHERE date >= '$thisYearStart' AND date < '$now1yr' AND mundane_id > 0) AS att_cur,
+			  (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance WHERE date >= '$lastYearStart' AND date < '$lastYearEnd' AND mundane_id > 0) AS att_prev,
+			  (SELECT COUNT(DISTINCT mundane_id) FROM " . DB_PREFIX . "attendance WHERE date >= '$prev1yrEnd' AND date < '$now1yr' AND mundane_id > 0) AS players_cur,
+			  (SELECT COUNT(DISTINCT mundane_id) FROM " . DB_PREFIX . "attendance WHERE date >= '$prev1yrStart' AND date < '$prev1yrEnd' AND mundane_id > 0) AS players_prev,
+			  (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations WHERE date_recommended >= '$thisYearStart' AND date_recommended < '$now1yr' AND deleted_at IS NULL) AS recs_cur,
+			  (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations WHERE date_recommended >= '$lastYearStart' AND date_recommended < '$lastYearEnd' AND deleted_at IS NULL) AS recs_prev"
+		);
+		$trendStats = ['awards_cur'=>0,'awards_prev'=>0,'att_cur'=>0,'att_prev'=>0,'players_cur'=>0,'players_prev'=>0,'recs_cur'=>0,'recs_prev'=>0];
+		if ($rs && $rs->Next()) {
+			foreach ($trendStats as $k => $_) $trendStats[$k] = (int)$rs->$k;
+		}
+		$this->data['TrendStats'] = $trendStats;
+
+		// Previous-period kingdom attendance for trend indicators
+		$DB->Clear();
+		$prevWkRs = $DB->DataSet(
+			"SELECT COUNT(mw.mundane_id) AS att, mw.kingdom_id
+			 FROM (
+			     SELECT mundane_id, date_year, date_week3, kingdom_id
+			     FROM " . DB_PREFIX . "attendance
+			     WHERE date >  DATE_SUB(CURDATE(), INTERVAL 52 WEEK)
+			       AND date <= DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
+			       AND mundane_id > 0
+			     GROUP BY date_year, date_week3, mundane_id, kingdom_id
+			 ) mw
+			 GROUP BY mw.kingdom_id"
+		);
+		$prevWeekly = [];
+		if ($prevWkRs) {
+			while ($prevWkRs->Next()) $prevWeekly[(int)$prevWkRs->kingdom_id] = (int)$prevWkRs->att;
+		}
+		$DB->Clear();
+		$prevMoRs = $DB->DataSet(
+			"SELECT COUNT(mm.mundane_id) AS mo, mm.kingdom_id
+			 FROM (
+			     SELECT mundane_id, date_year, date_month, kingdom_id
+			     FROM " . DB_PREFIX . "attendance
+			     WHERE date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+			       AND date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+			       AND mundane_id > 0
+			     GROUP BY date_year, date_month, mundane_id, kingdom_id
+			 ) mm
+			 GROUP BY mm.kingdom_id"
+		);
+		$prevMonthly = [];
+		if ($prevMoRs) {
+			while ($prevMoRs->Next()) $prevMonthly[(int)$prevMoRs->kingdom_id] = (int)$prevMoRs->mo;
+		}
+		$this->data['PrevWeekly']  = $prevWeekly;
+		$this->data['PrevMonthly'] = $prevMonthly;
+
+		$this->template = '../revised-frontend/Admin_index.tpl';
 	}
 
     public function mergepark($submit = null) {
@@ -29,7 +100,7 @@ class Controller_Admin extends Controller {
 			$this->request->save('Admin_mergepark');
 			$r = array('Status'=>0);
 			if (!isset($this->session->user_id)) {
-                logtrace('Header redirect: no user id', null);
+                error_log('ORK_DEBUG Header redirect: no user id: ' . json_encode(null));
 				header( 'Location: '.UIR."Login/login/Admin/mergepark" );
 			} else {
 				$r = $this->Park->mergeparks( array(
@@ -38,10 +109,10 @@ class Controller_Admin extends Controller {
 						'ToParkId' => $this->request->Admin_mergepark->ToParkId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = 'Parks merged.  <a href="' . UIR . 'Park/index/' . $this->request->Admin_mergepark->ToParkId . '">View your abomination here.</a>';
+					$this->data['Message'] = 'Parks merged.  <a href="' . UIR . 'Park/profile/' . $this->request->Admin_mergepark->ToParkId . '">View your abomination here.</a>';
 					$this->request->clear('Admin_mergepark');
 				} else if($r['Status'] == 5) {
-                    logtrace('Header redirect: bad status', $r);
+                    error_log('ORK_DEBUG Header redirect: bad status: ' . json_encode($r));
 					header( 'Location: '.UIR."Login/login/Admin/mergepark" );
 				} else {
 					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
@@ -142,7 +213,7 @@ class Controller_Admin extends Controller {
 					case 'addauth':
 						$r = $this->Unit->add_unit_auth(array(
 								'Token' => $this->session->token,
-								'Role' => AUTH_EDIT,
+								'Role' => AUTH_CREATE,
 								'Type' => AUTH_UNIT,
 								'Id' => $unit_id,
 								'MundaneId' => $this->request->Admin_unit->MundaneId
@@ -305,6 +376,7 @@ class Controller_Admin extends Controller {
 
 	public function editparks($kingdom_id) {
 		$this->load_model('Kingdom');
+		$this->template = '../revised-frontend/Admin_editparks.tpl';
 		if (strlen($this->request->Action) > 0) {
 			$this->request->save('Admin_editparks', true);
 			if (!isset($this->session->user_id)) {
@@ -339,8 +411,9 @@ class Controller_Admin extends Controller {
 		if ($this->request->exists('Admin_editparks')) {
 			$this->data['Admin_editparks'] = $this->request->Admin_editparks->Request;
 		}
-		$this->data['KingdomId'] = $kingdom_id;
-		$this->data['ParkInfo'] = $this->Kingdom->get_park_info($kingdom_id);
+		$this->data['KingdomId']   = $kingdom_id;
+		$this->data['KingdomName'] = $this->Kingdom->get_kingdom_name($kingdom_id);
+		$this->data['ParkInfo']    = $this->Kingdom->get_park_info($kingdom_id);
 	}
 
 	public function setkingdomofficers($post=null) {
@@ -619,7 +692,7 @@ class Controller_Admin extends Controller {
 			$this->data['CreateMundaneId'] = valid_id($this->request->Admin_manageevent->MundaneId)?$this->request->Admin_manageevent->MundaneId:$this->request->MundaneId;
 			if (valid_id($this->data['CreateMundaneId'])) {
 				$player = $this->Player->fetch_player($this->data['CreateMundaneId']);
-				$this->data['menu']['player'] = array( 'url' => UIR."Player/index/{$this->data['CreateMundaneId']}", 'display' => $player['Persona'] );
+				$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/{$this->data['CreateMundaneId']}", 'display' => $player['Persona'] );
 				if ($this->data['LoggedIn']) {
 					$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/{$this->data['CreateMundaneId']}", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 				}
@@ -707,6 +780,284 @@ class Controller_Admin extends Controller {
 				'edit' => 'Edit',
 				'admin' => 'Administrator'
 			);
+	}
+
+	public function permissions($path = null) {
+		$parts    = explode('/', $path ?? '');
+		$type     = in_array($parts[0] ?? '', ['Kingdom', 'Park', 'Event']) ? $parts[0] : null;
+		$id       = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+		$detailId = (int)preg_replace('/[^0-9]/', '', $parts[2] ?? '');
+		$uid = (int)($this->session->user_id ?? 0);
+
+		// Global ORK view — no type/id provided
+		if (!$type || !$id) {
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+				header('Location: ' . UIR . 'Admin');
+				exit;
+			}
+			global $DB;
+			$DB->Clear();
+			$rs = $DB->DataSet(
+				"SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
+				        m.persona, m.username, m.given_name, m.surname,
+				        DATE_SUB(m.token_expires, INTERVAL 72 HOUR) AS last_login,
+				        lc.last_credit
+				 FROM " . DB_PREFIX . "authorization a
+				 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+				 LEFT JOIN (SELECT mundane_id, MAX(date) AS last_credit FROM " . DB_PREFIX . "attendance WHERE credits > 0 GROUP BY mundane_id) lc ON lc.mundane_id = a.mundane_id
+				 WHERE a.role = 'admin' AND a.kingdom_id = 0 AND a.park_id = 0 AND a.event_id = 0 AND a.unit_id = 0
+				 ORDER BY m.persona"
+			);
+			$adminAuths = [];
+			if ($rs) {
+				while ($rs->Next()) {
+					$adminAuths[] = [
+						'AuthorizationId' => (int)$rs->authorization_id,
+						'MundaneId'       => (int)$rs->mundane_id,
+						'Modified'        => $rs->modified,
+						'Persona'         => $rs->persona,
+						'UserName'        => $rs->username,
+						'GivenName'       => $rs->given_name,
+						'Surname'         => $rs->surname,
+						'LastLogin'       => $rs->last_login,
+						'LastCredit'      => $rs->last_credit,
+					];
+				}
+			}
+			$DB->Clear();
+			$rs2 = $DB->DataSet(
+				"SELECT k.kingdom_id, k.name AS kingdom_name
+				 FROM " . DB_PREFIX . "kingdom k
+				 WHERE k.active = 'Active' AND k.parent_kingdom_id = 0
+				 ORDER BY k.name"
+			);
+			$kingdoms = [];
+			if ($rs2) {
+				while ($rs2->Next()) {
+					$kingdoms[] = ['KingdomId' => (int)$rs2->kingdom_id, 'KingdomName' => $rs2->kingdom_name];
+				}
+			}
+			$this->data['AdminAuths'] = $adminAuths;
+			$this->data['Kingdoms']   = $kingdoms;
+			$this->template = 'Admin_permissions_global.tpl';
+			return;
+		}
+		$authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK, 'Event' => AUTH_EVENT];
+		$authType = $authTypeMap[$type];
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_CREATE)) {
+			$backUrl = $type === 'Event'
+				? UIR . 'Event/detail/' . $id . ($detailId ? '/' . $detailId : '')
+				: UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $id;
+			header('Location: ' . $backUrl);
+			exit;
+		}
+
+		$this->load_model('Reports');
+		$this->template = 'Admin_permissions.tpl';
+
+		if ($type === 'Kingdom') {
+			$this->load_model('Kingdom');
+			$info = $this->Kingdom->get_kingdom_shortinfo($id);
+			$name = $info['Info']['KingdomInfo']['KingdomName'] ?? 'Kingdom ' . $id;
+			$url  = UIR . 'Kingdom/profile/' . $id;
+		} elseif ($type === 'Park') {
+			$this->load_model('Park');
+			$info = $this->Park->get_park_details($id);
+			$name = $info['ParkInfo']['ParkName'] ?? 'Park ' . $id;
+			$url  = UIR . 'Park/profile/' . $id;
+		} else { // Event
+			$this->load_model('Event');
+			$info = $this->Event->get_event_details($id);
+			$name = $info['Name'] ?? 'Event ' . $id;
+			$url  = UIR . 'Event/detail/' . $id . ($detailId ? '/' . $detailId : '');
+		}
+
+		// All grants at this type+id level (officers + non-officers), including modified timestamp
+		global $DB;
+		$eid = (int)$id;
+		$scopeColMap = ['Kingdom' => 'a.kingdom_id', 'Park' => 'a.park_id', 'Event' => 'a.event_id'];
+		$scopeCol    = $scopeColMap[$type];
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT a.authorization_id, a.mundane_id, a.role, a.modified,
+			        m.persona, m.username, m.given_name, m.surname, m.restricted,
+			        o.role AS officer_role, o.officer_id
+			 FROM " . DB_PREFIX . "authorization a
+			 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+			 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+			 WHERE $scopeCol = $eid
+			 ORDER BY m.persona"
+		);
+		$auths = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$auths[] = [
+					'AuthorizationId' => (int)$rs->authorization_id,
+					'MundaneId'       => (int)$rs->mundane_id,
+					'Role'            => $rs->role,
+					'Modified'        => $rs->modified,
+					'Persona'         => $rs->persona,
+					'UserName'        => $rs->username,
+					'GivenName'       => $rs->given_name,
+					'Surname'         => $rs->surname,
+					'OfficerRole'     => $rs->officer_role,
+					'OfficerId'       => $rs->officer_id,
+				];
+			}
+		}
+
+		// For kingdom pages: all park-level grants for every park in the kingdom
+		$parkAuths = [];
+		if ($type === 'Kingdom') {
+			$DB->Clear();
+			$rs = $DB->DataSet(
+				"SELECT a.authorization_id, a.mundane_id, a.park_id, a.role, a.modified,
+				        p.name AS park_name, m.persona, m.username, m.given_name, m.surname, m.restricted,
+				        o.role AS officer_role, o.officer_id
+				 FROM " . DB_PREFIX . "authorization a
+				 JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id
+				 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+				 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+				 WHERE p.kingdom_id = $eid
+				 ORDER BY p.name, m.persona"
+			);
+			if ($rs) {
+				while ($rs->Next()) {
+					$parkAuths[] = [
+						'AuthorizationId' => (int)$rs->authorization_id,
+						'MundaneId'       => (int)$rs->mundane_id,
+						'ParkId'          => (int)$rs->park_id,
+						'ParkName'        => $rs->park_name,
+						'Role'            => $rs->role,
+						'Modified'        => $rs->modified,
+						'Persona'         => $rs->persona,
+						'UserName'        => $rs->username,
+						'GivenName'       => $rs->given_name,
+						'Surname'         => $rs->surname,
+						'OfficerRole'     => $rs->officer_role,
+						'OfficerId'       => $rs->officer_id,
+					];
+				}
+			}
+		}
+
+		// For event pages: show inherited access (creator + park/kingdom grant holders)
+		$eventCreator      = null;
+		$inheritedParkAuths     = [];
+		$inheritedKingdomAuths  = [];
+		$inheritedParkName      = '';
+		$inheritedKingdomName   = '';
+		if ($type === 'Event') {
+			$DB->Clear();
+			$evRow = $DB->DataSet(
+				"SELECT e.mundane_id AS creator_id, e.park_id AS ev_park_id, e.kingdom_id AS ev_kingdom_id,
+				        m.persona AS creator_persona, m.given_name, m.surname,
+				        p.name AS park_name, k.name AS kingdom_name
+				 FROM " . DB_PREFIX . "event e
+				 LEFT JOIN " . DB_PREFIX . "mundane m  ON m.mundane_id = e.mundane_id
+				 LEFT JOIN " . DB_PREFIX . "park p     ON p.park_id    = e.park_id
+				 LEFT JOIN " . DB_PREFIX . "kingdom k  ON k.kingdom_id = e.kingdom_id
+				 WHERE e.event_id = $eid LIMIT 1"
+			);
+			$evParkId = 0; $evKingdomId = 0;
+			if ($evRow && $evRow->Next()) {
+				$evParkId    = (int)$evRow->ev_park_id;
+				$evKingdomId = (int)$evRow->ev_kingdom_id;
+				$inheritedParkName    = $evRow->park_name    ?? '';
+				$inheritedKingdomName = $evRow->kingdom_name ?? '';
+				if ((int)$evRow->creator_id > 0) {
+					$eventCreator = [
+						'MundaneId' => (int)$evRow->creator_id,
+						'Persona'   => $evRow->creator_persona,
+						'GivenName' => $evRow->given_name,
+						'Surname'   => $evRow->surname,
+					];
+				}
+			}
+
+			// Park-level grant holders for the event's host park
+			if ($evParkId) {
+				$DB->Clear();
+				$rs = $DB->DataSet(
+					"SELECT a.authorization_id, a.mundane_id, a.role,
+					        m.persona, m.given_name, m.surname,
+					        o.role AS officer_role
+					 FROM " . DB_PREFIX . "authorization a
+					 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+					 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+					 WHERE a.park_id = $evParkId
+					 ORDER BY a.role DESC, m.persona"
+				);
+				if ($rs) {
+					while ($rs->Next()) {
+						$inheritedParkAuths[] = [
+							'MundaneId'   => (int)$rs->mundane_id,
+							'Role'        => $rs->role,
+							'Persona'     => $rs->persona,
+							'GivenName'   => $rs->given_name,
+							'Surname'     => $rs->surname,
+							'OfficerRole' => $rs->officer_role,
+						];
+					}
+				}
+			}
+
+			// Kingdom-level grant holders for the event's kingdom
+			if ($evKingdomId) {
+				$DB->Clear();
+				$rs = $DB->DataSet(
+					"SELECT a.authorization_id, a.mundane_id, a.role,
+					        m.persona, m.given_name, m.surname,
+					        o.role AS officer_role
+					 FROM " . DB_PREFIX . "authorization a
+					 LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
+					 LEFT JOIN " . DB_PREFIX . "officer o ON o.authorization_id = a.authorization_id
+					 WHERE a.kingdom_id = $evKingdomId
+					 ORDER BY a.role DESC, m.persona"
+				);
+				if ($rs) {
+					while ($rs->Next()) {
+						$inheritedKingdomAuths[] = [
+							'MundaneId'   => (int)$rs->mundane_id,
+							'Role'        => $rs->role,
+							'Persona'     => $rs->persona,
+							'GivenName'   => $rs->given_name,
+							'Surname'     => $rs->surname,
+							'OfficerRole' => $rs->officer_role,
+						];
+					}
+				}
+			}
+		}
+
+		// Set breadcrumbs from the actual entity, not the logged-in user's session kingdom/park
+		unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
+		if ($type === 'Kingdom') {
+			$this->data['menu']['kingdom'] = ['url' => $url, 'display' => $name];
+		} elseif ($type === 'Park') {
+			$this->data['menu']['park'] = ['url' => $url, 'display' => $name];
+		} elseif ($type === 'Event') {
+			if (!empty($evKingdomId)) {
+				$this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $evKingdomId, 'display' => $inheritedKingdomName];
+			}
+			if (!empty($evParkId)) {
+				$this->data['menu']['park'] = ['url' => UIR . 'Park/profile/' . $evParkId, 'display' => $inheritedParkName];
+			}
+			$this->data['menu']['event'] = ['url' => $url, 'display' => $name];
+		}
+
+		$this->data['PermType']         = $type;
+		$this->data['PermId']           = $id;
+		$this->data['PermName']         = $name;
+		$this->data['PermUrl']          = $url;
+		$this->data['PermAuths']        = $auths;
+		$this->data['PermParkAuths']    = $parkAuths;
+		$this->data['PermCanGrantAdmin']      = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$this->data['PermEventCreator']       = $eventCreator;
+		$this->data['PermInheritedParkAuths']    = $inheritedParkAuths;
+		$this->data['PermInheritedKingdomAuths'] = $inheritedKingdomAuths;
+		$this->data['PermInheritedParkName']     = $inheritedParkName;
+		$this->data['PermInheritedKingdomName']  = $inheritedKingdomName;
 	}
 
 	public function player($id) {
@@ -814,7 +1165,7 @@ class Controller_Admin extends Controller {
 									'MundaneId' => $id,
 									'Base64FaceImage' => $face_imdata
 									]);
-									logtrace('One Shot.', $one);
+									error_log('ORK_DEBUG One Shot.: ' . json_encode($one));
 								unlink(DIR_TMP . sprintf("fi_%06d", $id));
 								}
 							}
@@ -927,6 +1278,21 @@ class Controller_Admin extends Controller {
 								'EventId' => valid_id($this->request->Admin_player->EventId)?$this->request->Admin_player->EventId:0
 							));
 						break;
+					case 'reconcileaward':
+						$reconcile_params = array(
+								'Token' => $this->session->token,
+								'AwardsId' => $roastbeef,
+								'KingdomAwardId' => $this->request->Admin_player->KingdomAwardId,
+								'Rank' => $this->request->Admin_player->Rank,
+								'Date' => $this->request->Admin_player->Date,
+								'GivenById' => $this->request->Admin_player->GivenById,
+								'Note' => $this->request->Admin_player->Note,
+								'ParkId' => valid_id($this->request->Admin_player->ParkId)?$this->request->Admin_player->ParkId:0,
+								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
+								'EventId' => valid_id($this->request->Admin_player->EventId)?$this->request->Admin_player->EventId:0
+						);
+						$r = $this->Player->reconcile_player_award($reconcile_params);
+						break;
 					case 'quitunit':
 						$r = $this->Unit->retire_unit_member( array ('UnitId' => $id, 'UnitMundaneId' => $roastbeef, 'Token' => $this->session->token) );
 						break;
@@ -946,6 +1312,8 @@ class Controller_Admin extends Controller {
 								'KingdomId' => valid_id($this->request->Admin_player->KingdomId)?$this->request->Admin_player->KingdomId:0,
 								'DuesFrom' => $this->request->Admin_player->DuesFrom,
 								'Terms' => $this->request->Admin_player->Terms,
+								'Months' => $this->request->Admin_player->Months,
+								'DuesPeriodType' => $this->request->Admin_player->DuesPeriodType,
 								'DuesForLife' => $this->request->Admin_player->DuesForLife
 							));
 						break;
@@ -1013,7 +1381,7 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$id", 'display' => $this->data['Player']['Persona'] );
+		$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
 		$this->data[ 'page_title' ] = "Admin: " . $this->data['Player']['Persona'];
 	}
 
@@ -1024,7 +1392,7 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$mundane_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['player'] = array( 'url' => UIR."Player/index/$mundane_id", 'display' => $this->data['Player']['Persona'] );
+		$this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$mundane_id", 'display' => $this->data['Player']['Persona'] );
 	}
 
 	public function mergeplayer($params=null) {
@@ -1051,7 +1419,7 @@ class Controller_Admin extends Controller {
 						'ToMundaneId' => $this->request->Admin_mergeplayer->ToMundaneId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player created. <a href='".UIR."Player/index/{$this->request->Admin_mergeplayer->ToMundaneId}'>View your abomination here.</a>";
+					$this->data['Message'] = "Player created. <a href='".UIR."Player/profile/{$this->request->Admin_mergeplayer->ToMundaneId}'>View your abomination here.</a>";
 					$this->request->clear('Admin_mergeplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1089,7 +1457,7 @@ class Controller_Admin extends Controller {
 						'ParkId' => $this->request->Admin_claimplayer->ParkId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/index/{$this->request->Admin_claimplayer->ParkId}'>their new home.</a>";
+					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/profile/{$this->request->Admin_claimplayer->ParkId}'>their new home.</a>";
 					$this->request->clear('Admin_claimplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1120,6 +1488,7 @@ class Controller_Admin extends Controller {
 						'SuspendedAt' => $this->request->Admin_suspendplayer->SuspendedAt,
 						'SuspendedUntil' => $this->request->Admin_suspendplayer->SuspendedUntil,
 						'Suspension' => $this->request->Admin_suspendplayer->Suspension,
+					'SuspensionPropagates' => $this->request->Admin_suspendplayer->SuspensionPropagates,
 					));
 				if ($r['Status'] == 0) {
 					$this->data['Message'] = "Player has been <b><a href='" . UIR . "Reports/suspended/Kingdom&id=" . $this->session->kingdom_id . "'>" .
@@ -1154,7 +1523,7 @@ class Controller_Admin extends Controller {
 						'ParkId' => $this->request->Admin_moveplayer->ParkId
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/index/{$this->request->Admin_moveplayer->ParkId}'>their new home.</a>";
+					$this->data['Message'] = "Player has been moved to <a href='".UIR."Park/profile/{$this->request->Admin_moveplayer->ParkId}'>their new home.</a>";
 					$this->request->clear('Admin_moveplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1180,7 +1549,7 @@ class Controller_Admin extends Controller {
 			$kingdom_id = $params[1];
 			$this->data['KingdomId'] = $kingdom_id;
 		}
-		logtrace('createplayer', $_FILES);
+		error_log('ORK_DEBUG createplayer: ' . json_encode($_FILES));
 		$this->load_model('Player');
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_createplayer', true);
@@ -1226,7 +1595,7 @@ class Controller_Admin extends Controller {
 						'IsActive' => 1,
 					));
 				if ($r['Status'] == 0) {
-					$this->data['Message'] = "Player created. <a href='".UIR."Player/index/$r[Detail]'>View your spawn here.</a>";
+					$this->data['Message'] = "Player created. <a href='".UIR."Player/profile/$r[Detail]'>View your spawn here.</a>";
 					$this->request->clear('Admin_createplayer');
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
@@ -1299,7 +1668,7 @@ class Controller_Admin extends Controller {
 					));
 				if ($r['Status'] == 0) {
 					$this->request->clear('Admin_createkingdom');
-					header( 'Location: '.UIR.'Kingdom/index/'.$r['Detail'] );
+					header( 'Location: '.UIR.'Kingdom/profile/'.$r['Detail'] );
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
@@ -1481,7 +1850,7 @@ class Controller_Admin extends Controller {
 			$kingdom_id = $params[1];
 			$this->data['KingdomId'] = $kingdom_id;
 		}
-		logtrace('createpark', $params);
+		error_log('ORK_DEBUG createpark: ' . json_encode($params));
 		if (strlen($post) > 0) {
 			$this->request->save('Admin_createpark', true);
 			if (!isset($this->session->user_id)) {
@@ -1504,7 +1873,7 @@ class Controller_Admin extends Controller {
 					));
 				if ($r['Status'] == 0) {
 					$this->request->clear('Admin_createpark');
-					//header( 'Location: '.UIR.'Park/index/'.$r['Detail'] );
+					//header( 'Location: '.UIR.'Park/profile/'.$r['Detail'] );
 				} else if($r['Status'] == 5) {
 					header('Location: '.UIR.'Login/login/Admin/createpark' . (($post!=null)?('/'.$post):''));
 				} else {
@@ -1522,7 +1891,15 @@ class Controller_Admin extends Controller {
 		}
 	}
 
-	public function kingdom($id) {
+	public function kingdom($id = null) {
+		if (empty($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/kingdom/' . (int)$id);
+			exit;
+		}
+		if (!valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->kingdom_route($id);
 		$r = $this->Kingdom->get_kingdom_details($id);
 		foreach ($r as $key => $detail) {
@@ -1534,7 +1911,15 @@ class Controller_Admin extends Controller {
 		$this->data['park_summary'] = $r;
 	}
 
-	public function park($id) {
+	public function park($id = null) {
+		if (empty($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login/login/Admin/park/' . (int)$id);
+			exit;
+		}
+		if (!valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->park_route($id);
 		$r = $this->Park->get_park_info($id);
 		foreach ($r as $key => $detail) {
@@ -1570,7 +1955,7 @@ class Controller_Admin extends Controller {
 		$limit = intval($limit) > 0 ? intval($limit) : 25;
 		$start_date = isset($this->request->StartDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->StartDate)
 			? $this->request->StartDate
-			: date("Y-m-d", strtotime("-12 month"));
+			: date("Y-m-d", strtotime("-6 month"));
 		$end_date = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
 			? $this->request->EndDate
 			: date("Y-m-d");
@@ -1595,7 +1980,11 @@ class Controller_Admin extends Controller {
 
 		if (!isset($this->session->user_id)) {
 			header('Location: ' . UIR . "Login/login/Admin/resetwaivers/$type/$id");
-			return;
+			exit;
+		}
+		if (!in_array($type, array('kingdom', 'park')) || !valid_id($id)) {
+			header('Location: ' . UIR);
+			exit;
 		}
 
 		$request = array('Token' => $this->session->token);
@@ -1638,7 +2027,163 @@ class Controller_Admin extends Controller {
 		}
 	}
 
-	private function kingdom_route($id) {
+	public function ajax($action = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
+		}
+		$uid = (int)($this->session->user_id ?? 0);
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			echo json_encode(['status' => 5, 'error' => 'Unauthorized']); exit;
+		}
+
+		if ($action === 'suspendplayer') {
+			$this->load_model('Player');
+			$mid        = (int)($_POST['MundaneId']  ?? 0);
+			$suspended  = (int)($_POST['Suspended']  ?? 1);
+			$byId       = (int)($_POST['SuspendedById'] ?? 0);
+			$at         = trim($_POST['SuspendedAt']    ?? '');
+			$until      = trim($_POST['SuspendedUntil'] ?? '');
+			$reason     = trim($_POST['Suspension']    ?? '');
+			$propagates = (int)($_POST['SuspensionPropagates'] ?? 0);
+			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Select a player.']); exit; }
+			$r = $this->Player->suspend_player([
+				'Token'                => $this->session->token,
+				'MundaneId'            => $mid,
+				'Suspended'            => (bool)$suspended,
+				'SuspendedById'        => $byId ?: $this->session->user_id,
+				'SuspendedAt'          => $at,
+				'SuspendedUntil'       => $until,
+				'Suspension'           => $reason,
+				'SuspensionPropagates' => $propagates,
+			]);
+			// SetPlayerSuspension returns null on success (no explicit return Success() in service layer)
+			echo ($r === null || $r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'banplayer') {
+			$this->load_model('Player');
+			$mid    = (int)($_POST['MundaneId'] ?? 0);
+			$banned = (int)($_POST['Banned']    ?? 0);
+			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Select a player.']); exit; }
+			$r = $this->Player->set_ban([
+				'Token'     => $this->session->token,
+				'MundaneId' => $mid,
+				'Banned'    => $banned,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'mergepark') {
+			$this->load_model('Park');
+			$from = (int)($_POST['FromParkId'] ?? 0);
+			$to   = (int)($_POST['ToParkId']   ?? 0);
+			if (!$from || !$to) { echo json_encode(['status' => 1, 'error' => 'Both parks are required.']); exit; }
+			if ($from === $to)   { echo json_encode(['status' => 1, 'error' => 'Cannot merge a park into itself.']); exit; }
+			$r = $this->Park->mergeparks([
+				'Token'      => $this->session->token,
+				'FromParkId' => $from,
+				'ToParkId'   => $to,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'checkparkabbr') {
+			$park_id    = (int)($_POST['ParkId']    ?? 0);
+			$kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+			if (!$park_id || !$kingdom_id) { echo json_encode(['status' => 1, 'error' => 'Missing parameters.']); exit; }
+			global $DB;
+			$DB->Clear();
+			$rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
+			if (!$rs || !$rs->Next()) { echo json_encode(['status' => 1, 'error' => 'Park not found.']); exit; }
+			$abbr = strtoupper($rs->abbreviation);
+			$DB->Clear();
+			$abbrEsc = mysql_real_escape_string($abbr);
+			$rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
+			$taken = ($rs2 && $rs2->Next());
+			echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
+			exit;
+
+		} elseif ($action === 'transferpark') {
+			$this->load_model('Park');
+			$park_id    = (int)($_POST['ParkId']    ?? 0);
+			$kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+			if (!$park_id || !$kingdom_id) { echo json_encode(['status' => 1, 'error' => 'Park and destination kingdom are required.']); exit; }
+			$new_abbr   = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$r = $this->Park->TransferPark([
+				'Token'        => $this->session->token,
+				'ParkId'       => $park_id,
+				'KingdomId'    => $kingdom_id,
+				'Abbreviation' => $new_abbr,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'mergeunit') {
+			$this->load_model('Unit');
+			$from = (int)($_POST['FromUnitId'] ?? 0);
+			$to   = (int)($_POST['ToUnitId']   ?? 0);
+			if (!$from || !$to) { echo json_encode(['status' => 1, 'error' => 'Both units are required.']); exit; }
+			if ($from === $to)   { echo json_encode(['status' => 1, 'error' => 'Cannot merge a unit into itself.']); exit; }
+			$r = $this->Unit->merge([
+				'Token'      => $this->session->token,
+				'FromUnitId' => $from,
+				'ToUnitId'   => $to,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'checkabbr') {
+			$abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$excludeId = (int)($_POST['ExcludeKingdomId'] ?? 0);
+			if (!strlen($abbr)) { echo json_encode(['status' => 0, 'taken' => false]); exit; }
+			global $DB;
+			$DB->Clear();
+			$excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
+			$rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
+			echo ($rs && $rs->Next())
+				? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
+				: json_encode(['status' => 0, 'taken' => false]);
+
+		} elseif ($action === 'createkingdom') {
+			$this->load_model('Kingdom');
+			$name   = trim($_POST['Name'] ?? '');
+			$abbr   = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+			$parentId = (int)($_POST['ParentKingdomId'] ?? 0);
+			if (!strlen($name)) { echo json_encode(['status' => 1, 'error' => 'Kingdom must have a name.']); exit; }
+			if (!strlen($abbr)) { echo json_encode(['status' => 1, 'error' => 'Kingdom must have an abbreviation.']); exit; }
+			$r = $this->Kingdom->create_kingdom([
+				'Token'                   => $this->session->token,
+				'Name'                    => $name,
+				'Abbreviation'            => $abbr,
+				'ParentKingdomId'         => $parentId,
+				'AttendancePeriodType'    => in_array($_POST['AttendancePeriodType'] ?? '', ['week','month']) ? $_POST['AttendancePeriodType'] : 'week',
+				'AttendancePeriod'        => max(1, (int)($_POST['AttendancePeriod']        ?? 26)),
+				'AttendanceWeeklyMinimum' => max(0, (int)($_POST['AttendanceWeeklyMinimum'] ?? 2)),
+				'AttendanceDailyMinimum'  => max(0, (int)($_POST['AttendanceDailyMinimum']  ?? 6)),
+				'AttendanceCreditMinimum' => max(0, (int)($_POST['AttendanceCreditMinimum'] ?? 9)),
+				'MonthlyCreditMaximum'    => max(0, (int)($_POST['MonthlyCreditMaximum']    ?? 4)),
+				'DuesPeriodType'          => in_array($_POST['DuesPeriodType'] ?? '', ['week','month']) ? $_POST['DuesPeriodType'] : 'month',
+				'DuesPeriod'              => max(1, (int)($_POST['DuesPeriod']   ?? 6)),
+				'DuesAmount'              => max(0, (float)($_POST['DuesAmount'] ?? 6)),
+				'KingdomDuesTake'         => max(0, (float)($_POST['KingdomDuesTake'] ?? 1)),
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'kingdomId' => (int)($r['Detail'] ?? 0)])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} else {
+			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+		}
+		exit;
+	}
+
+		private function kingdom_route($id) {
 		$this->data['kingdom_id'] = $id;
 		$this->session->kingdom_id = $id;
 
@@ -1655,7 +2200,7 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 	}
 
 	private function park_route($id) {
@@ -1680,8 +2225,8 @@ class Controller_Admin extends Controller {
 		if ($this->data['LoggedIn']) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
-		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
-		$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
+		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+		$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->session->park_id, 'display' => $this->session->park_name );
 	}
 }
 

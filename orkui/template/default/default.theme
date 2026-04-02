@@ -2,14 +2,17 @@
 <html>
 	<head>
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
-		<link rel="icon" href="/favicon.jpeg">
+		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
+		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
+		<link rel="apple-touch-icon" sizes="180x180" href="<?= HTTP_ASSETS ?>images/favicon-180x180.png">
+		<link rel="manifest" href="/assets/site.webmanifest">
 		<?php if ($no_index) : ?>
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
-		<meta name=viewport content="user-scalable=no,width=device-width,minimum-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
-		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css" rel="stylesheet" />
-		
+		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
+
     	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.2/css/all.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous">
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
 		<!-- Google tag (gtag.js) -->
@@ -22,29 +25,30 @@
 		gtag('config', 'G-PVQCKENY0M');
 		</script>
 		<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
-	</head>
+	
+	<style>
+	/* What's New modal */
+	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
+	.wn-overlay.wn-open { display:flex; }
+	.wn-modal { background:#fff; border-radius:12px; padding:32px 28px 24px; max-width:480px; width:92%; box-shadow:0 8px 40px rgba(0,0,0,0.28); font-family:inherit; }
+	.wn-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+	.wn-header-icon { font-size:28px; color:#4299e1; }
+	.wn-title { font-size:20px; font-weight:700; color:#2d3748; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
+	.wn-subtitle { font-size:12px; color:#718096; margin-top:3px; font-style:italic; }
+	.wn-date { font-size:11px; color:#a0aec0; margin-top:1px; font-style:italic; }
+	.wn-items { list-style:none; margin:0 0 24px; padding:0; display:flex; flex-direction:column; gap:14px; }
+	.wn-item { display:flex; gap:14px; align-items:flex-start; }
+	.wn-item-icon { color:#4299e1; font-size:18px; margin-top:2px; min-width:20px; }
+	.wn-item-title { font-weight:600; color:#2d3748; font-size:14px; }
+	.wn-item-body { color:#4a5568; font-size:13px; line-height:1.5; margin-top:2px; }
+	.wn-footer { display:flex; align-items:center; justify-content:center; gap:12px; }
+	.wn-all-versions { background:none; color:#4299e1; border:1px solid #4299e1; border-radius:7px; padding:10px 20px; font-size:15px; cursor:pointer; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; }
+	.wn-all-versions:hover { background:#ebf8ff; }
+	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; }
+	.wn-dismiss:hover { background:#3182ce; }
+	</style>
+</head>
 	<body>
-		<div id='downtime-banner' style="position:fixed;top:0;left:0;right:0;z-index:1000001;background:#b91c1c;color:#fff;text-align:center;padding:8px 16px;font-size:0.9rem;font-weight:600;letter-spacing:0.01em;">
-			&#9888; <strong>ORK Server Downtime Thursday, April 2nd, 6pm Eastern</strong> until the ORK 3.5 (Dragon) upgrade is complete
-		</div>
-		<script>
-			function applyBannerOffset() {
-				var banner    = document.getElementById('downtime-banner');
-				var nav       = document.getElementById('newmenu');
-				var mobileBtn = document.getElementById('simple-menu');
-				var container = document.getElementById('theme_container');
-				if (!banner) return;
-				var bh = banner.offsetHeight;
-				if (nav)       nav.style.setProperty('top', bh + 'px', 'important');
-				if (mobileBtn) mobileBtn.style.setProperty('top', bh + 'px', 'important');
-				// Content must clear the banner plus whichever nav is visible below it
-				var navH = (nav && nav.offsetHeight && getComputedStyle(nav).display !== 'none') ? nav.offsetHeight : 0;
-				var btnH = (mobileBtn && getComputedStyle(mobileBtn).display !== 'none') ? mobileBtn.offsetHeight : 0;
-				if (container) container.style.setProperty('margin-top', (bh + Math.max(navH, btnH)) + 'px', 'important');
-			}
-			document.addEventListener('DOMContentLoaded', applyBannerOffset);
-			window.addEventListener('resize', applyBannerOffset);
-		</script>
 		<div id='theme_container'>
 
 <?php
@@ -53,57 +57,362 @@
 
 		</div>
 
-	
-	<a id="simple-menu" href="#sidr">Menu</a>
-	<div id='newmenu'>
-	<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
-			<div id='navmenu'>
-				<ul>
-	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
-	<?php endforeach; ?>
-				</ul>
-			</div>
-	<?php endif; ?>
-			<div id='controls'>
-				<ul>
-					<li><a href='https://docs.google.com/document/d/18wsfFoyD6RXrO4FAxXjfHRTQ0Z_4mWZqzI5f3aH0sNw' target="_blank" style='border-right: 1px solid #666; padding-right: 6px;'>Documentation</a></li>
-	<?php if ($this->__session->token == null) : ?>
-					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
-	<?php else : ?>
-					<li>Logged in as <a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
-					<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"' >Logout</button></li>
-	<?php endif; ?>
-          <li class='search-switch search-switch-on'><a onclick="$('.search-switch').toggle('slow').css('display', 'table-cell');">Search</a></li>
-					<li class='search-switch search-switch-off'><input id='PlayerSearch' placeholder="Players" /></li>
-					<li class='search-switch search-switch-off'><input id='ParkSearch' placeholder="Parks" /></li>
-				</ul>
-			</div>
-	</div>
 
-	<div id="sidr">
-		<!-- Your content -->
-		<ul>
-				<ul>
-          <li><a href='https://www.facebook.com/mORKmobile/posts/2275859462673190'>Get the ORK Mobile!</a></li>
-	<?php foreach ($menu as $k => $item) : ?>
-					<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a></li>
-	<?php endforeach; ?>
-	<?php if ($this->__session->token == null) : ?>
-					<li><a href='<?=UIR;?>Login' style='border-right: 1px solid #666; padding-right: 6px;'>Login</a></li>
-	<?php else : ?>
-					<li><a href='<?=UIR;?>Player/index/<?=$this->__session->user_id; ?>' style='border-right: 1px solid #666; padding-right: 6px;'><?=$this->__session->user_name; ?></a></li>
-					<li><button onClick='javascript:window.location.href="<?=UIR;?>Login/logout"' >Logout</button></li>
-	<?php endif; ?>
-				</ul>
-		</ul>
-	</div>
+	<nav id='newmenu'>
+		<a id='nav-mobile-home' href='<?=UIR?>'><i class='fas fa-home'></i></a>
+		<!-- Left: breadcrumb navigation -->
+		<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
+		<div id='navmenu'>
+			<ul>
+<?php foreach ($menu as $k => $item) : ?>
+<?php if ($k === 'admin') continue; ?>
+				<li><a href='<?=$item["url"] ?>'><?=$item["display"] ?></a> <span class='breadcrumb-trail'><?=(isset($item['no-crumb']) || $item === end($menu))?'':'<i class="fas fa-angle-double-right"></i>'; ?></span> </li>
+<?php endforeach; ?>
+			</ul>
+		</div>
+		<?php else : ?>
+		<div id='navmenu'></div>
+		<?php endif; ?>
+
+		<!-- Right: controls -->
+		<div id='controls'>
+			<!-- Universal search -->
+			<div id='nav-search-wrap'>
+				<a class='nav-icon-btn' id='nav-search-toggle' onclick='nsToggle(this)' title='Search'><i class='fas fa-search'></i></a>
+				<div id='nav-search-input-wrap'>
+					<input id='UniversalSearch' placeholder='Search active players, parks, kingdoms&hellip;' class='nav-search-input' autocomplete='off' />
+					<div id='nav-search-dropdown'></div>
+				</div>
+			</div>
+
+			<!-- Home Kingdom / Home Park quick-links -->
+<?php if ($this->__session->token != null) : ?>
+<?php
+	global $DB;
+	$__huid = (int)$this->__session->user_id;
+	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name FROM ork_mundane m LEFT JOIN ork_park p ON m.park_id = p.park_id LEFT JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
+	$__home = null;
+	if ($__homeResult && $__homeResult->Next() && $__homeResult->park_id) {
+		$__home = ['park_id' => $__homeResult->park_id, 'park_name' => $__homeResult->park_name, 'kingdom_id' => $__homeResult->kingdom_id, 'kingdom_name' => $__homeResult->kingdom_name];
+	}
+?>
+<?php if ($__home) : ?>
+			<a href='<?=UIR?>Kingdom/profile/<?=(int)$__home['kingdom_id']?>' class='nav-home-btn' title='My Kingdom: <?=htmlspecialchars($__home['kingdom_name'])?>'>
+				<i class='fas fa-chess-rook'></i>
+				<span class='nav-home-label'><?=htmlspecialchars($__home['kingdom_name'])?></span>
+			</a>
+			<a href='<?=UIR?>Park/profile/<?=(int)$__home['park_id']?>' class='nav-home-btn' title='My Park: <?=htmlspecialchars($__home['park_name'])?>'>
+				<i class='fas fa-tree'></i>
+				<span class='nav-home-label'><?=htmlspecialchars($__home['park_name'])?></span>
+			</a>
+<?php endif; ?>
+<?php endif; ?>
+
+			<!-- Resources dropdown -->
+			<div class='nav-dropdown-wrap' id='nav-resources-wrap'>
+				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>
+				<div class='nav-dropdown-menu' style='min-width:200px'>
+					<a href='https://www.amtgard.com/' target='_blank'><i class='fas fa-globe'></i> Amtgard Website</a>
+					<a href='https://wiki.amtgard.com/Main_Page' target='_blank'><i class='fas fa-book-open'></i> Amtgard Wiki</a>
+					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
+					<div class='nav-dropdown-divider'></div>
+					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
+				</div>
+			</div>
+
+<?php if ($this->__session->token == null) : ?>
+			<a href='<?=UIR;?>Login' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
+<?php else : ?>
+<?php
+	$__navUid      = (int)$this->__session->user_id;
+	$__navImgName  = sprintf('%06d', $__navUid);
+	$__navHasPhoto = file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.png') || file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.jpg');
+	$DB->Clear();
+	$__personaRow  = $DB->DataSet("SELECT persona FROM ork_mundane WHERE mundane_id = $__navUid LIMIT 1");
+	$__navPersona  = ($__personaRow && $__personaRow->Next() && $__personaRow->persona)
+		? $__personaRow->persona
+		: $this->__session->user_name;
+?>
+			<div class='nav-dropdown-wrap' id='nav-avatar-wrap'>
+				<button class='nav-avatar-btn' onclick="document.getElementById('nav-avatar-wrap').classList.toggle('open')">
+					<span class='nav-avatar-img-wrap'>
+						<?php if ($__navHasPhoto): ?>
+						<img class='nav-avatar-img'
+							src='<?= HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, $__navImgName) ?>'
+							onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block';"
+							alt=''
+						/><i class='fas fa-user-circle nav-avatar-fallback-icon'></i>
+						<?php else: ?>
+						<i class='fas fa-user-circle nav-avatar-fallback-icon' style='display:inline-block'></i>
+						<?php endif; ?>
+					</span>
+					<span class='nav-username'><?=htmlspecialchars($__navPersona)?></span>
+					<i class='fas fa-chevron-down nav-chevron'></i>
+				</button>
+				<div class='nav-dropdown-menu'>
+					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
+<?php if (Ork3::$Lib->authorization->HasAuthority($__navUid, AUTH_ADMIN, 0, AUTH_ADMIN)): ?>
+					<div class='nav-dropdown-divider'></div>
+					<a href='<?=UIR?>Admin'><i class='fas fa-shield-alt'></i> ORK Admin</a>
+<?php endif; ?>
+					<div class='nav-dropdown-divider'></div>
+					<a href='<?=UIR?>Login/logout' class='nav-dropdown-danger'><i class='fas fa-sign-out-alt'></i> Log Out</a>
+				</div>
+			</div>
+<?php endif; ?>
+		</div>
+	</nav>
+
 
 	<script>
-		$(document).ready(function() {
-			$('#simple-menu').sidr();
+	// ---- Search toggle ----
+	function nsToggle(btn) {
+		var sw = document.getElementById('nav-search-wrap');
+		var isOpen = sw.classList.toggle('nav-search-open');
+		btn.classList.toggle('active');
+		if (isOpen) {
+			setTimeout(function(){ var el = document.getElementById('UniversalSearch'); if (el) el.focus(); }, 50);
+		} else {
+			var el = document.getElementById('UniversalSearch');
+			if (el) el.value = '';
+			var dd = document.getElementById('nav-search-dropdown');
+			if (dd) { dd.className = ''; dd.innerHTML = ''; }
+		}
+	}
+
+	// User's home kingdom ID for priority sorting (0 = not logged in / unknown)
+	var nsKid = <?= (isset($__home) && $__home) ? (int)$__home['kingdom_id'] : 0 ?>;
+	var nsPid = <?= (isset($__home) && $__home) ? (int)$__home['park_id'] : 0 ?>;
+	var nsUir = '<?= UIR ?>';
+
+	$(document).ready(function() {
+		// ---- Dropdowns: close on outside click ----
+		$(document).on('click.navDropdowns', function(e) {
+			['nav-avatar-wrap', 'nav-resources-wrap'].forEach(function(id) {
+				var wrap = document.getElementById(id);
+				if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+			});
 		});
+
+		// ---- Universal search ----
+		var nsTimer = null;
+		var nsXhr   = null;
+
+		function nsEsc(str) {
+			return $('<span>').text(str || '').html();
+		}
+
+		function nsSearch(term) {
+			var $dd = $('#nav-search-dropdown');
+			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
+			if (nsXhr) nsXhr.abort();
+			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid,
+				function(res) { nsRender(res || {}); }
+			).fail(function(xhr) {
+				if (xhr.statusText !== 'abort')
+					$dd.html('<div class="nsdd-empty">Search unavailable</div>');
+			});
+		}
+
+		function nsRender(res) {
+			var $dd = $('#nav-search-dropdown');
+			var html = '';
+			var sep = false;
+			var players  = res.players  || [];
+			var parks    = res.parks    || [];
+			var kingdoms = res.kingdoms || [];
+			var units    = res.units    || [];
+
+			if (players.length) {
+				html += '<div class="nsdd-section-header"><i class="fas fa-user fa-fw"></i>&ensp;Players</div>';
+				$.each(players, function(i, p) {
+					var lbl = p.name ? nsEsc(p.name) : '<em class="nsdd-no-value">No Persona</em>';
+					var sub = nsEsc((p.abbr || '') + ' \u00b7 ' + (p.park || ''));
+					html += '<a class="nsdd-item" href="?Route=Player/profile/' + p.id + '">' +
+						'<span class="nsdd-item-icon"><i class="fas fa-user fa-fw"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + lbl + '</div>' +
+						'<div class="nsdd-item-sub">' + sub + '</div></span></a>';
+				});
+				sep = true;
+			}
+
+			if (parks.length) {
+				if (sep) html += '<div class="nsdd-divider"></div>';
+				html += '<div class="nsdd-section-header"><i class="fas fa-tree fa-fw"></i>&ensp;Parks</div>';
+				$.each(parks, function(i, p) {
+					html += '<a class="nsdd-item" href="?Route=Park/profile/' + p.id + '">' +
+						'<span class="nsdd-item-icon"><i class="fas fa-tree fa-fw"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(p.name) + '</div></span></a>';
+				});
+				sep = true;
+			}
+
+			if (kingdoms.length) {
+				if (sep) html += '<div class="nsdd-divider"></div>';
+				html += '<div class="nsdd-section-header"><i class="fas fa-crown fa-fw"></i>&ensp;Kingdoms</div>';
+				$.each(kingdoms, function(i, k) {
+					html += '<a class="nsdd-item" href="?Route=Kingdom/profile/' + k.id + '">' +
+						'<span class="nsdd-item-icon"><i class="fas fa-crown fa-fw"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(k.name) + '</div></span></a>';
+				});
+				sep = true;
+			}
+
+			if (units.length) {
+				if (sep) html += '<div class="nsdd-divider"></div>';
+				html += '<div class="nsdd-section-header"><i class="fas fa-shield-alt fa-fw"></i>&ensp;Companies &amp; Households</div>';
+				$.each(units, function(i, u) {
+					var icon = (u.unitType === 'Household') ? 'fas fa-home fa-fw' : 'fas fa-shield-alt fa-fw';
+					html += '<a class="nsdd-item" href="?Route=Unit/index/' + u.id + '">' +
+						'<span class="nsdd-item-icon"><i class="' + icon + '"></i></span>' +
+						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + nsEsc(u.name) + '</div>' +
+						'<div class="nsdd-item-sub">' + nsEsc(u.unitType || '') + '</div></span></a>';
+				});
+			}
+
+			if (!html) {
+				html = '<div class="nsdd-empty">No results found</div>';
+			}
+
+			$dd.html(html);
+		}
+
+		(function() {
+			var inp = document.getElementById('UniversalSearch');
+			if (!inp) return;
+			function updatePlaceholder() {
+				inp.placeholder = window.innerWidth < 768
+					? 'Search\u2026'
+					: 'Search active players, parks, kingdoms\u2026';
+			}
+			updatePlaceholder();
+			window.addEventListener('resize', updatePlaceholder);
+		})();
+
+		$('#UniversalSearch').on('input', function() {
+			var term = $.trim($(this).val());
+			clearTimeout(nsTimer);
+			if (term.length < 2) {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+				return;
+			}
+			nsTimer = setTimeout(function() { nsSearch(term); }, 350);
+		}).on('keydown', function(e) {
+			if (e.key === 'Escape') {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+				document.getElementById('nav-search-wrap').classList.remove('nav-search-open');
+				document.getElementById('nav-search-toggle').classList.remove('active');
+				$(this).blur();
+			} else if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				$('#nav-search-dropdown .nsdd-item').first().focus();
+			}
+		});
+
+		$('#nav-search-dropdown').on('keydown', '.nsdd-item', function(e) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				$(this).nextAll('.nsdd-item').first().focus();
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				var $prev = $(this).prevAll('.nsdd-item').first();
+				if ($prev.length) $prev.focus(); else $('#UniversalSearch').focus();
+			} else if (e.key === 'Escape') {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+				$('#UniversalSearch').focus();
+			}
+		});
+
+		// Close search dropdown on outside click
+		$(document).on('click.searchDropdown', function(e) {
+			if (!$(e.target).closest('#nav-search-wrap').length) {
+				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+			}
+		});
+	});
 	</script>
+
+	<!-- Simple info dialog -->
+	<div id="nav-info-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+		<div style="background:#fff;border-radius:10px;padding:32px 28px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);text-align:center;font-family:inherit;">
+			<div style="font-size:32px;margin-bottom:12px;color:#4a5568;"><i class="fas fa-book"></i></div>
+			<div id="nav-info-msg" style="font-size:15px;color:#2d3748;line-height:1.5;margin-bottom:20px;"></div>
+			<button onclick="document.getElementById('nav-info-overlay').style.display='none';" style="background:#4299e1;color:#fff;border:none;border-radius:6px;padding:8px 28px;font-size:14px;cursor:pointer;font-family:inherit;">OK</button>
+		</div>
+	</div>
+	<script>
+	function navInfoDialog(msg) {
+		document.getElementById('nav-info-msg').textContent = msg;
+		var el = document.getElementById('nav-info-overlay');
+		el.style.display = 'flex';
+		el.onclick = function(e) { if (e.target === el) el.style.display = 'none'; };
+	}
+	</script>
+
 	
-	</body>
+<?php require_once(DIR_UI . 'whats_new_content.php'); ?>
+<?php if ($this->__session->token != null) : ?>
+<?php
+// --- What's New modal ---
+$__wnUid = (int)$this->__session->user_id;
+$DB->Clear();
+$__wnRow = $DB->DataSet("SELECT id FROM ork_whats_new_seen WHERE mundane_id = " . $__wnUid . " AND version = '" . WHATS_NEW_VERSION . "' LIMIT 1");
+$__wnShow = !($__wnRow && $__wnRow->Next());
+$DB->Clear();
+?>
+<?php
+$__currentRelease = null;
+foreach ($WHATS_NEW_ITEMS as $__release) {
+    if ($__release['date'] === WHATS_NEW_VERSION) { $__currentRelease = $__release; break; }
+}
+?>
+<?php if ($__wnShow && $__currentRelease): ?>
+<div class="wn-overlay wn-open" id="wn-overlay">
+  <div class="wn-modal">
+    <div class="wn-header">
+      <span class="wn-header-icon"><i class="fas fa-star"></i></span>
+      <div>
+        <span class="wn-title">What&rsquo;s New on the ORK?</span>
+        <span class="wn-subtitle">Version <?=htmlspecialchars($__currentRelease['version'])?></span>
+        <span class="wn-date"><?=htmlspecialchars($__currentRelease['date'])?></span>
+      </div>
+    </div>
+    <ul class="wn-items">
+    <?php foreach ($__currentRelease['items'] as $__item): ?>
+      <li class="wn-item">
+        <span class="wn-item-icon"><i class="<?=htmlspecialchars($__item['icon'])?>"></i></span>
+        <div>
+          <div class="wn-item-title"><?=htmlspecialchars($__item['title'])?></div>
+          <div class="wn-item-body"><?=htmlspecialchars($__item['body'])?></div>
+        </div>
+      </li>
+    <?php endforeach; ?>
+    </ul>
+    <div class="wn-footer">
+      <a class="wn-all-versions" href="<?=UIR?>ReleaseNotes" onclick="wnDismiss()">See All Versions</a>
+      <button class="wn-dismiss" onclick="wnDismiss()">Got it!</button>
+    </div>
+  </div>
+</div>
+<script>
+var wnVersion = <?=json_encode(WHATS_NEW_VERSION)?>;
+var wnUir = '<?=UIR?>';
+function wnDismiss() {
+  document.getElementById('wn-overlay').classList.remove('wn-open');
+  $.post(wnUir + 'WnAjax/dismiss', { version: wnVersion });
+}
+document.getElementById('wn-overlay').addEventListener('click', function(e) {
+  if (e.target === this) wnDismiss();
+});
+</script>
+<?php endif; ?>
+<?php endif; ?>
+
+<footer style="margin-top:40px;padding:18px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:11px;color:#94a3b8;text-align:center;line-height:1.7;">
+  Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
+  &nbsp;&middot;&nbsp;
+  <a href="<?=UIR?>ReleaseNotes" style="color:#94a3b8;text-decoration:none;border-bottom:1px dotted #94a3b8;">ORK v<?=ORK_VERSION?></a>
+</footer>
+
+</body>
 </html>

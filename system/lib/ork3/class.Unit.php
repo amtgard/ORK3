@@ -9,29 +9,56 @@ class Unit extends Ork3 {
 	}
 
     public function MergeUnits($request) {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-			&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['FromUnitId'], AUTH_CREATE)
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['ToUnitId'], AUTH_CREATE)) {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) === 0) {
+            return NoAuthorization();
+        }
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['FromUnitId'], AUTH_CREATE)
+            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['ToUnitId'], AUTH_CREATE)) {
+            return NoAuthorization();
+        }
 
-    		$sql = "update " . DB_PREFIX ."unit_mundane set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
-			$this->db->query($sql);
-        	$sql = "update " . DB_PREFIX ."authorization set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
-			$this->db->query($sql);
-            $sql = "update " . DB_PREFIX ."awards set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = $request'" . mysql_real_escape_string($request['FromUnitId']) . "'";
-			$this->db->query($sql);
-            $sql = "update " . DB_PREFIX ."event set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = $request'" . mysql_real_escape_string($request['FromUnitId']) . "'";
-    		$this->db->query($sql);
-            $sql = "update " . DB_PREFIX ."participant set unit_id = '" . mysql_real_escape_string($request['ToUnitId']) . "' where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
-        	$this->db->query($sql);
+        $to   = (int)$request['ToUnitId'];
+        $from = (int)$request['FromUnitId'];
 
-    		$sql = "delete from " . DB_PREFIX ."unit where unit_id = '" . mysql_real_escape_string($request['FromUnitId']) . "'";
-			$this->db->query($sql);
+        if (!valid_id($to) || !valid_id($from) || $to === $from) {
+            return InvalidParameter('Invalid unit IDs for merge.');
+        }
+
+        $this->db->BeginTrans();
+        try {
+            $sql = "update " . DB_PREFIX . "unit_mundane set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
+            if (!$this->db->query($sql)) { throw new Exception('unit_mundane update failed'); }
+
+            $sql = "update " . DB_PREFIX . "authorization set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
+            if (!$this->db->query($sql)) { throw new Exception('authorization update failed'); }
+
+            $sql = "update " . DB_PREFIX . "awards set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
+            if (!$this->db->query($sql)) { throw new Exception('awards update failed'); }
+
+            $sql = "update " . DB_PREFIX . "event set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
+            if (!$this->db->query($sql)) { throw new Exception('event update failed'); }
+
+            $sql = "update " . DB_PREFIX . "participant set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
+            if (!$this->db->query($sql)) { throw new Exception('participant update failed'); }
+
+            $sql = "update " . DB_PREFIX . "mundane set company_id = '" . $to . "' where company_id = '" . $from . "'";
+            if (!$this->db->query($sql)) { throw new Exception('mundane update failed'); }
+
+            $sql = "delete from " . DB_PREFIX . "unit where unit_id = '" . $from . "'";
+            if (!$this->db->query($sql)) { throw new Exception('unit delete failed'); }
+
+            $this->db->CommitTrans();
+            return Success();
+        } catch (Exception $e) {
+            $this->db->RollbackTrans();
+            return array('Status' => 1, 'Error' => 'MergeUnits failed', 'Detail' => $e->getMessage());
         }
     }
 
     public function ConvertToHousehold($request) {
         logtrace('ConvertToHousehold', $request);
 		$mundane = Ork3::$Lib->player->player_info($request['Token']);
+		if (!$mundane) return NoAuthorization();
 
     	if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)
@@ -53,6 +80,7 @@ class Unit extends Ork3 {
     public function ConvertToCompany($request) {
         logtrace('ConvertToCompany', $request);
 		$mundane = Ork3::$Lib->player->player_info($request['Token']);
+		if (!$mundane) return NoAuthorization();
 
     	if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)
@@ -72,7 +100,7 @@ class Unit extends Ork3 {
     }
 
 	public function AddAward($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) === 0)
 			return NoAuthorization();
 
         $mundane = new yapo($this->db, DB_PREFIX . 'mundane');
@@ -84,23 +112,25 @@ class Unit extends Ork3 {
 		$authorizer = array ( 'KingdomId' => $mundane->kingdom_id, 'ParkId' => $mundane->park_id );
 
         if (valid_id($request['AwardId'])) {
-            list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
+            list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $request['KingdomId'], 'AwardId' => $request['AwardId']));
         } else if (valid_id($request['KingdomAwardId'])) {
-            list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $recipient['KingdomAwardId']));
+            list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
         }
 		if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $authorizer['ParkId'], AUTH_EDIT)) {
-            if (valid_id($request['GivenById']))
-        		$given_by = $this->GetPlayer(array('MundaneId' => $request['GivenById']));
-			if (valid_id($request['ParkId'])) {
+            $given_by = null;
+            if (valid_id($request['GivenById'])) {
+                $given_by = $this->GetPlayer(array('MundaneId' => $request['GivenById']));
+                if (empty($given_by['Player'])) {
+                    $given_by = null;
+                }
+            }
+			if (valid_id($request['ParkId']) && valid_id($request['GivenById']) && !empty($given_by['Player']['ParkId'])) {
 				$Park = new Park();
 				$park_info = $Park->GetParkShortInfo(array( 'ParkId' => $given_by['Player']['ParkId'] ));
 				if ($park_info['Status']['Status'] != 0)
 					return InvalidParameter('Invalid Parameter 2');
 			}
-            if (valid_id($request['AwardId'])) {
-                list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $request['KingdomId'], 'AwardId' => $request['AwardId']));
-            }
 			$awards = new yapo($this->db, DB_PREFIX . 'awards');
 			$awards->clear();
 			$awards->kingdomaward_id = $request['KingdomAwardId'];
@@ -115,10 +145,10 @@ class Unit extends Ork3 {
 			$awards->at_event_id = valid_id($request['EventId'])?$request['EventId']:0;
 			$awards->note = $request['Note'];
 			// If no event, then go Park!
-            if (valid_id($request['GivenById'])) {
-    			$awards->park_id = valid_id($given_by['Player']['ParkId'])?$given_by['Player']['ParkId']:0;
+            if ($given_by !== null) {
+    			$awards->park_id = valid_id($given_by['Player']['ParkId']) ? $given_by['Player']['ParkId'] : 0;
     			// If no event and valid parkid, go Park! Otherwise, go Kingdom.  Unless it's an event.  Then go ... ZERO!
-    			$awards->kingdom_id = valid_id($given_by['Player']['KingdomId'])?$given_by['Player']['KingdomId']:0;
+    			$awards->kingdom_id = valid_id($given_by['Player']['KingdomId']) ? $given_by['Player']['KingdomId'] : 0;
             }
 			// Events are awesome.
 			$awards->save();
@@ -151,7 +181,7 @@ class Unit extends Ork3 {
 
 	public function AddMember($request) {
 		if (!valid_id($request['MundaneId'])) {
-			InvalidParameter();
+			return InvalidParameter();
 		}
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)) {
@@ -196,11 +226,13 @@ class Unit extends Ork3 {
 	    list($member_id, $unit_id) = $this->_translate_unitmundane($request['UnitMundaneId']);
 	    logtrace('Retire Member:', array($member_id, $unit_id));
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE)
-				|| $mundane_id == $member_id) {
+				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE)
+					|| $mundane_id == $member_id)) {
 			$this->members->clear();
 			$this->members->unit_mundane_id = $request['UnitMundaneId'];
-			$this->members->find();
+			if (!$this->members->find()) {
+				return InvalidParameter();
+			}
 			$mundane_id = $this->members->mundane_id;
 			$unit_id = $this->members->unit_id;
 			logtrace("RetireMember()", array($mundane_id, $unit_id));
@@ -224,9 +256,14 @@ class Unit extends Ork3 {
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)) {
 			$this->members->clear();
 			$this->members->unit_mundane_id = $request['UnitMundaneId'];
-			$this->members->find();
+			if (!$this->members->find()) {
+				return InvalidParameter();
+			}
 			$mundane_id = $this->members->mundane_id;
 			$unit_id = $this->members->unit_id;
+			if ($this->members->unit_id != $request['UnitId']) {
+				return NoAuthorization();
+			}
 			$this->members->delete();
 			$auths = Ork3::$Lib->authorization->GetAuthorizations(array('MundaneId'=>$mundane_id));
 			foreach ($auths['Authorizations'] as $k => $auth) {
@@ -245,10 +282,16 @@ class Unit extends Ork3 {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0) {
 
 			$this->unit->clear();
+			if (!in_array($request['Type'], array('Company', 'Household', 'Event'))) {
+				return InvalidParameter('Invalid unit type.');
+			}
+			if (!empty($request['Url']) && !preg_match('#^https?://#i', $request['Url'])) {
+				return InvalidParameter('Invalid URL.');
+			}
 			$this->unit->name = $request['Name'];
 			$this->unit->type = $request['Type'];
-			$this->unit->description = strip_tags($request['Description'], "<p><br><ul><li><b><i>");
-			$this->unit->history = strip_tags($request['History'], "<p><br><ul><li><b><i>");
+			$this->unit->description = trim($request['Description']);
+			$this->unit->history = trim($request['History']);
 			$this->unit->url = $request['Url'];
 			$this->unit->modified = date("Y-m-d H:i:s");
 			$this->unit->save();
@@ -271,13 +314,14 @@ class Unit extends Ork3 {
 				$mundane->save();
 			}
 
-			Ork3::$Lib->authorization->add_auth_h(array('MundaneId'=>$mundane_id, 'Type'=>AUTH_UNIT, 'Id' => $this->unit->unit_id, 'Role' => AUTH_EDIT));
+			Ork3::$Lib->authorization->add_auth_h(array('MundaneId'=>$mundane_id, 'Type'=>AUTH_UNIT, 'Id' => $this->unit->unit_id, 'Role' => AUTH_CREATE));
 
 			$request['MundaneId'] = $mundane_id;
 			switch ($this->unit->type) {
     			case 'Company': $request['Role'] = 'captain'; break;
     			case 'Household': $request['Role'] = 'lord'; break;
     			case 'Event': $request['Role'] = 'organizer'; break;
+    			default: $request['Role'] = 'member'; break;
 			}
 			$request['Title'] = 'Founder';
 			$request['Active'] = 1;
@@ -298,9 +342,12 @@ class Unit extends Ork3 {
 			$this->unit->clear();
 			$this->unit->unit_id = $request['UnitId'];
 			$this->unit->find();
+			if (!empty($request['Url']) && !preg_match('#^https?://#i', $request['Url'])) {
+				return InvalidParameter('Invalid URL.');
+			}
 			$this->unit->name = $request['Name'];
-			$this->unit->description = strip_tags($request['Description'], "<p><br><ul><li><b><i>");
-			$this->unit->history = strip_tags($request['History'], "<p><br><ul><li><b><i>");
+			$this->unit->description = trim($request['Description']);
+			$this->unit->history = trim($request['History']);
 			$this->unit->url = $request['Url'];
 			$this->unit->save();
 			if (strlen($request['Heraldry'])) {
@@ -331,19 +378,24 @@ class Unit extends Ork3 {
 			$this->members->active = 'Retired';
 			if ($this->members->find()) {
 				$this->members->active = 'Active';
+				$this->members->role = $request['Role'];
+				$this->members->title = $request['Title'];
 				$this->members->save();
 				return Success($this->members->unit_mundane_id);
 			}
-		}
 
-		$this->members->clear();
-		$this->members->unit_id = $request['UnitId'];
-		$this->members->mundane_id = $request['MundaneId'];
-		$this->members->role = $request['Role'];
-		$this->members->title = $request['Title'];
-		$this->members->active = $request['Active'];
-		$this->members->save();
-		return Success($this->members->unit_mundane_id);
+			// Brand new member — unit exists but was neither active nor retired
+			$this->members->clear();
+			$this->members->unit_id = $request['UnitId'];
+			$this->members->mundane_id = $request['MundaneId'];
+			$this->members->role = $request['Role'];
+			$this->members->title = $request['Title'];
+			$this->members->active = $request['Active'];
+			$this->members->save();
+			return Success($this->members->unit_mundane_id);
+		} else {
+			return InvalidParameter('Unit not found.');
+		}
 	}
 
 }

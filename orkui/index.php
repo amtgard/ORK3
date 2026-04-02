@@ -28,6 +28,34 @@ $Request = new Request();
 if ( empty( $_REQUEST[ 'Route' ] ) ) {
     $_REQUEST[ 'Route' ] = '';
 }
+
+// Redirect legacy index routes to their profile equivalents
+$_legacyRedirects = [
+    'Park/index/'       => 'Park/profile/',
+    'Kingdom/index/'    => 'Kingdom/profile/',
+    'Player/index/'     => 'Player/profile/',
+    'Attendance/event/' => 'Event/detail/',
+];
+foreach ($_legacyRedirects as $_old => $_new) {
+    if (strncasecmp($_REQUEST['Route'], $_old, strlen($_old)) === 0) {
+        $remainder = substr($_REQUEST['Route'], strlen($_old));
+        header('Location: ' . UIR . $_new . $remainder, true, 301);
+        exit;
+    }
+}
+
+// Redirect Event/index/{id} to the kingdom event attendance report with the event name as filter
+if (preg_match('#^Event/index/(\d+)$#i', $_REQUEST['Route'], $_m)) {
+    $_event_id = (int)$_m[1];
+    $_eq = $DB->query("SELECT name, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = $_event_id LIMIT 1");
+    if ($_eq && $_eq->size() > 0 && $_eq->next()) {
+        $_event_name    = $_eq->name;
+        $_event_kingdom = (int)$_eq->kingdom_id;
+        header('Location: ' . UIR . 'Reports/event_attendance/Kingdom/' . $_event_kingdom . '&filter=' . rawurlencode($_event_name), true, 302);
+        exit;
+    }
+}
+
 $route = explode( '/', $_REQUEST[ "Route" ] );
 logtrace( 'Index: Route', $route );
 Ork3::$Lib->session = $Session;

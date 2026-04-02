@@ -57,6 +57,8 @@ class Park extends Ork3
       $this->db->query( $sql );
 			$sql = "delete from " . DB_PREFIX . "officer where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
+			$sql = "delete from " . DB_PREFIX . "authorization where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
+			$this->db->query( $sql );
       /*
 			$sql = "delete from " . DB_PREFIX . "park where park_id = '" . mysql_real_escape_string( $request[ 'FromParkId' ] ) . "'";
 			$this->db->query( $sql );
@@ -97,6 +99,9 @@ class Park extends Ork3
 			$this->park->park_id = $request[ 'ParkId' ];
 			if ( $this->park->find() && $this->park->park_id == $request[ 'ParkId' ] ) {
 				$this->park->kingdom_id = $request[ 'KingdomId' ];
+				if ( !empty( $request[ 'Abbreviation' ] ) ) {
+					$this->park->abbreviation = strtoupper( $request[ 'Abbreviation' ] );
+				}
 				$this->park->save();
 				// Move all players in the park to the new kingdom
 				$sql = "update " . DB_PREFIX . "mundane set kingdom_id = '" . mysql_real_escape_string( $request[ 'KingdomId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "'";
@@ -128,8 +133,21 @@ class Park extends Ork3
 			$this->parkday->purpose = $request[ 'Purpose' ];
 			$this->parkday->description = $request[ 'Description' ];
 			$this->parkday->alternate_location = $request[ 'AlternateLocation' ];
+			$this->parkday->online = (int)( $request[ 'Online' ] ?? 0 );
 
-			if ( $request[ 'AlternateLocation' ] > 0 ) {
+			if ( !empty( $request[ 'Online' ] ) ) {
+				logtrace( 'AddParkDay.Online', null );
+				// Online/virtual park day — no physical location
+				$this->parkday->address = '';
+				$this->parkday->city = '';
+				$this->parkday->province = '';
+				$this->parkday->postal_code = '';
+				$this->parkday->latitude = 0;
+				$this->parkday->longitude = 0;
+				$this->parkday->google_geocode = '';
+				$this->parkday->location = '';
+				$this->parkday->map_url = '';
+			} elseif ( $request[ 'AlternateLocation' ] > 0 ) {
      			logtrace( 'AddParkDay.AlternateLocation', null );
 				$this->parkday->address = $request[ 'Address' ];
 				$this->parkday->city = $request[ 'City' ];
@@ -393,6 +411,7 @@ class Park extends Ork3
 					'Location'          => $parkday->location,
 					'MapUrl'            => $parkday->map_url,
 					'LocationUrl'       => $parkday->location_url,
+					'Online'            => (int)$parkday->online,
 				];
 			} while ( $parkday->next() );
 		} else {
@@ -556,23 +575,36 @@ class Park extends Ork3
 			$this->log->Write( 'Park', $mundane_id, LOG_ADD, $request );
 			$request[ 'Name' ] = $this->unique_username( trim( $request[ 'Name' ] ) );
 			$this->park->clear();
-			$this->park->kingdom_id = $request[ 'KingdomId' ];
-			$this->park->name = $request[ 'Name' ];
-			$this->park->abbreviation = strtoupper($request[ 'Abbreviation' ]);
-			$this->park->active = 'Active';
-			$this->park->modified = date( "Y-m-d H:i:s", time() );
-			$this->park->parktitle_id = $request[ 'ParkTitleId' ];
+			$this->park->kingdom_id     = $request[ 'KingdomId' ];
+			$this->park->name           = $request[ 'Name' ];
+			$this->park->abbreviation   = strtoupper($request[ 'Abbreviation' ]);
+			$this->park->active         = 'Active';
+			$this->park->modified       = date( "Y-m-d H:i:s", time() );
+			$this->park->parktitle_id   = $request[ 'ParkTitleId' ];
+			$this->park->url            = '';
+			$this->park->address        = '';
+			$this->park->city           = '';
+			$this->park->province       = '';
+			$this->park->postal_code    = '';
+			$this->park->google_geocode = '';
+			$this->park->latitude       = 0;
+			$this->park->longitude      = 0;
+			$this->park->location       = '';
+			$this->park->map_url        = '';
+			$this->park->description    = '';
+			$this->park->directions     = '';
 			$this->park->save();
+			$new_park_id = (int)$this->park->park_id;
 			$t = new Treasury();
-			$t->create_accounts( $mundane_id, 'park', $this->park->park_id, $this->park->kingdom_id );
+			$t->create_accounts( $mundane_id, 'park', $new_park_id, $request[ 'KingdomId' ] );
 			$c = new Common();
 			// Auths for a pricipality's officers travel with the mundane record, so we have to handle that @ the SetOfficer level
-			$c->create_officers( $this->park->kingdom_id, $this->park->park_id, 0 );
-			$c->create_events( $this->park->kingdom_id, $this->park->park_id );
+			$c->create_officers( $request[ 'KingdomId' ], $new_park_id, 0 );
+			$c->create_events( $request[ 'KingdomId' ], $new_park_id );
 			if ( strlen( $request[ 'Heraldry' ] ) ) {
 				Ork3::$Lib->heraldry->SetParkHeraldry( $request );
 			}
-			$response = Success( $this->park->park_id );
+			$response = Success( $new_park_id );
 		} else {
 			$response = NoAuthorization();
 		}

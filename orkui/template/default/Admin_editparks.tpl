@@ -30,7 +30,7 @@
 					</td>
 					<td><input type='text' name='Abbreviation[<?=$park['ParkId'] ?>]' class='narrow-field' maxlength='3' value='<?=$park['Abbreviation'] ?>' ></td>
 					<td><input type='checkbox' name='Active[<?=$park['ParkId'] ?>]' value='YES' <?=$park['Active']=='Active'?'CHECKED':''; ?> ></td>
-					<td><a href='<?=UIR;?>Park/index/<?=$park['ParkId'];?>&park_name=<?=$park['Name'];?>'><?=$park['Name'] ?></a></td>
+					<td><a href='<?=UIR;?>Park/profile/<?=$park['ParkId'];?>&park_name=<?=$park['Name'];?>'><?=$park['Name'] ?></a></td>
 				</tr>
 <?php endforeach; ?>
 				<tr>

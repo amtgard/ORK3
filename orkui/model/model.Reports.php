@@ -102,6 +102,15 @@ class Model_Reports extends Model {
 		return $r;
 	}
 
+	function get_distinct_player_stats($type, $id, $period, $num_periods) {
+		if ('All' == $period) {
+			$r = $this->Report->GetDistinctPlayerStats(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1));
+		} else {
+			$r = $this->Report->GetDistinctPlayerStats(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'Periods'=>$num_periods, 'PerWeeks'=>$period=='Weeks'?1:0, 'PerMonths'=>$period=='Months'?1:0));
+		}
+		return $r;
+	}
+
 	function get_authorization_list($type, $id, $officers) {
 		$request = array(
 				'Type' => $type,
@@ -238,6 +247,50 @@ class Model_Reports extends Model {
 			return $r['Parks'];
 		}
 		return array();
+	}
+
+	function kingdom_officer_directory($kingdom_id = null) {
+		$r = $this->Report->KingdomOfficerDirectory(array('KingdomId' => $kingdom_id));
+		if ($r['Status']['Status'] == 0) {
+			return ['Rows' => $r['Kingdoms'], 'Mode' => $r['Mode']];
+		}
+		return ['Rows' => [], 'Mode' => 'kingdoms'];
+	}
+	function event_attendance($request) {
+		$r = $this->Report->EventAttendanceReport($request);
+		if (isset($r['Status']['Status']) && $r['Status']['Status'] == 0) {
+			return $r['Events'];
+		}
+		return array();
+	}
+
+	function beltline_data($request) {
+		$r = $this->Report->BeltlineData($request);
+		if ($r['Status']['Status'] == 0) {
+			return array(
+				'Relationships' => $r['Relationships'],
+				'Knights'       => $r['Knights'],
+				'AllKnightIds'  => $r['AllKnightIds'],
+				'KnightTypes'   => $r['KnightTypes'],
+			);
+		}
+		return array('Relationships' => array(), 'Knights' => array(), 'AllKnightIds' => array(), 'KnightTypes' => array());
+	}
+
+	function park_distance_matrix($request) {
+		$r = $this->Report->GetParkDistanceMatrix($request);
+		return array(
+			'Parks'  => isset($r['Parks'])  ? $r['Parks']  : array(),
+			'Matrix' => isset($r['Matrix']) ? $r['Matrix'] : array(),
+		);
+	}
+
+	function closest_parks($request) {
+		$r = $this->Report->GetClosestParks($request);
+		return array(
+			'Parks'      => isset($r['Parks']) ? $r['Parks'] : array(),
+			'OriginPark' => isset($r['OriginPark']) ? $r['OriginPark'] : null,
+		);
 	}
 }
 

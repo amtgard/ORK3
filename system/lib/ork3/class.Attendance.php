@@ -72,16 +72,25 @@ class Attendance  extends Ork3 {
         }
         
 		$this->attendance->clear();
+		$this->attendance->park_id = 0;
+		$this->attendance->kingdom_id = 0;
 		$this->attendance->mundane_id = $request['MundaneId'];
-        $this->attendance->persona = $request['Persona'];
+        $this->attendance->persona = $request['Persona'] ?? '';
 		$this->attendance->class_id = $request['ClassId'];
 		$this->attendance->date = $request['Date'];
 		$this->attendance->credits = $request['Credits'];
-        $this->attendance->note = $request['Note'];
-    	$this->attendance->flavor = $request['Flavor'];
+        $this->attendance->note = $request['Note'] ?? '';
+    	$this->attendance->flavor = $request['Flavor'] ?? '';
 		$this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$this->attendance->entered_at = date("Y-m-d H:i:s");
+		$this->attendance->event_id = 0;
+		$this->attendance->event_calendardetail_id = 0;
+		$this->attendance->date_year = 0;
+		$this->attendance->date_month = 0;
+		$this->attendance->date_week3 = 0;
+		$this->attendance->date_week6 = 0;
 		
+		logtrace("AddAttendance: type before switch", array("type"=>$type, "type_strict_false"=>($type===false), "type_null"=>is_null($type)));
 		switch ($type) {
 			case AUTH_PARK:
 				$park = Ork3::$Lib->park->GetParkShortInfo(array('ParkId' => $request['ParkId']));
@@ -89,7 +98,7 @@ class Attendance  extends Ork3 {
 				$this->attendance->park_id = $request['ParkId'];
 				break;
 			case AUTH_KINGDOM:
-				$this->attendance->kingdom_d = $request['KingdomId'];
+				$this->attendance->kingdom_id = $request['KingdomId'];
 				break;
 			case AUTH_EVENT:
 				$detail = Ork3::$Lib->event->GetEventDetail(array('EventCalendarDetailId' => $request['EventCalendarDetailId']));
@@ -100,10 +109,9 @@ class Attendance  extends Ork3 {
 					return InvalidParameter();
 				}
 
-				if ($kingdom_id) $this->attendance->kingdom_id = $kingdom_id;
-				if (isset($detail['CalendarEventDetails'][0]['AtParkId'])) $this->attendance->park_id = $detail['CalendarEventDetails'][0]['AtParkId'];
-				$this->attendance->date = $detail['CalendarEventDetails'][0]['EventStart'];
-				$this->attendance->event_id = $detail['CalendarEventDetails'][0]['EventId'];
+				            if ($kingdom_id) $this->attendance->kingdom_id = $kingdom_id;
+							if (valid_id($detail['CalendarEventDetails'][0]['AtParkId'])) $this->attendance->park_id = $detail['CalendarEventDetails'][0]['AtParkId'];
+							$this->attendance->date = $detail['CalendarEventDetails'][0]['EventStart'];				$this->attendance->event_id = $detail['CalendarEventDetails'][0]['EventId'];
 				$this->attendance->event_calendardetail_id = $request['EventCalendarDetailId'];
 				break;
 			default:
@@ -132,7 +140,7 @@ class Attendance  extends Ork3 {
 		
 		$this->attendance->clear();
 		$this->attendance->attendance_id = $request['AttendanceId'];
-		if (!valid_id() || !$this->attendance->find()) {
+		if (!valid_id($request['AttendanceId']) || !$this->attendance->find()) {
 			return InvalidParameter();
 		}
 		
@@ -210,19 +218,19 @@ class Attendance  extends Ork3 {
 				logtrace('attendance_authority_h() - ecdid match', $detail);
 				return false;
 			}
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $detail['CalendarEventDetails'][0]['EventId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $detail['CalendarEventDetails'][0]['EventId'], AUTH_EDIT)) {
 				return AUTH_EVENT;
 			}
 		} else if (valid_id($request['EventId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
 				return AUTH_EVENT;
 			}
 		} else if (valid_id($request['ParkId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
 				return AUTH_PARK;
       }
 		} else if (valid_id($request['KingdomId'])) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
 				return AUTH_KINGDOM;
 			}
 		}else {

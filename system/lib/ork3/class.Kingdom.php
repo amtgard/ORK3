@@ -34,6 +34,8 @@ class Kingdom  extends Ork3 {
 			$response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id>0?1:0;
 			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
 			$response['KingdomInfo']['Active'] = $this->kingdom->active;
+			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
+			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
@@ -173,7 +175,7 @@ class Kingdom  extends Ork3 {
 
 	public function EditAward($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
 			$this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
 			$this->kingdomaward->clear();
 			$this->kingdomaward->kingdom_id = $request['KingdomId'];
@@ -193,9 +195,9 @@ class Kingdom  extends Ork3 {
 		}
 	}
 
-	public function RemoveAward($request) { 
+	public function RemoveAward($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
 			$this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
 			$this->kingdomaward->kingdom_id = $request['KingdomId'];
 			$this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
@@ -229,10 +231,8 @@ class Kingdom  extends Ork3 {
 						'Length'=>$parktitle->period_length
 					);
 			} while ($parktitle->next());
-			$response['Status'] = Success();
-			return $response;
 		}
-		$response['Status'] = InvalidParameter();
+		$response['Status'] = Success();
 		return $response;
 	}
 	
@@ -255,6 +255,8 @@ class Kingdom  extends Ork3 {
 			$response['KingdomInfo']['Active'] = $this->kingdom->active;
 			$response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id>0?1:0;
 			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
+			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
+			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
 			
 			// Fetch configs
 			$response['KingdomConfiguration'] = Common::get_configs($request['KingdomId']);
@@ -321,6 +323,7 @@ class Kingdom  extends Ork3 {
 			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'DuesAmount', $request['DuesAmount']);
 			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'KingdomDuesTake', $request['KingdomDuesTake']);
     		$c->add_config($mundane_id, CFG_KINGDOM, 'color', $this->kingdom->kingdom_id, 'AtlasColor', 'FE7569');
+			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AwardRecsPublic', '1');
 			
 			$c->create_officers($this->kingdom->kingdom_id, 0);
 			
@@ -387,6 +390,8 @@ class Kingdom  extends Ork3 {
 						'Title' => $r->title,
 						'Class' => $r->class,
                         'HasHeraldry' => $r->has_heraldry,
+                        'City' => $r->city,
+                        'Province' => $r->province,
 						'ParentOf' => $r->is_principality==1?Ork3::$Lib->park->GetParks(array('ParkId'=>$r->park_id, 'Stack' => array($r->park_id))):null
 					);
 			}
@@ -464,6 +469,8 @@ class Kingdom  extends Ork3 {
 			if ($this->kingdom->find()) {
 				$this->kingdom->name = strlen($request['Name'])>0?$request['Name']:$this->kingdom->name;
 				$this->kingdom->abbreviation = strlen($request['Abbreviation'])>0?$request['Abbreviation']:$this->kingdom->abbreviation;
+				if (isset($request['Description'])) $this->kingdom->description = $request['Description'];
+				if (isset($request['Url'])) $this->kingdom->url = $request['Url'];
 				$this->kingdom->modified = date("Y-m-d H:i:s", time());
 				$this->kingdom->save();
 				
@@ -493,6 +500,39 @@ class Kingdom  extends Ork3 {
 			$response = NoAuthorization(null, $mundane_id);
 		}
 		return $response;
+	}
+
+	public function SetKingdomParent($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			$kingdom_id = (int)$request['KingdomId'];
+			$parent_id  = (int)$request['ParentKingdomId'];
+			// Cannot make a kingdom its own parent or create a circular reference
+			if ($parent_id === $kingdom_id) {
+				return InvalidParameter('A kingdom cannot be its own parent.');
+			}
+			$this->kingdom->clear();
+			$this->kingdom->kingdom_id = $kingdom_id;
+			if (!$this->kingdom->find()) {
+				return InvalidParameter('Kingdom not found.');
+			}
+			if ($parent_id > 0) {
+				$this->kingdom->clear();
+				$this->kingdom->kingdom_id = $parent_id;
+				if (!$this->kingdom->find()) {
+					return InvalidParameter('Parent kingdom not found.');
+				}
+				$this->kingdom->clear();
+				$this->kingdom->kingdom_id = $kingdom_id;
+				$this->kingdom->find();
+			}
+			$this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
+			$this->kingdom->parent_kingdom_id = $parent_id;
+			$this->kingdom->modified = date('Y-m-d H:i:s', time());
+			$this->kingdom->save();
+			return Success();
+		}
+		return NoAuthorization();
 	}
 
 	public function GetOfficers($request) {

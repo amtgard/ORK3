@@ -111,6 +111,7 @@ class Report  extends Ork3 {
 						left join " . DB_PREFIX . "park park on t.park_id = park.park_id
 					where
 						1 $where
+					group by t.tournament_id
 					order by t.date_time
 					$limit";
 
@@ -202,7 +203,7 @@ class Report  extends Ork3 {
 		$key = Ork3::$Lib->ghettocache->key(array('KingdomId' => $kingdom_id));
     if (!valid_id($kingdom_id))
       return false;
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false && false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
 			return $cache;
 
     $sql = "select m.mundane_id, m.persona, ducal_terms.ducal_points, kingdom_terms.kingdom_points from
@@ -331,6 +332,7 @@ class Report  extends Ork3 {
 						'KingdomName' => $r->kingdom_name,
 						'Rank' => $r->rank,
 						'AwardName' => $r->award_name,
+						'Peerage' => $r->peerage,
 						'EnteredBy' => $r->by_whom_persona,
 						'EnteredById' => $r->by_whom_id
 					);
@@ -438,7 +440,11 @@ class Report  extends Ork3 {
 			a.peerage, ifnull(ka.name, a.name) as award_name, 
 			m.persona, 
 			recs.date_recommended, 
-			m.mundane_id, 
+			m.mundane_id,
+			m.park_id,
+			m.kingdom_id,
+			p.name as park_name,
+			k.name as kingdom_name,
 			recs.rank, 
 			rbi.mundane_id as recommended_by_id, rbi.persona as recommended_by_persona,
 			recs.recommendations_id,
@@ -448,15 +454,24 @@ class Report  extends Ork3 {
 			recs.deleted_by,
 			ka.award_id as ka_award_id,
 			ka.kingdomaward_id as ka_kaward_id,
-			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= recs.rank) as kacount,
-			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= recs.rank) as awcount
+			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
+			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
+			COALESCE(
+				(SELECT MAX(subr.rank) FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id),
+				(SELECT MAX(subr2.rank) FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id)
+			) as player_ka_rank,
+			COALESCE(
+				(SELECT subr.date FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id ORDER BY subr.rank DESC, subr.date DESC LIMIT 1),
+				(SELECT subr2.date FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id ORDER BY subr2.rank DESC, subr2.date DESC LIMIT 1)
+			) as player_ka_date
 			FROM " . DB_PREFIX . "recommendations recs			
 			LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = recs.kingdomaward_id
 			LEFT JOIN " . DB_PREFIX . "award a on a.award_id = ka.award_id
 			LEFT join " . DB_PREFIX . "mundane m on m.mundane_id = recs.mundane_id
 			LEFT join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = recs.recommended_by_id
+			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
+			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 			WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0) $location_clause
-			HAVING (kacount = 0 AND awcount = 0)
 			order by m.persona, a.name, recs.rank, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
@@ -472,7 +487,15 @@ class Report  extends Ork3 {
 						'AwardName' => $r->award_name,
 						'Reason' => $r->reason,
 						'RecommendedByName' => $r->recommended_by_persona,
-						'RecommendedById' => $r->recommended_by_id
+						'RecommendedById' => $r->recommended_by_id,
+						'KingdomAwardId' => (int)$r->ka_kaward_id,
+						'ParkId' => $r->park_id,
+						'KingdomId' => $r->kingdom_id,
+						'ParkName' => $r->park_name,
+						'KingdomName' => $r->kingdom_name,
+						'AlreadyHas' => ($r->kacount > 0 || $r->awcount > 0),
+						'CurrentRank' => ($r->kacount > 0 || $r->awcount > 0) ? (int)$r->player_ka_rank : null,
+						'CurrentRankDate' => ($r->kacount > 0 || $r->awcount > 0) ? $r->player_ka_date : null,
 					);
 			}
 			$response['Status'] = Success();
@@ -537,15 +560,32 @@ class Report  extends Ork3 {
 		if (valid_id($request['IncludeHouseHolds'])) $households = " or u.type = 'Household' ";
 		if (valid_id($request['IncludeEvents'])) $events = " or u.type = 'Event' ";
 		if (valid_id($request['ActiveOnly'])) $active_only = " and um.active = 'Active' ";
+		if (valid_id($request['KingdomId'])) $activity_scope = " and a.kingdom_id = '$request[KingdomId]'";
+		elseif (valid_id($request['ParkId'])) $activity_scope = " and a.park_id = '$request[ParkId]'";
 
-		$sql = "select distinct u.*, m.*, count(um.mundane_id) as member_count, um.unit_mundane_id
+		$name_where = '';
+		if (!empty($request['Name'])) {
+			$safeName = str_replace(["'", '%', '_', '\\'], ["\'\'", '\\%', '\\_', '\\\\'], $request['Name']);
+			$name_where = " and u.name like '%{$safeName}%'";
+		}
+		$limit_clause = isset($request['Limit']) && is_numeric($request['Limit']) ? 'LIMIT ' . (int)$request['Limit'] : '';
+		$allowed_order = ['u.name', 'active_member_count DESC', 'total_member_count DESC'];
+		$order_by = (isset($request['OrderBy']) && in_array($request['OrderBy'], $allowed_order))
+			? $request['OrderBy'] : 'u.name';
+
+		$sql = "select distinct u.*, m.*, u.has_heraldry, count(um.mundane_id) as member_count,
+					(select count(*) from " . DB_PREFIX . "unit_mundane um2 where um2.unit_id = u.unit_id) as total_member_count,
+					(select max(a.date) from " . DB_PREFIX . "attendance a join " . DB_PREFIX . "unit_mundane um3 on um3.mundane_id = a.mundane_id where um3.unit_id = u.unit_id $activity_scope) as last_activity_date,
+					(select count(distinct um4.mundane_id) from " . DB_PREFIX . "unit_mundane um4 join " . DB_PREFIX . "attendance a4 on a4.mundane_id = um4.mundane_id where um4.unit_id = u.unit_id and a4.date >= date_sub(curdate(), interval 1 year)) as active_member_count,
+					(select group_concat(m5.persona order by m5.persona separator ', ') from " . DB_PREFIX . "unit_mundane um5 join " . DB_PREFIX . "mundane m5 on m5.mundane_id = um5.mundane_id where um5.unit_id = u.unit_id and um5.role in ('captain','lord') and um5.active = 'Active') as leader_names,
+					um.unit_mundane_id
 					from " . DB_PREFIX . "unit u
 						left join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id
 							left join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id
 						left join " . DB_PREFIX . "event e on e.unit_id = u.unit_id
-					where 1 and (1 $kingdom $park $mundane $event_id $active_only) and (0 $companies $households $events)
+					where 1 and (1 $kingdom $park $mundane $event_id $active_only $name_where) and (0 $companies $households $events)
 					group by u.unit_id
-				order by u.name";
+				order by $order_by $limit_clause";
 		$r = $this->db->query($sql);
 		logtrace("Unit Summary", array($request, $sql));
 		$response = array( 'Status' => Success(), 'Units' => array());
@@ -554,12 +594,18 @@ class Report  extends Ork3 {
 		} else if ($r->size() > 0) {
 			while ($r->next()) {
 				$response['Units'][] = array(
-					'UnitId' => $r->unit_id,
-					'Type' => $r->type,
-					'Name' => $r->name,
-					'Persona' => $r->persona,
-					'MemberCount' => $r->member_count,
-					'UnitMundaneId' => $r->unit_mundane_id
+					'UnitId'           => $r->unit_id,
+					'Type'             => $r->type,
+					'Name'             => $r->name,
+					'HasHeraldry'      => (int)$r->has_heraldry,
+					'Persona'          => $r->persona,
+					'MemberCount'       => $r->member_count,
+					'TotalMemberCount'  => $r->total_member_count,
+					'LastActivityDate'   => $r->last_activity_date,
+					'ActiveMemberCount'  => (int)$r->active_member_count,
+					'LeaderNames'        => $r->leader_names ?? '',
+					'Url'                => $r->url ?? '',
+					'UnitMundaneId'      => $r->unit_mundane_id,
 				);
 			}
 		}
@@ -595,12 +641,12 @@ class Report  extends Ork3 {
 		    case 'date':
 		    default:
     		        $by_period = 'ssa.date';
-                    $group_period = 'a.date';
+                    $group_period = 'a.date, a.event_calendardetail_id';
                 break;
         }
 
 
-		$sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
+		$sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, count(DISTINCT a.mundane_id) as distinct_players, a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
 					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
 					from
@@ -631,6 +677,7 @@ class Report  extends Ork3 {
 						'Year' => $r->year,
 						'Week' => $r->week,
 						'Attendees' => $r->attendees,
+						'DistinctPlayers' => $r->distinct_players,
 						'EventCalendarDetailId' => $r->event_calendardetail_id,
 						'EventId' => $r->event_id,
 						'ParkId' => $r->park_id,
@@ -658,7 +705,7 @@ class Report  extends Ork3 {
 			$unit_phrase = "u.name as unit_name, ";
 		}
 
-		$sql = "select a.*, k.name as kingdom_name, p.park_id, p.name as park_name, k.parent_kingdom_id, m.persona, $unit_phrase c.name as class_name
+		$sql = "select a.*, k.name as kingdom_name, p.park_id, p.name as park_name, k.abbreviation as k_abbr, p.abbreviation as p_abbr, k.parent_kingdom_id, m.persona, $unit_phrase c.name as class_name
 					from " . DB_PREFIX . "attendance a
 						LEFT JOIN " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
 							LEFT JOIN " . DB_PREFIX . "kingdom k on m.kingdom_id = k.kingdom_id
@@ -696,6 +743,8 @@ class Report  extends Ork3 {
 						'Credits' => $r->credits,
 						'KingdomName' => $r->kingdom_name,
 						'ParkName' => $r->park_name,
+						'KAbbr' => $r->k_abbr,
+						'PAbbr' => $r->p_abbr,
 						'UnitName' => $r->unit_name,
 						'Persona' => $r->persona,
 						'ClassName' => $r->class_name,
@@ -717,7 +766,7 @@ class Report  extends Ork3 {
 		}
 
 		$sql = "select a.*, a.persona as attendance_persona,
-					k.name as kingdom_name, k.parent_kingdom_id, mk.name as from_kingdom_name, mk.parent_kingdom_id as from_parent_kingdom_id,
+					k.name as kingdom_name, k.parent_kingdom_id, mk.kingdom_id as from_kingdom_id, mk.name as from_kingdom_name, mk.parent_kingdom_id as from_parent_kingdom_id,
 					p.name as park_name, p.park_id as park_id, mp.name as from_park_name, mp.park_id as from_park_id,
 					m.persona, bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
 					$unit_phrase c.name as class_name, e.event_id, d.event_calendardetail_id, e.name as event_name, d.event_start, d.event_end
@@ -895,7 +944,7 @@ class Report  extends Ork3 {
 		$restrict_clause = array();
 		if (true == $request['Suspended']) {
 			/* Borrowed from Player class to clear the suspensions past their suspended_until date before running the report */
-			$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
+			$sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null, suspension_propagates = 1 where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
 			$this->db->query($sql);
 		}
 		switch ($request['Type']) {
@@ -931,7 +980,7 @@ class Report  extends Ork3 {
 		$select_list = array_merge($select_list,
 			array(
 				'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name',
-				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'suspended_by.persona suspendator',
+				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'm.suspension_propagates', 'suspended_by.persona suspendator',
 				'p.name as park_name','k.name as kingdom_name','m.penalty_box'));
 			if (true == $request['Active']) $restrict_clause[] = ' m.active = 1 ';
 			if (true == $request['InActive']) $restrict_clause[] = ' m.active = 0 ';
@@ -994,6 +1043,7 @@ class Report  extends Ork3 {
 								'SuspendedUntil' => $r->suspended_until,
 								'Suspendator' => $r->suspendator,
 								'Suspension' => $r->suspension,
+							'SuspensionPropagates' => $r->suspension_propagates,
 								'ParkId' => $r->park_id,
 								'KingdomId' => $r->kingdom_id,
 								'ParentKingdomId' => $r->parent_kingdom_id,
@@ -1213,9 +1263,9 @@ class Report  extends Ork3 {
 								count(mundanesbyweek.mundane_id) attendance_count, mundanesbyweek.kingdom_id
 							from
 								(select
-										mundane_id, date_week3 as week, kingdom_id
+										mundane_id, date_year, date_week3 as week, kingdom_id
 									from " . DB_PREFIX . "attendance
-									where date > '" . date("Y-m-d", strtotime("-$request[KingdomAverageWeeks] week")) . "' group by date_week3, mundane_id)
+									where date > '" . date("Y-m-d", strtotime("-$request[KingdomAverageWeeks] week")) . "' and mundane_id > 0 group by date_year, date_week3, mundane_id, kingdom_id)
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
@@ -1224,7 +1274,7 @@ class Report  extends Ork3 {
 								(select
 										mundane_id, date_month as month, kingdom_id
 									from " . DB_PREFIX . "attendance
-									where date > '" . date("Y-m-d", strtotime("-1 year")) . "' group by date_month, mundane_id)
+									where date > '" . date("Y-m-d", strtotime("-1 year")) . "' and mundane_id > 0 group by date_month, mundane_id, kingdom_id)
 									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
@@ -1254,6 +1304,63 @@ class Report  extends Ork3 {
 			'ActiveKingdomsSummaryList' => $report
 		);
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
+	public function GetDistinctPlayerStats($request) {
+		$where = '';
+		if (valid_id($request['EventId'])) $where = "AND a.event_id = '" . mysql_real_escape_string($request['EventId']) . "'";
+		if (valid_id($request['KingdomId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		if (valid_id($request['ParkId'])) $where = "AND a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
+		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['PrincipalityId']) . "'";
+
+		if ($request['PerWeeks'] == 1)
+			$per_period = date('Y-m-d', strtotime("-{$request['Periods']} week"));
+		if ($request['PerMonths'] == 1)
+			$per_period = date('Y-m-d', strtotime("-{$request['Periods']} month"));
+
+		$sql_total = "SELECT COUNT(DISTINCT a.mundane_id) AS total_distinct
+			FROM " . DB_PREFIX . "attendance a
+			WHERE a.date > '$per_period' AND a.date <= NOW() AND a.mundane_id > 0 $where";
+
+		$sql_avg = "SELECT AVG(weekly_unique) AS avg_per_week FROM (
+			SELECT COUNT(DISTINCT a.mundane_id) AS weekly_unique
+			FROM " . DB_PREFIX . "attendance a
+			WHERE a.date > '$per_period' AND a.date <= NOW() AND a.mundane_id > 0 $where
+			GROUP BY a.date_year, a.date_week3
+		) sub";
+
+		$total = 0;
+		$avg = 0;
+
+		$r = $this->db->query($sql_total);
+		if ($r && $r->next()) {
+			$total = (int)$r->total_distinct;
+		}
+
+		$r = $this->db->query($sql_avg);
+		if ($r && $r->next()) {
+			$avg = round((float)$r->avg_per_week, 1);
+		}
+
+		return array(
+			'Status' => Success(),
+			'TotalDistinctPlayers' => $total,
+			'AvgDistinctPerWeek' => $avg
+		);
+	}
+
+	public function GetDistinctActivePlayerCount($weeks = 26) {
+		$cacheKey = Ork3::$Lib->ghettocache->key(['weeks' => $weeks]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 600)) !== false)
+			return $cache;
+		$since = date('Y-m-d', strtotime("-{$weeks} week"));
+		$sql = "SELECT COUNT(DISTINCT mundane_id) AS player_count FROM `" . DB_PREFIX . "attendance` WHERE date > '{$since}' AND mundane_id > 0";
+		$r = $this->db->query($sql);
+		$count = 0;
+		if ($r && $r->next()) {
+			$count = (int)$r->player_count;
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $count);
 	}
 
 	public function GetActivePlayers($request) {
@@ -1420,6 +1527,7 @@ class Report  extends Ork3 {
 	}
 
 	public function GetReeveQualified($request) {
+		$where = '';
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
@@ -1457,6 +1565,7 @@ class Report  extends Ork3 {
 	}
 
 	public function GetCorporaQualified($request) {
+		$where = '';
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
@@ -1633,6 +1742,8 @@ class Report  extends Ork3 {
 
 		$r = $this->db->query($sql);
 		$response = array('Status' => Success(), 'Attendance' => array());
+		$kingdom_unique_players = 0;
+		$kingdom_unique_members = 0;
 		if ($r !== false && $r->size() > 0) {
 			do {
 				$response['Attendance'][] = array(
@@ -1646,6 +1757,26 @@ class Report  extends Ork3 {
 					'MonthsInPeriod' => $r->months_in_period
 				);
 			} while ($r->next());
+		}
+
+		// Kingdom-wide unique counts — dedicated query to avoid double-counting cross-park visitors
+		$sql_kw = "SELECT
+					COUNT(DISTINCT a2.mundane_id) as kingdom_unique_players,
+					COUNT(DISTINCT CASE WHEN m2.park_id = a2.park_id THEN a2.mundane_id END) as kingdom_unique_members
+				FROM " . DB_PREFIX . "attendance a2
+					INNER JOIN " . DB_PREFIX . "park p2 ON a2.park_id = p2.park_id
+					LEFT JOIN " . DB_PREFIX . "mundane m2 ON a2.mundane_id = m2.mundane_id
+				WHERE a2.kingdom_id = '$kingdom_id'
+					AND a2.date >= '$start_date'
+					AND a2.date <= '$end_date'
+					AND a2.park_id > 0
+					AND p2.active = 'Active'";
+
+		$r_kw = $this->db->query($sql_kw);
+		if ($r_kw !== false) {
+			$r_kw->next(); // DataSet() pre-fetches, but guard against edge cases where it doesn't
+			$kingdom_unique_players = (int)($r_kw->kingdom_unique_players ?? 0);
+			$kingdom_unique_members = (int)($r_kw->kingdom_unique_members ?? 0);
 		}
 
 		// Second query: count of park members with 2+/3+/4+ sign-ins per park per period
@@ -1691,25 +1822,11 @@ class Report  extends Ork3 {
 		}
 		unset($row);
 
-		// Summary query: kingdom-wide distinct player/member counts (avoids per-park summation double-counting visitors)
-		$sql_summary = "SELECT
-					COUNT(DISTINCT a.mundane_id) as unique_players,
-					COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END) as unique_members
-				FROM " . DB_PREFIX . "attendance a
-					INNER JOIN " . DB_PREFIX . "park p ON a.park_id = p.park_id
-					LEFT JOIN " . DB_PREFIX . "mundane m ON a.mundane_id = m.mundane_id
-				WHERE a.kingdom_id = '$kingdom_id'
-					AND a.date >= '$start_date'
-					AND a.date <= '$end_date'
-					AND a.park_id > 0
-					AND p.active = 'Active'";
-
-		$r_summary = $this->db->query($sql_summary);
-		$response['Summary'] = array('UniquePlayers' => 0, 'UniqueMembers' => 0);
-		if ($r_summary !== false && $r_summary->size() > 0) {
-			$response['Summary']['UniquePlayers'] = (int)$r_summary->unique_players;
-			$response['Summary']['UniqueMembers'] = (int)$r_summary->unique_members;
-		}
+		// Kingdom-wide unique counts from dedicated query
+		$response['Summary'] = array(
+			'UniquePlayers' => $kingdom_unique_players,
+			'UniqueMembers' => $kingdom_unique_members,
+		);
 
 		logtrace("Report->ParkAttendanceAllParks()", array($this->db->lastSql, $request));
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cache_key, $response);
@@ -2042,6 +2159,421 @@ class Report  extends Ork3 {
 		logtrace("Report->ParkAttendanceSinglePark()", array($this->db->lastSql, $request));
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
-}
 
-?>
+	public function GetParkDistanceMatrix($request) {
+		$kingdom_id = intval($request['KingdomId']);
+
+		$sql = "SELECT
+					p1.park_id  AS row_id,
+					p1.name     AS row_name,
+					p1.city     AS row_city,
+					p1.province AS row_province,
+					p2.park_id  AS col_id,
+					ROUND(ST_Distance_Sphere(POINT(p1.longitude, p1.latitude), POINT(p2.longitude, p2.latitude)) / 1609.344, 1) AS miles
+				FROM " . DB_PREFIX . "park p1
+				CROSS JOIN " . DB_PREFIX . "park p2
+				WHERE p1.kingdom_id = '$kingdom_id'
+					AND p2.kingdom_id = '$kingdom_id'
+					AND p1.active = 'Active'
+					AND p2.active = 'Active'
+					AND p1.latitude  IS NOT NULL AND p1.latitude  != 0
+					AND p1.longitude IS NOT NULL AND p1.longitude != 0
+					AND p2.latitude  IS NOT NULL AND p2.latitude  != 0
+					AND p2.longitude IS NOT NULL AND p2.longitude != 0
+				ORDER BY p1.name ASC, p2.name ASC";
+
+		$r = $this->db->query($sql);
+
+		$parks  = array();
+		$matrix = array();
+
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$row_id = $r->row_id;
+				$col_id = $r->col_id;
+				if (!isset($parks[$row_id])) {
+					$parks[$row_id] = array(
+						'Name'     => $r->row_name,
+						'City'     => $r->row_city,
+						'Province' => $r->row_province,
+					);
+				}
+				if ($row_id !== $col_id) $matrix[$row_id][$col_id] = floatval($r->miles);
+			}
+		}
+
+		return array('Parks' => $parks, 'Matrix' => $matrix);
+	}
+
+	public function GetClosestParks($request) {
+		$park_id = intval($request['ParkId']);
+
+		$origin_sql = "SELECT latitude, longitude, name FROM " . DB_PREFIX . "park WHERE park_id = '$park_id'";
+		$origin = $this->db->query($origin_sql);
+		if ($origin === false || $origin->size() == 0) return array('Parks' => array(), 'OriginPark' => null);
+
+		$origin->next();
+		$lat = floatval($origin->latitude);
+		$lng = floatval($origin->longitude);
+		$origin_name = $origin->name;
+
+		if ($lat == 0 && $lng == 0) return array('Parks' => array(), 'OriginPark' => $origin_name);
+
+		$sql = "SELECT
+					p.park_id,
+					p.name AS park_name,
+					k.name AS kingdom_name,
+					p.city,
+					p.province,
+					ROUND(ST_Distance_Sphere(POINT(p.longitude, p.latitude), POINT('$lng', '$lat')) / 1609.344, 1) AS miles
+				FROM " . DB_PREFIX . "park p
+				INNER JOIN " . DB_PREFIX . "kingdom k ON p.kingdom_id = k.kingdom_id
+				WHERE p.park_id != '$park_id'
+					AND p.active = 'Active'
+					AND p.latitude IS NOT NULL
+					AND p.longitude IS NOT NULL
+					AND p.latitude != 0
+					AND p.longitude != 0
+				ORDER BY miles ASC
+				LIMIT 25";
+
+		$r = $this->db->query($sql);
+		$response = array('Parks' => array(), 'OriginPark' => $origin_name);
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$response['Parks'][] = array(
+					'ParkId'      => $r->park_id,
+					'ParkName'    => $r->park_name,
+					'KingdomName' => $r->kingdom_name,
+					'City'        => $r->city,
+					'Province'    => $r->province,
+					'Miles'       => $r->miles,
+				);
+			}
+		}
+		return $response;
+	}
+
+	public function RecentParkAttendees($request) {
+		$park_id = intval($request['ParkId']);
+		if (!valid_id($park_id)) return ['Status' => InvalidParameter(), 'Attendees' => []];
+		$sql = "SELECT a.mundane_id, m.persona,
+					MAX(a.date) AS last_signin,
+					SUBSTRING_INDEX(GROUP_CONCAT(a.class_id ORDER BY a.date DESC, a.attendance_id DESC SEPARATOR ','), ',', 1) AS class_id,
+					SUBSTRING_INDEX(GROUP_CONCAT(c.name    ORDER BY a.date DESC, a.attendance_id DESC SEPARATOR ','), ',', 1) AS class_name
+				FROM ork_attendance a
+				JOIN ork_mundane m  ON m.mundane_id = a.mundane_id
+				LEFT JOIN ork_class c  ON c.class_id = a.class_id
+				WHERE a.park_id = $park_id
+				  AND a.date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+				  AND a.mundane_id > 0
+				  AND m.mundane_id IS NOT NULL
+				GROUP BY a.mundane_id, m.persona
+				ORDER BY m.persona";
+		$r = $this->db->query($sql);
+		$attendees = [];
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$attendees[] = [
+					'MundaneId'  => (int)$r->mundane_id,
+					'Persona'    => $r->persona,
+					'ClassId'    => (int)$r->class_id,
+					'ClassName'  => $r->class_name,
+					'LastSignIn' => $r->last_signin,
+				];
+			}
+		}
+		return ['Status' => Success(), 'Attendees' => $attendees];
+	}
+
+	public function KingdomOfficerDirectory($request) {
+		$kingdom_id = valid_id($request['KingdomId']) ? (int)$request['KingdomId'] : null;
+
+		if ($kingdom_id) {
+			// Park-scoped: officers for each park within a kingdom
+			$sql = "SELECT
+						p.park_id    AS entity_id,
+						p.name       AS entity_name,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
+					FROM " . DB_PREFIX . "park p
+						LEFT JOIN " . DB_PREFIX . "officer o ON o.park_id = p.park_id
+						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
+					WHERE p.kingdom_id = '$kingdom_id'
+						AND p.active = 'Active'
+					GROUP BY p.park_id, p.name
+					ORDER BY p.name";
+			$mode = 'parks';
+		} else {
+			// Top-level: kingdom-seat officers for all active kingdoms
+			$sql = "SELECT
+						k.kingdom_id AS entity_id,
+						k.name       AS entity_name,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.persona    END) AS monarch_persona,
+						MAX(CASE WHEN o.role = 'Monarch'        THEN m.mundane_id END) AS monarch_id,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.persona    END) AS regent_persona,
+						MAX(CASE WHEN o.role = 'Regent'         THEN m.mundane_id END) AS regent_id,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.persona    END) AS pm_persona,
+						MAX(CASE WHEN o.role = 'Prime Minister' THEN m.mundane_id END) AS pm_id,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.persona    END) AS champion_persona,
+						MAX(CASE WHEN o.role = 'Champion'       THEN m.mundane_id END) AS champion_id,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.persona    END) AS gmr_persona,
+						MAX(CASE WHEN o.role = 'GMR'            THEN m.mundane_id END) AS gmr_id,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.given_name  END) AS monarch_given,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.surname     END) AS monarch_surname,
+					MAX(CASE WHEN o.role = 'Monarch'        THEN m.email       END) AS monarch_email,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.given_name  END) AS regent_given,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.surname     END) AS regent_surname,
+					MAX(CASE WHEN o.role = 'Regent'         THEN m.email       END) AS regent_email,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.given_name  END) AS pm_given,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.surname     END) AS pm_surname,
+					MAX(CASE WHEN o.role = 'Prime Minister' THEN m.email       END) AS pm_email,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.given_name  END) AS champion_given,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.surname     END) AS champion_surname,
+					MAX(CASE WHEN o.role = 'Champion'       THEN m.email       END) AS champion_email,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.given_name  END) AS gmr_given,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.surname     END) AS gmr_surname,
+					MAX(CASE WHEN o.role = 'GMR'            THEN m.email       END) AS gmr_email
+					FROM " . DB_PREFIX . "kingdom k
+						LEFT JOIN " . DB_PREFIX . "officer o ON o.kingdom_id = k.kingdom_id AND o.park_id = 0
+						LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
+					WHERE k.parent_kingdom_id = 0
+						AND k.active = 'Active'
+						AND k.name != 'The Freeholds of Amtgard'
+					GROUP BY k.kingdom_id, k.name
+					ORDER BY k.name";
+			$mode = 'kingdoms';
+		}
+
+		$r = $this->db->query($sql);
+		$response = ['Status' => Success(), 'Mode' => $mode, 'Kingdoms' => []];
+		if ($r === false) {
+			$response['Status'] = InvalidParameter();
+		} elseif ($r->size() > 0) {
+			while ($r->next()) {
+				$response['Kingdoms'][] = [
+					'KingdomId'      => $r->entity_id,
+					'KingdomName'    => $r->entity_name,
+					'MonarchPersona'  => $r->monarch_persona,
+					'MonarchId'       => $r->monarch_id,
+					'MonarchGiven'    => $r->monarch_given,
+					'MonarchSurname'  => $r->monarch_surname,
+					'MonarchEmail'    => $r->monarch_email,
+					'RegentPersona'   => $r->regent_persona,
+					'RegentId'        => $r->regent_id,
+					'RegentGiven'     => $r->regent_given,
+					'RegentSurname'   => $r->regent_surname,
+					'RegentEmail'     => $r->regent_email,
+					'PMPersona'       => $r->pm_persona,
+					'PMId'            => $r->pm_id,
+					'PMGiven'         => $r->pm_given,
+					'PMSurname'       => $r->pm_surname,
+					'PMEmail'         => $r->pm_email,
+					'ChampionPersona' => $r->champion_persona,
+					'ChampionId'      => $r->champion_id,
+					'ChampionGiven'   => $r->champion_given,
+					'ChampionSurname' => $r->champion_surname,
+					'ChampionEmail'   => $r->champion_email,
+					'GMRPersona'      => $r->gmr_persona,
+					'GMRId'           => $r->gmr_id,
+					'GMRGiven'        => $r->gmr_given,
+					'GMRSurname'      => $r->gmr_surname,
+					'GMREmail'        => $r->gmr_email,
+				];
+			}
+		}
+		return $response;
+	}
+	public function EventAttendanceReport($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
+
+		if (valid_id($request['KingdomId'])) {
+			$where = 'AND e.kingdom_id = ' . (int)$request['KingdomId'];
+		} elseif (valid_id($request['ParkId'])) {
+			$where = 'AND e.park_id = ' . (int)$request['ParkId'];
+		} else {
+			return array('Status' => InvalidParameter(), 'Events' => array());
+		}
+
+		$sql = "SELECT
+					e.event_id,
+					e.name AS event_name,
+					e.has_heraldry,
+					p.park_id,
+					p.name AS park_name,
+					p.abbreviation AS park_abbr,
+					cd.event_calendardetail_id,
+					cd.event_start,
+					cd.event_end,
+					cd.price,
+					cd.city,
+					cd.province,
+					(SELECT COUNT(*) FROM " . DB_PREFIX . "attendance a
+						WHERE a.event_calendardetail_id = cd.event_calendardetail_id) AS attendance_count,
+					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r
+						WHERE r.event_calendardetail_id = cd.event_calendardetail_id) AS rsvp_count
+				FROM " . DB_PREFIX . "event e
+				LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
+				JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
+				WHERE 1 $where
+				ORDER BY cd.event_start DESC
+				LIMIT 1000";
+
+		$r = $this->db->query($sql);
+		$response = array();
+		if ($r !== false) {
+			$response['Events'] = array();
+			if ($r->size() > 0) {
+				while ($r->next()) {
+					$response['Events'][] = array(
+						'EventId'         => (int)$r->event_id,
+						'EventName'       => $r->event_name,
+						'HasHeraldry'     => (int)$r->has_heraldry,
+						'ParkId'          => (int)$r->park_id,
+						'ParkName'        => $r->park_name,
+						'ParkAbbr'        => $r->park_abbr,
+						'DetailId'        => (int)$r->event_calendardetail_id,
+						'EventStart'      => $r->event_start,
+						'EventEnd'        => $r->event_end,
+						'Price'           => $r->price,
+						'City'            => $r->city,
+						'Province'        => $r->province,
+						'AttendanceCount' => (int)$r->attendance_count,
+						'RsvpCount'       => (int)$r->rsvp_count,
+					);
+				}
+			}
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+			$response['Events'] = array();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
+	public function BeltlineData($request) {
+		$kingdom_id = intval($request['KingdomId']);
+		if (!valid_id($kingdom_id)) {
+			return array('Status' => InvalidParameter('KingdomId required'), 'Relationships' => array(), 'Knights' => array());
+		}
+
+		$sql = "SELECT
+				ma.mundane_id AS recipient_id,
+				m.persona AS recipient_persona,
+				ma.given_by_id AS giver_id,
+				giver.persona AS giver_persona,
+				IFNULL(ka.name, a.name) AS title_name,
+				a.peerage,
+				ma.date
+			FROM " . DB_PREFIX . "awards ma
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
+				LEFT JOIN " . DB_PREFIX . "mundane giver ON giver.mundane_id = ma.given_by_id
+			WHERE (a.peerage IN ('Squire', 'Man-At-Arms', 'Page', 'Lords-Page')
+					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			ORDER BY m.persona";
+
+		logtrace('BeltlineData', $sql);
+		$r = $this->db->query($sql);
+		$relationships = array();
+		if ($r !== false && $r->size() > 0) {
+			do {
+				$relationships[] = array(
+					'RecipientId'      => $r->recipient_id,
+					'RecipientPersona' => $r->recipient_persona,
+					'GiverId'          => $r->giver_id,
+					'GiverPersona'     => $r->giver_persona,
+					'TitleName'        => $r->title_name,
+					'Peerage'          => $r->peerage,
+					'Date'             => $r->date,
+				);
+			} while ($r->next());
+		}
+
+		// Knights for the dropdown — kingdom-scoped so the selector stays useful.
+		$knights_sql = "SELECT DISTINCT
+				m.mundane_id,
+				m.persona
+			FROM " . DB_PREFIX . "awards ma
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
+			WHERE a.peerage = 'Knight'
+				AND m.kingdom_id = $kingdom_id
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			ORDER BY m.persona";
+
+		logtrace('BeltlineData knights', $knights_sql);
+		$kr = $this->db->query($knights_sql);
+		$knights = array();
+		if ($kr !== false && $kr->size() > 0) {
+			do {
+				$knights[] = array(
+					'MundaneId' => $kr->mundane_id,
+					'Persona'   => $kr->persona,
+				);
+			} while ($kr->next());
+		}
+
+		// All knight awards globally — IDs for the crown icon + type names for display.
+		$all_knights_sql = "SELECT ma.mundane_id, IFNULL(ka.name, a.name) AS knight_name
+			FROM " . DB_PREFIX . "awards ma
+				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			WHERE a.peerage = 'Knight'
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)";
+
+		$akr = $this->db->query($all_knights_sql);
+		$all_knight_ids = array();
+		$knight_types   = array(); // mundane_id => [type, ...]
+		if ($akr !== false && $akr->size() > 0) {
+			do {
+				$mid  = (int)$akr->mundane_id;
+				$name = $akr->knight_name;
+				// Strip common "Knight of (the) " prefixes to get just the type
+				$type = preg_replace('/^knight(?:hood)? of (?:the )?/i', '', $name);
+				if (strcasecmp($type, $name) === 0) $type = $name; // no prefix matched, use as-is
+				$all_knight_ids[] = $mid;
+				if (!in_array($type, $knight_types[$mid] ?? array())) {
+					$knight_types[$mid][] = $type;
+				}
+			} while ($akr->next());
+			$all_knight_ids = array_unique($all_knight_ids);
+		}
+
+		return array(
+			'Status'        => Success(),
+			'Relationships' => $relationships,
+			'Knights'       => $knights,
+			'AllKnightIds'  => array_values($all_knight_ids),
+			'KnightTypes'   => $knight_types,
+		);
+	}
+
+}

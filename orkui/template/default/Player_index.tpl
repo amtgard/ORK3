@@ -54,6 +54,10 @@
 	}
 </style>
 
+<div id='playernew-preview-banner' style='display:block;width:calc(100% - 44px);background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:10px 16px;margin:10px;font-size:0.95em;color:#1a5276;'>
+	Want a sneak preview of our new, enhanced player profile? <a href='<?=UIR ?>Player/profile/<?=$Player['MundaneId'] ?>'>Check it out here</a>. Note: Clicking any link will return you to the regular design.
+</div>
+
 <div class='info-container <?=(($Player['Suspended'])==1)?"suspended-player":"" ?>' id='player-editor'>
 <h3><?=$Player['Persona'] ?></h3>
 	<form class='form-container' >
@@ -156,6 +160,39 @@
 		</div>
   </form>
 </div>
+
+<?php if (count($UpcomingRsvps) > 0) : ?>
+<div class='info-container'>
+	<h3>Event RSVPs</h3>
+	<table class='information-table' id='UpcomingRsvpTable'>
+		<thead>
+			<tr>
+				<th>Event</th>
+				<th>Start</th>
+				<th>End</th>
+				<?php if ($IsOwnProfile) : ?><th></th><?php endif ?>
+			</tr>
+		</thead>
+		<tbody>
+			<?php foreach ($UpcomingRsvps as $rsvp) : ?>
+			<tr>
+				<td><?=$rsvp['EventName'] ?></td>
+				<td><?=date('Y-m-d', strtotime($rsvp['EventStart'])) ?></td>
+				<td><?=date('Y-m-d', strtotime($rsvp['EventEnd'])) ?></td>
+				<?php if ($IsOwnProfile) : ?>
+				<td>
+					<form method='post' action='<?=UIR ?>Player/profile/<?=$Player['MundaneId'] ?>'>
+						<input type='hidden' name='cancel_rsvp_detail_id' value='<?=$rsvp['EventCalendarDetailId'] ?>'>
+						<button type='submit' class='btn btn-attending'>Cancel RSVP</button>
+					</form>
+				</td>
+				<?php endif ?>
+			</tr>
+			<?php endforeach ?>
+		</tbody>
+	</table>
+</div>
+<?php endif ?>
 
 <div class='info-container'>
     <h3>Dues</h3>
@@ -296,7 +333,7 @@
 	<h3>Awards</h3>
 	<div style="background-color:#eee; margin: 5px 5px; padding: 5px 5px;">
 		<?php if ($LoggedIn == true): ?>
-			<form id="recommendation-form" class='form-container' method='post' action='<?=UIR ?>Player/index/<?=$Player['MundaneId'] ?>/addrecommendation'>
+			<form id="recommendation-form" class='form-container' method='post' action='<?=UIR ?>Player/profile/<?=$Player['MundaneId'] ?>/addrecommendation'>
 				Award:
 				<select name="KingdomAwardId">
 					<option>Select Award...</option>
@@ -349,7 +386,7 @@
 				</td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
-				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
+				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/profile/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
 				<td>
 					<?php 
 						if (valid_id($detail['EventId'])) {
@@ -360,7 +397,7 @@
 					?>
 				</td>
 				<td><?=$detail['Note'] ?></td>
-				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
+				<td><a href="<?=UIR.'Player/profile/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 			</tr>
 <?php endif ?>
 <?php endforeach ?>
@@ -390,7 +427,7 @@
 				<td style='white-space: nowrap;'><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <span class='form-informational-field'>[$detail[Name]]</span>":"" ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='form-informational-field' style='white-space: nowrap;'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
-				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/index/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
+				<td style='white-space: nowrap;'><a href='<?=UIR ?>Player/profile/<?=$detail['GivenById'] ?>'><?=substr($detail['GivenBy'],0,30) ?></a></td>
 				<td> 
 					<?php 
 						if (valid_id($detail['EventId'])) {
@@ -401,7 +438,7 @@
 					?>
 				</td>
 				<td><?=$detail['Note'] ?></td>
-				<td><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
+				<td><a href="<?=UIR.'Player/profile/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
 			</tr>
 <?php endif ?>
 <?php endforeach ?>
@@ -431,12 +468,12 @@
 				<td><?=$recommendation['AwardName'] ?></td>
 				<td><?=valid_id($recommendation['Rank'])?$recommendation['Rank']:'' ?></td>
 				<td><?=$recommendation['DateRecommended'] ?></td>
-				<td><a href="<?=UIR.'Player/index/'.$recommendation['RecommendedById'] ?>"><?=$recommendation['RecommendedByName'] ?></a></td>
+				<td><a href="<?=UIR.'Player/profile/'.$recommendation['RecommendedById'] ?>"><?=$recommendation['RecommendedByName'] ?></a></td>
 				<td><?=$recommendation['Reason'] ?></td>
 				<?php if($this->__session->user_id): ?>
 					<td>
 						<?php if ($can_delete_recommendation || $this->__session->user_id == $recommendation['RecommendedById'] || $this->__session->user_id == $recommendation['MundaneId']): ?>
-							<a class="confirm-delete-recommendation" href="<?=UIR.'Player/index/' . $recommendation['MundaneId'] . '/deleterecommendation/'.$recommendation['RecommendationsId'] ?>">Delete</a> 
+							<a class="confirm-delete-recommendation" href="<?=UIR.'Player/profile/' . $recommendation['MundaneId'] . '/deleterecommendation/'.$recommendation['RecommendationsId'] ?>">Delete</a> 
 						<?php endif; ?>
 					</td>
 				<?php endif; ?>
@@ -464,8 +501,8 @@
 <?php foreach ($Details['Attendance'] as $key => $detail) : ?>
 			<tr>
 				<td><a href='<?=UIR ?>Attendance/<?=$detail['ParkId']>0?'park':'event' ?>/<?=(($detail['ParkId']>0)?($detail['ParkId'].'&AttendanceDate='.$detail['Date']):($detail['EventId'].'/'.$detail['EventCalendarDetailId'])) ?>'><?=$detail['Date'] ?></td>
-				<td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
-				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
+				<td><a href='<?=UIR ?>Kingdom/profile/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
+				<td><a href='<?=UIR ?>Park/profile/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
 				<td><a href='<?=UIR ?>Attendance/event/<?=$detail['EventId'] ?>/<?=$detail['EventCalendarDetailId'] ?>'><?=$detail['EventName'] ?></a></td>
 				<td><?=trimlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>

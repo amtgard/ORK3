@@ -71,6 +71,10 @@ class Model_Kingdom extends Model {
 	function set_kingdom_details($request) {
 		$r = $this->Kingdom->SetKingdomDetails($request);
 		return $r;
+	}
+
+	function set_kingdom_parent($request) {
+		return $this->Kingdom->SetKingdomParent($request);
 	}	
 	
 	function set_kingdom_parktitles($request) {
@@ -114,7 +118,15 @@ class Model_Kingdom extends Model {
 		foreach ($r as $k => $e) $t[$e['EventId']] = $e;
 		return $t;
 	}
-	
+
+	function set_kingdom_heraldry($request) {
+		return $this->Heraldry->SetKingdomHeraldry($request);
+	}
+
+	function remove_kingdom_heraldry($request) {
+		return $this->Heraldry->RemoveKingdomHeraldry($request);
+	}
+
 }
 
 ?>

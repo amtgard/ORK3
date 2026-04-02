@@ -11,6 +11,10 @@ class Model_Player extends Model {
     function remove_note($request) {
         return $this->Player->RemoveNote($request);
     }
+
+    function edit_note($request) {
+        return Ork3::$Lib->player->EditNote($request);
+    }
     
     function get_notes($id) {
         return $this->Player->GetNotes(array('MundaneId' => $id));
@@ -45,6 +49,10 @@ class Model_Player extends Model {
 	function revoke_player_award($request) {
 		return $this->Player->RevokeAward($request);
 	}
+
+	function add_note($request) {
+		return $this->Player->AddNote($request);
+	}
 	
 	function revoke_all_awards($request) {
 		return $this->Player->RevokeAllAwards($request);
@@ -56,6 +64,10 @@ class Model_Player extends Model {
 	
 	function update_player_award($request) {
 		return $this->Player->UpdateAward($request);
+	}
+
+	function reconcile_player_award($request) {
+		return $this->Player->ReconcileAward($request);
 	}
 
 	function add_dues($request) {
@@ -82,12 +94,9 @@ class Model_Player extends Model {
 		$r = $this->Player->SetBan($request);
 		return $r;
 	}
-	/*
 	function create_player($request) {
-		$r = $this->Player->CreatePlayer($request);
-		return $r;
+		return $this->Player->CreatePlayer($request);
 	}
-	*/
 	function move_player($request) {
 		$r = $this->Player->MovePlayer($request);
 		return $r;
@@ -113,6 +122,14 @@ class Model_Player extends Model {
 
 	function delete_player_recommendation($request) {
 		return $this->Player->DeleteAwardRecommendation($request);
+	}
+
+	function remove_heraldry($request) {
+		return $this->Player->RemoveHeraldry($request);
+	}
+
+	function remove_image($request) {
+		return $this->Player->RemoveImage($request);
 	}
 
 	function get_latest_attendance_date($mundane_id) {

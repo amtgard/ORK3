@@ -132,7 +132,7 @@ class SearchService extends Ork3 {
 		}
 	}
 	
-	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1) {
+	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1, $multi = 0) {
 		$keys = func_get_args();
 		if (count($keys) > 0)
 			$keys[0] = substr($keys[0] ?? '', 0, 4);
@@ -140,23 +140,53 @@ class SearchService extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
 			return $cache;
 		
-    	$limit = min($limit, 50);
-		$sql = "select e.*, k.name as kingdom_name, p.name as park_name, m.persona, cd.event_start, u.name as unit_name, substring(cd.description, 1, 100) as short_description
+		$limit = min($limit, 50);
+
+		// $current=0 → past mode: pick most recent past occurrence per event (regardless of whether upcoming also exists)
+		// $current!=0 → pick nearest upcoming occurrence (or most recent past if none upcoming)
+		$multiMode = ($multi == 1);
+
+		$pastOnly = ($current === 0 || $current === '0');
+		if ($multiMode) {
+			$cdJoin = "cd.event_id = e.event_id and cd.event_start < now()";
+		} elseif ($pastOnly) {
+			$cdJoin = "cd.event_calendardetail_id = (
+							select ecd.event_calendardetail_id from " . DB_PREFIX . "event_calendardetail ecd
+							where ecd.event_id = e.event_id
+							  and (ecd.event_start is null or ecd.event_start < date_sub(now(), interval 7 day))
+							order by ecd.event_start desc
+							limit 1
+						)";
+		} else {
+			$cdJoin = "cd.event_calendardetail_id = (
+							select ecd.event_calendardetail_id from " . DB_PREFIX . "event_calendardetail ecd
+							where ecd.event_id = e.event_id
+							order by (ecd.event_start >= date_sub(now(), interval 7 day)) desc,
+							         if(ecd.event_start >= date_sub(now(), interval 7 day), ecd.event_start, null) asc,
+							         ecd.event_start desc
+							limit 1
+						)";
+		}
+
+		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = e.mundane_id
-						left join " . DB_PREFIX . "event_calendardetail cd on e.event_id = cd.event_id and cd.current = 1
+						left join " . DB_PREFIX . "kingdom pk on pk.kingdom_id = p.kingdom_id
+						left join " . DB_PREFIX . "event_calendardetail cd on " . $cdJoin . "
 						left join " . DB_PREFIX . "unit u on e.unit_id = u.unit_id
 				where ";
-	
-	
-		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' " . (is_null($current) || $current != 0 ? " and (cd.current = 1 or cd.current is null) " : " ");
+
+
+		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' ";
+		$sql .= " and e.kingdom_id != 15 and (p.kingdom_id is null or p.kingdom_id != 15) ";
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
 		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";
 		if (valid_id($unit_id)) $sql .= " and e.unit_id = $unit_id ";
 		if (valid_id($event_id)) $sql .= " and e.event_id = $event_id ";
+		if (!valid_id($event_id)) $sql .= " and cd.event_calendardetail_id is not null ";
 		if ($date_order != null) {
 			$when = "date_add(now(), interval - 7 day)";
 			if (!is_null($date_start) && strtotime($date_start))
@@ -173,11 +203,14 @@ class SearchService extends Ork3 {
 				$r[] = array(
 						'EventId' => $d->event_id,
 						'Name' => $d->name,
+						'KingdomId' => $d->resolved_kingdom_id,
 						'KingdomName' => $d->kingdom_name,
+						'ParkId' => $d->park_id,
 						'ParkName' => $d->park_name,
 						'Persona' => $d->persona,
 						'UnitName' => $d->unit_name,
 						'NextDate' => $d->event_start,
+						'NextDetailId' => $d->next_detail_id,
 						'ShortDescription' => $d->short_description,
 						'HasHeraldry' => $d->has_heraldry
 					);
@@ -218,37 +251,38 @@ class SearchService extends Ork3 {
 		}
 	}
 	
-	public function Park($name, $kingdom_id = null, $limit = null) {
-		
-		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 2), $kingdom_id, $limit)); 
+	public function Park($name, $kingdom_id = null, $limit = null, $exclude_kingdom_id = null) {
+
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 2), $kingdom_id, $limit, $exclude_kingdom_id));
 		if (strlen($name) == 2 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
-		
-		$park = new yapo($this->db, DB_PREFIX . 'park');
-		$park->clear();
-		$park->like('name', "%$name%");
-		if(is_numeric($kingdom_id)) $park->kingdom_id = $kingdom_id;
-		$i = 0;
-		if ($park->find()) {
-			$r = array();
-			do {
-				$r[] = array(
-						'ParkId' => $park->park_id,
-						'KingdomId' => $park->kingdom_id,
-						'Name' => $park->name,
-						'Active' => $park->active
-					);
-				if (is_numeric($limit)) {
-					if ($limit == 0) break;
-					$limit--;
-				}
-			} while ($park->next());
-			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
-		} else {
-			return array();
+
+		$safeName = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $name);
+		$lim      = is_numeric($limit) ? (int)$limit : 20;
+		$kWhere   = is_numeric($kingdom_id) ? 'AND p.kingdom_id = ' . (int)$kingdom_id : '';
+		if (is_numeric($exclude_kingdom_id)) $kWhere .= ' AND p.kingdom_id != ' . (int)$exclude_kingdom_id;
+		$sql = "SELECT p.park_id, p.kingdom_id, p.name, p.active,
+		               k.name AS kingdom_name
+		          FROM " . DB_PREFIX . "park p
+		     LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+		         WHERE p.name LIKE '%{$safeName}%' {$kWhere}
+		      ORDER BY p.name
+		         LIMIT {$lim}";
+
+		$d = $this->db->query($sql);
+		if (!$d || !$d->size()) return array();
+		$r = array();
+		while ($d->next()) {
+			$r[] = array(
+				'ParkId'      => (int)$d->park_id,
+				'KingdomId'   => (int)$d->kingdom_id,
+				'Name'        => $d->name,
+				'KingdomName' => $d->kingdom_name,
+				'Active'      => $d->active,
+			);
 		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 	}
-	
 	public function magic_search($term, $kingdom_id, $park_id) {
 		preg_match('/([a-z0-9]{2,3}):([a-z0-9]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
 
@@ -268,7 +302,7 @@ class SearchService extends Ork3 {
 				
 		$searchtokens = preg_split("/[\s,-]+/", $search ?? '');
     	$opt = array("1");
-        $limit = min(valid_id($limit)?$limit:15, 50);
+        $limit = min(valid_id($limit)?$limit:15, 100);
 		switch (strtoupper($type)) {
 			case 'PERSONA': 
 				if (count($searchtokens) > 0)
@@ -307,9 +341,10 @@ class SearchService extends Ork3 {
 		if (is_numeric($waivered) && $waivered > 0) {
 			$opt[] = "waivered =".($waivered?1:0);
 		}
+		$opt[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
 		$order = $order ?? '';
 		$sql = "select 
-						`mundane_id`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
+						`mundane_id`, m.`active`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
 						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
 					from " . DB_PREFIX . "mundane m
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
@@ -336,6 +371,7 @@ class SearchService extends Ork3 {
 						'ParkName' => $q->park_name,
 						'Waivered' => $q->waivered,
 						'PenaltyBox' => $q->penalty_box,
+						'Active' => (int)$q->active,
 						'KAbbr' => $q->k_abbr,
 						'PAbbr' => $q->p_abbr,
 						'Suspended' => $q->suspended,

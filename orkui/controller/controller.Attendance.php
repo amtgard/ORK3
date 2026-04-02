@@ -7,6 +7,7 @@ class Controller_Attendance extends Controller {
 
 		$this->load_model('Park');
 		$this->data[ 'no_index' ] = true;
+		header('X-Robots-Tag: noindex, nofollow');
 		
 		switch ($call) {
 			case 'kingdom':
@@ -17,8 +18,8 @@ class Controller_Attendance extends Controller {
 				$this->session->park_name = $park_info['ParkInfo']['ParkName'];
 				$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 				$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
-				$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
-				$this->data['menu']['park'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
+				$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+				$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->session->park_id, 'display' => $this->session->park_name );
 				break;
 			case 'event':
 				break;
@@ -44,9 +45,13 @@ class Controller_Attendance extends Controller {
 
 		$this->data['Type'] = $type;
 		$this->data['Id'] = $id;
-		
+
 		$this->data['DefaultCredits'] = 1;
-		
+
+		$_uid = (int)($this->session->user_id ?? 0);
+		$this->data['CanAddAttendance'] = $_uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT);
+
 		if (strlen($action) > 0) {
 			$this->request->save('Attendance_kingdom', true);
 			$r = array('Status'=>0);
@@ -171,7 +176,11 @@ class Controller_Attendance extends Controller {
         $this->data['DefaultParkId'] = $this->session->park_id;
         $this->data['DefaultKingdomName'] = $this->session->kingdom_name;
         $this->data['DefaultKingdomId'] = $this->session->kingdom_id;
-		
+
+		$_uid = (int)($this->session->user_id ?? 0);
+		$this->data['CanAddAttendance'] = $_uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$id, AUTH_EDIT);
+
 		if (strlen($action) > 0) {
 			$this->request->save('Attendance_park', true);
 			$r = array('Status'=>0);
@@ -214,7 +223,8 @@ class Controller_Attendance extends Controller {
 		if (!isset($this->data['AttendanceDate'])) {
 			$this->data['AttendanceDate'] = isset($this->request->AttendanceDate)?$this->request->AttendanceDate:date('Y-m-d');
 		}
-		$this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_date($id, $this->data['AttendanceDate']);
+		$this->data['AttendanceReport']  = $this->Attendance->get_attendance_for_date($id, $this->data['AttendanceDate']);
+		$this->data['RecentAttendees']   = $this->Attendance->get_recent_attendees($id);
 		if ($this->request->exists('Attendance_park')) {
 			$this->data['Attendance_park'] = $this->request->Attendance_park->Request;
 		}

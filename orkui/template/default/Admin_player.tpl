@@ -579,8 +579,7 @@
 		<li>Events
 			<ul>
 				<li><a href='<?=UIR ?>Admin/createevent&MundaneId=<?=$Player['MundaneId'] ?>'>Create Event</a></li>
-				<li><a href='<?=UIR ?>Admin/manageevent&MundaneId=<?=$Player['MundaneId'] ?>'>Event Templates</a></li>
-			</ul>
+				</ul>
 		</li>
 	</ul>
 </div>

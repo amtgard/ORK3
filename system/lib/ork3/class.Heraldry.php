@@ -166,6 +166,26 @@ class Heraldry  extends Ork3 {
 		}
 	}
 	
+	public function RemoveKingdomHeraldry($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+			$this->kingdom->clear();
+			$this->kingdom->kingdom_id = $request['KingdomId'];
+			if ($this->kingdom->find()) {
+				$base = DIR_KINGDOM_HERALDRY . sprintf('%04d', $request['KingdomId']);
+				if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+				if (file_exists($base . '.png')) unlink($base . '.png');
+				$this->kingdom->has_heraldry = 0;
+				$this->kingdom->save();
+				return Success();
+			} else {
+				return InvalidParameter();
+			}
+		} else {
+			return NoAuthorization();
+		}
+	}
+
 	public function SetParkHeraldry($request) {
 	
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -185,6 +205,26 @@ class Heraldry  extends Ork3 {
 		}
 	}
 	
+	public function RemoveParkHeraldry($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
+			$this->park->clear();
+			$this->park->park_id = $request['ParkId'];
+			if ($this->park->find()) {
+				$base = DIR_PARK_HERALDRY . sprintf('%05d', $request['ParkId']);
+				if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+				if (file_exists($base . '.png')) unlink($base . '.png');
+				$this->park->has_heraldry = 0;
+				$this->park->save();
+				return Success();
+			} else {
+				return InvalidParameter();
+			}
+		} else {
+			return NoAuthorization();
+		}
+	}
+
 	public function SetUnitHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_EDIT)) {
@@ -204,6 +244,26 @@ class Heraldry  extends Ork3 {
 		}
 	}
 	
+	public function RemoveUnitHeraldry($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_EDIT)) {
+			$this->unit->clear();
+			$this->unit->unit_id = $request['UnitId'];
+			if ($this->unit->find()) {
+				$base = DIR_UNIT_HERALDRY . sprintf('%05d', $request['UnitId']);
+				if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+				if (file_exists($base . '.png')) unlink($base . '.png');
+				$this->unit->has_heraldry = 0;
+				$this->unit->save();
+				return Success();
+			} else {
+				return InvalidParameter();
+			}
+		} else {
+			return NoAuthorization();
+		}
+	}
+
 	public function SetEventHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {

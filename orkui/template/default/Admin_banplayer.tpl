@@ -100,7 +100,7 @@
 	<h3>Penalty Box</h3>
 	<ul>
 <?php foreach ($banned_players as $k => $info): ?>
-<li><a href="<?=UIR.'Player/index/'.$info['MundaneId'] ?>"><?= $info['Persona']; ?></a></li>
+<li><a href="<?=UIR.'Player/profile/'.$info['MundaneId'] ?>"><?= $info['Persona']; ?></a></li>
 <?php endforeach ?>
 	</ul>
 </div>

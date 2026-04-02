@@ -15,12 +15,19 @@ class Model_Attendance extends Model {
 	}
 	
 	function add_attendance($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits) {
-		logtrace("Model_Attendance->add_attendance()", array($token, $date, $park_id, $event_id, $mundane_id, $class_id, $credits));
+		logtrace("Model_Attendance->add_attendance()", array($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits));
 		return $this->Attendance->AddAttendance(array('Token'=>$token, 'Date'=>$date, 'ParkId'=>$park_id, 'EventCalendarDetailId'=>$detail_id, 'MundaneId'=>$mundane_id, 'ClassId'=>$class_id, 'Credits'=>$credits));
 	}
 	
-	function update_attendance() {
-	
+	function update_attendance($token, $attendance_id, $date, $credits, $class_id, $mundane_id) {
+		return $this->Attendance->SetAttendance(array(
+			'Token'        => $token,
+			'AttendanceId' => $attendance_id,
+			'MundaneId'    => $mundane_id,
+			'Date'         => $date,
+			'Credits'      => $credits,
+			'ClassId'      => $class_id,
+		));
 	}
 	
   function lookup_by_faces($request) {
@@ -56,6 +63,10 @@ class Model_Attendance extends Model {
 		$r = $this->Search->Event(null,null,null,null,null,null,$event_id);
 		logtrace("get_event_info($event_id)", $r);
 		return $r;
+	}
+
+	function get_recent_attendees($park_id) {
+		return $this->Report->RecentParkAttendees(['ParkId' => $park_id]);
 	}
 }
 

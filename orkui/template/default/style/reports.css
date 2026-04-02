@@ -1,0 +1,591 @@
+/* ============================================================
+   ORK3 Reports — Shared Layout  (.rp-*)
+
+   Accent colour controlled by --rp-accent / --rp-accent-dark
+   on .rp-root, so individual reports can override as needed.
+   ============================================================ */
+
+.rp-root {
+	--rp-accent-dark : #1e1b4b;   /* indigo-950 — header bg      */
+	--rp-accent      : #4338ca;   /* indigo-700 — numbers/links  */
+	--rp-accent-mid  : #6366f1;   /* indigo-500 — hover tint     */
+	--rp-border      : #e2e8f0;
+	--rp-bg-light    : #f7fafc;
+	--rp-text        : #2d3748;
+	--rp-text-body   : #4a5568;
+	--rp-text-muted  : #718096;
+	--rp-text-hint   : #a0aec0;
+}
+
+
+/* ── Header ──────────────────────────────────────────────── */
+
+.rp-header {
+	background    : var(--rp-accent-dark);
+	color         : #fff;
+	padding       : 0 20px;
+	min-height    : 76px;
+	display       : flex;
+	align-items   : center;
+	justify-content: space-between;
+	border-radius : 8px 8px 0 0;
+	border        : 1px solid rgba(0,0,0,0.25);
+	border-bottom : 1px solid var(--rp-border);
+	gap           : 16px;
+}
+
+.rp-header-left {
+	display       : flex;
+	flex-direction: column;
+	gap           : 5px;
+}
+
+.rp-header-icon-title {
+	display    : flex;
+	align-items: center;
+	gap        : 10px;
+}
+
+.rp-header-icon {
+	font-size: 18px;
+	opacity  : 0.75;
+}
+
+.rp-header-title {
+	font-size       : 20px;
+	font-weight     : 700;
+	color           : #fff;
+	margin          : 0;
+	line-height     : 1.2;
+	text-shadow     : 0 1px 3px rgba(0,0,0,0.25);
+	/* reset global h1-h6 styles */
+	background-color: transparent;
+	border          : none;
+	padding         : 0;
+	border-radius   : 0;
+}
+
+.rp-header-scope {
+	display    : flex;
+	align-items: center;
+	gap        : 6px;
+	font-size  : 12px;
+	color      : rgba(255,255,255,0.55);
+}
+
+.rp-scope-chip {
+	display        : inline-flex;
+	align-items    : center;
+	gap            : 5px;
+	background     : rgba(255,255,255,0.1);
+	border         : 1px solid rgba(255,255,255,0.2);
+	border-radius  : 20px;
+	padding        : 2px 10px;
+	font-size      : 11px;
+	font-weight    : 600;
+	color          : rgba(255,255,255,0.85);
+	text-decoration: none;
+	transition     : background 0.15s, color 0.15s;
+}
+
+.rp-scope-chip:hover {
+	background: rgba(255,255,255,0.2);
+	color     : #fff;
+}
+
+.rp-scope-chip-label {
+	color      : rgba(255,255,255,0.5);
+	font-weight: 400;
+	margin-right: 2px;
+}
+
+.rp-header-actions {
+	display   : flex;
+	gap       : 8px;
+	flex-shrink: 0;
+}
+
+.rp-btn-ghost {
+	display        : inline-flex;
+	align-items    : center;
+	gap            : 6px;
+	padding        : 7px 14px;
+	background     : rgba(255,255,255,0.1);
+	color          : rgba(255,255,255,0.9);
+	border         : 1px solid rgba(255,255,255,0.25);
+	border-radius  : 6px;
+	font-size      : 13px;
+	font-weight    : 600;
+	cursor         : pointer;
+	text-decoration: none;
+	transition     : background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.rp-btn-ghost:hover {
+	background  : rgba(255,255,255,0.18);
+	border-color: rgba(255,255,255,0.4);
+	color       : #fff;
+}
+
+
+/* ── Context strip ───────────────────────────────────────── */
+
+.rp-context {
+	background : var(--rp-bg-light);
+	border     : 1px solid var(--rp-border);
+	border-top : none;
+	padding    : 10px 16px;
+	display    : flex;
+	align-items: flex-start;
+	gap        : 8px;
+	font-size  : 13px;
+	color      : var(--rp-text-body);
+	line-height: 1.5;
+}
+
+.rp-context-icon {
+	color     : #0891b2;
+	font-size : 14px;
+	flex-shrink: 0;
+	margin-top: 1px;
+}
+
+
+/* ── Stats row ───────────────────────────────────────────── */
+
+.rp-stats-row {
+	display  : flex;
+	gap      : 14px;
+	margin   : 16px 0;
+}
+
+.rp-stat-card {
+	flex        : 1;
+	background  : #fff;
+	border      : 1px solid var(--rp-border);
+	border-radius: 8px;
+	padding     : 14px 12px;
+	text-align  : center;
+	box-shadow  : 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.rp-stat-icon {
+	font-size    : 13px;
+	color        : var(--rp-text-hint);
+	margin-bottom: 5px;
+}
+
+.rp-stat-number {
+	font-size  : 24px;
+	font-weight: 700;
+	color      : var(--rp-accent);
+	line-height: 1.2;
+}
+
+.rp-stat-label {
+	font-size     : 11px;
+	color         : var(--rp-text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-top    : 3px;
+}
+
+
+/* ── Charts / graphs placeholder ────────────────────────── */
+/* Hidden by default; show by adding .rp-charts-visible      */
+
+.rp-charts-row {
+	display      : none;
+	gap          : 14px;
+	margin-bottom: 16px;
+}
+
+.rp-charts-row.rp-charts-visible {
+	display: flex;
+}
+
+.rp-chart-card {
+	flex        : 1;
+	background  : #fff;
+	border      : 1px solid var(--rp-border);
+	border-radius: 8px;
+	padding     : 16px;
+	box-shadow  : 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.rp-chart-card-title {
+	font-size     : 11px;
+	font-weight   : 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color         : var(--rp-text-muted);
+	margin        : 0 0 10px 0;
+}
+
+
+/* ── Body layout ─────────────────────────────────────────── */
+
+.rp-body {
+	display    : flex;
+	gap        : 16px;
+	align-items: flex-start;
+}
+
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+
+.rp-sidebar {
+	width     : 220px;
+	flex-shrink: 0;
+}
+
+.rp-filter-card {
+	background   : #fff;
+	border       : 1px solid var(--rp-border);
+	border-radius: 8px;
+	overflow     : hidden;
+	margin-bottom: 12px;
+	box-shadow   : 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.rp-filter-card-header {
+	padding       : 9px 14px;
+	background    : var(--rp-bg-light);
+	border-bottom : 1px solid var(--rp-border);
+	font-size     : 11px;
+	font-weight   : 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color         : var(--rp-text-muted);
+	display       : flex;
+	align-items   : center;
+	gap           : 6px;
+}
+
+.rp-filter-card-body {
+	padding: 12px 14px;
+}
+
+.rp-no-filters {
+	font-size  : 12px;
+	color      : var(--rp-text-hint);
+	font-style : italic;
+	margin     : 0;
+}
+
+/* Column guide */
+
+.rp-col-guide-item {
+	margin-bottom: 10px;
+	font-size    : 12px;
+	line-height  : 1.45;
+}
+
+.rp-col-guide-item:last-child { margin-bottom: 0; }
+
+.rp-col-guide-name {
+	display    : block;
+	font-weight: 600;
+	color      : var(--rp-text-body);
+	margin-bottom: 2px;
+}
+
+.rp-col-guide-desc {
+	color: var(--rp-text-muted);
+}
+
+/* Filter toggle pills (for reports with checkbox-style filters) */
+
+.rp-filter-pills {
+	display  : flex;
+	flex-wrap: wrap;
+	gap      : 6px;
+}
+
+.rp-filter-pill {
+	padding       : 4px 11px;
+	border        : 1px solid #cbd5e0;
+	border-radius : 20px;
+	background    : #fff;
+	font-size     : 11px;
+	font-weight   : 600;
+	color         : var(--rp-text-muted);
+	cursor        : pointer;
+	transition    : background 0.15s, color 0.15s, border-color 0.15s;
+	white-space   : nowrap;
+}
+
+.rp-filter-pill.active {
+	background  : var(--rp-accent);
+	border-color: var(--rp-accent);
+	color       : #fff;
+}
+
+.rp-filter-pill:hover:not(.active) {
+	background  : var(--rp-bg-light);
+	border-color: #a0aec0;
+	color       : var(--rp-text-body);
+}
+
+
+/* ── Table area ──────────────────────────────────────────── */
+
+.rp-table-area {
+	flex        : 1;
+	min-width   : 0;
+	background  : #fff;
+	border      : 1px solid var(--rp-border);
+	border-radius: 8px;
+	padding     : 14px 16px;
+	box-shadow  : 0 1px 3px rgba(0,0,0,0.04);
+	overflow-x  : auto;
+}
+
+/* DataTables toolbar row */
+
+.rp-table-area .dataTables_wrapper .dataTables_length,
+.rp-table-area .dataTables_wrapper .dataTables_filter {
+	margin-bottom: 10px;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_filter label,
+.rp-table-area .dataTables_wrapper .dataTables_length label {
+	font-size  : 13px;
+	color      : var(--rp-text-body);
+	display    : inline-flex;
+	align-items: center;
+	gap        : 6px;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_filter input,
+.rp-table-area .dataTables_wrapper .dataTables_length select {
+	border       : 1px solid var(--rp-border);
+	border-radius: 5px;
+	padding      : 5px 8px;
+	font-size    : 13px;
+	color        : var(--rp-text);
+	outline      : none;
+	transition   : border-color 0.15s;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_filter input:focus,
+.rp-table-area .dataTables_wrapper .dataTables_length select:focus {
+	border-color: var(--rp-accent-mid);
+}
+
+/* Table headers */
+
+.rp-table-area table.dataTable thead th {
+	background    : var(--rp-bg-light);
+	color         : var(--rp-text-body);
+	font-size     : 11px;
+	font-weight   : 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding       : 8px 10px;
+	border-bottom : 2px solid var(--rp-border);
+	white-space   : nowrap;
+}
+
+.rp-table-area table.dataTable thead th:hover {
+	background: #edf2f7;
+}
+
+/* DataTables sort arrows */
+.rp-table-area table.dataTable thead th.sorting_asc,
+.rp-table-area table.dataTable thead th.sorting_desc {
+	color: var(--rp-accent);
+}
+
+/* Rows */
+
+.rp-table-area table.dataTable tbody td {
+	padding       : 8px 10px;
+	font-size     : 13px;
+	color         : var(--rp-text-body);
+	border-bottom : 1px solid #f0f4f8;
+	vertical-align: middle;
+}
+
+.rp-table-area table.dataTable tbody tr:hover > td {
+	background: var(--rp-bg-light);
+}
+
+/* Links inside table */
+
+.rp-table-area table.dataTable tbody a {
+	color          : var(--rp-accent);
+	text-decoration: none;
+}
+
+.rp-table-area table.dataTable tbody a:hover {
+	color          : var(--rp-accent-mid);
+	text-decoration: underline;
+}
+
+/* Footer row */
+
+.rp-table-area table.dataTable tfoot td {
+	padding   : 8px 10px;
+	font-size : 12px;
+	color     : var(--rp-text-muted);
+	border-top: 2px solid var(--rp-border);
+	background: var(--rp-bg-light);
+}
+
+/* Info + pagination bar */
+
+.rp-table-area .dataTables_wrapper .dataTables_info {
+	font-size  : 12px;
+	color      : var(--rp-text-muted);
+	padding-top: 10px;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_paginate {
+	padding-top: 6px;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button {
+	padding      : 4px 9px;
+	border-radius: 4px;
+	font-size    : 12px;
+	font-weight  : 600;
+	color        : var(--rp-text-body) !important;
+	border       : 1px solid var(--rp-border) !important;
+	background   : #fff !important;
+	margin       : 0 2px;
+	transition   : background 0.1s, border-color 0.1s;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+	background  : var(--rp-bg-light) !important;
+	border-color: #cbd5e0 !important;
+	color       : var(--rp-text) !important;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+	background  : var(--rp-accent) !important;
+	border-color: var(--rp-accent) !important;
+	color       : #fff !important;
+}
+
+.rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+.rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover {
+	opacity     : 0.4;
+	cursor      : default;
+	background  : #fff !important;
+	border-color: var(--rp-border) !important;
+	color       : var(--rp-text-muted) !important;
+}
+
+/* Action link (delete, etc.) inside table cells */
+.rp-action-link {
+	font-size   : 0.8rem;
+	color       : #e53e3e;
+	text-decoration: none;
+	white-space : nowrap;
+}
+.rp-action-link:hover { color: #c53030; text-decoration: underline; }
+
+/* Suspended row highlight */
+.rp-table-area table.dataTable tbody tr.rp-row-suspended > td {
+	background-color: #fff5f5;
+	color           : #742a2a;
+}
+
+.rp-table-area table.dataTable tbody tr.rp-row-suspended:hover > td {
+	background-color: #fed7d7;
+}
+
+/* Fix fixedColumns clone background for suspended rows */
+.dtfc-fixed-start tbody tr.rp-row-suspended td {
+	background-color: #fff5f5 !important;
+	color           : #742a2a !important;
+}
+
+.dtfc-fixed-start tbody tr.rp-row-suspended:hover td {
+	background-color: #fed7d7 !important;
+}
+
+/* Dues for Life row highlight */
+.rp-table-area table.dataTable tbody tr.rp-row-duesforlife > td {
+	background-color: #f0fff4;
+	color           : #276749;
+}
+
+.rp-table-area table.dataTable tbody tr.rp-row-duesforlife:hover > td {
+	background-color: #c6f6d5;
+}
+
+/* Unwaivered row highlight */
+.rp-table-area table.dataTable tbody tr.rp-row-unwaivered > td {
+	background-color: #fffbeb;
+	color           : #744210;
+}
+
+.rp-table-area table.dataTable tbody tr.rp-row-unwaivered:hover > td {
+	background-color: #fef3c7;
+}
+
+/* FixedColumns: keep fixed-column cells visually aligned */
+.rp-table-area .DTFC_LeftBodyWrapper table.dataTable tbody td,
+.rp-table-area .DTFC_LeftHeadWrapper table.dataTable thead th {
+	border-right: 2px solid var(--rp-border);
+}
+
+
+/* ── Responsive breakpoints ──────────────────────────────── */
+
+@media (max-width: 900px) {
+	.rp-body {
+		flex-direction: column;
+	}
+	.rp-sidebar {
+		width: 100%;
+	}
+	.rp-filter-card {
+		margin-bottom: 10px;
+	}
+	.rp-stats-row {
+		flex-wrap: wrap;
+	}
+	.rp-stat-card {
+		flex    : 1 1 calc(50% - 7px);
+		min-width: 100px;
+	}
+	.rp-charts-row.rp-charts-visible {
+		flex-wrap: wrap;
+	}
+	.rp-chart-card {
+		flex: 1 1 100%;
+	}
+}
+
+@media (max-width: 600px) {
+	.rp-header {
+		flex-direction: column;
+		align-items   : flex-start;
+		padding       : 14px 16px;
+		min-height    : auto;
+		gap           : 10px;
+		border-radius : 6px 6px 0 0;
+	}
+	.rp-header-actions {
+		width: 100%;
+	}
+	.rp-btn-ghost {
+		flex           : 1;
+		justify-content: center;
+	}
+	.rp-stat-card {
+		flex    : 1 1 calc(50% - 7px);
+	}
+}
+
+@media (max-width: 768px) {
+    .rp-table-area .dataTables_wrapper .dataTables_filter input,
+    .rp-table-area .dataTables_wrapper .dataTables_length select {
+        font-size: 16px;
+    }
+}

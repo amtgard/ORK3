@@ -18,7 +18,7 @@ class Controller_Tournament extends Controller {
 			// Direct link
 			$this->session->kingdom_id = $park_info['KingdomInfo']['KingdomId'];
 			$this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
-			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/index/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
+			$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 		}
 		$this->data['kingdom_id'] = $this->session->kingdom_id;
 		$this->data['park_id'] = $this->session->park_id;
@@ -29,14 +29,15 @@ class Controller_Tournament extends Controller {
 		}
 		$this->data['park_name'] = $this->session->park_name;
 	
-		if ($this->data['LoggedIn']) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
+			$this->data['menulist']['admin'] = array(
+					array( 'url' => UIR.'Admin/tournament/'.$id, 'display' => 'tournament' ),
+					array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Park' ),
+					array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
+				);
 		}
-		$this->data['menulist']['admin'] = array(
-				array( 'url' => UIR.'Admin/tournament/'.$id, 'display' => 'tournament' ),
-				array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Park' ),
-				array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
-			);
 		//$this->data['menu']['event'] = array( 'url' => UIR.'Park/index/'.$this->session->park_id, 'display' => $this->session->park_name );
 	}
 	

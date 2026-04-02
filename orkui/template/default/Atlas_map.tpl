@@ -1,5 +1,5 @@
 <div class='info-container' style="width: 65%;">
-    <h3>Amtgard Atlas</h3>
+    <h3>Amtgard Map</h3>
 		<div style='border: 1px solid #aaa;' >
 			<div id="map" style="width: 100%; height: 100%; min-width: 400px; min-height: 400px;"></div>
 		</div>
@@ -72,7 +72,7 @@
 
 			google.maps.event.addListener(marker, 'click', (function(marker, i) {
 				return function() {
-				infowindow.setContent("<b><a href='<?=UIR ?>Park/index/" + locations[i][3] + "'>" + locations[i][0] + "</a></b><p style='margin-top: 20px'>" + urldecode(locations[i][4]));
+				infowindow.setContent("<b><a href='<?=UIR ?>Park/profile/" + locations[i][3] + "'>" + locations[i][0] + "</a></b><p style='margin-top: 20px'>" + urldecode(locations[i][4]));
 				infowindow.open(map, marker);
 				showdirections(locations[i][0], locations[i][4]);
 				}

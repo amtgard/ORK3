@@ -39,12 +39,20 @@ class Model_Unit extends Model {
 	function set_unit_details($request) {
 		return $this->Unit->SetUnit($request);
 	}
+
+	function upload_unit_heraldry($request) {
+		return $this->Heraldry->SetUnitHeraldry($request);
+	}
+
+	function remove_unit_heraldry($request) {
+		return $this->Heraldry->RemoveUnitHeraldry($request);
+	}
 	
 	function add_unit_auth($request) {
 		logtrace("add_unit_auth()", $request);
-		$this->Authorization->AddAuthorization($request);
+		return $this->Authorization->AddAuthorization($request);
 	}
-	
+
 	function set_unit_member($request) {
 		logtrace("set_unit_member()", $request);
 		return $this->Unit->SetMember($request);
@@ -64,7 +72,7 @@ class Model_Unit extends Model {
 	
 	function del_unit_auth($request) {
 		logtrace("del_unit_auth()", $request);
-		$this->Authorization->RemoveAuthorization($request);
+		return $this->Authorization->RemoveAuthorization($request);
 	}
 	
 	function get_unit_list($request) {

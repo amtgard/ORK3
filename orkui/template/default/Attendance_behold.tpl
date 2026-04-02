@@ -56,9 +56,9 @@
   <?php foreach ($FaceLocations as $key => $detail) : ?>
   <?php if ($detail[0]['id'] > 0) : $detail = $detail[0]; ?>
         <tr mundaneid='<?=$detail['MundaneId'] ?>'>
-          <td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['Kingdom'] ?></a></td>
-          <td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['Park'] ?></a></td>
-          <td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
+          <td><a href='<?=UIR ?>Kingdom/profile/<?=$detail['KingdomId'] ?>'><?=$detail['Kingdom'] ?></a></td>
+          <td><a href='<?=UIR ?>Park/profile/<?=$detail['ParkId'] ?>'><?=$detail['Park'] ?></a></td>
+          <td><a href='<?=UIR ?>Player/profile/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
           <td class='data-column'>
             <select name='class[<?=$detail['MundaneId'] ?>]'>
               <option value=0> -</option>

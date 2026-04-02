@@ -1,1 +1,9 @@
-# Testing removing all directives locally
+User-agent: *
+Disallow: /orkui/index.php?Route=Reports/
+Disallow: /orkui/index.php?Route=Admin/
+
+# Allow public community pages
+Allow: /orkui/index.php?Route=Park/
+Allow: /orkui/index.php?Route=Kingdom/
+Allow: /orkui/index.php?Route=Player/profile/
+Allow: /orkui/index.php?Route=Event/detail/

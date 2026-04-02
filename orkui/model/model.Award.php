@@ -31,8 +31,30 @@ class Model_Award extends Model {
         if ($awards['Status']['Status'] == 0) {
             uasort($awards['Awards'], array('Model_Award','compareAwardsByName'));
 
-			foreach ($awards['Awards'] as $k => $award) {
-                $options .= "<option value='$award[KingdomAwardId]'>$award[KingdomAwardName]</option>";
+            $ladder = array();
+            $other  = array();
+            foreach ($awards['Awards'] as $award) {
+                if (!empty($award['IsLadder'])) {
+                    $ladder[] = $award;
+                } else {
+                    $other[] = $award;
+                }
+            }
+
+            $options = '';
+            if (!empty($ladder)) {
+                $options .= "<optgroup label='Common Awards'>";
+                foreach ($ladder as $award) {
+                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "' data-is-ladder='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
+                }
+                $options .= "</optgroup>";
+            }
+            if (!empty($other)) {
+                $options .= "<optgroup label='Awards'>";
+                foreach ($other as $award) {
+                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
+                }
+                $options .= "</optgroup>";
             }
             return $options;
         } else { 

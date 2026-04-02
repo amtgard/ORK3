@@ -122,7 +122,7 @@ class Authorization extends Ork3
 		$this->mundane->like('email', $request['Email']);
 		if ($this->mundane->find()) {
 			$password = substr(md5(microtime()), 2, 11);
-			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
+			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 1);
 			/* Only salt on password change or first password
 			$this->mundane->password_salt = md5(rand().microtime());
 			*/
@@ -137,7 +137,7 @@ class Authorization extends Ork3
 			$m->setTo($this->mundane->email);
 			$m->setFrom('ork3@amtgard.com');
 			$m->setSubject('Reset ORK Password (Expires in 24 hours)');
-			$m->setHtml('<h2>ORK Password Reset</h2>We have generated a temporary password that will <b>expire in 24 hours</b>. You will need to log in immediately and reset your password. <p>You can log in with the following link:<p><a rel="nofollow" href="' . UIR . 'Login/login&username=' . $request['UserName'] . '&password=' . $password . '">Click here to be logged in temporarily.</a> OR login with this temporary password: ' . $password . '<p>Regards,<p>-ORK 3 Team');
+			$m->setHtml('<h2>ORK Password Reset</h2>We have generated a temporary password that will <b>expire in 24 hours</b>. You will need to log in immediately and reset your password. <p>You can log in with the following link:<p><a rel="nofollow" href="' . UIR . 'Login/login&username=' . $request['UserName'] . '&password=' . $password . '">Click here to be logged in temporarily</a> OR login with this temporary password: ' . $password . '<p>Regards,<p>-ORK Team');
 			$m->setSender('ork3@amtgard.com');
 			$m->send();
 			$response = Success();
@@ -598,7 +598,11 @@ class Authorization extends Ork3
 	{
 		logtrace('add_auth_h', $request);
 		$this->auth->clear();
-		$this->auth->mundane_id = $request['MundaneId'];
+		$this->auth->mundane_id  = $request['MundaneId'];
+		$this->auth->park_id     = 0;
+		$this->auth->kingdom_id  = 0;
+		$this->auth->event_id    = 0;
+		$this->auth->unit_id     = 0;
 		switch ($request['Type']) {
 			case AUTH_PARK:
 				$this->auth->park_id = $request['Id'];
@@ -740,6 +744,7 @@ class Authorization extends Ork3
 				switch ($this->auth->role) {
 					case AUTH_EDIT:
 						$sufficient |= (AUTH_EDIT == $role);
+						break;
 					case AUTH_CREATE:
 						return true;
 					case AUTH_ADMIN:
@@ -772,7 +777,7 @@ class Authorization extends Ork3
 					$event->clear();
 					$event->event_id = $id;
 					if ($event->find()) {
-						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id = $mundane_id)
+						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id == $mundane_id)
 							return true;
 					}
 					break;
