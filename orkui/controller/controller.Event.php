@@ -320,6 +320,10 @@ class Controller_Event extends Controller {
 					]);
 					if ( $r['Status'] == 0 ) {
 						$this->request->clear('Eventnew_edit');
+						$cdKey = Ork3::$Lib->ghettocache->key([$detail_id]);
+						Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $cdKey);
+						$evKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
+						Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
 						header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
 						exit;
 					} elseif ( $r['Status'] != 5 ) {
