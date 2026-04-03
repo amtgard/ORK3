@@ -5630,7 +5630,8 @@ $(document).ready(function() {
         $('#ev-PlayerName').on('input', function() {
             if (!$(this).val()) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); }
         });
-        $('#ev-PlayerName').data('autocomplete')._renderItem = function(ul, item) {
+        var _evAcWidget = $('#ev-PlayerName').data('autocomplete');
+        if (_evAcWidget) _evAcWidget._renderItem = function(ul, item) {
             var a = $('<a>');
             if (item.suspended) {
                 a.addClass('pk-att-ac-suspended').html(

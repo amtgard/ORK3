@@ -77,6 +77,9 @@
 		: 'month';
 	$_duesPeriod = (!empty($_kconfig['DuesPeriod']['Value']->Period)) ? (int)$_kconfig['DuesPeriod']['Value']->Period : 6;
 
+	// Dues for Life flag (needed for badge + alerts)
+	$_duesForLife = is_array($Dues) && count(array_filter($Dues, function($d) { return $d['DuesForLife'] == 1; })) > 0;
+
 	// Last class used (for attendance modal default)
 	$_lastClassId = 0;
 	foreach (is_array($Details['Attendance']) ? $Details['Attendance'] : [] as $_att) {
@@ -135,7 +138,7 @@
 		// Alerts
 		$_maAlerts = [];
 		$_duesThrough = $Player['DuesThrough'] ?? '';
-		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time())
+		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-exclamation-circle','msg'=>'Your dues have lapsed.'];
 		if (empty($Player['Waivered']))
 			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
@@ -308,7 +311,7 @@
 				<?php if ($Player['Restricted'] == 1): ?>
 					<span class="pn-badge pn-badge-orange"><i class="fas fa-exclamation-triangle"></i> Restricted</span>
 				<?php endif; ?>
-				<?php if (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time()): ?>
+				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
 				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Expired</span>
@@ -883,7 +886,7 @@
 						24  => [4],       // Order of the Owl        → Master Owl
 						25  => [5],       // Order of the Dragon     → Master Dragon
 						26  => [6],       // Order of the Garber     → Master Garber
-						27  => [36, 12],  // Order of the Warrior    → Weaponmaster / Warlord
+						27  => [12],      // Order of the Warrior    → Warlord
 						28  => [7],       // Order of the Jovius     → Master Jovius
 						29  => [9],       // Order of the Mask       → Master Mask
 						30  => [8],       // Order of the Zodiac     → Master Zodiac
