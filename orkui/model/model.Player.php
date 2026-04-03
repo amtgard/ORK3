@@ -117,6 +117,15 @@ class Model_Player extends Model {
 	function create_player($request) {
 		return $this->Player->CreatePlayer($request);
 	}
+	function create_selfreg_link($request) {
+		return $this->Player->CreateSelfRegLink($request);
+	}
+	function validate_selfreg_link($token) {
+		return $this->Player->ValidateSelfRegLink(['SelfRegToken' => $token]);
+	}
+	function self_register($request) {
+		return $this->Player->SelfRegister($request);
+	}
 	function move_player($request) {
 		$r = $this->Player->MovePlayer($request);
 		return $r;

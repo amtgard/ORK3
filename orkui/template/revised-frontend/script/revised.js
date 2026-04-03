@@ -9508,6 +9508,165 @@ function setupPronounPicker(cfg) {
 
 })();
 
+// ---- Self-Registration QR Modal (Parknew) ----
+(function() {
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
+
+    var SELFREG_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/selfreg_link';
+    var selfregTimer = null;
+    var selfregExpiresAt = null;
+    var selfregUrl = '';
+
+    function gid(id) { return document.getElementById(id); }
+
+    function showSelfRegFeedback(msg, ok) {
+        var el = gid('pk-selfreg-feedback');
+        if (!el) return;
+        el.textContent = msg;
+        el.className = 'plr-feedback ' + (ok ? 'plr-ok' : 'plr-err');
+        el.style.display = '';
+    }
+    function hideSelfRegFeedback() {
+        var el = gid('pk-selfreg-feedback');
+        if (el) el.style.display = 'none';
+    }
+
+    function fetchAndRenderQR() {
+        var qrEl = gid('pk-selfreg-qr');
+        if (!qrEl) return;
+        qrEl.innerHTML = '<div style="padding:40px;color:#a0aec0;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+        hideSelfRegFeedback();
+        gid('pk-selfreg-regen-btn').style.display = 'none';
+        var badge = gid('pk-selfreg-expired-badge');
+        if (badge) badge.style.display = 'none';
+        $.ajax({
+            url: SELFREG_URL,
+            type: 'POST',
+            dataType: 'json',
+            success: function(r) {
+                if (r && r.status === 0 && r.token) {
+                    selfregUrl = PkConfig.uir + 'SelfReg/form/' + r.token;
+                    qrEl.innerHTML = '';
+                    new QRCode(qrEl, {
+                        text: selfregUrl,
+                        width: 220,
+                        height: 220,
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    // A3: Use seconds_remaining instead of absolute timestamp
+                    selfregExpiresAt = Date.now() + (r.seconds_remaining * 1000);
+                    startTimer();
+                } else {
+                    qrEl.innerHTML = '';
+                    showSelfRegFeedback((r && r.error) ? r.error : 'Could not generate QR code.', false);
+                }
+            },
+            error: function() {
+                qrEl.innerHTML = '';
+                showSelfRegFeedback('Request failed. Please try again.', false);
+            }
+        });
+    }
+
+    function startTimer() {
+        stopTimer();
+        updateTimer();
+        selfregTimer = setInterval(updateTimer, 1000);
+    }
+
+    function stopTimer() {
+        if (selfregTimer) { clearInterval(selfregTimer); selfregTimer = null; }
+    }
+
+    function updateTimer() {
+        var timerEl = gid('pk-selfreg-timer');
+        if (!timerEl || !selfregExpiresAt) return;
+
+        var remaining = Math.max(0, Math.floor((selfregExpiresAt - Date.now()) / 1000));
+        if (remaining <= 0) {
+            timerEl.textContent = 'Expired';
+            timerEl.parentElement.classList.add('pk-selfreg-timer-expired');
+            gid('pk-selfreg-regen-btn').style.display = '';
+            stopTimer();
+            // A18: Gray out QR and show expired badge
+            var qrEl = gid('pk-selfreg-qr');
+            if (qrEl) qrEl.style.opacity = '0.3';
+            var badge = gid('pk-selfreg-expired-badge');
+            if (badge) badge.style.display = '';
+        } else {
+            var min = Math.floor(remaining / 60);
+            var sec = remaining % 60;
+            timerEl.textContent = min + ':' + (sec < 10 ? '0' : '') + sec;
+            timerEl.parentElement.classList.remove('pk-selfreg-timer-expired');
+        }
+    }
+
+    // A7: Focus management
+    window.pkOpenSelfRegModal = function() {
+        // Close Add Player modal first
+        if (typeof pkCloseAddPlayerModal === 'function') pkCloseAddPlayerModal();
+
+        var ov = gid('pk-selfreg-overlay');
+        if (!ov) return;
+        hideSelfRegFeedback();
+        ov.classList.add('pk-selfreg-open');
+        document.body.style.overflow = 'hidden';
+        fetchAndRenderQR();
+        // A7: Focus close button on open
+        setTimeout(function() { var cb = gid('pk-selfreg-close-btn'); if (cb) cb.focus(); }, 50);
+    };
+
+    window.pkCloseSelfRegModal = function() {
+        var ov = gid('pk-selfreg-overlay');
+        if (ov) ov.classList.remove('pk-selfreg-open');
+        document.body.style.overflow = '';
+        stopTimer();
+        // A7: Return focus to Add Player button
+        var addBtn = document.querySelector('[onclick*="pkOpenAddPlayerModal"]');
+        if (addBtn) addBtn.focus();
+    };
+
+    // Anti-copy protections + event listeners
+    $(document).ready(function() {
+        var wrap = gid('pk-selfreg-qr-wrap');
+        if (wrap) {
+            wrap.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+            wrap.addEventListener('dragstart', function(e) { e.preventDefault(); });
+        }
+
+        var shield = gid('pk-selfreg-shield');
+        if (shield) {
+            shield.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        }
+
+        if (gid('pk-selfreg-close-btn'))
+            gid('pk-selfreg-close-btn').addEventListener('click', pkCloseSelfRegModal);
+        if (gid('pk-selfreg-cancel'))
+            gid('pk-selfreg-cancel').addEventListener('click', pkCloseSelfRegModal);
+
+        var overlay = gid('pk-selfreg-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) pkCloseSelfRegModal();
+            });
+        }
+
+        if (gid('pk-selfreg-regen-btn')) {
+            gid('pk-selfreg-regen-btn').addEventListener('click', function() {
+                var qrEl = gid('pk-selfreg-qr');
+                if (qrEl) qrEl.style.opacity = '1';
+                fetchAndRenderQR();
+            });
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay && overlay.classList.contains('pk-selfreg-open'))
+                pkCloseSelfRegModal();
+        });
+    });
+
+})();
+
 // ---- Playernew: Award Edit + Delete ----
 (function() {
     if (typeof PnConfig === 'undefined' || !PnConfig.canManageAwards) return;

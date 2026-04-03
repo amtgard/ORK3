@@ -2052,7 +2052,6 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 
 <?php endif; ?>
 
-<?php endif; ?>
 <script>
 (function() {
 	var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;

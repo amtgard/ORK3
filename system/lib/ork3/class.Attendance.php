@@ -440,7 +440,7 @@ class Attendance  extends Ork3 {
 		}
 
 		$this->db->Clear();
-		$rows = $this->db->DataSet('SELECT al.link_id, al.token, al.credits, al.expires_at, al.park_id, COALESCE(p.name, '') AS park_name FROM ' . DB_PREFIX . 'attendance_link al LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = al.park_id AND al.park_id > 0 WHERE ' . $where . ' AND al.expires_at > NOW() ORDER BY al.expires_at DESC LIMIT 20');
+		$rows = $this->db->DataSet('SELECT al.link_id, al.token, al.credits, al.expires_at, al.park_id, COALESCE(p.name, \'\') AS park_name FROM ' . DB_PREFIX . 'attendance_link al LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = al.park_id AND al.park_id > 0 WHERE ' . $where . ' AND al.expires_at > NOW() ORDER BY al.expires_at DESC LIMIT 20');
 		$links = [];
 		if ($rows) {
 			while ($rows->Next()) {
