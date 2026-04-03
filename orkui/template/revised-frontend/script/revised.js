@@ -5794,6 +5794,63 @@ $(document).ready(function() {
             if (classSelect) classSelect.focus();
         }, 50);
     };
+    window.evQuickCheckin = function(btn, mundaneId, classId) {
+        var initialHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        var fd = new FormData();
+        fd.append('MundaneId', mundaneId);
+        fd.append('ClassId', classId);
+        fd.append('Credits', evGetSavedCredits());
+        fd.append('AttendanceDate', new Date().toISOString().slice(0, 10));
+        fetch(EvConfig.uir + 'EventAjax/add_attendance/' + EvConfig.eventId + '/' + EvConfig.detailId, { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 0) {
+                evMarkCheckedIn(mundaneId);
+                if (data.attendance) { evAppendAttendanceRow(data.attendance); }
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = initialHtml;
+                alert(data.error || 'Check-in failed. Please try again.');
+            }
+        })
+        .catch(function(err) { btn.disabled = false; btn.innerHTML = initialHtml; alert('Request failed: ' + err.message); });
+    };
+    // Shared helper: mark all check-in buttons for a mundane as done, remove quick buttons
+    function evMarkCheckedIn(mundaneId) {
+        document.querySelectorAll('.ev-checkin-as-btn[data-mundane="' + mundaneId + '"]').forEach(function(b) { b.remove(); });
+        document.querySelectorAll('.ev-checkin-btn[data-mundane="' + mundaneId + '"]').forEach(function(b) {
+            b.classList.add('ev-checkin-done');
+            b.disabled = true;
+            b.removeAttribute('onclick');
+            b.innerHTML = '<i class="fas fa-user-check"></i> Checked In';
+        });
+    }
+    // Shared helper: append a row to the attendance table (creating it if needed)
+    function evAppendAttendanceRow(att) {
+        var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
+        var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
+        var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
+        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
+            '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
+            '<td>' + kingCell + '</td><td>' + parkCell + '</td>' +
+            '<td>' + escHtml(att.ClassName || '') + '</td><td>' + escHtml(att.Credits || '') + '</td>' +
+            '<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a></td>' +
+            '</tr>';
+        var tableBody = document.querySelector('#ev-attendance-table tbody');
+        if (tableBody) {
+            tableBody.insertAdjacentHTML('beforeend', newRow);
+        } else {
+            var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
+            var tableHtml = '<table class="display" id="ev-attendance-table" style="width:100%">' +
+                '<thead><tr><th>Player</th><th>Kingdom</th><th>Park</th><th>Class</th><th>Credits</th><th class="ev-del-cell"></th></tr></thead>' +
+                '<tbody>' + newRow + '</tbody></table>';
+            if (emptyMsg) emptyMsg.outerHTML = tableHtml;
+        }
+        var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-attendance"] .ev-tab-count');
+        if (cnt) cnt.textContent = '(' + ((parseInt(cnt.textContent.replace(/[^0-9]/g, '')) || 0) + 1) + ')';
+    }
     window.evCloseCheckinModal = function() {
         var overlay = document.getElementById('ev-checkin-modal');
         if (overlay) overlay.classList.remove('ev-modal-open');
@@ -5855,40 +5912,9 @@ $(document).ready(function() {
             if (data.status === 0) {
                 evSaveCredits(form.querySelector('[name="Credits"]').value);
                 var mundaneId = form.querySelector('[name="MundaneId"]').value;
-                var rsvpBtn = document.querySelector('.ev-checkin-btn[data-mundane="' + mundaneId + '"]');
-                if (rsvpBtn) {
-                    rsvpBtn.classList.add('ev-checkin-done');
-                    rsvpBtn.disabled = true;
-                    rsvpBtn.removeAttribute('onclick');
-                    rsvpBtn.innerHTML = '<i class="fas fa-user-check"></i> Checked In';
-                }
+                evMarkCheckedIn(mundaneId);
                 evCloseCheckinModal();
-                if (data.attendance) {
-                    var att = data.attendance;
-                    var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
-                    var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
-                    var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-                    var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
-                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
-                        '<td>' + kingCell + '</td>' +
-                        '<td>' + parkCell + '</td>' +
-                        '<td>' + escHtml(att.ClassName || '') + '</td>' +
-                        '<td>' + escHtml(att.Credits || '') + '</td>' +
-                        '<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a></td>' +
-                    '</tr>';
-                    var tableBody = document.querySelector('#ev-attendance-table tbody');
-                    if (tableBody) {
-                        tableBody.insertAdjacentHTML('beforeend', newRow);
-                    } else {
-                        var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
-                        var tableHtml = '<table class="display" id="ev-attendance-table" style="width:100%">' +
-                            '<thead><tr><th>Player</th><th>Kingdom</th><th>Park</th><th>Class</th><th>Credits</th><th class="ev-del-cell"></th></tr></thead>' +
-                            '<tbody>' + newRow + '</tbody></table>';
-                        if (emptyMsg) { emptyMsg.outerHTML = tableHtml; }
-                    }
-                    var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-attendance"] .ev-tab-count');
-                    if (cnt) cnt.textContent = '(' + ((parseInt(cnt.textContent.replace(/[^0-9]/g, '')) || 0) + 1) + ')';
-                }
+                if (data.attendance) { evAppendAttendanceRow(data.attendance); }
             } else {
                 alert(data.error || 'Check-in failed. Please try again.');
             }
@@ -5941,14 +5967,8 @@ $(document).ready(function() {
                     if (emptyMsg) { emptyMsg.outerHTML = tableHtml; }
                 }
 
-                // Mark RSVP check-in button as checked in if this player has an RSVP
-                var rsvpBtn = document.querySelector('.ev-checkin-btn[data-mundane="' + att.MundaneId + '"]');
-                if (rsvpBtn) {
-                    rsvpBtn.classList.add('ev-checkin-done');
-                    rsvpBtn.disabled = true;
-                    rsvpBtn.removeAttribute('onclick');
-                    rsvpBtn.innerHTML = '<i class="fas fa-user-check"></i> Checked In';
-                }
+                // Mark RSVP check-in buttons as done, remove quick-checkin button
+                evMarkCheckedIn(att.MundaneId);
 
                 form.reset();
                 var creditsField = form.querySelector('[name="Credits"]');
