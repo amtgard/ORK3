@@ -568,7 +568,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 							<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline">
 								<input type="hidden" name="Action" value="retire_member">
 								<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
-								<button type="submit" class="pn-delete-yes" onclick="gtag('event','unit_member_retire')">Yes</button>
+								<button type="submit" class="pn-delete-yes">Yes</button>
 							</form>
 							<button class="pn-delete-no"
 								onclick="document.getElementById('un-retire-<?=$_um_id?>').classList.remove('pn-active');document.getElementById('un-btns-<?=$_um_id?>').style.display=''">
@@ -581,7 +581,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 							<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline">
 								<input type="hidden" name="Action" value="remove_member">
 								<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
-								<button type="submit" class="pn-delete-yes" onclick="gtag('event','unit_member_remove')">Yes</button>
+								<button type="submit" class="pn-delete-yes">Yes</button>
 							</form>
 							<button class="pn-delete-no"
 								onclick="document.getElementById('un-remove-<?=$_um_id?>').classList.remove('pn-active');document.getElementById('un-btns-<?=$_um_id?>').style.display=''">
@@ -772,7 +772,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 			<div class="pn-modal-footer">
 				<button type="button" class="pn-btn pn-btn-secondary"
 					onclick="unCloseModal('un-modal-add-member')">Cancel</button>
-				<button type="submit" class="pn-btn pn-btn-primary" onclick="gtag('event','unit_member_add')">
+				<button type="submit" class="pn-btn pn-btn-primary">
 					<i class="fas fa-plus"></i> Add
 				</button>
 			</div>
@@ -907,11 +907,9 @@ document.getElementById('un-img-file-input').addEventListener('change', function
 		.then(function(r) {
 			document.getElementById('un-img-step-uploading').style.display = 'none';
 			if (r.ok) {
-				gtag('event', 'unit_heraldry_upload', { status: 'success' });
 				document.getElementById('un-img-step-done').style.display = '';
 				setTimeout(function() { window.location.reload(); }, 1200);
 			} else {
-				gtag('event', 'unit_heraldry_upload', { status: 'failed' });
 				document.getElementById('un-img-step-select').style.display = '';
 				alert('Upload failed. Please try again.');
 			}
