@@ -110,11 +110,17 @@
 	// Past-event check (date only, ignoring time)
 	$_refDateStr  = $eventEnd ?: $eventStart;
 	$isPastEvent  = $_refDateStr && (strtotime(date('Y-m-d', strtotime($_refDateStr))) < strtotime(date('Y-m-d')));
+	// 24-hour check-in window
+	$checkinOpenTs    = $eventStart ? strtotime($eventStart) - 86400 : 0;
+	$checkinOpen      = !$isUpcoming || !$checkinOpenTs || time() >= $checkinOpenTs;
+	$checkinOpenLabel = $checkinOpenTs ? date('D, M j, Y \\a\\t g:i A T', $checkinOpenTs) : '';
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <style>
 .ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
+.ev-checkin-locked { display:flex; align-items:flex-start; gap:10px; background:#fffbeb; border:1px solid #f6e05e; border-radius:7px; padding:11px 14px; margin-bottom:14px; font-size:13px; color:#744210; line-height:1.45; }
+.ev-checkin-locked i { color:#d69e2e; margin-top:1px; flex-shrink:0; }
 .ev-icon-btn { background: #fff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 9px; font-size: 13px; color: #4a5568; cursor: pointer; transition: background .15s, border-color .15s; line-height: 1; }
 .ev-icon-btn:hover { background: #edf2f7; border-color: #cbd5e0; }
 .ev-modal-btn-delete {
@@ -458,6 +464,9 @@
 					<button class="ev-icon-btn" title="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>
 				</div>
 				<?php if ($canManageAttendance): ?>
+				<?php if (!$checkinOpen): ?>
+				<div class="ev-checkin-locked"><i class="fas fa-clock"></i> Sign-ins for this event can be processed starting on <?= htmlspecialchars($checkinOpenLabel) ?>.</div>
+				<?php else: ?>
 				<div class="ev-att-form">
 					<h4><i class="fas fa-plus-circle" style="margin-right:6px;color:#276749"></i>Add Attendance</h4>
 					<form method="post" id="ev-attendance-form" action="<?= UIR ?>EventAjax/add_attendance/<?= $eventId ?>/<?= $detailId ?>" onsubmit="evHandleAttendanceSubmit(this); return false;">
@@ -498,7 +507,8 @@
 							value="<?= $eventStart ? date('Y-m-d', strtotime($eventStart)) : date('Y-m-d') ?>">
 					</form>
 				</div>
-				<?php endif; ?>
+				<?php endif; // $checkinOpen ?>
+				<?php endif; // $canManageAttendance — re-opened below ?>
 
 				<?php if (count($attendanceList) > 0): ?>
 				<table class="display" id="ev-attendance-table" style="width:100%">
@@ -586,7 +596,7 @@
 									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button"
 										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
 										data-persona="<?= htmlspecialchars($attendee['Persona'], ENT_QUOTES) ?>"
-										<?php if (!isset($checkedInIds[$attendee['MundaneId']])): ?>
+										<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen): ?>
 										onclick="evOpenCheckinModal(<?= (int)$attendee['MundaneId'] ?>, <?= htmlspecialchars(json_encode($attendee['Persona']), ENT_QUOTES) ?>)"
 										<?php else: ?>disabled<?php endif; ?>>
 										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : 'Check In' ?>
@@ -647,6 +657,9 @@
 
 			<?php if ($canManage): ?>
 			<div class="ev-tab-panel" id="ev-tab-admin">
+				<?php if (!$checkinOpen): ?>
+				<div class="ev-checkin-locked"><i class="fas fa-clock"></i> Sign-ins for this event can be processed starting on <?= htmlspecialchars($checkinOpenLabel) ?>.</div>
+				<?php endif; ?>
 				<ul style="margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px">
 					<li>
 						<a href="<?= UIR ?>Admin/permissions/Event/<?= $eventId ?>/<?= $detailId ?>" style="display:inline-flex;align-items:center;gap:7px;padding:7px 14px;background:#f0faf4;border:1px solid #c6e8d4;border-radius:6px;font-size:13px;font-weight:600;color:#276749;text-decoration:none">
