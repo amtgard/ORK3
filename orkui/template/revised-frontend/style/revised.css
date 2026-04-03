@@ -3436,6 +3436,7 @@
 }
 .ev-badge-green  { background: #c6f6d5; color: #276749; }
 .ev-badge-gray   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
+.ev-badge-blue   { background: #bee3f8; color: #2a69ac; }
 
 .ev-owner-inline {
 	color: rgba(255,255,255,0.85);

@@ -371,6 +371,7 @@ class Controller_Event extends Controller {
 		$_parkLookupId = $atParkId ?: (int)($this->data['EventInfo']['ParkId'] ?? 0);
 		if ( $_parkLookupId > 0 ) {
 			global $DB;
+			$DB->Clear();
 			$row = $DB->DataSet("SELECT name, address, city, province, postal_code, location FROM " . DB_PREFIX . "park WHERE park_id = " . $_parkLookupId . " LIMIT 1");
 			if ($row && $row->Size() > 0 && $row->Next()) {
 				$this->data['AtParkName']       = $row->name;

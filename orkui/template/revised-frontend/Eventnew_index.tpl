@@ -227,6 +227,10 @@
 				<span class="ev-badge <?= $isUpcoming ? 'ev-badge-green' : 'ev-badge-gray' ?>">
 					<?= $isUpcoming ? '<i class="fas fa-clock"></i> Upcoming' : '<i class="fas fa-history"></i> Past' ?>
 				</span>
+				<span class="ev-badge ev-badge-blue">
+					<i class="fas fa-<?= $parkId > 0 ? 'tree' : 'crown' ?>"></i>
+					<?= $parkId > 0 ? 'Park Event' : 'Kingdom Event' ?>
+				</span>
 			</div>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
@@ -237,9 +241,9 @@
 				<?php endif; ?>
 				<?php
 					$breadcrumbParkId   = $atParkId   ?: $parkId;
-					$breadcrumbParkName = $atParkId ? $atParkName : $parkName;
+					$breadcrumbParkName = $atParkName; // controller fetches name for atParkId ?: parkId
 				?>
-				<?php if ($breadcrumbParkId): ?>
+				<?php if ($breadcrumbParkId && $breadcrumbParkName): ?>
 					<span class="ev-owner-sep">›</span>
 					<a href="<?= UIR ?>Park/profile/<?= $breadcrumbParkId ?>"><?= $breadcrumbParkName ?></a>
 				<?php endif; ?>
