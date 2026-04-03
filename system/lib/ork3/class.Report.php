@@ -1248,7 +1248,7 @@ class Report  extends Ork3 {
 
 	public function GetActiveKingdomsSummary($request=null) {
 		$key = Ork3::$Lib->ghettocache->key($request);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 1200)) !== false)
 			return $cache;
 
 		if (strlen($request['KingdomAverageWeeks'] ?? '') == 0) $request['KingdomAverageWeeks'] = 26;
@@ -1351,7 +1351,7 @@ class Report  extends Ork3 {
 
 	public function GetDistinctActivePlayerCount($weeks = 26) {
 		$cacheKey = Ork3::$Lib->ghettocache->key(['weeks' => $weeks]);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 600)) !== false)
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 1200)) !== false)
 			return $cache;
 		$since = date('Y-m-d', strtotime("-{$weeks} week"));
 		$sql = "SELECT COUNT(DISTINCT mundane_id) AS player_count FROM `" . DB_PREFIX . "attendance` WHERE date > '{$since}' AND mundane_id > 0";

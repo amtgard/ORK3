@@ -62,6 +62,14 @@ class Controller_Kingdom extends Controller {
 	public function park_averages_json($kingdom_id = null) {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid     = (int)$kingdom_id;
+		$uid     = (int)($this->session->user_id ?? 0);
+		$isAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT);
+		$cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid, 'IsAdmin' => (int)$isAdmin]);
+		if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 1200)) !== false) {
+			header('Content-Type: application/json');
+			echo json_encode($cached);
+			exit();
+		}
 		$weekly  = $this->Report->GetKingdomParkAverages(['KingdomId' => $kingdom_id]);
 		$monthly = $this->Report->GetKingdomParkMonthlyAverages(['KingdomId' => $kingdom_id]);
 		$result  = array();
@@ -115,8 +123,7 @@ class Controller_Kingdom extends Controller {
 		$result['_kingdom'] = ['att' => $katt];
 
 		// Previous-period trend data — only for users with kingdom-level auth
-		$uid = (int)($this->session->user_id ?? 0);
-		if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT)) {
+		if ($isAdmin) {
 			// Previous 26 weeks (weeks 27–52 ago)
 			$DB->Clear();
 			$prevWkResult = $DB->DataSet(
@@ -161,6 +168,7 @@ class Controller_Kingdom extends Controller {
 				}
 			}
 		}
+		Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $result);
 		header('Content-Type: application/json');
 		echo json_encode($result);
 		exit();
