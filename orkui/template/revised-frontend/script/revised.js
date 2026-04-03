@@ -5777,11 +5777,15 @@ $(document).ready(function() {
         var n = parseFloat(val);
         if (n > 0) localStorage.setItem('ev_credits_default', n);
     }
-    window.evOpenCheckinModal = function(mundaneId, personaName) {
+    window.evOpenCheckinModal = function(mundaneId, personaName, classId) {
         document.getElementById('ev-checkin-mundane-id').value = mundaneId;
         document.getElementById('ev-checkin-name').textContent = personaName;
         var creditsInput = document.querySelector('#ev-checkin-form [name="Credits"]');
         if (creditsInput) creditsInput.value = evGetSavedCredits();
+        if (classId) {
+            var classSelect = document.querySelector('#ev-checkin-form [name="ClassId"]');
+            if (classSelect) classSelect.value = classId;
+        }
         var overlay = document.getElementById('ev-checkin-modal');
         if (overlay) overlay.classList.add('ev-modal-open');
         document.body.style.overflow = 'hidden';
