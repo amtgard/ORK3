@@ -6,6 +6,7 @@ class Attendance  extends Ork3 {
 		parent::__construct();
 		$this->attendance = new yapo($this->db, DB_PREFIX . 'attendance');
 		$this->class = new yapo($this->db, DB_PREFIX . 'class');
+		$this->attendance_link = new yapo($this->db, DB_PREFIX . 'attendance_link');
 	}
 	
 	public function GetClasses($request) {
@@ -281,6 +282,204 @@ class Attendance  extends Ork3 {
 		$this->attendance->delete();
 		
 		return Success($this->attendance->attendance_id);
+	}
+
+
+
+	public function GetPlayerLastClass($request) {
+		$mundane_id = (int)($request['MundaneId'] ?? 0);
+		if (!valid_id($mundane_id)) return 0;
+		$this->db->Clear();
+		$r = $this->db->query('SELECT class_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id . ' ORDER BY date DESC, attendance_id DESC LIMIT 1');
+		return ($r && isset($r->class_id)) ? (int)$r->class_id : 0;
+	}
+
+	public function CreateAttendanceLink($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id)) return NoAuthorization();
+
+		$park_id    = (int)($request['ParkId'] ?? 0);
+		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+
+		if (valid_id($park_id)) {
+			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
+				return NoAuthorization();
+		} elseif (valid_id($kingdom_id)) {
+			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
+				return NoAuthorization();
+		} else {
+			return InvalidParameter('ParkId or KingdomId required.');
+		}
+
+		$hours   = min(96, max(1, (int)($request['Hours'] ?? 3)));
+		$credits = (float)($request['Credits'] ?? 1.0);
+		if ($credits <= 0 || $credits > 10) $credits = 1.0;
+
+		$token      = bin2hex(random_bytes(24));
+		$expires_at = date('Y-m-d H:i:s', time() + $hours * 3600);
+
+		$this->attendance_link->clear();
+		$this->attendance_link->token      = $token;
+		$this->attendance_link->park_id    = $park_id;
+		$this->attendance_link->kingdom_id = $kingdom_id;
+		$this->attendance_link->by_whom_id = $mundane_id;
+		$this->attendance_link->credits    = $credits;
+		$this->attendance_link->expires_at = $expires_at;
+		$this->attendance_link->created_at = date('Y-m-d H:i:s');
+		$this->attendance_link->save();
+
+		if (!$this->attendance_link->link_id) return InvalidParameter('Could not create link.');
+		return Success($token);
+	}
+
+	public function GetAttendanceLinkInfo($request) {
+		$token = preg_replace('/[^a-f0-9]/', '', (string)($request['LinkToken'] ?? ''));
+		if (strlen($token) !== 48) return InvalidParameter('Invalid link token.');
+
+		$this->attendance_link->clear();
+		$this->attendance_link->token = $token;
+		if (!$this->attendance_link->find()) return InvalidParameter('Link not found.');
+		if (strtotime($this->attendance_link->expires_at) <= time()) return InvalidParameter('This sign-in link has expired.');
+
+		return Success([
+			'LinkId'    => (int)$this->attendance_link->link_id,
+			'ParkId'    => (int)$this->attendance_link->park_id,
+			'KingdomId' => (int)$this->attendance_link->kingdom_id,
+			'Credits'   => (float)$this->attendance_link->credits,
+			'ExpiresAt' => $this->attendance_link->expires_at,
+		]);
+	}
+
+	public function UseAttendanceLink($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id)) return NoAuthorization('Must be logged in.');
+
+		$token = preg_replace('/[^a-f0-9]/', '', (string)($request['LinkToken'] ?? ''));
+		if (strlen($token) !== 48) return InvalidParameter('Invalid link token.');
+
+		$this->attendance_link->clear();
+		$this->attendance_link->token = $token;
+		if (!$this->attendance_link->find()) return InvalidParameter('Link not found.');
+		if (strtotime($this->attendance_link->expires_at) <= time()) return InvalidParameter('This sign-in link has expired.');
+
+		$park_id    = (int)$this->attendance_link->park_id;
+		$kingdom_id = (int)$this->attendance_link->kingdom_id;
+		$credits    = (float)$this->attendance_link->credits;
+
+		$class_id = (int)($request['ClassId'] ?? 0);
+		if (!valid_id($class_id)) return InvalidParameter('Class is required.');
+
+		// If park-level link, resolve kingdom_id from park record
+		if (valid_id($park_id) && !valid_id($kingdom_id)) {
+			$park = Ork3::$Lib->park->GetParkShortInfo(['ParkId' => $park_id]);
+			$kingdom_id = (int)($park['ParkInfo']['KingdomId'] ?? 0);
+		}
+
+		// Get player persona
+		$this->db->Clear();
+		$player_row = $this->db->query('SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
+		$persona    = ($player_row && isset($player_row->persona)) ? (string)$player_row->persona : '';
+
+		$today = date('Y-m-d');
+
+		// Check for duplicate sign-in today
+		$this->db->Clear();
+		$check = $this->db->query(
+			'SELECT attendance_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id .
+			" AND date = '" . $today . "' AND park_id = " . $park_id . ' AND kingdom_id = ' . $kingdom_id .
+			' AND event_id = 0 LIMIT 1'
+		);
+		if ($check && $check->attendance_id) return InvalidParameter('You have already signed in today.');
+
+		$this->attendance->clear();
+		$this->attendance->park_id                  = $park_id;
+		$this->attendance->kingdom_id               = $kingdom_id;
+		$this->attendance->mundane_id               = $mundane_id;
+		$this->attendance->persona                  = $persona;
+		$this->attendance->class_id                 = $class_id;
+		$this->attendance->date                     = $today;
+		$this->attendance->credits                  = $credits;
+		$this->attendance->note                     = '';
+		$this->attendance->flavor                   = '';
+		$this->attendance->by_whom_id               = $mundane_id;
+		$this->attendance->entered_at               = date('Y-m-d H:i:s');
+		$this->attendance->event_id                 = 0;
+		$this->attendance->event_calendardetail_id  = 0;
+		$this->attendance->date_year                = 0;
+		$this->attendance->date_month               = 0;
+		$this->attendance->date_week3               = 0;
+		$this->attendance->date_week6               = 0;
+		$this->attendance->save();
+
+		if ($this->attendance->attendance_id) {
+			$this->db->query(
+				'UPDATE ' . DB_PREFIX . 'attendance SET date_year = YEAR(`date`), date_month = MONTH(`date`), date_week3 = WEEK(`date`, 3), date_week6 = WEEK(`date`, 6) WHERE attendance_id = ' . $this->attendance->attendance_id
+			);
+			return Success($this->attendance->attendance_id);
+		}
+		return InvalidParameter('Could not save attendance. You may have already signed in today.');
+	}
+
+	public function GetAttendanceLinks($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id)) return NoAuthorization();
+
+		$park_id    = (int)($request['ParkId'] ?? 0);
+		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+
+		if (valid_id($park_id)) {
+			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
+				return NoAuthorization();
+			$where = 'park_id = ' . $park_id;
+		} elseif (valid_id($kingdom_id)) {
+			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
+				return NoAuthorization();
+			$where = 'kingdom_id = ' . $kingdom_id . ' AND (park_id = 0 OR park_id IS NULL)';
+		} else {
+			return InvalidParameter('ParkId or KingdomId required.');
+		}
+
+		$this->db->Clear();
+		$rows = $this->db->DataSet('SELECT al.link_id, al.token, al.credits, al.expires_at, al.park_id, COALESCE(p.name, '') AS park_name FROM ' . DB_PREFIX . 'attendance_link al LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = al.park_id AND al.park_id > 0 WHERE ' . $where . ' AND al.expires_at > NOW() ORDER BY al.expires_at DESC LIMIT 20');
+		$links = [];
+		if ($rows) {
+			while ($rows->Next()) {
+				$links[] = [
+					'LinkId'    => (int)$rows->link_id,
+					'Token'     => $rows->token,
+					'Credits'   => (float)$rows->credits,
+					'ExpiresAt' => $rows->expires_at,
+					'ParkId'    => (int)$rows->park_id,
+					'ParkName'  => (string)$rows->park_name,
+				];
+			}
+		}
+		return Success($links);
+	}
+
+	public function DeleteAttendanceLink($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id)) return NoAuthorization();
+
+		$link_id = (int)($request['LinkId'] ?? 0);
+		if (!valid_id($link_id)) return InvalidParameter('Invalid link ID.');
+
+		$this->attendance_link->clear();
+		$this->attendance_link->link_id = $link_id;
+		if (!$this->attendance_link->find()) return InvalidParameter('Link not found.');
+
+		$park_id    = (int)$this->attendance_link->park_id;
+		$kingdom_id = (int)$this->attendance_link->kingdom_id;
+		$authorized = false;
+		if (valid_id($park_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
+			$authorized = true;
+		elseif (valid_id($kingdom_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
+			$authorized = true;
+		if (!$authorized) return NoAuthorization();
+
+		$this->attendance_link->expires_at = date('Y-m-d H:i:s', time() - 1);
+		$this->attendance_link->save();
+		return Success($link_id);
 	}
 
 	public function _create_system_classes() {

@@ -1558,6 +1558,79 @@ var KnConfig = {
 
 			<?php if (!empty($CanAddPark)): ?>
 			<!-- ── Panel: Operations ── -->
+			<?php if ($CanEditKingdom ?? false): ?>
+			<div class="kn-admin-panel" id="kn-admin-panel-signinlink">
+				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-signinlink" aria-expanded="false">
+					<span><i class="fas fa-link" style="margin-right:6px;color:#a0aec0"></i>Sign-in Link</span>
+					<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-signinlink"></i>
+				</button>
+				<div class="kn-admin-panel-body" id="kn-admin-body-signinlink" style="display:none">
+					<div class="kn-form-error" id="kn-signinlink-error" style="display:none"></div>
+					<!-- Park selector (optional) -->
+					<div class="kn-admin-field" style="margin-bottom:12px;position:relative">
+						<label>Park <span style="font-weight:400;color:#a0aec0">(optional — leave blank for kingdom-wide)</span></label>
+						<input type="text" id="kn-signinlink-park-name" autocomplete="off"
+							placeholder="Search parks in this kingdom&hellip;"
+							style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;color:#2d3748">
+						<input type="hidden" id="kn-signinlink-park-id" value="">
+						<div class="kn-ac-results" id="kn-signinlink-park-results"></div>
+					</div>
+					<div class="pk-att-search-row" style="margin-bottom:12px">
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Duration (hrs)</label>
+							<input type="number" id="kn-signinlink-hours" min="1" max="96" step="1" value="3">
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="kn-signinlink-credits" min="0.5" max="10" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="kn-btn kn-btn-primary" id="kn-signinlink-gen-btn">
+								<i class="fas fa-link"></i> Generate
+							</button>
+						</div>
+					</div>
+					<div id="kn-signinlink-result" style="display:none;margin-bottom:12px">
+						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
+							<input type="text" id="kn-signinlink-url" readonly
+								style="flex:1;min-width:0;font-size:12px;padding:7px 10px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-copy-btn" style="white-space:nowrap">
+								<i class="fas fa-copy"></i> Copy
+							</button>
+							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-qr-btn" style="white-space:nowrap">
+								<i class="fas fa-qrcode"></i> QR
+							</button>
+						</div>
+						<div id="kn-signinlink-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
+					</div>
+					<p style="margin:0 0 12px;font-size:12px;color:#718096">
+						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
+					</p>
+					<!-- Active links collapsible -->
+					<div id="kn-signinlink-links-wrap" style="border-top:1px solid #e2e8f0;padding-top:10px">
+						<button type="button" id="kn-signinlink-links-toggle" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px">
+							<i class="fas fa-chevron-right" id="kn-signinlink-links-chevron" style="font-size:10px;transition:transform 0.15s"></i>
+							<span>Active Links</span> <span id="kn-signinlink-links-count" style="color:#a0aec0"></span>
+						</button>
+						<div id="kn-signinlink-links-body" style="display:none;margin-top:8px">
+							<div id="kn-signinlink-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
+							<div id="kn-signinlink-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
+							<table id="kn-signinlink-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+								<thead><tr style="color:#718096;text-align:left">
+									<th style="padding:4px 6px;font-weight:600">Scope</th>
+									<th style="padding:4px 6px;font-weight:600">Expires</th>
+									<th style="padding:4px 6px;font-weight:600">Cr.</th>
+									<th style="padding:4px 6px"></th>
+								</tr></thead>
+								<tbody id="kn-signinlink-links-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<div class="kn-admin-panel">
 				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-ops" aria-expanded="false">
 					<span><i class="fas fa-tools" style="margin-right:6px;color:#a0aec0"></i>Operations</span>
@@ -1961,6 +2034,24 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 
 
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
+
+<!-- QR Code Modal -->
+<div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100" onclick="if(event.target===this)knCloseQrModal()">
+	<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<button onclick="knCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="kn-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="kn-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="kn-qr-download" href="" download="signin-qr.png" class="kn-btn kn-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
+	</div>
+</div>
+
+<?php endif; ?>
+
 <?php endif; ?>
 <script>
 (function() {

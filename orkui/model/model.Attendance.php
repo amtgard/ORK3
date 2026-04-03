@@ -75,6 +75,24 @@ class Model_Attendance extends Model {
 		return $r;
 	}
 
+
+
+	function get_player_last_class($mundane_id) {
+		return $this->Attendance->GetPlayerLastClass(['MundaneId' => (int)$mundane_id]);
+	}
+
+	function create_attendance_link($args) {
+		return $this->Attendance->CreateAttendanceLink($args);
+	}
+
+	function get_attendance_link_info($link_token) {
+		return $this->Attendance->GetAttendanceLinkInfo(['LinkToken' => $link_token]);
+	}
+
+	function use_attendance_link($token, $link_token, $class_id) {
+		return $this->Attendance->UseAttendanceLink(['Token' => $token, 'LinkToken' => $link_token, 'ClassId' => $class_id]);
+	}
+
 	function get_recent_attendees($park_id) {
 		return $this->Report->RecentParkAttendees(['ParkId' => $park_id]);
 	}
@@ -82,7 +100,7 @@ class Model_Attendance extends Model {
 	function get_adjacent_park_dates($park_id, $date) {
 		global $DB;
 		$pid  = (int)$park_id;
-		$date = date('Y-m-d', strtotime($date)); // sanitize to valid date
+		$date = date('Y-m-d', strtotime($date));
 		$DB->Clear();
 		$prev = null;
 		$r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date < '{$date}' ORDER BY date DESC LIMIT 1");
@@ -92,6 +110,17 @@ class Model_Attendance extends Model {
 		$r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date > '{$date}' ORDER BY date ASC LIMIT 1");
 		if ($r && $r->Next()) $next = $r->att_date;
 		return ['prev' => $prev, 'next' => $next];
+	}
+
+	function get_attendance_links($token, $scope, $id) {
+		$args = ['Token' => $token];
+		if ($scope === 'park') $args['ParkId'] = $id;
+		else $args['KingdomId'] = $id;
+		return $this->Attendance->GetAttendanceLinks($args);
+	}
+
+	function delete_attendance_link($token, $link_id) {
+		return $this->Attendance->DeleteAttendanceLink(['Token' => $token, 'LinkId' => $link_id]);
 	}
 }
 
