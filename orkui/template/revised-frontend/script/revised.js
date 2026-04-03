@@ -4838,7 +4838,7 @@ $(document).ready(function() {
 });
 (function() {
     if (typeof PkConfig === 'undefined') return;
-    if (!document.getElementById('pk-award-overlay')) return;
+    if (!PkConfig.canAdmin) return;
     var UIR_JS = PkConfig.uir;
     var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
     var PARK_ID = PkConfig.parkId;
@@ -4849,6 +4849,13 @@ $(document).ready(function() {
     var pkPlayerRanks = {};
 
     function gid(id) { return document.getElementById(id); }
+
+    function pkFixedAcPosition(inputEl, dropdownEl) {
+        var rect = inputEl.getBoundingClientRect();
+        dropdownEl.style.top   = (rect.bottom + 2) + 'px';
+        dropdownEl.style.left  = rect.left + 'px';
+        dropdownEl.style.width = rect.width + 'px';
+    }
 
     function checkRequired() {
         var ok = !!gid('pk-award-player-id').value
@@ -4937,7 +4944,7 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-player-results');
                 el.innerHTML = (data && data.length)
@@ -4946,6 +4953,7 @@ $(document).ready(function() {
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                pkFixedAcPosition(gid('pk-award-player-text'), el);
                 el.classList.add('pk-ac-open');
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }, AUTOCOMPLETE_DEBOUNCE_MS);
@@ -4999,6 +5007,7 @@ $(document).ready(function() {
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
+                pkFixedAcPosition(gid('pk-award-givenby-text'), el);
                 el.classList.add('pk-ac-open');
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }, AUTOCOMPLETE_DEBOUNCE_MS);
@@ -5022,6 +5031,7 @@ $(document).ready(function() {
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-givenat-results');
+                pkFixedAcPosition(gid('pk-award-givenat-text'), el);
                 el.innerHTML = (data && data.length)
                     ? data.map(function(loc) {
                         return '<div class="pk-ac-item" tabindex="-1" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
@@ -6307,7 +6317,17 @@ $(document).ready(function() {
         var tr = document.createElement('tr');
         tr.dataset.attendanceId = entry.AttendanceId || 0;
         tr.dataset.mundaneId = entry.MundaneId || 0;
-        var td1 = document.createElement('td'); td1.textContent = entry.Persona;
+        var td1 = document.createElement('td');
+        var td1Link = document.createElement('a');
+        td1Link.href = PkConfig.uir + 'Player/profile/' + (entry.MundaneId || 0);
+        td1Link.target = '_blank';
+        td1Link.rel = 'noopener';
+        td1Link.textContent = entry.Persona;
+        var td1Icon = document.createElement('i');
+        td1Icon.className = 'fas fa-external-link-alt';
+        td1Icon.style.cssText = 'margin-left:5px;font-size:10px;color:#a0aec0;vertical-align:middle';
+        td1Link.appendChild(td1Icon);
+        td1.appendChild(td1Link);
         var td2 = document.createElement('td'); td2.textContent = className;
         var td3 = document.createElement('td'); td3.textContent = entry.Credits || 1;
         var td4 = document.createElement('td');

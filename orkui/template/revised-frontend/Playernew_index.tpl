@@ -248,6 +248,10 @@
 .pna-tenure-years{font-size:30px}
 .pna-congrats-banner{font-size:11.5px;padding:7px 10px}
 }
+.pn-givenby-warn{display:inline-flex;align-items:center;gap:4px;cursor:default;position:relative}
+.pn-givenby-warn .pn-tip-icon{color:#e53e3e;font-size:11px;font-weight:700;font-style:normal;border:1px solid #e53e3e;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#2d3748;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-givenby-warn:hover .pn-tip-box{display:block}
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -1088,7 +1092,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($filteredTitles as $detail): ?>
-								<tr>
+									<tr>
 									<td class="pn-col-nowrap">
 										<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 										<?= htmlspecialchars($displayName) ?>
@@ -1099,7 +1103,21 @@
 									</td>
 									<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 									<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
-									<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= htmlspecialchars(substr($detail['GivenBy'], 0, 30)) ?></a></td>
+									<td class="pn-col-nowrap">
+										<?php
+											$_isPeerageTitleRow = in_array($detail['Peerage'] ?? '', ['Squire', 'Man-At-Arms', 'Lords-Page', 'Page']);
+											$_givenByMissing = $_isPeerageTitleRow && !trimlen($detail['GivenBy']);
+										?>
+										<?php if (!$_givenByMissing): ?>
+											<a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= htmlspecialchars(substr($detail['GivenBy'], 0, 30)) ?></a>
+										<?php else: ?>
+											<span class="pn-givenby-warn">
+												<i>(Unknown)</i>
+												<span class="pn-tip-icon">?</span>
+												<span class="pn-tip-box">It looks like the persona record isn&rsquo;t set on this title, so the ORK doesn&rsquo;t know who gave you this. Ask your park monarchy to correct it with the proper Given By individual.</span>
+											</span>
+										<?php endif; ?>
+									</td>
 									<td>
 										<?php
 											if (valid_id($detail['EventId'])) {
