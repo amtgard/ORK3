@@ -8,11 +8,6 @@ class Controller_AttendanceAjax extends Controller {
 		$park_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
 		$action  = $parts[1] ?? '';
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
-
 		if (!valid_id($park_id)) {
 			echo json_encode(['status' => 1, 'error' => 'Invalid park ID']);
 			exit;
@@ -139,4 +134,96 @@ class Controller_AttendanceAjax extends Controller {
 		}
 		exit;
 	}
+
+	public function link($p = null) {
+		header('Content-Type: application/json');
+		$parts  = explode('/', $p ?? '');
+		// Format: {scope}/{id}/create  where scope = park|kingdom
+		$scope  = $parts[0] ?? '';
+		$id     = (int)($parts[1] ?? 0);
+		$action = $parts[2] ?? '';
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		// Format: {scope}/{id}/create|list  or  delete/{link_id}
+		// $scope = park|kingdom|delete, $id = entity_id or link_id, $action = create|list
+		$this->load_model('Attendance');
+
+		if ($scope === 'delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+			// delete/{link_id}
+			if (!valid_id($id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid link ID']); exit;
+			}
+			$r = $this->Attendance->delete_attendance_link($this->session->token, $id);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'list') {
+			if ($scope !== 'park' && $scope !== 'kingdom') {
+				echo json_encode(['status' => 1, 'error' => 'Invalid scope']); exit;
+			}
+			if (!valid_id($id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid ID']); exit;
+			}
+			$r = $this->Attendance->get_attendance_links($this->session->token, $scope, $id);
+			if ($r['Status'] == 0) {
+				$links = array_map(function($lnk) {
+					$lnk['Url'] = HTTP_UI_REMOTE . 'index.php?Route=SignIn/index/' . $lnk['Token'];
+					return $lnk;
+				}, $r['Detail'] ?? []);
+				echo json_encode(['status' => 0, 'links' => $links]);
+			} else {
+				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			}
+
+		} elseif ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+			if ($scope !== 'park' && $scope !== 'kingdom') {
+				echo json_encode(['status' => 1, 'error' => 'Invalid scope']);
+				exit;
+			}
+			if (!valid_id($id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid ID']);
+				exit;
+			}
+			$hours   = min(96, max(1, (int)($_POST['Hours']   ?? 3)));
+			$credits = (float)($_POST['Credits'] ?? 1.0);
+
+			$args = ['Token' => $this->session->token, 'Hours' => $hours, 'Credits' => $credits];
+			if ($scope === 'park') {
+				$args['ParkId'] = $id;
+			} else {
+				$args['KingdomId'] = $id;
+			}
+
+			$r = $this->Attendance->create_attendance_link($args);
+			if ($r['Status'] == 0) {
+				$token   = $r['Detail'];
+				$url     = HTTP_UI_REMOTE . 'index.php?Route=SignIn/index/' . $token;
+				$expires = date('D, M j g:i a T', time() + $hours * 3600);
+				echo json_encode(['status' => 0, 'url' => $url, 'token' => $token, 'expires' => 'Expires ' . $expires]);
+			} else {
+				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			}
+		} else {
+			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+		}
+		exit;
+	}
+
+	public function myclass($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$this->load_model('Attendance');
+		$class_id = (int)$this->Attendance->get_player_last_class((int)$this->session->user_id);
+		echo json_encode(['status' => 0, 'class_id' => $class_id]);
+		exit;
+	}
+
 }
