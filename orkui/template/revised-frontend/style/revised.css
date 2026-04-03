@@ -5138,6 +5138,7 @@
 #pk-award-overlay .pk-ac-results,
 #pk-rec-overlay .pk-ac-results {
     position: fixed;
+    top: auto; left: auto; right: auto;
     z-index: var(--z-modal-top, 1200);
 }
 .pk-ac-item {

@@ -121,8 +121,9 @@ class Controller_ParkAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'playersearch') {
-			$q     = trim($_GET['q']     ?? '');
-			$scope = trim($_GET['scope'] ?? 'own'); // 'own' | 'exclude' | 'all'
+			$q          = trim($_GET['q']         ?? '');
+			$scope      = trim($_GET['scope']      ?? 'own'); // 'own' | 'exclude' | 'all'
+			$prioritize = !empty($_GET['prioritize']);
 			if (strlen($q) < 2) {
 				echo json_encode([]);
 				exit;
@@ -156,6 +157,10 @@ class Controller_ParkAjax extends Controller {
 				$park_clause = '';
 			}
 
+			$order_clause = $prioritize
+				? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1) THEN 1 ELSE 2 END,"
+				: "";
+
 			// Abbreviation prefix overrides scope filter when specific kingdom/park matched
 			if ($filterPid > 0) {
 				$park_clause = "AND m.park_id = {$filterPid}";
@@ -177,7 +182,7 @@ class Controller_ParkAjax extends Controller {
 				    OR m.given_name LIKE '%{$term}%'
 				    OR m.surname LIKE '%{$term}%'
 				    OR m.username LIKE '%{$term}%')
-				ORDER BY m.persona
+				ORDER BY {$order_clause} m.persona
 				LIMIT 15";
 			$DB->Clear();
 			$rs      = $DB->DataSet($sql);

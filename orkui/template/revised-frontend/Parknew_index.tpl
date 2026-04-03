@@ -1125,7 +1125,7 @@ var PkConfig = {
 	},
 };
 </script>
-<?php if ($IsLoggedIn): ?>
+<?php if (!empty($CanAdminPark)): ?>
 <div id="pk-award-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
