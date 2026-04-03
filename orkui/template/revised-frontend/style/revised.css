@@ -3650,6 +3650,12 @@
 	opacity: 0.75;
 }
 .ev-checkin-btn.ev-checkin-done:hover, .ev-checkin-btn:disabled:hover { background: #a0aec0; }
+.ev-checkin-as-btn {
+	background: #fff;
+	color: #276749;
+	border: 1px solid #276749;
+}
+.ev-checkin-as-btn:hover { background: #f0faf4; }
 .ev-rsvp-del-btn {
 	background: transparent;
 	color: #e53e3e;
