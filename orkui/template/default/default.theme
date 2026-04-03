@@ -89,6 +89,7 @@
 <?php
 	global $DB;
 	$__huid = (int)$this->__session->user_id;
+	$DB->Clear();
 	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name FROM ork_mundane m LEFT JOIN ork_park p ON m.park_id = p.park_id LEFT JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
 	$__home = null;
 	if ($__homeResult && $__homeResult->Next() && $__homeResult->park_id) {
