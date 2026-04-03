@@ -1279,6 +1279,11 @@ var PkConfig = {
 				<button class="pk-att-tab" id="pk-att-tab-recent" data-panel="pk-att-panel-recent">
 					<i class="fas fa-users"></i> Recent Park Attendees
 				</button>
+			<?php if (!empty($CanManagePark)): ?>
+				<button class="pk-att-tab" id="pk-att-tab-link" data-panel="pk-att-panel-link">
+					<i class="fas fa-link"></i> Sign-in Link
+				</button>
+			<?php endif; ?>
 			</div>
 
 			<!-- Search panel -->
@@ -1326,6 +1331,65 @@ var PkConfig = {
 				</div>
 			</div>
 
+			<?php if (!empty($CanManagePark)): ?>
+			<!-- Sign-in Link panel -->
+			<div class="pk-att-tab-panel" id="pk-att-panel-link" style="display:none">
+				<div class="pk-att-search-section-inner">
+					<div class="pk-att-search-row">
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Duration (hrs)</label>
+							<input type="number" id="pk-att-link-hours" min="1" max="96" step="1" value="3">
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="pk-att-link-credits" min="0.5" max="10" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="pk-btn pk-btn-primary" id="pk-att-link-gen-btn">
+								<i class="fas fa-link"></i> Generate
+							</button>
+						</div>
+					</div>
+					<div id="pk-att-link-result" style="display:none;margin-top:12px">
+						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
+							<input type="text" id="pk-att-link-url" readonly
+								style="flex:1;min-width:0;font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-copy-btn" style="white-space:nowrap">
+								<i class="fas fa-copy"></i> Copy
+							</button>
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-qr-btn" style="white-space:nowrap">
+								<i class="fas fa-qrcode"></i> QR
+							</button>
+						</div>
+						<div id="pk-att-link-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
+					</div>
+					<div style="margin-top:10px;font-size:11px;color:#718096">
+						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
+					</div>
+					<!-- Active links collapsible -->
+					<div id="pk-att-links-wrap" style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px">
+						<button type="button" id="pk-att-links-toggle" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px">
+							<i class="fas fa-chevron-right" id="pk-att-links-chevron" style="font-size:10px;transition:transform 0.15s"></i>
+							<span>Active Links</span> <span id="pk-att-links-count" style="color:#a0aec0"></span>
+						</button>
+						<div id="pk-att-links-body" style="display:none;margin-top:8px">
+							<div id="pk-att-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
+							<div id="pk-att-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
+							<table id="pk-att-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+								<thead><tr style="color:#718096;text-align:left">
+									<th style="padding:4px 6px;font-weight:600">Expires</th>
+									<th style="padding:4px 6px;font-weight:600">Cr.</th>
+									<th style="padding:4px 6px"></th>
+								</tr></thead>
+								<tbody id="pk-att-links-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<!-- Entered today (always visible, shared by both tabs) -->
 			<div class="pk-att-entered-section">
 				<div class="pk-att-section-label">
@@ -1347,6 +1411,21 @@ var PkConfig = {
 			<button class="pk-btn pk-btn-ghost" id="pk-att-done-btn">Done</button>
 		</div>
 
+	</div>
+</div>
+
+<!-- QR Code Modal -->
+<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100;align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
+	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<button onclick="pkCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="pk-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="pk-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="pk-qr-download" href="" download="signin-qr.png" class="pk-btn pk-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
 	</div>
 </div>
 
