@@ -257,12 +257,167 @@
 .pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#2d3748;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .pn-givenby-warn:hover .pn-tip-box{display:block}
 
+/* ===================================================================
+   DARK MODE OVERRIDES — Playernew profile
+   Activated by: html[data-theme="dark"]
+   =================================================================== */
+
 /* Required field indicator */
 .required-indicator { color: #e53e3e; }
 
-/* Inline danger buttons */
+/* Inline danger buttons — light default, dark override below */
 .btn-danger-confirm { background: #c53030; color: #fff; border: none; cursor: pointer; }
 
+/* ============================================================
+   html[data-theme="dark"] overrides
+   ============================================================ */
+html[data-theme="dark"] .pn-hero { background-color: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pn-avatar { border-color: rgba(255,255,255,0.2); }
+html[data-theme="dark"] .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-stat-number { color: #90cdf4; }
+html[data-theme="dark"] .pn-stat-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-stat-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .pn-card h4 { color: var(--ork-text); background: transparent; border: none; border-bottom: 1px solid var(--ork-border); padding: 0 0 8px 0; border-radius: 0; text-shadow: none; }
+html[data-theme="dark"] .pn-detail-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-detail-value { color: var(--ork-text); }
+html[data-theme="dark"] .pn-detail-row { border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-tab-nav li { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-tab-nav li:hover:not(.pn-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pn-tab-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-mini-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-mini-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
+html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
+html[data-theme="dark"] .pn-badge-gray { background: #374151; color: #a0aec0; }
+html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
+html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
+html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
+html[data-theme="dark"] .pn-badge-gold { background: #744210; color: #fbd38d; }
+html[data-theme="dark"] .pn-badge-purple { background: #44337a; color: #d6bcfa; }
+html[data-theme="dark"] .pn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .pn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pn-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+html[data-theme="dark"] .pn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-modal-close-btn:hover { color: var(--ork-text); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pn-overlay { background: rgba(0,0,0,0.7); }
+html[data-theme="dark"] .pn-acct-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-acct-field input[type="text"],
+html[data-theme="dark"] .pn-acct-field input[type="date"],
+html[data-theme="dark"] .pn-acct-field input[type="number"],
+html[data-theme="dark"] .pn-acct-field input[type="url"],
+html[data-theme="dark"] .pn-acct-field input[type="password"],
+html[data-theme="dark"] .pn-acct-field select,
+html[data-theme="dark"] .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pna-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-card-title { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pna-tenure-years { color: var(--ork-link); }
+html[data-theme="dark"] .pna-tenure-label,
+html[data-theme="dark"] .pna-tenure-since { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pna-class-name { color: var(--ork-text); }
+html[data-theme="dark"] .pna-class-level { color: #68d391; }
+html[data-theme="dark"] .pna-bar-wrap { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pna-bar { background: linear-gradient(90deg,#48bb78,#38a169) !important; }
+html[data-theme="dark"] .pna-bar-max { background: linear-gradient(90deg,#f6ad55,#c05621) !important; }
+html[data-theme="dark"] .pna-class-credits { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pna-officer-title { color: var(--ork-text); }
+html[data-theme="dark"] .pna-officer-row { border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-feed-row { border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-feed-date { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pna-feed-label { color: var(--ork-text); }
+html[data-theme="dark"] .pna-feed-label a { color: var(--ork-link); }
+html[data-theme="dark"] .pna-feed-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pna-ev-col-hdr { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-assoc-group { color: var(--ork-text-muted); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-alert-warning { background: var(--ork-alert-warning-bg, #744210); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
+html[data-theme="dark"] .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
+html[data-theme="dark"] .pna-alert-info { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); color: var(--ork-alert-info-text, #90cdf4); }
+html[data-theme="dark"] .pna-spark-off,
+html[data-theme="dark"] .pna-spark-swatch-off { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-spark-legend { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pna-congrats-banner { background: linear-gradient(90deg,#3d3300,#4a3c00); border-color: #975a16; color: #fbd38d; }
+html[data-theme="dark"] .pna-anni-banner { color: #fbd38d; }
+html[data-theme="dark"] .pna-tenure-info-btn { background: #1a365d; color: #90cdf4; border-color: #2a4365; }
+html[data-theme="dark"] .pn-ladder-item { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-ladder-name { color: var(--ork-text); }
+html[data-theme="dark"] .pn-ladder-rank { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pn-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-table td { color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pn-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-unit-link { color: var(--ork-link); }
+html[data-theme="dark"] .pn-unit-type { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-unit-row { border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-suspended-detail { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .pn-revoke-all-warning { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .pn-move-warning { background: #744210; border-color: #975a16; color: #fbd38d; }
+html[data-theme="dark"] .pn-mp-player-locked { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-mp-toggle { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pn-mp-toggle-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] .btn-danger-confirm { background: #fc8181; color: #1a202c; }
+html[data-theme="dark"] .pn-char-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-revoke-award-name { color: var(--ork-text); }
+html[data-theme="dark"] .pn-form-error { background: var(--ork-alert-danger-bg, #742a2a); color: var(--ork-alert-danger-text, #feb2b2); }
+html[data-theme="dark"] .pn-tab-toolbar { border-color: var(--ork-border); }
+html[data-theme="dark"] .required-indicator { color: #feb2b2; }
+
+/* ============================================================
+   @media prefers-color-scheme: dark (auto-detect fallback)
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-hero { background-color: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-number { color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-icon { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-label { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-card h4 { color: var(--ork-text); background: transparent; border: none; border-bottom: 1px solid var(--ork-border); padding: 0 0 8px 0; border-radius: 0; text-shadow: none; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-detail-label { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-detail-value { color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--ork-text); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mini-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mini-table td { color: var(--ork-text); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="text"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="date"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="number"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="url"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="password"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field select,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-tenure-years { color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-class-name { color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar-wrap { background: var(--ork-bg-tertiary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar { background: linear-gradient(90deg,#48bb78,#38a169) !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar-max { background: linear-gradient(90deg,#f6ad55,#c05621) !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-feed-label a { color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-feed-row { border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-warning { background: var(--ork-alert-warning-bg, #744210); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-info { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); color: var(--ork-alert-info-text, #90cdf4); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table td { color: var(--ork-text); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ladder-item { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mp-toggle { background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .btn-danger-confirm { background: #fc8181; color: #1a202c; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .required-indicator { color: #feb2b2; }
+}
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -889,7 +1044,7 @@
 				</a>
 				<?php endif; ?>
 				<?php if (!empty($awardsList)): ?>
-				<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
+				<button class="pn-btn pn-btn-sm btn-danger-confirm" style="margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
 				</div>
 				<?php elseif ($isOwnProfile && $hasHistoricalTip): ?>
@@ -1634,7 +1789,7 @@
 				</div>
 			</div>
 			<div class="pn-acct-field">
-				<label for="pn-acct-persona">Persona <span style="color:#e53e3e">*</span></label>
+				<label for="pn-acct-persona">Persona <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-persona" name="Persona" value="<?= htmlspecialchars($Player['Persona']) ?>" />
 			</div>
 			<div class="pn-acct-field">
@@ -1649,7 +1804,7 @@
 				</div>
 			</div>
 			<div class="pn-acct-field">
-				<label for="pn-acct-username">Username <span style="color:#e53e3e">*</span></label>
+				<label for="pn-acct-username">Username <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-username" name="UserName" value="<?= htmlspecialchars($Player['UserName']) ?>" />
 			</div>
 			<div class="pn-acct-two-col">
@@ -1806,7 +1961,7 @@
 			</div>
 
 			<div class="pn-acct-field">
-				<label for="pn-dues-from">Date Paid <span style="color:#e53e3e">*</span></label>
+				<label for="pn-dues-from">Date Paid <span class="required-indicator">*</span></label>
 				<input type="date" id="pn-dues-from" name="DuesFrom" value="<?= date('Y-m-d') ?>" />
 			</div>
 
@@ -1987,7 +2142,7 @@
 
 			<!-- Award Select -->
 			<div class="pn-acct-field">
-				<label for="pn-award-select" id="pn-award-select-label">Award <span style="color:#e53e3e">*</span></label>
+				<label for="pn-award-select" id="pn-award-select-label">Award <span class="required-indicator">*</span></label>
 				<select id="pn-award-select" name="KingdomAwardId">
 					<option value="">Select award…</option>
 					<?= $AwardOptions ?>
@@ -2010,13 +2165,13 @@
 
 			<!-- Date -->
 			<div class="pn-acct-field">
-				<label for="pn-award-date">Date <span style="color:#e53e3e">*</span></label>
+				<label for="pn-award-date">Date <span class="required-indicator">*</span></label>
 				<input type="date" name="Date" id="pn-award-date" />
 			</div>
 
 			<!-- Given By -->
 			<div class="pn-acct-field">
-				<label>Given By <span style="color:#e53e3e">*</span></label>
+				<label>Given By <span class="required-indicator">*</span></label>
 				<?php if (!empty($PreloadOfficers)): ?>
 				<div class="pn-officer-chips" id="pn-award-officer-chips">
 					<?php foreach ($PreloadOfficers as $officer): ?>
@@ -2088,7 +2243,7 @@
 				</label>
 				<div id="pn-edit-reconcile-fields" style="display:none;margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px;">
 					<div class="pn-acct-field">
-						<label>Target Award <span style="color:#e53e3e">*</span></label>
+						<label>Target Award <span class="required-indicator">*</span></label>
 						<select id="pn-edit-reconcile-award">
 							<option value="">— select award —</option>
 							<?= $AwardOptions ?>
@@ -2117,12 +2272,12 @@
 			</div>
 
 			<div class="pn-acct-field">
-				<label for="pn-edit-award-date">Date <span style="color:#e53e3e">*</span></label>
+				<label for="pn-edit-award-date">Date <span class="required-indicator">*</span></label>
 				<input type="date" id="pn-edit-award-date" />
 			</div>
 
 			<div class="pn-acct-field">
-				<label>Given By <span style="color:#e53e3e">*</span></label>
+				<label>Given By <span class="required-indicator">*</span></label>
 				<?php if (!empty($PreloadOfficers)): ?>
 				<div class="pn-officer-chips" id="pn-edit-award-officer-chips">
 					<?php foreach ($PreloadOfficers as $officer): ?>
@@ -2176,7 +2331,7 @@
 			<div class="pn-form-error" id="pn-rec-error"><?= $recError ?></div>
 			<form id="pn-recommend-form" method="post" action="<?= UIR ?>Player/profile/<?= $Player['MundaneId'] ?>/addrecommendation">
 				<div class="pn-rec-field">
-					<label for="pn-rec-award">Award <span style="color:#e53e3e">*</span></label>
+					<label for="pn-rec-award">Award <span class="required-indicator">*</span></label>
 					<select name="KingdomAwardId" id="pn-rec-award">
 						<option value="">Select award...</option>
 						<?= $AwardOptions ?>
@@ -2189,7 +2344,7 @@
 					<input type="hidden" name="Rank" id="pn-rec-rank-val" value="" />
 				</div>
 				<div class="pn-rec-field">
-					<label for="pn-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
+					<label for="pn-rec-reason">Reason <span class="required-indicator">*</span></label>
 					<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 					<span class="pn-char-count" id="pn-rec-char-count">400 characters remaining</span>
 				</div>
@@ -2331,14 +2486,14 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			<div id="pn-revoke-award-feedback" style="display:none"></div>
 			<div class="pn-revoke-award-name" id="pn-revoke-award-name"></div>
 			<div class="pn-acct-field">
-				<label for="pn-revoke-reason">Revocation Reason <span style="color:#e53e3e">*</span></label>
+				<label for="pn-revoke-reason">Revocation Reason <span class="required-indicator">*</span></label>
 				<textarea id="pn-revoke-reason" rows="3" maxlength="300" placeholder="Why is this award being revoked?"></textarea>
 				<span class="pn-char-count" id="pn-revoke-char-count">300 characters remaining</span>
 			</div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-revoke-award-cancel">Cancel</button>
-			<button class="pn-btn" id="pn-revoke-award-save" style="background:#c53030;color:#fff;"><i class="fas fa-ban"></i> Revoke Award</button>
+			<button class="pn-btn btn-danger-confirm" id="pn-revoke-award-save"><i class="fas fa-ban"></i> Revoke Award</button>
 		</div>
 	</div>
 </div>
@@ -2353,7 +2508,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		<div class="pn-modal-body">
 			<div id="pn-addnote-feedback" style="display:none"></div>
 			<div class="pn-acct-field">
-				<label for="pn-note-title">Note Title <span style="color:#e53e3e">*</span></label>
+				<label for="pn-note-title">Note Title <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-note-title" maxlength="200" placeholder="e.g. Promotion, Warning, Waypoint Import" />
 			</div>
 			<div class="pn-acct-field">
@@ -2362,7 +2517,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			</div>
 			<div class="pn-addnote-date-row">
 				<div class="pn-acct-field" style="flex:1">
-					<label for="pn-note-date">Date <span style="color:#e53e3e">*</span></label>
+					<label for="pn-note-date">Date <span class="required-indicator">*</span></label>
 					<input type="date" id="pn-note-date" />
 				</div>
 				<div class="pn-acct-field" style="flex:1">
@@ -2490,7 +2645,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 				<strong>Current park:</strong> <span id="pn-move-current-park-name"></span>
 			</div>
 			<div class="pn-acct-field">
-				<label id="pn-moveplayer-park-label">New Home Park <span style="color:#e53e3e">*</span></label>
+				<label id="pn-moveplayer-park-label">New Home Park <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-moveplayer-park-name" placeholder="Search for a park…" autocomplete="off" />
 				<input type="hidden" id="pn-moveplayer-park-id" value="" />
 				<div class="pn-ac-results" id="pn-moveplayer-park-results"></div>
@@ -2502,7 +2657,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-move-cancel">Cancel</button>
-			<button class="pn-btn" id="pn-move-submit" disabled style="background:#c53030;color:#fff;"><i class="fas fa-arrows-alt"></i> Move Player</button>
+			<button class="pn-btn btn-danger-confirm" id="pn-move-submit" disabled><i class="fas fa-arrows-alt"></i> Move Player</button>
 		</div>
 	</div>
 </div>
@@ -2526,14 +2681,14 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 				</div>
 			</div>
 			<div class="pn-acct-field">
-				<label for="pn-revoke-all-reason">Revocation Reason <span style="color:#e53e3e">*</span></label>
+				<label for="pn-revoke-all-reason">Revocation Reason <span class="required-indicator">*</span></label>
 				<textarea id="pn-revoke-all-reason" rows="3" maxlength="300" placeholder="Why are all awards being revoked?"></textarea>
 				<span class="pn-char-count" id="pn-revoke-all-char-count">300 characters remaining</span>
 			</div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-revoke-all-cancel">Cancel</button>
-			<button class="pn-btn" id="pn-revoke-all-save" style="background:#c53030;color:#fff;" disabled><i class="fas fa-ban"></i> Revoke All Awards</button>
+			<button class="pn-btn btn-danger-confirm" id="pn-revoke-all-save" disabled><i class="fas fa-ban"></i> Revoke All Awards</button>
 		</div>
 	</div>
 </div>
@@ -2585,7 +2740,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			<input type="hidden" name="Action" value="create">
 			<div class="pn-acct-modal-body">
 				<div class="pn-acct-field">
-					<label>Name <span style="color:#e53e3e">*</span></label>
+					<label>Name <span class="required-indicator">*</span></label>
 					<input type="text" name="Name" required placeholder="Enter a name…" autocomplete="off" id="pn-unit-create-name">
 				</div>
 				<div class="pn-acct-field">

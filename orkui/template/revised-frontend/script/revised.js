@@ -38,6 +38,90 @@ var AWARD_DESCRIPTIONS = {
 };
 
 /* ===========================
+   Dark Mode Theme Toggle
+   =========================== */
+function orkInitTheme() {
+    var stored = localStorage.getItem('ork_theme');
+    if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    }
+    // else: no attribute → CSS prefers-color-scheme media query handles it
+
+    // Wire up the toggle button
+    var btn = document.getElementById('ork-theme-toggle');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            var current = document.documentElement.getAttribute('data-theme');
+            var isDark;
+            if (current === 'dark') {
+                isDark = false;
+            } else if (current === 'light') {
+                isDark = true;
+            } else {
+                // Currently auto — check what system prefers and toggle opposite
+                isDark = !window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            if (isDark) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('ork_theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('ork_theme', 'light');
+            }
+            // Update icon
+            orkUpdateThemeIcon();
+            // Reapply hero color with new lightness
+            var heroImg = document.querySelector('.kn-heraldry-frame img, .pk-heraldry-frame img');
+            if (heroImg && heroImg.complete) {
+                if (typeof knApplyHeroColor === 'function') knApplyHeroColor(heroImg);
+                if (typeof pkApplyHeroColor === 'function') pkApplyHeroColor(heroImg);
+                if (typeof evApplyHeroColor === 'function') evApplyHeroColor();
+                if (typeof enApplyHeroColor === 'function') enApplyHeroColor();
+                if (typeof ecApplyBannerColor === 'function') ecApplyBannerColor();
+            }
+        });
+        orkUpdateThemeIcon();
+    }
+}
+
+function orkUpdateThemeIcon() {
+    var btn = document.getElementById('ork-theme-toggle');
+    if (!btn) return;
+    var current = document.documentElement.getAttribute('data-theme');
+    var effectiveDark;
+    if (current === 'dark') {
+        effectiveDark = true;
+    } else if (current === 'light') {
+        effectiveDark = false;
+    } else {
+        effectiveDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    btn.setAttribute('title', effectiveDark ? 'Switch to light mode' : 'Switch to dark mode');
+    btn.innerHTML = effectiveDark
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11.807A9.002 9.002 0 0 1 10.049 2a9.942 9.942 0 0 0-5.12 2.735c-3.905 3.905-3.905 10.237 0 14.142 3.906 3.906 10.237 3.905 14.143 0a9.946 9.946 0 0 0 2.735-5.119A9.003 9.003 0 0 1 12 11.807z"/></svg>';
+}
+
+// Run theme init on DOMContentLoaded to ensure button is in DOM
+// Theme attr is applied immediately via stored value in case it was already set server-side
+(function() {
+    var stored = localStorage.getItem('ork_theme');
+    if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', orkInitTheme);
+    } else {
+        orkInitTheme();
+    }
+})();
+
+
+/* ===========================
    Autocomplete keyboard nav
    =========================== */
 /**
@@ -1885,6 +1969,13 @@ var knCalendar  = null;
 var knFilters   = { 'kingdom-event': true, 'park-event': true, 'park-day': false };
 var knCalCache  = {}; // raw events keyed by "startISO|endISO" — avoids re-fetching on filter toggle
 
+function orkIsDarkMode() {
+    var attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark') return true;
+    if (attr === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 function knIsMobile() { return window.innerWidth <= 768; }
 
 function knSetEventsView(view) {
@@ -2204,16 +2295,18 @@ function knApplyHeroColor(img) {
             h /= 6;
         }
 
-        // Clamp: keep hue, boost saturation if washed out, fix lightness for dark bg
-        var finalS = Math.max(s, 0.28);
+        // Clamp: keep hue, boost saturation proportionately for dark mode
+        var _kn_dark = orkIsDarkMode();
+        var finalS = _kn_dark ? Math.min(Math.max(s * 1.15, 0.35), 0.90) : Math.max(s, 0.28);
         var hDeg   = Math.round(h * 360);
         var sPct   = Math.round(finalS * 100);
         document.documentElement.style.setProperty('--kn-hue', hDeg);
         document.documentElement.style.setProperty('--kn-sat', sPct + '%');
         var heroEl = document.querySelector('.kn-hero');
         if (heroEl) {
+            var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_kn_dark ? '22%' : '18%');
             heroEl.style.backgroundColor =
-                'hsl(' + hDeg + ',' + sPct + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,' + heroL + ')';
         }
     } catch(e) { /* CORS or tainted canvas — keep default green */ }
 }
@@ -5212,15 +5305,17 @@ function pkApplyHeroColor(img) {
             else                 h = (rf-gf)/d + 4;
             h /= 6;
         }
-        var finalS = Math.max(s, 0.28);
+        var _pk_dark = orkIsDarkMode();
+        var finalS = _pk_dark ? Math.min(Math.max(s * 1.15, 0.35), 0.90) : Math.max(s, 0.28);
         var hDeg   = Math.round(h * 360);
         var sPct   = Math.round(finalS * 100);
         document.documentElement.style.setProperty('--pk-hue', hDeg);
         document.documentElement.style.setProperty('--pk-sat', sPct + '%');
         var heroEl = document.querySelector('.pk-hero');
         if (heroEl) {
+            var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_pk_dark ? '22%' : '18%');
             heroEl.style.backgroundColor =
-                'hsl(' + hDeg + ',' + sPct + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,' + heroL + ')';
         }
         document.documentElement.style.setProperty(
             '--pk-page-tint', 'rgba(' + dr + ',' + dg + ',' + db + ',0.05)'
@@ -6404,7 +6499,12 @@ $(document).ready(function() {
                     h*=60;
                 }
                 var hero = document.getElementById('ev-hero');
-                if (hero) hero.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (hero) {
+                    var _ev_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_ev_dark ? '22%' : '18%');
+                    var evSPct = _ev_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    hero.style.backgroundColor = 'hsl('+Math.round(h)+','+evSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -6806,7 +6906,12 @@ if (typeof EnConfig !== 'undefined') (function() {
                     h*=60;
                 }
                 var hero = document.getElementById('en-hero');
-                if (hero) hero.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (hero) {
+                    var _en_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_en_dark ? '22%' : '18%');
+                    var enSPct = _en_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    hero.style.backgroundColor = 'hsl('+Math.round(h)+','+enSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -6871,7 +6976,12 @@ if (typeof EcConfig !== 'undefined') (function() {
                     h*=60;
                 }
                 var banner = document.getElementById('ec-banner');
-                if (banner) banner.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (banner) {
+                    var _ec_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_ec_dark ? '22%' : '18%');
+                    var ecSPct = _ec_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    banner.style.backgroundColor = 'hsl('+Math.round(h)+','+ecSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }

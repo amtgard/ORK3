@@ -83,7 +83,7 @@
 .hm-welcome-title {
 	font-family: 'MedievalSharp', serif;
 	font-size: 36px;
-	color: #2d3748;
+	color: var(--ork-text);
 	letter-spacing: 0.02em;
 	line-height: 1.2;
 	margin: 0;
@@ -117,8 +117,8 @@
 .hm-stats-bar {
 	display: flex;
 	gap: 0;
-	background: #fff;
-	border: 1px solid #e2e8f0;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 8px;
 	margin-bottom: 14px;
 	overflow: hidden;
@@ -131,18 +131,18 @@
 	justify-content: center;
 	padding: 11px 12px;
 	gap: 3px;
-	border-right: 1px solid #e2e8f0;
+	border-right: 1px solid var(--ork-border);
 }
 .hm-stat-item:last-child { border-right: none; }
 .hm-stat-value {
 	font-size: 24px;
 	font-weight: 700;
-	color: #2d3748;
+	color: var(--ork-text);
 	line-height: 1;
 }
 .hm-stat-label {
 	font-size: 11px;
-	color: #718096;
+	color: var(--ork-text-muted);
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
 }
@@ -155,18 +155,18 @@
 	justify-content: space-between;
 	margin-bottom: 10px;
 	padding-bottom: 7px;
-	border-bottom: 2px solid #e2e8f0;
+	border-bottom: 2px solid var(--ork-border);
 }
 .hm-section-title {
 	font-size: 17px;
 	font-weight: 700;
-	color: #2d3748;
+	color: var(--ork-text);
 }
-.hm-section-title i { margin-right: 7px; color: #4a5568; }
-.hm-section-hint { font-size: 12px; color: #718096; font-style: italic; }
+.hm-section-title i { margin-right: 7px; color: var(--ork-text-secondary); }
+.hm-section-hint { font-size: 12px; color: var(--ork-text-muted); font-style: italic; }
 .hm-view-all {
 	font-size: 13px;
-	color: #2b6cb0;
+	color: var(--ork-link);
 	text-decoration: none;
 }
 .hm-view-all:hover { text-decoration: underline; }
@@ -178,8 +178,8 @@
 	gap: 14px;
 }
 .hm-kingdom-card {
-	background: #fff;
-	border: 1px solid #e2e8f0;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 10px;
 	overflow: hidden;
 	text-decoration: none;
@@ -192,10 +192,10 @@
 .hm-kingdom-card:hover {
 	box-shadow: 0 6px 20px rgba(0,0,0,0.12);
 	transform: translateY(-3px);
-	border-color: #bee3f8;
+	border-color: var(--ork-border-dark);
 }
 .hm-card-heraldry-wrap {
-	background: #f7fafc;
+	background: var(--ork-bg-secondary);
 	height: 140px;
 	flex-shrink: 0;
 	display: flex;
@@ -213,7 +213,7 @@
 	left: 0;
 	right: 0;
 	height: 72px;
-	background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 40%, #fff 100%);
+	background: linear-gradient(to bottom, rgba(var(--ork-card-bg-rgb,255,255,255),0) 0%, rgba(var(--ork-card-bg-rgb,255,255,255),0.6) 40%, var(--ork-card-bg) 100%);
 	pointer-events: none;
 }
 .hm-card-heraldry {
@@ -228,13 +228,13 @@
 	margin-top: -18px;
 	position: relative;
 	z-index: 1;
-	background: #fff;
+	background: var(--ork-card-bg);
 	flex: 1;
 }
 .hm-card-name {
 	font-size: 14px;
 	font-weight: 700;
-	color: #2d3748;
+	color: var(--ork-text);
 	margin-bottom: 8px;
 	line-height: 1.3;
 }
@@ -245,7 +245,7 @@
 }
 .hm-card-stat {
 	font-size: 12px;
-	color: #718096;
+	color: var(--ork-text-muted);
 	display: flex;
 	align-items: center;
 	gap: 4px;
@@ -259,8 +259,8 @@
 	gap: 12px;
 }
 .hm-prinz-card {
-	background: #fff;
-	border: 1px solid #e2e8f0;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 8px;
 	text-decoration: none;
 	color: inherit;
@@ -274,7 +274,7 @@
 }
 .hm-prinz-card:hover {
 	box-shadow: 0 3px 12px rgba(0,0,0,0.09);
-	border-color: #bee3f8;
+	border-color: var(--ork-border-dark);
 }
 .hm-prinz-heraldry {
 	width: 70px;
@@ -284,12 +284,12 @@
 .hm-prinz-name {
 	font-size: 12px;
 	font-weight: 600;
-	color: #2d3748;
+	color: var(--ork-text);
 	line-height: 1.3;
 }
 .hm-prinz-stat {
 	font-size: 11px;
-	color: #a0aec0;
+	color: var(--ork-text-muted);
 }
 
 /* ---- Bottom: Principalities then Reports and Utilities ---- */
@@ -317,7 +317,7 @@
 	color: inherit;
 	transition: background 0.1s;
 }
-.hm-event-row:hover { background: #f7fafc; }
+.hm-event-row:hover { background: var(--ork-bg-secondary); }
 .hm-event-heraldry {
 	width: 36px;
 	height: 36px;
@@ -338,14 +338,14 @@
 .hm-event-name {
 	font-size: 13px;
 	font-weight: 600;
-	color: #2d3748;
+	color: var(--ork-text);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 .hm-event-meta {
 	font-size: 11px;
-	color: #718096;
+	color: var(--ork-text-muted);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -360,15 +360,15 @@
 .hm-event-date {
 	font-size: 12px;
 	font-weight: 600;
-	color: #4a5568;
-	background: #edf2f7;
+	color: var(--ork-text-secondary);
+	background: var(--ork-bg-tertiary);
 	border-radius: 4px;
 	padding: 3px 8px;
 	white-space: nowrap;
 }
 .hm-event-rsvp {
 	font-size: 11px;
-	color: #276749;
+	color: var(--ork-link);
 	font-weight: 600;
 	white-space: nowrap;
 }
@@ -387,43 +387,43 @@
 	align-items: center;
 	gap: 10px;
 	padding: 10px 14px;
-	background: #fff;
-	border: 1px solid #e2e8f0;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 7px;
 	font-size: 13px;
 	font-weight: 500;
-	color: #2d3748;
+	color: var(--ork-text);
 	text-decoration: none;
 	transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 .hm-find-item:hover {
-	background: #ebf8ff;
-	border-color: #bee3f8;
-	color: #2b6cb0;
+	background: var(--ork-bg-tertiary);
+	border-color: var(--ork-border-dark);
+	color: var(--ork-link);
 }
 .hm-find-item i {
 	font-size: 14px;
 	width: 18px;
 	text-align: center;
-	color: #4a5568;
+	color: var(--ork-text-secondary);
 }
-.hm-find-item:hover i { color: #2b6cb0; }
+.hm-find-item:hover i { color: var(--ork-link); }
 
 /* ---- Pinned home kingdom/principality indicator ---- */
 .hm-kingdom-card.hm-pinned,
 .hm-prinz-card.hm-pinned {
-	border-color: #bee3f8;
-	box-shadow: 0 0 0 2px #bee3f8;
+	border-color: var(--ork-border-dark);
+	box-shadow: 0 0 0 2px var(--ork-border-dark);
 }
 .hm-pin-badge {
 	position: absolute;
 	top: 7px;
 	right: 8px;
-	background: rgba(255,255,255,0.88);
-	border: 1px solid #bee3f8;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 10px;
 	font-size: 10px;
-	color: #2b6cb0;
+	color: var(--ork-link);
 	padding: 2px 7px;
 	font-weight: 600;
 	letter-spacing: 0.04em;
@@ -434,7 +434,7 @@
 /* ---- Empty state ---- */
 .hm-empty {
 	font-size: 13px;
-	color: #a0aec0;
+	color: var(--ork-text-muted);
 	font-style: italic;
 	padding: 20px 0;
 	text-align: center;
@@ -451,13 +451,69 @@
 @media (max-width: 600px) {
 	.hm-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
 	.hm-stats-bar { display: grid; grid-template-columns: 1fr 1fr; }
-	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid #e2e8f0; }
-	.hm-stat-item:nth-child(odd) { border-right: 1px solid #e2e8f0; }
+	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid var(--ork-border); }
+	.hm-stat-item:nth-child(odd) { border-right: 1px solid var(--ork-border); }
 	.hm-stat-item:last-child { border-bottom: none; }
 	.hm-stat-item:nth-last-child(2):nth-child(odd) { border-bottom: none; }
 	/* Last item spanning both columns when count is odd */
 	.hm-stat-item:last-child:nth-child(odd) { grid-column: span 2; border-right: none; }
 	.hm-stat-value { font-size: 20px; }
+}
+
+/* ========================================
+   DARK MODE — Home page (hm-*)
+   ======================================== */
+html[data-theme="dark"] .hm-welcome-title {
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+html[data-theme="dark"] .hm-stat-value {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+html[data-theme="dark"] .hm-stat-label {
+  color: rgba(255,255,255,0.6);
+}
+html[data-theme="dark"] .hm-card-name {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+html[data-theme="dark"] .hm-card-stat {
+  color: rgba(255,255,255,0.6);
+}
+html[data-theme="dark"] .hm-prinz-name {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+html[data-theme="dark"] .hm-prinz-stat {
+  color: rgba(255,255,255,0.55);
+}
+html[data-theme="dark"] .hm-section-title {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+html[data-theme="dark"] .hm-section-title i {
+  color: rgba(255,255,255,0.7);
+}
+html[data-theme="dark"] .hm-card-heraldry-wrap::after {
+  background: linear-gradient(to bottom, rgba(45,55,72,0) 0%, rgba(45,55,72,0.6) 40%, #2d3748 100%);
+}
+html[data-theme="dark"] .hm-kingdom-card:hover {
+  border-color: var(--ork-border-dark);
+}
+html[data-theme="dark"] .hm-kingdom-card.hm-pinned {
+  border-color: var(--ork-border-dark);
+  box-shadow: 0 0 0 2px var(--ork-border-dark);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-heraldry-wrap::after {
+    background: linear-gradient(to bottom, rgba(45,55,72,0) 0%, rgba(45,55,72,0.6) 40%, #2d3748 100%);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-stat-value { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-stat-label { color: rgba(255,255,255,0.6); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-stat { color: rgba(255,255,255,0.6); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-section-title { color: #fff; }
 }
 </style>
 

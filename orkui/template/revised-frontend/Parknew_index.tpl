@@ -1796,6 +1796,102 @@ var PkConfig = {
 	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s;
 }
 .pk-mp-toggle-btn.pk-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+
+/* ===================================================================
+   DARK MODE OVERRIDES — Parknew profile
+   Activated by: html[data-theme="dark"]
+   Auto-detected by: @media (prefers-color-scheme: dark) when no manual pref
+   =================================================================== */
+
+/* ============================================================
+   html[data-theme="dark"] overrides
+   ============================================================ */
+/* Hero: bg driven by --pk-hue/--pk-sat + --ork-hero-lightness (72% in dark). No override needed. */
+html[data-theme="dark"] .pk-stat-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; }
+html[data-theme="dark"] .pk-stat-number { color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .pk-stat-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-stat-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pk-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
+html[data-theme="dark"] .pk-sidebar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-tab-nav li { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-tab-nav li.pk-tab-active { background: var(--ork-card-bg); color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .pk-tab-nav li:hover:not(.pk-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pk-tab-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
+html[data-theme="dark"] .pk-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-day-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-day-time { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-day-name { color: var(--ork-text); }
+html[data-theme="dark"] .pk-day-addr { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pk-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-modal-close-btn:hover { color: var(--ork-text); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-acct-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-acct-field input[type="text"],
+html[data-theme="dark"] .pk-acct-field input[type="date"],
+html[data-theme="dark"] .pk-acct-field input[type="number"],
+html[data-theme="dark"] .pk-acct-field select,
+html[data-theme="dark"] .pk-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pk-mp-toggle { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pk-mp-toggle-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-mp-toggle-btn.pk-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] .pk-officer-item { border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-officer-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-officer-name { color: var(--ork-text); }
+html[data-theme="dark"] #theme_container .pk-officer-name a { color: hsl(calc(var(--pk-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+html[data-theme="dark"] .pk-empty { color: var(--ork-text-muted); }
+/* FullCalendar dark overrides */
+html[data-theme="dark"] .fc-toolbar { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .fc-toolbar-title { color: var(--ork-text); }
+html[data-theme="dark"] .fc-col-header { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .fc-col-header-cell { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .fc-daygrid-day { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .fc-daygrid-day-number { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .fc-day-today { background: var(--ork-bg-tertiary) !important; }
+html[data-theme="dark"] .fc-button { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .fc-button:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
+html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+
+/* ============================================================
+   @media prefers-color-scheme: dark (auto-detect fallback)
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-number { color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-icon { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-label { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-tab-nav li.pk-tab-active { background: var(--ork-card-bg); color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-day-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field input[type="text"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field input[type="date"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field select,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-mp-toggle { background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-mp-toggle-btn.pk-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-toolbar { background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-col-header-cell { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-daygrid-day { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-day-today { background: var(--ork-bg-tertiary) !important; }
+}
 </style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">

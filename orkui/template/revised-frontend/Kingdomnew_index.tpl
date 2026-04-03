@@ -479,7 +479,7 @@
 				</div>
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="kn-events-cal-wrap" style="position:relative;display:none">
-					<div id="kn-cal-loading" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,0.88);z-index:10;align-items:center;justify-content:center;min-height:120px;">
+					<div id="kn-cal-loading" style="display:none;position:absolute;inset:0;background:var(--ork-overlay-light,rgba(255,255,255,0.88));z-index:10;align-items:center;justify-content:center;min-height:120px;">
 						<i class="fas fa-spinner fa-spin" style="font-size:28px;color:#a0aec0"></i>
 					</div>
 					<div id="kn-events-cal"></div>
@@ -1202,7 +1202,7 @@ var KnConfig = {
 					Remove this kingdom's heraldry image?
 					<div style="margin-top:8px;display:flex;gap:8px">
 						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('kn-heraldry-remove-confirm').style.display='none'">Cancel</button>
-						<button type="button" class="pn-btn pn-btn-sm" style="background:#e53e3e;color:#fff" onclick="knDoRemoveHeraldry()">Yes, Remove</button>
+						<button type="button" class="pn-btn pn-btn-sm kn-btn-danger" onclick="knDoRemoveHeraldry()">Yes, Remove</button>
 					</div>
 				</div>
 			</div>
@@ -1737,7 +1737,7 @@ var KnConfig = {
 .kn-sub-wrap { position:relative; }
 .kn-sub-pop {
 	display:none !important; position:fixed; z-index:9000;
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid #e2e8f0; border-radius:8px;
 	box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:12px 14px; width:280px; font-size:13px;
 }
 .kn-sub-pop.kn-sub-open { display:block !important; }
@@ -1764,6 +1764,105 @@ var KnConfig = {
 	display:block; margin-top:6px; font-size:11px; color:#718096; text-align:center; text-decoration:none;
 }
 .kn-sub-webcal-btn:hover { color:#4a5568; }
+
+/* ===================================================================
+   DARK MODE OVERRIDES — Kingdomnew profile
+   Activated by: html[data-theme="dark"]
+   Auto-detected by: @media (prefers-color-scheme: dark) when no manual pref
+   =================================================================== */
+
+/* ============================================================
+   html[data-theme="dark"] overrides
+   ============================================================ */
+/* Hero: the hero bg is dynamically driven by --kn-hue/--kn-sat + --ork-hero-lightness (72% in dark).
+   No override needed for .kn-hero itself — lightness var handles it. */
+html[data-theme="dark"] .kn-stat-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; }
+html[data-theme="dark"] .kn-stat-number { color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .kn-stat-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-stat-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .kn-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
+html[data-theme="dark"] .kn-officer-item { border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-officer-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-officer-name { color: var(--ork-text); }
+html[data-theme="dark"] #theme_container .kn-officer-name a { color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+html[data-theme="dark"] #theme_container .kn-link-list a { color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+html[data-theme="dark"] .kn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-tab-nav li { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-tab-nav li.kn-tab-active { background: var(--ork-card-bg); color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .kn-tab-nav li:hover:not(.kn-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .kn-tab-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
+html[data-theme="dark"] .kn-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-row-link:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-sub-pop { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-sub-pop-title { color: var(--ork-text); }
+html[data-theme="dark"] .kn-sub-url-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-sub-copy-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-sub-copy-btn:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-sub-webcal-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-sub-webcal-btn:hover { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .kn-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .kn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+html[data-theme="dark"] .kn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-modal-close-btn:hover { color: var(--ork-text); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-acct-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-acct-field input[type="text"],
+html[data-theme="dark"] .kn-acct-field input[type="date"],
+html[data-theme="dark"] .kn-acct-field input[type="number"],
+html[data-theme="dark"] .kn-acct-field select,
+html[data-theme="dark"] .kn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-mp-toggle { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .kn-mp-toggle-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-mp-toggle-btn.kn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] #theme_container .kn-reports-grid a { color: var(--ork-link); }
+html[data-theme="dark"] #theme_container .kn-reports-grid a:hover { color: var(--ork-link-bright); }
+html[data-theme="dark"] .kn-map-sidebar-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-filter-toggle { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-filter-toggle.kn-filter-off { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-sidebar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+/* Inline danger buttons */
+.kn-btn-danger { background: #c53030; color: #fff; border-color: #c53030; }
+html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
+
+/* ============================================================
+   @media prefers-color-scheme: dark (auto-detect fallback)
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-number { color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-icon { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-label { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-tab-nav li.kn-tab-active { background: var(--ork-card-bg); color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-row-link:hover { background: var(--ork-bg-tertiary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-sub-pop { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-sub-url-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-sub-copy-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field input[type="text"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field input[type="date"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field select,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-mp-toggle { background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-mp-toggle-btn.kn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container .kn-link-list a { color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container .kn-reports-grid a { color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-map-sidebar-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
+}
 </style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
@@ -1847,7 +1946,7 @@ var KnConfig = {
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-mergeplayer-cancel">Cancel</button>
-			<button class="kn-btn" id="kn-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="kn-btn kn-btn-danger" id="kn-mergeplayer-submit" disabled><i class="fas fa-compress-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>

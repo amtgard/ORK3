@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html>
 	<head>
+		<script>
+		(function(){var t=localStorage.getItem('ork_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');else if(t==='light')document.documentElement.setAttribute('data-theme','light');})();
+		</script>
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
 		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
@@ -55,6 +58,51 @@
 	.wn-all-versions:hover { background:#ebf8ff; }
 	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; }
 	.wn-dismiss:hover { background:#3182ce; }
+
+	/* Dark mode toggle button */
+	.nav-theme-toggle {
+		background: transparent;
+		border: none;
+		color: #e2e8f0;
+		cursor: pointer;
+		padding: 6px 8px;
+		border-radius: 4px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		transition: background 0.2s;
+		vertical-align: middle;
+	}
+	.nav-theme-toggle:hover {
+		background: rgba(255,255,255,0.1);
+	}
+
+	/* Dark mode global overrides */
+	html[data-theme="dark"] body { background-color: #1a202c; color: #e2e8f0; }
+	html[data-theme="dark"] #theme_container { background-color: #1a202c; }
+	html[data-theme="dark"] .information-table { background-color: #2d3748; border-color: #4a5568; }
+	html[data-theme="dark"] .information-table th { background-color: #374151; color: #e2e8f0; }
+	html[data-theme="dark"] .information-table td { border-color: #4a5568; color: #cbd5e0; }
+	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
+	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
+	html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="dark"] textarea {
+		background-color: #374151 !important;
+		color: #e2e8f0 !important;
+		border-color: #4a5568 !important;
+	}
+	@media (prefers-color-scheme: dark) {
+		html:not([data-theme="light"]):not([data-theme="dark"]) body { background-color: #1a202c; color: #e2e8f0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container { background-color: #1a202c; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table { background-color: #2d3748; border-color: #4a5568; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table th { background-color: #374151; color: #e2e8f0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container a { color: #63b3ed; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) input,
+		html:not([data-theme="light"]):not([data-theme="dark"]) select,
+		html:not([data-theme="light"]):not([data-theme="dark"]) textarea {
+			background-color: #374151 !important;
+			color: #e2e8f0 !important;
+		}
+	}
 	</style>
 </head>
 	<body>
@@ -148,6 +196,9 @@
 				</div>
 			</div>
 
+			<button id="ork-theme-toggle" class="nav-theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+				<!-- SVG injected by JS -->
+			</button>
 <?php if ($this->__session->token == null) : ?>
 			<a href='<?=UIR;?>Login' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
 <?php else : ?>
@@ -586,11 +637,65 @@ endif;
 </script>
 <?php endif; ?>
 
-<footer style="margin-top:40px;padding:18px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:11px;color:#94a3b8;text-align:center;line-height:1.7;">
+<footer style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);background:var(--ork-bg-secondary,#f8fafc);font-size:11px;color:var(--ork-text-muted,#94a3b8);text-align:center;line-height:1.7;">
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
-  <a href="<?=UIR?>ReleaseNotes" style="color:#94a3b8;text-decoration:none;border-bottom:1px dotted #94a3b8;">ORK v<?=ORK_VERSION?></a>
+  <a href="<?=UIR?>ReleaseNotes" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">ORK v<?=ORK_VERSION?></a>
 </footer>
+
+<script>
+/* Global dark mode toggle — runs on every page.
+   Skips init if revised.js already defined orkInitTheme (revised-frontend pages). */
+(function() {
+  if (typeof orkInitTheme === 'function') {
+    orkInitTheme();
+    return;
+  }
+
+  function _isDark() {
+    var attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark') return true;
+    if (attr === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  function _setIcon(btn, dark) {
+    if (!btn) return;
+    if (dark) {
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+      btn.title = 'Switch to light mode';
+    } else {
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+      btn.title = 'Switch to dark mode';
+    }
+  }
+
+  function _init() {
+    var stored = localStorage.getItem('ork_theme');
+    if (stored === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (stored === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+    var btn = document.getElementById('ork-theme-toggle');
+    _setIcon(btn, _isDark());
+    if (btn) {
+      btn.addEventListener('click', function() {
+        var dark = !_isDark();
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        localStorage.setItem('ork_theme', dark ? 'dark' : 'light');
+        _setIcon(btn, dark);
+      });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _init);
+  } else {
+    _init();
+  }
+})();
+</script>
 
 </body>
 </html>
