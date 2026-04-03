@@ -93,6 +93,19 @@
 	$defaultParkId      = $DefaultParkId            ?? 0;
 	$defaultCredits     = $DefaultAttendanceCredits ?? 1;
 
+	// Detect attendance-date mismatch: event is in the future but attendance dates are all in the past
+	$attDateMismatch = false;
+	if (!empty($attendanceList) && $eventStart && strtotime($eventStart) > time()) {
+		$allPast = true;
+		foreach ($attendanceList as $_ar) {
+			if (!empty($_ar['Date']) && strtotime($_ar['Date']) >= strtotime(date('Y-m-d'))) {
+				$allPast = false;
+				break;
+			}
+		}
+		$attDateMismatch = $allPast;
+	}
+
 	$rsvpCounts    = is_array($RsvpCount ?? null) ? $RsvpCount : ['going' => 0, 'interested' => 0, 'total' => (int)($RsvpCount ?? 0)];
 	$rsvpCount     = $rsvpCounts['total'];
 	$userAttending = $UserAttending ?? false; // false or 'going' or 'interested'
@@ -453,6 +466,13 @@
 			<?php // ---- Attendance Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-attendance">
 
+				<?php if ($attDateMismatch): ?>
+				<div style="background:#fffbeb;border:1px solid #f6ad55;border-radius:6px;padding:12px 16px;margin-bottom:14px;color:#7b341e;font-size:13px;line-height:1.5;">
+					<strong><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Warning:</strong>
+					It looks like this future event already has attendance. This is most likely due to the event being edited to move it forward instead of a new event being created.
+					Please edit this event to move it back to its original date and create a new event instead.
+				</div>
+				<?php endif; ?>
 				<div class="ev-export-bar">
 					<button class="ev-icon-btn" title="Export CSV" onclick="evExportAttendanceCsv()"><i class="fas fa-download"></i></button>
 					<button class="ev-icon-btn" title="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>

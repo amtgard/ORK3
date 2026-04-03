@@ -288,6 +288,8 @@ class Event  extends Ork3 {
 			return InvalidParameter();
 		}
 		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
+				return InvalidParameter('This event occurrence cannot be deleted because attendance has already been entered for it.');
 			$this->detail->clear();
 			$this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
 			if ($this->detail->find()) {
