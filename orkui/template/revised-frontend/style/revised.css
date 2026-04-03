@@ -1834,6 +1834,11 @@
 	color: var(--kn-accent, #276749);
 	line-height: 1.2;
 }
+.kn-stat-spinner {
+	font-size: 11px;
+	color: #a0aec0;
+	opacity: 0.7;
+}
 .kn-park-tile-stat-lbl {
 	font-size: 9px;
 	color: #a0aec0;

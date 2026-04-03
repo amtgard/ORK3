@@ -344,11 +344,11 @@
 									<div class="kn-park-tile-type"><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : 'Park') ?></div>
 									<div class="kn-park-tile-stats">
 										<div class="kn-park-tile-stat">
-											<div class="kn-park-tile-stat-val kn-avgwk-tile">—</div>
+											<div class="kn-park-tile-stat-val kn-avgwk-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
 											<div class="kn-park-tile-stat-lbl">Avg/Wk</div>
 										</div>
 										<div class="kn-park-tile-stat">
-											<div class="kn-park-tile-stat-val kn-avgmo-tile">—</div>
+											<div class="kn-park-tile-stat-val kn-avgmo-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
 											<div class="kn-park-tile-stat-lbl">Avg/Mo</div>
 										</div>
 									</div>
@@ -384,8 +384,8 @@
 											<?php if (!empty($park['_pinned'])): ?><span class="kn-park-pin-badge" style="position:static;margin-left:6px">Your Park</span><?php endif; ?>
 										</td>
 										<td><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : '') ?></td>
-										<td class="kn-col-numeric kn-avgwk-row">—</td>
-										<td class="kn-col-numeric kn-avgmo-row">—</td>
+										<td class="kn-col-numeric kn-avgwk-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
+										<td class="kn-col-numeric kn-avgmo-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
 										<td class="kn-col-numeric kn-tp-row">—</td>
 										<td class="kn-col-numeric kn-tm-row">—</td>
 										<?php if ($CanManageKingdom ?? false): ?>
