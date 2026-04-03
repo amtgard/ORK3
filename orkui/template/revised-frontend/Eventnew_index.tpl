@@ -106,6 +106,7 @@
 		$attDateMismatch = $allPast;
 	}
 
+	$reconciled    = isset($_GET['reconciled']);
 	$rsvpCounts    = is_array($RsvpCount ?? null) ? $RsvpCount : ['going' => 0, 'interested' => 0, 'total' => (int)($RsvpCount ?? 0)];
 	$rsvpCount     = $rsvpCounts['total'];
 	$userAttending = $UserAttending ?? false; // false or 'going' or 'interested'
@@ -470,11 +471,28 @@
 			<?php // ---- Attendance Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-attendance">
 
-				<?php if ($attDateMismatch): ?>
+				<?php if ($reconciled): ?>
+				<div style="background:#f0fff4;border:1px solid #68d391;border-radius:6px;padding:12px 16px;margin-bottom:14px;color:#276749;font-size:13px;line-height:1.5;">
+					<i class="fas fa-check-circle" style="margin-right:6px;"></i>
+					<strong>Reconciled.</strong> Past attendance has been moved to a new occurrence dated to match those records.
+				</div>
+				<?php endif; ?>
+				<?php if ($attDateMismatch && $canManage): ?>
 				<div style="background:#fffbeb;border:1px solid #f6ad55;border-radius:6px;padding:12px 16px;margin-bottom:14px;color:#7b341e;font-size:13px;line-height:1.5;">
-					<strong><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Warning:</strong>
-					It looks like this future event already has attendance. This is most likely due to the event being edited to move it forward instead of a new event being created.
-					Please edit this event to move it back to its original date and create a new event instead.
+					<strong><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Data mismatch detected:</strong>
+					This future event has <?= count($attendanceList) ?> attendance record<?= count($attendanceList) != 1 ? 's' : '' ?> dated in the past —
+					likely because this occurrence's date was edited forward after attendance was entered.
+					<?php if ($canManageAttendance): ?>
+					<br><br>
+					<strong>Reconcile</strong> will create a new past occurrence for those dates and move the attendance there, leaving this future occurrence clean.
+					<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/reconcile"
+						  style="display:inline-block;margin-top:8px;"
+						  onsubmit="return confirm('Move <?= count($attendanceList) ?> attendance record(s) to a new past occurrence? This cannot be undone.');">
+						<button type="submit" style="background:#c05621;color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;">
+							<i class="fas fa-tools" style="margin-right:5px;"></i>Reconcile Attendance
+						</button>
+					</form>
+					<?php endif; ?>
 				</div>
 				<?php endif; ?>
 				<div class="ev-export-bar">
