@@ -1901,7 +1901,6 @@ var KnConfig = {
 
 <?php endif; ?>
 
-<?php endif; ?>
 <script>
 (function() {
 	var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
