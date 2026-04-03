@@ -596,6 +596,13 @@
 									<?php endif; ?>
 								</td>
 								<td style="text-align:right;white-space:nowrap">
+									<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen && !empty($attendee['LastClassId'])): ?>
+									<button class="ev-checkin-btn ev-checkin-as-btn" type="button"
+										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
+										onclick="evOpenCheckinModal(<?= (int)$attendee['MundaneId'] ?>, <?= htmlspecialchars(json_encode($attendee['Persona']), ENT_QUOTES) ?>, <?= (int)$attendee['LastClassId'] ?>)">
+										<i class="fas fa-user-check"></i> Check-in as <?= htmlspecialchars($attendee['LastClassName'] ?? '') ?>
+									</button>
+									<?php endif; ?>
 									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button"
 										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
 										data-persona="<?= htmlspecialchars($attendee['Persona'], ENT_QUOTES) ?>"
