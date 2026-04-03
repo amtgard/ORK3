@@ -369,7 +369,6 @@ if (PnConfig.recError) {
         }
         $('#pn-rec-error').hide();
         $('#pn-rec-submit').prop('disabled', true).text('Submitting…');
-        gtag('event', 'recommendation_add');
         $('#pn-recommend-form').submit();
     });
 
@@ -744,12 +743,10 @@ if (PnConfig.recError) {
             fetch(UPLOAD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
-                    gtag('event', imgType === 'photo' ? 'player_photo_upload' : 'player_heraldry_upload', { status: 'success' });
                     showStep('pn-img-step-success');
                     setTimeout(function() { window.location.reload(); }, 1400);
                 })
                 .catch(function(err) {
-                    gtag('event', imgType === 'photo' ? 'player_photo_upload' : 'player_heraldry_upload', { status: 'failed' });
                     showStep('pn-img-step-select');
                     showError('Upload failed: ' + err.message);
                 });
@@ -1809,7 +1806,6 @@ function knLoadMoreList(tableId, tmplBase, btn) {
 
 // ---- Activate a tab by name (used by buttons + links) ----
 function knActivateTab(tab) {
-    if (tab === 'recommendations') { if (typeof gtag === 'function') gtag('event', 'recommendation_view', { section: 'kingdom' }); }
     $('.kn-tab-nav li').removeClass('kn-tab-active');
     var $activeTab = $('.kn-tab-nav li[data-kntab="' + tab + '"]');
     $activeTab.addClass('kn-tab-active');
@@ -2385,8 +2381,6 @@ $(document).ready(function() {
             + String(today.getDate()).padStart(2, '0');
         setAwardType('awards');
         checkRequired();
-        if (typeof gtag === 'function') gtag('event', 'award_entry_open', { section: 'kingdom' });
-        gid('kn-award-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
         gid('kn-award-player-text').focus();
     };
@@ -2401,8 +2395,6 @@ $(document).ready(function() {
 
     // Pre-populate award modal from a recommendation row
     window.knGiveFromRec = function(rec) {
-        if (typeof gtag === 'function') gtag('event', 'recommendation_give');
-        knOpenAwardModal();
         if (rec.Persona || rec.MundaneId) {
             gid('kn-award-player-text').value = rec.Persona || '';
             gid('kn-award-player-id').value   = String(rec.MundaneId || '');
@@ -2474,7 +2466,6 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (d.status === 0) {
-                        if (typeof gtag === 'function') gtag('event', 'recommendation_dismiss', { section: 'kingdom' });
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
                         alert(d.error || 'Failed to dismiss recommendation.');
@@ -4320,8 +4311,6 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(r) {
                 if (r && r.status === 0) {
-                    if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_remove', { status: 'success' });
-                    window.location.reload();
                 } else {
                     alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
                 }
@@ -4350,18 +4339,12 @@ $(document).ready(function() {
                     .then(function(r) {
                         if (upl) upl.style.display = 'none';
                         if (r && r.status === 0) {
-                            if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'success' });
-                            if (done) done.style.display = '';
                             setTimeout(function() { window.location.reload(); }, 1200);
                         } else {
-                            if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
-                            if (sel) sel.style.display = '';
                             alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
                         }
                     })
                     .catch(function() {
-                        if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
-                        if (upl) upl.style.display = 'none';
                         if (sel) sel.style.display = '';
                         alert('Request failed. Please try again.');
                     });
@@ -4618,7 +4601,6 @@ function pkApplyHeroColor(img) {
 
 // ---- Tab activation ----
 function pkActivateTab(tab) {
-    if (tab === 'recommendations' && typeof gtag === 'function') gtag('event', 'recommendation_view', { section: 'park' });
     $('.pk-tab-nav li').removeClass('pk-tab-active');
     var $pkTab = $('.pk-tab-nav li[data-pktab="' + tab + '"]');
     $pkTab.addClass('pk-tab-active');
@@ -5107,8 +5089,6 @@ $(document).ready(function() {
             + String(today.getDate()).padStart(2, '0');
         setAwardType('awards');
         checkRequired();
-        gtag('event', 'award_entry_open', { section: 'park' });
-        gtag('event', 'park_awards_open', { source: 'park_info' });
         gid('pk-award-overlay').classList.add('pk-open');
         document.body.style.overflow = 'hidden';
         gid('pk-award-player-text').focus();
@@ -5124,7 +5104,6 @@ $(document).ready(function() {
 
     // Pre-populate award modal from a recommendation row
     window.pkGiveFromRec = function(rec) {
-        gtag('event', 'recommendation_give');
         pkOpenAwardModal();
         if (rec.Persona || rec.MundaneId) {
             gid('pk-award-player-text').value = rec.Persona || '';
@@ -5205,7 +5184,6 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (d.status === 0) {
-                        gtag('event', 'recommendation_dismiss', { section: 'park' });
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
                         alert(d.error || 'Failed to dismiss recommendation.');
@@ -5888,7 +5866,6 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    gtag('event', 'event_rsvp_delete');
                     var row = btn.closest('tr');
                     if (row) row.remove();
                     var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-rsvp"] .ev-tab-count');
@@ -6545,7 +6522,6 @@ $(document).ready(function() {
         if (nameInput) nameInput.placeholder = 'Search within your park\u2026';
         var qaTbody = gid('pk-att-qa-tbody');
         if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
-        gtag('event', 'park_attendance_open', { source: 'park_info' });
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
         pkSetDate(today);
@@ -6683,7 +6659,7 @@ $(document).ready(function() {
     // --- Core AJAX ---
     function pkSubmit(data, cb) {
         $.post(ADD_URL, data, function(r) {
-            if (r && r.status === 0) { gtag('event', 'attendance_add', { method: 'quick_add' }); cb(true, null, r.attendanceId || 0); }
+            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0); }
             else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0);
         }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0); });
     }
@@ -7569,8 +7545,7 @@ function setupPronounPicker(cfg) {
                         console.log('[EditAward] Response body (first 500 chars):', body.substring(0, 500));
                         saveBtn.disabled = false;
                         if (r.ok) {
-                            if (doReconcile) gtag('event', 'reconcile_submit', { type: 'award' });
-                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+                            if (doReconcile)                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
                             showFb(msg, 'pn-award-edit-success');
                             setTimeout(function() { location.reload(); }, 900);
                         } else {
@@ -8829,7 +8804,6 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
                 tbody.appendChild(tr);
             });
         }
-        gtag('event', 'reconcile_open', { type: 'class' });
         var overlay = gid('pn-reconcile-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
     };
@@ -8863,7 +8837,6 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    gtag('event', 'reconcile_submit', { type: 'class' });
                     location.reload();
                 } else {
                     if (fb) { fb.textContent = data.error || 'Error saving reconciliation.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
@@ -9494,7 +9467,6 @@ window.pnCloseUnitCreateModal = function() {
             .then(function(r) { return r.json(); })
             .then(function(r) {
                 if (r && r.status === 0) {
-                    gtag('event', 'park_heraldry_remove', { status: 'success' });
                     window.location.reload();
                 } else {
                     alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
@@ -9524,17 +9496,14 @@ window.pnCloseUnitCreateModal = function() {
                     .then(function(r) {
                         if (upl) upl.style.display = 'none';
                         if (r && r.status === 0) {
-                            gtag('event', 'park_heraldry_upload', { status: 'success' });
                             if (done) done.style.display = '';
                             setTimeout(function() { window.location.reload(); }, 1200);
                         } else {
-                            gtag('event', 'park_heraldry_upload', { status: 'failed' });
                             if (sel) sel.style.display = '';
                             alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
                         }
                     })
                     .catch(function() {
-                        gtag('event', 'park_heraldry_upload', { status: 'failed' });
                         if (upl) upl.style.display = 'none';
                         if (sel) sel.style.display = '';
                         alert('Request failed. Please try again.');

@@ -246,13 +246,11 @@
 			<?php if ($loggedIn && $isUpcoming): ?>
 			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0;display:inline-flex;gap:6px">
 				<button type="submit" name="status" value="going"
-					class="ev-btn <?= $userAttending === 'going' ? 'ev-btn-primary' : 'ev-btn-outline' ?>"
-					onclick="gtag('event','event_rsvp',{action:'going'})">
+					class="ev-btn <?= $userAttending === 'going' ? 'ev-btn-primary' : 'ev-btn-outline' ?>">
 					<i class="fas fa-check-circle"></i> <?= $userAttending === 'going' ? 'Going ✓' : 'Going' ?>
 				</button>
 				<button type="submit" name="status" value="interested"
-					class="ev-btn <?= $userAttending === 'interested' ? 'ev-btn-secondary' : 'ev-btn-outline' ?>"
-					onclick="gtag('event','event_rsvp',{action:'interested'})">
+					class="ev-btn <?= $userAttending === 'interested' ? 'ev-btn-secondary' : 'ev-btn-outline' ?>">
 					<i class="fas fa-star"></i> <?= $userAttending === 'interested' ? 'Interested ✓' : 'Interested' ?>
 				</button>
 			</form>
