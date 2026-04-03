@@ -1648,11 +1648,187 @@ var PkConfig = {
 				</div>
 			</div>
 		</div>
-		<div class="pk-modal-footer">
+		<div class="pk-modal-footer" style="justify-content:flex-end;gap:8px;">
+			<button class="pk-btn pk-btn-secondary pk-selfreg-trigger" id="pk-selfreg-btn" onclick="pkOpenSelfRegModal()" style="margin-right:auto;">
+				<i class="fas fa-qrcode"></i> Self Registration
+			</button>
 			<button class="pk-btn pk-btn-ghost" id="pk-addplayer-cancel">Cancel</button>
 			<button class="pk-btn pk-btn-primary" id="pk-addplayer-submit">
 				<i class="fas fa-user-plus"></i> Create Player
 			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php if ($CanAdminPark ?? false): ?>
+<!-- Self-Registration QR Modal -->
+<style>
+/* ---- Self-Registration QR Modal ---- */
+#pk-selfreg-overlay {
+	position: fixed; inset: 0;
+	background: rgba(0,0,0,0.5);
+	display: flex; align-items: center; justify-content: center;
+	z-index: var(--z-modal, 1100);
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+#pk-selfreg-overlay.pk-selfreg-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+#pk-selfreg-overlay .pk-modal-box {
+	background: #fff; border-radius: 12px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+	max-height: 90vh; display: flex; flex-direction: column;
+}
+#pk-selfreg-overlay .pk-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+}
+#pk-selfreg-overlay .pk-modal-title {
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+#pk-selfreg-overlay .pk-modal-close-btn {
+	background: none; border: none; font-size: 22px; color: #a0aec0;
+	cursor: pointer; line-height: 1; padding: 0 4px;
+}
+#pk-selfreg-overlay .pk-modal-close-btn:hover { color: #4a5568; }
+#pk-selfreg-overlay .pk-modal-body {
+	padding: 20px; overflow-y: auto; flex: 1;
+}
+#pk-selfreg-overlay .pk-modal-footer {
+	padding: 14px 20px; border-top: 1px solid #e2e8f0;
+	display: flex; align-items: center; flex-shrink: 0;
+}
+
+/* Warning banner */
+.pk-selfreg-warning {
+	background: #fffbeb;
+	border: 1px solid #f6e05e;
+	color: #744210;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-warning i {
+	color: #d69e2e;
+	margin-right: 6px;
+}
+.pk-selfreg-note {
+	background: #ebf8ff;
+	border: 1px solid #90cdf4;
+	color: #2a4365;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-note i {
+	color: #3182ce;
+	margin-right: 6px;
+}
+
+/* QR container + anti-copy shield */
+#pk-selfreg-qr-wrap {
+	position: relative;
+	display: inline-block;
+	margin: 0 auto 16px;
+}
+.pk-selfreg-qr-container {
+	user-select: none;
+	pointer-events: none;
+	-webkit-user-select: none;
+}
+.pk-selfreg-qr-container canvas,
+.pk-selfreg-qr-container img {
+	display: block;
+	margin: 0 auto;
+}
+.pk-selfreg-qr-shield {
+	position: absolute; inset: 0;
+	z-index: 2;
+	background: transparent;
+	cursor: default;
+}
+
+/* A18: Expired badge overlay */
+.pk-selfreg-expired-badge {
+	position: absolute;
+	top: 50%; left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(255,255,255,0.85);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	color: #c53030;
+	font-size: 20px;
+	font-weight: 700;
+	padding: 12px 28px;
+	border-radius: 8px;
+	z-index: 3;
+	display: none;
+}
+
+/* Timer */
+.pk-selfreg-timer-row {
+	font-size: 18px;
+	font-weight: 600;
+	color: #2d3748;
+	margin: 12px 0 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+.pk-selfreg-timer-row i {
+	color: #a0aec0;
+	font-size: 14px;
+}
+.pk-selfreg-timer-expired {
+	color: #c53030;
+}
+
+/* Regenerate button */
+#pk-selfreg-regen-btn {
+	margin-top: 8px;
+}
+</style>
+<div id="pk-selfreg-overlay">
+	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-qrcode" style="margin-right:8px;color:#2c5282"></i>Self Registration</h3>
+			<button class="pk-modal-close-btn" id="pk-selfreg-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body" style="text-align:center;">
+			<div id="pk-selfreg-feedback" class="plr-feedback" style="display:none" aria-live="polite" role="status"></div>
+			<div class="pk-selfreg-warning">
+				<i class="fas fa-exclamation-triangle"></i>
+				Do not distribute this self-registration QR code. This is designed to be used for in-person registration only.
+			</div>
+			<div class="pk-selfreg-note">
+				<i class="fas fa-info-circle"></i>
+				The new player will be assigned a Color credit for today to ensure they show in Active Player lists, but you can change this to any other class at a later time.
+			</div>
+			<div id="pk-selfreg-qr-wrap">
+				<div id="pk-selfreg-qr" class="pk-selfreg-qr-container"></div>
+				<div class="pk-selfreg-qr-shield" id="pk-selfreg-shield"></div>
+				<div class="pk-selfreg-expired-badge" id="pk-selfreg-expired-badge">Expired</div>
+			</div>
+			<div class="pk-selfreg-timer-row" aria-live="polite">
+				<i class="fas fa-clock"></i>
+				<span id="pk-selfreg-timer">--:--</span>
+			</div>
+			<button class="pk-btn pk-btn-primary" id="pk-selfreg-regen-btn" style="display:none;">
+				<i class="fas fa-sync-alt"></i> Regenerate
+			</button>
+		</div>
+		<div class="pk-modal-footer" style="justify-content:center;">
+			<button class="pk-btn pk-btn-ghost" id="pk-selfreg-cancel">Close</button>
 		</div>
 	</div>
 </div>
@@ -2168,6 +2344,9 @@ html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { bac
 <?php endif; ?>
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<?php if ($CanAdminPark ?? false): ?>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>

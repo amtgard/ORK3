@@ -405,6 +405,27 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'selfreg_link') {
+			$this->load_model('Player');
+			$r = $this->Player->create_selfreg_link([
+				'Token'  => $this->session->token,
+				'ParkId' => $park_id,
+			]);
+			if ($r['Status'] == 0) {
+				$detail = $r['Detail'];
+				echo json_encode([
+					'status'            => 0,
+					'token'             => $detail['token'],
+					'expires_at'        => $detail['expires_at'],
+					'seconds_remaining' => $detail['seconds_remaining'],
+				]);
+			} else {
+				echo json_encode([
+					'status' => $r['Status'],
+					'error'  => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''),
+				]);
+			}
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}
