@@ -340,7 +340,6 @@ class Controller_Player extends Controller {
 		$this->data['KingdomId']     = $this->session->kingdom_id;
 		$this->data['AwardOptions']  = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
-		$this->data['Player']        = $this->Player->fetch_player($id);
 		$this->data['Player']['LastSignInDate'] = $this->Player->get_latest_attendance_date($id);
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();

@@ -32,6 +32,9 @@ class Model_Player extends Model {
 	}
 	
 	function fetch_player_details($mundane_id) {
+		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
 		$awards = $this->Player->AwardsForPlayer(array( 'MundaneId' => $mundane_id ));
 		if ($awards['Status']['Status'] != 0) return $awards;
 		$attendance = $this->Player->AttendanceForPlayer(array( 'MundaneId' => $mundane_id ));
@@ -39,7 +42,7 @@ class Model_Player extends Model {
 		$classes = $this->Player->GetPlayerClasses(array( 'MundaneId' => $mundane_id ));
 		if ($classes['Status']['Status'] != 0) return $classes;
 		$details = array( 'Awards' => $awards['Awards'], 'Attendance' => $attendance['Attendance'], 'Classes' => $classes['Classes'] );
-		return $details;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $details);
 	}
 	
 	function delete_player_award($request) {
