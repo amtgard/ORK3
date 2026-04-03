@@ -555,6 +555,9 @@
 
 			<?php // ---- RSVPs Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-rsvp">
+				<?php if (!$checkinOpen): ?>
+				<div class="ev-checkin-locked"><i class="fas fa-clock"></i> Sign-ins for this event can be processed starting on <?= htmlspecialchars($checkinOpenLabel) ?>.</div>
+				<?php endif; ?>
 				<div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 12px">
 					<p style="font-size:.95em;color:#4a5568;margin:0">
 						<i class="fas fa-check-circle" style="margin-right:4px;color:#276749"></i>
