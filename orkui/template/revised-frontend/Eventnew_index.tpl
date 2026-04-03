@@ -985,11 +985,11 @@ var EvConfig = {
         if (li && typeof evShowTab === 'function') evShowTab(li, hash);
     }
 })();
-<?php if (count($attendanceList) > 0): ?>
 (function() {
 	var _evAttDt = null;
 	function initEvAttDt() {
 		if (_evAttDt || !$.fn || !$.fn.DataTable) return;
+		if (!document.getElementById('ev-attendance-table')) return;
 		_evAttDt = $('#ev-attendance-table').DataTable({
 			dom: 'lfrtip',
 			order: [[0, 'asc']],
@@ -1014,8 +1014,8 @@ var EvConfig = {
 	$(function() {
 		if (document.querySelector('#ev-tab-attendance.ev-tab-visible')) initEvAttDt();
 	});
+	window.evInitAttDt = initEvAttDt;
 })();
-<?php endif; ?>
 <?php if ($canManage && ($CalendarDetailCount ?? 1) > 1): ?>
 (function() {
 	var form = document.getElementById('ev-edit-form');

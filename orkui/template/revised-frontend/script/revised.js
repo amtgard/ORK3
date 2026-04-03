@@ -5840,13 +5840,19 @@ $(document).ready(function() {
             '</tr>';
         var tableBody = document.querySelector('#ev-attendance-table tbody');
         if (tableBody) {
-            tableBody.insertAdjacentHTML('beforeend', newRow);
+            if (window._evAttDt) {
+                window._evAttDt.row.add($(newRow)).draw(false);
+            } else {
+                tableBody.insertAdjacentHTML('beforeend', newRow);
+                if (window.evInitAttDt) window.evInitAttDt();
+            }
         } else {
             var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
             var tableHtml = '<table class="display" id="ev-attendance-table" style="width:100%">' +
                 '<thead><tr><th>Player</th><th>Kingdom</th><th>Park</th><th>Class</th><th>Credits</th><th class="ev-del-cell"></th></tr></thead>' +
                 '<tbody>' + newRow + '</tbody></table>';
             if (emptyMsg) emptyMsg.outerHTML = tableHtml;
+            if (window.evInitAttDt) window.evInitAttDt();
         }
         var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-attendance"] .ev-tab-count');
         if (cnt) cnt.textContent = '(' + ((parseInt(cnt.textContent.replace(/[^0-9]/g, '')) || 0) + 1) + ')';
