@@ -177,6 +177,12 @@ class Controller_Kingdom extends Controller {
 	public function players_json($kingdom_id = null) {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid = (int)$kingdom_id;
+		$cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid]);
+		if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 1200)) !== false) {
+			header('Content-Type: application/json');
+			echo json_encode($cached);
+			exit();
+		}
 		global $DB;
 		$kpSql = "SELECT m.mundane_id, m.persona, m.has_image, m.has_heraldry,
 				COALESCE(sub.last_signin, '1970-01-01') AS last_signin,
@@ -224,6 +230,7 @@ class Controller_Kingdom extends Controller {
 				];
 			}
 		}
+		Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, ['players' => $players]);
 		header('Content-Type: application/json');
 		echo json_encode(['players' => $players]);
 		exit();
