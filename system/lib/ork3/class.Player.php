@@ -417,6 +417,7 @@ class Player extends Ork3 {
 						'IsTitle' => $r->is_title,
 						'TitleClass' => $r->title_class,
 						'OfficerRole' => $r->officer_role,
+						'Peerage' => $r->peerage,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name,

@@ -1052,6 +1052,37 @@
 				<?php if (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
+				<?php if (!empty($CanAdminPark)): ?>
+				<div class="kn-rec-filter-bar">
+					<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
+					<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
+					<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="all">All</button>
+					<span class="kn-rec-filter-info">
+						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
+						<div class="kn-rec-filter-popover">
+							<h4>About These Filters</h4>
+							<dl>
+								<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
+								<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
+								<dt>Below Recommended</dt>
+								<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
+								<dt>Non-Ladder</dt>
+								<dd>Flat awards with no rank progression (e.g. service awards). Grant or Delete as appropriate.</dd>
+								<dt>At or Above Recommended</dt>
+								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
+								<dt>All</dt>
+								<dd>Every recommendation regardless of status. Use for a full audit.</dd>
+							</dl>
+						</div>
+					</span>
+					<span class="kn-rec-export-btns">
+						<button class="kn-rec-export-btn" type="button" onclick="pkRecPrint()"><i class="fas fa-print"></i> Print</button>
+						<button class="kn-rec-export-btn" type="button" onclick="pkRecCsv()"><i class="fas fa-download"></i> CSV</button>
+					</span>
+				</div>
+				<?php endif; ?>
 				<div class="pk-recs-table-wrap">
 					<table id="pk-rec-table" class="pk-recs-table display">
 						<thead>
@@ -1067,7 +1098,9 @@
 						</thead>
 						<tbody id="pk-recs-tbody">
 						<?php foreach ($AwardRecommendations as $rec): ?>
-						<tr class="pk-rec-row" data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
+						<tr class="pk-rec-row"
+							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
+							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($rec['AwardName']) ?></td>
 							<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
@@ -1081,12 +1114,12 @@
 							<?php if (!empty($CanAdminPark)): ?>
 							<td class="pk-rec-actions">
 								<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-									data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
+									data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
 									<i class="fas fa-medal"></i> Grant
 								</button>
 								<button class="pk-rec-dismiss-btn"
 									data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-									<i class="fas fa-times"></i> Dismiss
+									<i class="fas fa-times"></i> Delete
 								</button>
 							</td>
 							<?php endif; ?>
@@ -1139,7 +1172,7 @@ var PkConfig = {
 	},
 };
 </script>
-<?php if ($IsLoggedIn): ?>
+<?php if (!empty($CanAdminPark)): ?>
 <div id="pk-award-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -1972,9 +2005,19 @@ var PkConfig = {
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+window.pkRecActiveFilter = 'open';
+$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+	if (settings.nTable.id !== 'pk-rec-table') return true;
+	var filter = window.pkRecActiveFilter || 'all';
+	if (filter === 'all') return true;
+	var row = settings.aoData[dataIndex].nTr;
+	var rowFilter = row ? row.getAttribute('data-filter') : '';
+	if (filter === 'open') return rowFilter !== 'already';
+	return rowFilter === filter;
+});
 $(function() {
 	if ($('#pk-rec-table').length) {
-		$('#pk-rec-table').DataTable({
+		window.pkRecDT = $('#pk-rec-table').DataTable({
 			order: [[4, 'desc']],
 			columnDefs: [
 				{ targets: [4], type: 'date' },
@@ -1986,4 +2029,6 @@ $(function() {
 		});
 	}
 });
+window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
+window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 </script>

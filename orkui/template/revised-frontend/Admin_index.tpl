@@ -305,7 +305,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-modal-box {
 	background: #fff; border-radius: 10px; width: 520px; max-width: calc(100vw - 32px);
 	max-height: calc(100vh - 48px); display: flex; flex-direction: column;
-	box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+	box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: visible;
 }
 .cp-modal-header {
 	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
@@ -317,7 +317,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 }
 .cp-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
 .cp-modal-close:hover { color: #2d3748; }
-.cp-modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.cp-modal-body { padding: 20px; overflow: visible; flex: 1; }
 .cp-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
 /* Field rows */
 .cp-field { margin-bottom: 14px; }
@@ -820,9 +820,9 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		input.addEventListener('input', function() {
 			var term = this.value.trim();
 			hidden.value = '';
+			clearTimeout(timer);
 			if (opts.onClear) opts.onClear();
 			if (term.length < minLen) { acClose(); return; }
-			clearTimeout(timer);
 			timer = setTimeout(function() {
 				opts.fetchFn(term, function(items) { acOpen(items); });
 			}, 220);
@@ -898,9 +898,10 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		var url = UIR + 'SearchAjax/universal&focus=player&q=' + encodeURIComponent(q) + (includeInactive ? '&inactive=1' : '');
 		fetch(url).then(function(r){return r.json();}).then(function(d) {
 			cb((d.players || []).map(function(p) {
+				var inactive = p.active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
 				return {
 					id: p.id, label: p.name,
-					html: cpEsc(p.name) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(p.abbr) + ' · ' + cpEsc(p.park) + ')</span>',
+					html: cpEsc(p.name) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(p.abbr) + ' · ' + cpEsc(p.park) + ')</span>' + inactive,
 				};
 			}));
 		}).catch(function(){cb([]);});
@@ -972,7 +973,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		document.getElementById('cp-mp-submit').disabled = !(pid && pkid);
 	}
 	cpAc({ inputId:'cp-mp-player-name', hiddenId:'cp-mp-player-id', resultsId:'cp-mp-player-results',
-		fetchFn: cpSearchPlayersGlobal, onSelect: cpMpCheck, onClear: cpMpCheck });
+		fetchFn: function(q, cb) { cpSearchPlayersGlobal(q, cb, true); }, onSelect: cpMpCheck, onClear: cpMpCheck });
 	cpAc({ inputId:'cp-mp-park-name', hiddenId:'cp-mp-park-id', resultsId:'cp-mp-park-results',
 		fetchFn: cpSearchParks, onSelect: cpMpCheck, onClear: cpMpCheck });
 	document.getElementById('cp-mp-submit').addEventListener('click', function() {
@@ -1001,8 +1002,8 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		var remove = document.getElementById('cp-mgp-remove-id').value;
 		document.getElementById('cp-mgp-submit').disabled = !(keep && remove);
 	}
-	cpAc({ inputId:'cp-mgp-keep-name',   hiddenId:'cp-mgp-keep-id',   resultsId:'cp-mgp-keep-results',   fetchFn:cpSearchPlayersGlobal, onSelect:cpMgpCheck, onClear:cpMgpCheck });
-	cpAc({ inputId:'cp-mgp-remove-name', hiddenId:'cp-mgp-remove-id', resultsId:'cp-mgp-remove-results', fetchFn:cpSearchPlayersGlobal, onSelect:cpMgpCheck, onClear:cpMgpCheck });
+	cpAc({ inputId:'cp-mgp-keep-name',   hiddenId:'cp-mgp-keep-id',   resultsId:'cp-mgp-keep-results',   fetchFn:function(q,cb){cpSearchPlayersGlobal(q,cb,true);}, onSelect:cpMgpCheck, onClear:cpMgpCheck });
+	cpAc({ inputId:'cp-mgp-remove-name', hiddenId:'cp-mgp-remove-id', resultsId:'cp-mgp-remove-results', fetchFn:function(q,cb){cpSearchPlayersGlobal(q,cb,true);}, onSelect:cpMgpCheck, onClear:cpMgpCheck });
 	document.getElementById('cp-mgp-submit').addEventListener('click', function() {
 		var keepId   = document.getElementById('cp-mgp-keep-id').value;
 		var removeId = document.getElementById('cp-mgp-remove-id').value;

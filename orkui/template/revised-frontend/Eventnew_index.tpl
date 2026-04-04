@@ -230,6 +230,10 @@
 					<?= $isUpcoming ? '<i class="fas fa-clock"></i> Upcoming' : '<i class="fas fa-history"></i> Past' ?>
 				</span>
 				<?php endif; ?>
+				<span class="ev-badge ev-badge-blue">
+					<i class="fas fa-<?= $parkId > 0 ? 'tree' : 'crown' ?>"></i>
+					<?= $parkId > 0 ? 'Park Event' : 'Kingdom Event' ?>
+				</span>
 			</div>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
@@ -240,9 +244,9 @@
 				<?php endif; ?>
 				<?php
 					$breadcrumbParkId   = $atParkId   ?: $parkId;
-					$breadcrumbParkName = $atParkId ? $atParkName : $parkName;
+					$breadcrumbParkName = $atParkName; // controller fetches name for atParkId ?: parkId
 				?>
-				<?php if ($breadcrumbParkId): ?>
+				<?php if ($breadcrumbParkId && $breadcrumbParkName): ?>
 					<span class="ev-owner-sep">›</span>
 					<a href="<?= UIR ?>Park/profile/<?= $breadcrumbParkId ?>"><?= $breadcrumbParkName ?></a>
 				<?php endif; ?>
@@ -592,8 +596,7 @@
 						<button class="ev-icon-btn" title="Print" onclick="evPrintRsvp()"><i class="fas fa-print"></i></button>
 					</div>
 				</div>
-				<?php if ($canManageAttendance): ?>
-					<?php if (count($rsvpList) > 0): ?>
+				<?php if ($loggedIn && count($rsvpList) > 0): ?>
 					<div style="margin-bottom:10px;position:relative;">
 						<i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#a0aec0;font-size:12px;pointer-events:none"></i>
 						<input type="text" id="ev-rsvp-search" placeholder="Filter by name…" oninput="evFilterRsvp(this.value)"
@@ -603,7 +606,7 @@
 					</div>
 					<table class="ev-table" id="ev-rsvp-table">
 						<thead>
-							<tr><th>Player</th><th>Status</th><th></th></tr>
+							<tr><th>Player</th><th>Status</th><?php if ($canManageAttendance): ?><th></th><?php endif; ?></tr>
 						</thead>
 						<tbody>
 							<?php foreach ($rsvpList as $attendee): ?>
@@ -616,6 +619,7 @@
 										<i class="fas fa-star" style="color:#b7791f;margin-right:4px"></i>Interested
 									<?php endif; ?>
 								</td>
+								<?php if ($canManageAttendance): ?>
 								<td style="text-align:right;white-space:nowrap">
 									<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen && !empty($attendee['LastClassId'])): ?>
 									<button class="ev-checkin-btn ev-checkin-as-btn" type="button"
@@ -637,15 +641,15 @@
 										<i class="fas fa-times"></i>
 									</button>
 								</td>
+								<?php endif; ?>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
 					</table>
-					<?php else: ?>
-					<div class="ev-empty">
-						<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
-					</div>
-					<?php endif; ?>
+				<?php elseif ($loggedIn): ?>
+				<div class="ev-empty">
+					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
+				</div>
 				<?php elseif ($rsvpCount === 0): ?>
 				<div class="ev-empty">
 					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>

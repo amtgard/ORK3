@@ -371,6 +371,7 @@ class Controller_Event extends Controller {
 		$_parkLookupId = $atParkId ?: (int)($this->data['EventInfo']['ParkId'] ?? 0);
 		if ( $_parkLookupId > 0 ) {
 			global $DB;
+			$DB->Clear();
 			$row = $DB->DataSet("SELECT name, address, city, province, postal_code, location FROM " . DB_PREFIX . "park WHERE park_id = " . $_parkLookupId . " LIMIT 1");
 			if ($row && $row->Size() > 0 && $row->Next()) {
 				$this->data['AtParkName']       = $row->name;
@@ -417,7 +418,7 @@ class Controller_Event extends Controller {
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
-		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];
+		$this->data['RsvpList']      = $uid > 0 ? $this->Event->get_rsvp_list($detail_id) : [];
 
 		global $DB;
 		$cdCountRow = $DB->DataSet('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $event_id . ' LIMIT 1');
