@@ -45,6 +45,13 @@
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
+	// Display privacy: monarchy/admin always see; others see if player opted in
+	$isLoggedIn = isset($this->__session->user_id) && (int)$this->__session->user_id > 0;
+	$canSeePrivate = $isOwnProfile || $canEditAdmin;
+	$showFirstName = $canSeePrivate || ($isLoggedIn && (int)($Player['ShowMundaneFirst'] ?? 1));
+	$showLastName  = $canSeePrivate || ($isLoggedIn && (int)($Player['ShowMundaneLast'] ?? 1));
+	$showEmail     = $canSeePrivate || ($isLoggedIn && (int)($Player['ShowEmail'] ?? 1));
+
 	// Check if player has any reconcilable historical awards (ladder only — matches reconcile page filter)
 	$hasHistorical = false;
 	if ($canManageAwards && is_array($Details['Awards'])) {
@@ -410,6 +417,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-about-content pre code{background:transparent;padding:0;color:inherit}
 .pn-about-content img{max-width:100%;height:auto;border-radius:6px}
 .pn-about-content ul,.pn-about-content ol{margin:8px 0;padding-left:24px}
+.pn-pronunciation{font-size:13px;color:rgba(255,255,255,0.65);font-style:italic;margin-top:-2px;margin-bottom:2px;letter-spacing:.02em}
+.pn-tooltip-trigger{position:relative;display:inline-flex}
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
 .pn-about-main{flex:1;min-width:0}
@@ -505,8 +514,16 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
 				<?php endif; ?>
 			</h1>
-			<?php if (strlen($Player['GivenName']) > 0 || strlen($Player['Surname']) > 0): ?>
-				<div class="pn-real-name"><?= htmlspecialchars(trim($Player['GivenName'] . ' ' . $Player['Surname'])) ?></div>
+			<?php if (!empty($Player['PronunciationGuide'])): ?>
+				<div class="pn-pronunciation">(<?= htmlspecialchars($Player['PronunciationGuide']) ?>)</div>
+			<?php endif; ?>
+			<?php
+				$_heroRealParts = [];
+				if ($showFirstName && strlen($Player['GivenName']) > 0) $_heroRealParts[] = $Player['GivenName'];
+				if ($showLastName && strlen($Player['Surname']) > 0) $_heroRealParts[] = $Player['Surname'];
+			?>
+			<?php if (!empty($_heroRealParts)): ?>
+				<div class="pn-real-name"><?= htmlspecialchars(implode(' ', $_heroRealParts)) ?></div>
 			<?php endif; ?>
 			<?php if (!empty($pronounDisplay)): ?>
 				<div class="pn-pronouns"><?= htmlspecialchars($pronounDisplay) ?></div>
@@ -617,11 +634,13 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 		<!-- Player Details -->
 		<div class="pn-card">
 			<h4><i class="fas fa-user"></i> Player Details<?php if ($canEditAccount): ?><button class="pn-card-edit-btn" onclick="pnOpenAccountModal()" title="Edit account details"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
-			<?php if ($canEditAccount): ?>
+			<?php if ($showFirstName && strlen($Player['GivenName']) > 0): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Given Name</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['GivenName']) ?></span>
 			</div>
+			<?php endif; ?>
+			<?php if ($showLastName && strlen($Player['Surname']) > 0): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Surname</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['Surname']) ?></span>
@@ -2340,6 +2359,35 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						echo $_npv;
 					?>
 				</div>
+				<div class="pn-design-field" style="margin-top:16px">
+					<label>Pronunciation Guide</label>
+					<input type="text" id="pn-design-pronunciation" placeholder="Ex. veh-ree-lah nigh-born" value="<?= htmlspecialchars($Player['PronunciationGuide'] ?? '') ?>" maxlength="200" />
+					<div class="pn-design-hint">Help others pronounce your persona name correctly. Shown in parentheses under your name.</div>
+				</div>
+				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
+					<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:12px">Persona Display Controls</div>
+					<div class="pn-design-field" style="margin-bottom:10px">
+						<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+							<input type="checkbox" id="pn-design-show-first" <?= ((int)($Player['ShowMundaneFirst'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+							Show Mundane First Name
+							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
+						</label>
+					</div>
+					<div class="pn-design-field" style="margin-bottom:10px">
+						<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+							<input type="checkbox" id="pn-design-show-last" <?= ((int)($Player['ShowMundaneLast'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+							Show Mundane Last Name
+							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
+						</label>
+					</div>
+					<div class="pn-design-field">
+						<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+							<input type="checkbox" id="pn-design-show-email" <?= ((int)($Player['ShowEmail'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+							Show Email Address
+							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your email address. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
+						</label>
+					</div>
+				</div>
 			</div>
 
 			<!-- Photo Focus Panel -->
@@ -2856,6 +2904,10 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		fd.append('PhotoFocusY', gid('pn-focus-y') ? gid('pn-focus-y').value : PnConfig.photoFocusY);
 		fd.append('PhotoFocusSize', gid('pn-focus-size') ? gid('pn-focus-size').value : PnConfig.photoFocusSize);
 		fd.append('ShowBeltline', gid('pn-design-show-beltline').checked ? 1 : 0);
+		fd.append('PronunciationGuide', gid('pn-design-pronunciation').value);
+		fd.append('ShowMundaneFirst', gid('pn-design-show-first').checked ? 1 : 0);
+		fd.append('ShowMundaneLast', gid('pn-design-show-last').checked ? 1 : 0);
+		fd.append('ShowEmail', gid('pn-design-show-email').checked ? 1 : 0);
 
 		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateprofile', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })

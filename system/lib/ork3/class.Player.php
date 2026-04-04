@@ -304,6 +304,10 @@ class Player extends Ork3 {
 					'PhotoFocusY' => $this->mundane->photo_focus_y,
 					'PhotoFocusSize' => $this->mundane->photo_focus_size,
 						'ShowBeltline' => (int)$this->mundane->show_beltline,
+						'PronunciationGuide' => $this->mundane->pronunciation_guide,
+						'ShowMundaneFirst' => (int)$this->mundane->show_mundane_first,
+						'ShowMundaneLast' => (int)$this->mundane->show_mundane_last,
+						'ShowEmail' => (int)$this->mundane->show_email,
 				);
 			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
@@ -975,6 +979,10 @@ class Player extends Ork3 {
 					$this->mundane->photo_focus_y = is_null($request['PhotoFocusY'])?$this->mundane->photo_focus_y:(int)$request['PhotoFocusY'];
 					$this->mundane->photo_focus_size = is_null($request['PhotoFocusSize'])?$this->mundane->photo_focus_size:(int)$request['PhotoFocusSize'];
 					$this->mundane->show_beltline = is_null($request['ShowBeltline'])?$this->mundane->show_beltline:(int)$request['ShowBeltline'];
+					$this->mundane->pronunciation_guide = is_null($request['PronunciationGuide'])?$this->mundane->pronunciation_guide:$request['PronunciationGuide'];
+					$this->mundane->show_mundane_first = is_null($request['ShowMundaneFirst'])?$this->mundane->show_mundane_first:(int)$request['ShowMundaneFirst'];
+					$this->mundane->show_mundane_last = is_null($request['ShowMundaneLast'])?$this->mundane->show_mundane_last:(int)$request['ShowMundaneLast'];
+					$this->mundane->show_email = is_null($request['ShowEmail'])?$this->mundane->show_email:(int)$request['ShowEmail'];
 				}
 
 				// reeve or corpora qual changes
