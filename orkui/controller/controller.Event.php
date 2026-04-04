@@ -408,6 +408,7 @@ class Controller_Event extends Controller {
 
 		$now = time();
 		$this->data['IsUpcoming']      = strtotime($cd['EventStart'] ?? '') > $now;
+		$this->data['IsOngoing']       = !$this->data['IsUpcoming'] && strtotime($cd['EventEnd'] ?? $cd['EventStart'] ?? '') > $now;
 		$this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
 		$this->data['CanManageEvent'] = $uid > 0
