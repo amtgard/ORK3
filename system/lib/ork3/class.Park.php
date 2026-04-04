@@ -178,6 +178,66 @@ class Park extends Ork3
 		}
 	}
 
+	public function EditParkDay( $request )
+	{
+		$this->parkday->clear();
+		$this->parkday->parkday_id = $request[ 'ParkDayId' ];
+		if ( !valid_id( $request[ 'ParkDayId' ] ) || !$this->parkday->find() ) {
+			return InvalidParameter();
+		}
+		$park_id = $this->parkday->park_id;
+		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
+			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT )
+		) {
+			$this->parkday->recurrence = $request[ 'Recurrence' ];
+			$this->parkday->week_of_month = $request[ 'WeekOfMonth' ];
+			$this->parkday->week_day = $request[ 'WeekDay' ];
+			$this->parkday->month_day = $request[ 'MonthDay' ];
+			$this->parkday->time = $request[ 'Time' ];
+			$this->parkday->purpose = $request[ 'Purpose' ];
+			$this->parkday->description = $request[ 'Description' ];
+			$this->parkday->alternate_location = $request[ 'AlternateLocation' ];
+			$this->parkday->online = (int)( $request[ 'Online' ] ?? 0 );
+
+			if ( !empty( $request[ 'Online' ] ) ) {
+				$this->parkday->address = '';
+				$this->parkday->city = '';
+				$this->parkday->province = '';
+				$this->parkday->postal_code = '';
+				$this->parkday->latitude = 0;
+				$this->parkday->longitude = 0;
+				$this->parkday->google_geocode = '';
+				$this->parkday->location = '';
+				$this->parkday->map_url = '';
+			} elseif ( $request[ 'AlternateLocation' ] > 0 ) {
+				$this->parkday->address = $request[ 'Address' ];
+				$this->parkday->city = $request[ 'City' ];
+				$this->parkday->province = $request[ 'Province' ];
+				$this->parkday->postal_code = $request[ 'PostalCode' ];
+				$this->parkday->map_url = $request[ 'MapUrl' ];
+				$this->park_geocode_h(null, $this->parkday);
+			} else {
+				$this->park->clear();
+				$this->park->park_id = $park_id;
+				$this->park->find();
+				$this->parkday->address = $this->park->address;
+				$this->parkday->city = $this->park->city;
+				$this->parkday->province = $this->park->province;
+				$this->parkday->postal_code = $this->park->postal_code;
+				$this->parkday->latitude = $this->park->latitude;
+				$this->parkday->longitude = $this->park->longitude;
+				$this->parkday->google_geocode = $this->park->google_geocode;
+				$this->parkday->location = $this->park->location;
+				$this->parkday->map_url = $this->park->map_url;
+			}
+			$this->parkday->location_url = $request[ 'LocationUrl' ];
+			$this->parkday->save();
+			return Success();
+		} else {
+			return NoAuthorization();
+		}
+	}
+
 	public function RemoveParkDay( $request )
 	{
 		$this->parkday->clear();

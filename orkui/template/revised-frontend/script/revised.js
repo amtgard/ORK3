@@ -7844,7 +7844,9 @@ function setupPronounPicker(cfg) {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var ADD_DAY_URL    = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/addparkday';
+    var EDIT_DAY_URL   = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/editparkday';
     var DELETE_DAY_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deleteparkday';
+    var _editingDayId  = 0;
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7896,6 +7898,9 @@ function setupPronounPicker(cfg) {
             radio.checked = radio.value === '0';
         });
         pkToggleAltLoc(false); // reset altloc block
+        _editingDayId = 0;
+        gid('pk-addday-id').value = 0;
+        pkSetModalMode(false);
         overlay.classList.add('pk-open');
         document.body.style.overflow = 'hidden';
     };
@@ -7905,6 +7910,94 @@ function setupPronounPicker(cfg) {
         if (!overlay) return;
         overlay.classList.remove('pk-open');
         document.body.style.overflow = '';
+        _editingDayId = 0;
+    }
+
+    function pkSetModalMode(isEdit) {
+        var titleIcon = gid('pk-addday-title-icon');
+        var titleText = gid('pk-addday-title-text');
+        var submitIcon = gid('pk-addday-submit-icon');
+        var submitText = gid('pk-addday-submit-text');
+        var delSection = gid('pk-addday-delete-section');
+        if (isEdit) {
+            if (titleIcon) titleIcon.className = 'fas fa-pencil-alt';
+            if (titleText) titleText.textContent = 'Edit Park Day';
+            if (submitIcon) submitIcon.className = 'fas fa-save';
+            if (submitText) submitText.textContent = 'Save Changes';
+            if (delSection) delSection.style.display = '';
+        } else {
+            if (titleIcon) titleIcon.className = 'fas fa-calendar-plus';
+            if (titleText) titleText.textContent = 'Add Park Day';
+            if (submitIcon) submitIcon.className = 'fas fa-calendar-plus';
+            if (submitText) submitText.textContent = 'Add Park Day';
+            if (delSection) delSection.style.display = 'none';
+        }
+    }
+
+    function pkOpenEditDayModal(card) {
+        var overlay = gid('pk-addday-overlay');
+        if (!overlay) return;
+        _editingDayId = parseInt(card.dataset.dayId, 10) || 0;
+        gid('pk-addday-id').value = _editingDayId;
+
+        var fb = gid('pk-addday-feedback');
+        if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+
+        // Purpose
+        var purpose = card.dataset.purpose || 'fighter-practice';
+        overlay.querySelectorAll('.pk-seg-btn[data-group="purpose"]').forEach(function(btn) {
+            btn.classList.toggle('pk-seg-active', btn.dataset.val === purpose);
+        });
+        var purposeHid = gid('pk-addday-purpose');
+        if (purposeHid) purposeHid.value = purpose;
+
+        // Recurrence
+        var recurrence = card.dataset.recurrence || 'weekly';
+        overlay.querySelectorAll('.pk-seg-btn[data-group="recurrence"]').forEach(function(btn) {
+            btn.classList.toggle('pk-seg-active', btn.dataset.val === recurrence);
+        });
+        var recHid = gid('pk-addday-recurrence');
+        if (recHid) recHid.value = recurrence;
+        pkUpdateRecurrenceFields(recurrence);
+
+        // Weekday, week-of-month, month-day
+        var weekdayEl = gid('pk-addday-weekday');
+        if (weekdayEl) weekdayEl.value = card.dataset.weekday || 'Monday';
+        var weekofEl = gid('pk-addday-weekof');
+        if (weekofEl) weekofEl.value = card.dataset.weekof || '1';
+        var monthdayEl = gid('pk-addday-monthday');
+        if (monthdayEl) monthdayEl.value = card.dataset.monthday || '1';
+
+        // Time
+        var timeEl = gid('pk-addday-time');
+        if (timeEl) timeEl.value = card.dataset.time || '';
+
+        // Description
+        var descEl = gid('pk-addday-desc');
+        if (descEl) descEl.value = card.dataset.desc || '';
+
+        // Location
+        var isOnline = card.dataset.online === '1';
+        var isAltLoc = card.dataset.altloc === '1';
+        var locVal = isOnline ? 'online' : (isAltLoc ? '1' : '0');
+        overlay.querySelectorAll('input[name="pk-addday-altloc"]').forEach(function(radio) {
+            radio.checked = radio.value === locVal;
+        });
+        pkToggleAltLoc(locVal === '1');
+
+        // Alternate location fields
+        var addrEl = gid('pk-addday-address');
+        if (addrEl) addrEl.value = card.dataset.address || '';
+        var cityEl = gid('pk-addday-city');
+        if (cityEl) cityEl.value = card.dataset.city || '';
+        var provEl = gid('pk-addday-province');
+        if (provEl) provEl.value = card.dataset.province || '';
+        var postalEl = gid('pk-addday-postal');
+        if (postalEl) postalEl.value = card.dataset.postal || '';
+
+        pkSetModalMode(true);
+        overlay.classList.add('pk-open');
+        document.body.style.overflow = 'hidden';
     }
 
     $(document).ready(function() {
@@ -7961,12 +8054,19 @@ function setupPronounPicker(cfg) {
                 fd.append('City',              gid('pk-addday-city')     ? gid('pk-addday-city').value     : '');
                 fd.append('Province',          gid('pk-addday-province') ? gid('pk-addday-province').value : '');
                 fd.append('PostalCode',        gid('pk-addday-postal')   ? gid('pk-addday-postal').value   : '');
-                fetch(ADD_DAY_URL, { method: 'POST', body: fd })
+                var url = ADD_DAY_URL;
+                var successMsg = 'Park day added!';
+                if (_editingDayId) {
+                    fd.append('ParkDayId', _editingDayId);
+                    url = EDIT_DAY_URL;
+                    successMsg = 'Park day updated!';
+                }
+                fetch(url, { method: 'POST', body: fd })
                     .then(function(r) { return r.json(); })
                     .then(function(result) {
                         saveBtn.disabled = false;
                         if (result && result.status === 0) {
-                            if (fb) { fb.textContent = 'Park day added!'; fb.style.display = ''; fb.className = 'pk-addday-ok'; }
+                            if (fb) { fb.textContent = successMsg; fb.style.display = ''; fb.className = 'pk-addday-ok'; }
                             setTimeout(function() { location.reload(); }, 800);
                         } else {
                             if (fb) { fb.textContent = (result && result.error) ? result.error : 'Save failed.'; fb.style.display = ''; fb.className = 'pk-addday-err'; }
@@ -7978,31 +8078,39 @@ function setupPronounPicker(cfg) {
             });
         }
 
-        // Delete park day
-        $(document).on('click', '.pk-schedule-card-del', function() {
-            var btn       = this;
-            var card      = $(this).closest('.pk-schedule-card');
-            var parkDayId = $(this).data('park-day-id');
-            if (!parkDayId) return;
-            knConfirm('Remove this park day? This cannot be undone.', function() {
-                btn.disabled = true;
-                var fd = new FormData();
-                fd.append('ParkDayId', parkDayId);
-                fetch(DELETE_DAY_URL, { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(result) {
-                        if (result && result.status === 0) {
-                            card.fadeOut(300, function() { card.remove(); });
-                        } else {
-                            btn.disabled = false;
-                            alert((result && result.error) ? result.error : 'Delete failed.');
-                        }
-                    }).catch(function() {
-                        btn.disabled = false;
-                        alert('Request failed.');
-                    });
-            });
+        // Edit park day — open modal with card data
+        $(document).on('click', '.pk-schedule-card-edit', function() {
+            var card = $(this).closest('.pk-schedule-card')[0];
+            if (card) pkOpenEditDayModal(card);
         });
+
+        // Delete park day from modal
+        var delBtn = gid('pk-addday-delete');
+        if (delBtn) {
+            delBtn.addEventListener('click', function() {
+                if (!_editingDayId) return;
+                knConfirm('Delete this park day? This cannot be undone.', function() {
+                    delBtn.disabled = true;
+                    var fd = new FormData();
+                    fd.append('ParkDayId', _editingDayId);
+                    fetch(DELETE_DAY_URL, { method: 'POST', body: fd })
+                        .then(function(r) { return r.json(); })
+                        .then(function(result) {
+                            delBtn.disabled = false;
+                            if (result && result.status === 0) {
+                                pkCloseAddDayModal();
+                                var card = document.querySelector('.pk-schedule-card[data-day-id="' + _editingDayId + '"]');
+                                if (card) $(card).fadeOut(300, function() { $(card).remove(); });
+                            } else {
+                                alert((result && result.error) ? result.error : 'Delete failed.');
+                            }
+                        }).catch(function() {
+                            delBtn.disabled = false;
+                            alert('Request failed.');
+                        });
+                });
+            });
+        }
     });
 })();
 

@@ -30,6 +30,7 @@
 	$persona     = htmlspecialchars($info['Persona']     ?? '');
 
 	$isUpcoming    = $IsUpcoming     ?? false;
+	$isOngoing     = $IsOngoing      ?? false;
 	$attendeeCount = $AttendanceCount ?? 0;
 	$mapLink       = $MapLink        ?? '';
 
@@ -224,9 +225,11 @@
 					<i class="fas fa-calendar-alt"></i> <?= htmlspecialchars($dateBadgeText) ?>
 				</span>
 				<?php endif; ?>
+				<?php if (!$isOngoing): ?>
 				<span class="ev-badge <?= $isUpcoming ? 'ev-badge-green' : 'ev-badge-gray' ?>">
 					<?= $isUpcoming ? '<i class="fas fa-clock"></i> Upcoming' : '<i class="fas fa-history"></i> Past' ?>
 				</span>
+				<?php endif; ?>
 			</div>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
@@ -618,7 +621,7 @@
 									<button class="ev-checkin-btn ev-checkin-as-btn" type="button"
 										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
 										onclick="evQuickCheckin(this, <?= (int)$attendee['MundaneId'] ?>, <?= (int)$attendee['LastClassId'] ?>)">
-										<i class="fas fa-user-check"></i> Check-in as <?= htmlspecialchars($attendee['LastClassName'] ?? '') ?>
+										<i class="fas fa-user-check"></i> <span class="ev-checkin-label">Check-in </span>as <?= htmlspecialchars($attendee['LastClassName'] ?? '') ?>
 									</button>
 									<?php endif; ?>
 									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button"
@@ -627,7 +630,7 @@
 										<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen): ?>
 										onclick="evOpenCheckinModal(<?= (int)$attendee['MundaneId'] ?>, <?= htmlspecialchars(json_encode($attendee['Persona']), ENT_QUOTES) ?>)"
 										<?php else: ?>disabled<?php endif; ?>>
-										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : 'Check In' ?>
+										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : '<span class="ev-checkin-label">Check-in </span>as...' ?>
 									</button>
 									<button class="ev-rsvp-del-btn" type="button"
 										onclick="evDeleteRsvp(this, <?= (int)$attendee['MundaneId'] ?>)" title="Remove RSVP">
@@ -1195,6 +1198,7 @@ function fpAddTitle(label, calEl) {
 	title.textContent = label;
 	calEl.insertBefore(title, calEl.firstChild);
 }
+if (document.getElementById('ev-fp-start')) {
 var _fpOpts = {
 	enableTime: true,
 	dateFormat: 'Y-m-d\\TH:i',
@@ -1224,4 +1228,5 @@ var _fpStart = flatpickr('#ev-fp-start', Object.assign({}, _fpOpts, {
 var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	onReady: function(sel, str, fp) { fpAddTitle('End Date & Time', fp.calendarContainer); }
 }));
+}
 </script>
