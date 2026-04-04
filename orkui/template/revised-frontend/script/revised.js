@@ -423,6 +423,25 @@ if (PnConfig.recError) {
         buildRecRankPills($(this).val());
     });
 
+    // ---- Rec dismiss button (player page) ----
+    document.addEventListener('click', function(e) {
+        var dimBtn = e.target.closest ? e.target.closest('.pn-rec-dismiss-btn') : null;
+        if (!dimBtn) return;
+        if (!dimBtn.dataset.confirm) {
+            dimBtn.dataset.confirm = '1';
+            dimBtn.textContent = 'Confirm Delete?';
+            dimBtn.classList.add('pk-rec-dismiss-confirm');
+            dimBtn._confirmTimer = setTimeout(function() {
+                dimBtn.dataset.confirm = '';
+                dimBtn.innerHTML = '<i class="fas fa-times"></i> Delete';
+                dimBtn.classList.remove('pk-rec-dismiss-confirm');
+            }, 3000);
+            return;
+        }
+        clearTimeout(dimBtn._confirmTimer);
+        window.location.href = dimBtn.getAttribute('data-href');
+    });
+
     // ---- Inline Delete Confirmation ----
     $(document).on('click', '.pn-confirm-delete-rec', function(e) {
         e.preventDefault();
@@ -1418,10 +1437,10 @@ if (PnConfig.recError) {
             }
         };
         document.addEventListener('click', function(e) {
-            var link = e.target.closest ? e.target.closest('.pn-rec-give-link') : null;
-            if (!link) return;
-            e.preventDefault();
-            try { window.pnGiveFromRec(JSON.parse(link.getAttribute('data-rec') || '{}')); } catch (ex) {}
+            var grantBtn = e.target.closest ? e.target.closest('.pn-rec-grant-btn') : null;
+            if (grantBtn) {
+                try { window.pnGiveFromRec(JSON.parse(grantBtn.getAttribute('data-rec') || '{}')); } catch (ex) {}
+            }
         });
 
         gid('pn-award-close-btn').addEventListener('click', pnCloseAwardModal);
@@ -2381,6 +2400,7 @@ $(document).ready(function() {
             + String(today.getDate()).padStart(2, '0');
         setAwardType('awards');
         checkRequired();
+        gid('kn-award-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
         gid('kn-award-player-text').focus();
     };
@@ -2395,9 +2415,20 @@ $(document).ready(function() {
 
     // Pre-populate award modal from a recommendation row
     window.knGiveFromRec = function(rec) {
+        knOpenAwardModal();
         if (rec.Persona || rec.MundaneId) {
             gid('kn-award-player-text').value = rec.Persona || '';
             gid('kn-award-player-id').value   = String(rec.MundaneId || '');
+        }
+        if (rec.MundaneId) {
+            var pid = String(rec.MundaneId);
+            fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    knPlayerRanks = ranks || {};
+                    var curAward = gid('kn-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }
         if (rec.KingdomAwardId) {
             var sel = gid('kn-award-select');
@@ -2447,11 +2478,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Dismiss?';
+                dimBtn.textContent = 'Confirm Delete?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Dismiss';
+                    dimBtn.textContent = 'Delete';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -2468,7 +2499,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to dismiss recommendation.');
+                        alert(d.error || 'Failed to delete recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -5119,6 +5150,16 @@ $(document).ready(function() {
             gid('pk-award-player-text').value = rec.Persona || '';
             gid('pk-award-player-id').value   = String(rec.MundaneId || '');
         }
+        if (rec.MundaneId) {
+            var pid = String(rec.MundaneId);
+            fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    pkPlayerRanks = ranks || {};
+                    var curAward = gid('pk-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }
         if (rec.KingdomAwardId) {
             var sel = gid('pk-award-select');
             sel.value = String(rec.KingdomAwardId);
@@ -5175,11 +5216,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Dismiss?';
+                dimBtn.textContent = 'Confirm Delete?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Dismiss';
+                    dimBtn.textContent = 'Delete';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -5196,7 +5237,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to dismiss recommendation.');
+                        alert(d.error || 'Failed to delete recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -10507,26 +10548,107 @@ window.pnCloseUnitCreateModal = function() {
 })();
 
 /* [TOURNAMENTS HIDDEN] KN delete tournament buttons */
-// ---- Recommendations tab filter bar (Kingdomnew) ----
-(function() {
-    var bar = document.querySelector('.kn-rec-filter-bar');
-    if (!bar) return;
-
-    var activeFilter = 'all';
-
-    function applyFilter(filter) {
-        activeFilter = filter;
-        var rows = document.querySelectorAll('#kn-recs-tbody .pk-rec-row');
-        rows.forEach(function(row) {
-            row.style.display = (filter === 'all' || row.dataset.filter === filter) ? '' : 'none';
+// ---- Recs table export helpers (shared by Kingdom + Park) ----
+function recsCellText(td) {
+    // Clone so we don't mutate the live DOM; strip expand/collapse buttons and
+    // the ellipsis "… […]" span — jQuery .text() still reads display:none text,
+    // so the full pk-rec-notes-full content comes through automatically.
+    var $c = $(td).clone();
+    $c.find('button, .pk-rec-notes-ellipsis').remove();
+    return $c.text().replace(/\s+/g, ' ').trim();
+}
+window.recsExportCsv = function(dt, filename) {
+    var EXPORT_COLS = 6; // skip actions column
+    var headers = [];
+    dt.columns().header().each(function(h, i) {
+        if (i < EXPORT_COLS) headers.push(h.textContent.trim());
+    });
+    var rows = [headers];
+    dt.rows({search: 'applied'}).every(function() {
+        var cells = [];
+        $(this.node()).find('td').each(function(i) {
+            if (i < EXPORT_COLS) cells.push(recsCellText(this));
         });
-        bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(btn) {
-            btn.classList.toggle('kn-rec-filter-active', btn.dataset.filter === filter);
+        rows.push(cells);
+    });
+    var csv = rows.map(function(r) {
+        return r.map(function(v) { return '"' + v.replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+window.recsExportPrint = function(dt, title) {
+    var EXPORT_COLS = 6;
+    var headers = [];
+    dt.columns().header().each(function(h, i) {
+        if (i < EXPORT_COLS) headers.push('<th>' + h.textContent.trim() + '</th>');
+    });
+    var rowsHtml = '';
+    dt.rows({search: 'applied'}).every(function() {
+        var cells = '';
+        $(this.node()).find('td').each(function(i) {
+            if (i < EXPORT_COLS) cells += '<td>' + recsCellText(this) + '</td>';
+        });
+        rowsHtml += '<tr>' + cells + '</tr>';
+    });
+    var win = window.open('', '_blank');
+    win.document.write('<!DOCTYPE html><html><head><title>' + title + '</title><style>' +
+        'body{font-family:sans-serif;font-size:12px;padding:16px;color:#1a202c}' +
+        'h2{font-size:15px;margin:0 0 12px;color:#2b6cb0}' +
+        'table{border-collapse:collapse;width:100%}' +
+        'th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left;vertical-align:top}' +
+        'th{background:#edf2f7;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}' +
+        'tr:nth-child(even) td{background:#f7fafc}' +
+        '@media print{body{padding:0}button{display:none}}' +
+        '</style></head><body>' +
+        '<h2>' + title + '</h2>' +
+        '<table><thead><tr>' + headers.join('') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+        '<script>window.onload=function(){window.print();}<\/script>' +
+        '</body></html>');
+    win.document.close();
+};
+
+// ---- Recommendations tab filter bar (Kingdom + Park) ----
+(function() {
+    function initFilterBar(bar, filterVarName, dtVarName) {
+        if (!bar) return;
+        bar.addEventListener('click', function(e) {
+            var btn = e.target.closest('.kn-rec-filter-btn');
+            if (!btn) return;
+            var filter = btn.dataset.filter;
+            bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(b) {
+                b.classList.toggle('kn-rec-filter-active', b.dataset.filter === filter);
+            });
+            window[filterVarName] = filter;
+            if (window[dtVarName]) window[dtVarName].draw();
         });
     }
 
-    bar.addEventListener('click', function(e) {
-        var btn = e.target.closest('.kn-rec-filter-btn');
-        if (btn) applyFilter(btn.dataset.filter);
+    initFilterBar(
+        document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar'),
+        'knRecActiveFilter', 'knRecDT'
+    );
+    initFilterBar(
+        document.querySelector('#pk-tab-recommendations .kn-rec-filter-bar'),
+        'pkRecActiveFilter', 'pkRecDT'
+    );
+
+    // Info popover toggle
+    document.addEventListener('click', function(e) {
+        var infoBtn = e.target.closest('.kn-rec-filter-info-btn');
+        if (infoBtn) {
+            var pop = infoBtn.parentElement.querySelector('.kn-rec-filter-popover');
+            var isOpen = pop.classList.contains('kn-pop-open');
+            document.querySelectorAll('.kn-rec-filter-popover.kn-pop-open').forEach(function(p) { p.classList.remove('kn-pop-open'); });
+            if (!isOpen) pop.classList.add('kn-pop-open');
+            return;
+        }
+        if (!e.target.closest('.kn-rec-filter-info')) {
+            document.querySelectorAll('.kn-rec-filter-popover.kn-pop-open').forEach(function(p) { p.classList.remove('kn-pop-open'); });
+        }
     });
 })();

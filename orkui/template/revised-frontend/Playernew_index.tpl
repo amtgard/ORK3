@@ -130,7 +130,7 @@
 		// Open recs
 		$_maOpenRecs = array_values(array_filter(
 			is_array($AwardRecommendations) ? $AwardRecommendations : [],
-			function($r) { return empty($r['Awarded']); }
+			function($r) { return empty($r['AlreadyHas']); }
 		));
 		// Alerts
 		$_maAlerts = [];
@@ -606,7 +606,7 @@
 					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
 				</li>
 				<?php
-				$_allRecs  = is_array($AwardRecommendations) ? $AwardRecommendations : [];
+				$_allRecs  = array_values(array_filter(is_array($AwardRecommendations) ? $AwardRecommendations : [], function($r) { return empty($r['AlreadyHas']); }));
 				$_myRecs   = array_values(array_filter($_allRecs, function($r) { return (int)$this->__session->user_id === (int)$r['RecommendedById']; }));
 				$_recList  = $ShowRecsTab ? $_allRecs : $_myRecs;
 				$_showRecs = $ShowRecsTab || count($_myRecs) > 0;
@@ -1303,21 +1303,18 @@
 									<td><a href="<?= UIR ?>Player/profile/<?= $rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a></td>
 									<td><?= htmlspecialchars($rec['Reason']) ?></td>
 									<?php if ($this->__session->user_id): ?>
-										<td style="white-space:nowrap">
+										<td class="pk-rec-actions">
 											<?php if ($canManageAwards && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
-												<a class="pn-rec-give-link" href="#"
-													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>"
-												><i class="fas fa-plus"></i> Give</a>
+												<button class="pk-btn pk-btn-primary pn-rec-grant-btn"
+													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>">
+													<i class="fas fa-medal"></i> Grant
+												</button>
 											<?php endif; ?>
 											<?php if ($can_delete_recommendation || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']): ?>
-												<span class="pn-delete-cell">
-												<a class="pn-delete-link pn-confirm-delete-rec" href="#"><i class="fas fa-trash-alt"></i> Delete</a>
-												<span class="pn-delete-confirm">
-													Delete?&nbsp;
-													<button class="pn-delete-yes" data-href="<?= UIR ?>Player/profile/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">Yes</button>
-													&nbsp;<button class="pn-delete-no">No</button>
-												</span>
-											</span>
+												<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn"
+													data-href="<?= UIR ?>Player/profile/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">
+													<i class="fas fa-times"></i> Delete
+												</button>
 											<?php endif; ?>
 										</td>
 									<?php endif; ?>
