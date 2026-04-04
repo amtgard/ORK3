@@ -368,6 +368,8 @@ class Controller_PlayerAjax extends Controller {
 				'AboutStory'    => isset($_POST['AboutStory'])    ? $_POST['AboutStory']    : null,
 				'ColorPrimary'  => (isset($_POST['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorPrimary'])) ? $_POST['ColorPrimary'] : null,
 				'ColorAccent'   => (isset($_POST['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorAccent'])) ? $_POST['ColorAccent'] : null,
+					'ColorSecondary'=> isset($_POST['ColorSecondary']) ? (preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorSecondary']) ? $_POST['ColorSecondary'] : '') : null,
+					'HeroOverlay'   => isset($_POST['HeroOverlay'])     ? $_POST['HeroOverlay']    : null,
 				'NamePrefix'    => isset($_POST['NamePrefix'])    ? trim($_POST['NamePrefix'])  : null,
 				'NameSuffix'    => isset($_POST['NameSuffix'])    ? trim($_POST['NameSuffix'])  : null,
 				'Persona'       => isset($_POST['Persona'])       ? trim($_POST['Persona'])     : null,
