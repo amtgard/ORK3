@@ -910,7 +910,7 @@
 						if ((int)$a['IsLadder'] !== 1) continue;
 						$aid  = (int)$a['AwardId'];
 						$rank = (int)$a['Rank'];
-						if ($aid <= 0) continue;
+						if ($aid <= 0 || $aid === 31) continue; // 31 = Walker of the Middle
 						$displayName = trimlen($a['CustomAwardName']) > 0 ? $a['CustomAwardName']
 							: (trimlen($a['KingdomAwardName']) > 0 ? $a['KingdomAwardName'] : $a['Name']);
 						// Strip "Order of the " / "Order of " prefix to save space
