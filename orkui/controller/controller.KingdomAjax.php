@@ -99,6 +99,7 @@ class Controller_KingdomAjax extends Controller {
 				'Abbreviation' => $abbr,
 				'Description'  => trim($_POST['Description'] ?? ''),
 				'Url'          => trim($_POST['Url'] ?? ''),
+				'Timezone'     => trim($_POST['Timezone'] ?? ''),
 			];
 
 			if (!empty($_FILES['Heraldry']['tmp_name']) && is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
@@ -632,8 +633,15 @@ class Controller_KingdomAjax extends Controller {
 		$events = [];
 
 		// Events in range (all calendar-detail occurrences within window)
+		// Fetch kingdom timezone for default
+		$knTzSql = "SELECT timezone FROM ork_kingdom WHERE kingdom_id = {$kid}";
+		$DB->Clear();
+		$knTzRow = $DB->DataSet($knTzSql);
+		$kingdomTz = ($knTzRow && $knTzRow->Size() > 0 && $knTzRow->Next() && !empty($knTzRow->timezone)) ? $knTzRow->timezone : '';
+
 		$evtSql = "
-			SELECT e.event_id, e.name, e.park_id, p.abbreviation AS park_abbr,
+			SELECT e.event_id, e.name, e.park_id, e.timezone AS event_tz,
+			       p.abbreviation AS park_abbr, p.timezone AS park_tz,
 			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
@@ -642,6 +650,7 @@ class Controller_KingdomAjax extends Controller {
 			  AND cd.event_start >= '{$start}'
 			  AND cd.event_start < '{$end}'
 			ORDER BY cd.event_start";
+		$DB->Clear();
 		$evtResult = $DB->DataSet($evtSql);
 		if ($evtResult && $evtResult->Size() > 0) {
 			while ($evtResult->Next()) {
@@ -649,12 +658,22 @@ class Controller_KingdomAjax extends Controller {
 				$abbr   = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
 				$eid    = (int)$evtResult->event_id;
 				$did    = (int)$evtResult->detail_id;
+
+				// Resolve timezone: event -> park -> kingdom -> UTC
+				$evTz = 'UTC';
+				if (!empty($evtResult->event_tz))      $evTz = $evtResult->event_tz;
+				elseif (!empty($evtResult->park_tz))    $evTz = $evtResult->park_tz;
+				elseif (!empty($kingdomTz))             $evTz = $kingdomTz;
+				$evTzAbbr = Common::get_timezone_abbr($evTz, $evtResult->event_start);
+
 				$ev = [
 					'title' => $abbr . $evtResult->name,
 					'start' => $evtResult->event_start,
 					'url'   => $did ? UIR . "Event/detail/{$eid}/{$did}" : '',
 					'color' => $isPark ? '#6b46c1' : '#0891b2',
 					'type'  => $isPark ? 'park-event' : 'kingdom-event',
+					'timezone' => $evTz,
+					'tzAbbr'   => $evTzAbbr,
 				];
 				$endRaw = $evtResult->event_end ?? '';
 				if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {

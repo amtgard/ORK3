@@ -114,6 +114,10 @@
 	$canManageAttendance = $CanManageAttendance ?? false;
 	$canDelete           = ($attendeeCount === 0 && $rsvpCount === 0);
 
+	// Timezone
+	$eventTz     = $EventTimezone     ?? 'UTC';
+	$eventTzAbbr = $EventTimezoneAbbr ?? '';
+
 	// Date badge label
 	$startLabel = $eventStart ? date('M j, Y', strtotime($eventStart)) : '';
 	$endLabel   = $eventEnd   ? date('M j, Y', strtotime($eventEnd))   : '';
@@ -349,7 +353,7 @@
 			</div>
 			<div class="ev-detail-row">
 				<span class="ev-detail-label">Time</span>
-				<span class="ev-detail-value"><?= date('g:i A', strtotime($eventStart)) ?></span>
+				<span class="ev-detail-value"><?= date('g:i A', strtotime($eventStart)) ?><?php if ($eventTzAbbr): ?> <span class="ev-tz-badge"><?= htmlspecialchars($eventTzAbbr) ?></span><?php endif; ?></span>
 			</div>
 			<?php endif; ?>
 			<?php if ($eventEnd): ?>
@@ -747,6 +751,17 @@
 							<label>Price ($)</label>
 							<input type="number" name="Price" min="0" step="0.01"
 								value="<?= number_format($price, 2) ?>">
+						</div>
+					</div>
+					<div class="ev-modal-row">
+						<div class="ev-modal-field ev-field-full">
+							<label>Timezone <span class="kn-admin-hint-inline">(leave blank to inherit from park/kingdom<?= $eventTzAbbr && empty($EventOwnTimezone ?? '') ? ': ' . htmlspecialchars($eventTzAbbr) : '' ?>)</span></label>
+							<select name="EventTimezone" id="ev-edit-timezone">
+								<option value="">— Inherit from park/kingdom —</option>
+								<?php foreach ($TimezoneOptions ?? [] as $tzOpt): ?>
+								<option value="<?= htmlspecialchars($tzOpt['value']) ?>"<?= ($EventOwnTimezone ?? '') === $tzOpt['value'] ? ' selected' : '' ?>><?= htmlspecialchars($tzOpt['label']) ?></option>
+								<?php endforeach; ?>
+							</select>
 						</div>
 					</div>
 				</div>

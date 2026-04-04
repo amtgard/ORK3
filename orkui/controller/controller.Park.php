@@ -108,8 +108,26 @@ class Controller_Park extends Controller
 		global $DB;
 		$pid = (int)$park_id;
 
+		// Resolve park and kingdom timezone
+		$DB->Clear();
+		$pkTzRow = $DB->DataSet("SELECT timezone, kingdom_id FROM ork_park WHERE park_id = {$pid}");
+		$parkTz = '';
+		$pkKingdomId = 0;
+		if ($pkTzRow && $pkTzRow->Size() > 0 && $pkTzRow->Next()) {
+			$parkTz = !empty($pkTzRow->timezone) ? $pkTzRow->timezone : '';
+			$pkKingdomId = (int)$pkTzRow->kingdom_id;
+		}
+		$kingdomTz = '';
+		if ($pkKingdomId > 0) {
+			$DB->Clear();
+			$knTzRow = $DB->DataSet("SELECT timezone FROM ork_kingdom WHERE kingdom_id = {$pkKingdomId}");
+			$kingdomTz = ($knTzRow && $knTzRow->Size() > 0 && $knTzRow->Next() && !empty($knTzRow->timezone)) ? $knTzRow->timezone : '';
+		}
+		$this->data['ParkTimezone'] = $parkTz;
+		$this->data['KingdomTimezone'] = $kingdomTz;
+
 		$evtSql = "
-			SELECT e.event_id, e.name, p.name AS park_name,
+			SELECT e.event_id, e.name, e.timezone AS event_tz, p.name AS park_name,
 			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
 			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'going') AS rsvp_going,
 		       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested
@@ -127,6 +145,13 @@ class Controller_Park extends Controller
 			do {
 				$eid = (int)($evtResult->event_id ?? 0);
 				if ($eid) {
+					// Resolve timezone: event -> park -> kingdom
+					$evTz = '';
+					if (!empty($evtResult->event_tz))  $evTz = $evtResult->event_tz;
+					elseif (!empty($parkTz))            $evTz = $parkTz;
+					elseif (!empty($kingdomTz))         $evTz = $kingdomTz;
+					$evTzAbbr = $evTz ? Common::get_timezone_abbr($evTz, $evtResult->event_start) : '';
+
 					$eventSummary[] = [
 						'EventId'      => $eid,
 						'Name'         => $evtResult->name,
@@ -137,6 +162,8 @@ class Controller_Park extends Controller
 						'HasHeraldry'  => (int)$evtResult->has_heraldry,
 						'RsvpGoing'      => (int)$evtResult->rsvp_going,
 					'RsvpInterested' => (int)$evtResult->rsvp_interested,
+						'Timezone'     => $evTz,
+						'TzAbbr'       => $evTzAbbr,
 					];
 				}
 			} while ($evtResult->Next());
@@ -222,6 +249,9 @@ class Controller_Park extends Controller
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_EDIT);
 		$this->data['CanAdminPark']  = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
+		if ($this->data['CanManagePark']) {
+			$this->data['TimezoneOptions'] = Common::get_timezone_options();
+		}
 
 		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])

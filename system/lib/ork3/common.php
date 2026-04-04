@@ -655,6 +655,103 @@ class shortScale
 		if ( $pre && $post ) return trim( $pre . ' and ' . $post );
 		return trim( $pre . $post );
 	}
+
+	/**
+	 * Resolve the effective timezone for an entity using the inheritance chain:
+	 * Event -> Park -> Kingdom -> UTC
+	 */
+	public static function get_effective_timezone($event_id = null, $park_id = null, $kingdom_id = null) {
+		global $DB;
+
+		// 1. Check event-level timezone
+		if (valid_id($event_id)) {
+			$DB->Clear();
+			$row = $DB->DataSet("SELECT timezone, park_id, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = " . (int)$event_id);
+			if ($row && $row->Size() > 0 && $row->Next()) {
+				if (!empty($row->timezone)) return $row->timezone;
+				if (!valid_id($park_id))    $park_id    = (int)$row->park_id;
+				if (!valid_id($kingdom_id)) $kingdom_id = (int)$row->kingdom_id;
+			}
+		}
+
+		// 2. Check park-level timezone
+		if (valid_id($park_id)) {
+			$DB->Clear();
+			$row = $DB->DataSet("SELECT timezone, kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = " . (int)$park_id);
+			if ($row && $row->Size() > 0 && $row->Next()) {
+				if (!empty($row->timezone)) return $row->timezone;
+				if (!valid_id($kingdom_id)) $kingdom_id = (int)$row->kingdom_id;
+			}
+		}
+
+		// 3. Check kingdom-level timezone
+		if (valid_id($kingdom_id)) {
+			$DB->Clear();
+			$row = $DB->DataSet("SELECT timezone FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = " . (int)$kingdom_id);
+			if ($row && $row->Size() > 0 && $row->Next() && !empty($row->timezone)) {
+				return $row->timezone;
+			}
+		}
+
+		// 4. Default to UTC
+		return 'UTC';
+	}
+
+	/**
+	 * Get the timezone abbreviation for display (e.g. 'CST', 'EST')
+	 */
+	public static function get_timezone_abbr($timezone, $datetime = null) {
+		try {
+			$tz = new DateTimeZone($timezone);
+			$dt = new DateTime($datetime ?? 'now', $tz);
+			return $dt->format('T');
+		} catch (Exception $e) {
+			return 'UTC';
+		}
+	}
+
+	/**
+	 * Return list of common IANA timezone identifiers for dropdown selectors.
+	 */
+	public static function get_timezone_options() {
+		$zones = [
+			'America/New_York'    => 'Eastern Time',
+			'America/Chicago'     => 'Central Time',
+			'America/Denver'      => 'Mountain Time',
+			'America/Los_Angeles' => 'Pacific Time',
+			'America/Anchorage'   => 'Alaska Time',
+			'Pacific/Honolulu'    => 'Hawaii Time',
+			'America/Phoenix'     => 'Arizona (no DST)',
+			'America/Puerto_Rico' => 'Atlantic Time',
+			'Pacific/Guam'        => 'Guam / Chamorro',
+			'America/Edmonton'    => 'Mountain Time (Canada)',
+			'America/Winnipeg'    => 'Central Time (Canada)',
+			'America/Toronto'     => 'Eastern Time (Canada)',
+			'America/Halifax'     => 'Atlantic Time (Canada)',
+			'America/St_Johns'    => 'Newfoundland Time',
+			'America/Vancouver'   => 'Pacific Time (Canada)',
+			'Europe/London'       => 'United Kingdom',
+			'Europe/Berlin'       => 'Central European Time',
+			'Europe/Helsinki'     => 'Eastern European Time',
+			'Asia/Tokyo'          => 'Japan Standard Time',
+			'Asia/Seoul'          => 'Korea Standard Time',
+			'Australia/Sydney'    => 'Australian Eastern Time',
+			'Pacific/Auckland'    => 'New Zealand Time',
+			'UTC'                 => 'UTC',
+		];
+		$options = [];
+		foreach ($zones as $tz => $label) {
+			try {
+				$dtz = new DateTimeZone($tz);
+				$now = new DateTime('now', $dtz);
+				$offset = $now->format('P');
+				$options[] = ['value' => $tz, 'label' => "(UTC{$offset}) {$label}"];
+			} catch (Exception $e) {
+				continue;
+			}
+		}
+		return $options;
+	}
 }
 
 

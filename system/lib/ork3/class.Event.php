@@ -19,6 +19,11 @@ class Event  extends Ork3 {
 		$this->event->mundane_id = $request['MundaneId'];
 		$this->event->unit_id = $request['UnitId'];
 		$this->event->name = $request['Name'];
+		if (array_key_exists('Timezone', $request)) {
+			$tz = $request['Timezone'];
+			if (!empty($tz)) { try { new DateTimeZone($tz); } catch (Exception $e) { $tz = null; } } else { $tz = null; }
+			$this->event->timezone = $tz;
+		}
 		$this->event->modified = date('Y-m-d H:i:s');
 		
 		if (valid_id($request['MundaneId']) && !valid_id($request['UnitId'])) {
@@ -89,7 +94,8 @@ class Event  extends Ork3 {
 				'ParkId' => $this->event->park_id,
 				'UnitId' => $this->event->unit_id,
 				'MundaneId' => $this->event->mundane_id,
-				'Name' => $this->event->name
+				'Name' => $this->event->name,
+				'Timezone' => $this->event->timezone ?? '',
 			);
 		} while ($this->event->next());
 		return $events;
@@ -106,6 +112,7 @@ class Event  extends Ork3 {
 			$response['Name'] = $this->event->name;
 			$response['HasHeraldry'] = $this->event->has_heraldry;
 			$response['HeraldryUrl'] = $this->event->has_heraldry?Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type'=>'Event','Id'=>$request['EventId'])):Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type'=>'Event','Id'=>0));
+			$response['Timezone'] = $this->event->timezone ?? '';
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -497,6 +504,11 @@ class Event  extends Ork3 {
 					if (is_numeric($request['MundaneId'])) $this->event->mundane_id = $request['MundaneId'];
 					if (is_numeric($request['UnitId'])) $this->event->unit_id = $request['UnitId'];
 					if (trimlen($request['Name'])) $this->event->name = $request['Name'];
+					if (array_key_exists('Timezone', $request)) {
+						$tz = $request['Timezone'];
+						if (!empty($tz)) { try { new DateTimeZone($tz); } catch (Exception $e) { $tz = null; } } else { $tz = null; }
+						$this->event->timezone = $tz;
+					}
 					$this->event->save();
 					Ork3::$Lib->heraldry->SetEventHeraldry($request);
 					logtrace("SetEvent", array($request, $this->event));

@@ -348,6 +348,7 @@ class Park extends Ork3
 			$response[ 'Description' ] = stripslashes( nl2br( $this->park->description ) );
 			$response[ 'GoogleGeocode' ] = $this->park->google_geocode;
 			$response[ 'Location' ] = $this->park->location;
+			$response[ 'Timezone' ] = $this->park->timezone ?? '';
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
 		}
@@ -659,6 +660,11 @@ class Park extends Ork3
 				$this->park->directions = isset( $request[ 'Directions' ] ) ? ( $request[ 'Directions' ] ) : $this->park->directions;
 				$this->park->description = isset( $request[ 'Description' ] ) ? ( $request[ 'Description' ] ) : $this->park->description;
 				$this->park->map_url = isset( $request[ 'MapUrl' ] ) ? ( $request[ 'MapUrl' ] ) : $this->park->map_url;
+				if (array_key_exists('Timezone', $request)) {
+						$tz = $request['Timezone'];
+						if (!empty($tz)) { try { new DateTimeZone($tz); } catch (Exception $e) { $tz = null; } } else { $tz = null; }
+						$this->park->timezone = $tz;
+					}
 
 				$this->park->save();
 				$this->park->clear();

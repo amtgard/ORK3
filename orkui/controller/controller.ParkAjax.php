@@ -115,6 +115,7 @@ class Controller_ParkAjax extends Controller {
 				'MapUrl'      => trim($_POST['MapUrl']      ?? ''),
 				'Description' => trim($_POST['Description'] ?? ''),
 				'Directions'  => trim($_POST['Directions']  ?? ''),
+				'Timezone'    => trim($_POST['Timezone']    ?? ''),
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])

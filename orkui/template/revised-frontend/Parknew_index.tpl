@@ -615,6 +615,7 @@
 								</td>
 								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
 									<?= 0 == $event['NextDate'] ? '' : date('M. j, Y', strtotime($event['NextDate'])) ?>
+									<?php if (!empty($event['TzAbbr'])): ?><span class="pk-tz-badge"><?= htmlspecialchars($event['TzAbbr']) ?></span><?php endif; ?>
 								</td>
 								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
 							<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
@@ -1122,6 +1123,7 @@ var PkConfig = {
 		mapUrl:      <?= json_encode($parkInfo['MapUrl']      ?? '') ?>,
 		description: <?= json_encode($description) ?>,
 		directions:  <?= json_encode($directions) ?>,
+		timezone:    <?= json_encode($ParkTimezone ?? '') ?>,
 	},
 };
 </script>
@@ -1911,6 +1913,15 @@ var PkConfig = {
 							<button type="button" class="kn-md-help-btn" onclick="document.getElementById('pk-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
 						</label>
 						<textarea id="pk-editdetails-directions" rows="3" placeholder="How to find us..." data-original=""></textarea>
+					</div>
+					<div class="kn-admin-field">
+						<label for="pk-editdetails-timezone">Timezone <span class="kn-admin-hint-inline">(leave blank to inherit from kingdom<?= !empty($KingdomTimezone) ? ': ' . htmlspecialchars(Common::get_timezone_abbr($KingdomTimezone)) : '' ?>)</span></label>
+						<select id="pk-editdetails-timezone" data-original="">
+							<option value="">— Inherit from kingdom —</option>
+							<?php foreach ($TimezoneOptions ?? [] as $tzOpt): ?>
+							<option value="<?= htmlspecialchars($tzOpt['value']) ?>"><?= htmlspecialchars($tzOpt['label']) ?></option>
+							<?php endforeach; ?>
+						</select>
 					</div>
 					<button class="kn-admin-save-btn" id="pk-admin-details-save">
 						<i class="fas fa-save"></i> Save Details

@@ -36,12 +36,13 @@ class Kingdom  extends Ork3 {
 			$response['KingdomInfo']['Active'] = $this->kingdom->active;
 			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
 			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
+			$response['KingdomInfo']['Timezone'] = $this->kingdom->timezone ?? '';
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
 		return $response;
 	}
-	
+
 /*
 	public function SetKingdomAwards($request) {
 		$response = array();
@@ -257,7 +258,8 @@ class Kingdom  extends Ork3 {
 			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
 			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
 			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
-			
+			$response['KingdomInfo']['Timezone'] = $this->kingdom->timezone ?? '';
+
 			// Fetch configs
 			$response['KingdomConfiguration'] = Common::get_configs($request['KingdomId']);
 			
@@ -471,6 +473,11 @@ class Kingdom  extends Ork3 {
 				$this->kingdom->abbreviation = strlen($request['Abbreviation'])>0?$request['Abbreviation']:$this->kingdom->abbreviation;
 				if (isset($request['Description'])) $this->kingdom->description = $request['Description'];
 				if (isset($request['Url'])) $this->kingdom->url = $request['Url'];
+				if (array_key_exists('Timezone', $request)) {
+					$tz = $request['Timezone'];
+					if (!empty($tz)) { try { new DateTimeZone($tz); } catch (Exception $e) { $tz = null; } } else { $tz = null; }
+					$this->kingdom->timezone = $tz;
+				}
 				$this->kingdom->modified = date("Y-m-d H:i:s", time());
 				$this->kingdom->save();
 				

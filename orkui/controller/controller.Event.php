@@ -294,8 +294,15 @@ class Controller_Event extends Controller {
 				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
 					$this->request->save('Eventnew_edit', true);
 					$newName = trim($this->request->Eventnew_edit->EventName ?? '');
-					if ( $newName ) {
-						$this->Event->update_event($this->session->token, $event_id, null, null, null, null, $newName, '', '');
+					$newTimezone = $this->request->Eventnew_edit->EventTimezone ?? null;
+					if ( $newName || $newTimezone !== null ) {
+						$setReq = [
+							'Token' => $this->session->token,
+							'EventId' => $event_id,
+						];
+						if ($newName) $setReq['Name'] = $newName;
+						if ($newTimezone !== null) $setReq['Timezone'] = $newTimezone;
+						Ork3::$Lib->event->SetEvent($setReq);
 						$bustKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
 						Ork3::$Lib->ghettocache->bust('SearchService.Event', $bustKey);
 					}
@@ -367,6 +374,13 @@ class Controller_Event extends Controller {
 
 		$this->data['EventDetail'] = $this->Attendance->get_eventdetail_info($detail_id);
 
+		// Resolve effective timezone for this event
+		$this->data['EventTimezone']     = Common::get_effective_timezone($event_id);
+		$this->data['EventTimezoneAbbr'] = Common::get_timezone_abbr(
+			$this->data['EventTimezone'],
+			$this->data['EventDetail']['EventStart'] ?? null
+		);
+
 		$atParkId = (int)($this->data['EventDetail']['AtParkId'] ?? 0);
 		$_parkLookupId = $atParkId ?: (int)($this->data['EventInfo']['ParkId'] ?? 0);
 		if ( $_parkLookupId > 0 ) {
@@ -413,6 +427,14 @@ class Controller_Event extends Controller {
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
 		$this->data['CanManageAttendance'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+		if ($this->data['CanManageEvent']) {
+			$this->data['TimezoneOptions'] = Common::get_timezone_options();
+			// Get the event's own timezone (not resolved), so the dropdown shows what's set on THIS event
+			global $DB;
+			$DB->Clear();
+			$_evTzRow = $DB->DataSet("SELECT timezone FROM " . DB_PREFIX . "event WHERE event_id = " . (int)$event_id);
+			$this->data['EventOwnTimezone'] = ($_evTzRow && $_evTzRow->Size() > 0 && $_evTzRow->Next() && !empty($_evTzRow->timezone)) ? $_evTzRow->timezone : '';
+		}
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;

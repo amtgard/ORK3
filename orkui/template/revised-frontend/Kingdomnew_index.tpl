@@ -496,9 +496,12 @@
 							<?php foreach ($eventList as $event): ?>
 								<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
 									<td class="kn-col-nowrap">
-										<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
-											? date("M j, Y", strtotime($event['NextDate']))
-											: '<span style="color:#a0aec0">—</span>' ?>
+										<?php if (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00'): ?>
+											<?= date("M j, Y", strtotime($event['NextDate'])) ?>
+											<?php if (!empty($event['TzAbbr'])): ?><span class="kn-tz-badge"><?= htmlspecialchars($event['TzAbbr']) ?></span><?php endif; ?>
+										<?php else: ?>
+											<span style="color:#a0aec0">—</span>
+										<?php endif; ?>
 									</td>
 									<td class="kn-col-nowrap">
 										<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
@@ -863,6 +866,7 @@ var KnConfig = {
 	adminParkTitles: <?= json_encode($AdminParkTitles ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminAwards:     <?= json_encode($AdminAwards     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminRecsPublic: <?= !empty($AwardRecsPublic) ? 'true' : 'false' ?>,
+	kingdomTimezone: <?= json_encode($KingdomTimezone ?? '', JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 };
 </script>
 <?php if ($IsLoggedIn): ?>
@@ -1239,6 +1243,15 @@ var KnConfig = {
 					<div class="kn-admin-field">
 						<label for="kn-admin-url">Website URL <span class="kn-admin-hint-inline">(optional)</span></label>
 						<input type="url" id="kn-admin-url" value="<?= htmlspecialchars($AdminInfo['Url'] ?? '') ?>" data-original="<?= htmlspecialchars($AdminInfo['Url'] ?? '') ?>" placeholder="https://">
+					</div>
+					<div class="kn-admin-field">
+						<label for="kn-admin-timezone">Timezone <span class="kn-admin-hint-inline">(applies to all parks &amp; events unless overridden)</span></label>
+						<select id="kn-admin-timezone" data-original="<?= htmlspecialchars($AdminInfo['Timezone'] ?? '') ?>">
+							<option value="">— Not set (UTC) —</option>
+							<?php foreach ($TimezoneOptions ?? [] as $tzOpt): ?>
+							<option value="<?= htmlspecialchars($tzOpt['value']) ?>"<?= ($AdminInfo['Timezone'] ?? '') === $tzOpt['value'] ? ' selected' : '' ?>><?= htmlspecialchars($tzOpt['label']) ?></option>
+							<?php endforeach; ?>
+						</select>
 					</div>
 					<button class="kn-admin-save-btn" id="kn-admin-details-save"<?= (empty($AdminInfo['Name']) || empty($AdminInfo['Abbreviation'])) ? ' disabled' : '' ?>>
 						<i class="fas fa-save"></i> Save Details

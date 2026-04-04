@@ -300,8 +300,14 @@ class Controller_Kingdom extends Controller {
 		global $DB;
 		$kid = (int)$kingdom_id;
 
+		// Resolve kingdom timezone for template
+		$DB->Clear();
+		$knTzRow = $DB->DataSet("SELECT timezone FROM ork_kingdom WHERE kingdom_id = {$kid}");
+		$this->data['KingdomTimezone'] = ($knTzRow && $knTzRow->Size() > 0 && $knTzRow->Next() && !empty($knTzRow->timezone)) ? $knTzRow->timezone : '';
+
 		$evtSql = "
-			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
+			SELECT e.event_id, e.name, e.park_id, e.timezone AS event_tz,
+			       p.name AS park_name, p.abbreviation AS park_abbr, p.timezone AS park_tz,
 			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
 			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'going') AS rsvp_going,
 		       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested
@@ -318,6 +324,13 @@ class Controller_Kingdom extends Controller {
 		while ($evtResult && $evtResult->Next()) {
 			$eid = (int)($evtResult->event_id ?? 0);
 			if ($eid) {
+				// Resolve timezone: event -> park -> kingdom
+				$evTz = '';
+				if (!empty($evtResult->event_tz))     $evTz = $evtResult->event_tz;
+				elseif (!empty($evtResult->park_tz))   $evTz = $evtResult->park_tz;
+				elseif (!empty($this->data['KingdomTimezone'])) $evTz = $this->data['KingdomTimezone'];
+				$evTzAbbr = $evTz ? Common::get_timezone_abbr($evTz, $evtResult->event_start) : '';
+
 				$eventSummary[] = [
 					'EventId'      => $eid,
 					'Name'         => $evtResult->name,
@@ -329,6 +342,8 @@ class Controller_Kingdom extends Controller {
 					'RsvpGoing'      => (int)$evtResult->rsvp_going,
 				'RsvpInterested' => (int)$evtResult->rsvp_interested,
 					'_IsParkEvent' => (int)$evtResult->park_id > 0,
+					'Timezone'     => $evTz,
+					'TzAbbr'       => $evTzAbbr,
 				];
 			}
 		}
@@ -447,11 +462,13 @@ class Controller_Kingdom extends Controller {
 				'Abbreviation'     => $kd['KingdomInfo']['Abbreviation'] ?? '',
 				'Description'      => $kd['KingdomInfo']['Description']  ?? '',
 				'Url'              => $kd['KingdomInfo']['Url']          ?? '',
+				'Timezone'         => $kd['KingdomInfo']['Timezone']     ?? '',
 				'IsPrincipality'   => !empty($kd['KingdomInfo']['IsPrincipality']),
 				'ParentKingdomId'  => $parentKingdomId,
 				'ParentKingdomName'=> $parentKingdomName,
 				'Active'           => $kd['KingdomInfo']['Active'] ?? 'Active',
 			];
+			$this->data['TimezoneOptions'] = Common::get_timezone_options();
 
 			$adminConfig = [];
 			foreach ($kd['KingdomConfiguration'] ?? [] as $cfg) {
@@ -486,8 +503,14 @@ class Controller_Kingdom extends Controller {
 	private static function ics_dt($str) {
 		return gmdate('Ymd\THis\Z', strtotime($str));
 	}
+	private static function ics_dt_local($str) {
+		return date('Ymd\THis', strtotime($str));
+	}
 	private static function ics_dt_plus1hr($str) {
 		return gmdate('Ymd\THis\Z', strtotime($str) + 3600);
+	}
+	private static function ics_dt_local_plus1hr($str) {
+		return date('Ymd\THis', strtotime($str) + 3600);
 	}
 	private static function ics_escape($str) {
 		$str = str_replace('\\', '\\\\', $str);
@@ -508,6 +531,67 @@ class Controller_Kingdom extends Controller {
 		$parts = array_filter([$address, $city, $province, $postal, $country], 'strlen');
 		return implode(', ', $parts);
 	}
+	private static function ics_vtimezone($tzid) {
+		if ($tzid === 'UTC') return [];
+		try {
+			$tz   = new DateTimeZone($tzid);
+			$year = (int)date('Y');
+			$transitions = $tz->getTransitions(
+				mktime(0, 0, 0, 1, 1, $year),
+				mktime(23, 59, 59, 12, 31, $year + 1)
+			);
+			if (!$transitions) return [];
+
+			$lines = [];
+			$lines[] = 'BEGIN:VTIMEZONE';
+			$lines[] = 'TZID:' . $tzid;
+
+			$hasDST = false;
+			$hasSTD = false;
+			for ($i = 1; $i < count($transitions); $i++) {
+				$t    = $transitions[$i];
+				$prev = $transitions[$i - 1];
+				$dt   = gmdate('Ymd\THis', $t['ts']);
+				$offsetFrom = sprintf('%+03d%02d', intdiv($prev['offset'], 3600), abs($prev['offset'] % 3600) / 60);
+				$offsetTo   = sprintf('%+03d%02d', intdiv($t['offset'], 3600), abs($t['offset'] % 3600) / 60);
+
+				if ($t['isdst'] && !$hasDST) {
+					$lines[] = 'BEGIN:DAYLIGHT';
+					$lines[] = 'DTSTART:' . $dt;
+					$lines[] = 'TZOFFSETFROM:' . $offsetFrom;
+					$lines[] = 'TZOFFSETTO:' . $offsetTo;
+					$lines[] = 'TZNAME:' . $t['abbr'];
+					$lines[] = 'END:DAYLIGHT';
+					$hasDST = true;
+				} elseif (!$t['isdst'] && !$hasSTD) {
+					$lines[] = 'BEGIN:STANDARD';
+					$lines[] = 'DTSTART:' . $dt;
+					$lines[] = 'TZOFFSETFROM:' . $offsetFrom;
+					$lines[] = 'TZOFFSETTO:' . $offsetTo;
+					$lines[] = 'TZNAME:' . $t['abbr'];
+					$lines[] = 'END:STANDARD';
+					$hasSTD = true;
+				}
+				if ($hasDST && $hasSTD) break;
+			}
+
+			if (!$hasDST && !$hasSTD) {
+				$t = $transitions[0];
+				$offset = sprintf('%+03d%02d', intdiv($t['offset'], 3600), abs($t['offset'] % 3600) / 60);
+				$lines[] = 'BEGIN:STANDARD';
+				$lines[] = 'DTSTART:19700101T000000';
+				$lines[] = 'TZOFFSETFROM:' . $offset;
+				$lines[] = 'TZOFFSETTO:' . $offset;
+				$lines[] = 'TZNAME:' . $t['abbr'];
+				$lines[] = 'END:STANDARD';
+			}
+
+			$lines[] = 'END:VTIMEZONE';
+			return $lines;
+		} catch (Exception $e) {
+			return [];
+		}
+	}
 
 	// ------------------------------------------------------------------ ICS Feed
 	public function ics($kingdom_id = null) {
@@ -518,26 +602,86 @@ class Controller_Kingdom extends Controller {
 		$knName = $this->Kingdom->get_kingdom_name($kid);
 		if (empty($knName)) $knName = 'Kingdom';
 
-		// Fetch events
+		// Fetch events with timezone columns
 		global $DB;
 		$sql = "
 			SELECT
-				e.event_id, e.name,
-				p.name AS park_name,
+				e.event_id, e.name, e.timezone AS event_tz,
+				e.park_id, e.kingdom_id,
+				p.name AS park_name, p.timezone AS park_tz,
+				k.timezone AS kingdom_tz,
 				cd.event_calendardetail_id, cd.event_start, cd.event_end,
 				cd.description, cd.url,
 				cd.address, cd.city, cd.province, cd.postal_code, cd.country
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			LEFT JOIN ork_kingdom k ON k.kingdom_id = COALESCE(NULLIF(e.kingdom_id,0), p.kingdom_id)
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 				AND cd.event_start >= CURDATE()
 				AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
-			WHERE e.kingdom_id = {$kid}
+			WHERE (e.kingdom_id = {$kid} OR p.kingdom_id = {$kid})
 			ORDER BY cd.event_start ASC";
 		$DB->Clear();
 		$result = $DB->DataSet($sql);
 
-		// Build ICS
+		// Build ICS — collect events and track unique timezones
+		$eventLines = [];
+		$usedTzIds  = [];
+
+		if ($result) {
+			do {
+				if ((int)$result->event_calendardetail_id === 0) continue;
+
+				// Resolve timezone via inheritance: event -> park -> kingdom -> UTC
+				$tzid = 'UTC';
+				if (!empty($result->event_tz))   $tzid = $result->event_tz;
+				elseif (!empty($result->park_tz)) $tzid = $result->park_tz;
+				elseif (!empty($result->kingdom_tz)) $tzid = $result->kingdom_tz;
+
+				$usedTzIds[$tzid] = true;
+
+				if ($tzid !== 'UTC') {
+					$dtstart = self::ics_dt_local($result->event_start);
+					$rawEnd  = $result->event_end;
+					$dtend   = (!empty($rawEnd) && $rawEnd !== '0000-00-00 00:00:00')
+						? self::ics_dt_local($rawEnd)
+						: self::ics_dt_local_plus1hr($result->event_start);
+					$dtstartProp = 'DTSTART;TZID=' . $tzid . ':' . $dtstart;
+					$dtendProp   = 'DTEND;TZID=' . $tzid . ':' . $dtend;
+				} else {
+					$dtstart = self::ics_dt($result->event_start);
+					$rawEnd  = $result->event_end;
+					$dtend   = (!empty($rawEnd) && $rawEnd !== '0000-00-00 00:00:00')
+						? self::ics_dt($rawEnd)
+						: self::ics_dt_plus1hr($result->event_start);
+					$dtstartProp = 'DTSTART:' . $dtstart;
+					$dtendProp   = 'DTEND:' . $dtend;
+				}
+
+				$uid      = 'event-' . (int)$result->event_id . '-' . (int)$result->event_calendardetail_id . '@ork3';
+				$location = self::ics_location($result->address, $result->city, $result->province, $result->postal_code, $result->country);
+				$dtstamp  = gmdate('Ymd\THis\Z');
+
+				$eventLines[] = 'BEGIN:VEVENT';
+				$eventLines[] = self::ics_fold('UID:' . $uid);
+				$eventLines[] = 'DTSTAMP:' . $dtstamp;
+				$eventLines[] = self::ics_fold($dtstartProp);
+				$eventLines[] = self::ics_fold($dtendProp);
+				$eventLines[] = self::ics_fold('SUMMARY:' . self::ics_escape($result->name));
+				if (!empty($result->description)) {
+					$eventLines[] = self::ics_fold('DESCRIPTION:' . self::ics_escape(strip_tags($result->description)));
+				}
+				if (!empty($location)) {
+					$eventLines[] = self::ics_fold('LOCATION:' . self::ics_escape($location));
+				}
+				if (!empty($result->url)) {
+					$eventLines[] = self::ics_fold('URL:' . self::ics_escape(preg_replace('/[\r\n]/', '', $result->url)));
+				}
+				$eventLines[] = 'END:VEVENT';
+			} while ($result->Next());
+		}
+
+		// Assemble final ICS with VTIMEZONE components before events
 		$lines = [];
 		$lines[] = 'BEGIN:VCALENDAR';
 		$lines[] = 'VERSION:2.0';
@@ -546,37 +690,14 @@ class Controller_Kingdom extends Controller {
 		$lines[] = 'METHOD:PUBLISH';
 		$lines[] = self::ics_fold('X-WR-CALNAME:' . self::ics_escape($knName) . ' Events');
 
-		if ($result) {
-			do {
-				if ((int)$result->event_calendardetail_id === 0) continue;
-				$dtstart = self::ics_dt($result->event_start);
-				$rawEnd  = $result->event_end;
-				$dtend   = (!empty($rawEnd) && $rawEnd !== '0000-00-00 00:00:00')
-					? self::ics_dt($rawEnd)
-					: self::ics_dt_plus1hr($result->event_start);
-
-				$uid      = 'event-' . (int)$result->event_id . '-' . (int)$result->event_calendardetail_id . '@ork3';
-				$location = self::ics_location($result->address, $result->city, $result->province, $result->postal_code, $result->country);
-				$dtstamp  = gmdate('Ymd\THis\Z');
-
-				$lines[] = 'BEGIN:VEVENT';
-				$lines[] = self::ics_fold('UID:' . $uid);
-				$lines[] = 'DTSTAMP:' . $dtstamp;
-				$lines[] = 'DTSTART:' . $dtstart;
-				$lines[] = 'DTEND:' . $dtend;
-				$lines[] = self::ics_fold('SUMMARY:' . self::ics_escape($result->name));
-				if (!empty($result->description)) {
-					$lines[] = self::ics_fold('DESCRIPTION:' . self::ics_escape(strip_tags($result->description)));
-				}
-				if (!empty($location)) {
-					$lines[] = self::ics_fold('LOCATION:' . self::ics_escape($location));
-				}
-				if (!empty($result->url)) {
-					$lines[] = self::ics_fold('URL:' . self::ics_escape(preg_replace('/[\r\n]/', '', $result->url)));
-				}
-				$lines[] = 'END:VEVENT';
-			} while ($result->Next());
+		// Emit VTIMEZONE for each used timezone
+		foreach (array_keys($usedTzIds) as $tzid) {
+			$vtLines = self::ics_vtimezone($tzid);
+			foreach ($vtLines as $vl) $lines[] = $vl;
 		}
+
+		// Emit events
+		foreach ($eventLines as $el) $lines[] = $el;
 
 		$lines[] = 'END:VCALENDAR';
 
