@@ -472,6 +472,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-overlay-btn{padding:8px 20px;border:2px solid #e2e8f0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
 .pn-overlay-btn:hover{border-color:#a0aec0}
 .pn-overlay-btn.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
+.pn-comma-toggle{padding:2px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc;font-size:11px;font-weight:700;color:#a0aec0;cursor:pointer;transition:all .15s;font-family:inherit;line-height:1.4}
+.pn-comma-toggle:hover{border-color:#a0aec0}
+.pn-comma-toggle.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
 .pn-name-parts{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .pn-name-part{flex:1;min-width:120px}
 .pn-name-core{flex:2;min-width:160px}
@@ -518,7 +521,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				$_pnDisplayName = '';
 				if (!empty($Player['NamePrefix'])) $_pnDisplayName .= htmlspecialchars($Player['NamePrefix']) . ' ';
 				$_pnDisplayName .= htmlspecialchars($Player['Persona']);
-				if (!empty($Player['NameSuffix'])) $_pnDisplayName .= ' ' . htmlspecialchars($Player['NameSuffix']);
+				if (!empty($Player['NameSuffix'])) {
+					$_pnDisplayName .= ((int)($Player['SuffixComma'] ?? 0) ? ', ' : ' ') . htmlspecialchars($Player['NameSuffix']);
+				}
 			?>
 			<h1 class="pn-persona">
 				<?= $_pnDisplayName ?>
@@ -2372,7 +2377,10 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					</div>
 					<div class="pn-name-part">
 						<div class="pn-design-field">
-							<label>Suffix</label>
+							<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+								<label style="margin:0">Suffix</label>
+								<button type="button" id="pn-suffix-comma-toggle" class="pn-comma-toggle<?= (int)($Player['SuffixComma'] ?? 0) ? ' pn-active' : '' ?>" title="Add comma before suffix">, comma</button>
+							</div>
 							<select id="pn-name-suffix-select">
 								<option value="">None</option>
 								<?php if (!empty($PlayerTitles)): foreach ($PlayerTitles as $_pt): ?>
@@ -2389,7 +2397,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						$_npv = '';
 						if (!empty($Player['NamePrefix'])) $_npv .= htmlspecialchars($Player['NamePrefix']) . ' ';
 						$_npv .= htmlspecialchars($Player['Persona']);
-						if (!empty($Player['NameSuffix'])) $_npv .= ' ' . htmlspecialchars($Player['NameSuffix']);
+						if (!empty($Player['NameSuffix'])) {
+							$_npv .= ((int)($Player['SuffixComma'] ?? 0) ? ', ' : ' ') . htmlspecialchars($Player['NameSuffix']);
+						}
 						echo $_npv;
 					?>
 				</div>
@@ -2800,12 +2810,17 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		if (suffixSel.value === '__custom__') { suffix = suffixCustom.value.trim(); }
 		else if (suffixSel.value) { suffix = suffixSel.value; }
 		var core = coreInput.value.trim() || PnConfig.playerPersona;
+		var useComma = gid('pn-suffix-comma-toggle').classList.contains('pn-active');
 		var full = '';
 		if (prefix) full += prefix + ' ';
 		full += core;
-		if (suffix) full += ' ' + suffix;
+		if (suffix) full += (useComma ? ', ' : ' ') + suffix;
 		gid('pn-name-preview').textContent = full;
 	}
+	gid('pn-suffix-comma-toggle').addEventListener('click', function() {
+		this.classList.toggle('pn-active');
+		updateNamePreview();
+	});
 	prefixSel.addEventListener('change', function() {
 		prefixCustom.style.display = this.value === '__custom__' ? '' : 'none';
 		if (this.value !== '__custom__') prefixCustom.value = '';
@@ -2968,6 +2983,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		fd.append('HeroOverlay', gid('pn-hero-overlay').value);
 		fd.append('NamePrefix', prefix);
 		fd.append('NameSuffix', suffix);
+		fd.append('SuffixComma', gid('pn-suffix-comma-toggle').classList.contains('pn-active') ? 1 : 0);
 		fd.append('Persona', coreName);
 		fd.append('PhotoFocusX', gid('pn-focus-x') ? gid('pn-focus-x').value : PnConfig.photoFocusX);
 		fd.append('PhotoFocusY', gid('pn-focus-y') ? gid('pn-focus-y').value : PnConfig.photoFocusY);

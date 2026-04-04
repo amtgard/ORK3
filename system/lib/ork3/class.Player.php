@@ -302,6 +302,7 @@ class Player extends Ork3 {
 						'HeroOverlay' => $this->mundane->hero_overlay,
 					'NamePrefix' => $this->mundane->name_prefix,
 					'NameSuffix' => $this->mundane->name_suffix,
+						'SuffixComma' => (int)$this->mundane->suffix_comma,
 					'PhotoFocusX' => $this->mundane->photo_focus_x,
 					'PhotoFocusY' => $this->mundane->photo_focus_y,
 					'PhotoFocusSize' => $this->mundane->photo_focus_size,
@@ -980,6 +981,7 @@ class Player extends Ork3 {
 					$this->mundane->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : $this->mundane->hero_overlay;
 					$this->mundane->name_prefix = is_null($request['NamePrefix'])?$this->mundane->name_prefix:$request['NamePrefix'];
 					$this->mundane->name_suffix = is_null($request['NameSuffix'])?$this->mundane->name_suffix:$request['NameSuffix'];
+					$this->mundane->suffix_comma = is_null($request['SuffixComma'])?$this->mundane->suffix_comma:(int)$request['SuffixComma'];
 					$this->mundane->photo_focus_x = is_null($request['PhotoFocusX'])?$this->mundane->photo_focus_x:(int)$request['PhotoFocusX'];
 					$this->mundane->photo_focus_y = is_null($request['PhotoFocusY'])?$this->mundane->photo_focus_y:(int)$request['PhotoFocusY'];
 					$this->mundane->photo_focus_size = is_null($request['PhotoFocusSize'])?$this->mundane->photo_focus_size:(int)$request['PhotoFocusSize'];
