@@ -58,7 +58,7 @@ class Controller_SearchAjax extends Controller {
 			? "CASE WHEN p.park_id = {$pid} THEN 0 WHEN p.kingdom_id = {$kid} THEN 1 ELSE 2 END, p.name"
 			: (valid_id($kid) ? "CASE WHEN p.kingdom_id = {$kid} THEN 0 ELSE 1 END, p.name" : "p.name");
 		$rs = $DB->DataSet("
-			SELECT p.park_id, p.name, k.abbreviation AS k_abbr, k.name AS k_name
+			SELECT p.park_id, p.name, k.abbreviation AS k_abbr, k.name AS k_name, k.kingdom_id
 			FROM ork_park p
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = p.kingdom_id
 			WHERE {$parkWhere}
@@ -66,7 +66,7 @@ class Controller_SearchAjax extends Controller {
 			LIMIT {$parkBudget}");
 		$parks = [];
 		while ($rs->Next()) {
-			$parks[] = ['type' => 'park', 'id' => (int)$rs->park_id, 'name' => $rs->name, 'abbr' => $rs->k_abbr ?? '', 'kingdom' => $rs->k_name ?? ''];
+			$parks[] = ['type' => 'park', 'id' => (int)$rs->park_id, 'name' => $rs->name, 'abbr' => $rs->k_abbr ?? '', 'kingdom' => $rs->k_name ?? '', 'kingdom_id' => (int)$rs->kingdom_id];
 		}
 		$playerBudget += $parkBudget - count($parks);
 
