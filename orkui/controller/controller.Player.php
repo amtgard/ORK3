@@ -609,7 +609,7 @@ class Controller_Player extends Controller {
 				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 				WHERE ma.mundane_id = " . (int)$id . "
 				  AND (ma.revoked = 0 OR ma.revoked IS NULL)
-				  AND (a.officer_role != 'none' OR IFNULL(ka.is_title, 0) = 1 OR a.peerage NOT IN ('None',''))
+				  AND (a.officer_role != 'none' OR IFNULL(ka.is_title, 0) = 1 OR a.is_title = 1 OR a.peerage NOT IN ('None',''))
 				ORDER BY a.peerage ASC, title_name ASC";
 			$__titleResult = $DB->DataSet($__titleSql);
 			$__titles = [];
@@ -624,6 +624,15 @@ class Controller_Player extends Controller {
 				}
 			}
 			$DB->Clear();
+			// Add standalone Master/Paragon if player has any Master X or Paragon X awards
+			$hasMaster = false;
+			$hasParagon = false;
+			foreach ($__titles as $_t) {
+				if ($_t['Peerage'] === 'Master') $hasMaster = true;
+				if ($_t['Peerage'] === 'Paragon') $hasParagon = true;
+			}
+			if ($hasMaster) array_unshift($__titles, ['TitleName' => 'Master', 'OfficerRole' => 'none', 'Peerage' => 'Master', 'IsTitle' => 0]);
+			if ($hasParagon) array_unshift($__titles, ['TitleName' => 'Paragon', 'OfficerRole' => 'none', 'Peerage' => 'Paragon', 'IsTitle' => 0]);
 			$this->data['PlayerTitles'] = $__titles;
 		}
 	}
