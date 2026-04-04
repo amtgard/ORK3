@@ -168,7 +168,16 @@
 	}
 ?>
 
-<style>:root { --pn-hero-bg: <?= $isSuspended ? '#9b2c2c' : '#2c5282' ?>; }</style>
+<?php
+	$_pnHeroBg = $isSuspended ? '#9b2c2c' : '#2c5282';
+	if (!$isSuspended && !empty($Player['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorPrimary'])) $_pnHeroBg = $Player['ColorPrimary'];
+	$_pnAccent = (!empty($Player['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorAccent'])) ? $Player['ColorAccent'] : '#4299e1';
+	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
+	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
+	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
+
+?>
+<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; }</style>
 <style>
 /* ===== My Amtgard Dashboard ===== */
 .pna-alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
@@ -388,8 +397,82 @@ html[data-theme="dark"] .pn-officer-chip.pn-selected { background: var(--ork-bg-
 html[data-theme="dark"] .pn-active-tab-label { background: var(--ork-card-bg); color: var(--ork-text); }
 html[data-theme="dark"] .pn-persona { color: #fff !important; background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
 
-/* ============================================================
-   </style>
+/* ===== About Tab ===== */
+.pn-about-section{margin-bottom:24px}
+.pn-about-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 12px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-about-content{font-size:14px;line-height:1.7;color:#4a5568}
+.pn-about-content h1,.pn-about-content h2,.pn-about-content h3,.pn-about-content h4,.pn-about-content h5,.pn-about-content h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;color:#2d3748;margin:16px 0 8px}
+.pn-about-content p{margin:0 0 12px}
+.pn-about-content a{color:var(--pn-accent,#4299e1)}
+.pn-about-content blockquote{border-left:3px solid var(--pn-accent,#4299e1);margin:12px 0;padding:8px 16px;color:#718096;background:#f7fafc;border-radius:0 4px 4px 0}
+.pn-about-content code{background:#edf2f7;padding:2px 6px;border-radius:3px;font-size:13px}
+.pn-about-content pre{background:#2d3748;color:#e2e8f0;padding:14px;border-radius:6px;overflow-x:auto;margin:12px 0}
+.pn-about-content pre code{background:transparent;padding:0;color:inherit}
+.pn-about-content img{max-width:100%;height:auto;border-radius:6px}
+.pn-about-content ul,.pn-about-content ol{margin:8px 0;padding-left:24px}
+.pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
+.pn-about-layout{display:flex;gap:24px;align-items:flex-start}
+.pn-about-main{flex:1;min-width:0}
+.pn-about-sidebar{flex:0 0 240px}
+.pn-belt-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.pn-belt-card-title{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pn-belt-card-title i{color:var(--pn-accent,#4299e1);font-size:12px}
+.pn-belt-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #f7fafc}
+.pn-belt-group:first-of-type{border-top:none;margin-top:0;padding-top:0}
+.pn-belt-row{display:flex;align-items:baseline;justify-content:space-between;padding:4px 0;gap:8px}
+.pn-belt-name{font-size:13px;font-weight:600;color:var(--pn-accent,#4299e1);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-belt-name:hover{text-decoration:underline}
+.pn-belt-title{font-size:11px;color:#718096;white-space:nowrap;flex-shrink:0}
+@media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-sidebar{flex:none;width:100%}}
+/* ===== Design My Profile Modal ===== */
+.pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0}
+.pn-design-tab{padding:10px 18px;font-size:13px;font-weight:600;color:#718096;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap}
+.pn-design-tab:hover{color:#2d3748}
+.pn-design-tab.pn-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
+.pn-design-panel{display:none}
+.pn-design-panel.pn-active{display:block}
+.pn-design-field{margin-bottom:16px}
+.pn-design-field label{display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:5px}
+.pn-design-field textarea{width:100%;min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box}
+.pn-design-field textarea:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-design-field input[type="text"],.pn-design-field select{width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box}
+.pn-design-field input[type="text"]:focus,.pn-design-field select:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-design-hint{font-size:11px;color:#a0aec0;margin-top:4px}
+.pn-design-preview-label{font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.pn-color-presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.pn-color-swatch{width:36px;height:36px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:border-color .15s,transform .15s}
+.pn-color-swatch:hover{transform:scale(1.1)}
+.pn-color-swatch.pn-selected{border-color:#2d3748;box-shadow:0 0 0 2px #fff,0 0 0 4px #2d3748}
+.pn-color-row{display:flex;gap:16px;align-items:flex-start;margin-bottom:12px}
+.pn-color-col{flex:1;min-width:0}
+.pn-color-input-wrap{display:flex;align-items:center;gap:8px}
+.pn-color-input-wrap input[type="color"]{width:40px;height:34px;border:1px solid #e2e8f0;border-radius:6px;padding:2px;cursor:pointer;background:#fff}
+.pn-color-input-wrap input[type="text"]{width:80px;font-family:monospace;font-size:13px}
+.pn-hero-preview{border-radius:8px;padding:16px 20px;color:#fff;margin:12px 0;position:relative;overflow:hidden;min-height:60px}
+.pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
+.pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
+.pn-name-parts{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.pn-name-part{flex:1;min-width:120px}
+.pn-name-core{flex:2;min-width:160px}
+.pn-name-constructed{margin-top:12px;padding:10px 14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:15px;font-weight:600;color:#2d3748}
+.pn-focus-canvas-wrap{position:relative;display:inline-block;max-width:100%;margin:10px auto;text-align:center}
+.pn-focus-canvas-wrap canvas{display:block;max-width:100%;cursor:move;border-radius:6px}
+.pn-md-preview-toggle{display:flex;gap:0;margin-bottom:8px}
+.pn-md-toggle-btn{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#718096}
+.pn-md-toggle-btn:first-child{border-radius:4px 0 0 4px}
+.pn-md-toggle-btn:last-child{border-radius:0 4px 4px 0;border-left:0}
+.pn-md-toggle-btn.pn-active{background:var(--pn-accent,#4299e1);color:#fff;border-color:var(--pn-accent,#4299e1)}
+.pn-md-preview{min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;line-height:1.7;color:#4a5568;background:#fafafa}
+.pn-md-preview h1,.pn-md-preview h2,.pn-md-preview h3,.pn-md-preview h4,.pn-md-preview h5,.pn-md-preview h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+/* ===== Accent color applied to stat cards ===== */
+.pn-stat-card{border-top:3px solid var(--pn-accent,#4299e1)}
+.pn-tab-nav li.pn-tab-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
+@media(max-width:600px){
+.pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pn-name-parts{flex-direction:column;gap:8px}
+.pn-color-row{flex-direction:column;gap:8px}
+}
+</style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
@@ -401,17 +484,23 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 	<div class="pn-hero-content">
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
-			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
+			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 			<button class="pn-img-edit-btn" onclick="pnOpenImgModal('photo')" title="Update player photo"><i class="fas fa-camera"></i></button>
 		</div>
 		<?php else: ?>
 		<div class="pn-avatar">
-			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" />
+			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 		</div>
 		<?php endif; ?>
 		<div class="pn-hero-info">
+			<?php
+				$_pnDisplayName = '';
+				if (!empty($Player['NamePrefix'])) $_pnDisplayName .= htmlspecialchars($Player['NamePrefix']) . ' ';
+				$_pnDisplayName .= htmlspecialchars($Player['Persona']);
+				if (!empty($Player['NameSuffix'])) $_pnDisplayName .= ' ' . htmlspecialchars($Player['NameSuffix']);
+			?>
 			<h1 class="pn-persona">
-				<?= htmlspecialchars($Player['Persona']) ?>
+				<?= $_pnDisplayName ?>
 				<?php if ($isKnight): ?>
 					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
 				<?php endif; ?>
@@ -474,9 +563,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<?php endif; ?>
 		</div>
 		<div class="pn-hero-actions">
+			<?php if ($isOwnProfile): ?>
+				<button class="pn-btn pn-btn-white" id="pn-design-btn" onclick="pnOpenDesignModal()"><i class="fas fa-palette"></i> Design My Profile</button>
+			<?php endif; ?>
 			<?php if ($LoggedIn): ?>
 				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
-
 			<?php endif; ?>
 		</div>
 	</div>
@@ -735,6 +826,18 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<i class="fas fa-home"></i><span class="pn-tab-label"> My Amtgard</span>
 				</li>
 				<?php endif; ?>
+				<?php
+					$_hasAboutPersona = !empty(trim($Player['AboutPersona'] ?? ''));
+					$_hasAboutStory   = !empty(trim($Player['AboutStory'] ?? ''));
+					$_showBeltline    = (int)($Player['ShowBeltline'] ?? 1);
+					$_hasBeltline     = $_showBeltline && (!empty($BeltlinePeers) || !empty($BeltlineAssociates));
+					$_showAboutTab    = $_hasAboutPersona || $_hasAboutStory || $_hasBeltline || $isOwnProfile;
+				?>
+				<?php if ($_showAboutTab): ?>
+				<li data-tab="about">
+					<i class="fas fa-scroll"></i><span class="pn-tab-label"> About</span>
+				</li>
+				<?php endif; ?>
 				<li<?= $isOwnProfile ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
 					<i class="fas fa-medal"></i><span class="pn-tab-label"> Awards</span> <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
 				</li>
@@ -949,7 +1052,75 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			</div><!-- /#pn-tab-myamtgard -->
 			<?php endif; // isOwnProfile ?>
 
-			<!-- Awards Tab -->
+			<!-- About Tab -->
+				<?php if ($_showAboutTab): ?>
+				<div class="pn-tab-panel" id="pn-tab-about" style="display:none">
+					<div class="pn-about-layout">
+						<div class="pn-about-main">
+							<?php if ($_hasAboutPersona): ?>
+							<div class="pn-about-section">
+								<h3 class="pn-about-heading">About <?= htmlspecialchars($Player['Persona']) ?></h3>
+								<div class="pn-about-content" id="pn-about-persona-rendered"></div>
+							</div>
+							<?php endif; ?>
+							<?php if ($_hasAboutStory): ?>
+							<div class="pn-about-section">
+								<h3 class="pn-about-heading">My Story</h3>
+								<div class="pn-about-content" id="pn-about-story-rendered"></div>
+							</div>
+							<?php endif; ?>
+							<?php if (!$_hasAboutPersona && !$_hasAboutStory && $isOwnProfile && !$_hasBeltline): ?>
+							<div class="pn-about-empty">
+								<i class="fas fa-scroll" style="font-size:28px;color:#cbd5e0;margin-bottom:10px"></i>
+								<p>Your About section is empty. Click <strong>Design My Profile</strong> above to add a bio and tell your story!</p>
+							</div>
+							<?php endif; ?>
+						</div>
+						<?php if ($_hasBeltline): ?>
+						<div class="pn-about-sidebar">
+							<?php if (!empty($BeltlinePeers)): ?>
+							<div class="pn-belt-card">
+								<div class="pn-belt-card-title"><i class="fas fa-shield-alt"></i> My Peer<?= count($BeltlinePeers) > 1 ? 's' : '' ?></div>
+								<?php
+								$_blCurPeerage = null;
+								$_blPeerLabels = ['Squire' => 'Squire to', 'Man-At-Arms' => 'Person-at-Arms to', 'Lords-Page' => "Lord's Page to", 'Page' => 'Page to'];
+								?>
+								<?php foreach ($BeltlinePeers as $_bp): ?>
+								<?php if ($_bp['Peerage'] !== $_blCurPeerage): ?>
+								<div class="pn-belt-group"><?= htmlspecialchars($_blPeerLabels[$_bp['Peerage']] ?? $_bp['Peerage']) ?></div>
+								<?php $_blCurPeerage = $_bp['Peerage']; endif; ?>
+								<div class="pn-belt-row">
+									<a href="<?= UIR ?>Player/profile/<?= (int)$_bp['PeerId'] ?>" class="pn-belt-name"><?= htmlspecialchars($_bp['Persona']) ?></a>
+									<span class="pn-belt-title"><?= htmlspecialchars($_bp['TitleName']) ?></span>
+								</div>
+								<?php endforeach; ?>
+							</div>
+							<?php endif; ?>
+							<?php if (!empty($BeltlineAssociates)): ?>
+							<div class="pn-belt-card">
+								<div class="pn-belt-card-title"><i class="fas fa-user-friends"></i> My Associate<?= count($BeltlineAssociates) > 1 ? 's' : '' ?></div>
+								<?php
+								$_blaCurPeerage = null;
+								$_blAssocLabels = ['Squire' => 'Squires', 'Man-At-Arms' => 'People-at-Arms', 'Lords-Page' => "Lords-Pages", 'Page' => 'Pages'];
+								?>
+								<?php foreach ($BeltlineAssociates as $_ba): ?>
+								<?php if ($_ba['Peerage'] !== $_blaCurPeerage): ?>
+								<div class="pn-belt-group"><?= htmlspecialchars($_blAssocLabels[$_ba['Peerage']] ?? $_ba['Peerage']) ?></div>
+								<?php $_blaCurPeerage = $_ba['Peerage']; endif; ?>
+								<div class="pn-belt-row">
+									<a href="<?= UIR ?>Player/profile/<?= (int)$_ba['RecipientId'] ?>" class="pn-belt-name"><?= htmlspecialchars($_ba['Persona']) ?></a>
+									<span class="pn-belt-title"><?= htmlspecialchars($_ba['TitleName']) ?></span>
+								</div>
+								<?php endforeach; ?>
+							</div>
+							<?php endif; ?>
+						</div>
+						<?php endif; ?>
+					</div>
+				</div>
+				<?php endif; ?>
+
+				<!-- Awards Tab -->
 			<div class="pn-tab-panel" id="pn-tab-awards"<?= $isOwnProfile ? ' style="display:none"' : '' ?>>
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
@@ -1490,7 +1661,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<label class="pn-upload-area" for="pn-img-file-input">
 				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
 				Click to choose an image
-				<small>JPG, GIF, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
+				<small>JPG, GIF, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
 			</label>
 			<input type="file" id="pn-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none;" />
 			<div id="pn-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;"></div>
@@ -2036,6 +2207,169 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <?php endif; ?>
 
 <!-- =============================================
+     Design My Profile Modal
+     ============================================= -->
+<?php if ($isOwnProfile): ?>
+<div class="pn-overlay" id="pn-design-overlay">
+	<div class="pn-modal-box" style="width:640px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-palette" style="margin-right:8px;color:#2c5282"></i>Design My Profile</h3>
+			<button class="pn-modal-close-btn" id="pn-design-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-design-tabs">
+			<button class="pn-design-tab pn-active" data-panel="about"><i class="fas fa-scroll"></i> About</button>
+			<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
+			<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
+			<button class="pn-design-tab" data-panel="focus"><i class="fas fa-crosshairs"></i> Photo Focus</button>
+		</div>
+		<div class="pn-acct-modal-body" style="max-height:60vh;overflow-y:auto">
+			<div class="pn-form-error" id="pn-design-error"></div>
+
+			<!-- About Panel -->
+			<div class="pn-design-panel pn-active" id="pn-design-about">
+				<div class="pn-design-field">
+					<label>About <?= htmlspecialchars($Player['Persona']) ?></label>
+					<div class="pn-md-preview-toggle">
+						<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="persona">Write</button>
+						<button class="pn-md-toggle-btn" data-target="preview" data-field="persona">Preview</button>
+					</div>
+					<textarea id="pn-design-about-persona" placeholder="Ex. Hi there! I'm an archer in the Northern Kingdom who loves brewing mead and singing bardic songs. You can find me in the Barony of..."><?= htmlspecialchars($Player['AboutPersona'] ?? '') ?></textarea>
+					<div class="pn-md-preview" id="pn-design-about-persona-preview" style="display:none"></div>
+					<div class="pn-design-hint">Supports <strong>Markdown</strong>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
+				</div>
+				<div class="pn-design-field">
+					<label>My Story</label>
+					<div class="pn-md-preview-toggle">
+						<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="story">Write</button>
+						<button class="pn-md-toggle-btn" data-target="preview" data-field="story">Preview</button>
+					</div>
+					<textarea id="pn-design-about-story" placeholder="Ex. Feywild the Brewer has been traveling the realms looking for the Amulet of Fireballs. After his village was destroyed in a rock giant stampede..."><?= htmlspecialchars($Player['AboutStory'] ?? '') ?></textarea>
+					<div class="pn-md-preview" id="pn-design-about-story-preview" style="display:none"></div>
+					<div class="pn-design-hint">Supports <strong>Markdown</strong>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
+				</div>
+				<div class="pn-design-field" style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0">
+					<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+						<input type="checkbox" id="pn-design-show-beltline" <?= ((int)($Player['ShowBeltline'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Show My Beltline
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Display your peerage relationships (peers and associates) on your About tab. Others can see who you're belted to and who you've belted.</div>
+				</div>
+			</div>
+
+			<!-- Colors Panel -->
+			<div class="pn-design-panel" id="pn-design-colors">
+				<div class="pn-design-preview-label">Preview</div>
+				<div class="pn-hero-preview" id="pn-color-hero-preview">
+					<div class="pn-hero-preview-name"><?= htmlspecialchars($Player['Persona']) ?></div>
+					<div class="pn-hero-preview-sub">Your profile will look like this</div>
+				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Presets</div>
+				<div class="pn-color-presets" id="pn-color-presets">
+					<div class="pn-color-swatch" data-primary="#2c5282" data-accent="#4299e1" style="background:#2c5282" title="Default Blue"></div>
+					<div class="pn-color-swatch" data-primary="#276749" data-accent="#48bb78" style="background:#276749" title="Forest Green"></div>
+					<div class="pn-color-swatch" data-primary="#9b2c2c" data-accent="#fc8181" style="background:#9b2c2c" title="Crimson Red"></div>
+					<div class="pn-color-swatch" data-primary="#553c9a" data-accent="#9f7aea" style="background:#553c9a" title="Royal Purple"></div>
+					<div class="pn-color-swatch" data-primary="#975a16" data-accent="#ecc94b" style="background:#975a16" title="Gold"></div>
+					<div class="pn-color-swatch" data-primary="#2d3748" data-accent="#a0aec0" style="background:#2d3748" title="Dark Gray"></div>
+					<div class="pn-color-swatch" data-primary="#285e61" data-accent="#38b2ac" style="background:#285e61" title="Teal"></div>
+					<div class="pn-color-swatch" data-primary="#744210" data-accent="#ed8936" style="background:#744210" title="Burnt Orange"></div>
+				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Custom Colors</div>
+				<div class="pn-color-row">
+					<div class="pn-color-col">
+						<label style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block">Primary (Hero Background)</label>
+						<div class="pn-color-input-wrap">
+							<input type="color" id="pn-color-primary" value="<?= htmlspecialchars($Player['ColorPrimary'] ?? '#2c5282') ?>" />
+							<input type="text" id="pn-color-primary-hex" value="<?= htmlspecialchars($Player['ColorPrimary'] ?? '#2c5282') ?>" maxlength="7" />
+						</div>
+					</div>
+					<div class="pn-color-col">
+						<label style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block">Accent (Tabs, Links, Stat Cards)</label>
+						<div class="pn-color-input-wrap">
+							<input type="color" id="pn-color-accent" value="<?= htmlspecialchars($Player['ColorAccent'] ?? '#4299e1') ?>" />
+							<input type="text" id="pn-color-accent-hex" value="<?= htmlspecialchars($Player['ColorAccent'] ?? '#4299e1') ?>" maxlength="7" />
+						</div>
+					</div>
+				</div>
+				<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-color-reset" style="margin-top:4px"><i class="fas fa-undo"></i> Reset to Default</button>
+			</div>
+
+			<!-- Name Panel -->
+			<div class="pn-design-panel" id="pn-design-name">
+				<div class="pn-design-hint" style="margin-bottom:14px">Add titles or positions you've earned to your display name.</div>
+				<div class="pn-name-parts">
+					<div class="pn-name-part">
+						<div class="pn-design-field">
+							<label>Prefix</label>
+							<select id="pn-name-prefix-select">
+								<option value="">None</option>
+								<?php if (!empty($PlayerTitles)): foreach ($PlayerTitles as $_pt): ?>
+								<option value="<?= htmlspecialchars($_pt['TitleName']) ?>"<?= ($Player['NamePrefix'] ?? '') === $_pt['TitleName'] ? ' selected' : '' ?>><?= htmlspecialchars($_pt['TitleName']) ?></option>
+								<?php endforeach; endif; ?>
+								<option value="__custom__"<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
+							</select>
+							<input type="text" id="pn-name-prefix-custom" placeholder="Syr, Lady, Archon, Captain, etc..." style="margin-top:6px;<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NamePrefix'] : '') ?>" />
+						</div>
+					</div>
+					<div class="pn-name-core">
+						<div class="pn-design-field">
+							<label>Core Name</label>
+							<input type="text" id="pn-name-core" value="<?= htmlspecialchars($Player['Persona']) ?>" />
+						</div>
+					</div>
+					<div class="pn-name-part">
+						<div class="pn-design-field">
+							<label>Suffix</label>
+							<select id="pn-name-suffix-select">
+								<option value="">None</option>
+								<?php if (!empty($PlayerTitles)): foreach ($PlayerTitles as $_pt): ?>
+								<option value="<?= htmlspecialchars($_pt['TitleName']) ?>"<?= ($Player['NameSuffix'] ?? '') === $_pt['TitleName'] ? ' selected' : '' ?>><?= htmlspecialchars($_pt['TitleName']) ?></option>
+								<?php endforeach; endif; ?>
+								<option value="__custom__"<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
+							</select>
+							<input type="text" id="pn-name-suffix-custom" placeholder="the Overpowered, the Realmstrider, Esquire" style="margin-top:6px;<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NameSuffix'] : '') ?>" />
+						</div>
+					</div>
+				</div>
+				<div class="pn-name-constructed" id="pn-name-preview">
+					<?php
+						$_npv = '';
+						if (!empty($Player['NamePrefix'])) $_npv .= htmlspecialchars($Player['NamePrefix']) . ' ';
+						$_npv .= htmlspecialchars($Player['Persona']);
+						if (!empty($Player['NameSuffix'])) $_npv .= ' ' . htmlspecialchars($Player['NameSuffix']);
+						echo $_npv;
+					?>
+				</div>
+			</div>
+
+			<!-- Photo Focus Panel -->
+			<div class="pn-design-panel" id="pn-design-focus">
+				<?php if ($Player['HasImage'] > 0): ?>
+				<div class="pn-design-hint" style="margin-bottom:10px">Move and resize the circle to set the focus area for your profile photo thumbnail.</div>
+				<div class="pn-focus-canvas-wrap" style="text-align:center">
+					<canvas id="pn-focus-canvas"></canvas>
+				</div>
+				<input type="hidden" id="pn-focus-x" value="<?= $_pnFocusX ?>" />
+				<input type="hidden" id="pn-focus-y" value="<?= $_pnFocusY ?>" />
+				<input type="hidden" id="pn-focus-size" value="<?= (int)($Player['PhotoFocusSize'] ?? 100) ?>" />
+				<?php else: ?>
+				<div class="pn-about-empty">
+					<i class="fas fa-camera" style="font-size:28px;color:#cbd5e0;margin-bottom:10px"></i>
+					<p>Upload a player photo first, then come back here to set the focus area.</p>
+				</div>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-design-cancel">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-design-save"><i class="fas fa-save"></i> Save Changes</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<!-- =============================================
      Recommendation Modal
      ============================================= -->
 <?php if ($LoggedIn): ?>
@@ -2160,6 +2494,18 @@ var PnConfig = {
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
 	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
+	aboutPersona:   <?= json_encode($Player['AboutPersona'] ?? '') ?>,
+	aboutStory:     <?= json_encode($Player['AboutStory'] ?? '') ?>,
+	colorPrimary:   <?= json_encode($Player['ColorPrimary'] ?? '') ?>,
+	colorAccent:    <?= json_encode($Player['ColorAccent'] ?? '') ?>,
+	namePrefix:     <?= json_encode($Player['NamePrefix'] ?? '') ?>,
+	nameSuffix:     <?= json_encode($Player['NameSuffix'] ?? '') ?>,
+	photoFocusX:    <?= (int)($Player['PhotoFocusX'] ?? 50) ?>,
+	photoFocusY:    <?= (int)($Player['PhotoFocusY'] ?? 50) ?>,
+	photoFocusSize: <?= (int)($Player['PhotoFocusSize'] ?? 100) ?>,
+	hasImage:       <?= ($Player['HasImage'] > 0) ? 'true' : 'false' ?>,
+	imageUrl:       <?= json_encode($imageUrl) ?>,
+	playerTitles:   <?= json_encode($PlayerTitles ?? []) ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -2167,6 +2513,371 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
+// ---- Markdown rendering for About tab ----
+(function() {
+	var personaEl = document.getElementById('pn-about-persona-rendered');
+	var storyEl   = document.getElementById('pn-about-story-rendered');
+	function renderMd(raw) {
+		if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+			return DOMPurify.sanitize(marked.parse(raw || ''));
+		}
+		return (raw || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+	}
+	if (personaEl && PnConfig.aboutPersona) personaEl.innerHTML = renderMd(PnConfig.aboutPersona);
+	if (storyEl && PnConfig.aboutStory) storyEl.innerHTML = renderMd(PnConfig.aboutStory);
+})();
+
+// ---- Photo Focus (precise pixel positioning) ----
+(function() {
+	var imgs = document.querySelectorAll('.pn-avatar img[data-focus-size]');
+	function applyFocus(img) {
+		var fx = parseFloat(img.dataset.focusX);
+		var fy = parseFloat(img.dataset.focusY);
+		var fs = parseFloat(img.dataset.focusSize);
+		if (isNaN(fx) || isNaN(fy) || isNaN(fs)) return;
+		var nw = img.naturalWidth, nh = img.naturalHeight;
+		if (!nw || !nh) return;
+		var box = img.parentElement;
+		var cw = box.offsetWidth || 110, ch = box.offsetHeight || 110;
+		// Focus circle diameter in natural image pixels
+		var minDim = Math.min(nw, nh);
+		var diameter = (fs / 100) * minDim;
+		// Scale so the focus circle fills the container
+		var scale = Math.max(cw, ch) / diameter;
+		var sw = nw * scale, sh = nh * scale;
+		// Focus center in scaled coordinates
+		var cx = (fx / 100) * sw, cy = (fy / 100) * sh;
+		// Offset to center the focus point in the container
+		var ox = cx - cw / 2, oy = cy - ch / 2;
+		// Clamp so we don't show outside the image
+		ox = Math.max(0, Math.min(sw - cw, ox));
+		oy = Math.max(0, Math.min(sh - ch, oy));
+		img.style.position = 'absolute';
+		img.style.width = sw + 'px';
+		img.style.height = sh + 'px';
+		img.style.left = (-ox) + 'px';
+		img.style.top = (-oy) + 'px';
+		img.style.objectFit = 'initial';
+		img.style.maxWidth = 'none';
+	}
+	imgs.forEach(function(img) {
+		if (img.complete && img.naturalWidth) applyFocus(img);
+		else img.addEventListener('load', function() { applyFocus(img); });
+	});
+})();
+
+// ---- Design My Profile Modal ----
+(function() {
+	if (!PnConfig.isOwnProfile) return;
+	function gid(id) { return document.getElementById(id); }
+
+	// Open/Close
+	window.pnOpenDesignModal = function() {
+		gid('pn-design-error').style.display = 'none';
+		gid('pn-design-error').textContent = '';
+		gid('pn-design-overlay').classList.add('pn-open');
+		document.body.style.overflow = 'hidden';
+		initFocusTool();
+	};
+	function closeDesign() {
+		gid('pn-design-overlay').classList.remove('pn-open');
+		document.body.style.overflow = '';
+	}
+	gid('pn-design-close-btn').addEventListener('click', closeDesign);
+	gid('pn-design-cancel').addEventListener('click', closeDesign);
+	gid('pn-design-overlay').addEventListener('click', function(e) { if (e.target === this) closeDesign(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && gid('pn-design-overlay').classList.contains('pn-open')) closeDesign();
+	});
+
+	// Tab switching
+	document.querySelectorAll('.pn-design-tab').forEach(function(tab) {
+		tab.addEventListener('click', function() {
+			document.querySelectorAll('.pn-design-tab').forEach(function(t) { t.classList.remove('pn-active'); });
+			document.querySelectorAll('.pn-design-panel').forEach(function(p) { p.classList.remove('pn-active'); });
+			tab.classList.add('pn-active');
+			var panel = gid('pn-design-' + tab.dataset.panel);
+			if (panel) panel.classList.add('pn-active');
+			if (tab.dataset.panel === 'focus') initFocusTool();
+		});
+	});
+
+	// Markdown preview toggles
+	document.querySelectorAll('.pn-md-toggle-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var field = btn.dataset.field;
+			var target = btn.dataset.target;
+			var textareaId = 'pn-design-about-' + field;
+			var previewId  = textareaId + '-preview';
+			var textarea = gid(textareaId);
+			var preview  = gid(previewId);
+			btn.parentElement.querySelectorAll('.pn-md-toggle-btn').forEach(function(b) { b.classList.remove('pn-active'); });
+			btn.classList.add('pn-active');
+			if (target === 'preview') {
+				textarea.style.display = 'none';
+				preview.style.display = '';
+				var raw = textarea.value;
+				if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+					preview.innerHTML = DOMPurify.sanitize(marked.parse(raw || ''));
+				} else {
+					preview.textContent = raw;
+				}
+			} else {
+				textarea.style.display = '';
+				preview.style.display = 'none';
+			}
+		});
+	});
+
+	// Color presets
+	var colorPresets = document.querySelectorAll('.pn-color-swatch');
+	colorPresets.forEach(function(sw) {
+		sw.addEventListener('click', function() {
+			colorPresets.forEach(function(s) { s.classList.remove('pn-selected'); });
+			sw.classList.add('pn-selected');
+			gid('pn-color-primary').value = sw.dataset.primary;
+			gid('pn-color-primary-hex').value = sw.dataset.primary;
+			gid('pn-color-accent').value = sw.dataset.accent;
+			gid('pn-color-accent-hex').value = sw.dataset.accent;
+			updateColorPreview();
+		});
+	});
+
+	// Color picker sync
+	gid('pn-color-primary').addEventListener('input', function() { gid('pn-color-primary-hex').value = this.value; syncPresetSwatch(); updateColorPreview(); });
+	gid('pn-color-accent').addEventListener('input', function() { gid('pn-color-accent-hex').value = this.value; syncPresetSwatch(); updateColorPreview(); });
+	gid('pn-color-primary-hex').addEventListener('input', function() {
+		if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid('pn-color-primary').value = this.value; syncPresetSwatch(); updateColorPreview(); }
+	});
+	gid('pn-color-accent-hex').addEventListener('input', function() {
+		if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid('pn-color-accent').value = this.value; syncPresetSwatch(); updateColorPreview(); }
+	});
+	gid('pn-color-reset').addEventListener('click', function() {
+		gid('pn-color-primary').value = '#2c5282'; gid('pn-color-primary-hex').value = '#2c5282';
+		gid('pn-color-accent').value = '#4299e1'; gid('pn-color-accent-hex').value = '#4299e1';
+		syncPresetSwatch(); updateColorPreview();
+	});
+	function syncPresetSwatch() {
+		var p = gid('pn-color-primary').value.toLowerCase();
+		var a = gid('pn-color-accent').value.toLowerCase();
+		colorPresets.forEach(function(sw) {
+			sw.classList.toggle('pn-selected', sw.dataset.primary.toLowerCase() === p && sw.dataset.accent.toLowerCase() === a);
+		});
+	}
+	function updateColorPreview() {
+		var preview = gid('pn-color-hero-preview');
+		if (preview) preview.style.backgroundColor = gid('pn-color-primary').value;
+	}
+	updateColorPreview();
+	syncPresetSwatch();
+
+	// Name builder
+	var prefixSel = gid('pn-name-prefix-select');
+	var suffixSel = gid('pn-name-suffix-select');
+	var prefixCustom = gid('pn-name-prefix-custom');
+	var suffixCustom = gid('pn-name-suffix-custom');
+	var coreInput = gid('pn-name-core');
+	function updateNamePreview() {
+		var prefix = '';
+		if (prefixSel.value === '__custom__') { prefix = prefixCustom.value.trim(); }
+		else if (prefixSel.value) { prefix = prefixSel.value; }
+		var suffix = '';
+		if (suffixSel.value === '__custom__') { suffix = suffixCustom.value.trim(); }
+		else if (suffixSel.value) { suffix = suffixSel.value; }
+		var core = coreInput.value.trim() || PnConfig.playerPersona;
+		var full = '';
+		if (prefix) full += prefix + ' ';
+		full += core;
+		if (suffix) full += ' ' + suffix;
+		gid('pn-name-preview').textContent = full;
+	}
+	prefixSel.addEventListener('change', function() {
+		prefixCustom.style.display = this.value === '__custom__' ? '' : 'none';
+		if (this.value !== '__custom__') prefixCustom.value = '';
+		updateNamePreview();
+	});
+	suffixSel.addEventListener('change', function() {
+		suffixCustom.style.display = this.value === '__custom__' ? '' : 'none';
+		if (this.value !== '__custom__') suffixCustom.value = '';
+		updateNamePreview();
+	});
+	prefixCustom.addEventListener('input', updateNamePreview);
+	suffixCustom.addEventListener('input', updateNamePreview);
+	coreInput.addEventListener('input', updateNamePreview);
+
+	// Photo focus tool
+	var focusImg = null, focusCanvas = null, focusCtx = null;
+	var focusCircle = { x: PnConfig.photoFocusX, y: PnConfig.photoFocusY, size: PnConfig.photoFocusSize };
+	var focusScale = 1, focusImgW = 0, focusImgH = 0;
+	var focusInited = false;
+
+	function initFocusTool() {
+		if (focusInited || !PnConfig.hasImage) return;
+		focusCanvas = gid('pn-focus-canvas');
+		if (!focusCanvas) return;
+		focusCtx = focusCanvas.getContext('2d');
+		var img = new Image();
+		img.crossOrigin = 'anonymous';
+		img.onload = function() {
+			focusImg = img;
+			focusImgW = img.width; focusImgH = img.height;
+			var maxW = Math.min(400, window.innerWidth - 120);
+			var maxH = Math.min(320, window.innerHeight - 340);
+			focusScale = Math.min(maxW / img.width, maxH / img.height, 1);
+			focusCanvas.width = Math.round(img.width * focusScale);
+			focusCanvas.height = Math.round(img.height * focusScale);
+			drawFocus();
+			bindFocusEvents();
+			focusInited = true;
+		};
+		img.src = PnConfig.imageUrl;
+	}
+
+	function drawFocus() {
+		if (!focusImg || !focusCtx) return;
+		var cw = focusCanvas.width, ch = focusCanvas.height;
+		focusCtx.clearRect(0, 0, cw, ch);
+		focusCtx.drawImage(focusImg, 0, 0, cw, ch);
+		// Dim everything
+		focusCtx.fillStyle = 'rgba(0,0,0,0.55)';
+		focusCtx.fillRect(0, 0, cw, ch);
+		// Cut out circle
+		var cx = focusCircle.x / 100 * cw;
+		var cy = focusCircle.y / 100 * ch;
+		var radius = focusCircle.size / 100 * Math.min(cw, ch) / 2;
+		radius = Math.max(20, Math.min(radius, Math.min(cw, ch) / 2));
+		focusCtx.save();
+		focusCtx.beginPath();
+		focusCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+		focusCtx.clip();
+		focusCtx.drawImage(focusImg, 0, 0, cw, ch);
+		focusCtx.restore();
+		// Circle border
+		focusCtx.beginPath();
+		focusCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+		focusCtx.strokeStyle = 'rgba(255,255,255,0.9)';
+		focusCtx.lineWidth = 2;
+		focusCtx.stroke();
+		// Resize handle at bottom-right of circle
+		var hx = cx + radius * 0.707, hy = cy + radius * 0.707;
+		focusCtx.fillStyle = '#fff';
+		focusCtx.beginPath();
+		focusCtx.arc(hx, hy, 6, 0, Math.PI * 2);
+		focusCtx.fill();
+		focusCtx.strokeStyle = 'rgba(0,0,0,0.3)';
+		focusCtx.lineWidth = 1;
+		focusCtx.stroke();
+	}
+
+	function bindFocusEvents() {
+		var dragging = null;
+		function getPos(e) {
+			var r = focusCanvas.getBoundingClientRect();
+			var src = e.touches ? e.touches[0] : e;
+			return { x: src.clientX - r.left, y: src.clientY - r.top };
+		}
+		function onDown(e) {
+			e.preventDefault();
+			var pos = getPos(e);
+			var cw = focusCanvas.width, ch = focusCanvas.height;
+			var cx = focusCircle.x / 100 * cw, cy = focusCircle.y / 100 * ch;
+			var radius = focusCircle.size / 100 * Math.min(cw, ch) / 2;
+			// Check resize handle
+			var hx = cx + radius * 0.707, hy = cy + radius * 0.707;
+			if (Math.hypot(pos.x - hx, pos.y - hy) < 12) {
+				dragging = { type: 'resize', startSize: focusCircle.size, startDist: Math.hypot(pos.x - cx, pos.y - cy) };
+				return;
+			}
+			// Check if inside circle (move)
+			if (Math.hypot(pos.x - cx, pos.y - cy) <= radius) {
+				dragging = { type: 'move', ox: focusCircle.x, oy: focusCircle.y, sx: pos.x, sy: pos.y };
+			}
+		}
+		function onMove(e) {
+			if (!dragging) return;
+			var pos = getPos(e);
+			var cw = focusCanvas.width, ch = focusCanvas.height;
+			if (dragging.type === 'move') {
+				var dx = (pos.x - dragging.sx) / cw * 100;
+				var dy = (pos.y - dragging.sy) / ch * 100;
+				focusCircle.x = Math.max(0, Math.min(100, dragging.ox + dx));
+				focusCircle.y = Math.max(0, Math.min(100, dragging.oy + dy));
+			} else if (dragging.type === 'resize') {
+				var cx = focusCircle.x / 100 * cw, cy = focusCircle.y / 100 * ch;
+				var dist = Math.hypot(pos.x - cx, pos.y - cy);
+				var newSize = dragging.startSize * (dist / dragging.startDist);
+				focusCircle.size = Math.max(15, Math.min(100, newSize));
+			}
+			gid('pn-focus-x').value = Math.round(focusCircle.x);
+			gid('pn-focus-y').value = Math.round(focusCircle.y);
+			gid('pn-focus-size').value = Math.round(focusCircle.size);
+			drawFocus();
+		}
+		function onUp() { dragging = null; }
+		focusCanvas.addEventListener('mousedown', onDown);
+		focusCanvas.addEventListener('touchstart', onDown, { passive: false });
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('touchmove', onMove, { passive: false });
+		window.addEventListener('mouseup', onUp);
+		window.addEventListener('touchend', onUp);
+	}
+
+	// Save
+	gid('pn-design-save').addEventListener('click', function() {
+		var btn = this;
+		btn.disabled = true;
+		btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+		var errEl = gid('pn-design-error');
+		errEl.style.display = 'none';
+
+		var prefix = '';
+		if (prefixSel.value === '__custom__') prefix = prefixCustom.value.trim();
+		else if (prefixSel.value) prefix = prefixSel.value;
+		var suffix = '';
+		if (suffixSel.value === '__custom__') suffix = suffixCustom.value.trim();
+		else if (suffixSel.value) suffix = suffixSel.value;
+		var coreName = coreInput.value.trim();
+		if (!coreName) {
+			errEl.textContent = 'Core name is required.';
+			errEl.style.display = '';
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			return;
+		}
+		var fd = new FormData();
+		fd.append('AboutPersona', gid('pn-design-about-persona').value);
+		fd.append('AboutStory', gid('pn-design-about-story').value);
+		fd.append('ColorPrimary', gid('pn-color-primary').value);
+		fd.append('ColorAccent', gid('pn-color-accent').value);
+		fd.append('NamePrefix', prefix);
+		fd.append('NameSuffix', suffix);
+		fd.append('Persona', coreName);
+		fd.append('PhotoFocusX', gid('pn-focus-x') ? gid('pn-focus-x').value : PnConfig.photoFocusX);
+		fd.append('PhotoFocusY', gid('pn-focus-y') ? gid('pn-focus-y').value : PnConfig.photoFocusY);
+		fd.append('PhotoFocusSize', gid('pn-focus-size') ? gid('pn-focus-size').value : PnConfig.photoFocusSize);
+		fd.append('ShowBeltline', gid('pn-design-show-beltline').checked ? 1 : 0);
+
+		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateprofile', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(result) {
+				if (result && result.status === 0) {
+					window.location.reload();
+				} else {
+					errEl.textContent = (result && result.error) ? result.error : 'Save failed.';
+					errEl.style.display = '';
+					btn.disabled = false;
+					btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+				}
+			})
+			.catch(function(err) {
+				errEl.textContent = 'Request failed: ' + err.message;
+				errEl.style.display = '';
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			});
+	});
+})();
+
 pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
 pnSortDesc($('#pn-titles-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-titles-table'), 1);
 pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
@@ -2521,6 +3232,8 @@ pnRenderSparkline();
 </div>
 <?php endif; ?>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
 $(function() {

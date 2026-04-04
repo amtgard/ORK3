@@ -183,6 +183,7 @@ html[data-theme="dark"] .pk-btn-white {
 	z-index: 1;
 }
 .pn-avatar {
+	position: relative;
 	width: 110px;
 	height: 110px;
 	border-radius: 50%;

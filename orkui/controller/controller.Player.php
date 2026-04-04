@@ -504,6 +504,70 @@ class Controller_Player extends Controller {
 		$this->data['IsOwnProfile']    = $uid === (int)$id;
 		$this->data['Player']['ParkName'] = $this->session->park_name;
 
+
+		// Beltline: My Peers (who gave this player peerage awards)
+		$DB->Clear();
+		$__peerSql = "SELECT m.mundane_id AS PeerId, m.persona AS Persona,
+			IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date
+			FROM ork_awards ma
+			JOIN ork_award a ON a.award_id = ma.award_id
+			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			JOIN ork_mundane m ON m.mundane_id = ma.given_by_id
+			WHERE ma.mundane_id = " . (int)$id . "
+				AND (a.peerage IN ('Squire','Man-At-Arms','Page','Lords-Page')
+					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+				AND ma.given_by_id > 0
+			ORDER BY CASE a.peerage
+				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
+				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
+		$__peerResult = $DB->DataSet($__peerSql);
+		$__peers = [];
+		if ($__peerResult) {
+			while ($__peerResult->Next()) {
+				$__peers[] = [
+					'PeerId'    => (int)$__peerResult->PeerId,
+					'Persona'   => $__peerResult->Persona,
+					'TitleName' => $__peerResult->TitleName,
+					'Peerage'   => $__peerResult->Peerage,
+					'Date'      => $__peerResult->Date,
+				];
+			}
+		}
+		$DB->Clear();
+		$this->data['BeltlinePeers'] = $__peers;
+
+		// Beltline: My Associates (who this player gave peerage awards to)
+		$DB->Clear();
+		$__blAssocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
+			IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date
+			FROM ork_awards ma
+			JOIN ork_award a ON a.award_id = ma.award_id
+			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
+			WHERE ma.given_by_id = " . (int)$id . "
+				AND (a.peerage IN ('Squire','Man-At-Arms','Page','Lords-Page')
+					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			ORDER BY CASE a.peerage
+				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
+				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
+		$__blAssocResult = $DB->DataSet($__blAssocSql);
+		$__blAssocs = [];
+		if ($__blAssocResult) {
+			while ($__blAssocResult->Next()) {
+				$__blAssocs[] = [
+					'RecipientId' => (int)$__blAssocResult->RecipientId,
+					'Persona'     => $__blAssocResult->Persona,
+					'TitleName'   => $__blAssocResult->TitleName,
+					'Peerage'     => $__blAssocResult->Peerage,
+					'Date'        => $__blAssocResult->Date,
+				];
+			}
+		}
+		$DB->Clear();
+		$this->data['BeltlineAssociates'] = $__blAssocs;
+
 		if ($uid === (int)$id) {
 			$DB->Clear();
 			$__assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
@@ -534,6 +598,33 @@ class Controller_Player extends Controller {
 			}
 			$DB->Clear();
 			$this->data['MyAssociates'] = $__assocs;
+
+			// Fetch player's titles for name builder prefix/suffix options
+			$DB->Clear();
+			$__titleSql = "SELECT DISTINCT
+				COALESCE(NULLIF(ka.name,''), a.name) AS title_name,
+				a.officer_role, a.peerage, IFNULL(ka.is_title, 0) AS is_title
+				FROM ork_awards ma
+				JOIN ork_award a ON a.award_id = ma.award_id
+				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+				WHERE ma.mundane_id = " . (int)$id . "
+				  AND (ma.revoked = 0 OR ma.revoked IS NULL)
+				  AND (a.officer_role != 'none' OR IFNULL(ka.is_title, 0) = 1 OR a.peerage NOT IN ('None',''))
+				ORDER BY a.peerage ASC, title_name ASC";
+			$__titleResult = $DB->DataSet($__titleSql);
+			$__titles = [];
+			if ($__titleResult) {
+				while ($__titleResult->Next()) {
+					$__titles[] = [
+						'TitleName'   => $__titleResult->title_name,
+						'OfficerRole' => $__titleResult->officer_role,
+						'Peerage'     => $__titleResult->peerage,
+						'IsTitle'     => (int)$__titleResult->is_title,
+					];
+				}
+			}
+			$DB->Clear();
+			$this->data['PlayerTitles'] = $__titles;
 		}
 	}
 

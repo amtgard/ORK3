@@ -354,6 +354,33 @@ class Controller_PlayerAjax extends Controller {
 			}
 			exit;
 
+		} elseif ($action === 'updateprofile') {
+			// Own-profile customization: about, colors, name prefix/suffix, photo focus
+			$uid = (int)$this->session->user_id;
+			if ($uid !== $player_id) {
+				echo json_encode(['status' => 5, 'error' => 'You can only customize your own profile.']);
+				exit;
+			}
+			$fields = [
+				'Token'         => $this->session->token,
+				'MundaneId'     => $player_id,
+				'AboutPersona'  => isset($_POST['AboutPersona'])  ? $_POST['AboutPersona']  : null,
+				'AboutStory'    => isset($_POST['AboutStory'])    ? $_POST['AboutStory']    : null,
+				'ColorPrimary'  => (isset($_POST['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorPrimary'])) ? $_POST['ColorPrimary'] : null,
+				'ColorAccent'   => (isset($_POST['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorAccent'])) ? $_POST['ColorAccent'] : null,
+				'NamePrefix'    => isset($_POST['NamePrefix'])    ? trim($_POST['NamePrefix'])  : null,
+				'NameSuffix'    => isset($_POST['NameSuffix'])    ? trim($_POST['NameSuffix'])  : null,
+				'Persona'       => isset($_POST['Persona'])       ? trim($_POST['Persona'])     : null,
+				'PhotoFocusX'   => isset($_POST['PhotoFocusX'])   ? (int)$_POST['PhotoFocusX']  : null,
+				'PhotoFocusY'   => isset($_POST['PhotoFocusY'])   ? (int)$_POST['PhotoFocusY']  : null,
+				'PhotoFocusSize'=> isset($_POST['PhotoFocusSize'])? (int)$_POST['PhotoFocusSize']: null,
+				'ShowBeltline'  => isset($_POST['ShowBeltline'])  ? (int)$_POST['ShowBeltline']   : null,
+			];
+			$r = $this->Player->update_player($fields);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

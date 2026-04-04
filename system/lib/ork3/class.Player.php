@@ -293,7 +293,17 @@ class Player extends Ork3 {
 					//'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
 					'ParkMemberSince' => $this->mundane->park_member_since,
 					'IsNewPlayer' => $is_new_player,
-					'DuesPaidList' => $dues
+					'DuesPaidList' => $dues,
+					'AboutPersona' => $this->mundane->about_persona,
+					'AboutStory' => $this->mundane->about_story,
+					'ColorPrimary' => $this->mundane->color_primary,
+					'ColorAccent' => $this->mundane->color_accent,
+					'NamePrefix' => $this->mundane->name_prefix,
+					'NameSuffix' => $this->mundane->name_suffix,
+					'PhotoFocusX' => $this->mundane->photo_focus_x,
+					'PhotoFocusY' => $this->mundane->photo_focus_y,
+					'PhotoFocusSize' => $this->mundane->photo_focus_size,
+						'ShowBeltline' => (int)$this->mundane->show_beltline,
 				);
 			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
@@ -598,7 +608,7 @@ class Player extends Ork3 {
 						$this->mundane->waiver_ext = 'pdf';
 					}
 				}
-				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
+				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 					$playerimage = @imagecreatefromstring(base64_decode($request['Image']));
 					if ($playerimage !== false)
 					{
@@ -953,6 +963,20 @@ class Player extends Ork3 {
 				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
 				$this->mundane->pronoun_custom = is_null($request['PronounCustom'])?$this->mundane->pronoun_custom:$request['PronounCustom'];
 
+				// Profile customization fields (own-profile only)
+				if ($requester_id == $request['MundaneId']) {
+					$this->mundane->about_persona = is_null($request['AboutPersona'])?$this->mundane->about_persona:$request['AboutPersona'];
+					$this->mundane->about_story = is_null($request['AboutStory'])?$this->mundane->about_story:$request['AboutStory'];
+					$this->mundane->color_primary = is_null($request['ColorPrimary'])?$this->mundane->color_primary:$request['ColorPrimary'];
+					$this->mundane->color_accent = is_null($request['ColorAccent'])?$this->mundane->color_accent:$request['ColorAccent'];
+					$this->mundane->name_prefix = is_null($request['NamePrefix'])?$this->mundane->name_prefix:$request['NamePrefix'];
+					$this->mundane->name_suffix = is_null($request['NameSuffix'])?$this->mundane->name_suffix:$request['NameSuffix'];
+					$this->mundane->photo_focus_x = is_null($request['PhotoFocusX'])?$this->mundane->photo_focus_x:(int)$request['PhotoFocusX'];
+					$this->mundane->photo_focus_y = is_null($request['PhotoFocusY'])?$this->mundane->photo_focus_y:(int)$request['PhotoFocusY'];
+					$this->mundane->photo_focus_size = is_null($request['PhotoFocusSize'])?$this->mundane->photo_focus_size:(int)$request['PhotoFocusSize'];
+					$this->mundane->show_beltline = is_null($request['ShowBeltline'])?$this->mundane->show_beltline:(int)$request['ShowBeltline'];
+				}
+
 				// reeve or corpora qual changes
 				// TODO: add error messaging
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) {
@@ -1057,7 +1081,7 @@ class Player extends Ork3 {
         $mime = $prefix . 'MimeType';
     	if (strlen($request[$url]) > 0 && Common::url_exists($request[$url])) {
 			$mime_type = Common::exif_to_mime(@exif_imagetype($request[$url]), $request[$url]);
-			if (Common::supported_mime_types($mime_type) && Ork3::$Lib->heraldry->url_file_size($request[$url]) < 465000) {
+			if (Common::supported_mime_types($mime_type) && Ork3::$Lib->heraldry->url_file_size($request[$url]) < 1365334) {
 				$request[$media] = base64_encode(file_get_contents($request[$url]));
 				$request[$mime] = $mime_type;
 			}
@@ -1068,7 +1092,7 @@ class Player extends Ork3 {
 	public function set_image($request) {
         logtrace("set_image", $request);
         $request = $this->media_fetch('Image', $request);
-		if (strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
+		if (strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 			$playerimage = imagecreatefromstring(base64_decode($request['Image']));
 			if ($playerimage !== false)
 			{
@@ -1090,7 +1114,7 @@ class Player extends Ork3 {
 				$notices .= "Image could not be decoded.";
 			}
 		} else {
-			$notices .= 'Images must be jpeg, gifs, or pngs, and may be no larger than 340KB.<br />';
+			$notices .= 'Images must be jpeg, gifs, or pngs, and may be no larger than 1MB.<br />';
 		}
 		logtrace("set_image() complete", array($request, $notices));
 		return Success($notices);
