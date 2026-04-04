@@ -417,7 +417,10 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-about-content pre code{background:transparent;padding:0;color:inherit}
 .pn-about-content img{max-width:100%;height:auto;border-radius:6px}
 .pn-about-content ul,.pn-about-content ol{margin:8px 0;padding-left:24px}
-.pn-pronunciation{font-size:13px;color:rgba(255,255,255,0.65);font-style:italic;margin-top:-2px;margin-bottom:2px;letter-spacing:.02em}
+.pn-hero-subline{font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:4px;display:flex;align-items:center;flex-wrap:wrap;gap:0}
+.pn-sub-pronunciation{font-style:italic;color:rgba(255,255,255,0.6);letter-spacing:.02em}
+.pn-sub-pronouns{font-style:italic;color:rgba(255,255,255,0.6)}
+.pn-sub-sep{margin:0 6px;color:rgba(255,255,255,0.4);font-size:10px}
 .pn-tooltip-trigger{position:relative;display:inline-flex}
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
@@ -514,19 +517,17 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
 				<?php endif; ?>
 			</h1>
-			<?php if (!empty($Player['PronunciationGuide'])): ?>
-				<div class="pn-pronunciation">(<?= htmlspecialchars($Player['PronunciationGuide']) ?>)</div>
-			<?php endif; ?>
 			<?php
+				$_heroSubParts = [];
+				if (!empty($Player['PronunciationGuide'])) $_heroSubParts[] = '<span class="pn-sub-pronunciation">(' . htmlspecialchars($Player['PronunciationGuide']) . ')</span>';
 				$_heroRealParts = [];
 				if ($showFirstName && strlen($Player['GivenName']) > 0) $_heroRealParts[] = $Player['GivenName'];
 				if ($showLastName && strlen($Player['Surname']) > 0) $_heroRealParts[] = $Player['Surname'];
+				if (!empty($_heroRealParts)) $_heroSubParts[] = '<span class="pn-sub-name">' . htmlspecialchars(implode(' ', $_heroRealParts)) . '</span>';
+				if (!empty($pronounDisplay)) $_heroSubParts[] = '<span class="pn-sub-pronouns">' . htmlspecialchars($pronounDisplay) . '</span>';
 			?>
-			<?php if (!empty($_heroRealParts)): ?>
-				<div class="pn-real-name"><?= htmlspecialchars(implode(' ', $_heroRealParts)) ?></div>
-			<?php endif; ?>
-			<?php if (!empty($pronounDisplay)): ?>
-				<div class="pn-pronouns"><?= htmlspecialchars($pronounDisplay) ?></div>
+			<?php if (!empty($_heroSubParts)): ?>
+				<div class="pn-hero-subline"><?= implode(' <span class="pn-sub-sep">&bull;</span> ', $_heroSubParts) ?></div>
 			<?php endif; ?>
 			<div class="pn-breadcrumb">
 				<?php if (valid_id($this->__session->kingdom_id)): ?>
