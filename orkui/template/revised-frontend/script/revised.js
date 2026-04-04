@@ -8015,6 +8015,7 @@ function setupPronounPicker(cfg) {
 
     var currentRevokeAwardsId = 0;
     var currentRevokeAwardName = '';
+    var revokeCountdownTimer = null;
 
     window.pnOpenAwardRevokeModal = function(awardsId, awardName, isTitle) {
         currentRevokeAwardsId = awardsId;
@@ -8023,19 +8024,38 @@ function setupPronounPicker(cfg) {
         if (nameEl) nameEl.textContent = awardName;
         var titleEl = document.querySelector('#pn-award-revoke-overlay .pn-modal-title');
         if (titleEl) titleEl.innerHTML = '<i class="fas fa-ban" style="margin-right:8px;color:#b7791f"></i>' + (isTitle ? 'Revoke Title' : 'Revoke Award');
+        var revokeLabel = isTitle ? 'Revoke Title' : 'Revoke Award';
         var saveBtn = gid('pn-revoke-award-save');
-        if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + (isTitle ? 'Revoke Title' : 'Revoke Award');
         var reason = gid('pn-revoke-reason');
         if (reason) reason.value = '';
         var counter = gid('pn-revoke-char-count');
         if (counter) counter.textContent = '300 characters remaining';
         var fb = gid('pn-revoke-award-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+        // 5-second countdown on confirm button
+        if (revokeCountdownTimer) clearInterval(revokeCountdownTimer);
+        if (saveBtn) {
+            var remaining = 5;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + revokeLabel + ' (' + remaining + ')';
+            revokeCountdownTimer = setInterval(function() {
+                remaining--;
+                if (remaining > 0) {
+                    saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + revokeLabel + ' (' + remaining + ')';
+                } else {
+                    clearInterval(revokeCountdownTimer);
+                    revokeCountdownTimer = null;
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + revokeLabel;
+                }
+            }, 1000);
+        }
         var overlay = gid('pn-award-revoke-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
     };
 
     function pnCloseAwardRevokeModal() {
+        if (revokeCountdownTimer) { clearInterval(revokeCountdownTimer); revokeCountdownTimer = null; }
         var overlay = gid('pn-award-revoke-overlay');
         if (overlay) { overlay.classList.remove('pn-open'); document.body.style.overflow = ''; }
     }

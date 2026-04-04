@@ -903,7 +903,7 @@
 						if ((int)$a['IsLadder'] !== 1) continue;
 						$aid  = (int)$a['AwardId'];
 						$rank = (int)$a['Rank'];
-						if ($aid <= 0 || $rank <= 0) continue;
+						if ($aid <= 0) continue;
 						$displayName = trimlen($a['CustomAwardName']) > 0 ? $a['CustomAwardName']
 							: (trimlen($a['KingdomAwardName']) > 0 ? $a['KingdomAwardName'] : $a['Name']);
 						// Strip "Order of the " / "Order of " prefix to save space
@@ -915,10 +915,20 @@
 								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
 							}
 						}
-						if (!isset($pnLadderProgress[$aid]) || $rank > $pnLadderProgress[$aid]['Rank']) {
-							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank, 'HasMaster' => $hasMaster];
+						if (!isset($pnLadderProgress[$aid])) {
+							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank, 'Count' => 1, 'HasMaster' => $hasMaster];
+						} else {
+							$pnLadderProgress[$aid]['Count']++;
+							if ($rank > $pnLadderProgress[$aid]['Rank']) {
+								$pnLadderProgress[$aid]['Rank'] = $rank;
+							}
 						}
 					}
+					// Use max(highest_rank, total_entries) to account for unreconciled historical awards
+					foreach ($pnLadderProgress as &$lp) {
+						$lp['Rank'] = max($lp['Rank'], $lp['Count']);
+					}
+					unset($lp);
 					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
 				<?php if (!empty($pnLadderProgress)): ?>
@@ -2168,6 +2178,10 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			<button class="pn-modal-close-btn" id="pn-revoke-award-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
+			<div style="background:#fff5f5;border:1px solid #fc8181;color:#9b2c2c;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.5;">
+				<i class="fas fa-exclamation-triangle" style="margin-right:6px;color:#e53e3e"></i>
+				<strong>Revoke Award</strong> is designed for situations where an award is being intentionally stripped from a player, not for deleting erroneous awards. Use the delete (<i class="fas fa-trash"></i>) function for that purpose.
+			</div>
 			<div id="pn-revoke-award-feedback" style="display:none"></div>
 			<div class="pn-revoke-award-name" id="pn-revoke-award-name"></div>
 			<div class="pn-acct-field">
