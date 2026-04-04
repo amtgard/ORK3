@@ -472,12 +472,13 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-overlay-btn{padding:8px 20px;border:2px solid #e2e8f0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
 .pn-overlay-btn:hover{border-color:#a0aec0}
 .pn-overlay-btn.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
-.pn-comma-toggle{padding:2px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc;font-size:11px;font-weight:700;color:#a0aec0;cursor:pointer;transition:all .15s;font-family:inherit;line-height:1.4}
-.pn-comma-toggle:hover{border-color:#a0aec0}
+.pn-comma-toggle{width:32px;height:32px;border:2px solid #cbd5e0;border-radius:6px;background:#f7fafc;font-size:16px;font-weight:700;color:#a0aec0;cursor:pointer;transition:all .15s;font-family:inherit;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.pn-comma-toggle:hover{border-color:#a0aec0;background:#edf2f7}
 .pn-comma-toggle.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
-.pn-name-parts{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
-.pn-name-part{flex:1;min-width:120px}
-.pn-name-core{flex:2;min-width:160px}
+.pn-name-parts{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.pn-name-part{flex:1.2;min-width:130px}
+.pn-name-core{flex:1;min-width:120px}
+.pn-name-comma-sep{flex:0 0 auto;padding-bottom:4px;align-self:flex-end}
 .pn-name-constructed{margin-top:12px;padding:10px 14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:15px;font-weight:600;color:#2d3748}
 .pn-focus-canvas-wrap{position:relative;display:inline-block;max-width:100%;margin:10px auto;text-align:center}
 .pn-focus-canvas-wrap canvas{display:block;max-width:100%;cursor:move;border-radius:6px}
@@ -2375,12 +2376,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 							<input type="text" id="pn-name-core" value="<?= htmlspecialchars($Player['Persona']) ?>" />
 						</div>
 					</div>
+					<div class="pn-name-comma-sep">
+						<button type="button" id="pn-suffix-comma-toggle" class="pn-comma-toggle<?= (int)($Player['SuffixComma'] ?? 0) ? ' pn-active' : '' ?>" title="Add comma before suffix">,</button>
+					</div>
 					<div class="pn-name-part">
 						<div class="pn-design-field">
-							<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-								<label style="margin:0">Suffix</label>
-								<button type="button" id="pn-suffix-comma-toggle" class="pn-comma-toggle<?= (int)($Player['SuffixComma'] ?? 0) ? ' pn-active' : '' ?>" title="Add comma before suffix">, comma</button>
-							</div>
+							<label>Suffix</label>
 							<select id="pn-name-suffix-select">
 								<option value="">None</option>
 								<?php if (!empty($PlayerTitles)): foreach ($PlayerTitles as $_pt): ?>
