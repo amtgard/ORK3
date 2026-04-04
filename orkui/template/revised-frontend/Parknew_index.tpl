@@ -516,9 +516,23 @@
 								$dayMapUrl = $parkMapUrl;
 							}
 						?>
-						<div class="pk-schedule-card">
+						<div class="pk-schedule-card"
+					data-day-id="<?= (int)$day['ParkDayId'] ?>"
+					data-purpose="<?= htmlspecialchars($day['Purpose'] ?? '') ?>"
+					data-recurrence="<?= htmlspecialchars($day['Recurrence'] ?? '') ?>"
+					data-weekday="<?= htmlspecialchars($day['WeekDay'] ?? '') ?>"
+					data-weekof="<?= (int)($day['WeekOfMonth'] ?? 0) ?>"
+					data-monthday="<?= (int)($day['MonthDay'] ?? 0) ?>"
+					data-time="<?= htmlspecialchars($day['Time'] ?? '') ?>"
+					data-desc="<?= htmlspecialchars($day['Description'] ?? '', ENT_QUOTES) ?>"
+					data-online="<?= (int)($day['Online'] ?? 0) ?>"
+					data-altloc="<?= (int)($day['AlternateLocation'] ?? 0) ?>"
+					data-address="<?= htmlspecialchars($day['Address'] ?? '', ENT_QUOTES) ?>"
+					data-city="<?= htmlspecialchars($day['City'] ?? '', ENT_QUOTES) ?>"
+					data-province="<?= htmlspecialchars($day['Province'] ?? '', ENT_QUOTES) ?>"
+					data-postal="<?= htmlspecialchars($day['PostalCode'] ?? '', ENT_QUOTES) ?>">
 				<?php if (!empty($CanAdminPark)): ?>
-				<button class="pk-schedule-card-del" data-park-day-id="<?= (int)$day['ParkDayId'] ?>" title="Remove park day">&times;</button>
+				<button class="pk-schedule-card-edit" title="Edit park day"><i class="fas fa-pencil-alt"></i></button>
 				<?php endif; ?>
 							<div class="pk-schedule-icon <?= $iconCls ?>">
 								<i class="fas <?= $iconFa ?>"></i>
@@ -1565,11 +1579,12 @@ var PkConfig = {
 <div id="pk-addday-overlay">
 	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#2c5282"></i>Add Park Day</h3>
+			<h3 class="pk-modal-title" id="pk-addday-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#2c5282" id="pk-addday-title-icon"></i><span id="pk-addday-title-text">Add Park Day</span></h3>
 			<button class="pk-modal-close-btn" id="pk-addday-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pk-modal-body">
 			<div id="pk-addday-feedback" class="pk-addday-feedback" style="display:none"></div>
+				<input type="hidden" id="pk-addday-id" value="0" />
 
 			<div class="pk-addday-field">
 				<label>Purpose</label>
@@ -1692,10 +1707,14 @@ var PkConfig = {
 				</div>
 			</div>
 
+		<div id="pk-addday-delete-section" style="display:none;border-top:1px solid #e2e8f0;margin-top:16px;padding-top:16px;">
+				<button class="pk-btn pk-btn-danger" id="pk-addday-delete" type="button" style="width:100%"><i class="fas fa-trash-alt"></i> Delete Park Day</button>
+			</div>
+
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn pk-btn-ghost" id="pk-addday-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-addday-submit"><i class="fas fa-calendar-plus"></i> Add Park Day</button>
+			<button class="pk-btn pk-btn-primary" id="pk-addday-submit"><i class="fas fa-calendar-plus" id="pk-addday-submit-icon"></i> <span id="pk-addday-submit-text">Add Park Day</span></button>
 		</div>
 	</div>
 </div>

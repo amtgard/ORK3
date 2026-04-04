@@ -3764,8 +3764,14 @@
 	max-width: 700px;
 	width: 100%;
 	max-height: 90vh;
-	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.ev-modal > form {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	min-height: 0;
 }
 .ev-modal-header {
 	display: flex;
@@ -3775,6 +3781,7 @@
 	border-bottom: 1px solid #e2e8f0;
 	background: #f7fafc;
 	border-radius: 8px 8px 0 0;
+	flex-shrink: 0;
 }
 .ev-modal-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
 .ev-modal-close {
@@ -3859,6 +3866,7 @@
 	border-top: 1px solid #e2e8f0;
 	background: #f7fafc;
 	border-radius: 0 0 8px 8px;
+	flex-shrink: 0;
 }
 .ev-modal-btn-cancel {
 	background: #e2e8f0;
@@ -3944,6 +3952,9 @@
 		padding: 8px;
 	}
 	.ev-modal { max-height: calc(100vh - 64px); }
+	.ev-checkin-label { display: none; }
+	#ev-rsvp-table td:last-child { white-space: normal !important; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; }
+	#ev-rsvp-table .ev-checkin-btn { white-space: normal; }
 }
 
 /* ===========================
@@ -5017,10 +5028,13 @@
 .pk-seg-btn + .pk-seg-btn { border-left:1px solid #e2e8f0; }
 .pk-seg-btn:hover { background:#f7fafc; color:#4a5568; }
 .pk-seg-btn.pk-seg-active { background:#0891b2; color:#fff; }
-/* Schedule card delete button */
+/* Schedule card edit button */
 .pk-schedule-card { position:relative; }
-.pk-schedule-card-del { position:absolute; top:6px; right:6px; width:22px; height:22px; background:rgba(255,255,255,0.9); border:1px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; color:#a0aec0; line-height:1; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
-.pk-schedule-card-del:hover { background:#fff5f5; border-color:#fc8181; color:#e53e3e; }
+.pk-schedule-card-edit { position:absolute; top:6px; right:6px; width:22px; height:22px; background:rgba(255,255,255,0.9); border:1px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:#a0aec0; line-height:1; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
+.pk-schedule-card-edit:hover { background:#ebf8ff; border-color:#63b3ed; color:#2c5282; }
+/* Danger button for delete actions */
+.pk-btn-danger { background:#e53e3e; color:#fff; border:none; border-radius:4px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+.pk-btn-danger:hover { background:#c53030; }
 
 /* ============================================================
    Batch 2 Admin Features

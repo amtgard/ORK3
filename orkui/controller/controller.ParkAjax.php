@@ -89,6 +89,47 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'editparkday') {
+			$parkDayId  = (int)($_POST['ParkDayId'] ?? 0);
+			$recurrence = trim($_POST['Recurrence'] ?? '');
+			$time       = trim($_POST['Time']       ?? '');
+			if (!valid_id($parkDayId)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
+				exit;
+			}
+			if (!strlen($recurrence)) {
+				echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
+				exit;
+			}
+			if (!strlen($time)) {
+				echo json_encode(['status' => 1, 'error' => 'Time is required.']);
+				exit;
+			}
+			$online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
+			$altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
+			$r = $this->Park->edit_park_day([
+				'Token'             => $this->session->token,
+				'ParkDayId'         => $parkDayId,
+				'Recurrence'        => $recurrence,
+				'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
+				'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
+				'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+				'Time'              => $time,
+				'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
+				'Description'       => trim($_POST['Description'] ?? ''),
+				'Online'            => $online,
+				'AlternateLocation' => $altLoc,
+				'Address'           => trim($_POST['Address']     ?? ''),
+				'City'              => trim($_POST['City']        ?? ''),
+				'Province'          => trim($_POST['Province']    ?? ''),
+				'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
+				'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
+				'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
+			]);
+			echo (!isset($r['Status']) || $r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'deleteparkday') {
 			$parkDayId = (int)($_POST['ParkDayId'] ?? 0);
 			if (!valid_id($parkDayId)) {
