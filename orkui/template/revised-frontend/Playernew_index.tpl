@@ -941,14 +941,14 @@
 							<?php foreach ($pnLadderProgress as $aid => $lp): ?>
 								<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name']) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
 									<div class="pn-ladder-header">
 										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
 										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
 											<?php if ($lp['HasMaster']): ?>
 												<span class="pn-ladder-master" title="Master title earned"><i class="fas fa-star"></i> M</span>
 											<?php endif; ?>
-											<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span title="Approximated due to historical data" style="cursor:help;color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
+											<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span style="color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
 										</span>
 									</div>
 									<div class="pn-ladder-bar-track">
