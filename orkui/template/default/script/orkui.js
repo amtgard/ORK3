@@ -14051,7 +14051,7 @@ function resizeImageToLimit(file, maxBytes, onSuccess, onError, preservePng) {
 				} else if (remainingTries > 1) {
 					attempt(blob, remainingTries - 1);
 				} else {
-					onError('Could not resize image to fit within 340 KB. Please choose a smaller image.');
+					onError('Could not resize image to fit within the size limit. Please choose a smaller image.');
 				}
 			}, mimeType, quality);
 		};
