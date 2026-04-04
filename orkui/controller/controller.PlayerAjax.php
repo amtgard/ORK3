@@ -372,6 +372,7 @@ class Controller_PlayerAjax extends Controller {
 					'HeroOverlay'   => isset($_POST['HeroOverlay'])     ? $_POST['HeroOverlay']    : null,
 				'NamePrefix'    => isset($_POST['NamePrefix'])    ? trim($_POST['NamePrefix'])  : null,
 				'NameSuffix'    => isset($_POST['NameSuffix'])    ? trim($_POST['NameSuffix'])  : null,
+					'SuffixComma'   => isset($_POST['SuffixComma'])   ? (int)$_POST['SuffixComma']   : null,
 				'Persona'       => isset($_POST['Persona'])       ? trim($_POST['Persona'])     : null,
 				'PhotoFocusX'   => isset($_POST['PhotoFocusX'])   ? (int)$_POST['PhotoFocusX']  : null,
 				'PhotoFocusY'   => isset($_POST['PhotoFocusY'])   ? (int)$_POST['PhotoFocusY']  : null,
