@@ -298,6 +298,8 @@ class Player extends Ork3 {
 					'AboutStory' => $this->mundane->about_story,
 					'ColorPrimary' => $this->mundane->color_primary,
 					'ColorAccent' => $this->mundane->color_accent,
+						'ColorSecondary' => $this->mundane->color_secondary,
+						'HeroOverlay' => $this->mundane->hero_overlay,
 					'NamePrefix' => $this->mundane->name_prefix,
 					'NameSuffix' => $this->mundane->name_suffix,
 					'PhotoFocusX' => $this->mundane->photo_focus_x,
@@ -973,6 +975,9 @@ class Player extends Ork3 {
 					$this->mundane->about_story = is_null($request['AboutStory'])?$this->mundane->about_story:$request['AboutStory'];
 					$this->mundane->color_primary = is_null($request['ColorPrimary'])?$this->mundane->color_primary:$request['ColorPrimary'];
 					$this->mundane->color_accent = is_null($request['ColorAccent'])?$this->mundane->color_accent:$request['ColorAccent'];
+					$this->mundane->color_secondary = is_null($request['ColorSecondary'])?$this->mundane->color_secondary:$request['ColorSecondary'];
+					$validOverlays = ['low','med','high'];
+					$this->mundane->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : $this->mundane->hero_overlay;
 					$this->mundane->name_prefix = is_null($request['NamePrefix'])?$this->mundane->name_prefix:$request['NamePrefix'];
 					$this->mundane->name_suffix = is_null($request['NameSuffix'])?$this->mundane->name_suffix:$request['NameSuffix'];
 					$this->mundane->photo_focus_x = is_null($request['PhotoFocusX'])?$this->mundane->photo_focus_x:(int)$request['PhotoFocusX'];

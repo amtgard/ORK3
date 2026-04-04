@@ -179,12 +179,18 @@
 	$_pnHeroBg = $isSuspended ? '#9b2c2c' : '#2c5282';
 	if (!$isSuspended && !empty($Player['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorPrimary'])) $_pnHeroBg = $Player['ColorPrimary'];
 	$_pnAccent = (!empty($Player['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorAccent'])) ? $Player['ColorAccent'] : '#4299e1';
+	$_pnColorSecondary = (!empty($Player['ColorSecondary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorSecondary'])) ? $Player['ColorSecondary'] : '';
+	$_pnOverlay = in_array($Player['HeroOverlay'] ?? 'med', ['low','med','high']) ? ($Player['HeroOverlay'] ?? 'med') : 'med';
+	$_pnOverlayOpacity = ['low' => '0.06', 'med' => '0.12', 'high' => '0.22'][$_pnOverlay];
+	$_pnHeroCss = !empty($_pnColorSecondary)
+		? "background: linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
+		: "background-color: $_pnHeroBg";
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
 	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
 	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
 
 ?>
-<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; }</style>
+<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; }</style>
 <style>
 /* ===== My Amtgard Dashboard ===== */
 .pna-alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
@@ -463,6 +469,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-hero-preview{border-radius:8px;padding:16px 20px;color:#fff;margin:12px 0;position:relative;overflow:hidden;min-height:60px}
 .pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
+.pn-overlay-btn{padding:8px 20px;border:2px solid #e2e8f0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
+.pn-overlay-btn:hover{border-color:#a0aec0}
+.pn-overlay-btn.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
 .pn-name-parts{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .pn-name-part{flex:1;min-width:120px}
 .pn-name-core{flex:2;min-width:160px}
@@ -491,7 +500,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero">
+<div class="pn-hero" style="<?= $_pnHeroCss ?>">
 	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-content">
 		<?php if ($canEditImages): ?>
@@ -2311,7 +2320,31 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						</div>
 					</div>
 				</div>
-				<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-color-reset" style="margin-top:4px"><i class="fas fa-undo"></i> Reset to Default</button>
+				<div class="pn-design-preview-label" style="margin-top:14px">Gradient (Optional)</div>
+				<div class="pn-color-row">
+					<div class="pn-color-col">
+						<label style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block">Secondary Color</label>
+						<div class="pn-color-input-wrap">
+							<input type="color" id="pn-color-secondary" value="<?= htmlspecialchars($Player['ColorSecondary'] ?? '#2c5282') ?>" />
+							<input type="text" id="pn-color-secondary-hex" value="<?= htmlspecialchars($Player['ColorSecondary'] ?? '') ?>" maxlength="7" placeholder="None" />
+						</div>
+					</div>
+					<div class="pn-color-col" style="display:flex;flex-direction:column;justify-content:flex-end">
+						<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#4a5568">
+							<input type="checkbox" id="pn-gradient-enabled" <?= !empty($Player['ColorSecondary']) ? 'checked' : '' ?> style="width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)" />
+							Enable gradient
+						</label>
+					</div>
+				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Heraldry Overlay Strength</div>
+				<div class="pn-design-hint" style="margin-bottom:8px">Controls how much your heraldry shows through the hero background.</div>
+				<div class="pn-overlay-options" style="display:flex;gap:8px">
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'low' ? ' pn-active' : '' ?>" data-overlay="low">Low</button>
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'med' ? ' pn-active' : '' ?>" data-overlay="med">Medium</button>
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'high' ? ' pn-active' : '' ?>" data-overlay="high">High</button>
+				</div>
+				<input type="hidden" id="pn-hero-overlay" value="<?= $_pnOverlay ?>" />
+				<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-color-reset" style="margin-top:12px"><i class="fas fa-undo"></i> Reset to Default</button>
 			</div>
 
 			<!-- Name Panel -->
@@ -2704,7 +2737,32 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	gid('pn-color-reset').addEventListener('click', function() {
 		gid('pn-color-primary').value = '#2c5282'; gid('pn-color-primary-hex').value = '#2c5282';
 		gid('pn-color-accent').value = '#4299e1'; gid('pn-color-accent-hex').value = '#4299e1';
+		gid('pn-color-secondary-hex').value = ''; gid('pn-color-secondary').value = '#2c5282';
+		gid('pn-gradient-enabled').checked = false;
+		gid('pn-hero-overlay').value = 'med';
+		document.querySelectorAll('.pn-overlay-btn').forEach(function(b) { b.classList.remove('pn-active'); });
+		document.querySelector('.pn-overlay-btn[data-overlay="med"]').classList.add('pn-active');
 		syncPresetSwatch(); updateColorPreview();
+	});
+	// Secondary color / gradient toggle
+	gid('pn-color-secondary').addEventListener('input', function() { gid('pn-color-secondary-hex').value = this.value; updateColorPreview(); });
+	gid('pn-color-secondary-hex').addEventListener('input', function() {
+		if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid('pn-color-secondary').value = this.value; updateColorPreview(); }
+	});
+	gid('pn-gradient-enabled').addEventListener('change', function() {
+		if (this.checked && !gid('pn-color-secondary-hex').value) {
+			gid('pn-color-secondary-hex').value = gid('pn-color-accent').value;
+			gid('pn-color-secondary').value = gid('pn-color-accent').value;
+		}
+		updateColorPreview();
+	});
+	// Overlay strength buttons
+	document.querySelectorAll('.pn-overlay-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			document.querySelectorAll('.pn-overlay-btn').forEach(function(b) { b.classList.remove('pn-active'); });
+			btn.classList.add('pn-active');
+			gid('pn-hero-overlay').value = btn.dataset.overlay;
+		});
 	});
 	function syncPresetSwatch() {
 		var p = gid('pn-color-primary').value.toLowerCase();
@@ -2715,7 +2773,15 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	}
 	function updateColorPreview() {
 		var preview = gid('pn-color-hero-preview');
-		if (preview) preview.style.backgroundColor = gid('pn-color-primary').value;
+		if (!preview) return;
+		var primary = gid('pn-color-primary').value;
+		var gradientOn = gid('pn-gradient-enabled').checked;
+		var secondary = gid('pn-color-secondary').value;
+		if (gradientOn && secondary) {
+			preview.style.background = 'linear-gradient(135deg, ' + primary + ', ' + secondary + ')';
+		} else {
+			preview.style.background = primary;
+		}
 	}
 	updateColorPreview();
 	syncPresetSwatch();
@@ -2898,6 +2964,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		fd.append('AboutStory', gid('pn-design-about-story').value);
 		fd.append('ColorPrimary', gid('pn-color-primary').value);
 		fd.append('ColorAccent', gid('pn-color-accent').value);
+		fd.append('ColorSecondary', gid('pn-gradient-enabled').checked ? gid('pn-color-secondary').value : '');
+		fd.append('HeroOverlay', gid('pn-hero-overlay').value);
 		fd.append('NamePrefix', prefix);
 		fd.append('NameSuffix', suffix);
 		fd.append('Persona', coreName);
