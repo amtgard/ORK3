@@ -926,8 +926,10 @@
 					}
 					// Use max(highest_rank, total_entries) to account for unreconciled historical awards
 					// Cap at maxRank per award (10 for most, 12 for Zodiac)
+					// Mark as approximate when count exceeds highest actual rank
 					foreach ($pnLadderProgress as $_lpAid => &$lp) {
 						$_lpMax = ($_lpAid === 30) ? 12 : 10;
+						$lp['Approx'] = $lp['Count'] > $lp['Rank'];
 						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $lp['Count']));
 					}
 					unset($lp);
@@ -946,7 +948,7 @@
 											<?php if ($lp['HasMaster']): ?>
 												<span class="pn-ladder-master" title="Master title earned"><i class="fas fa-star"></i> M</span>
 											<?php endif; ?>
-											<span class="pn-ladder-rank"><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
+											<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span title="Approximated due to historical data" style="cursor:help;color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
 										</span>
 									</div>
 									<div class="pn-ladder-bar-track">
