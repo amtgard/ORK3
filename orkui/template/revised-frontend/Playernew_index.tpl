@@ -476,8 +476,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-comma-toggle:hover{border-color:#a0aec0;background:#edf2f7}
 .pn-comma-toggle.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
 .pn-name-parts{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
-.pn-name-part{flex:1.2;min-width:130px}
-.pn-name-core{flex:1;min-width:120px}
+.pn-name-part{flex:1;min-width:120px}
+.pn-name-core{flex:1.8;min-width:160px}
 .pn-name-comma-sep{flex:0 0 auto;padding-bottom:4px;align-self:flex-end}
 .pn-name-constructed{margin-top:12px;padding:10px 14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:15px;font-weight:600;color:#2d3748}
 .pn-focus-canvas-wrap{position:relative;display:inline-block;max-width:100%;margin:10px auto;text-align:center}
@@ -2246,7 +2246,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
      ============================================= -->
 <?php if ($isOwnProfile): ?>
 <div class="pn-overlay" id="pn-design-overlay">
-	<div class="pn-modal-box" style="width:640px;max-width:calc(100vw - 40px);">
+	<div class="pn-modal-box" style="width:720px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-palette" style="margin-right:8px;color:#2c5282"></i>Design My Profile</h3>
 			<button class="pn-modal-close-btn" id="pn-design-close-btn" aria-label="Close">&times;</button>
