@@ -932,8 +932,10 @@
 						}
 					}
 					// Use max(highest_rank, total_entries) to account for unreconciled historical awards
-					foreach ($pnLadderProgress as &$lp) {
-						$lp['Rank'] = max($lp['Rank'], $lp['Count']);
+					// Cap at maxRank per award (10 for most, 12 for Zodiac)
+					foreach ($pnLadderProgress as $_lpAid => &$lp) {
+						$_lpMax = ($_lpAid === 30) ? 12 : 10;
+						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $lp['Count']));
 					}
 					unset($lp);
 					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
