@@ -9049,14 +9049,15 @@ window.pnCloseUnitCreateModal = function() {
             if (term.length < 2) { gid('kn-moveplayer-player-results').classList.remove('kn-ac-open'); return; }
             mpPlayerTimer = setTimeout(function() {
                 var scope = (knmpMode === 'in') ? 'exclude' : 'own';
-                fetch(PSEARCH_URL + '&scope=' + scope + '&q=' + encodeURIComponent(term))
+                fetch(PSEARCH_URL + '&scope=' + scope + '&include_inactive=1&q=' + encodeURIComponent(term))
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         var el = gid('kn-moveplayer-player-results');
                         el.innerHTML = (data && data.length)
                             ? data.map(function(p) {
+                                var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
                                 return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                    + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span></div>';
+                                    + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + inactive + '</div>';
                             }).join('')
                             : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                         el.classList.add('kn-ac-open');
@@ -9609,8 +9610,8 @@ window.pnCloseUnitCreateModal = function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
-    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&q=';
-    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&q=';
+    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&q=';
+    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&q=';
 
     var mpPlayerId = 0, mpParkId = 0;
     var mpPlayerTimer = null, mpParkTimer = null;
@@ -9718,6 +9719,12 @@ window.pnCloseUnitCreateModal = function() {
                                     ? ' — ' + player.PAbbr + ' (' + player.KAbbr + ')'
                                     : (player.ParkName ? ' — ' + player.ParkName : '');
                                 item.textContent = player.Persona + abbr;
+                                if (player.Active === 0) {
+                                    var badge = document.createElement('span');
+                                    badge.textContent = ' inactive';
+                                    badge.style.cssText = 'color:#e53e3e;font-size:10px;font-weight:600';
+                                    item.appendChild(badge);
+                                }
                                 item.addEventListener('mousedown', function(e) {
                                     e.preventDefault();
                                     mpPlayerId = player.MundaneId;

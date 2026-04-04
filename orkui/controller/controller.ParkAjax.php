@@ -121,9 +121,10 @@ class Controller_ParkAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'playersearch') {
-			$q          = trim($_GET['q']         ?? '');
-			$scope      = trim($_GET['scope']      ?? 'own'); // 'own' | 'exclude' | 'all'
-			$prioritize = !empty($_GET['prioritize']);
+			$q                = trim($_GET['q']               ?? '');
+			$scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
+			$prioritize       = !empty($_GET['prioritize']);
+			$include_inactive = !empty($_GET['include_inactive']);
 			if (strlen($q) < 2) {
 				echo json_encode([]);
 				exit;
@@ -172,11 +173,12 @@ class Controller_ParkAjax extends Controller {
 				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
 				       k.name AS kingdom_name, p.name AS park_name,
 				       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-				       m.suspended
+				       m.suspended, m.active
 				FROM ork_mundane m
 				LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 				LEFT JOIN ork_park p ON p.park_id = m.park_id
-				WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+				WHERE m.suspended = 0 AND LENGTH(m.persona) > 0
+				  " . ($include_inactive ? "" : "AND m.active = 1") . "
 				  {$park_clause}
 				  AND (m.persona LIKE '%{$term}%'
 				    OR m.given_name LIKE '%{$term}%'
@@ -198,6 +200,7 @@ class Controller_ParkAjax extends Controller {
 					'KAbbr'       => $rs->k_abbr,
 					'PAbbr'       => $rs->p_abbr,
 					'Suspended'   => (int)$rs->suspended,
+					'Active'      => (int)$rs->active,
 				];
 			}
 

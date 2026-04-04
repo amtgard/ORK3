@@ -113,7 +113,7 @@ class Controller_SearchAjax extends Controller {
 			? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = {$kid} THEN 1 ELSE 2 END, m.persona"
 			: (valid_id($kid) ? "CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona" : "m.persona");
 		$rs = $DB->DataSet("
-			SELECT m.mundane_id, m.persona, k.abbreviation AS k_abbr, p.name AS park_name
+			SELECT m.mundane_id, m.persona, m.active, k.abbreviation AS k_abbr, p.name AS park_name
 			FROM ork_mundane m
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
@@ -123,11 +123,12 @@ class Controller_SearchAjax extends Controller {
 		$players = [];
 		while ($rs->Next()) {
 			$players[] = [
-				'type' => 'player',
-				'id'   => (int)$rs->mundane_id,
-				'name' => $rs->persona,
-				'abbr' => $rs->k_abbr ?? '',
-				'park' => $rs->park_name ?? '',
+				'type'   => 'player',
+				'id'     => (int)$rs->mundane_id,
+				'name'   => $rs->persona,
+				'abbr'   => $rs->k_abbr ?? '',
+				'park'   => $rs->park_name ?? '',
+				'active' => (int)$rs->active,
 			];
 		}
 
