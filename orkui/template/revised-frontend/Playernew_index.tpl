@@ -2309,6 +2309,17 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<div class="pn-color-swatch" data-primary="#285e61" data-accent="#38b2ac" style="background:#285e61" title="Teal"></div>
 					<div class="pn-color-swatch" data-primary="#744210" data-accent="#ed8936" style="background:#744210" title="Burnt Orange"></div>
 				</div>
+				<div class="pn-design-preview-label" style="margin-top:14px">Gradient Presets</div>
+				<div class="pn-color-presets" id="pn-gradient-presets">
+					<div class="pn-color-swatch" data-primary="#1a365d" data-accent="#4299e1" data-secondary="#553c9a" style="background:linear-gradient(135deg,#1a365d,#553c9a)" title="Midnight Royal"></div>
+					<div class="pn-color-swatch" data-primary="#1a4731" data-accent="#48bb78" data-secondary="#2c5282" style="background:linear-gradient(135deg,#1a4731,#2c5282)" title="Forest Ocean"></div>
+					<div class="pn-color-swatch" data-primary="#742a2a" data-accent="#fc8181" data-secondary="#975a16" style="background:linear-gradient(135deg,#742a2a,#975a16)" title="Ember"></div>
+					<div class="pn-color-swatch" data-primary="#44337a" data-accent="#d6bcfa" data-secondary="#97266d" style="background:linear-gradient(135deg,#44337a,#97266d)" title="Mystic"></div>
+					<div class="pn-color-swatch" data-primary="#234e52" data-accent="#38b2ac" data-secondary="#276749" style="background:linear-gradient(135deg,#234e52,#276749)" title="Deep Forest"></div>
+					<div class="pn-color-swatch" data-primary="#1a202c" data-accent="#a0aec0" data-secondary="#2d3748" style="background:linear-gradient(135deg,#1a202c,#2d3748)" title="Charcoal"></div>
+					<div class="pn-color-swatch" data-primary="#2c5282" data-accent="#4299e1" data-secondary="#285e61" style="background:linear-gradient(135deg,#2c5282,#285e61)" title="Ocean Teal"></div>
+					<div class="pn-color-swatch" data-primary="#744210" data-accent="#ecc94b" data-secondary="#9b2c2c" style="background:linear-gradient(135deg,#744210,#9b2c2c)" title="Autumn"></div>
+				</div>
 				<div class="pn-design-preview-label" style="margin-top:14px">Custom Colors</div>
 				<div class="pn-color-row">
 					<div class="pn-color-col">
@@ -2723,15 +2734,23 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	});
 
 	// Color presets
-	var colorPresets = document.querySelectorAll('.pn-color-swatch');
-	colorPresets.forEach(function(sw) {
+	var allSwatches = document.querySelectorAll('.pn-color-swatch');
+	allSwatches.forEach(function(sw) {
 		sw.addEventListener('click', function() {
-			colorPresets.forEach(function(s) { s.classList.remove('pn-selected'); });
+			allSwatches.forEach(function(s) { s.classList.remove('pn-selected'); });
 			sw.classList.add('pn-selected');
 			gid('pn-color-primary').value = sw.dataset.primary;
 			gid('pn-color-primary-hex').value = sw.dataset.primary;
 			gid('pn-color-accent').value = sw.dataset.accent;
 			gid('pn-color-accent-hex').value = sw.dataset.accent;
+			if (sw.dataset.secondary) {
+				gid('pn-color-secondary').value = sw.dataset.secondary;
+				gid('pn-color-secondary-hex').value = sw.dataset.secondary;
+				gid('pn-gradient-enabled').checked = true;
+			} else {
+				gid('pn-color-secondary-hex').value = '';
+				gid('pn-gradient-enabled').checked = false;
+			}
 			updateColorPreview();
 		});
 	});
@@ -2778,8 +2797,11 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	function syncPresetSwatch() {
 		var p = gid('pn-color-primary').value.toLowerCase();
 		var a = gid('pn-color-accent').value.toLowerCase();
-		colorPresets.forEach(function(sw) {
-			sw.classList.toggle('pn-selected', sw.dataset.primary.toLowerCase() === p && sw.dataset.accent.toLowerCase() === a);
+		var s = (gid('pn-gradient-enabled').checked ? gid('pn-color-secondary').value : '').toLowerCase();
+		allSwatches.forEach(function(sw) {
+			var matchBase = sw.dataset.primary.toLowerCase() === p && sw.dataset.accent.toLowerCase() === a;
+			var swSec = (sw.dataset.secondary || '').toLowerCase();
+			sw.classList.toggle('pn-selected', matchBase && swSec === s);
 		});
 	}
 	function updateColorPreview() {
