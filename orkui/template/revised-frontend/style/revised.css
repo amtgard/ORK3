@@ -229,16 +229,10 @@ html[data-theme="dark"] .pk-btn-white {
 	filter: brightness(0) invert(1);
 	opacity: 0.9;
 }
-.pn-real-name {
+.pn-hero-subline {
+	font-size: 13.5px;
 	color: rgba(255,255,255,0.7);
-	font-size: 14px;
 	margin-bottom: 4px;
-}
-.pn-pronouns {
-	color: rgba(255,255,255,0.6);
-	font-size: 13px;
-	font-style: italic;
-	margin-bottom: 6px;
 }
 .pn-breadcrumb {
 	color: rgba(255,255,255,0.75);
@@ -1258,8 +1252,7 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 		width: auto;
 	}
 	.pn-persona { font-size: 18px; }
-	.pn-real-name { font-size: 12px; margin-bottom: 2px; }
-	.pn-pronouns { font-size: 11px; margin-bottom: 4px; }
+	.pn-hero-subline { font-size: 11px; margin-bottom: 2px; }
 	.pn-breadcrumb { font-size: 11px; margin-bottom: 6px; }
 	.pn-badges { gap: 4px; }
 	.pn-badge { font-size: 10px; padding: 2px 7px; }
