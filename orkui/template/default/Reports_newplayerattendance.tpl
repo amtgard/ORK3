@@ -336,7 +336,7 @@ details > summary::-webkit-details-marker { display: none; }
 
 	/* ── Highcharts grouped bar chart ── */
 	new Highcharts.Chart({
-		chart  : { renderTo: 'npa-chart', type: 'column', style: { fontFamily: 'inherit' } },
+		chart  : { renderTo: 'npa-chart', type: 'column', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
 		title  : { text: 'New vs Returning Players by Park' },
 		xAxis  : {
 			categories: <?=json_encode($chart_parks)?>,

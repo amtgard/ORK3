@@ -218,7 +218,7 @@ $(function () {
 	});
 
 	new Highcharts.Chart({
-		chart  : { renderTo: 'tp-chart', type: 'bar', style: { fontFamily: 'inherit' }, marginLeft: 160 },
+		chart  : { renderTo: 'tp-chart', type: 'bar', backgroundColor: 'transparent', style: { fontFamily: 'inherit' }, marginLeft: 160 },
 		title  : { text: null },
 		xAxis  : { categories: <?=json_encode($_chart_parks)?>, labels: { style: { fontSize: '11px' } } },
 		yAxis  : { title: { text: 'Weekly Avg Attendance' }, allowDecimals: true, min: 0 },

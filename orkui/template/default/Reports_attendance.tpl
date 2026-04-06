@@ -609,7 +609,7 @@ if ($Type !== 'Event') {
 
 	function attBuildWeeklyChart() {
 		return new Highcharts.Chart({
-		chart  : { renderTo: 'attendance-chart', style: { fontFamily: 'inherit' } },
+		chart  : { renderTo: 'attendance-chart', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
 		title  : { text: 'Distinct Players per Week' },
 		xAxis  : {
 			categories   : chartDates,

@@ -522,7 +522,7 @@ $(function() {
 
 	/* ── Charts ──────────────────────────────────────── */
 	new Highcharts.Chart({
-		chart: { renderTo: 'att-park-chart', type: 'column',
+		chart: { renderTo: 'att-park-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
 		title: { text: null },
 		xAxis: {
@@ -538,7 +538,7 @@ $(function() {
 	});
 
 	new Highcharts.Chart({
-		chart: { renderTo: 'att-class-chart', type: 'column',
+		chart: { renderTo: 'att-class-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
 		title: { text: null },
 		xAxis: {

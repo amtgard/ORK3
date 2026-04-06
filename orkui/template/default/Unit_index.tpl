@@ -158,7 +158,7 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 .un-section-title {
 	font-size: 13px;
 	font-weight: 700;
-	color: #4a5568;
+	color: var(--ork-text-secondary);
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 	display: flex;
@@ -168,8 +168,8 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 
 /* ── Roster card wrapper ─────────────────────────────────── */
 .un-roster-card {
-	background: #fff;
-	border: 1px solid #e2e8f0;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 8px;
 	overflow: hidden;
 	box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -180,10 +180,10 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 
 /* ── Error banner ────────────────────────────────────────── */
 .un-error-banner {
-	background: #fff5f5;
-	border: 1px solid #fed7d7;
+	background: var(--ork-alert-danger-bg);
+	border: 1px solid var(--ork-alert-danger-border);
 	border-radius: 6px;
-	color: #c53030;
+	color: var(--ork-alert-danger-text);
 	padding: 10px 14px;
 	font-size: 13px;
 	margin-bottom: 16px;
@@ -208,12 +208,12 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 .pn-modal-body .pn-acct-field input[type="number"] {
 	width: 100%;
 	padding: 8px 10px;
-	border: 1px solid #e2e8f0;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 14px;
-	color: #2d3748;
+	color: var(--ork-text);
 	box-sizing: border-box;
-	background: #fff;
+	background: var(--ork-input-bg);
 	font-family: inherit;
 	transition: border-color 0.15s;
 }
@@ -225,14 +225,14 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 }
 .pn-modal-body .pn-acct-field input[type="file"] {
 	font-size: 13px;
-	color: #4a5568;
+	color: var(--ork-text-secondary);
 	padding: 6px 0;
 	display: block;
 	width: 100%;
 }
 .un-field-hint {
 	font-size: 11px;
-	color: #a0aec0;
+	color: var(--ork-text-lighter);
 	margin-top: 3px;
 }
 
@@ -243,8 +243,8 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 	position: absolute;
 	top: calc(100% + 2px);
 	left: 0; right: 0;
-	background: #fff;
-	border: 1px solid #cbd5e0;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border-dark);
 	border-radius: 6px;
 	box-shadow: 0 4px 16px rgba(0,0,0,0.12);
 	z-index: 500;
@@ -257,33 +257,33 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 	padding: 6px 12px 3px;
 	font-size: 10px;
 	font-weight: 700;
-	color: #a0aec0;
+	color: var(--ork-text-lighter);
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
-	background: #f7fafc;
-	border-bottom: 1px solid #edf2f7;
+	background: var(--ork-bg-secondary);
+	border-bottom: 1px solid var(--ork-border);
 }
 .un-ac-item {
 	padding: 8px 12px;
 	font-size: 13px;
-	color: #2d3748;
+	color: var(--ork-text);
 	cursor: pointer;
 	transition: background 0.1s;
 	display: flex;
 	align-items: center;
 	gap: 8px;
 }
-.un-ac-item:hover, .un-ac-item.un-ac-focused { background: #ebf8ff; }
+.un-ac-item:hover, .un-ac-item.un-ac-focused { background: var(--ork-bg-tertiary); }
 .un-ac-scope {
 	font-size: 10px;
-	color: #718096;
+	color: var(--ork-text-muted);
 	margin-left: auto;
 	white-space: nowrap;
 }
 .un-ac-empty {
 	padding: 10px 12px;
 	font-size: 13px;
-	color: #a0aec0;
+	color: var(--ork-text-muted);
 	font-style: italic;
 }
 
@@ -391,7 +391,7 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 				</button>
 				<?php endif; ?>
 			</h4>
-			<div class="kn-description-body" style="font-size:13px;color:#4a5568;">
+			<div class="kn-description-body" style="font-size:13px;color:var(--ork-text-secondary);">
 				<?=un_markdown($_desc)?>
 			</div>
 		</div>
@@ -407,7 +407,7 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 				</button>
 				<?php endif; ?>
 			</h4>
-			<div class="kn-description-body" style="font-size:13px;color:#4a5568;">
+			<div class="kn-description-body" style="font-size:13px;color:var(--ork-text-secondary);">
 				<?=un_markdown($_history)?>
 			</div>
 		</div>
@@ -450,7 +450,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 <?php endforeach; ?>
 			</ul>
 <?php else: ?>
-			<p style="font-size:12px;color:#a0aec0;font-style:italic;margin:0;">No managers assigned.</p>
+			<p style="font-size:12px;color:var(--ork-text-muted);font-style:italic;margin:0;">No managers assigned.</p>
 <?php endif; ?>
 		</div>
 <?php endif; ?>
@@ -505,17 +505,17 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 				<tr>
 					<td>
 						<a href="<?=UIR?>Player/profile/<?=(int)$_m['MundaneId']?>"
-							style="color:#2b6cb0;text-decoration:none;font-weight:500;">
+							style="color:var(--ork-link);text-decoration:none;font-weight:500;">
 							<?=htmlspecialchars($_persona)?>
 						</a>
 						<?php if (!$_is_active && !empty($_last_signin)): ?>
-						<span style="font-size:10px;color:#a0aec0;margin-left:4px;">(inactive)</span>
+						<span style="font-size:10px;color:var(--ork-text-lighter);margin-left:4px;">(inactive)</span>
 						<?php endif; ?>
 					</td>
 					<td>
 						<?php if (!empty($_m['ParkId'])): ?>
 						<a href="<?=UIR?>Park/profile/<?=(int)$_m['ParkId']?>"
-							style="color:#4a5568;text-decoration:none;">
+							style="color:var(--ork-text-secondary);text-decoration:none;">
 							<?=htmlspecialchars($_m['ParkName'] ?? '')?>
 						</a>
 						<?php else: ?>
@@ -525,7 +525,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					<td>
 						<?php if (!empty($_m['KingdomId'])): ?>
 						<a href="<?=UIR?>Kingdom/profile/<?=(int)$_m['KingdomId']?>"
-							style="color:#4a5568;text-decoration:none;">
+							style="color:var(--ork-text-secondary);text-decoration:none;">
 							<?=htmlspecialchars($_m['KingdomName'] ?? '')?>
 						</a>
 						<?php else: ?>
@@ -597,10 +597,10 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 			<input type="file" id="un-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none">
 <?php if (!empty($_unit['HasHeraldry'])): ?>
 			<div style="text-align:center;margin-top:14px">
-				<button type="button" id="un-img-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
+				<button type="button" id="un-img-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:var(--ork-alert-danger-border);font-size:12px;padding:4px 14px">
 					<i class="fas fa-trash"></i> Remove Heraldry
 				</button>
-				<div id="un-img-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+				<div id="un-img-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:var(--ork-alert-danger-bg);border:1px solid var(--ork-alert-danger-border);border-radius:6px;font-size:13px;color:var(--ork-alert-danger-text);text-align:left">
 					Remove this unit's heraldry image?
 					<div style="margin-top:8px;display:flex;gap:8px">
 						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('un-img-remove-confirm').style.display='none'">Cancel</button>
@@ -612,8 +612,8 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 		</div>
 		<!-- Step: uploading -->
 		<div class="pn-modal-body" id="un-img-step-uploading" style="display:none;text-align:center;padding:40px 20px">
-			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1"></i>
-			<p style="margin-top:12px;color:#718096">Uploading&hellip;</p>
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:var(--ork-link-bright)"></i>
+			<p style="margin-top:12px;color:var(--ork-text-muted)">Uploading&hellip;</p>
 		</div>
 		<!-- Step: done -->
 		<div class="pn-modal-body" id="un-img-step-done" style="display:none;text-align:center;padding:40px 20px">
@@ -640,7 +640,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 				<div class="pn-acct-field" style="display:flex;align-items:center;gap:12px;">
 					<div style="flex:1;">
 						<label>Type</label>
-						<div style="font-size:14px;color:#2d3748;padding:8px 0 2px;">
+						<div style="font-size:14px;color:var(--ork-text);padding:8px 0 2px;">
 							<i class="fas <?=$_type_icon?>"></i> <?=htmlspecialchars($_type)?>
 						</div>
 					</div>
@@ -686,7 +686,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 <div id="un-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
 	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-hashtag" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<h3 class="kn-modal-title"><i class="fas fa-hashtag" style="margin-right:8px;color:var(--ork-link)"></i>Markdown Reference</h3>
 			<button class="kn-modal-close-btn" onclick="document.getElementById('un-md-help-overlay').classList.remove('kn-open')">&times;</button>
 		</div>
 		<div class="kn-modal-body" style="padding:16px 20px">
@@ -741,7 +741,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					</select>
 				</div>
 				<div class="pn-acct-field">
-					<label>Title <span style="font-weight:400;color:#a0aec0;">(optional)</span></label>
+					<label>Title <span style="font-weight:400;color:var(--ork-text-lighter);">(optional)</span></label>
 					<input type="text" name="Title" placeholder="Honorific or rank">
 				</div>
 			</div>

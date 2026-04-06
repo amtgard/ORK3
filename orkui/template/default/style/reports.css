@@ -842,6 +842,32 @@ html[data-theme="dark"] .dtfc-fixed-start tbody tr.rp-row-suspended:hover td {
   background-color: var(--rp-row-suspended-hover) !important;
 }
 
+/* Filter pills */
+html[data-theme="dark"] .rp-filter-pill {
+  background: var(--ork-bg-secondary, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+  color: var(--ork-text-secondary, #cbd5e0);
+}
+html[data-theme="dark"] .rp-filter-pill:hover:not(.active) {
+  background: var(--ork-bg-tertiary, #374151);
+  border-color: #718096;
+  color: var(--ork-text, #e2e8f0);
+}
+
+/* Chart cards */
+html[data-theme="dark"] .rp-chart-card {
+  background: #2d3748;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .rp-chart-card-title {
+  color: #a0aec0;
+}
+
+/* Table header hover */
+html[data-theme="dark"] .rp-table-area table.dataTable thead th:hover {
+  background: #4a5568;
+}
+
 /* prefers-color-scheme fallback */
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]):not([data-theme="dark"]) .rp-root {
@@ -923,5 +949,511 @@ html[data-theme="dark"] .dtfc-fixed-start tbody tr.rp-row-suspended:hover td {
   }
   html:not([data-theme="light"]):not([data-theme="dark"]) .rp-col-guide-desc {
     color: #a0aec0;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-filter-pill {
+    background: var(--ork-bg-secondary, #2d3748);
+    border-color: var(--ork-border, #4a5568);
+    color: var(--ork-text-secondary, #cbd5e0);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-filter-pill:hover:not(.active) {
+    background: #374151;
+    border-color: #718096;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-chart-card {
+    background: #2d3748;
+    border-color: #4a5568;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-chart-card-title {
+    color: #a0aec0;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-table-area table.dataTable thead th:hover {
+    background: #4a5568;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .dtfc-fixed-start tbody tr.rp-row-suspended td {
+    background-color: var(--rp-row-suspended-bg) !important;
+    color: var(--rp-row-suspended-text) !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .dtfc-fixed-start tbody tr.rp-row-suspended:hover td {
+    background-color: var(--rp-row-suspended-hover) !important;
+  }
+}
+
+/* =====================================================
+   DARK MODE — Top Parks report (rp-form-*, rp-rank-*)
+   ===================================================== */
+html[data-theme="dark"] .rp-form-input {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .rp-form-input:focus {
+  border-color: #818cf8;
+}
+html[data-theme="dark"] .rp-form-group label {
+  color: var(--rp-text-muted);
+}
+html[data-theme="dark"] .rp-form-check {
+  color: var(--rp-text-body);
+}
+html[data-theme="dark"] .rp-btn-run {
+  background: #6366f1;
+}
+html[data-theme="dark"] .rp-btn-run:hover {
+  background: #818cf8;
+}
+html[data-theme="dark"] .rp-rank-badge {
+  background: #374151;
+  color: #a0aec0;
+}
+html[data-theme="dark"] .rp-rank-badge.rp-rank-1 {
+  background: #78350f;
+  color: #fcd34d;
+}
+html[data-theme="dark"] .rp-rank-badge.rp-rank-2 {
+  background: #374151;
+  color: #cbd5e0;
+}
+html[data-theme="dark"] .rp-rank-badge.rp-rank-3 {
+  background: #7c2d12;
+  color: #fdba74;
+}
+html[data-theme="dark"] .rp-filter-pill-active {
+  background: rgba(139,92,246,0.2);
+  color: #c4b5fd;
+}
+html[data-theme="dark"] .rp-context {
+  background: #2d3748;
+  border-color: #4a5568;
+  color: #cbd5e0;
+}
+html[data-theme="dark"] .rp-context-icon {
+  color: #63b3ed;
+}
+html[data-theme="dark"] .rp-btn-ghost {
+  color: rgba(255,255,255,0.7);
+  border-color: rgba(255,255,255,0.2);
+}
+html[data-theme="dark"] .rp-btn-ghost:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+html[data-theme="dark"] .rp-scope-chip {
+  color: rgba(255,255,255,0.7);
+}
+
+/* =====================================================
+   DARK MODE — Beltline Explorer (be-*)
+   ===================================================== */
+html[data-theme="dark"] .be-selector-bar {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .be-selector-bar label {
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .be-selector-bar select {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .be-selector-bar select:focus {
+  border-color: #818cf8;
+}
+html[data-theme="dark"] .be-view-btn {
+  background: #374151;
+  border-color: #4a5568;
+  color: #a0aec0;
+}
+html[data-theme="dark"] .be-view-btn.active,
+html[data-theme="dark"] .be-view-btn:hover {
+  background: #6366f1;
+  color: #fff;
+  border-color: #6366f1;
+}
+html[data-theme="dark"] .be-empty-state {
+  color: #718096;
+}
+html[data-theme="dark"] .be-empty-state i {
+  color: #4a5568;
+}
+html[data-theme="dark"] .be-empty-state h3 {
+  color: #a0aec0 !important;
+}
+html[data-theme="dark"] .be-tree-wrap {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .be-tree-title {
+  color: #718096;
+}
+html[data-theme="dark"] .be-tree ul::before {
+  border-left-color: #4a5568;
+}
+html[data-theme="dark"] .be-tree li::before {
+  border-top-color: #4a5568;
+}
+html[data-theme="dark"] .be-node {
+  background: #374151;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .be-node:hover {
+  background: #3d4a5e;
+}
+html[data-theme="dark"] .be-node.be-node-root {
+  background: #44381a;
+  border-color: #b8860b;
+}
+html[data-theme="dark"] .be-node.be-node-selected {
+  background: #2d3a5e;
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(129,140,248,0.3);
+}
+html[data-theme="dark"] .be-persona {
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .be-persona:hover {
+  color: #a5b4fc;
+}
+html[data-theme="dark"] .be-knight-types {
+  color: #fcd34d;
+}
+html[data-theme="dark"] .be-date {
+  color: #718096;
+}
+html[data-theme="dark"] .be-badge-squire {
+  background: #78350f;
+  color: #fcd34d;
+  border-color: #b45309;
+}
+html[data-theme="dark"] .be-badge-manatarms {
+  background: #1e3a5f;
+  color: #93c5fd;
+  border-color: #3b82f6;
+}
+html[data-theme="dark"] .be-badge-page {
+  background: #14532d;
+  color: #86efac;
+  border-color: #22c55e;
+}
+html[data-theme="dark"] .be-badge-lordspage {
+  background: #164e63;
+  color: #67e8f9;
+  border-color: #22d3ee;
+}
+html[data-theme="dark"] .be-badge-womanatarms {
+  background: #3b0764;
+  color: #d8b4fe;
+  border-color: #a855f7;
+}
+html[data-theme="dark"] .be-table-wrap {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .be-no-lineage {
+  color: #718096;
+}
+
+/* =====================================================
+   DARK MODE — Heraldry gallery (hw-*)
+   ===================================================== */
+html[data-theme="dark"] .hw-card {
+  background: #2d3748;
+}
+html[data-theme="dark"] #hw-search {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] #hw-search:focus {
+  border-color: #818cf8;
+}
+
+/* =====================================================
+   DARK MODE — Park Distance Matrix (pdm-*)
+   ===================================================== */
+html[data-theme="dark"] .pdm-table th,
+html[data-theme="dark"] .pdm-table td {
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .pdm-table td.pdm-rowhead {
+  background: #2d3748;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .pdm-table td.pdm-rowhead a {
+  color: var(--rp-accent);
+}
+html[data-theme="dark"] .pdm-table td.pdm-location {
+  background: #2d3748;
+  color: #a0aec0;
+}
+html[data-theme="dark"] .pdm-table th.pdm-colhead {
+  background: #2d3748;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .pdm-table td.pdm-self {
+  background: #374151;
+  color: #718096;
+}
+html[data-theme="dark"] .pdm-table th.pdm-corner {
+  background: #2d3748;
+}
+
+/* =====================================================
+   @media fallbacks for above sections
+   ===================================================== */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-form-input {
+    background: var(--ork-input-bg, #374151);
+    border-color: var(--ork-input-border, #4a5568);
+    color: var(--ork-text, #e2e8f0);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-rank-badge {
+    background: #374151;
+    color: #a0aec0;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-context {
+    background: #2d3748;
+    border-color: #4a5568;
+    color: #cbd5e0;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-btn-ghost {
+    color: rgba(255,255,255,0.7);
+    border-color: rgba(255,255,255,0.2);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .be-selector-bar {
+    background: var(--ork-card-bg, #2d3748);
+    border-color: var(--ork-border, #4a5568);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .be-selector-bar select {
+    background: var(--ork-input-bg, #374151);
+    border-color: var(--ork-input-border, #4a5568);
+    color: var(--ork-text, #e2e8f0);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .be-tree-wrap {
+    background: var(--ork-card-bg, #2d3748);
+    border-color: var(--ork-border, #4a5568);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .be-node {
+    background: #374151;
+    border-color: #4a5568;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .be-persona {
+    color: #e2e8f0;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hw-card {
+    background: #2d3748;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #hw-search {
+    background: var(--ork-input-bg, #374151);
+    border-color: var(--ork-input-border, #4a5568);
+    color: var(--ork-text, #e2e8f0);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td {
+    border-color: #4a5568;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-rowhead {
+    background: #2d3748;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-location {
+    background: #2d3748;
+    color: #a0aec0;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th.pdm-colhead {
+    background: #2d3748;
+    color: #e2e8f0;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-self {
+    background: #374151;
+    color: #718096;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th.pdm-corner {
+    background: #2d3748;
+  }
+}
+
+/* =====================================================
+   DARK MODE — Chart container background
+   ===================================================== */
+html[data-theme="dark"] .rp-charts-row {
+  background: transparent;
+}
+html[data-theme="dark"] .rp-charts-row > div[id] {
+  background: var(--ork-card-bg, #2d3748) !important;
+  border: 1px solid var(--ork-border, #4a5568);
+  border-radius: 8px;
+}
+html[data-theme="dark"] .highcharts-container {
+  background: transparent !important;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-charts-row { background: transparent; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-charts-row > div[id] {
+    background: var(--ork-card-bg, #2d3748) !important;
+    border: 1px solid var(--ork-border, #4a5568);
+    border-radius: 8px;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .highcharts-container {
+    background: transparent !important;
+  }
+}
+
+/* =====================================================
+   DARK MODE — Beltline DataTable
+   ===================================================== */
+html[data-theme="dark"] .be-table-wrap table.dataTable thead th {
+  background: #2d3748;
+  color: #a0aec0;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .be-table-wrap table.dataTable tbody td {
+  border-color: #4a5568;
+  color: #cbd5e0;
+}
+html[data-theme="dark"] .be-table-wrap table.dataTable tbody tr:hover > td {
+  background: #374151;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_filter input,
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_length select {
+  background: #374151;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_filter label,
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_length label {
+  color: #a0aec0;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_info {
+  color: #718096;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: #a0aec0 !important;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #374151;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: #6366f1;
+  color: #fff !important;
+  border-color: #6366f1;
+}
+
+/* =====================================================
+   DARK MODE — Attendance chart cards (att-chart-*)
+   ===================================================== */
+html[data-theme="dark"] .att-chart-card {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .att-chart-title {
+  background: var(--ork-bg-tertiary, #374151);
+  border-color: var(--ork-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .att-chart-title:hover {
+  background: var(--ork-bg-secondary, #2d3748);
+}
+html[data-theme="dark"] .att-chart-chevron {
+  color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .att-del-link {
+  color: #fc8181;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-chart-card {
+    background: var(--ork-card-bg, #2d3748);
+    border-color: var(--ork-border, #4a5568);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-chart-title {
+    background: var(--ork-bg-tertiary, #374151);
+    border-color: var(--ork-border, #4a5568);
+    color: var(--ork-text, #e2e8f0);
+  }
+}
+
+/* =====================================================
+   DARK MODE — Ladder Award Grid (lg-*)
+   ===================================================== */
+html[data-theme="dark"] .lg-table th.lg-col-player,
+html[data-theme="dark"] .lg-table td.lg-col-player {
+  background: var(--ork-card-bg, #2d3748);
+}
+html[data-theme="dark"] .lg-table th.lg-col-player {
+  background: var(--ork-bg-tertiary, #374151);
+}
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td {
+  background: var(--ork-bg-secondary, #2d3748);
+}
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-col-player {
+  background: var(--ork-bg-tertiary, #374151);
+}
+html[data-theme="dark"] .lg-table tbody tr:hover td {
+  background: rgba(99,179,237,0.12) !important;
+}
+html[data-theme="dark"] .lg-table td.lg-col-award {
+  border-left-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .lg-cell-master {
+  color: #b794f4;
+}
+html[data-theme="dark"] .lg-cell-rank {
+  color: var(--ork-text-secondary, #cbd5e0);
+}
+html[data-theme="dark"] .lg-cell-empty {
+  color: var(--ork-text-muted, #718096);
+}
+html[data-theme="dark"] .lg-pill {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+  color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .lg-pill:hover {
+  border-color: var(--rp-accent, #48bb78);
+  color: var(--rp-accent, #48bb78);
+}
+html[data-theme="dark"] .lg-pill.lg-pill-active {
+  background: var(--rp-accent, #48bb78);
+  border-color: var(--rp-accent, #48bb78);
+  color: #fff;
+}
+html[data-theme="dark"] .lg-search-bar input {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .lg-search-bar label {
+  color: var(--ork-text-muted, #a0aec0);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table th.lg-col-player,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table td.lg-col-player {
+    background: var(--ork-card-bg, #2d3748);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table th.lg-col-player {
+    background: var(--ork-bg-tertiary, #374151);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(even) td {
+    background: var(--ork-bg-secondary, #2d3748);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:hover td {
+    background: rgba(99,179,237,0.12) !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-pill {
+    background: var(--ork-card-bg, #2d3748);
+    border-color: var(--ork-border, #4a5568);
+    color: var(--ork-text-muted, #a0aec0);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-pill.lg-pill-active {
+    background: var(--rp-accent, #48bb78);
+    border-color: var(--rp-accent, #48bb78);
+    color: #fff;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-search-bar input {
+    background: var(--ork-input-bg, #374151);
+    border-color: var(--ork-input-border, #4a5568);
+    color: var(--ork-text, #e2e8f0);
   }
 }

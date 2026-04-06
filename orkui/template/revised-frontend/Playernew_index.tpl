@@ -369,6 +369,22 @@ html[data-theme="dark"] .pn-revoke-award-name { color: var(--ork-text); }
 html[data-theme="dark"] .pn-form-error { background: var(--ork-alert-danger-bg, #742a2a); color: var(--ork-alert-danger-text, #feb2b2); }
 html[data-theme="dark"] .pn-tab-toolbar { border-color: var(--ork-border); }
 html[data-theme="dark"] .required-indicator { color: #feb2b2; }
+html[data-theme="dark"] .pn-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .pn-ac-item { color: var(--ork-text); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .pn-ac-item:hover,
+html[data-theme="dark"] .pn-ac-item.pn-ac-focused { background: var(--ork-bg-secondary); color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-page-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .pn-officer-chip { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-officer-chip span { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-officer-chip:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-link); color: var(--ork-link); }
+html[data-theme="dark"] .pn-officer-chip.pn-selected { background: var(--ork-bg-tertiary); border-color: var(--ork-link); color: var(--ork-link); font-weight: 600; }
+html[data-theme="dark"] .pn-active-tab-label { background: var(--ork-card-bg); color: var(--ork-text); }
+html[data-theme="dark"] .pn-persona { color: #fff !important; background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
 
 /* ============================================================
    @media prefers-color-scheme: dark (auto-detect fallback)
@@ -417,6 +433,22 @@ html[data-theme="dark"] .required-indicator { color: #feb2b2; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .btn-danger-confirm { background: #fc8181; color: #1a202c; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .required-indicator { color: #feb2b2; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item { color: var(--ork-text); border-bottom-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item:hover,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item.pn-ac-focused { background: var(--ork-bg-secondary); color: var(--ork-link-bright); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip.pn-selected { background: var(--ork-bg-tertiary); border-color: var(--ork-link); color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip:hover { background: var(--ork-bg-tertiary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip span { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-active-tab-label { background: var(--ork-card-bg); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-persona { color: #fff !important; background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
 }
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -575,7 +607,7 @@ html[data-theme="dark"] .required-indicator { color: #feb2b2; }
 				<span class="pn-detail-label">Username</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['UserName']) ?></span>
 			</div>
-			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:#fffbe6;border-left:3px solid #f6ad55;padding-left:6px;margin-left:-6px;"' : '' ?>>
+			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:var(--ork-alert-warning-bg,#fffbe6);border-left:3px solid var(--ork-alert-warning-border,#f6ad55);padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
 			</div>

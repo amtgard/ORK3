@@ -88,6 +88,10 @@
 	line-height: 1.2;
 	margin: 0;
 	text-shadow: 0 1px 2px rgba(0,0,0,0.08);
+	background: transparent;
+	border: none;
+	padding: 0;
+	border-radius: 0;
 }
 @media (max-width: 600px) {
 	.hm-welcome-title { font-size: 24px; }
@@ -466,6 +470,10 @@
 html[data-theme="dark"] .hm-welcome-title {
   color: #fff;
   text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
 }
 html[data-theme="dark"] .hm-stat-value {
   color: #fff;
@@ -514,6 +522,7 @@ html[data-theme="dark"] .hm-kingdom-card.hm-pinned {
   html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-stat { color: rgba(255,255,255,0.6); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .hm-section-title { color: #fff; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-welcome-title { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.5); background: transparent; border: none; padding: 0; border-radius: 0; }
 }
 </style>
 
@@ -571,7 +580,7 @@ html[data-theme="dark"] .hm-kingdom-card.hm-pinned {
 				<?php if (!empty($k['_pinned'])): ?><span class="hm-pin-badge">Your Kingdom</span><?php endif; ?>
 				<img class="hm-card-heraldry"
 				     src="<?= htmlspecialchars($k['_heraldry']) ?>"
-				     onerror="this.closest('.hm-card-heraldry-wrap').style.background='#edf2f7'"
+				     onerror="this.closest('.hm-card-heraldry-wrap').style.background='var(--ork-bg-tertiary,#edf2f7)'"
 				     alt="<?= htmlspecialchars(stripslashes($k['KingdomName'])) ?> heraldry">
 			</div>
 			<div class="hm-card-body">

@@ -59,6 +59,26 @@
 	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; }
 	.wn-dismiss:hover { background:#3182ce; }
 
+	/* What's New dark mode */
+	html[data-theme="dark"] .wn-overlay { background: rgba(0,0,0,0.7); }
+	html[data-theme="dark"] .wn-modal { background: #2d3748; color: #e2e8f0; }
+	html[data-theme="dark"] .wn-title { color: #e2e8f0; }
+	html[data-theme="dark"] .wn-item-title { color: #e2e8f0; }
+	html[data-theme="dark"] .wn-item-body { color: #cbd5e0; }
+	html[data-theme="dark"] .wn-subtitle { color: #a0aec0; }
+	html[data-theme="dark"] .wn-all-versions { border-color: #63b3ed; color: #63b3ed; }
+	html[data-theme="dark"] .wn-all-versions:hover { background: #374151; }
+	@media (prefers-color-scheme: dark) {
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-overlay { background: rgba(0,0,0,0.7); }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-modal { background: #2d3748; color: #e2e8f0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-title { color: #e2e8f0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-item-title { color: #e2e8f0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-item-body { color: #cbd5e0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-subtitle { color: #a0aec0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-all-versions { border-color: #63b3ed; color: #63b3ed; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-all-versions:hover { background: #374151; }
+	}
+
 	/* Dark mode toggle button */
 	.nav-theme-toggle {
 		background: transparent;
@@ -85,23 +105,14 @@
 	html[data-theme="dark"] .information-table td { border-color: #4a5568; color: #cbd5e0; }
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
-	html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="dark"] textarea {
-		background-color: #374151 !important;
-		color: #e2e8f0 !important;
-		border-color: #4a5568 !important;
-	}
 	@media (prefers-color-scheme: dark) {
 		html:not([data-theme="light"]):not([data-theme="dark"]) body { background-color: #1a202c; color: #e2e8f0; }
 		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container { background-color: #1a202c; }
 		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table { background-color: #2d3748; border-color: #4a5568; }
 		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table th { background-color: #374151; color: #e2e8f0; }
+		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table td { border-color: #4a5568; color: #cbd5e0; }
 		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container a { color: #63b3ed; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) input,
-		html:not([data-theme="light"]):not([data-theme="dark"]) select,
-		html:not([data-theme="light"]):not([data-theme="dark"]) textarea {
-			background-color: #374151 !important;
-			color: #e2e8f0 !important;
-		}
+		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container a:hover { color: #90cdf4; }
 	}
 	</style>
 </head>
@@ -413,9 +424,9 @@
 
 	<!-- Simple info dialog -->
 	<div id="nav-info-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
-		<div style="background:#fff;border-radius:10px;padding:32px 28px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);text-align:center;font-family:inherit;">
-			<div style="font-size:32px;margin-bottom:12px;color:#4a5568;"><i class="fas fa-book"></i></div>
-			<div id="nav-info-msg" style="font-size:15px;color:#2d3748;line-height:1.5;margin-bottom:20px;"></div>
+		<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:32px 28px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);text-align:center;font-family:inherit;color:var(--ork-text,#2d3748);">
+			<div style="font-size:32px;margin-bottom:12px;color:var(--ork-text-secondary,#4a5568);"><i class="fas fa-book"></i></div>
+			<div id="nav-info-msg" style="font-size:15px;color:var(--ork-text,#2d3748);line-height:1.5;margin-bottom:20px;"></div>
 			<button onclick="document.getElementById('nav-info-overlay').style.display='none';" style="background:#4299e1;color:#fff;border:none;border-radius:6px;padding:8px 28px;font-size:14px;cursor:pointer;font-family:inherit;">OK</button>
 		</div>
 	</div>
@@ -695,6 +706,20 @@ endif;
     _init();
   }
 })();
+
+/* Highcharts dark mode — setOptions for backgroundColor (tooltip handled via CSS) */
+if (typeof Highcharts !== 'undefined') {
+  (function() {
+    var dk = document.documentElement.getAttribute('data-theme') === 'dark'
+      || (!document.documentElement.getAttribute('data-theme')
+          && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (dk) {
+      Highcharts.setOptions({
+        chart: { backgroundColor: 'transparent' }
+      });
+    }
+  })();
+}
 </script>
 
 </body>

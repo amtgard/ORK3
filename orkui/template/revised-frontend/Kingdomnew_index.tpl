@@ -431,6 +431,12 @@
 			.kn-sub-gcal-btn:hover{background:#3367d6;color:#fff}
 			.kn-sub-webcal-btn{display:block;margin-top:6px;font-size:11px;color:#718096;text-align:center;text-decoration:none}
 			.kn-sub-webcal-btn:hover{color:#4a5568}
+			html[data-theme="dark"] .kn-sub-pop-title{color:var(--ork-text)}
+			html[data-theme="dark"] .kn-sub-url-input{background:var(--ork-input-bg);border-color:var(--ork-input-border);color:var(--ork-text)}
+			html[data-theme="dark"] .kn-sub-copy-btn{background:var(--ork-bg-tertiary);border-color:var(--ork-border);color:var(--ork-text-secondary)}
+			html[data-theme="dark"] .kn-sub-copy-btn:hover{background:var(--ork-bg-secondary)}
+			html[data-theme="dark"] .kn-sub-webcal-btn{color:var(--ork-text-muted)}
+			html[data-theme="dark"] .kn-sub-webcal-btn:hover{color:var(--ork-text)}
 			</style>
 			<!-- Events Tab -->
 			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
@@ -450,7 +456,7 @@
 								onclick="(function(btn){var p=document.getElementById('kn-sub-pop');var r=btn.getBoundingClientRect();p.style.top=(r.bottom+6)+'px';p.style.right=(window.innerWidth-r.right)+'px';var show=p.style.display==='none';p.style.setProperty('display',show?'block':'none','important');event.stopPropagation();})(this)">
 								<i class="fas fa-rss"></i>
 							</button>
-							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px">
+							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:var(--ork-card-bg,#fff);border:1px solid var(--ork-border,#e2e8f0);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px;color:var(--ork-text,#2d3748)">
 								<div class="kn-sub-pop-title"><i class="fas fa-calendar-check" style="margin-right:5px"></i>Subscribe to Events</div>
 								<div class="kn-sub-pop-row">
 									<input class="kn-sub-url-input" id="kn-sub-url-input" type="text"
@@ -594,8 +600,8 @@
 			<!-- Reports Tab -->
 			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
 				<?php if (!$IsLoggedIn): ?>
-				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
-					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
+				<div style="background:var(--ork-alert-info-bg,#eaf4fb);border:1px solid var(--ork-alert-info-border,#b0d4ea);border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:var(--ork-alert-info-text,#1a5276);">
+					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:var(--ork-alert-info-text,#1a5276);font-weight:600;">Log in</a> to see the full list of available reports.
 				</div>
 				<?php endif; ?>
 				<div class="pk-reports-mobile-notice">
@@ -1079,7 +1085,7 @@ var KnConfig = {
 				<label class="kn-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="kn-emod-input" id="kn-event-name" autocomplete="off" placeholder="e.g. Summer Midreign">
 			</div>
-			<div id="kn-emod-date-row" style="display:none;font-size:12px;color:#2b6cb0;margin-top:8px;padding:5px 8px;background:#ebf8ff;border-radius:5px;border-left:3px solid #90cdf4">
+			<div id="kn-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="kn-emod-date-text"></span>
 			</div>
 			<div class="kn-emod-field" style="margin-top:12px">
@@ -1198,7 +1204,7 @@ var KnConfig = {
 				<button type="button" id="kn-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
 					<i class="fas fa-trash"></i> Remove Heraldry
 				</button>
-				<div id="kn-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+				<div id="kn-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:var(--ork-alert-danger-bg,#fff5f5);border:1px solid var(--ork-alert-danger-border,#fed7d7);border-radius:6px;font-size:13px;color:var(--ork-alert-danger-text,#c53030);text-align:left">
 					Remove this kingdom's heraldry image?
 					<div style="margin-top:8px;display:flex;gap:8px">
 						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('kn-heraldry-remove-confirm').style.display='none'">Cancel</button>
@@ -1331,12 +1337,12 @@ var KnConfig = {
 				</button>
 				<div class="kn-admin-panel-body" id="kn-admin-body-config" style="display:none">
 					<div id="kn-admin-config-feedback" class="kn-admin-feedback" style="display:none"></div>
-					<div class="kn-admin-field kn-admin-recs-visibility-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e2e8f0;margin-bottom:12px">
+					<div class="kn-admin-field kn-admin-recs-visibility-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--ork-border,#e2e8f0);margin-bottom:12px">
 						<div>
-							<div style="font-size:13px;font-weight:600;color:#2d3748">Recommendation Visibility</div>
-							<div style="font-size:12px;color:#718096;margin-top:3px">When Private, besides the monarchy, only the submitter can see their own recommendations.</div>
+							<div style="font-size:13px;font-weight:600;color:var(--ork-text,#2d3748)">Recommendation Visibility</div>
+							<div style="font-size:12px;color:var(--ork-text-muted,#718096);margin-top:3px">When Private, besides the monarchy, only the submitter can see their own recommendations.</div>
 						</div>
-						<select id="kn-admin-recs-public" style="font-size:13px;border:1.5px solid #e2e8f0;border-radius:6px;padding:5px 8px;flex-shrink:0">
+						<select id="kn-admin-recs-public" style="font-size:13px;border:1.5px solid var(--ork-border,#e2e8f0);border-radius:6px;padding:5px 8px;flex-shrink:0">
 							<option value="1" <?= !empty($AwardRecsPublic) ? 'selected' : '' ?>>Public</option>
 							<option value="0" <?= empty($AwardRecsPublic) ? 'selected' : '' ?>>Private (monarchy and submitters only)</option>
 						</select>
@@ -1625,7 +1631,7 @@ var KnConfig = {
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:#2d3748;line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>

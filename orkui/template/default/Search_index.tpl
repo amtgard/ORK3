@@ -126,6 +126,13 @@
 }
 .sr-empty i { display:block; font-size:24px; margin-bottom:8px; color:#cbd5e0; }
 
+.sr-overflow-warning {
+	text-align:center; padding:10px 16px; font-style:normal;
+	color:#c05621; background:#fffaf0;
+	font-size:13px;
+}
+.sr-overflow-warning i { color:#dd6b20; }
+
 @media (max-width:768px) {
 	.sr-search-card { flex-direction:column; align-items:stretch; gap:10px; }
 	.sr-search-hint { display:none; }
@@ -237,8 +244,8 @@
 		}
 
 		if (data.length >= 100) {
-			html += '<tr><td colspan="3" class="sr-empty" style="padding:10px 16px;font-style:normal;color:#c05621;background:#fffaf0">'
-				+ '<i class="fas fa-exclamation-triangle" style="color:#dd6b20"></i>'
+			html += '<tr><td colspan="3" class="sr-overflow-warning">'
+				+ '<i class="fas fa-exclamation-triangle"></i>'
 				+ '&ensp;Showing the first 100 results &mdash; please refine your search if you don\'t see who you\'re looking for.'
 				+ '</td></tr>';
 		}

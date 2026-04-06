@@ -41,6 +41,8 @@ var AWARD_DESCRIPTIONS = {
    Dark Mode Theme Toggle
    =========================== */
 function orkInitTheme() {
+    if (orkInitTheme._done) return;
+    orkInitTheme._done = true;
     var stored = localStorage.getItem('ork_theme');
     if (stored === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
