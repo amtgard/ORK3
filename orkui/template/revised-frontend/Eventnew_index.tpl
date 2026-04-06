@@ -93,6 +93,20 @@
 	$defaultParkId      = $DefaultParkId            ?? 0;
 	$defaultCredits     = $DefaultAttendanceCredits ?? 1;
 
+	// Detect attendance-date mismatch: event is in the future but attendance dates are all in the past
+	$attDateMismatch = false;
+	if (!empty($attendanceList) && $eventStart && strtotime($eventStart) > time()) {
+		$allPast = true;
+		foreach ($attendanceList as $_ar) {
+			if (!empty($_ar['Date']) && strtotime($_ar['Date']) >= strtotime(date('Y-m-d'))) {
+				$allPast = false;
+				break;
+			}
+		}
+		$attDateMismatch = $allPast;
+	}
+
+	$reconciled    = isset($_GET['reconciled']);
 	$rsvpCounts    = is_array($RsvpCount ?? null) ? $RsvpCount : ['going' => 0, 'interested' => 0, 'total' => (int)($RsvpCount ?? 0)];
 	$rsvpCount     = $rsvpCounts['total'];
 	$userAttending = $UserAttending ?? false; // false or 'going' or 'interested'
@@ -110,11 +124,17 @@
 	// Past-event check (date only, ignoring time)
 	$_refDateStr  = $eventEnd ?: $eventStart;
 	$isPastEvent  = $_refDateStr && (strtotime(date('Y-m-d', strtotime($_refDateStr))) < strtotime(date('Y-m-d')));
+	// 24-hour check-in window
+	$checkinOpenTs    = $eventStart ? strtotime($eventStart) - 86400 : 0;
+	$checkinOpen      = !$isUpcoming || !$checkinOpenTs || time() >= $checkinOpenTs;
+	$checkinOpenLabel = $checkinOpenTs ? date('D, M j, Y \\a\\t g:i A T', $checkinOpenTs) : '';
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <style>
 .ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
+.ev-checkin-locked { display:flex; align-items:flex-start; gap:10px; background:#fffbeb; border:1px solid #f6e05e; border-radius:7px; padding:11px 14px; margin-bottom:14px; font-size:13px; color:#744210; line-height:1.45; }
+.ev-checkin-locked i { color:#d69e2e; margin-top:1px; flex-shrink:0; }
 .ev-icon-btn { background: #fff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 9px; font-size: 13px; color: #4a5568; cursor: pointer; transition: background .15s, border-color .15s; line-height: 1; }
 .ev-icon-btn:hover { background: #edf2f7; border-color: #cbd5e0; }
 .ev-modal-btn-delete {
@@ -240,13 +260,11 @@
 			<?php if ($loggedIn && $isUpcoming): ?>
 			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0;display:inline-flex;gap:6px">
 				<button type="submit" name="status" value="going"
-					class="ev-btn <?= $userAttending === 'going' ? 'ev-btn-primary' : 'ev-btn-outline' ?>"
-					onclick="gtag('event','event_rsvp',{action:'going'})">
+					class="ev-btn <?= $userAttending === 'going' ? 'ev-btn-primary' : 'ev-btn-outline' ?>">
 					<i class="fas fa-check-circle"></i> <?= $userAttending === 'going' ? 'Going ✓' : 'Going' ?>
 				</button>
 				<button type="submit" name="status" value="interested"
-					class="ev-btn <?= $userAttending === 'interested' ? 'ev-btn-secondary' : 'ev-btn-outline' ?>"
-					onclick="gtag('event','event_rsvp',{action:'interested'})">
+					class="ev-btn <?= $userAttending === 'interested' ? 'ev-btn-secondary' : 'ev-btn-outline' ?>">
 					<i class="fas fa-star"></i> <?= $userAttending === 'interested' ? 'Interested ✓' : 'Interested' ?>
 				</button>
 			</form>
@@ -453,11 +471,38 @@
 			<?php // ---- Attendance Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-attendance">
 
+				<?php if ($reconciled): ?>
+				<div style="background:#f0fff4;border:1px solid #68d391;border-radius:6px;padding:12px 16px;margin-bottom:14px;color:#276749;font-size:13px;line-height:1.5;">
+					<i class="fas fa-check-circle" style="margin-right:6px;"></i>
+					<strong>Reconciled.</strong> Past attendance has been moved to a new occurrence dated to match those records.
+				</div>
+				<?php endif; ?>
+				<?php if ($attDateMismatch && $canManage): ?>
+				<div style="background:#fffbeb;border:1px solid #f6ad55;border-radius:6px;padding:12px 16px;margin-bottom:14px;color:#7b341e;font-size:13px;line-height:1.5;">
+					<strong><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Data mismatch detected:</strong>
+					This future event has <?= count($attendanceList) ?> attendance record<?= count($attendanceList) != 1 ? 's' : '' ?> dated in the past —
+					likely because this occurrence's date was edited forward after attendance was entered.
+					<?php if ($canManageAttendance): ?>
+					<br><br>
+					<strong>Reconcile</strong> will create a new past occurrence for those dates and move the attendance there, leaving this future occurrence clean.
+					<form id="ev-reconcile-form" method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/reconcile"
+						  style="display:inline-block;margin-top:8px;">
+						<button type="button" style="background:#c05621;color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;"
+						        onclick="pnConfirm({title:'Reconcile Attendance?',message:'Move <?= count($attendanceList) ?> attendance record(s) to a new past occurrence? This cannot be undone.',confirmText:'Reconcile',danger:true},function(){document.getElementById('ev-reconcile-form').submit();});">
+							<i class="fas fa-tools" style="margin-right:5px;"></i>Reconcile Attendance
+						</button>
+					</form>
+					<?php endif; ?>
+				</div>
+				<?php endif; ?>
 				<div class="ev-export-bar">
 					<button class="ev-icon-btn" title="Export CSV" onclick="evExportAttendanceCsv()"><i class="fas fa-download"></i></button>
 					<button class="ev-icon-btn" title="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>
 				</div>
 				<?php if ($canManageAttendance): ?>
+				<?php if (!$checkinOpen): ?>
+				<div class="ev-checkin-locked"><i class="fas fa-clock"></i> Sign-ins for this event can be processed starting on <?= htmlspecialchars($checkinOpenLabel) ?>.</div>
+				<?php else: ?>
 				<div class="ev-att-form">
 					<h4><i class="fas fa-plus-circle" style="margin-right:6px;color:#276749"></i>Add Attendance</h4>
 					<form method="post" id="ev-attendance-form" action="<?= UIR ?>EventAjax/add_attendance/<?= $eventId ?>/<?= $detailId ?>" onsubmit="evHandleAttendanceSubmit(this); return false;">
@@ -498,7 +543,8 @@
 							value="<?= $eventStart ? date('Y-m-d', strtotime($eventStart)) : date('Y-m-d') ?>">
 					</form>
 				</div>
-				<?php endif; ?>
+				<?php endif; // $checkinOpen ?>
+				<?php endif; // $canManageAttendance — re-opened below ?>
 
 				<?php if (count($attendanceList) > 0): ?>
 				<table class="display" id="ev-attendance-table" style="width:100%">
@@ -545,6 +591,9 @@
 
 			<?php // ---- RSVPs Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-rsvp">
+				<?php if (!$checkinOpen): ?>
+				<div class="ev-checkin-locked"><i class="fas fa-clock"></i> Sign-ins for this event can be processed starting on <?= htmlspecialchars($checkinOpenLabel) ?>.</div>
+				<?php endif; ?>
 				<div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 12px">
 					<p style="font-size:.95em;color:#4a5568;margin:0">
 						<i class="fas fa-check-circle" style="margin-right:4px;color:#276749"></i>
@@ -593,7 +642,7 @@
 									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button"
 										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
 										data-persona="<?= htmlspecialchars($attendee['Persona'], ENT_QUOTES) ?>"
-										<?php if (!isset($checkedInIds[$attendee['MundaneId']])): ?>
+										<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen): ?>
 										onclick="evOpenCheckinModal(<?= (int)$attendee['MundaneId'] ?>, <?= htmlspecialchars(json_encode($attendee['Persona']), ENT_QUOTES) ?>)"
 										<?php else: ?>disabled<?php endif; ?>>
 										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : 'Check In' ?>
@@ -654,6 +703,9 @@
 
 			<?php if ($canManage): ?>
 			<div class="ev-tab-panel" id="ev-tab-admin">
+				<?php if (!$checkinOpen): ?>
+				<div class="ev-checkin-locked"><i class="fas fa-clock"></i> Sign-ins for this event can be processed starting on <?= htmlspecialchars($checkinOpenLabel) ?>.</div>
+				<?php endif; ?>
 				<ul style="margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px">
 					<li>
 						<a href="<?= UIR ?>Admin/permissions/Event/<?= $eventId ?>/<?= $detailId ?>" style="display:inline-flex;align-items:center;gap:7px;padding:7px 14px;background:#f0faf4;border:1px solid #c6e8d4;border-radius:6px;font-size:13px;font-weight:600;color:#276749;text-decoration:none">
