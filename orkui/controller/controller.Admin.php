@@ -2047,11 +2047,25 @@ class Controller_Admin extends Controller {
 			$reason     = trim($_POST['Suspension']    ?? '');
 			$propagates = (int)($_POST['SuspensionPropagates'] ?? 0);
 			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Select a player.']); exit; }
+			if (!$byId) {
+				global $DB;
+				$DB->Clear();
+				$rs_sb = $DB->DataSet("SELECT suspended_by_id, suspended FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
+				$existing_by_id = 0;
+				$is_suspended   = false;
+				if ($rs_sb && $rs_sb->Next()) {
+					$existing_by_id = (int)$rs_sb->suspended_by_id;
+					$is_suspended   = (bool)$rs_sb->suspended;
+				}
+				$DB->Clear();
+				// New suspension → use current user; edit → preserve existing (or null if never recorded)
+				$byId = $is_suspended ? ($existing_by_id ?: 0) : (int)$this->session->user_id;
+			}
 			$r = $this->Player->suspend_player([
 				'Token'                => $this->session->token,
 				'MundaneId'            => $mid,
 				'Suspended'            => (bool)$suspended,
-				'SuspendedById'        => $byId ?: $this->session->user_id,
+				'SuspendedById'        => $byId ?: null,
 				'SuspendedAt'          => $at,
 				'SuspendedUntil'       => $until,
 				'Suspension'           => $reason,

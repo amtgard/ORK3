@@ -984,7 +984,7 @@ class Report  extends Ork3 {
 		$select_list = array_merge($select_list,
 			array(
 				'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name',
-				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'm.suspension_propagates', 'suspended_by.persona suspendator',
+				'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'm.suspension_propagates', 'suspended_by.persona suspendator', 'suspended_by.mundane_id suspended_by_id',
 				'p.name as park_name','k.name as kingdom_name','m.penalty_box'));
 			if (true == $request['Active']) $restrict_clause[] = ' m.active = 1 ';
 			if (true == $request['InActive']) $restrict_clause[] = ' m.active = 0 ';
@@ -1046,6 +1046,7 @@ class Report  extends Ork3 {
 								'SuspendedAt' => $r->suspended_at,
 								'SuspendedUntil' => $r->suspended_until,
 								'Suspendator' => $r->suspendator,
+								'SuspendatorId' => $r->suspended_by_id,
 								'Suspension' => $r->suspension,
 							'SuspensionPropagates' => $r->suspension_propagates,
 								'ParkId' => $r->park_id,
