@@ -983,9 +983,23 @@
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
-				<div class="pn-award-search-bar">
-					<i class="fas fa-search pn-award-search-icon"></i>
-					<input type="text" id="pn-award-search" placeholder="Search awards…" class="pn-award-search-input" autocomplete="off" oninput="pnAwardSearch(this.value)" />
+				<div class="pn-table-toolbar">
+					<?php if (count($filteredAwards) > 10): ?>
+					<div class="pn-pagesize-bar" style="margin-bottom:0">
+						<label for="pn-awards-pagesize">Show</label>
+						<select id="pn-awards-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-awards-table', this.value)">
+							<option value="10">10</option>
+							<option value="25">25</option>
+							<option value="50">50</option>
+							<option value="100">100</option>
+						</select>
+						<span>per page</span>
+					</div>
+					<?php endif; ?>
+					<div class="pn-award-search-bar" style="margin-bottom:0">
+						<i class="fas fa-search pn-award-search-icon"></i>
+						<input type="text" id="pn-award-search" placeholder="Search awards…" class="pn-award-search-input" autocomplete="off" oninput="pnAwardSearch(this.value)" />
+					</div>
 				</div>
 				<table class="pn-table pn-sortable" id="pn-awards-table">
 					<thead>
@@ -1101,6 +1115,18 @@
 					}
 				?>
 				<?php if (count($filteredTitles) > 0): ?>
+					<?php if (count($filteredTitles) > 10): ?>
+					<div class="pn-pagesize-bar">
+						<label for="pn-titles-pagesize">Show</label>
+						<select id="pn-titles-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-titles-table', this.value)">
+							<option value="10">10</option>
+							<option value="25">25</option>
+							<option value="50">50</option>
+							<option value="100">100</option>
+						</select>
+						<span>per page</span>
+					</div>
+					<?php endif; ?>
 					<table class="pn-table pn-sortable" id="pn-titles-table">
 						<thead>
 							<tr>
@@ -2161,8 +2187,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
-pnSortDesc($('#pn-awards-table'), 2, 'date');     pnPaginate($('#pn-awards-table'), 1);
-pnSortDesc($('#pn-titles-table'), 2, 'date');     pnPaginate($('#pn-titles-table'), 1);
+pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
+pnSortDesc($('#pn-titles-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-titles-table'), 1);
 pnSortDesc($('#pn-attendance-table'), 0, 'date'); pnPaginate($('#pn-attendance-table'), 1);
 pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
 // 26-week sparkline

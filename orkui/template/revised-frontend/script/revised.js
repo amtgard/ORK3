@@ -203,7 +203,7 @@ function pnPaginate($table, page) {
     $pg.html(html);
 }
 
-function pnSortDesc($table, colIndex, sortType) {
+function pnSortDesc($table, colIndex, sortType, secondaryColIndex, secondarySortType) {
     if (!$table.length) return;
     $table.find('thead th').removeClass('sort-asc sort-desc');
     $table.find('thead th').eq(colIndex).addClass('sort-desc');
@@ -219,6 +219,18 @@ function pnSortDesc($table, colIndex, sortType) {
             cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
         } else {
             cmp = aVal.localeCompare(bVal);
+        }
+        if (cmp === 0 && secondaryColIndex != null) {
+            var aVal2 = $(a).find('td').eq(secondaryColIndex).text().trim();
+            var bVal2 = $(b).find('td').eq(secondaryColIndex).text().trim();
+            var st = secondarySortType || 'text';
+            if (st === 'numeric') {
+                cmp = (parseFloat(aVal2) || 0) - (parseFloat(bVal2) || 0);
+            } else if (st === 'date') {
+                cmp = (new Date(aVal2).getTime() || 0) - (new Date(bVal2).getTime() || 0);
+            } else {
+                cmp = aVal2.localeCompare(bVal2);
+            }
         }
         return -cmp;
     });
