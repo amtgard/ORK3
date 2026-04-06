@@ -334,6 +334,13 @@ $show_chart = $total > 0;
 			</div>
 		</div>
 		<div class="rp-header-actions">
+<?php $_adj = isset($AdjacentDates) ? $AdjacentDates : []; ?>
+<?php if (!empty($_adj['prev'])): ?>
+			<a class="rp-btn-ghost" href="<?=UIR?>Attendance/park/<?=$Id?>&AttendanceDate=<?=$_adj['prev']?>" title="Previous park day"><i class="fas fa-chevron-left"></i> Previous</a>
+<?php endif; ?>
+<?php if (!empty($_adj['next'])): ?>
+			<a class="rp-btn-ghost" href="<?=UIR?>Attendance/park/<?=$Id?>&AttendanceDate=<?=$_adj['next']?>">Next <i class="fas fa-chevron-right"></i></a>
+<?php endif; ?>
 			<button class="rp-btn-ghost" id="att-btn-export"><i class="fas fa-download"></i> Export CSV</button>
 			<button class="rp-btn-ghost" id="att-btn-print"><i class="fas fa-print"></i> Print</button>
 		</div>

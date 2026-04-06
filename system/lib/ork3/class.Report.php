@@ -625,10 +625,14 @@ class Report  extends Ork3 {
 			return $response;
 		}
 		*/
+		$report_to = (!empty($request['ReportFromDate']) && $request['ReportFromDate'] !== date('Y-m-d'))
+			? $request['ReportFromDate'] : date('Y-m-d');
 		if ($request['PerWeeks'] == 1)
-			$per_period = date("Y-m-d", strtotime("-$request[Periods] week"));
+			$per_period = date("Y-m-d", strtotime("$report_to -$request[Periods] week"));
 		if ($request['PerMonths'] == 1)
-			$per_period = date("Y-m-d", strtotime("-$request[Periods] month"));
+			$per_period = date("Y-m-d", strtotime("$report_to -$request[Periods] month"));
+		if (!isset($per_period))
+			$per_period = date("Y-m-d", strtotime("$report_to -$request[Periods] day"));
 		switch($request['ByPeriod']) {
 		    case 'week':
 	                $by_period = 'ssa.date_year, ssa.date_week3';
@@ -664,7 +668,7 @@ class Report  extends Ork3 {
 							left join " . DB_PREFIX . "park ep on e.park_id = ep.park_id
 							left join " . DB_PREFIX . "kingdom ek on e.kingdom_id = ek.kingdom_id
 					where
-						a.date > '$per_period' and a.date <= now()
+						a.date > '$per_period' and a.date <= '$report_to'
 					group by $group_period
 					order by a.date desc, kingdom_name asc, park_name asc, event_name asc";
 
@@ -1313,19 +1317,23 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) $where = "AND a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['PrincipalityId']) . "'";
 
+		$report_to = (!empty($request['ReportFromDate']) && $request['ReportFromDate'] !== date('Y-m-d'))
+			? $request['ReportFromDate'] : date('Y-m-d');
 		if ($request['PerWeeks'] == 1)
-			$per_period = date('Y-m-d', strtotime("-{$request['Periods']} week"));
+			$per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} week"));
 		if ($request['PerMonths'] == 1)
-			$per_period = date('Y-m-d', strtotime("-{$request['Periods']} month"));
+			$per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} month"));
+		if (!isset($per_period))
+			$per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} day"));
 
 		$sql_total = "SELECT COUNT(DISTINCT a.mundane_id) AS total_distinct
 			FROM " . DB_PREFIX . "attendance a
-			WHERE a.date > '$per_period' AND a.date <= NOW() AND a.mundane_id > 0 $where";
+			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where";
 
 		$sql_avg = "SELECT AVG(weekly_unique) AS avg_per_week FROM (
 			SELECT COUNT(DISTINCT a.mundane_id) AS weekly_unique
 			FROM " . DB_PREFIX . "attendance a
-			WHERE a.date > '$per_period' AND a.date <= NOW() AND a.mundane_id > 0 $where
+			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where
 			GROUP BY a.date_year, a.date_week3
 		) sub";
 

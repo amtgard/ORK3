@@ -253,6 +253,7 @@ class Controller_Reports extends Controller {
 		$id = 1;
 		$period = 'Week';
 		$num_periods = 1;
+		$from_date = null;
 		if (count($params) > 0)
 			$type = $params[0];
 		if (count($params) > 1)
@@ -261,10 +262,19 @@ class Controller_Reports extends Controller {
 			$period = $params[2];
 		if (count($params) > 3)
 			$num_periods = $params[3];
-		$this->data['attendance_summary'] = $this->Reports->get_attendance_summary($type, $id, $period, $num_periods);
-		$this->data['attendance_periodical'] = $this->Reports->get_periodical_summary($type, $id, $period, $num_periods, 'week');
-		$this->data['distinct_stats'] = $this->Reports->get_distinct_player_stats($type, $id, $period, $num_periods);
+		if (count($params) > 4 && preg_match('/^\d{4}-\d{2}-\d{2}$/', $params[4]))
+			$from_date = $params[4];
+		$this->data['attendance_summary'] = $this->Reports->get_attendance_summary($type, $id, $period, $num_periods, $from_date);
+		$this->data['attendance_periodical'] = $this->Reports->get_periodical_summary($type, $id, $period, $num_periods, 'week', $from_date);
+		$this->data['distinct_stats'] = $this->Reports->get_distinct_player_stats($type, $id, $period, $num_periods, $from_date);
 		$this->data['Type'] = $type;
+		$this->data['AttendancePeriod'] = $period;
+		$this->data['AttendanceNumPeriods'] = (int)$num_periods;
+		$this->data['AttendanceFromDate'] = $from_date ?? date('Y-m-d');
+		$this->data['AttendanceId'] = $id;
+		if ($type === 'Park' || $type === 'Kingdom') {
+			$this->data['AttendanceDates'] = $this->Reports->get_attendance_dates($type, $id);
+		}
 	}
 
     private function kingdom_config($type) {

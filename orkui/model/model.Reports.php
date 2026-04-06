@@ -82,27 +82,45 @@ class Model_Reports extends Model {
 		return false;
 	}
 
-	function get_attendance_summary($type, $id, $period, $num_periods) {
+	function get_attendance_summary($type, $id, $period, $num_periods, $from_date = null) {
 		logtrace("get_attendance_summary($type, $id, $period, $num_periods)", null);
+		$report_from = $from_date ?? date('Y-m-d');
 		if ('All' == $period) {
-			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>date('Y-m-d'), 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1));
+			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>$report_from, 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1));
 		} else {
-			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>date('Y-m-d'), 'Periods'=>$num_periods, 'PerWeeks'=>$period=='Weeks'?1:0, 'PerMonths'=>$period=='Months'?1:0));
+			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>$report_from, 'Periods'=>$num_periods, 'PerWeeks'=>$period=='Weeks'?1:0, 'PerMonths'=>$period=='Months'?1:0));
 		}
 		return $r;
 	}
 
-	function get_periodical_summary($type, $id, $period, $num_periods, $by_period) {
+	function get_periodical_summary($type, $id, $period, $num_periods, $by_period, $from_date = null) {
 		logtrace("get_periodical_summary($type, $id, $period, $num_periods, $by_period)", null);
+		$report_from = $from_date ?? date('Y-m-d');
 		if ('All' == $period) {
-			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>date('Y-m-d'), 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1, 'ByPeriod' => 'week'));
+			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>$report_from, 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1, 'ByPeriod' => 'week'));
 		} else {
-			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>date('Y-m-d'), 'Periods'=>$num_periods, 'PerWeeks'=>$period=='Weeks'?1:0, 'PerMonths'=>$period=='Months'?1:0, 'ByPeriod' => 'week'));
+			$r = $this->Report->AttendanceSummary(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'ReportFromDate'=>$report_from, 'Periods'=>$num_periods, 'PerWeeks'=>$period=='Weeks'?1:0, 'PerMonths'=>$period=='Months'?1:0, 'ByPeriod' => 'week'));
 		}
 		return $r;
 	}
 
-	function get_distinct_player_stats($type, $id, $period, $num_periods) {
+	function get_attendance_dates($type, $id) {
+		global $DB;
+		$id = (int)$id;
+		$col = ($type === 'Kingdom') ? 'kingdom_id' : 'park_id';
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT DISTINCT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE {$col} = {$id} ORDER BY att_date DESC");
+		$dates = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$dates[] = $rs->att_date;
+			}
+		}
+		return $dates;
+	}
+
+	function get_distinct_player_stats($type, $id, $period, $num_periods, $from_date = null) {
+		$report_from = $from_date ?? date('Y-m-d');
 		if ('All' == $period) {
 			$r = $this->Report->GetDistinctPlayerStats(array('KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'EventId'=>$type=='Event'?$id:null, 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1));
 		} else {
