@@ -468,6 +468,9 @@ class Controller_Kingdom extends Controller {
 				$adminAwards[] = [
 					'KingdomAwardId'   => (int)$kawId,
 					'KingdomAwardName' => $aw['KingdomAwardName']  ?? '',
+					'AwardId'          => (int)($aw['AwardId']     ?? 0),
+					'AwardName'        => $aw['AwardName']         ?? '',
+					'IsLadder'         => (int)($aw['IsLadder']    ?? 0),
 					'ReignLimit'       => (int)($aw['ReignLimit']  ?? 0),
 					'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),
 					'IsTitle'          => (int)($aw['IsTitle']     ?? 0),
@@ -475,6 +478,17 @@ class Controller_Kingdom extends Controller {
 				];
 			}
 			$this->data['AdminAwards'] = $adminAwards;
+
+			// System awards list for Add Award Alias dropdown
+			$sysAwardResult = $this->Award->GetAwardList(['IsLadder' => null, 'IsTitle' => null, 'OfficerRole' => 'Awards']);
+			$sysAwards = [];
+			if (($sysAwardResult['Status']['Status'] ?? 1) == 0) {
+				foreach ($sysAwardResult['Awards'] as $sa) {
+					$sysAwards[] = ['AwardId' => (int)$sa['AwardId'], 'Name' => $sa['AwardName'] ?? $sa['KingdomAwardName']];
+				}
+				usort($sysAwards, function($a, $b) { return strcasecmp($a['Name'], $b['Name']); });
+			}
+			$this->data['SystemAwards'] = $sysAwards;
 		}
 
 		$this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();

@@ -715,6 +715,13 @@
 	color: #4a5568;
 	margin-bottom: 4px;
 }
+.pn-rec-award-desc {
+	font-size: 12px;
+	color: #718096;
+	font-style: italic;
+	margin-top: 4px;
+	line-height: 1.4;
+}
 .pn-rec-field select,
 .pn-rec-field input[type="text"] {
 	width: 100%;
@@ -2649,6 +2656,7 @@
 	background: #f7fafc;
 	flex-wrap: nowrap;
 	overflow-x: auto;
+	overflow-y: hidden;
 }
 .pk-tab-nav li {
 	padding: 12px 18px;
@@ -3043,6 +3051,28 @@
 }
 .pk-player-card:hover .pk-player-stats { background: rgba(255,255,255,0.82); }
 .pk-player-stats span { display: block; }
+
+/* ---- Responsive: progressive tab label collapse (right → left) ---- */
+@media (max-width: 1200px) {
+	.pk-tab-nav li:nth-last-child(1) .pk-tab-label,
+	.pk-tab-nav li:nth-last-child(1) .pk-tab-count { display: none; }
+}
+@media (max-width: 1100px) {
+	.pk-tab-nav li:nth-last-child(2) .pk-tab-label,
+	.pk-tab-nav li:nth-last-child(2) .pk-tab-count { display: none; }
+}
+@media (max-width: 1000px) {
+	.pk-tab-nav li:nth-last-child(3) .pk-tab-label,
+	.pk-tab-nav li:nth-last-child(3) .pk-tab-count { display: none; }
+}
+@media (max-width: 920px) {
+	.pk-tab-nav li:nth-last-child(4) .pk-tab-label,
+	.pk-tab-nav li:nth-last-child(4) .pk-tab-count { display: none; }
+}
+@media (max-width: 850px) {
+	.pk-tab-nav li:nth-last-child(5) .pk-tab-label,
+	.pk-tab-nav li:nth-last-child(5) .pk-tab-count { display: none; }
+}
 
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
@@ -4822,7 +4852,7 @@
 #kn-admin-overlay .kn-modal-close-btn:hover { color:#4a5568; }
 #kn-admin-overlay .kn-modal-body { padding:16px 20px; overflow-y:auto; flex:1; }
 #kn-admin-overlay .kn-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:flex-end; flex-shrink:0; }
-.kn-admin-panel { border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; overflow:hidden; }
+.kn-admin-panel { border:1px solid #e2e8f0; border-radius:8px; margin-bottom:16px; overflow:hidden; }
 .kn-admin-panel-hdr { width:100%; display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:#f7fafc; border:none; cursor:pointer; font-size:13px; font-weight:600; color:#4a5568; text-align:left; }
 .kn-admin-panel-hdr:hover { background:#edf2f7; }
 .kn-admin-chevron { font-size:11px; color:#a0aec0; transition:transform 0.2s; }
@@ -4857,13 +4887,15 @@
 .kn-admin-tnumeric { width:58px; padding:5px 6px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; text-align:center; box-sizing:border-box; }
 .kn-admin-tselect { padding:5px 4px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; background:#fff; }
 .kn-admin-tinput:focus, .kn-admin-tnumeric:focus, .kn-admin-tselect:focus { outline:none; border-color:#90cdf4; }
-.kn-admin-tdel { padding:3px 8px; background:none; border:1px solid #fc8181; color:#e53e3e; border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.kn-admin-tdel { padding:4px 6px; background:none; border:1px solid #fc8181; color:#e53e3e; border-radius:4px; font-size:13px; cursor:pointer; line-height:1; }
 .kn-admin-tdel:hover { background:#fff5f5; }
 .kn-admin-tdel:disabled, .kn-admin-tsave:disabled { opacity:0.5; cursor:default; }
-.kn-admin-tsave { padding:3px 8px; background:none; border:1px solid #68d391; color:var(--kn-accent, #276749); border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.kn-admin-tsave { padding:4px 6px; background:none; border:1px solid #68d391; color:#38a169; border-radius:4px; font-size:13px; cursor:pointer; line-height:1; }
 .kn-admin-tsave:hover { background:#f0fff4; }
-.kn-admin-awards-table .kn-admin-tinput { width:150px; }
-.kn-admin-awards-table .kn-admin-tnumeric { width:50px; }
+.kn-admin-awards-table .kn-admin-tinput { flex:1; min-width:120px; }
+.kn-admin-awards-table .kn-admin-tnumeric { width:54px; }
+.kn-admin-awards-table td:first-child { overflow:visible; position:relative; display:flex; align-items:center; gap:4px; }
+.kn-admin-awards-table td:nth-child(n+2) { white-space:nowrap; width:1%; }
 .kn-admin-config-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #f0f4f8; }
 .kn-admin-config-row:last-child { border-bottom:none; }
 .kn-admin-config-label { width:200px; flex-shrink:0; font-size:12px; font-weight:600; color:#4a5568; }
@@ -4873,8 +4905,28 @@
 .kn-admin-config-sublabel { font-size:11px; color:#a0aec0; margin-right:2px; }
 .kn-admin-add-award-wrap { margin-top:12px; padding:14px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; }
 .kn-admin-add-award-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; }
+.kn-admin-form-hint { font-size:12px; color:#718096; line-height:1.5; margin:0 0 12px 0; }
 .kn-admin-award-row-fields { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
 .kn-admin-award-row-fields .kn-admin-field { margin-bottom:0; }
+
+/* ---- Alias award picker ---- */
+.kn-admin-alias-trigger { display:flex; align-items:center; justify-content:space-between; width:100%; padding:7px 10px; background:#fff; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; cursor:pointer; text-align:left; min-height:36px; box-sizing:border-box; }
+.kn-admin-alias-trigger:hover { border-color:#90cdf4; }
+.kn-admin-alias-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.kn-admin-alias-dropdown { position:absolute; top:100%; left:0; right:0; z-index:120; background:#fff; border:1.5px solid #cbd5e0; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.12); margin-top:4px; max-height:260px; display:flex; flex-direction:column; }
+.kn-admin-alias-search { padding:8px 10px; border:none; border-bottom:1px solid #e2e8f0; font-size:13px; outline:none; border-radius:8px 8px 0 0; box-sizing:border-box; width:100%; }
+.kn-admin-alias-list { overflow-y:auto; flex:1; max-height:220px; }
+.kn-admin-alias-item { padding:7px 12px; font-size:13px; color:#2d3748; cursor:pointer; border-bottom:1px solid #f7fafc; }
+.kn-admin-alias-item:hover { background:#ebf8ff; }
+.kn-admin-alias-item:last-child { border-bottom:none; }
+.kn-admin-alias-empty { padding:12px; font-size:12px; color:#a0aec0; text-align:center; font-style:italic; }
+.kn-admin-alias-hint { flex-shrink:0; color:#a0aec0; font-size:11px; cursor:help; position:relative; }
+.kn-admin-alias-hint:hover { color:#4299e1; }
+.kn-admin-alias-hint::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px); left:0; background:#2d3748; color:#fff; font-size:11px; font-style:italic; white-space:nowrap; padding:4px 10px; border-radius:4px; pointer-events:none; opacity:0; transition:opacity 0s; z-index:500; }
+.kn-admin-alias-hint::before { content:''; position:absolute; bottom:calc(100% + 2px); left:4px; border:4px solid transparent; border-top-color:#2d3748; pointer-events:none; opacity:0; transition:opacity 0s; z-index:500; }
+.kn-admin-alias-hint:hover::after, .kn-admin-alias-hint:hover::before { opacity:1; }
+.kn-admin-award-add-btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.kn-admin-th-tip { cursor:help; }
 
 /* ---- Confirmation modal ---- */
 #kn-md-help-overlay, #pk-md-help-overlay, #ev-md-help-overlay, #un-md-help-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:var(--z-help-overlay, 1300); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
@@ -5745,4 +5797,70 @@ table.dataTable.adm-table tbody tr.even:hover {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* =============================================
+   Searchable Award Dropdown
+   ============================================= */
+.aw-picker-trigger {
+	display: flex; align-items: center; justify-content: space-between;
+	width: 100%; padding: 7px 10px; background: #fff;
+	border: 1px solid #cbd5e0; border-radius: 4px;
+	cursor: pointer; font-size: 13px; color: #a0aec0; text-align: left;
+	transition: border-color 0.15s; box-sizing: border-box;
+}
+.aw-picker-trigger:hover { border-color: #a0aec0; }
+.aw-picker-trigger.aw-has-value { color: #2d3748; }
+.aw-picker-trigger.aw-has-value .aw-trigger-label { font-weight: 500; }
+
+.aw-dropdown {
+	position: fixed;
+	background: #fff;
+	border: 1px solid #cbd5e0;
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+	z-index: 100000;
+	max-height: 360px;
+	display: none;
+	flex-direction: column;
+}
+.aw-dropdown.aw-open { display: flex; }
+.aw-dropdown-search {
+	padding: 8px 10px 8px 30px;
+	border: none; border-bottom: 1px solid #e2e8f0;
+	font-size: 13px; outline: none; box-sizing: border-box;
+	border-radius: 6px 6px 0 0; width: 100%;
+}
+.aw-dropdown-search-wrap { position: relative; flex-shrink: 0; }
+.aw-dropdown-search-wrap i {
+	position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+	color: #a0aec0; font-size: 12px; pointer-events: none;
+}
+.aw-dropdown-body { overflow-y: auto; padding: 2px 0; flex: 1; }
+.aw-pick-group { padding-bottom: 2px; }
+.aw-pick-group-label {
+	font-size: 10px; font-weight: 700; text-transform: uppercase;
+	letter-spacing: 0.06em; color: #718096;
+	padding: 8px 12px 3px; position: sticky; top: 0;
+	background: #fff; z-index: 1; border-bottom: 1px solid #f0f0f0;
+}
+.aw-pick-item {
+	padding: 5px 12px 5px 18px; cursor: pointer;
+	transition: background 0.1s;
+}
+.aw-pick-item:hover { background: #f0fdfa; }
+.aw-pick-item:focus { background: #e6fffa; outline: none; }
+.aw-pick-item.aw-active {
+	background: #e6fffa; border-left: 3px solid #0891b2; padding-left: 15px;
+}
+.aw-pick-name { font-size: 13px; color: #2d3748; display: block; }
+.aw-pick-desc { font-size: 11px; color: #a0aec0; font-style: italic; line-height: 1.3; display: block; }
+.aw-pick-standalone { border-bottom: 1px solid #edf2f7; padding-bottom: 2px; margin-bottom: 2px; }
+.aw-pick-empty { padding: 16px 12px; text-align: center; color: #a0aec0; font-size: 13px; }
+
+@media (max-width: 600px) {
+	.aw-dropdown-search { font-size: 16px; padding: 10px 10px 10px 32px; }
+	.aw-pick-item { padding: 10px 12px 10px 18px; }
+	.aw-pick-item.aw-active { padding-left: 15px; }
+	.aw-pick-group-label { padding: 10px 12px 5px; }
 }

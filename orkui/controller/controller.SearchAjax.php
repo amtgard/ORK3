@@ -110,8 +110,8 @@ class Controller_SearchAjax extends Controller {
 		if ($filterPid > 0)           { $playerWhere .= " AND m.park_id = {$filterPid}"; }
 		elseif ($filterKid > 0)       { $playerWhere .= " AND m.kingdom_id = {$filterKid}"; }
 		$playerOrder = valid_id($pid)
-			? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = {$kid} THEN 1 ELSE 2 END, m.persona"
-			: (valid_id($kid) ? "CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona" : "m.persona");
+			? "m.active DESC, CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = {$kid} THEN 1 ELSE 2 END, m.persona"
+			: (valid_id($kid) ? "m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona" : "m.active DESC, m.persona");
 		$rs = $DB->DataSet("
 			SELECT m.mundane_id, m.persona, m.active, k.abbreviation AS k_abbr, p.name AS park_name
 			FROM ork_mundane m

@@ -979,6 +979,7 @@
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Park&id=<?= $park_id ?>">Waivered Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/reeve&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Corpora Qualified</a></li>
+							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Park&id=<?= $park_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<?php endif; ?>
 						</ul>
@@ -1427,6 +1428,7 @@ var PkConfig = {
 					<option value="">Select award...</option>
 					<?= $AwardOptions ?>
 				</select>
+				<div id="pk-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 			</div>
 			<div class="pk-acct-field" id="pk-rec-rank-row" style="display:none">
 				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>

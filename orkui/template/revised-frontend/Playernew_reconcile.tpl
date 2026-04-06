@@ -397,6 +397,7 @@ var RcConfig = {
 					gbDrop.innerHTML = items.map(function(p) {
 						return '<div class="rc-ac-item" data-id="' + p.id + '" data-name="' + escH(p.name) + '">'
 							+ escH(p.name)
+							+ (p.active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
 							+ (p.park ? '<div class="rc-ac-item-sub">' + escH(p.park) + '</div>' : '')
 							+ '</div>';
 					}).join('');
