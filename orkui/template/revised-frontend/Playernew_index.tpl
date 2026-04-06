@@ -872,6 +872,13 @@
 				<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
 				</div>
+				<?php elseif ($isOwnProfile && $hasHistoricalTip): ?>
+				<div class="pn-tab-toolbar">
+					<a href="<?= UIR ?>Player/reconcile/<?= (int)$Player['MundaneId'] ?>"
+					   class="pn-btn pn-btn-sm" style="background:#2b6cb0;color:#fff">
+						<i class="fas fa-history"></i> View Historical Awards
+					</a>
+				</div>
 				<?php endif; ?>
 				<?php
 					$filteredAwards = array();

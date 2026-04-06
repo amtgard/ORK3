@@ -542,11 +542,12 @@ class Controller_Player extends Controller {
 
 		$playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
 		$canEditAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
-		if (!$canEditAdmin) {
+		$isOwnProfile = $uid === $id;
+		if (!$canEditAdmin && !$isOwnProfile) {
 			header('Location: ' . UIR . "Player/profile/$id");
 			exit;
 		}
-		$this->data['canEditAdmin'] = true;
+		$this->data['canEditAdmin'] = $canEditAdmin;
 
 		$this->load_model('Kingdom');
 		$preloadOfficers = [];
