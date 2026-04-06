@@ -1284,6 +1284,10 @@ var PkConfig = {
 		</div>
 	</div>
 </div>
+
+<?php endif; ?>
+
+<?php if (!empty($CanManagePark)): ?>
 <div id="pk-att-overlay">
 	<div class="pk-modal-box">
 
