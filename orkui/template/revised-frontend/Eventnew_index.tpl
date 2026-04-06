@@ -492,10 +492,10 @@
 					<?php if ($canManageAttendance): ?>
 					<br><br>
 					<strong>Reconcile</strong> will create a new past occurrence for those dates and move the attendance there, leaving this future occurrence clean.
-					<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/reconcile"
-						  style="display:inline-block;margin-top:8px;"
-						  onsubmit="return confirm('Move <?= count($attendanceList) ?> attendance record(s) to a new past occurrence? This cannot be undone.');">
-						<button type="submit" style="background:#c05621;color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;">
+					<form id="ev-reconcile-form" method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/reconcile"
+						  style="display:inline-block;margin-top:8px;">
+						<button type="button" style="background:#c05621;color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;"
+						        onclick="pnConfirm({title:'Reconcile Attendance?',message:'Move <?= count($attendanceList) ?> attendance record(s) to a new past occurrence? This cannot be undone.',confirmText:'Reconcile',danger:true},function(){document.getElementById('ev-reconcile-form').submit();});">
 							<i class="fas fa-tools" style="margin-right:5px;"></i>Reconcile Attendance
 						</button>
 					</form>
