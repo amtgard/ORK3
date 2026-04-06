@@ -112,7 +112,7 @@ class Kingdom  extends Ork3 {
 		}
 		$sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
 						a.award_id, a.is_ladder, ifnull(a.is_title, ka.is_title) as is_title, ifnull(a.title_class, ka.title_class) as title_class,
-            a.officer_role
+            a.officer_role, a.peerage
 					from " . DB_PREFIX . "kingdomaward ka
 						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
 					where 1
@@ -144,7 +144,8 @@ class Kingdom  extends Ork3 {
 					'IsLadder' => $r->is_ladder,
 					'IsTitle' => $r->is_title,
 					'TitleClass' => $r->title_class,
-					'OfficerRole' => $r->officer_role
+					'OfficerRole' => $r->officer_role,
+					'Peerage' => $r->peerage
 				);
 			}
 			$response['Status'] = Success();

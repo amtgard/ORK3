@@ -17,6 +17,27 @@ var AUTOCOMPLETE_DEBOUNCE_MS = 250;
 var AWARD_NOTE_MAX_CHARS     = 400;
 
 /* ===========================
+   Award descriptions (keyed by base AwardId)
+   =========================== */
+var AWARD_DESCRIPTIONS = {
+    21: 'Awarded for service to the club not necessarily related to an elected office.',
+    22: 'Awarded for organizing and running battlegames, quests, workshops, and demonstrations.',
+    23: 'Awarded for going above and beyond the call of duty in executing an office, or for leadership outside of office.',
+    239: 'Awarded for serving with excellence in office from the local level to the kingdom level.',
+    24: 'Awarded for demonstrating ability in the construction sciences: weapons, armor, furniture, shoes, belts, etc.',
+    25: 'Awarded for demonstrating ability in the arts: performance, painting, sculpting, photography, cooking, writing, etc.',
+    26: 'Awarded for the creation of garb: tabards, pants, cloaks, gloves, sashes, pouches, etc.',
+    27: 'Awarded for fighting prowess in tournament and battlefield combat.',
+    243: 'Awarded for understanding of tactics and effectiveness as a player in class battlegaming.',
+    28: 'Awarded for positive attitude and sportsmanship.',
+    29: 'Awarded for excellence in roleplaying.',
+    32: 'Awarded for participation in qualification events.',
+    30: 'Awarded for exceptional service in a calendar month.',
+    33: 'Awarded for demonstrating positive character traits that reflect well on the club.',
+    34: 'Awarded for service as a group (a park, company, household, event team, etc.).'
+};
+
+/* ===========================
    Autocomplete keyboard nav
    =========================== */
 /**
@@ -61,6 +82,208 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         }
     });
 }
+
+/* ===========================
+   Searchable Award Dropdown
+   =========================== */
+(function() {
+    var dropdown, searchInput, body, activeSelect, activeTrigger;
+
+    function ensureDOM() {
+        if (dropdown) return;
+        dropdown = document.createElement('div');
+        dropdown.className = 'aw-dropdown';
+        dropdown.innerHTML =
+            '<div class="aw-dropdown-search-wrap"><i class="fas fa-search"></i>' +
+                '<input type="text" class="aw-dropdown-search" placeholder="Type to filter\u2026"></div>' +
+            '<div class="aw-dropdown-body"></div>';
+        document.body.appendChild(dropdown);
+        searchInput = dropdown.querySelector('.aw-dropdown-search');
+        body = dropdown.querySelector('.aw-dropdown-body');
+
+        // Close on outside click
+        document.addEventListener('mousedown', function(e) {
+            if (!dropdown.classList.contains('aw-open')) return;
+            if (dropdown.contains(e.target)) return;
+            if (activeTrigger && activeTrigger.contains(e.target)) return;
+            closeDropdown();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && dropdown.classList.contains('aw-open')) { e.stopPropagation(); closeDropdown(); }
+        });
+
+        searchInput.addEventListener('input', function() {
+            var term = this.value.toLowerCase();
+            var items = body.querySelectorAll('.aw-pick-item');
+            for (var i = 0; i < items.length; i++)
+                items[i].style.display = items[i].textContent.toLowerCase().indexOf(term) !== -1 ? '' : 'none';
+            var groups = body.querySelectorAll('.aw-pick-group');
+            for (var i = 0; i < groups.length; i++)
+                groups[i].style.display = groups[i].querySelector('.aw-pick-item:not([style*="display: none"])') ? '' : 'none';
+            var standalones = body.querySelectorAll('.aw-pick-standalone');
+            for (var i = 0; i < standalones.length; i++)
+                standalones[i].style.display = standalones[i].querySelector('.aw-pick-item:not([style*="display: none"])') ? '' : 'none';
+            var any = body.querySelector('.aw-pick-item:not([style*="display: none"])');
+            var empty = body.querySelector('.aw-pick-empty');
+            if (!any && !empty) {
+                var el = document.createElement('div'); el.className = 'aw-pick-empty';
+                el.textContent = 'No awards match'; body.appendChild(el);
+            } else if (any && empty) { empty.remove(); }
+        });
+
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                var first = body.querySelector('.aw-pick-item:not([style*="display: none"])');
+                if (first) first.focus();
+            }
+        });
+
+        body.addEventListener('click', function(e) {
+            var item = e.target.closest('.aw-pick-item');
+            if (!item) return;
+            if (!activeSelect) return;
+            activeSelect.value = item.getAttribute('data-value');
+            activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            syncTrigger(activeSelect);
+            closeDropdown();
+        });
+
+        body.addEventListener('keydown', function(e) {
+            var item = e.target.closest('.aw-pick-item');
+            if (!item) return;
+            if (e.key === 'Enter') { e.preventDefault(); item.click(); }
+            else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                var next = item.nextElementSibling;
+                while (next && (!next.classList.contains('aw-pick-item') || next.style.display === 'none')) next = next.nextElementSibling;
+                if (!next) { var ng = item.closest('.aw-pick-group, .aw-pick-standalone');
+                    if (ng) ng = ng.nextElementSibling;
+                    while (ng && !(next = ng.querySelector('.aw-pick-item:not([style*="display: none"])'))) ng = ng.nextElementSibling; }
+                if (next) next.focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                var prev = item.previousElementSibling;
+                while (prev && (!prev.classList.contains('aw-pick-item') || prev.style.display === 'none')) prev = prev.previousElementSibling;
+                if (!prev) { var pg = item.closest('.aw-pick-group, .aw-pick-standalone');
+                    if (pg) pg = pg.previousElementSibling;
+                    while (pg && !(prev = pg.querySelector('.aw-pick-item:not([style*="display: none"]):last-child'))) pg = pg.previousElementSibling; }
+                if (prev) prev.focus(); else searchInput.focus();
+            }
+        });
+    }
+
+    function buildHTML(sel) {
+        var html = '', cur = sel.value, ch = sel.children;
+        for (var i = 0; i < ch.length; i++) {
+            if (ch[i].tagName === 'OPTGROUP') {
+                html += '<div class="aw-pick-group"><div class="aw-pick-group-label">' + escHtml(ch[i].label) + '</div>';
+                for (var j = 0; j < ch[i].children.length; j++) html += itemHTML(ch[i].children[j], cur);
+                html += '</div>';
+            } else if (ch[i].tagName === 'OPTION' && ch[i].value) {
+                html += '<div class="aw-pick-standalone">' + itemHTML(ch[i], cur) + '</div>';
+            }
+        }
+        return html;
+    }
+
+    function itemHTML(opt, cur) {
+        var aid = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var isL = opt.getAttribute('data-is-ladder') === '1';
+        var desc = isL && typeof AWARD_DESCRIPTIONS !== 'undefined' ? (AWARD_DESCRIPTIONS[aid] || '') : '';
+        var cls = 'aw-pick-item' + (opt.value === cur && cur ? ' aw-active' : '');
+        var h = '<div class="' + cls + '" data-value="' + opt.value + '" tabindex="0">';
+        h += '<span class="aw-pick-name">' + escHtml(opt.textContent) + '</span>';
+        if (desc) h += '<span class="aw-pick-desc">' + escHtml(desc) + '</span>';
+        return h + '</div>';
+    }
+
+    function openDropdown(sel, trigger) {
+        ensureDOM();
+        if (activeSelect === sel && dropdown.classList.contains('aw-open')) { closeDropdown(); return; }
+        activeSelect = sel; activeTrigger = trigger;
+        body.innerHTML = buildHTML(sel);
+        var empty = body.querySelector('.aw-pick-empty'); if (empty) empty.remove();
+        searchInput.value = '';
+        var rect = trigger.getBoundingClientRect();
+        var vw = window.innerWidth, vh = window.innerHeight;
+        var mobile = vw <= 600;
+        if (mobile) {
+            dropdown.style.left = '8px';
+            dropdown.style.right = '8px';
+            dropdown.style.width = 'auto';
+            dropdown.style.bottom = '0';
+            dropdown.style.top = 'auto';
+            dropdown.style.maxHeight = '55vh';
+            dropdown.style.borderRadius = '10px 10px 0 0';
+        } else {
+            var w = Math.max(rect.width, 320);
+            var left = rect.left;
+            if (left + w > vw - 8) left = vw - w - 8;
+            if (left < 8) left = 8;
+            var spaceBelow = vh - rect.bottom - 8;
+            var spaceAbove = rect.top - 8;
+            var maxH = 360;
+            if (spaceBelow >= 200) {
+                dropdown.style.top = rect.bottom + 2 + 'px';
+                dropdown.style.bottom = 'auto';
+                maxH = Math.min(360, spaceBelow);
+            } else {
+                dropdown.style.bottom = (vh - rect.top + 2) + 'px';
+                dropdown.style.top = 'auto';
+                maxH = Math.min(360, spaceAbove);
+            }
+            dropdown.style.left = left + 'px';
+            dropdown.style.right = 'auto';
+            dropdown.style.width = w + 'px';
+            dropdown.style.maxHeight = maxH + 'px';
+            dropdown.style.borderRadius = '6px';
+        }
+        dropdown.classList.add('aw-open');
+        searchInput.focus();
+        var active = body.querySelector('.aw-active');
+        if (active) active.scrollIntoView({ block: 'center' });
+    }
+
+    function closeDropdown() {
+        if (!dropdown) return;
+        dropdown.classList.remove('aw-open');
+        if (activeTrigger) activeTrigger.focus();
+        activeSelect = null; activeTrigger = null;
+    }
+
+    function syncTrigger(sel) {
+        var btn = sel._awTrigger; if (!btn) return;
+        var opt = sel.options[sel.selectedIndex];
+        var hasVal = opt && opt.value;
+        btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : 'Select award\u2026';
+        btn.classList.toggle('aw-has-value', !!hasVal);
+    }
+
+    function initPicker(sel) {
+        sel.style.display = 'none';
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'aw-picker-trigger';
+        var opt = sel.options[sel.selectedIndex];
+        var hasVal = opt && opt.value;
+        btn.innerHTML = '<span class="aw-trigger-label">' + (hasVal ? escHtml(opt.text) : 'Select award\u2026') + '</span>' +
+            '<i class="fas fa-chevron-down" style="color:#a0aec0;font-size:11px"></i>';
+        if (hasVal) btn.classList.add('aw-has-value');
+        sel.parentNode.insertBefore(btn, sel.nextSibling);
+        sel._awTrigger = btn;
+        btn.addEventListener('click', function() { openDropdown(sel, btn); });
+
+        var desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+        Object.defineProperty(sel, 'value', {
+            get: function() { return desc.get.call(this); },
+            set: function(v) { desc.set.call(this, v); syncTrigger(this); }
+        });
+        new MutationObserver(function() { syncTrigger(sel); }).observe(sel, { childList: true, subtree: true });
+    }
+
+    window.awInitPicker = initPicker;
+    window.awSyncTrigger = syncTrigger;
+})();
 
 /* ===========================
    Player Profile (PnConfig)
@@ -431,8 +654,13 @@ if (PnConfig.recError) {
         p.classList.add('pn-rank-selected');
         input.value = p.dataset.rank;
     });
+    if (gid('pn-rec-award')) awInitPicker(gid('pn-rec-award'));
     $('#pn-rec-award').on('change', function() {
         buildRecRankPills($(this).val());
+        var aid = parseInt($(this).find(':selected').data('award-id') || 0);
+        var desc = AWARD_DESCRIPTIONS[aid] || '';
+        var el = document.getElementById('pn-rec-award-desc');
+        if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
     });
 
     // ---- Rec dismiss button (player page) ----
@@ -1208,6 +1436,9 @@ if (PnConfig.recError) {
         gid('pn-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
         gid('pn-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
 
+        // ---- Award Picker init ----
+        if (gid('pn-award-select')) awInitPicker(gid('pn-award-select'));
+
         // ---- Award Select Change ----
         var pnNoBadgeAwards = ['griffon', 'griffin', 'hydra', 'jovious', 'jovius', 'mask', 'zodiac', 'walker'];
         gid('pn-award-select').addEventListener('change', function() {
@@ -1287,7 +1518,7 @@ if (PnConfig.recError) {
             var term = this.value.trim();
             if (term.length < 2) { gid('pn-award-givenby-results').classList.remove('pn-ac-open'); return; }
             givenByTimer = setTimeout(function() {
-                var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
                 fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                     var results = gid('pn-award-givenby-results');
                     if (!data || !data.length) {
@@ -1297,6 +1528,7 @@ if (PnConfig.recError) {
                             return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                 + escHtml(p.Persona)
                                 + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
+                                + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
                                 + '</div>';
                         }).join('');
                     }
@@ -2238,6 +2470,7 @@ $(document).ready(function() {
         if (suggestedPill) { suggestedPill.classList.add('kn-rank-selected'); input.value = suggested; }
     }
 
+    if (gid('kn-award-select')) awInitPicker(gid('kn-award-select'));
     gid('kn-award-select').addEventListener('change', function() {
         var awardId = this.value;
         var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
@@ -2261,13 +2494,14 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-player-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 el.classList.add('kn-ac-open');
@@ -2313,13 +2547,14 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-givenby-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + KINGDOM_ID + '&limit=6';
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 el.classList.add('kn-ac-open');
@@ -2677,9 +2912,14 @@ $(document).ready(function() {
         if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
     }
 
+    if (gid('kn-rec-award-select')) awInitPicker(gid('kn-rec-award-select'));
     gid('kn-rec-award-select').addEventListener('change', function() {
         buildRecRankPills(this.value);
         checkRequired();
+        var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
+        var desc = AWARD_DESCRIPTIONS[aid] || '';
+        var el = gid('kn-rec-award-desc');
+        if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
     });
 
     gid('kn-rec-player-text').addEventListener('input', function() {
@@ -2689,13 +2929,14 @@ $(document).ready(function() {
         clearTimeout(playerTimer);
         if (term.length < 2) { gid('kn-rec-player-results').classList.remove('pk-ac-open'); return; }
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-rec-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 el.classList.add('pk-ac-open');
@@ -3724,7 +3965,8 @@ $(document).ready(function() {
         var delTd  = document.createElement('td');
         var delBtn = document.createElement('button');
         delBtn.className   = 'kn-admin-tdel';
-        delBtn.textContent = 'Delete';
+        delBtn.innerHTML   = '<i class="fas fa-trash"></i>';
+        delBtn.title       = 'Delete';
         (function(row, titleName, titleId) {
             delBtn.addEventListener('click', function() {
                 if (!confirm('Delete "' + titleName + '"? Parks using this title must be reassigned first.')) return;
@@ -3819,6 +4061,17 @@ $(document).ready(function() {
         }
 
         var nameCell  = ntd(true,  aw.KingdomAwardName);
+
+        // If kingdom name differs from system name, show (?) hint
+        var sysName = aw.AwardName || '';
+        if (sysName && sysName !== aw.KingdomAwardName) {
+            var hint = document.createElement('span');
+            hint.className = 'kn-admin-alias-hint';
+            hint.innerHTML = '<i class="fas fa-question-circle"></i>';
+            hint.setAttribute('data-tip', 'Alias for system award ' + sysName);
+            nameCell.td.appendChild(hint);
+        }
+
         var reignCell = ntd(false, aw.ReignLimit);
         var monthCell = ntd(false, aw.MonthLimit);
 
@@ -3838,7 +4091,8 @@ $(document).ready(function() {
 
         var saveBtn = document.createElement('button');
         saveBtn.className   = 'kn-admin-tsave';
-        saveBtn.textContent = 'Save';
+        saveBtn.innerHTML   = '<i class="fas fa-save"></i>';
+        saveBtn.title       = 'Save';
         saveBtn.style.marginRight = '4px';
         (function(btn, nc, rc, mc, cb, cc, kawId) {
             btn.addEventListener('click', function() {
@@ -3861,7 +4115,8 @@ $(document).ready(function() {
 
         var delBtn = document.createElement('button');
         delBtn.className   = 'kn-admin-tdel';
-        delBtn.textContent = 'Delete';
+        delBtn.innerHTML   = '<i class="fas fa-trash"></i>';
+        delBtn.title       = 'Delete';
         (function(btn, row, kawId, awName) {
             btn.addEventListener('click', function() {
                 if (!confirm('Delete award "' + awName + '"? This cannot be undone.')) return;
@@ -3895,16 +4150,39 @@ $(document).ready(function() {
         var addWrap   = gid('kn-admin-add-award-wrap');
         var cancelBtn = gid('kn-admin-new-award-cancel');
 
-        if (addBtn && addWrap) {
-            addBtn.addEventListener('click', function() {
-                addWrap.style.display = '';
-                addBtn.style.display  = 'none';
+        var customAddBtn  = gid('kn-admin-custom-add-btn');
+        var customWrap    = gid('kn-admin-add-custom-wrap');
+        var customCancel  = gid('kn-admin-custom-cancel');
+        var btnRow        = addBtn ? addBtn.parentNode : null;
+
+        function showAliasForm() {
+            if (addWrap) addWrap.style.display = '';
+            if (customWrap) customWrap.style.display = 'none';
+            if (btnRow) btnRow.style.display = 'none';
+        }
+        function showCustomForm() {
+            if (customWrap) customWrap.style.display = '';
+            if (addWrap) addWrap.style.display = 'none';
+            if (btnRow) btnRow.style.display = 'none';
+        }
+        function showButtons() {
+            if (addWrap) addWrap.style.display = 'none';
+            if (customWrap) customWrap.style.display = 'none';
+            if (btnRow) btnRow.style.display = '';
+        }
+
+        if (addBtn) addBtn.addEventListener('click', showAliasForm);
+        if (customAddBtn) customAddBtn.addEventListener('click', showCustomForm);
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function() {
+                showButtons();
+                resetAliasForm();
             });
         }
-        if (cancelBtn && addWrap && addBtn) {
-            cancelBtn.addEventListener('click', function() {
-                addWrap.style.display = 'none';
-                addBtn.style.display  = '';
+        if (customCancel) {
+            customCancel.addEventListener('click', function() {
+                showButtons();
+                resetCustomForm();
             });
         }
 
@@ -3916,18 +4194,111 @@ $(document).ready(function() {
             });
         }
 
+        // ── Searchable system award dropdown ──
+        var trigger   = gid('kn-admin-alias-trigger');
+        var dropdown  = gid('kn-admin-alias-dropdown');
+        var searchInp = gid('kn-admin-alias-search');
+        var listEl    = gid('kn-admin-alias-list');
+        var hiddenInp = gid('kn-admin-new-award-id');
+        var nameInp   = gid('kn-admin-new-award-name');
+        var labelSpan = trigger ? trigger.querySelector('.kn-admin-alias-label') : null;
+        var sysAwards = KnConfig.systemAwards || [];
+        var aliasOpen = false;
+
+        function buildAliasList(filter) {
+            if (!listEl) return;
+            listEl.innerHTML = '';
+            var lc = (filter || '').toLowerCase();
+            var count = 0;
+            sysAwards.forEach(function(sa) {
+                if (lc && sa.Name.toLowerCase().indexOf(lc) === -1) return;
+                var div = document.createElement('div');
+                div.className = 'kn-admin-alias-item';
+                div.textContent = sa.Name;
+                div.setAttribute('data-id', sa.AwardId);
+                div.addEventListener('click', function() {
+                    selectAlias(sa.AwardId, sa.Name);
+                });
+                listEl.appendChild(div);
+                count++;
+            });
+            if (count === 0) {
+                var empty = document.createElement('div');
+                empty.className = 'kn-admin-alias-empty';
+                empty.textContent = 'No matching awards';
+                listEl.appendChild(empty);
+            }
+        }
+
+        function selectAlias(id, name) {
+            if (hiddenInp) hiddenInp.value = id;
+            if (labelSpan) { labelSpan.textContent = name; labelSpan.style.color = ''; }
+            if (nameInp && !nameInp.value.trim()) nameInp.value = name;
+            closeAlias();
+        }
+
+        function openAlias() {
+            if (!dropdown || aliasOpen) return;
+            aliasOpen = true;
+            dropdown.style.display = '';
+            buildAliasList('');
+            if (searchInp) { searchInp.value = ''; searchInp.focus(); }
+        }
+
+        function closeAlias() {
+            if (!dropdown) return;
+            aliasOpen = false;
+            dropdown.style.display = 'none';
+        }
+
+        function resetAliasForm() {
+            if (hiddenInp) hiddenInp.value = '';
+            if (labelSpan) { labelSpan.textContent = 'Select a system award…'; labelSpan.style.color = ''; }
+            if (nameInp) nameInp.value = '';
+            gid('kn-admin-new-reign')   && (gid('kn-admin-new-reign').value = '0');
+            gid('kn-admin-new-month')   && (gid('kn-admin-new-month').value = '0');
+            gid('kn-admin-new-istitle') && (gid('kn-admin-new-istitle').checked = false);
+            gid('kn-admin-new-tclass')  && (gid('kn-admin-new-tclass').value = '0');
+            gid('kn-admin-new-tclass')  && (gid('kn-admin-new-tclass').disabled = true);
+            closeAlias();
+        }
+
+        if (trigger) {
+            trigger.addEventListener('click', function(e) {
+                e.preventDefault();
+                aliasOpen ? closeAlias() : openAlias();
+            });
+        }
+
+        if (searchInp) {
+            searchInp.addEventListener('input', function() {
+                buildAliasList(this.value);
+            });
+            searchInp.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeAlias();
+            });
+        }
+
+        // Close dropdown on outside click
+        document.addEventListener('click', function(e) {
+            if (aliasOpen && trigger && dropdown && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
+                closeAlias();
+            }
+        });
+
+        // ── Save new award alias ──
         var saveNewBtn = gid('kn-admin-new-award-save');
         if (saveNewBtn) {
             saveNewBtn.addEventListener('click', function() {
                 clearFeedback('kn-admin-awards-feedback');
-                var awardId = parseInt((gid('kn-admin-new-award-id').value || '0'), 10);
-                var name    = (gid('kn-admin-new-award-name').value || '').trim();
+                var awardId = parseInt((hiddenInp ? hiddenInp.value : '0') || '0', 10);
+                var name    = (nameInp ? nameInp.value : '').trim();
                 var reign   = gid('kn-admin-new-reign').value;
                 var month   = gid('kn-admin-new-month').value;
                 var isTitle = gid('kn-admin-new-istitle').checked ? 1 : 0;
                 var tClass  = gid('kn-admin-new-tclass').value;
 
-                if (!awardId) { feedback('kn-admin-awards-feedback', 'Canonical Award ID is required.', false); return; }
+                if (!awardId) { feedback('kn-admin-awards-feedback', 'Please select a system award.', false); return; }
                 if (!name)    { feedback('kn-admin-awards-feedback', 'Award name is required.', false); return; }
 
                 saveNewBtn.disabled = true;
@@ -3942,12 +4313,63 @@ $(document).ready(function() {
                 }, function(r) {
                     saveNewBtn.disabled = false;
                     if (r && r.status === 0) {
-                        feedback('kn-admin-awards-feedback', 'Award created!', true);
+                        feedback('kn-admin-awards-feedback', 'Award alias created!', true);
                         setTimeout(function() { location.reload(); }, 900);
                     } else {
                         feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Create failed.', false);
                     }
                 }, 'json').fail(function() { saveNewBtn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+            });
+        }
+
+        // ── Custom (kingdom-specific) award ──
+        var customIsTitleCb = gid('kn-admin-custom-istitle');
+        var customTClassInp = gid('kn-admin-custom-tclass');
+        if (customIsTitleCb && customTClassInp) {
+            customIsTitleCb.addEventListener('change', function() {
+                customTClassInp.disabled = !this.checked;
+            });
+        }
+
+        function resetCustomForm() {
+            gid('kn-admin-custom-name')    && (gid('kn-admin-custom-name').value = '');
+            gid('kn-admin-custom-reign')   && (gid('kn-admin-custom-reign').value = '0');
+            gid('kn-admin-custom-month')   && (gid('kn-admin-custom-month').value = '0');
+            gid('kn-admin-custom-istitle') && (gid('kn-admin-custom-istitle').checked = false);
+            gid('kn-admin-custom-tclass')  && (gid('kn-admin-custom-tclass').value = '0');
+            gid('kn-admin-custom-tclass')  && (gid('kn-admin-custom-tclass').disabled = true);
+        }
+
+        var saveCustomBtn = gid('kn-admin-custom-save');
+        if (saveCustomBtn) {
+            saveCustomBtn.addEventListener('click', function() {
+                clearFeedback('kn-admin-awards-feedback');
+                var name    = (gid('kn-admin-custom-name').value || '').trim();
+                var reign   = gid('kn-admin-custom-reign').value;
+                var month   = gid('kn-admin-custom-month').value;
+                var isTitle = gid('kn-admin-custom-istitle').checked ? 1 : 0;
+                var tClass  = gid('kn-admin-custom-tclass').value;
+
+                if (!name) { feedback('kn-admin-awards-feedback', 'Award name is required.', false); return; }
+
+                saveCustomBtn.disabled = true;
+                $.post(BASE_URL + 'setaward', {
+                    KingdomAwardId:   0,
+                    AwardId:          0,
+                    KingdomAwardName: name,
+                    ReignLimit:       reign,
+                    MonthLimit:       month,
+                    IsTitle:          isTitle,
+                    TitleClass:       tClass,
+                }, function(r) {
+                    saveCustomBtn.disabled = false;
+                    if (r && r.status === 0) {
+                        feedback('kn-admin-awards-feedback', 'Kingdom-specific award created!', true);
+                        setTimeout(function() { location.reload(); }, 900);
+                    } else {
+                        feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Create failed.', false);
+                    }
+                }, 'json').fail(function() { saveCustomBtn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
             });
         }
     }
@@ -4964,6 +5386,7 @@ $(document).ready(function() {
         if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
     }
 
+    if (gid('pk-award-select')) awInitPicker(gid('pk-award-select'));
     gid('pk-award-select').addEventListener('change', function() {
         var awardId = this.value;
         var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
@@ -4987,13 +5410,14 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 pkFixedAcPosition(gid('pk-award-player-text'), el);
@@ -5041,13 +5465,14 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = SEARCH_URL + '?Action=Search%2FPlayer&type=PERSONA&search=' + encodeURIComponent(term) + '&park_id=' + PkConfig.parkId + '&limit=6';
+            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 pkFixedAcPosition(gid('pk-award-givenby-text'), el);
@@ -5417,9 +5842,14 @@ $(document).ready(function() {
         if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
     }
 
+    if (gid('pk-rec-award-select')) awInitPicker(gid('pk-rec-award-select'));
     gid('pk-rec-award-select').addEventListener('change', function() {
         buildRecRankPills(this.value);
         checkRequired();
+        var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
+        var desc = AWARD_DESCRIPTIONS[aid] || '';
+        var el = gid('pk-rec-award-desc');
+        if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
     });
 
     // Player search
@@ -5430,13 +5860,14 @@ $(document).ready(function() {
         clearTimeout(playerTimer);
         if (term.length < 2) { gid('pk-rec-player-results').classList.remove('pk-ac-open'); return; }
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + PkConfig.kingdomId + '&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + PkConfig.kingdomId + '&include_inactive=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-rec-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
+                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 el.classList.add('pk-ac-open');

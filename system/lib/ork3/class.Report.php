@@ -2585,4 +2585,126 @@ class Report  extends Ork3 {
 		);
 	}
 
+
+	public function GetPlayerStatusReconciliation($request) {
+		$key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 120)) !== false)
+			return $cache;
+
+		$location = '';
+		if (valid_id($request['ParkId'])) {
+			$location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
+		} else if (valid_id($request['KingdomId'])) {
+			$location = " and m.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		} else {
+			return array('Status' => InvalidParameter());
+		}
+
+		// Inactive players WITH a sign-in in the past 6 months
+		$sql_inactive_with_attendance = "
+			SELECT m.mundane_id, m.persona, m.given_name, m.surname,
+				p.park_id, p.name AS park_name,
+				k.kingdom_id, k.name AS kingdom_name,
+				MAX(a.date) AS last_signin,
+				COUNT(DISTINCT a.date) AS signin_count_6mo
+			FROM " . DB_PREFIX . "mundane m
+				INNER JOIN " . DB_PREFIX . "attendance a ON a.mundane_id = m.mundane_id
+					AND a.date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+				LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+				LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+			WHERE m.active = 0 AND m.suspended = 0 AND m.persona IS NOT NULL AND m.persona != '' $location
+			GROUP BY m.mundane_id
+			ORDER BY p.name, m.persona";
+
+		$this->db->Clear();
+		$r1 = $this->db->query($sql_inactive_with_attendance);
+		$inactive_with_attendance = array();
+		if ($r1 !== false && $r1->size() > 0) {
+			while ($r1->next()) {
+				$inactive_with_attendance[] = array(
+					'MundaneId'     => $r1->mundane_id,
+					'Persona'       => $r1->persona,
+					'GivenName'     => $r1->given_name,
+					'Surname'       => $r1->surname,
+					'ParkId'        => $r1->park_id,
+					'ParkName'      => $r1->park_name,
+					'KingdomId'     => $r1->kingdom_id,
+					'KingdomName'   => $r1->kingdom_name,
+					'LastSignIn'    => $r1->last_signin,
+					'SignInCount'   => $r1->signin_count_6mo,
+				);
+			}
+		}
+
+		// Active players with NO sign-in in the past 24 months
+		$sql_active_no_attendance = "
+			SELECT m.mundane_id, m.persona, m.given_name, m.surname,
+				p.park_id, p.name AS park_name,
+				k.kingdom_id, k.name AS kingdom_name,
+				m.park_member_since,
+				(SELECT MAX(a2.date) FROM " . DB_PREFIX . "attendance a2 WHERE a2.mundane_id = m.mundane_id) AS last_signin
+			FROM " . DB_PREFIX . "mundane m
+				LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+				LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+			WHERE m.active = 1 AND m.suspended = 0 AND m.persona IS NOT NULL AND m.persona != '' $location
+				AND (m.park_member_since IS NULL OR m.park_member_since < DATE_SUB(CURDATE(), INTERVAL 24 MONTH))
+				AND NOT EXISTS (
+					SELECT 1 FROM " . DB_PREFIX . "attendance a
+					WHERE a.mundane_id = m.mundane_id
+						AND a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+				)
+			ORDER BY p.name, m.persona";
+
+		$this->db->Clear();
+		$r2 = $this->db->query($sql_active_no_attendance);
+		$active_no_attendance = array();
+		if ($r2 !== false && $r2->size() > 0) {
+			while ($r2->next()) {
+				$active_no_attendance[] = array(
+					'MundaneId'     => $r2->mundane_id,
+					'Persona'       => $r2->persona,
+					'GivenName'     => $r2->given_name,
+					'Surname'       => $r2->surname,
+					'ParkId'        => $r2->park_id,
+					'ParkName'      => $r2->park_name,
+					'KingdomId'     => $r2->kingdom_id,
+					'KingdomName'   => $r2->kingdom_name,
+					'LastSignIn'    => $r2->last_signin,
+					'ParkMemberSince' => $r2->park_member_since,
+				);
+			}
+		}
+
+		$response = array(
+			'Status' => Success(),
+			'InactiveWithAttendance' => $inactive_with_attendance,
+			'ActiveNoAttendance' => $active_no_attendance,
+		);
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
+	public function SetPlayerActiveStatus($request) {
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($requester_id)) return NoAuthorization();
+
+		$mundane_id = (int)$request['MundaneId'];
+		$active = (int)$request['Active'];
+		if (!$mundane_id || !\in_array($active, [0, 1])) return InvalidParameter();
+
+		$mundane = new yapo($this->db, DB_PREFIX . 'mundane');
+		$mundane->mundane_id = $mundane_id;
+		if (!$mundane->find()) return InvalidParameter('Player not found.');
+
+		// Auth check: requester must have AUTH_PARK + AUTH_CREATE on the player's park
+		if (!Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane->park_id, AUTH_CREATE)
+			&& !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $mundane->kingdom_id, AUTH_EDIT)
+			&& !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+			return NoAuthorization();
+		}
+
+		$mundane->active = $active;
+		$mundane->save();
+		return Success();
+	}
+
 }

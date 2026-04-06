@@ -611,6 +611,7 @@
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?= $kingdom_id ?>">Waivered Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/reeve/Kingdom&id=<?= $kingdom_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
+							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -887,6 +888,7 @@ var KnConfig = {
 	adminConfig:     <?= json_encode($AdminConfig     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminParkTitles: <?= json_encode($AdminParkTitles ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminAwards:     <?= json_encode($AdminAwards     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	systemAwards:    <?= json_encode($SystemAwards    ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminRecsPublic: <?= !empty($AwardRecsPublic) ? 'true' : 'false' ?>,
 };
 </script>
@@ -1027,6 +1029,7 @@ var KnConfig = {
 					<option value="">Select award...</option>
 					<?= $AwardOptions ?>
 				</select>
+				<div id="kn-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 			</div>
 			<div class="pk-acct-field" id="kn-rec-rank-row" style="display:none">
 				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
@@ -1346,7 +1349,7 @@ var KnConfig = {
 						<thead>
 							<tr>
 								<th>Title</th>
-								<th>Class</th>
+								<th><span class="kn-admin-th-tip" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke).">Class <i class="fas fa-question-circle" style="font-size:9px;color:#a0aec0;cursor:help"></i></span></th>
 								<th>Min Att.</th>
 								<th>Cutoff</th>
 								<th>Period</th>
@@ -1388,7 +1391,7 @@ var KnConfig = {
 				</button>
 				<div class="kn-admin-panel-body" id="kn-admin-body-awards" style="display:none">
 					<div id="kn-admin-awards-feedback" class="kn-admin-feedback" style="display:none"></div>
-					<table class="kn-admin-table kn-admin-awards-table">
+					<div class="kn-admin-table-wrap"><table class="kn-admin-table kn-admin-awards-table">
 						<thead>
 							<tr>
 								<th>Award Name</th>
@@ -1402,16 +1405,27 @@ var KnConfig = {
 						<tbody id="kn-admin-awards-tbody">
 							<!-- Built by JS -->
 						</tbody>
-					</table>
+					</table></div>
 					<div class="kn-admin-add-award-wrap" id="kn-admin-add-award-wrap" style="display:none">
-						<div class="kn-admin-add-award-title">New Award</div>
+						<div class="kn-admin-add-award-title">Add Award Alias</div>
+						<p class="kn-admin-form-hint">An award alias lets you create additional variations on existing system awards and titles. For example, the default system title of “Man-at-Arms” would have variations such as “Woman-at-Arms” or “Person-at-Arms.” You can add as many aliases as you would like.</p>
 						<div class="kn-admin-field">
-							<label>Canonical Award ID <span class="kn-admin-hint-inline">(from ork_award table)</span></label>
-							<input type="number" id="kn-admin-new-award-id" min="1" placeholder="e.g. 7">
+							<label>System Award</label>
+							<div class="kn-admin-alias-picker-wrap" style="position:relative">
+								<input type="hidden" id="kn-admin-new-award-id">
+								<button type="button" class="kn-admin-alias-trigger" id="kn-admin-alias-trigger">
+									<span class="kn-admin-alias-label">Select a system award&hellip;</span>
+									<i class="fas fa-chevron-down" style="font-size:11px;opacity:.5"></i>
+								</button>
+								<div class="kn-admin-alias-dropdown" id="kn-admin-alias-dropdown" style="display:none">
+									<input type="text" class="kn-admin-alias-search" id="kn-admin-alias-search" placeholder="Search awards&hellip;" autocomplete="off">
+									<div class="kn-admin-alias-list" id="kn-admin-alias-list"></div>
+								</div>
+							</div>
 						</div>
 						<div class="kn-admin-award-row-fields">
 							<div class="kn-admin-field kn-admin-field-grow">
-								<label>Award Name</label>
+								<label>Kingdom Name <span class="kn-admin-hint-inline">(your kingdom&rsquo;s name for this award)</span></label>
 								<input type="text" id="kn-admin-new-award-name" placeholder="e.g. Order of the Warrior">
 							</div>
 							<div class="kn-admin-field">
@@ -1427,20 +1441,57 @@ var KnConfig = {
 								<input type="checkbox" id="kn-admin-new-istitle">
 							</div>
 							<div class="kn-admin-field">
-								<label>Title Class</label>
+								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
 								<input type="number" id="kn-admin-new-tclass" min="0" value="0" style="width:64px" disabled>
 							</div>
 						</div>
 						<div style="display:flex;gap:8px;margin-top:10px">
 							<button class="kn-admin-save-btn" id="kn-admin-new-award-save">
-								<i class="fas fa-plus"></i> Add Award
+								<i class="fas fa-plus"></i> Add Award Alias
 							</button>
 							<button class="kn-btn-ghost" id="kn-admin-new-award-cancel" style="font-size:13px">Cancel</button>
 						</div>
 					</div>
-					<button class="kn-admin-add-btn" id="kn-admin-awards-add-btn">
-						<i class="fas fa-plus"></i> Add Award
-					</button>
+					<div class="kn-admin-add-award-wrap" id="kn-admin-add-custom-wrap" style="display:none">
+						<div class="kn-admin-add-award-title">Add Kingdom-Specific Award</div>
+						<p class="kn-admin-form-hint">A kingdom-specific award allows you to add awards only given out in your kingdom. For example, if your kingdom awards a custom award called “Order of the Key,” you can add it here so it can be marked in award records.</p>
+						<div class="kn-admin-award-row-fields">
+							<div class="kn-admin-field kn-admin-field-grow">
+								<label>Award Name</label>
+								<input type="text" id="kn-admin-custom-name" placeholder="e.g. Kingdom Spotlight">
+							</div>
+							<div class="kn-admin-field">
+								<label>Reign Limit</label>
+								<input type="number" id="kn-admin-custom-reign" min="0" value="0" style="width:64px">
+							</div>
+							<div class="kn-admin-field">
+								<label>Month Limit</label>
+								<input type="number" id="kn-admin-custom-month" min="0" value="0" style="width:64px">
+							</div>
+							<div class="kn-admin-field kn-admin-field-center">
+								<label>Title?</label>
+								<input type="checkbox" id="kn-admin-custom-istitle">
+							</div>
+							<div class="kn-admin-field">
+								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
+								<input type="number" id="kn-admin-custom-tclass" min="0" value="0" style="width:64px" disabled>
+							</div>
+						</div>
+						<div style="display:flex;gap:8px;margin-top:10px">
+							<button class="kn-admin-save-btn" id="kn-admin-custom-save">
+								<i class="fas fa-plus"></i> Add Award
+							</button>
+							<button class="kn-btn-ghost" id="kn-admin-custom-cancel" style="font-size:13px">Cancel</button>
+						</div>
+					</div>
+					<div class="kn-admin-award-add-btns">
+						<button class="kn-admin-add-btn" id="kn-admin-awards-add-btn">
+							<i class="fas fa-plus"></i> Add Award Alias
+						</button>
+						<button class="kn-admin-add-btn" id="kn-admin-custom-add-btn">
+							<i class="fas fa-plus"></i> Add Kingdom-Specific Award
+						</button>
+					</div>
 				</div>
 			</div>
 
@@ -1466,8 +1517,7 @@ var KnConfig = {
 							<tbody id="kn-admin-parks-tbody">
 								<!-- Built by JS -->
 							</tbody>
-						</table>
-					</div>
+						</table></div>
 					<button class="kn-admin-save-btn" id="kn-admin-parks-save">
 						<i class="fas fa-save"></i> Save Parks
 					</button>

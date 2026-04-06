@@ -44,7 +44,7 @@ class Award  extends Ork3 {
     } else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers') {
       $officer_role_clause = " and officer_role != 'none'"; 
     } 
-		$sql = "select award_id, name, a.award_id, a.is_ladder, is_title, title_class, a.officer_role
+		$sql = "select award_id, name, a.award_id, a.is_ladder, is_title, title_class, a.officer_role, a.peerage
 					from " . DB_PREFIX . "award a 
 					where 1
 						$ladder_clause
@@ -67,7 +67,8 @@ class Award  extends Ork3 {
 					'IsLadder' => $r->is_ladder,
 					'IsTitle' => $r->is_title,
 					'TitleClass' => $r->title_class,
-          			'OfficerRole' => $r->officer_role
+          			'OfficerRole' => $r->officer_role,
+					'Peerage' => $r->peerage
 				);
 			}
 			$response['Status'] = Success();

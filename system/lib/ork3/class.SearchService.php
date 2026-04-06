@@ -307,19 +307,19 @@ class SearchService extends Ork3 {
 			case 'PERSONA': 
 				if (count($searchtokens) > 0)
 					$s = implode(' or ', array_map(function($t) { return "`persona` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
-			    	$order = "order by persona,surname,given_name";
+			    	$order = "order by m.active DESC, persona,surname,given_name";
                     $opt[] = "length(`persona`) > 0";
 				break;
 			case 'MUNDANE':
 				if (count($searchtokens) > 0)
 					$s = implode(' or ', array_map(function($t) { return "`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
-				    $order = "order by surname,given_name";
+				    $order = "order by m.active DESC, surname,given_name";
                     $opt[] = "(length(`surname`) > 0 or length(`given_name`) > 0)";
 				break;
 			case 'USER':
 				if (count($searchtokens) > 0)
 					$s = implode(' or ', array_map(function($t) { return "`username` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
-			    	$order = "order by username,surname,given_name";
+			    	$order = "order by m.active DESC, username,surname,given_name";
                     $opt[] = "length(`username`) > 0";
 				break;
 			default:
@@ -342,7 +342,7 @@ class SearchService extends Ork3 {
 			$opt[] = "waivered =".($waivered?1:0);
 		}
 		$opt[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
-		$order = $order ?? '';
+		$order = $order ?? 'order by m.active DESC, persona';
 		$sql = "select 
 						`mundane_id`, m.`active`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
 						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr

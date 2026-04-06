@@ -225,7 +225,7 @@ class Controller_ParkAjax extends Controller {
 				    OR m.given_name LIKE '%{$term}%'
 				    OR m.surname LIKE '%{$term}%'
 				    OR m.username LIKE '%{$term}%')
-				ORDER BY {$order_clause} m.persona
+				ORDER BY m.active DESC, {$order_clause} m.persona
 				LIMIT 15";
 			$DB->Clear();
 			$rs      = $DB->DataSet($sql);

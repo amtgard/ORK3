@@ -1078,6 +1078,60 @@ class Controller_Reports extends Controller {
 		$this->data['park_id']     = $park_id;
 	}
 
+	public function player_status_reconciliation($type = null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		$this->template = 'Reports_player_status_reconciliation.tpl';
+		$this->data['page_title'] = 'Player Status Reconciliation';
+		$this->data['report_type'] = $type;
+		$this->data['report_id']   = $this->request->id ?? null;
+		$this->data['reconciliation'] = $this->Reports->player_status_reconciliation($type, $this->request->id);
+		$this->data['user_token'] = $this->session->token ?? '';
+
+		// Check if current user can edit players in this scope
+		$can_edit = false;
+		if ($_isOrkAdmin) {
+			$can_edit = true;
+		} elseif ($type === 'Park' && valid_id($this->request->id)) {
+			$can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
+		} elseif ($type === 'Kingdom' && valid_id($this->request->id)) {
+			$can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
+		}
+		$this->data['can_edit'] = $can_edit;
+
+		if ($type === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$this->request->id . '&tab=reports';
+		} elseif ($type === 'Kingdom') {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$this->request->id . '&tab=reports';
+		}
+	}
+
+	public function set_player_active_json() {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id) || !isset($this->session->token)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$mundane_id = (int)($_POST['MundaneId'] ?? 0);
+		$active     = (int)($_POST['Active'] ?? -1);
+		if (!valid_id($mundane_id) || !in_array($active, [0, 1])) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
+			exit;
+		}
+		$r = $this->Reports->set_player_active_status($this->session->token, $mundane_id, $active);
+		if ($r['Status'] == 0) {
+			echo json_encode(['status' => 0]);
+		} else {
+			echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+		}
+		exit;
+	}
+
 }
 
 ?>

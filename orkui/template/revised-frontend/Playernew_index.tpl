@@ -2093,6 +2093,7 @@
 						<option value="">Select award...</option>
 						<?= $AwardOptions ?>
 					</select>
+					<div id="pn-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 				</div>
 				<div class="pn-rec-field" id="pn-rec-rank-row" style="display:none">
 					<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; light blue = already held, green border = suggested; dark blue = selected</span></label>

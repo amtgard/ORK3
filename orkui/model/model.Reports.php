@@ -310,6 +310,31 @@ class Model_Reports extends Model {
 			'OriginPark' => isset($r['OriginPark']) ? $r['OriginPark'] : null,
 		);
 	}
+
+	function player_status_reconciliation($type, $id) {
+		$request = array();
+		if ($type === 'Park') {
+			$request['ParkId'] = $id;
+		} else {
+			$request['KingdomId'] = $id;
+		}
+		$r = $this->Report->GetPlayerStatusReconciliation($request);
+		if ($r['Status']['Status'] == 0) {
+			return array(
+				'InactiveWithAttendance' => $r['InactiveWithAttendance'],
+				'ActiveNoAttendance'     => $r['ActiveNoAttendance'],
+			);
+		}
+		return false;
+	}
+
+	function set_player_active_status($token, $mundane_id, $active) {
+		return $this->Report->SetPlayerActiveStatus(array(
+			'Token'     => $token,
+			'MundaneId' => $mundane_id,
+			'Active'    => $active,
+		));
+	}
 }
 
 ?>

@@ -226,10 +226,6 @@ class Controller_KingdomAjax extends Controller {
 				]);
 			} else {
 				$awardId = (int)($_POST['AwardId'] ?? 0);
-				if (!valid_id($awardId)) {
-					echo json_encode(['status' => 1, 'error' => 'Canonical Award ID is required for new awards.']);
-					exit;
-				}
 				$r = $this->Kingdom->CreateAward([
 					'Token'      => $this->session->token,
 					'KingdomId'  => $kingdom_id,
@@ -796,6 +792,9 @@ class Controller_KingdomAjax extends Controller {
 		} elseif ($scope === 'exclude') {
 			$kingdom_clause = "AND m.kingdom_id != {$kid}";
 			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+		} elseif ($scope === 'all') {
+			$kingdom_clause = '';
+			$park_clause    = '';
 		} else {
 			$kingdom_clause = "AND m.kingdom_id = {$kid}";
 			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
@@ -817,7 +816,7 @@ class Controller_KingdomAjax extends Controller {
 			    OR m.given_name LIKE '%{$term}%'
 			    OR m.surname LIKE '%{$term}%'
 			    OR m.username LIKE '%{$term}%')
-			ORDER BY m.persona
+			ORDER BY m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona
 			LIMIT 15";
 
 		$DB->Clear();
