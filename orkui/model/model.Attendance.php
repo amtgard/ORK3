@@ -68,6 +68,21 @@ class Model_Attendance extends Model {
 	function get_recent_attendees($park_id) {
 		return $this->Report->RecentParkAttendees(['ParkId' => $park_id]);
 	}
+
+	function get_adjacent_park_dates($park_id, $date) {
+		global $DB;
+		$pid  = (int)$park_id;
+		$date = date('Y-m-d', strtotime($date)); // sanitize to valid date
+		$DB->Clear();
+		$prev = null;
+		$r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date < '{$date}' ORDER BY date DESC LIMIT 1");
+		if ($r && $r->Next()) $prev = $r->att_date;
+		$DB->Clear();
+		$next = null;
+		$r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date > '{$date}' ORDER BY date ASC LIMIT 1");
+		if ($r && $r->Next()) $next = $r->att_date;
+		return ['prev' => $prev, 'next' => $next];
+	}
 }
 
 ?>

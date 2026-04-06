@@ -369,7 +369,6 @@ if (PnConfig.recError) {
         }
         $('#pn-rec-error').hide();
         $('#pn-rec-submit').prop('disabled', true).text('Submitting…');
-        gtag('event', 'recommendation_add');
         $('#pn-recommend-form').submit();
     });
 
@@ -422,6 +421,25 @@ if (PnConfig.recError) {
     });
     $('#pn-rec-award').on('change', function() {
         buildRecRankPills($(this).val());
+    });
+
+    // ---- Rec dismiss button (player page) ----
+    document.addEventListener('click', function(e) {
+        var dimBtn = e.target.closest ? e.target.closest('.pn-rec-dismiss-btn') : null;
+        if (!dimBtn) return;
+        if (!dimBtn.dataset.confirm) {
+            dimBtn.dataset.confirm = '1';
+            dimBtn.textContent = 'Confirm Delete?';
+            dimBtn.classList.add('pk-rec-dismiss-confirm');
+            dimBtn._confirmTimer = setTimeout(function() {
+                dimBtn.dataset.confirm = '';
+                dimBtn.innerHTML = '<i class="fas fa-times"></i> Delete';
+                dimBtn.classList.remove('pk-rec-dismiss-confirm');
+            }, 3000);
+            return;
+        }
+        clearTimeout(dimBtn._confirmTimer);
+        window.location.href = dimBtn.getAttribute('data-href');
     });
 
     // ---- Inline Delete Confirmation ----
@@ -744,12 +762,10 @@ if (PnConfig.recError) {
             fetch(UPLOAD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
-                    gtag('event', imgType === 'photo' ? 'player_photo_upload' : 'player_heraldry_upload', { status: 'success' });
                     showStep('pn-img-step-success');
                     setTimeout(function() { window.location.reload(); }, 1400);
                 })
                 .catch(function(err) {
-                    gtag('event', imgType === 'photo' ? 'player_photo_upload' : 'player_heraldry_upload', { status: 'failed' });
                     showStep('pn-img-step-select');
                     showError('Upload failed: ' + err.message);
                 });
@@ -1421,10 +1437,10 @@ if (PnConfig.recError) {
             }
         };
         document.addEventListener('click', function(e) {
-            var link = e.target.closest ? e.target.closest('.pn-rec-give-link') : null;
-            if (!link) return;
-            e.preventDefault();
-            try { window.pnGiveFromRec(JSON.parse(link.getAttribute('data-rec') || '{}')); } catch (ex) {}
+            var grantBtn = e.target.closest ? e.target.closest('.pn-rec-grant-btn') : null;
+            if (grantBtn) {
+                try { window.pnGiveFromRec(JSON.parse(grantBtn.getAttribute('data-rec') || '{}')); } catch (ex) {}
+            }
         });
 
         gid('pn-award-close-btn').addEventListener('click', pnCloseAwardModal);
@@ -1809,7 +1825,6 @@ function knLoadMoreList(tableId, tmplBase, btn) {
 
 // ---- Activate a tab by name (used by buttons + links) ----
 function knActivateTab(tab) {
-    if (tab === 'recommendations') { if (typeof gtag === 'function') gtag('event', 'recommendation_view', { section: 'kingdom' }); }
     $('.kn-tab-nav li').removeClass('kn-tab-active');
     var $activeTab = $('.kn-tab-nav li[data-kntab="' + tab + '"]');
     $activeTab.addClass('kn-tab-active');
@@ -2385,7 +2400,6 @@ $(document).ready(function() {
             + String(today.getDate()).padStart(2, '0');
         setAwardType('awards');
         checkRequired();
-        if (typeof gtag === 'function') gtag('event', 'award_entry_open', { section: 'kingdom' });
         gid('kn-award-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
         gid('kn-award-player-text').focus();
@@ -2401,11 +2415,20 @@ $(document).ready(function() {
 
     // Pre-populate award modal from a recommendation row
     window.knGiveFromRec = function(rec) {
-        if (typeof gtag === 'function') gtag('event', 'recommendation_give');
         knOpenAwardModal();
         if (rec.Persona || rec.MundaneId) {
             gid('kn-award-player-text').value = rec.Persona || '';
             gid('kn-award-player-id').value   = String(rec.MundaneId || '');
+        }
+        if (rec.MundaneId) {
+            var pid = String(rec.MundaneId);
+            fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    knPlayerRanks = ranks || {};
+                    var curAward = gid('kn-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }
         if (rec.KingdomAwardId) {
             var sel = gid('kn-award-select');
@@ -2455,11 +2478,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Dismiss?';
+                dimBtn.textContent = 'Confirm Delete?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Dismiss';
+                    dimBtn.textContent = 'Delete';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -2474,10 +2497,9 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (d.status === 0) {
-                        if (typeof gtag === 'function') gtag('event', 'recommendation_dismiss', { section: 'kingdom' });
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to dismiss recommendation.');
+                        alert(d.error || 'Failed to delete recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -4320,8 +4342,6 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(r) {
                 if (r && r.status === 0) {
-                    if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_remove', { status: 'success' });
-                    window.location.reload();
                 } else {
                     alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
                 }
@@ -4350,18 +4370,12 @@ $(document).ready(function() {
                     .then(function(r) {
                         if (upl) upl.style.display = 'none';
                         if (r && r.status === 0) {
-                            if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'success' });
-                            if (done) done.style.display = '';
                             setTimeout(function() { window.location.reload(); }, 1200);
                         } else {
-                            if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
-                            if (sel) sel.style.display = '';
                             alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
                         }
                     })
                     .catch(function() {
-                        if (typeof gtag === 'function') gtag('event', 'kingdom_heraldry_upload', { status: 'failed' });
-                        if (upl) upl.style.display = 'none';
                         if (sel) sel.style.display = '';
                         alert('Request failed. Please try again.');
                     });
@@ -4618,7 +4632,6 @@ function pkApplyHeroColor(img) {
 
 // ---- Tab activation ----
 function pkActivateTab(tab) {
-    if (tab === 'recommendations' && typeof gtag === 'function') gtag('event', 'recommendation_view', { section: 'park' });
     $('.pk-tab-nav li').removeClass('pk-tab-active');
     var $pkTab = $('.pk-tab-nav li[data-pktab="' + tab + '"]');
     $pkTab.addClass('pk-tab-active');
@@ -4856,7 +4869,7 @@ $(document).ready(function() {
 });
 (function() {
     if (typeof PkConfig === 'undefined') return;
-    if (!document.getElementById('pk-award-overlay')) return;
+    if (!PkConfig.canAdmin) return;
     var UIR_JS = PkConfig.uir;
     var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
     var PARK_ID = PkConfig.parkId;
@@ -4867,6 +4880,13 @@ $(document).ready(function() {
     var pkPlayerRanks = {};
 
     function gid(id) { return document.getElementById(id); }
+
+    function pkFixedAcPosition(inputEl, dropdownEl) {
+        var rect = inputEl.getBoundingClientRect();
+        dropdownEl.style.top   = (rect.bottom + 2) + 'px';
+        dropdownEl.style.left  = rect.left + 'px';
+        dropdownEl.style.width = rect.width + 'px';
+    }
 
     function checkRequired() {
         var ok = !!gid('pk-award-player-id').value
@@ -4955,7 +4975,7 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-player-results');
                 el.innerHTML = (data && data.length)
@@ -4964,6 +4984,7 @@ $(document).ready(function() {
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                pkFixedAcPosition(gid('pk-award-player-text'), el);
                 el.classList.add('pk-ac-open');
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }, AUTOCOMPLETE_DEBOUNCE_MS);
@@ -5017,6 +5038,7 @@ $(document).ready(function() {
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span></div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
+                pkFixedAcPosition(gid('pk-award-givenby-text'), el);
                 el.classList.add('pk-ac-open');
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }, AUTOCOMPLETE_DEBOUNCE_MS);
@@ -5040,6 +5062,7 @@ $(document).ready(function() {
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-givenat-results');
+                pkFixedAcPosition(gid('pk-award-givenat-text'), el);
                 el.innerHTML = (data && data.length)
                     ? data.map(function(loc) {
                         return '<div class="pk-ac-item" tabindex="-1" data-pid="' + (loc.ParkId||0) + '" data-kid="' + (loc.KingdomId||0) + '" data-eid="' + (loc.EventId||0) + '" data-name="' + encodeURIComponent(loc.LocationName||loc.ShortName||'') + '">'
@@ -5107,8 +5130,6 @@ $(document).ready(function() {
             + String(today.getDate()).padStart(2, '0');
         setAwardType('awards');
         checkRequired();
-        gtag('event', 'award_entry_open', { section: 'park' });
-        gtag('event', 'park_awards_open', { source: 'park_info' });
         gid('pk-award-overlay').classList.add('pk-open');
         document.body.style.overflow = 'hidden';
         gid('pk-award-player-text').focus();
@@ -5124,11 +5145,20 @@ $(document).ready(function() {
 
     // Pre-populate award modal from a recommendation row
     window.pkGiveFromRec = function(rec) {
-        gtag('event', 'recommendation_give');
         pkOpenAwardModal();
         if (rec.Persona || rec.MundaneId) {
             gid('pk-award-player-text').value = rec.Persona || '';
             gid('pk-award-player-id').value   = String(rec.MundaneId || '');
+        }
+        if (rec.MundaneId) {
+            var pid = String(rec.MundaneId);
+            fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    pkPlayerRanks = ranks || {};
+                    var curAward = gid('pk-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
         }
         if (rec.KingdomAwardId) {
             var sel = gid('pk-award-select');
@@ -5186,11 +5216,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Dismiss?';
+                dimBtn.textContent = 'Confirm Delete?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Dismiss';
+                    dimBtn.textContent = 'Delete';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -5205,10 +5235,9 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (d.status === 0) {
-                        gtag('event', 'recommendation_dismiss', { section: 'park' });
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to dismiss recommendation.');
+                        alert(d.error || 'Failed to delete recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -5652,7 +5681,8 @@ $(document).ready(function() {
         $('#ev-PlayerName').on('input', function() {
             if (!$(this).val()) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); }
         });
-        $('#ev-PlayerName').data('autocomplete')._renderItem = function(ul, item) {
+        var _evAcWidget = $('#ev-PlayerName').data('autocomplete');
+        if (_evAcWidget) _evAcWidget._renderItem = function(ul, item) {
             var a = $('<a>');
             if (item.suspended) {
                 a.addClass('pk-att-ac-suspended').html(
@@ -5888,7 +5918,6 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    gtag('event', 'event_rsvp_delete');
                     var row = btn.closest('tr');
                     if (row) row.remove();
                     var cnt = document.querySelector('.ev-tab-nav li[data-tab="ev-tab-rsvp"] .ev-tab-count');
@@ -6330,7 +6359,17 @@ $(document).ready(function() {
         var tr = document.createElement('tr');
         tr.dataset.attendanceId = entry.AttendanceId || 0;
         tr.dataset.mundaneId = entry.MundaneId || 0;
-        var td1 = document.createElement('td'); td1.textContent = entry.Persona;
+        var td1 = document.createElement('td');
+        var td1Link = document.createElement('a');
+        td1Link.href = PkConfig.uir + 'Player/profile/' + (entry.MundaneId || 0);
+        td1Link.target = '_blank';
+        td1Link.rel = 'noopener';
+        td1Link.textContent = entry.Persona;
+        var td1Icon = document.createElement('i');
+        td1Icon.className = 'fas fa-external-link-alt';
+        td1Icon.style.cssText = 'margin-left:5px;font-size:10px;color:#a0aec0;vertical-align:middle';
+        td1Link.appendChild(td1Icon);
+        td1.appendChild(td1Link);
         var td2 = document.createElement('td'); td2.textContent = className;
         var td3 = document.createElement('td'); td3.textContent = entry.Credits || 1;
         var td4 = document.createElement('td');
@@ -6545,7 +6584,6 @@ $(document).ready(function() {
         if (nameInput) nameInput.placeholder = 'Search within your park\u2026';
         var qaTbody = gid('pk-att-qa-tbody');
         if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
-        gtag('event', 'park_attendance_open', { source: 'park_info' });
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
         pkSetDate(today);
@@ -6683,7 +6721,7 @@ $(document).ready(function() {
     // --- Core AJAX ---
     function pkSubmit(data, cb) {
         $.post(ADD_URL, data, function(r) {
-            if (r && r.status === 0) { gtag('event', 'attendance_add', { method: 'quick_add' }); cb(true, null, r.attendanceId || 0); }
+            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0); }
             else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0);
         }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0); });
     }
@@ -7569,8 +7607,7 @@ function setupPronounPicker(cfg) {
                         console.log('[EditAward] Response body (first 500 chars):', body.substring(0, 500));
                         saveBtn.disabled = false;
                         if (r.ok) {
-                            if (doReconcile) gtag('event', 'reconcile_submit', { type: 'award' });
-                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+                            if (doReconcile)                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
                             showFb(msg, 'pn-award-edit-success');
                             setTimeout(function() { location.reload(); }, 900);
                         } else {
@@ -7869,7 +7906,9 @@ function setupPronounPicker(cfg) {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var ADD_DAY_URL    = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/addparkday';
+    var EDIT_DAY_URL   = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/editparkday';
     var DELETE_DAY_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deleteparkday';
+    var _editingDayId  = 0;
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7921,6 +7960,9 @@ function setupPronounPicker(cfg) {
             radio.checked = radio.value === '0';
         });
         pkToggleAltLoc(false); // reset altloc block
+        _editingDayId = 0;
+        gid('pk-addday-id').value = 0;
+        pkSetModalMode(false);
         overlay.classList.add('pk-open');
         document.body.style.overflow = 'hidden';
     };
@@ -7930,6 +7972,94 @@ function setupPronounPicker(cfg) {
         if (!overlay) return;
         overlay.classList.remove('pk-open');
         document.body.style.overflow = '';
+        _editingDayId = 0;
+    }
+
+    function pkSetModalMode(isEdit) {
+        var titleIcon = gid('pk-addday-title-icon');
+        var titleText = gid('pk-addday-title-text');
+        var submitIcon = gid('pk-addday-submit-icon');
+        var submitText = gid('pk-addday-submit-text');
+        var delSection = gid('pk-addday-delete-section');
+        if (isEdit) {
+            if (titleIcon) titleIcon.className = 'fas fa-pencil-alt';
+            if (titleText) titleText.textContent = 'Edit Park Day';
+            if (submitIcon) submitIcon.className = 'fas fa-save';
+            if (submitText) submitText.textContent = 'Save Changes';
+            if (delSection) delSection.style.display = '';
+        } else {
+            if (titleIcon) titleIcon.className = 'fas fa-calendar-plus';
+            if (titleText) titleText.textContent = 'Add Park Day';
+            if (submitIcon) submitIcon.className = 'fas fa-calendar-plus';
+            if (submitText) submitText.textContent = 'Add Park Day';
+            if (delSection) delSection.style.display = 'none';
+        }
+    }
+
+    function pkOpenEditDayModal(card) {
+        var overlay = gid('pk-addday-overlay');
+        if (!overlay) return;
+        _editingDayId = parseInt(card.dataset.dayId, 10) || 0;
+        gid('pk-addday-id').value = _editingDayId;
+
+        var fb = gid('pk-addday-feedback');
+        if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+
+        // Purpose
+        var purpose = card.dataset.purpose || 'fighter-practice';
+        overlay.querySelectorAll('.pk-seg-btn[data-group="purpose"]').forEach(function(btn) {
+            btn.classList.toggle('pk-seg-active', btn.dataset.val === purpose);
+        });
+        var purposeHid = gid('pk-addday-purpose');
+        if (purposeHid) purposeHid.value = purpose;
+
+        // Recurrence
+        var recurrence = card.dataset.recurrence || 'weekly';
+        overlay.querySelectorAll('.pk-seg-btn[data-group="recurrence"]').forEach(function(btn) {
+            btn.classList.toggle('pk-seg-active', btn.dataset.val === recurrence);
+        });
+        var recHid = gid('pk-addday-recurrence');
+        if (recHid) recHid.value = recurrence;
+        pkUpdateRecurrenceFields(recurrence);
+
+        // Weekday, week-of-month, month-day
+        var weekdayEl = gid('pk-addday-weekday');
+        if (weekdayEl) weekdayEl.value = card.dataset.weekday || 'Monday';
+        var weekofEl = gid('pk-addday-weekof');
+        if (weekofEl) weekofEl.value = card.dataset.weekof || '1';
+        var monthdayEl = gid('pk-addday-monthday');
+        if (monthdayEl) monthdayEl.value = card.dataset.monthday || '1';
+
+        // Time
+        var timeEl = gid('pk-addday-time');
+        if (timeEl) timeEl.value = card.dataset.time || '';
+
+        // Description
+        var descEl = gid('pk-addday-desc');
+        if (descEl) descEl.value = card.dataset.desc || '';
+
+        // Location
+        var isOnline = card.dataset.online === '1';
+        var isAltLoc = card.dataset.altloc === '1';
+        var locVal = isOnline ? 'online' : (isAltLoc ? '1' : '0');
+        overlay.querySelectorAll('input[name="pk-addday-altloc"]').forEach(function(radio) {
+            radio.checked = radio.value === locVal;
+        });
+        pkToggleAltLoc(locVal === '1');
+
+        // Alternate location fields
+        var addrEl = gid('pk-addday-address');
+        if (addrEl) addrEl.value = card.dataset.address || '';
+        var cityEl = gid('pk-addday-city');
+        if (cityEl) cityEl.value = card.dataset.city || '';
+        var provEl = gid('pk-addday-province');
+        if (provEl) provEl.value = card.dataset.province || '';
+        var postalEl = gid('pk-addday-postal');
+        if (postalEl) postalEl.value = card.dataset.postal || '';
+
+        pkSetModalMode(true);
+        overlay.classList.add('pk-open');
+        document.body.style.overflow = 'hidden';
     }
 
     $(document).ready(function() {
@@ -7986,12 +8116,19 @@ function setupPronounPicker(cfg) {
                 fd.append('City',              gid('pk-addday-city')     ? gid('pk-addday-city').value     : '');
                 fd.append('Province',          gid('pk-addday-province') ? gid('pk-addday-province').value : '');
                 fd.append('PostalCode',        gid('pk-addday-postal')   ? gid('pk-addday-postal').value   : '');
-                fetch(ADD_DAY_URL, { method: 'POST', body: fd })
+                var url = ADD_DAY_URL;
+                var successMsg = 'Park day added!';
+                if (_editingDayId) {
+                    fd.append('ParkDayId', _editingDayId);
+                    url = EDIT_DAY_URL;
+                    successMsg = 'Park day updated!';
+                }
+                fetch(url, { method: 'POST', body: fd })
                     .then(function(r) { return r.json(); })
                     .then(function(result) {
                         saveBtn.disabled = false;
                         if (result && result.status === 0) {
-                            if (fb) { fb.textContent = 'Park day added!'; fb.style.display = ''; fb.className = 'pk-addday-ok'; }
+                            if (fb) { fb.textContent = successMsg; fb.style.display = ''; fb.className = 'pk-addday-ok'; }
                             setTimeout(function() { location.reload(); }, 800);
                         } else {
                             if (fb) { fb.textContent = (result && result.error) ? result.error : 'Save failed.'; fb.style.display = ''; fb.className = 'pk-addday-err'; }
@@ -8003,31 +8140,39 @@ function setupPronounPicker(cfg) {
             });
         }
 
-        // Delete park day
-        $(document).on('click', '.pk-schedule-card-del', function() {
-            var btn       = this;
-            var card      = $(this).closest('.pk-schedule-card');
-            var parkDayId = $(this).data('park-day-id');
-            if (!parkDayId) return;
-            knConfirm('Remove this park day? This cannot be undone.', function() {
-                btn.disabled = true;
-                var fd = new FormData();
-                fd.append('ParkDayId', parkDayId);
-                fetch(DELETE_DAY_URL, { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(result) {
-                        if (result && result.status === 0) {
-                            card.fadeOut(300, function() { card.remove(); });
-                        } else {
-                            btn.disabled = false;
-                            alert((result && result.error) ? result.error : 'Delete failed.');
-                        }
-                    }).catch(function() {
-                        btn.disabled = false;
-                        alert('Request failed.');
-                    });
-            });
+        // Edit park day — open modal with card data
+        $(document).on('click', '.pk-schedule-card-edit', function() {
+            var card = $(this).closest('.pk-schedule-card')[0];
+            if (card) pkOpenEditDayModal(card);
         });
+
+        // Delete park day from modal
+        var delBtn = gid('pk-addday-delete');
+        if (delBtn) {
+            delBtn.addEventListener('click', function() {
+                if (!_editingDayId) return;
+                knConfirm('Delete this park day? This cannot be undone.', function() {
+                    delBtn.disabled = true;
+                    var fd = new FormData();
+                    fd.append('ParkDayId', _editingDayId);
+                    fetch(DELETE_DAY_URL, { method: 'POST', body: fd })
+                        .then(function(r) { return r.json(); })
+                        .then(function(result) {
+                            delBtn.disabled = false;
+                            if (result && result.status === 0) {
+                                pkCloseAddDayModal();
+                                var card = document.querySelector('.pk-schedule-card[data-day-id="' + _editingDayId + '"]');
+                                if (card) $(card).fadeOut(300, function() { $(card).remove(); });
+                            } else {
+                                alert((result && result.error) ? result.error : 'Delete failed.');
+                            }
+                        }).catch(function() {
+                            delBtn.disabled = false;
+                            alert('Request failed.');
+                        });
+                });
+            });
+        }
     });
 })();
 
@@ -8040,6 +8185,7 @@ function setupPronounPicker(cfg) {
 
     var currentRevokeAwardsId = 0;
     var currentRevokeAwardName = '';
+    var revokeCountdownTimer = null;
 
     window.pnOpenAwardRevokeModal = function(awardsId, awardName, isTitle) {
         currentRevokeAwardsId = awardsId;
@@ -8048,19 +8194,38 @@ function setupPronounPicker(cfg) {
         if (nameEl) nameEl.textContent = awardName;
         var titleEl = document.querySelector('#pn-award-revoke-overlay .pn-modal-title');
         if (titleEl) titleEl.innerHTML = '<i class="fas fa-ban" style="margin-right:8px;color:#b7791f"></i>' + (isTitle ? 'Revoke Title' : 'Revoke Award');
+        var revokeLabel = isTitle ? 'Revoke Title' : 'Revoke Award';
         var saveBtn = gid('pn-revoke-award-save');
-        if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + (isTitle ? 'Revoke Title' : 'Revoke Award');
         var reason = gid('pn-revoke-reason');
         if (reason) reason.value = '';
         var counter = gid('pn-revoke-char-count');
         if (counter) counter.textContent = '300 characters remaining';
         var fb = gid('pn-revoke-award-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+        // 5-second countdown on confirm button
+        if (revokeCountdownTimer) clearInterval(revokeCountdownTimer);
+        if (saveBtn) {
+            var remaining = 5;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + revokeLabel + ' (' + remaining + ')';
+            revokeCountdownTimer = setInterval(function() {
+                remaining--;
+                if (remaining > 0) {
+                    saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + revokeLabel + ' (' + remaining + ')';
+                } else {
+                    clearInterval(revokeCountdownTimer);
+                    revokeCountdownTimer = null;
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-ban"></i> ' + revokeLabel;
+                }
+            }, 1000);
+        }
         var overlay = gid('pn-award-revoke-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
     };
 
     function pnCloseAwardRevokeModal() {
+        if (revokeCountdownTimer) { clearInterval(revokeCountdownTimer); revokeCountdownTimer = null; }
         var overlay = gid('pn-award-revoke-overlay');
         if (overlay) { overlay.classList.remove('pn-open'); document.body.style.overflow = ''; }
     }
@@ -8829,7 +8994,6 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
                 tbody.appendChild(tr);
             });
         }
-        gtag('event', 'reconcile_open', { type: 'class' });
         var overlay = gid('pn-reconcile-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
     };
@@ -8863,7 +9027,6 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    gtag('event', 'reconcile_submit', { type: 'class' });
                     location.reload();
                 } else {
                     if (fb) { fb.textContent = data.error || 'Error saving reconciliation.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
@@ -9014,14 +9177,15 @@ window.pnCloseUnitCreateModal = function() {
             if (term.length < 2) { gid('kn-moveplayer-player-results').classList.remove('kn-ac-open'); return; }
             mpPlayerTimer = setTimeout(function() {
                 var scope = (knmpMode === 'in') ? 'exclude' : 'own';
-                fetch(PSEARCH_URL + '&scope=' + scope + '&q=' + encodeURIComponent(term))
+                fetch(PSEARCH_URL + '&scope=' + scope + '&include_inactive=1&q=' + encodeURIComponent(term))
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         var el = gid('kn-moveplayer-player-results');
                         el.innerHTML = (data && data.length)
                             ? data.map(function(p) {
+                                var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
                                 return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                    + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span></div>';
+                                    + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + inactive + '</div>';
                             }).join('')
                             : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                         el.classList.add('kn-ac-open');
@@ -9105,192 +9269,16 @@ window.pnCloseUnitCreateModal = function() {
 // ---- Claim Park Modal (Kingdomnew) ----
 (function() {
     if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
-
-    var CLAIM_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/claimpark';
-    var PARK_URL  = KnConfig.httpService + 'Search/SearchService.php';
-
-    function gid(id) { return document.getElementById(id); }
-    function showFb(msg, ok) {
-        var el = gid('kn-claimpark-feedback');
-        el.textContent = msg;
-        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
-        el.style.display = '';
-    }
-
-    function closeClaimPark() {
-        var ov = gid('kn-claimpark-overlay');
-        if (ov) ov.classList.remove('kn-open');
-        document.body.style.overflow = '';
-    }
-
-    function cpShowSearch() {
-        cpAbbrData = null;
-        gid('kn-claimpark-search-panel').style.display  = '';
-        gid('kn-claimpark-confirm-panel').style.display = 'none';
-        gid('kn-claimpark-back').style.display          = 'none';
-        gid('kn-claimpark-cancel').style.display        = '';
-        var btn = gid('kn-claimpark-submit');
-        btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
-        btn.disabled  = false;
-    }
-
-    function cpShowConfirm(abbr, taken, conflictName) {
-        var parkName    = gid('kn-claimpark-park-name').value;
-        var fromKingdom = gid('kn-claimpark-source-kingdom').value || '(unknown)';
-        gid('kn-claimpark-confirm-park').textContent = parkName;
-        gid('kn-claimpark-confirm-from').textContent = fromKingdom;
-        gid('kn-claimpark-confirm-abbr').textContent = abbr;
-        var warnEl  = gid('kn-claimpark-abbr-warning');
-        var fieldEl = gid('kn-claimpark-abbr-field');
-        if (taken) {
-            gid('kn-claimpark-abbr-conflict-abbr').textContent = abbr;
-            gid('kn-claimpark-abbr-conflict-name').textContent = conflictName;
-            gid('kn-claimpark-new-abbr').value = abbr;
-            warnEl.style.display  = 'flex';
-            fieldEl.style.display = '';
-        } else {
-            warnEl.style.display  = 'none';
-            fieldEl.style.display = 'none';
-        }
-        gid('kn-claimpark-search-panel').style.display  = 'none';
-        gid('kn-claimpark-confirm-panel').style.display = '';
-        gid('kn-claimpark-back').style.display          = '';
-        gid('kn-claimpark-cancel').style.display        = 'none';
-        var btn = gid('kn-claimpark-submit');
-        btn.innerHTML = '<i class="fas fa-flag"></i> Confirm Transfer';
-        btn.disabled  = false;
-    }
-
-    window.knOpenClaimParkModal = function() {
-        var ov = gid('kn-claimpark-overlay');
-        if (!ov) return;
-        cpAbbrData = null;
-        cpConfirming = false;
-        gid('kn-claimpark-park-name').value      = '';
-        gid('kn-claimpark-park-id').value        = '';
-        gid('kn-claimpark-source-kingdom').value = '';
-        gid('kn-claimpark-park-results').classList.remove('kn-ac-open');
-        gid('kn-claimpark-feedback').style.display = 'none';
-        cpShowSearch();
-        ov.classList.add('kn-open');
-        document.body.style.overflow = 'hidden';
-        setTimeout(function() { gid('kn-claimpark-park-name').focus(); }, 50);
-    };
-
-    var cpParkTimer;
-    var cpConfirming = false;
-    var cpAbbrData   = null;
-
-    $(document).ready(function() {
-        if (!gid('kn-claimpark-overlay')) return;
-
-        acKeyNav(gid('kn-claimpark-park-name'), gid('kn-claimpark-park-results'), 'kn-ac-open', '.kn-ac-item[data-id]');
-
-        gid('kn-claimpark-close-btn').addEventListener('click', closeClaimPark);
-        gid('kn-claimpark-cancel').addEventListener('click', closeClaimPark);
-        gid('kn-claimpark-back').addEventListener('click', function() { cpConfirming = false; cpShowSearch(); });
-        gid('kn-claimpark-overlay').addEventListener('click', function(e) {
-            if (e.target === this) closeClaimPark();
-        });
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && gid('kn-claimpark-overlay') && gid('kn-claimpark-overlay').classList.contains('kn-open'))
-                closeClaimPark();
-        });
-
-        // Park autocomplete (all parks, no kingdom filter)
-        gid('kn-claimpark-park-name').addEventListener('input', function() {
-            gid('kn-claimpark-park-id').value        = '';
-            gid('kn-claimpark-source-kingdom').value = '';
-            var term = this.value.trim();
-            if (term.length < 2) { gid('kn-claimpark-park-results').classList.remove('kn-ac-open'); return; }
-            clearTimeout(cpParkTimer);
-            cpParkTimer = setTimeout(function() {
-                $.getJSON(PARK_URL, { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
-                    var el = gid('kn-claimpark-park-results');
-                    el.innerHTML = (data && data.length)
-                        ? data.map(function(p) {
-                            var label = p.Name + (p.KingdomName ? ' [' + p.KingdomName + ']' : '');
-                            return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.ParkId
-                                + '" data-name="' + encodeURIComponent(p.Name)
-                                + '" data-kingdom="' + encodeURIComponent(p.KingdomName || '') + '">'
-                                + label + '</div>';
-                        }).join('')
-                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
-                    el.classList.add('kn-ac-open');
-                });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
-        });
-        gid('kn-claimpark-park-results').addEventListener('click', function(e) {
-            var item = e.target.closest('.kn-ac-item[data-id]');
-            if (!item) return;
-            gid('kn-claimpark-park-name').value      = decodeURIComponent(item.dataset.name);
-            gid('kn-claimpark-park-id').value        = item.dataset.id;
-            gid('kn-claimpark-source-kingdom').value = decodeURIComponent(item.dataset.kingdom || '');
-            this.classList.remove('kn-ac-open');
-        });
-
-        gid('kn-claimpark-submit').addEventListener('click', function() {
-            var parkId = gid('kn-claimpark-park-id').value;
-            if (!cpConfirming) {
-                if (!parkId) { showFb('Select a park to claim.', false); return; }
-                var btn = this;
-                btn.disabled  = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
-                var fd = new FormData();
-                fd.append('ParkId', parkId);
-                fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/checkparkabbr', { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        if (d.status !== 0) {
-                            btn.disabled  = false;
-                            btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
-                            showFb(d.error || 'Error checking abbreviation.', false);
-                            return;
-                        }
-                        cpAbbrData   = { abbr: d.abbr, taken: d.taken, conflictName: d.conflictName };
-                        cpConfirming = true;
-                        cpShowConfirm(d.abbr, d.taken, d.conflictName);
-                    })
-                    .catch(function() {
-                        btn.disabled  = false;
-                        btn.innerHTML = '<i class="fas fa-arrow-right"></i> Review Transfer';
-                        showFb('Error checking abbreviation. Please try again.', false);
-                    });
-                return;
-            }
-            // Confirmed — validate abbreviation if conflict exists
-            if (cpAbbrData && cpAbbrData.taken) {
-                var newAbbr = gid('kn-claimpark-new-abbr').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-                if (newAbbr.length < 2 || newAbbr.length > 3) {
-                    showFb('Please enter a 2–3 character abbreviation.', false);
-                    return;
-                }
-            }
-            var postData = { ParkId: parkId, DestKingdomId: KnConfig.kingdomId };
-            if (cpAbbrData && cpAbbrData.taken) {
-                postData.Abbreviation = gid('kn-claimpark-new-abbr').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-            }
-            var btn = this;
-            btn.disabled = true;
-            $.post(CLAIM_URL, postData, function(r) {
-                btn.disabled = false;
-                if (r && r.status === 0) {
-                    showFb('Park claimed successfully.', true);
-                    setTimeout(function() { closeClaimPark(); location.reload(); }, 1200);
-                } else {
-                    cpConfirming = false;
-                    cpShowSearch();
-                    showFb((r && r.error) ? r.error : 'Claim failed.', false);
-                }
-            }, 'json').fail(function() {
-                btn.disabled = false;
-                cpConfirming = false;
-                cpShowSearch();
-                showFb('Request failed. Please try again.', false);
-            });
-        });
-    });
+    var ov = document.getElementById('kn-claimpark-overlay');
+    if (!ov) return;
+    function closeClaimPark() { ov.classList.remove('kn-open'); document.body.style.overflow = ''; }
+    document.getElementById('kn-claimpark-close-btn').addEventListener('click', closeClaimPark);
+    document.getElementById('kn-claimpark-cancel').addEventListener('click', closeClaimPark);
+    ov.addEventListener('click', function(e) { if (e.target === ov) closeClaimPark(); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && ov.classList.contains('kn-open')) closeClaimPark(); });
+    window.knOpenClaimParkModal = function() { ov.classList.add('kn-open'); document.body.style.overflow = 'hidden'; };
 })();
+
 
 // ---- Merge Players Modal (Kingdomnew) ----
 (function() {
@@ -9494,7 +9482,6 @@ window.pnCloseUnitCreateModal = function() {
             .then(function(r) { return r.json(); })
             .then(function(r) {
                 if (r && r.status === 0) {
-                    gtag('event', 'park_heraldry_remove', { status: 'success' });
                     window.location.reload();
                 } else {
                     alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
@@ -9524,17 +9511,14 @@ window.pnCloseUnitCreateModal = function() {
                     .then(function(r) {
                         if (upl) upl.style.display = 'none';
                         if (r && r.status === 0) {
-                            gtag('event', 'park_heraldry_upload', { status: 'success' });
                             if (done) done.style.display = '';
                             setTimeout(function() { window.location.reload(); }, 1200);
                         } else {
-                            gtag('event', 'park_heraldry_upload', { status: 'failed' });
                             if (sel) sel.style.display = '';
                             alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
                         }
                     })
                     .catch(function() {
-                        gtag('event', 'park_heraldry_upload', { status: 'failed' });
                         if (upl) upl.style.display = 'none';
                         if (sel) sel.style.display = '';
                         alert('Request failed. Please try again.');
@@ -9578,8 +9562,8 @@ window.pnCloseUnitCreateModal = function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
-    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&q=';
-    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&q=';
+    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&q=';
+    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&q=';
 
     var mpPlayerId = 0, mpParkId = 0;
     var mpPlayerTimer = null, mpParkTimer = null;
@@ -9687,6 +9671,12 @@ window.pnCloseUnitCreateModal = function() {
                                     ? ' — ' + player.PAbbr + ' (' + player.KAbbr + ')'
                                     : (player.ParkName ? ' — ' + player.ParkName : '');
                                 item.textContent = player.Persona + abbr;
+                                if (player.Active === 0) {
+                                    var badge = document.createElement('span');
+                                    badge.textContent = ' inactive';
+                                    badge.style.cssText = 'color:#e53e3e;font-size:10px;font-weight:600';
+                                    item.appendChild(badge);
+                                }
                                 item.addEventListener('mousedown', function(e) {
                                     e.preventDefault();
                                     mpPlayerId = player.MundaneId;
@@ -10518,26 +10508,107 @@ window.pnCloseUnitCreateModal = function() {
 })();
 
 /* [TOURNAMENTS HIDDEN] KN delete tournament buttons */
-// ---- Recommendations tab filter bar (Kingdomnew) ----
-(function() {
-    var bar = document.querySelector('.kn-rec-filter-bar');
-    if (!bar) return;
-
-    var activeFilter = 'all';
-
-    function applyFilter(filter) {
-        activeFilter = filter;
-        var rows = document.querySelectorAll('#kn-recs-tbody .pk-rec-row');
-        rows.forEach(function(row) {
-            row.style.display = (filter === 'all' || row.dataset.filter === filter) ? '' : 'none';
+// ---- Recs table export helpers (shared by Kingdom + Park) ----
+function recsCellText(td) {
+    // Clone so we don't mutate the live DOM; strip expand/collapse buttons and
+    // the ellipsis "… […]" span — jQuery .text() still reads display:none text,
+    // so the full pk-rec-notes-full content comes through automatically.
+    var $c = $(td).clone();
+    $c.find('button, .pk-rec-notes-ellipsis').remove();
+    return $c.text().replace(/\s+/g, ' ').trim();
+}
+window.recsExportCsv = function(dt, filename) {
+    var EXPORT_COLS = 6; // skip actions column
+    var headers = [];
+    dt.columns().header().each(function(h, i) {
+        if (i < EXPORT_COLS) headers.push(h.textContent.trim());
+    });
+    var rows = [headers];
+    dt.rows({search: 'applied'}).every(function() {
+        var cells = [];
+        $(this.node()).find('td').each(function(i) {
+            if (i < EXPORT_COLS) cells.push(recsCellText(this));
         });
-        bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(btn) {
-            btn.classList.toggle('kn-rec-filter-active', btn.dataset.filter === filter);
+        rows.push(cells);
+    });
+    var csv = rows.map(function(r) {
+        return r.map(function(v) { return '"' + v.replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+window.recsExportPrint = function(dt, title) {
+    var EXPORT_COLS = 6;
+    var headers = [];
+    dt.columns().header().each(function(h, i) {
+        if (i < EXPORT_COLS) headers.push('<th>' + h.textContent.trim() + '</th>');
+    });
+    var rowsHtml = '';
+    dt.rows({search: 'applied'}).every(function() {
+        var cells = '';
+        $(this.node()).find('td').each(function(i) {
+            if (i < EXPORT_COLS) cells += '<td>' + recsCellText(this) + '</td>';
+        });
+        rowsHtml += '<tr>' + cells + '</tr>';
+    });
+    var win = window.open('', '_blank');
+    win.document.write('<!DOCTYPE html><html><head><title>' + title + '</title><style>' +
+        'body{font-family:sans-serif;font-size:12px;padding:16px;color:#1a202c}' +
+        'h2{font-size:15px;margin:0 0 12px;color:#2b6cb0}' +
+        'table{border-collapse:collapse;width:100%}' +
+        'th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left;vertical-align:top}' +
+        'th{background:#edf2f7;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}' +
+        'tr:nth-child(even) td{background:#f7fafc}' +
+        '@media print{body{padding:0}button{display:none}}' +
+        '</style></head><body>' +
+        '<h2>' + title + '</h2>' +
+        '<table><thead><tr>' + headers.join('') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+        '<script>window.onload=function(){window.print();}<\/script>' +
+        '</body></html>');
+    win.document.close();
+};
+
+// ---- Recommendations tab filter bar (Kingdom + Park) ----
+(function() {
+    function initFilterBar(bar, filterVarName, dtVarName) {
+        if (!bar) return;
+        bar.addEventListener('click', function(e) {
+            var btn = e.target.closest('.kn-rec-filter-btn');
+            if (!btn) return;
+            var filter = btn.dataset.filter;
+            bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(b) {
+                b.classList.toggle('kn-rec-filter-active', b.dataset.filter === filter);
+            });
+            window[filterVarName] = filter;
+            if (window[dtVarName]) window[dtVarName].draw();
         });
     }
 
-    bar.addEventListener('click', function(e) {
-        var btn = e.target.closest('.kn-rec-filter-btn');
-        if (btn) applyFilter(btn.dataset.filter);
+    initFilterBar(
+        document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar'),
+        'knRecActiveFilter', 'knRecDT'
+    );
+    initFilterBar(
+        document.querySelector('#pk-tab-recommendations .kn-rec-filter-bar'),
+        'pkRecActiveFilter', 'pkRecDT'
+    );
+
+    // Info popover toggle
+    document.addEventListener('click', function(e) {
+        var infoBtn = e.target.closest('.kn-rec-filter-info-btn');
+        if (infoBtn) {
+            var pop = infoBtn.parentElement.querySelector('.kn-rec-filter-popover');
+            var isOpen = pop.classList.contains('kn-pop-open');
+            document.querySelectorAll('.kn-rec-filter-popover.kn-pop-open').forEach(function(p) { p.classList.remove('kn-pop-open'); });
+            if (!isOpen) pop.classList.add('kn-pop-open');
+            return;
+        }
+        if (!e.target.closest('.kn-rec-filter-info')) {
+            document.querySelectorAll('.kn-rec-filter-popover.kn-pop-open').forEach(function(p) { p.classList.remove('kn-pop-open'); });
+        }
     });
 })();

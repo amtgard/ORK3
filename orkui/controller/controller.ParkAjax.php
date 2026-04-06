@@ -89,6 +89,47 @@ class Controller_ParkAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'editparkday') {
+			$parkDayId  = (int)($_POST['ParkDayId'] ?? 0);
+			$recurrence = trim($_POST['Recurrence'] ?? '');
+			$time       = trim($_POST['Time']       ?? '');
+			if (!valid_id($parkDayId)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
+				exit;
+			}
+			if (!strlen($recurrence)) {
+				echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
+				exit;
+			}
+			if (!strlen($time)) {
+				echo json_encode(['status' => 1, 'error' => 'Time is required.']);
+				exit;
+			}
+			$online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
+			$altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
+			$r = $this->Park->edit_park_day([
+				'Token'             => $this->session->token,
+				'ParkDayId'         => $parkDayId,
+				'Recurrence'        => $recurrence,
+				'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
+				'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
+				'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+				'Time'              => $time,
+				'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
+				'Description'       => trim($_POST['Description'] ?? ''),
+				'Online'            => $online,
+				'AlternateLocation' => $altLoc,
+				'Address'           => trim($_POST['Address']     ?? ''),
+				'City'              => trim($_POST['City']        ?? ''),
+				'Province'          => trim($_POST['Province']    ?? ''),
+				'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
+				'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
+				'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
+			]);
+			echo (!isset($r['Status']) || $r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'deleteparkday') {
 			$parkDayId = (int)($_POST['ParkDayId'] ?? 0);
 			if (!valid_id($parkDayId)) {
@@ -121,8 +162,10 @@ class Controller_ParkAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'playersearch') {
-			$q     = trim($_GET['q']     ?? '');
-			$scope = trim($_GET['scope'] ?? 'own'); // 'own' | 'exclude' | 'all'
+			$q                = trim($_GET['q']               ?? '');
+			$scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
+			$prioritize       = !empty($_GET['prioritize']);
+			$include_inactive = !empty($_GET['include_inactive']);
 			if (strlen($q) < 2) {
 				echo json_encode([]);
 				exit;
@@ -156,6 +199,10 @@ class Controller_ParkAjax extends Controller {
 				$park_clause = '';
 			}
 
+			$order_clause = $prioritize
+				? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1) THEN 1 ELSE 2 END,"
+				: "";
+
 			// Abbreviation prefix overrides scope filter when specific kingdom/park matched
 			if ($filterPid > 0) {
 				$park_clause = "AND m.park_id = {$filterPid}";
@@ -167,17 +214,18 @@ class Controller_ParkAjax extends Controller {
 				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
 				       k.name AS kingdom_name, p.name AS park_name,
 				       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-				       m.suspended
+				       m.suspended, m.active
 				FROM ork_mundane m
 				LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 				LEFT JOIN ork_park p ON p.park_id = m.park_id
-				WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+				WHERE m.suspended = 0 AND LENGTH(m.persona) > 0
+				  " . ($include_inactive ? "" : "AND m.active = 1") . "
 				  {$park_clause}
 				  AND (m.persona LIKE '%{$term}%'
 				    OR m.given_name LIKE '%{$term}%'
 				    OR m.surname LIKE '%{$term}%'
 				    OR m.username LIKE '%{$term}%')
-				ORDER BY m.persona
+				ORDER BY {$order_clause} m.persona
 				LIMIT 15";
 			$DB->Clear();
 			$rs      = $DB->DataSet($sql);
@@ -193,6 +241,7 @@ class Controller_ParkAjax extends Controller {
 					'KAbbr'       => $rs->k_abbr,
 					'PAbbr'       => $rs->p_abbr,
 					'Suspended'   => (int)$rs->suspended,
+					'Active'      => (int)$rs->active,
 				];
 			}
 

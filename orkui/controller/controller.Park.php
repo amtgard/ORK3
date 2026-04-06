@@ -143,7 +143,11 @@ class Controller_Park extends Controller
 		}
 		$this->data['event_summary'] = $eventSummary;
 
-		$rosterSql = "
+		$pkRosterCacheKey = Ork3::$Lib->ghettocache->key(['ParkId' => $pid]);
+		$parkPlayers = Ork3::$Lib->ghettocache->get(__CLASS__ . '.park_players', $pkRosterCacheKey, 1200);
+		if ($parkPlayers === false) {
+			$parkPlayers = [];
+			$rosterSql = "
 			SELECT
 				m.mundane_id,
 				m.persona,
@@ -173,22 +177,23 @@ class Controller_Park extends Controller
 			  AND m.active = 1
 			GROUP BY m.mundane_id
 			ORDER BY m.persona";
-		$DB->Clear();
-	$rosterResult = $DB->DataSet($rosterSql);
-		$parkPlayers  = [];
-		if ($rosterResult && $rosterResult->Size() > 0) {
-			do {
-				$parkPlayers[] = [
-					'MundaneId'    => (int)$rosterResult->mundane_id,
-					'Persona'      => $rosterResult->persona,
-					'HasImage'     => (int)$rosterResult->has_image > 0,
-					'HasHeraldry'  => (int)$rosterResult->has_heraldry > 0,
-					'SigninCount'  => (int)$rosterResult->signin_count,
-					'LastSignin'   => $rosterResult->last_signin,
-					'LastClass'    => $rosterResult->last_class,
-					'OfficerRoles' => $rosterResult->officer_roles,
-				];
-			} while ($rosterResult->Next());
+			$DB->Clear();
+			$rosterResult = $DB->DataSet($rosterSql);
+			if ($rosterResult && $rosterResult->Size() > 0) {
+				do {
+					$parkPlayers[] = [
+						'MundaneId'    => (int)$rosterResult->mundane_id,
+						'Persona'      => $rosterResult->persona,
+						'HasImage'     => (int)$rosterResult->has_image > 0,
+						'HasHeraldry'  => (int)$rosterResult->has_heraldry > 0,
+						'SigninCount'  => (int)$rosterResult->signin_count,
+						'LastSignin'   => $rosterResult->last_signin,
+						'LastClass'    => $rosterResult->last_class,
+						'OfficerRoles' => $rosterResult->officer_roles,
+					];
+				} while ($rosterResult->Next());
+			}
+			Ork3::$Lib->ghettocache->cache(__CLASS__ . '.park_players', $pkRosterCacheKey, $parkPlayers);
 		}
 		$this->data['park_players'] = $parkPlayers;
 

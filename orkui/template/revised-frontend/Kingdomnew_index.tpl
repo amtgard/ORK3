@@ -344,11 +344,11 @@
 									<div class="kn-park-tile-type"><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : 'Park') ?></div>
 									<div class="kn-park-tile-stats">
 										<div class="kn-park-tile-stat">
-											<div class="kn-park-tile-stat-val kn-avgwk-tile">—</div>
+											<div class="kn-park-tile-stat-val kn-avgwk-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
 											<div class="kn-park-tile-stat-lbl">Avg/Wk</div>
 										</div>
 										<div class="kn-park-tile-stat">
-											<div class="kn-park-tile-stat-val kn-avgmo-tile">—</div>
+											<div class="kn-park-tile-stat-val kn-avgmo-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
 											<div class="kn-park-tile-stat-lbl">Avg/Mo</div>
 										</div>
 									</div>
@@ -384,8 +384,8 @@
 											<?php if (!empty($park['_pinned'])): ?><span class="kn-park-pin-badge" style="position:static;margin-left:6px">Your Park</span><?php endif; ?>
 										</td>
 										<td><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : '') ?></td>
-										<td class="kn-col-numeric kn-avgwk-row">—</td>
-										<td class="kn-col-numeric kn-avgmo-row">—</td>
+										<td class="kn-col-numeric kn-avgwk-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
+										<td class="kn-col-numeric kn-avgmo-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
 										<td class="kn-col-numeric kn-tp-row">—</td>
 										<td class="kn-col-numeric kn-tm-row">—</td>
 										<?php if ($CanManageKingdom ?? false): ?>
@@ -720,12 +720,37 @@
 			<?php if (empty($AwardRecommendations)): ?>
 			<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($kingdom_name) ?>.</div>
 			<?php else: ?>
+			<?php if ($CanManageKingdom ?? false): ?>
 			<div class="kn-rec-filter-bar">
-				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="all">All</button>
+				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
 				<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
-				<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
 				<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
+				<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
+				<button class="kn-rec-filter-btn" data-filter="all">All</button>
+				<span class="kn-rec-filter-info">
+					<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
+					<div class="kn-rec-filter-popover">
+						<h4>About These Filters</h4>
+						<dl>
+							<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
+							<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
+							<dt>Below Recommended</dt>
+							<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
+							<dt>Non-Ladder</dt>
+							<dd>Flat awards with no rank progression (e.g. service awards). Grant or Delete as appropriate.</dd>
+							<dt>At or Above Recommended</dt>
+							<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
+							<dt>All</dt>
+							<dd>Every recommendation regardless of status. Use for a full audit.</dd>
+						</dl>
+					</div>
+				</span>
+				<span class="kn-rec-export-btns">
+					<button class="kn-rec-export-btn" type="button" onclick="knRecPrint()"><i class="fas fa-print"></i> Print</button>
+					<button class="kn-rec-export-btn" type="button" onclick="knRecCsv()"><i class="fas fa-download"></i> CSV</button>
+				</span>
 			</div>
+			<?php endif; ?>
 				<div class="pk-recs-table-wrap">
 				<table id="kn-rec-table" class="pk-recs-table display">
 					<thead>
@@ -761,12 +786,12 @@
 						<?php if ($CanManageKingdom ?? false): ?>
 						<td class="pk-rec-actions">
 							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-								data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
+								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
 								<i class="fas fa-medal"></i> Grant
 							</button>
 							<button class="pk-rec-dismiss-btn"
 								data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-								<i class="fas fa-times"></i> Dismiss
+								<i class="fas fa-times"></i> Delete
 							</button>
 						</td>
 						<?php endif; ?>
@@ -794,7 +819,7 @@
 					</div>
 					<?php if ($CanManageKingdom ?? false): ?>
 					<div class="plr-action-group">
-						<button class="plr-add-btn" onclick="knOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
+						<button class="plr-add-btn" onclick="knOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Create Player</button>
 						<div class="plr-gear-wrap">
 							<button class="plr-gear-btn" id="kn-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 							<div class="plr-gear-menu" id="kn-plr-gear-menu">
@@ -1550,7 +1575,7 @@ var KnConfig = {
 <div id="kn-addplayer-overlay">
 	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Add Player</h3>
+			<h3 class="kn-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Create Player</h3>
 			<button class="kn-modal-close-btn" id="kn-addplayer-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -1759,60 +1784,20 @@ var KnConfig = {
 
 <!-- Claim Park Modal -->
 <div id="kn-claimpark-overlay">
-	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
 			<h3 class="kn-modal-title"><i class="fas fa-flag" style="margin-right:8px;color:#276749"></i>Claim Park</h3>
 			<button class="kn-modal-close-btn" id="kn-claimpark-close-btn">&times;</button>
 		</div>
-		<div class="kn-modal-body">
-			<div id="kn-claimpark-feedback" style="display:none"></div>
-			<!-- Step 1: Search -->
-			<div id="kn-claimpark-search-panel">
-				<p style="font-size:13px;color:#718096;margin:0 0 14px">Transfer a park from another kingdom into <strong><?= htmlspecialchars($kingdom_name) ?></strong>.</p>
-				<div class="kn-acct-field" style="position:relative">
-					<label>Park to Claim <span style="color:#e53e3e">*</span></label>
-					<input type="text" id="kn-claimpark-park-name" autocomplete="off" placeholder="Search all parks&hellip;">
-					<input type="hidden" id="kn-claimpark-park-id">
-					<input type="hidden" id="kn-claimpark-source-kingdom">
-					<div class="kn-ac-results" id="kn-claimpark-park-results"></div>
-				</div>
-			</div>
-			<!-- Step 2: Confirm -->
-			<div id="kn-claimpark-confirm-panel" style="display:none">
-				<p style="font-size:14px;color:#2d3748;margin:0 0 16px">Confirm the following transfer:</p>
-				<table style="width:100%;font-size:13px;border-collapse:collapse">
-					<tr>
-						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">Park</td>
-						<td style="padding:6px 0;font-weight:600" id="kn-claimpark-confirm-park"></td>
-					</tr>
-					<tr>
-						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">From</td>
-						<td style="padding:6px 0" id="kn-claimpark-confirm-from"></td>
-					</tr>
-					<tr>
-						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">To</td>
-						<td style="padding:6px 0"><strong><?= htmlspecialchars($kingdom_name) ?></strong></td>
-					</tr>
-					<tr>
-						<td style="padding:6px 10px 6px 0;color:#718096;white-space:nowrap">Abbreviation</td>
-						<td style="padding:6px 0;font-family:monospace" id="kn-claimpark-confirm-abbr"></td>
-					</tr>
-				</table>
-				<div id="kn-claimpark-abbr-warning" style="display:none;margin-top:12px;padding:10px 12px;background:#fff5f5;border:1px solid #feb2b2;border-radius:6px;font-size:13px;color:#c53030;gap:8px;align-items:flex-start">
-					<i class="fas fa-exclamation-triangle" style="margin-top:2px;flex-shrink:0"></i>
-					<div>The abbreviation <strong id="kn-claimpark-abbr-conflict-abbr"></strong> is already used by <strong id="kn-claimpark-abbr-conflict-name"></strong> in this kingdom. Enter a new abbreviation for this park.</div>
-				</div>
-				<div id="kn-claimpark-abbr-field" style="display:none;margin-top:12px">
-					<label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">New Abbreviation <span style="color:#e53e3e">*</span></label>
-					<input type="text" id="kn-claimpark-new-abbr" maxlength="3" autocomplete="off" style="width:80px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px;text-transform:uppercase" placeholder="e.g. ABC">
-				</div>
-				<p style="font-size:12px;color:#e53e3e;margin:16px 0 0">This will move all players in the park to the new kingdom.</p>
-			</div>
+		<div class="kn-modal-body" style="padding:20px">
+			<p style="font-size:14px;color:#2d3748;margin:0 0 10px">To claim a park, please submit documentation, including Althing results if possible, authorizing the move to:</p>
+			<p style="font-size:15px;font-weight:600;margin:0 0 14px">
+				<a href="mailto:Contracts@amtgard.com?subject=<?= rawurlencode('Park Claim Request — ' . ($kingdom_name ?? '')) ?>&body=<?= rawurlencode("Kingdom: " . ($kingdom_name ?? '') . "\nPark Name: \nAlthing Results: \nReason for Claim: ") ?>">Contracts@amtgard.com</a>
+			</p>
+			<p style="font-size:12px;color:#718096;margin:0">Include the park name, your kingdom, and any supporting documentation.</p>
 		</div>
-		<div class="kn-modal-footer">
-			<button class="kn-btn-ghost" id="kn-claimpark-cancel">Cancel</button>
-			<button class="kn-btn-ghost" id="kn-claimpark-back" style="display:none"><i class="fas fa-arrow-left"></i> Back</button>
-			<button class="kn-btn kn-btn-primary" id="kn-claimpark-submit"><i class="fas fa-arrow-right"></i> Review Transfer</button>
+		<div class="kn-modal-footer" style="justify-content:flex-end">
+			<button class="kn-btn-ghost" id="kn-claimpark-cancel">Close</button>
 		</div>
 	</div>
 </div>
@@ -2055,9 +2040,19 @@ var KnConfig = {
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+window.knRecActiveFilter = 'open';
+$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+	if (settings.nTable.id !== 'kn-rec-table') return true;
+	var filter = window.knRecActiveFilter || 'all';
+	if (filter === 'all') return true;
+	var row = settings.aoData[dataIndex].nTr;
+	var rowFilter = row ? row.getAttribute('data-filter') : '';
+	if (filter === 'open') return rowFilter !== 'already';
+	return rowFilter === filter;
+});
 $(function() {
 	if ($('#kn-rec-table').length) {
-		$('#kn-rec-table').DataTable({
+		window.knRecDT = $('#kn-rec-table').DataTable({
 			order: [[4, 'desc']],
 			columnDefs: [
 				{ targets: [4], type: 'date' },
@@ -2069,4 +2064,6 @@ $(function() {
 		});
 	}
 });
+window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
+window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
 </script>

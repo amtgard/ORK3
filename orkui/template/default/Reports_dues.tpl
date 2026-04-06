@@ -45,6 +45,7 @@ if (isset($this->__session->park_id) && !empty($players)) {
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<style>.dt-buttons { display:none; }</style>
 
 <div class="rp-root">
 
@@ -221,17 +222,8 @@ $(function() {
 	/* ── Row filter state ────────────────────────────────── */
 	var filterState = { unwaivered: true, duesforlife: true, suspended: true };
 
-	$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-		if (settings.nTable.id !== 'dues-report-table') return true;
-		var $row = $(table.row(dataIndex).node());
-		if (!filterState.unwaivered && $row.hasClass('rp-row-unwaivered')) return false;
-		if (!filterState.duesforlife && $row.hasClass('rp-row-duesforlife')) return false;
-		if (!filterState.suspended  && $row.hasClass('rp-row-suspended'))   return false;
-		return true;
-	});
-
 	var table = $('#dues-report-table').DataTable({
-		dom: 'lfrtip',
+		dom: 'Blfrtip',
 		buttons: [
 			{ extend: 'csv',   filename: 'Dues Paid List', exportOptions: { columns: ':visible' } },
 			{ extend: 'print', exportOptions: { columns: ':visible' } }
@@ -240,6 +232,15 @@ $(function() {
 		order: [[0, 'asc'], [1, 'asc'], [2, 'asc']],
 		fixedHeader: { headerOffset: document.getElementById('newmenu') ? document.getElementById('newmenu').offsetHeight : 0 },
 		autoWidth: true
+	});
+
+	$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+		if (settings.nTable.id !== 'dues-report-table') return true;
+		var $row = $(table.row(dataIndex).node());
+		if (!filterState.unwaivered && $row.hasClass('rp-row-unwaivered')) return false;
+		if (!filterState.duesforlife && $row.hasClass('rp-row-duesforlife')) return false;
+		if (!filterState.suspended  && $row.hasClass('rp-row-suspended'))   return false;
+		return true;
 	});
 
 	/* ── Filter pill toggles ─────────────────────────────── */

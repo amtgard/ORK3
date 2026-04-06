@@ -19,6 +19,10 @@ class Model_Park extends Model {
 		return $this->Park->AddParkDay($request);
 	}
 	
+	function edit_park_day($request) {
+		return $this->Park->EditParkDay($request);
+	}
+
 	function delete_park_day($request) {
 		return $this->Park->RemoveParkDay($request);
 	}

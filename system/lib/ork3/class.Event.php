@@ -288,6 +288,8 @@ class Event  extends Ork3 {
 			return InvalidParameter();
 		}
 		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
+				return InvalidParameter('This event occurrence cannot be deleted because attendance has already been entered for it.');
 			$this->detail->clear();
 			$this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
 			if ($this->detail->find()) {
@@ -393,8 +395,6 @@ class Event  extends Ork3 {
 			$this->detail->event_id = $request['EventId'];
 			$this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
 			if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
-				if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
-					return InvalidParameter('The scheduled event for this template cannot be updated because it has already been used (attendance has been entered!).  Please try scheduling a new event for this template.');
 			
 				$hasAddress = !empty(trim(($request['Address'] ?? '') . ($request['City'] ?? '') . ($request['Province'] ?? '') . ($request['PostalCode'] ?? '')));
 				$details  = $hasAddress ? Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
@@ -435,6 +435,7 @@ class Event  extends Ork3 {
 					$this->SetCurrent(array( 'Token' => $request['Token'], 'EventCalendarDetailId' => $request['EventCalendarDetailId'], 'Current' => 1));
 				}
 				logtrace('SetEventDetails', $request);
+				return Success();
 			} else {
 				return InvalidParameter('');
 			}

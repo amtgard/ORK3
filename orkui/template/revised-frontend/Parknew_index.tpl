@@ -516,9 +516,23 @@
 								$dayMapUrl = $parkMapUrl;
 							}
 						?>
-						<div class="pk-schedule-card">
+						<div class="pk-schedule-card"
+					data-day-id="<?= (int)$day['ParkDayId'] ?>"
+					data-purpose="<?= htmlspecialchars($day['Purpose'] ?? '') ?>"
+					data-recurrence="<?= htmlspecialchars($day['Recurrence'] ?? '') ?>"
+					data-weekday="<?= htmlspecialchars($day['WeekDay'] ?? '') ?>"
+					data-weekof="<?= (int)($day['WeekOfMonth'] ?? 0) ?>"
+					data-monthday="<?= (int)($day['MonthDay'] ?? 0) ?>"
+					data-time="<?= htmlspecialchars($day['Time'] ?? '') ?>"
+					data-desc="<?= htmlspecialchars($day['Description'] ?? '', ENT_QUOTES) ?>"
+					data-online="<?= (int)($day['Online'] ?? 0) ?>"
+					data-altloc="<?= (int)($day['AlternateLocation'] ?? 0) ?>"
+					data-address="<?= htmlspecialchars($day['Address'] ?? '', ENT_QUOTES) ?>"
+					data-city="<?= htmlspecialchars($day['City'] ?? '', ENT_QUOTES) ?>"
+					data-province="<?= htmlspecialchars($day['Province'] ?? '', ENT_QUOTES) ?>"
+					data-postal="<?= htmlspecialchars($day['PostalCode'] ?? '', ENT_QUOTES) ?>">
 				<?php if (!empty($CanAdminPark)): ?>
-				<button class="pk-schedule-card-del" data-park-day-id="<?= (int)$day['ParkDayId'] ?>" title="Remove park day">&times;</button>
+				<button class="pk-schedule-card-edit" title="Edit park day"><i class="fas fa-pencil-alt"></i></button>
 				<?php endif; ?>
 							<div class="pk-schedule-icon <?= $iconCls ?>">
 								<i class="fas <?= $iconFa ?>"></i>
@@ -677,7 +691,7 @@
 							</div>
 							<?php if ($CanAdminPark ?? false): ?>
 							<div class="plr-action-group">
-								<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
+								<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Create Player</button>
 								<div class="plr-gear-wrap">
 									<button class="plr-gear-btn" id="pk-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 									<div class="plr-gear-menu" id="pk-plr-gear-menu">
@@ -1009,7 +1023,7 @@
 					<div class="kn-report-group">
 						<h5><i class="fas fa-users-cog"></i> Players</h5>
 						<ul>
-							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Add Player</a></li>
+							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Create Player</a></li>
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
 							<li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
@@ -1038,6 +1052,37 @@
 				<?php if (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
+				<?php if (!empty($CanAdminPark)): ?>
+				<div class="kn-rec-filter-bar">
+					<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
+					<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
+					<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="all">All</button>
+					<span class="kn-rec-filter-info">
+						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
+						<div class="kn-rec-filter-popover">
+							<h4>About These Filters</h4>
+							<dl>
+								<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
+								<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
+								<dt>Below Recommended</dt>
+								<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
+								<dt>Non-Ladder</dt>
+								<dd>Flat awards with no rank progression (e.g. service awards). Grant or Delete as appropriate.</dd>
+								<dt>At or Above Recommended</dt>
+								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
+								<dt>All</dt>
+								<dd>Every recommendation regardless of status. Use for a full audit.</dd>
+							</dl>
+						</div>
+					</span>
+					<span class="kn-rec-export-btns">
+						<button class="kn-rec-export-btn" type="button" onclick="pkRecPrint()"><i class="fas fa-print"></i> Print</button>
+						<button class="kn-rec-export-btn" type="button" onclick="pkRecCsv()"><i class="fas fa-download"></i> CSV</button>
+					</span>
+				</div>
+				<?php endif; ?>
 				<div class="pk-recs-table-wrap">
 					<table id="pk-rec-table" class="pk-recs-table display">
 						<thead>
@@ -1053,7 +1098,9 @@
 						</thead>
 						<tbody id="pk-recs-tbody">
 						<?php foreach ($AwardRecommendations as $rec): ?>
-						<tr class="pk-rec-row" data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
+						<tr class="pk-rec-row"
+							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
+							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($rec['AwardName']) ?></td>
 							<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
@@ -1067,12 +1114,12 @@
 							<?php if (!empty($CanAdminPark)): ?>
 							<td class="pk-rec-actions">
 								<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-									data-rec="<?= htmlspecialchars(json_encode(['MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
+									data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
 									<i class="fas fa-medal"></i> Grant
 								</button>
 								<button class="pk-rec-dismiss-btn"
 									data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-									<i class="fas fa-times"></i> Dismiss
+									<i class="fas fa-times"></i> Delete
 								</button>
 							</td>
 							<?php endif; ?>
@@ -1125,7 +1172,7 @@ var PkConfig = {
 	},
 };
 </script>
-<?php if ($IsLoggedIn): ?>
+<?php if (!empty($CanAdminPark)): ?>
 <div id="pk-award-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -1237,6 +1284,10 @@ var PkConfig = {
 		</div>
 	</div>
 </div>
+
+<?php endif; ?>
+
+<?php if (!empty($CanManagePark)): ?>
 <div id="pk-att-overlay">
 	<div class="pk-modal-box">
 
@@ -1434,7 +1485,7 @@ var PkConfig = {
 <div id="pk-addplayer-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Add Player</h3>
+			<h3 class="pk-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Create Player</h3>
 			<button class="pk-modal-close-btn" id="pk-addplayer-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pk-modal-body">
@@ -1532,11 +1583,12 @@ var PkConfig = {
 <div id="pk-addday-overlay">
 	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#2c5282"></i>Add Park Day</h3>
+			<h3 class="pk-modal-title" id="pk-addday-title"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#2c5282" id="pk-addday-title-icon"></i><span id="pk-addday-title-text">Add Park Day</span></h3>
 			<button class="pk-modal-close-btn" id="pk-addday-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pk-modal-body">
 			<div id="pk-addday-feedback" class="pk-addday-feedback" style="display:none"></div>
+				<input type="hidden" id="pk-addday-id" value="0" />
 
 			<div class="pk-addday-field">
 				<label>Purpose</label>
@@ -1659,10 +1711,14 @@ var PkConfig = {
 				</div>
 			</div>
 
+		<div id="pk-addday-delete-section" style="display:none;border-top:1px solid #e2e8f0;margin-top:16px;padding-top:16px;">
+				<button class="pk-btn pk-btn-danger" id="pk-addday-delete" type="button" style="width:100%"><i class="fas fa-trash-alt"></i> Delete Park Day</button>
+			</div>
+
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn pk-btn-ghost" id="pk-addday-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-addday-submit"><i class="fas fa-calendar-plus"></i> Add Park Day</button>
+			<button class="pk-btn pk-btn-primary" id="pk-addday-submit"><i class="fas fa-calendar-plus" id="pk-addday-submit-icon"></i> <span id="pk-addday-submit-text">Add Park Day</span></button>
 		</div>
 	</div>
 </div>
@@ -1953,9 +2009,19 @@ var PkConfig = {
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+window.pkRecActiveFilter = 'open';
+$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+	if (settings.nTable.id !== 'pk-rec-table') return true;
+	var filter = window.pkRecActiveFilter || 'all';
+	if (filter === 'all') return true;
+	var row = settings.aoData[dataIndex].nTr;
+	var rowFilter = row ? row.getAttribute('data-filter') : '';
+	if (filter === 'open') return rowFilter !== 'already';
+	return rowFilter === filter;
+});
 $(function() {
 	if ($('#pk-rec-table').length) {
-		$('#pk-rec-table').DataTable({
+		window.pkRecDT = $('#pk-rec-table').DataTable({
 			order: [[4, 'desc']],
 			columnDefs: [
 				{ targets: [4], type: 'date' },
@@ -1967,4 +2033,6 @@ $(function() {
 		});
 	}
 });
+window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
+window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 </script>

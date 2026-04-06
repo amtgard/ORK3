@@ -288,6 +288,8 @@ class Controller_Event extends Controller {
 			return;
 		}
 
+		$cdInfo = $this->Attendance->get_eventdetail_info($detail_id);
+
 		if ( strlen($action) > 0 && $uid > 0 ) {
 
 			if ( $action === 'edit' ) {
@@ -320,10 +322,87 @@ class Controller_Event extends Controller {
 					]);
 					if ( $r['Status'] == 0 ) {
 						$this->request->clear('Eventnew_edit');
+						$cdKey = Ork3::$Lib->ghettocache->key([$detail_id]);
+						Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $cdKey);
+						$evKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
+						Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
 						header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
 						exit;
 					} elseif ( $r['Status'] != 5 ) {
 						$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
+					}
+				}
+
+			} elseif ( $action === 'reconcile' ) {
+				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+					$today   = date('Y-m-d');
+					$attData = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
+					$pastAtt = array_filter(
+						$attData['Attendance'] ?? [],
+						fn($a) => !empty($a['Date']) && strtotime($a['Date']) < strtotime($today)
+					);
+					if ( !empty($pastAtt) ) {
+						$dates   = array_map(fn($a) => strtotime($a['Date']), $pastAtt);
+						$minDate = date('Y-m-d', min($dates)) . ' 12:00:00';
+						$maxDate = date('Y-m-d', max($dates)) . ' 18:00:00';
+						$r = $this->Event->add_event_detail([
+							'Token'       => $this->session->token,
+							'EventId'     => $event_id,
+							'AtParkId'    => valid_id($cdInfo['AtParkId']) ? $cdInfo['AtParkId'] : null,
+							'Current'     => 0,
+							'Price'       => $cdInfo['Price']       ?? '',
+							'EventStart'  => $minDate,
+							'EventEnd'    => $maxDate,
+							'Description' => $cdInfo['Description'] ?? '',
+							'Url'         => $cdInfo['Url']         ?? '',
+							'UrlName'     => $cdInfo['UrlName']     ?? '',
+							'Address'     => $cdInfo['Address']     ?? '',
+							'Province'    => $cdInfo['Province']    ?? '',
+							'PostalCode'  => $cdInfo['PostalCode']  ?? '',
+							'City'        => $cdInfo['City']        ?? '',
+							'Country'     => $cdInfo['Country']     ?? '',
+							'MapUrl'      => $cdInfo['MapUrl']      ?? '',
+							'MapUrlName'  => $cdInfo['MapUrlName']  ?? '',
+						]);
+						if ( $r['Status'] == 0 ) {
+							$new_detail_id = (int)($r['Detail'] ?? 0);
+							if ( !$new_detail_id ) {
+								$fresh = $this->Event->get_event_details($event_id);
+								$all   = $fresh['CalendarEventDetails'] ?? [];
+								if ( $all ) $new_detail_id = max(array_map('intval', array_column($all, 'EventCalendarDetailId')));
+							}
+							if ( $new_detail_id ) {
+								global $DB;
+								$DB->Clear();
+								$DB->Execute(
+									"UPDATE " . DB_PREFIX . "attendance " .
+									"SET event_calendardetail_id = " . $new_detail_id .
+									" WHERE event_calendardetail_id = " . $detail_id .
+									" AND date < '" . $today . "'"
+								);
+								$DB->Clear();
+								$DB->Execute(
+									"UPDATE " . DB_PREFIX . "attendance_myisam " .
+									"SET event_calendardetail_id = " . $new_detail_id .
+									" WHERE event_calendardetail_id = " . $detail_id .
+									" AND date < '" . $today . "'"
+								);
+								$evKey  = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
+								$oldKey = Ork3::$Lib->ghettocache->key([$detail_id]);
+								$newKey = Ork3::$Lib->ghettocache->key([$new_detail_id]);
+								Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
+								Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $oldKey);
+								Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $newKey);
+								header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '&reconciled=1');
+								exit;
+							} else {
+								$this->data['Error'] = 'Reconciliation failed: could not determine the new occurrence ID.';
+							}
+						} else {
+							$this->data['Error'] = 'Reconciliation failed: ' . ($r['Error'] ?? 'unknown error') . ' — ' . ($r['Detail'] ?? '');
+						}
+					} else {
+						$this->data['Error'] = 'No past-dated attendance found to reconcile.';
 					}
 				}
 
@@ -361,12 +440,13 @@ class Controller_Event extends Controller {
 			}
 		}
 
-		$this->data['EventDetail'] = $this->Attendance->get_eventdetail_info($detail_id);
+		$this->data['EventDetail'] = $cdInfo;
 
 		$atParkId = (int)($this->data['EventDetail']['AtParkId'] ?? 0);
 		$_parkLookupId = $atParkId ?: (int)($this->data['EventInfo']['ParkId'] ?? 0);
 		if ( $_parkLookupId > 0 ) {
 			global $DB;
+			$DB->Clear();
 			$row = $DB->DataSet("SELECT name, address, city, province, postal_code, location FROM " . DB_PREFIX . "park WHERE park_id = " . $_parkLookupId . " LIMIT 1");
 			if ($row && $row->Size() > 0 && $row->Next()) {
 				$this->data['AtParkName']       = $row->name;
@@ -403,6 +483,7 @@ class Controller_Event extends Controller {
 
 		$now = time();
 		$this->data['IsUpcoming']      = strtotime($cd['EventStart'] ?? '') > $now;
+		$this->data['IsOngoing']       = !$this->data['IsUpcoming'] && strtotime($cd['EventEnd'] ?? $cd['EventStart'] ?? '') > $now;
 		$this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
 		$this->data['CanManageEvent'] = $uid > 0
@@ -412,7 +493,7 @@ class Controller_Event extends Controller {
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
-		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];
+		$this->data['RsvpList']      = $uid > 0 ? $this->Event->get_rsvp_list($detail_id) : [];
 
 		global $DB;
 		$cdCountRow = $DB->DataSet('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $event_id . ' LIMIT 1');

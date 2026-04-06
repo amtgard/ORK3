@@ -21,22 +21,22 @@
 		window.dataLayer = window.dataLayer || [];
 		function gtag(){dataLayer.push(arguments);}
 		gtag('js', new Date());
-
 		gtag('config', 'G-PVQCKENY0M');
 		</script>
-		<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
 	
 	<style>
 	/* What's New modal */
 	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
 	.wn-overlay.wn-open { display:flex; }
-	.wn-modal { background:#fff; border-radius:12px; padding:32px 28px 24px; max-width:480px; width:92%; box-shadow:0 8px 40px rgba(0,0,0,0.28); font-family:inherit; }
-	.wn-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+	.wn-modal { background:#fff; border-radius:12px; padding:32px 28px 24px; max-width:480px; width:92%; box-shadow:0 8px 40px rgba(0,0,0,0.28); font-family:inherit; display:flex; flex-direction:column; max-height:90dvh; max-height:90vh; }
+	.wn-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-shrink:0; }
 	.wn-header-icon { font-size:28px; color:#4299e1; }
 	.wn-title { font-size:20px; font-weight:700; color:#2d3748; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
 	.wn-subtitle { font-size:12px; color:#718096; margin-top:3px; font-style:italic; }
 	.wn-date { font-size:11px; color:#a0aec0; margin-top:1px; font-style:italic; }
-	.wn-items { list-style:none; margin:0 0 24px; padding:0; display:flex; flex-direction:column; gap:14px; }
+	.wn-items { list-style:none; margin:0 0 24px; padding:0; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex-shrink:1; }
+	.wn-footer { flex-shrink:0; }
 	.wn-item { display:flex; gap:14px; align-items:flex-start; }
 	.wn-item-icon { color:#4299e1; font-size:18px; margin-top:2px; min-width:20px; }
 	.wn-item-title { font-weight:600; color:#2d3748; font-size:14px; }
@@ -90,6 +90,7 @@
 <?php
 	global $DB;
 	$__huid = (int)$this->__session->user_id;
+	$DB->Clear();
 	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name FROM ork_mundane m LEFT JOIN ork_park p ON m.park_id = p.park_id LEFT JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
 	$__home = null;
 	if ($__homeResult && $__homeResult->Next() && $__homeResult->park_id) {

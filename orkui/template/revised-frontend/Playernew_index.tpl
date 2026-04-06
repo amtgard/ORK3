@@ -77,6 +77,9 @@
 		: 'month';
 	$_duesPeriod = (!empty($_kconfig['DuesPeriod']['Value']->Period)) ? (int)$_kconfig['DuesPeriod']['Value']->Period : 6;
 
+	// Dues for Life flag (needed for badge + alerts)
+	$_duesForLife = is_array($Dues) && count(array_filter($Dues, function($d) { return $d['DuesForLife'] == 1; })) > 0;
+
 	// Last class used (for attendance modal default)
 	$_lastClassId = 0;
 	foreach (is_array($Details['Attendance']) ? $Details['Attendance'] : [] as $_att) {
@@ -130,12 +133,12 @@
 		// Open recs
 		$_maOpenRecs = array_values(array_filter(
 			is_array($AwardRecommendations) ? $AwardRecommendations : [],
-			function($r) { return empty($r['Awarded']); }
+			function($r) { return empty($r['AlreadyHas']); }
 		));
 		// Alerts
 		$_maAlerts = [];
 		$_duesThrough = $Player['DuesThrough'] ?? '';
-		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time())
+		if (!empty($_duesThrough) && $_duesThrough !== '0000-00-00' && strtotime($_duesThrough) < time() && !$_duesForLife)
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-exclamation-circle','msg'=>'Your dues have lapsed.'];
 		if (empty($Player['Waivered']))
 			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
@@ -248,6 +251,10 @@
 .pna-tenure-years{font-size:30px}
 .pna-congrats-banner{font-size:11.5px;padding:7px 10px}
 }
+.pn-givenby-warn{display:inline-flex;align-items:center;gap:4px;cursor:default;position:relative}
+.pn-givenby-warn .pn-tip-icon{color:#e53e3e;font-size:11px;font-weight:700;font-style:normal;border:1px solid #e53e3e;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#2d3748;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-givenby-warn:hover .pn-tip-box{display:block}
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -308,7 +315,7 @@
 				<?php if ($Player['Restricted'] == 1): ?>
 					<span class="pn-badge pn-badge-orange"><i class="fas fa-exclamation-triangle"></i> Restricted</span>
 				<?php endif; ?>
-				<?php if (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time()): ?>
+				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
 				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Expired</span>
@@ -602,7 +609,7 @@
 					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
 				</li>
 				<?php
-				$_allRecs  = is_array($AwardRecommendations) ? $AwardRecommendations : [];
+				$_allRecs  = array_values(array_filter(is_array($AwardRecommendations) ? $AwardRecommendations : [], function($r) { return empty($r['AlreadyHas']); }));
 				$_myRecs   = array_values(array_filter($_allRecs, function($r) { return (int)$this->__session->user_id === (int)$r['RecommendedById']; }));
 				$_recList  = $ShowRecsTab ? $_allRecs : $_myRecs;
 				$_showRecs = $ShowRecsTab || count($_myRecs) > 0;
@@ -865,6 +872,13 @@
 				<button class="pn-btn pn-btn-sm" style="background:#c53030;color:#fff;margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
 				</div>
+				<?php elseif ($isOwnProfile && $hasHistoricalTip): ?>
+				<div class="pn-tab-toolbar">
+					<a href="<?= UIR ?>Player/reconcile/<?= (int)$Player['MundaneId'] ?>"
+					   class="pn-btn pn-btn-sm" style="background:#2b6cb0;color:#fff">
+						<i class="fas fa-history"></i> View Historical Awards
+					</a>
+				</div>
 				<?php endif; ?>
 				<?php
 					$filteredAwards = array();
@@ -883,7 +897,7 @@
 						24  => [4],       // Order of the Owl        → Master Owl
 						25  => [5],       // Order of the Dragon     → Master Dragon
 						26  => [6],       // Order of the Garber     → Master Garber
-						27  => [36, 12],  // Order of the Warrior    → Weaponmaster / Warlord
+						27  => [12],      // Order of the Warrior    → Warlord
 						28  => [7],       // Order of the Jovius     → Master Jovius
 						29  => [9],       // Order of the Mask       → Master Mask
 						30  => [8],       // Order of the Zodiac     → Master Zodiac
@@ -903,7 +917,7 @@
 						if ((int)$a['IsLadder'] !== 1) continue;
 						$aid  = (int)$a['AwardId'];
 						$rank = (int)$a['Rank'];
-						if ($aid <= 0 || $rank <= 0) continue;
+						if ($aid <= 0 || $aid === 31) continue; // 31 = Walker of the Middle
 						$displayName = trimlen($a['CustomAwardName']) > 0 ? $a['CustomAwardName']
 							: (trimlen($a['KingdomAwardName']) > 0 ? $a['KingdomAwardName'] : $a['Name']);
 						// Strip "Order of the " / "Order of " prefix to save space
@@ -915,10 +929,24 @@
 								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
 							}
 						}
-						if (!isset($pnLadderProgress[$aid]) || $rank > $pnLadderProgress[$aid]['Rank']) {
-							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank, 'HasMaster' => $hasMaster];
+						if (!isset($pnLadderProgress[$aid])) {
+							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank, 'Count' => 1, 'HasMaster' => $hasMaster];
+						} else {
+							$pnLadderProgress[$aid]['Count']++;
+							if ($rank > $pnLadderProgress[$aid]['Rank']) {
+								$pnLadderProgress[$aid]['Rank'] = $rank;
+							}
 						}
 					}
+					// Use max(highest_rank, total_entries) to account for unreconciled historical awards
+					// Cap at maxRank per award (10 for most, 12 for Zodiac)
+					// Mark as approximate when count exceeds highest actual rank
+					foreach ($pnLadderProgress as $_lpAid => &$lp) {
+						$_lpMax = ($_lpAid === 30) ? 12 : 10;
+						$lp['Approx'] = $lp['Count'] > $lp['Rank'];
+						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $lp['Count']));
+					}
+					unset($lp);
 					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
 				<?php if (!empty($pnLadderProgress)): ?>
@@ -927,14 +955,14 @@
 							<?php foreach ($pnLadderProgress as $aid => $lp): ?>
 								<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name']) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
 									<div class="pn-ladder-header">
 										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
 										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
 											<?php if ($lp['HasMaster']): ?>
 												<span class="pn-ladder-master" title="Master title earned"><i class="fas fa-star"></i> M</span>
 											<?php endif; ?>
-											<span class="pn-ladder-rank"><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
+											<span class="pn-ladder-rank"><?php if ($lp['Approx']): ?><span style="color:#b7791f">~</span><?php endif; ?><strong><?= $lp['Rank'] ?></strong> / <?= $maxRank ?></span>
 										</span>
 									</div>
 									<div class="pn-ladder-bar-track">
@@ -1088,7 +1116,7 @@
 						</thead>
 						<tbody>
 							<?php foreach ($filteredTitles as $detail): ?>
-								<tr>
+									<tr>
 									<td class="pn-col-nowrap">
 										<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 										<?= htmlspecialchars($displayName) ?>
@@ -1099,7 +1127,21 @@
 									</td>
 									<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 									<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
-									<td class="pn-col-nowrap"><a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= htmlspecialchars(substr($detail['GivenBy'], 0, 30)) ?></a></td>
+									<td class="pn-col-nowrap">
+										<?php
+											$_isPeerageTitleRow = in_array($detail['Peerage'] ?? '', ['Squire', 'Man-At-Arms', 'Lords-Page', 'Page']);
+											$_givenByMissing = $_isPeerageTitleRow && !trimlen($detail['GivenBy']);
+										?>
+										<?php if (!$_givenByMissing): ?>
+											<a href="<?= UIR ?>Player/profile/<?= $detail['GivenById'] ?>"><?= htmlspecialchars(substr($detail['GivenBy'], 0, 30)) ?></a>
+										<?php else: ?>
+											<span class="pn-givenby-warn">
+												<i>(Unknown)</i>
+												<span class="pn-tip-icon">?</span>
+												<span class="pn-tip-box">It looks like the persona record isn&rsquo;t set on this title, so the ORK doesn&rsquo;t know who gave you this. Ask your park monarchy to correct it with the proper Given By individual.</span>
+											</span>
+										<?php endif; ?>
+									</td>
 									<td>
 										<?php
 											if (valid_id($detail['EventId'])) {
@@ -1285,21 +1327,18 @@
 									<td><a href="<?= UIR ?>Player/profile/<?= $rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a></td>
 									<td><?= htmlspecialchars($rec['Reason']) ?></td>
 									<?php if ($this->__session->user_id): ?>
-										<td style="white-space:nowrap">
+										<td class="pk-rec-actions">
 											<?php if ($canManageAwards && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
-												<a class="pn-rec-give-link" href="#"
-													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>"
-												><i class="fas fa-plus"></i> Give</a>
+												<button class="pk-btn pk-btn-primary pn-rec-grant-btn"
+													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>">
+													<i class="fas fa-medal"></i> Grant
+												</button>
 											<?php endif; ?>
 											<?php if ($can_delete_recommendation || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']): ?>
-												<span class="pn-delete-cell">
-												<a class="pn-delete-link pn-confirm-delete-rec" href="#"><i class="fas fa-trash-alt"></i> Delete</a>
-												<span class="pn-delete-confirm">
-													Delete?&nbsp;
-													<button class="pn-delete-yes" data-href="<?= UIR ?>Player/profile/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">Yes</button>
-													&nbsp;<button class="pn-delete-no">No</button>
-												</span>
-											</span>
+												<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn"
+													data-href="<?= UIR ?>Player/profile/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">
+													<i class="fas fa-times"></i> Delete
+												</button>
 											<?php endif; ?>
 										</td>
 									<?php endif; ?>
@@ -2168,6 +2207,10 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			<button class="pn-modal-close-btn" id="pn-revoke-award-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
+			<div style="background:#fff5f5;border:1px solid #fc8181;color:#9b2c2c;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.5;">
+				<i class="fas fa-exclamation-triangle" style="margin-right:6px;color:#e53e3e"></i>
+				<strong>Revoke Award</strong> is designed for situations where an award is being intentionally stripped from a player, not for deleting erroneous awards. Use the delete (<i class="fas fa-trash"></i>) function for that purpose.
+			</div>
 			<div id="pn-revoke-award-feedback" style="display:none"></div>
 			<div class="pn-revoke-award-name" id="pn-revoke-award-name"></div>
 			<div class="pn-acct-field">

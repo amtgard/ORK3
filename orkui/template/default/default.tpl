@@ -80,6 +80,26 @@
 	.hm-welcome-title { font-size: 24px; }
 }
 
+/* ---- Downtime info box ---- */
+.hm-infobox {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	background: #e8f4fd;
+	border: 1px solid #90cdf4;
+	border-radius: 7px;
+	padding: 11px 16px;
+	margin: 0 0 14px;
+	color: #1a4f72;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.hm-infobox-icon {
+	flex-shrink: 0;
+	font-size: 18px;
+	margin-top: 1px;
+}
+
 /* ---- Stats bar ---- */
 .hm-stats-bar {
 	display: flex;
@@ -432,6 +452,14 @@
      ============================================= -->
 <div class="hm-welcome-banner">
 	<h1 class="hm-welcome-title">Welcome to the Amtgard Online Record Keeper</h1>
+</div>
+
+<!-- =============================================
+     Downtime Info Box
+     ============================================= -->
+<div class="hm-infobox">
+	<span class="hm-infobox-icon">&#x2139;&#xFE0F;</span>
+	<span>Welcome to ORK 3.5 Dragon! We anticipate heavier than normal usage over the next few days as players log in to check out the exciting new updates. You may experience performance impacts or longer load times than usual. We appreciate your patience in advance!</span>
 </div>
 
 <!-- =============================================

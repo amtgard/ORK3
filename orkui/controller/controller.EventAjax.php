@@ -77,6 +77,14 @@ class Controller_EventAjax extends Controller {
 		}
 
 		$detail = $this->Attendance->get_eventdetail_info($detail_id);
+
+		$eventStartTs = $detail['EventStart'] ? strtotime($detail['EventStart']) : 0;
+		if ($eventStartTs && time() < $eventStartTs - 86400) {
+			$openLabel = date('D, M j, Y \\a\\t g:i A T', $eventStartTs - 86400);
+			echo json_encode(['status' => 1, 'error' => 'Sign-ins for this event can be processed starting on ' . $openLabel . '.']);
+			exit;
+		}
+
 		$r = $this->Attendance->add_attendance(
 			$this->session->token,
 			$_POST['AttendanceDate'] ?? date('Y-m-d'),

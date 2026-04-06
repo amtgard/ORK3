@@ -756,9 +756,10 @@ class Controller_KingdomAjax extends Controller {
 			exit;
 		}
 
-		$q       = trim($_GET['q']       ?? '');
-		$scope   = trim($_GET['scope']   ?? 'own'); // 'own' | 'exclude'
-		$park_id = (int)($_GET['park_id'] ?? 0);
+		$q                = trim($_GET['q']               ?? '');
+		$scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude'
+		$park_id          = (int)($_GET['park_id']        ?? 0);
+		$include_inactive = !empty($_GET['include_inactive']);
 		if (strlen($q) < 2) {
 			echo json_encode([]);
 			exit;
@@ -804,11 +805,12 @@ class Controller_KingdomAjax extends Controller {
 			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,
 			       k.name AS kingdom_name, p.name AS park_name,
 			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-			       m.suspended
+			       m.suspended, m.active
 			FROM ork_mundane m
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
-			WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
+			WHERE m.suspended = 0 AND LENGTH(m.persona) > 0
+			  " . ($include_inactive ? "" : "AND m.active = 1") . "
 			  {$kingdom_clause}
 			  {$park_clause}
 			  AND (m.persona LIKE '%{$term}%'
@@ -832,6 +834,7 @@ class Controller_KingdomAjax extends Controller {
 				'KAbbr'       => $rs->k_abbr,
 				'PAbbr'       => $rs->p_abbr,
 				'Suspended'   => (int)$rs->suspended,
+				'Active'      => (int)$rs->active,
 			];
 		}
 
@@ -850,9 +853,11 @@ class Controller_KingdomAjax extends Controller {
 
 		// Determine the player's kingdom so we can check auth
 		global $DB;
-		$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
+		$rs = $DB->DataSet("SELECT kingdom_id, suspended_by_id, suspended FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
 		if (!$rs || !$rs->Next()) { echo json_encode(['status' => 1, 'error' => 'Player not found.']); exit; }
-		$player_kingdom_id = (int)$rs->kingdom_id;
+		$player_kingdom_id        = (int)$rs->kingdom_id;
+		$existing_suspended_by_id = (int)$rs->suspended_by_id;
+		$is_currently_suspended   = (bool)$rs->suspended;
 
 		$isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 		$isKingdomEditor = valid_id($player_kingdom_id)
@@ -867,12 +872,14 @@ class Controller_KingdomAjax extends Controller {
 		$until      = trim($_POST['SuspendedUntil'] ?? '');
 		$reason     = trim($_POST['Suspension']    ?? '');
 		$propagates = (int)($_POST['SuspensionPropagates'] ?? 0);
+		// New suspension → use current user; edit → preserve existing suspendator (or null if never recorded)
+		$resolvedById = $byId ?: ($is_currently_suspended ? ($existing_suspended_by_id ?: null) : $uid);
 		$this->load_model('Player');
 		$r = $this->Player->suspend_player([
 			'Token'                => $this->session->token,
 			'MundaneId'            => $mid,
 			'Suspended'            => (bool)$suspended,
-			'SuspendedById'        => $byId ?: $uid,
+			'SuspendedById'        => $resolvedById,
 			'SuspendedAt'          => $at,
 			'SuspendedUntil'       => $until,
 			'Suspension'           => $reason,

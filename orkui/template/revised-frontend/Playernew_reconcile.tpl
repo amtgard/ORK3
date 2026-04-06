@@ -1,10 +1,13 @@
 <?php
-	// Auth gate
-	$_rcUid    = isset($this->__session->user_id) ? (int)$this->__session->user_id : 0;
-	$_rcParkId = (int)($Player['ParkId'] ?? 0);
-	$canEditAdmin = $_rcUid > 0 && Ork3::$Lib->authorization->HasAuthority($_rcUid, AUTH_PARK, $_rcParkId, AUTH_EDIT);
-	if (!$canEditAdmin) {
-		header('Location: ' . UIR . 'Player/profile/' . (int)($Player['MundaneId'] ?? 0));
+	// Auth gate — admins can edit, players can view their own
+	$_rcUid       = isset($this->__session->user_id) ? (int)$this->__session->user_id : 0;
+	$_rcPlayerId  = (int)($Player['MundaneId'] ?? 0);
+	$_rcParkId    = (int)($Player['ParkId'] ?? 0);
+	$canEditAdmin = isset($canEditAdmin) ? (bool)$canEditAdmin
+	              : ($_rcUid > 0 && Ork3::$Lib->authorization->HasAuthority($_rcUid, AUTH_PARK, $_rcParkId, AUTH_EDIT));
+	$_isOwnProfile = $_rcUid === $_rcPlayerId;
+	if (!$canEditAdmin && !$_isOwnProfile) {
+		header('Location: ' . UIR . 'Player/profile/' . $_rcPlayerId);
 		exit;
 	}
 
@@ -158,6 +161,25 @@
 	<!-- ── Content card ── -->
 	<div class="adm-card" style="border-radius:0 0 10px 10px;border-top:none">
 
+		<?php if (!$canEditAdmin): ?>
+		<!-- Read-only info banner for players viewing their own profile -->
+		<div style="background:#ebf8ff;border:1px solid #90cdf4;border-radius:8px;padding:16px 20px;margin:20px 20px 0">
+			<div style="font-weight:600;color:#2b6cb0;margin-bottom:6px"><i class="fas fa-info-circle" style="margin-right:6px"></i>About Your Historical Awards</div>
+			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">These are awards that were imported from historical records before the current award system was in place. They haven't been matched to your official award history yet, which means they may not be reflected in your class levels or progress bars. If you see a progress bar with a ~ before the number, likely it is because of historical records not having a correct rank.</p>
+			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">To have these reconciled, contact your park or kingdom leadership and ask them to use the <strong>Reconcile Historical Awards</strong> tool on your profile.</p>
+			<?php if (!empty($PreloadOfficers)): ?>
+			<div style="font-size:13px;color:#2d3748">
+				<strong>People who can help:</strong>
+				<ul style="margin:6px 0 0 18px;padding:0">
+					<?php foreach ($PreloadOfficers as $_po): ?>
+					<li><a href="<?= UIR ?>Player/profile/<?= (int)$_po['MundaneId'] ?>" style="color:#2b6cb0"><?= htmlspecialchars($_po['Persona']) ?></a> — <?= htmlspecialchars($_po['Role']) ?></li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
+
 		<?php if (empty($historicalAwards)): ?>
 			<div class="pn-empty" style="padding:60px 20px">
 				<i class="fas fa-check-circle" style="font-size:40px;color:#68d391;display:block;margin-bottom:10px"></i>
@@ -169,11 +191,17 @@
 			<div class="adm-card-title">
 				<i class="fas fa-table"></i>
 				Historical Awards
+				<?php if ($canEditAdmin): ?>
 				<span class="adm-count" id="rc-pending-count"><?= $totalCount ?> pending</span>
+				<?php else: ?>
+				<span class="adm-count"><?= $totalCount ?> record<?= $totalCount !== 1 ? 's' : '' ?></span>
+				<?php endif; ?>
 			</div>
+			<?php if ($canEditAdmin): ?>
 			<button class="adm-btn adm-btn-primary" id="rc-reconcile-all">
 				<i class="fas fa-check-double"></i> Update All Pending
 			</button>
+			<?php endif; ?>
 		</div>
 
 		<div class="adm-table-wrap rc-table-wrap">
@@ -238,6 +266,8 @@
 						</span>
 					</td>
 
+					<?php if ($canEditAdmin): ?>
+
 					<td>
 						<?php
 						$_preselect = (int)$a['KingdomAwardId'] > 0
@@ -300,6 +330,18 @@
 							Skip
 						</button>
 					</td>
+
+					<?php else: /* read-only view for own profile */ ?>
+
+					<td><?= htmlspecialchars($a['Name'] ?? '') ?></td>
+					<td style="width:64px"><?= $isLadder && (int)$a['Rank'] > 0 ? (int)$a['Rank'] : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td style="width:130px"><?= $legacyDate ? htmlspecialchars(date('M j, Y', strtotime($legacyDate))) : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td><?= $givenByName ? $givenByName : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td><?= $existLocName ? htmlspecialchars($existLocName) : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td><?= !empty($a['Note']) ? htmlspecialchars($a['Note']) : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td></td>
+
+					<?php endif; ?>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
@@ -318,6 +360,7 @@ var RcConfig = {
 	kingdomId: <?= (int)($KingdomId ?? 0) ?>
 };
 </script>
+<?php if ($canEditAdmin): ?>
 <script>
 (function() {
 	'use strict';
@@ -520,3 +563,4 @@ var RcConfig = {
 	document.querySelectorAll('.rc-award-row').forEach(wireRow);
 })();
 </script>
+<?php endif; // canEditAdmin ?>

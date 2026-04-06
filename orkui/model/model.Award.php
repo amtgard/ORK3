@@ -13,6 +13,9 @@ class Model_Award extends Model {
     }
 
     function fetch_award_option_list($kingdom_id = 0, $officer_role = null) {
+        $cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => (int)$kingdom_id, 'OfficerRole' => $officer_role]);
+        if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 1200)) !== false)
+            return $cached;
         if (valid_id($kingdom_id)) {
             $awards = $this->Kingdom->GetAwardList(array(
                     'IsLadder' => null,
@@ -56,8 +59,8 @@ class Model_Award extends Model {
                 }
                 $options .= "</optgroup>";
             }
-            return $options;
-        } else { 
+            return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $options);
+        } else {
             return false;
         }
     }

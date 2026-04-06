@@ -1834,6 +1834,11 @@
 	color: var(--kn-accent, #276749);
 	line-height: 1.2;
 }
+.kn-stat-spinner {
+	font-size: 11px;
+	color: #a0aec0;
+	opacity: 0.7;
+}
 .kn-park-tile-stat-lbl {
 	font-size: 9px;
 	color: #a0aec0;
@@ -3436,6 +3441,7 @@
 }
 .ev-badge-green  { background: #c6f6d5; color: #276749; }
 .ev-badge-gray   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
+.ev-badge-blue   { background: #bee3f8; color: #2a69ac; }
 
 .ev-owner-inline {
 	color: rgba(255,255,255,0.85);
@@ -3763,8 +3769,14 @@
 	max-width: 700px;
 	width: 100%;
 	max-height: 90vh;
-	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.ev-modal > form {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	min-height: 0;
 }
 .ev-modal-header {
 	display: flex;
@@ -3774,6 +3786,7 @@
 	border-bottom: 1px solid #e2e8f0;
 	background: #f7fafc;
 	border-radius: 8px 8px 0 0;
+	flex-shrink: 0;
 }
 .ev-modal-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
 .ev-modal-close {
@@ -3858,6 +3871,7 @@
 	border-top: 1px solid #e2e8f0;
 	background: #f7fafc;
 	border-radius: 0 0 8px 8px;
+	flex-shrink: 0;
 }
 .ev-modal-btn-cancel {
 	background: #e2e8f0;
@@ -3943,6 +3957,9 @@
 		padding: 8px;
 	}
 	.ev-modal { max-height: calc(100vh - 64px); }
+	.ev-checkin-label { display: none; }
+	#ev-rsvp-table td:last-child { white-space: normal !important; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; }
+	#ev-rsvp-table .ev-checkin-btn { white-space: normal; }
 }
 
 /* ===========================
@@ -5016,10 +5033,13 @@
 .pk-seg-btn + .pk-seg-btn { border-left:1px solid #e2e8f0; }
 .pk-seg-btn:hover { background:#f7fafc; color:#4a5568; }
 .pk-seg-btn.pk-seg-active { background:#0891b2; color:#fff; }
-/* Schedule card delete button */
+/* Schedule card edit button */
 .pk-schedule-card { position:relative; }
-.pk-schedule-card-del { position:absolute; top:6px; right:6px; width:22px; height:22px; background:rgba(255,255,255,0.9); border:1px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; color:#a0aec0; line-height:1; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
-.pk-schedule-card-del:hover { background:#fff5f5; border-color:#fc8181; color:#e53e3e; }
+.pk-schedule-card-edit { position:absolute; top:6px; right:6px; width:22px; height:22px; background:rgba(255,255,255,0.9); border:1px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:#a0aec0; line-height:1; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
+.pk-schedule-card-edit:hover { background:#ebf8ff; border-color:#63b3ed; color:#2c5282; }
+/* Danger button for delete actions */
+.pk-btn-danger { background:#e53e3e; color:#fff; border:none; border-radius:4px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+.pk-btn-danger:hover { background:#c53030; }
 
 /* ============================================================
    Batch 2 Admin Features
@@ -5094,22 +5114,18 @@
 #kn-claimpark-overlay .kn-modal-close-btn:hover,
 #kn-mergeplayer-overlay .kn-modal-close-btn:hover { color:#4a5568; }
 #kn-moveplayer-overlay .kn-modal-body,
+#kn-claimpark-overlay .kn-modal-body,
 #kn-mergeplayer-overlay .kn-modal-body { padding:20px; overflow-y:auto; flex:1; }
-#kn-claimpark-overlay .kn-modal-body { padding:20px; overflow:visible; flex:1; }
 #kn-moveplayer-overlay .kn-modal-footer,
 #kn-claimpark-overlay .kn-modal-footer,
 #kn-mergeplayer-overlay .kn-modal-footer { padding:14px 20px; border-top:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
 #kn-moveplayer-overlay .kn-acct-field,
-#kn-claimpark-overlay .kn-acct-field,
 #kn-mergeplayer-overlay .kn-acct-field { margin-bottom:14px; }
 #kn-moveplayer-overlay .kn-acct-field label,
-#kn-claimpark-overlay .kn-acct-field label,
 #kn-mergeplayer-overlay .kn-acct-field label { display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em; }
 #kn-moveplayer-overlay .kn-acct-field input[type=text],
-#kn-claimpark-overlay .kn-acct-field input[type=text],
 #kn-mergeplayer-overlay .kn-acct-field input[type=text] { width:100%; padding:8px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; }
 #kn-moveplayer-overlay .kn-acct-field input:focus,
-#kn-claimpark-overlay .kn-acct-field input:focus,
 #kn-mergeplayer-overlay .kn-acct-field input:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
 
 /* ================================================================
@@ -5138,6 +5154,7 @@
 #pk-award-overlay .pk-ac-results,
 #pk-rec-overlay .pk-ac-results {
     position: fixed;
+    top: auto; left: auto; right: auto;
     z-index: var(--z-modal-top, 1200);
 }
 .pk-ac-item {
@@ -5339,10 +5356,22 @@
 .pk-rec-dismiss-btn:hover { background: #fff5f5; border-color: #fc8181; color: #c53030; }
 .pk-rec-dismiss-btn.pk-rec-dismiss-confirm { background: #fff5f5; border-color: #fc8181; color: #c53030; font-weight: 600; }
 .pk-rec-row.pk-rec-dismissed { opacity: 0.4; pointer-events: none; }
-.kn-rec-filter-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.kn-rec-filter-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.kn-rec-export-btns { display:flex; gap:6px; margin-left:auto; }
+.kn-rec-export-btn { padding:4px 10px; border-radius:6px; border:1.5px solid #e2e8f0; background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; }
+.kn-rec-export-btn:hover { border-color:#90cdf4; color:#2b6cb0; background:#ebf8ff; }
 .kn-rec-filter-btn { padding:4px 12px; border-radius:20px; border:1.5px solid #e2e8f0; background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; }
 .kn-rec-filter-btn:hover { border-color:#90cdf4; color:#2b6cb0; }
 .kn-rec-filter-btn.kn-rec-filter-active { background:#2b6cb0; border-color:#2b6cb0; color:#fff; }
+.kn-rec-filter-info { position:relative; display:inline-flex; align-items:center; }
+.kn-rec-filter-info-btn { background:none; border:none; cursor:pointer; color:#a0aec0; font-size:15px; padding:2px 4px; line-height:1; transition:color 0.15s; }
+.kn-rec-filter-info-btn:hover { color:#2b6cb0; }
+.kn-rec-filter-popover { display:none; position:absolute; left:0; top:calc(100% + 6px); z-index:200; background:#fff; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.13); padding:14px 16px; width:300px; font-size:13px; color:#2d3748; }
+.kn-rec-filter-popover.kn-pop-open { display:block; }
+.kn-rec-filter-popover h4 { margin:0 0 8px; font-size:13px; font-weight:700; color:#1a202c; border-bottom:1px solid #e2e8f0; padding-bottom:6px; }
+.kn-rec-filter-popover dl { margin:0; }
+.kn-rec-filter-popover dt { font-weight:600; color:#2b6cb0; margin-top:8px; }
+.kn-rec-filter-popover dd { margin:2px 0 0; color:#4a5568; line-height:1.4; }
 .pk-rec-has-tip { position:relative; display:inline-block; margin-left:4px; color:#3182ce; cursor:default; font-size:12px; }
 .pk-rec-has-tip::after { content:attr(title); position:absolute; bottom:calc(100% + 5px); left:50%; transform:translateX(-50%); background:#2d3748; color:#fff; font-size:11px; font-weight:600; white-space:nowrap; padding:3px 8px; border-radius:4px; pointer-events:none; opacity:0; transition:opacity 0s; z-index:var(--z-tooltip, 500); }
 .pk-rec-has-tip::before { content:''; position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#2d3748; pointer-events:none; opacity:0; transition:opacity 0s; z-index:var(--z-tooltip, 500); }

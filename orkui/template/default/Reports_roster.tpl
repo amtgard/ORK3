@@ -322,7 +322,8 @@ if ($_isOrkAdmin) {
 						data-suspended-at="<?=htmlspecialchars($player['SuspendedAt'] ?? '')?>"
 						data-suspended-until="<?=htmlspecialchars($player['SuspendedUntil'] ?? '')?>"
 						data-suspension="<?=htmlspecialchars($player['Suspension'] ?? '')?>"
-						data-propagates="<?= isset($player['SuspensionPropagates']) ? (int)$player['SuspensionPropagates'] : '' ?>">
+						data-propagates="<?= isset($player['SuspensionPropagates']) ? (int)$player['SuspensionPropagates'] : '' ?>"
+						data-suspendator-id="<?= (int)($player['SuspendatorId'] ?? 0) ?>">
 						<i class="fas fa-pencil-alt" style="margin-right:3px"></i> Edit
 					</a>
 					&nbsp;·&nbsp;
@@ -557,7 +558,7 @@ $(function() {
 <script>
 (function() {
 	var _suspUrl       = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
-	var _suspendatorId = <?= (int)$this->__session->user_id ?>;
+	var _suspendatorId = <?= (int)$this->__session->user_id ?>; // used for new suspensions; overridden per-row on edit
 	var _fpFrom, _fpUntil;
 
 	_fpFrom  = flatpickr('#es-from',  { dateFormat: 'Y-m-d' });
@@ -577,6 +578,7 @@ $(function() {
 	}
 
 	function openEditOverlay(data) {
+		if (data.suspendatorId) _suspendatorId = data.suspendatorId;
 		document.getElementById('es-player-name').textContent = data.persona;
 		document.getElementById('es-player-id').value         = data.mundaneId;
 		document.getElementById('es-error').style.display     = 'none';
@@ -591,8 +593,7 @@ $(function() {
 		document.getElementById('es-comment').value           = comment;
 		document.getElementById('es-char-count').textContent  = comment.length + ' / 100';
 
-		// null/empty → default checked (propagates); '0' → unchecked
-		document.getElementById('es-propagates').checked = data.propagates !== '0';
+		document.getElementById('es-propagates').checked = data.propagates === '1';
 
 		document.getElementById('es-overlay').style.display = 'flex';
 	}
@@ -667,7 +668,8 @@ $(function() {
 			suspendedAt:   $(el).data('suspended-at'),
 			suspendedUntil: $(el).data('suspended-until'),
 			suspension:    $(el).data('suspension'),
-			propagates:    String($(el).data('propagates'))
+			propagates:    String($(el).data('propagates')),
+			suspendatorId: $(el).data('suspendator-id') || 0
 		});
 	});
 })();

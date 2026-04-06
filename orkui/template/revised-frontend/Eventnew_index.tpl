@@ -30,6 +30,7 @@
 	$persona     = htmlspecialchars($info['Persona']     ?? '');
 
 	$isUpcoming    = $IsUpcoming     ?? false;
+	$isOngoing     = $IsOngoing      ?? false;
 	$attendeeCount = $AttendanceCount ?? 0;
 	$mapLink       = $MapLink        ?? '';
 
@@ -225,8 +226,14 @@
 					<i class="fas fa-calendar-alt"></i> <?= htmlspecialchars($dateBadgeText) ?>
 				</span>
 				<?php endif; ?>
+				<?php if (!$isOngoing): ?>
 				<span class="ev-badge <?= $isUpcoming ? 'ev-badge-green' : 'ev-badge-gray' ?>">
 					<?= $isUpcoming ? '<i class="fas fa-clock"></i> Upcoming' : '<i class="fas fa-history"></i> Past' ?>
+				</span>
+				<?php endif; ?>
+				<span class="ev-badge ev-badge-blue">
+					<i class="fas fa-<?= $parkId > 0 ? 'tree' : 'crown' ?>"></i>
+					<?= $parkId > 0 ? 'Park Event' : 'Kingdom Event' ?>
 				</span>
 			</div>
 			<div class="ev-owner-inline">
@@ -238,9 +245,9 @@
 				<?php endif; ?>
 				<?php
 					$breadcrumbParkId   = $atParkId   ?: $parkId;
-					$breadcrumbParkName = $atParkId ? $atParkName : $parkName;
+					$breadcrumbParkName = $atParkName; // controller fetches name for atParkId ?: parkId
 				?>
-				<?php if ($breadcrumbParkId): ?>
+				<?php if ($breadcrumbParkId && $breadcrumbParkName): ?>
 					<span class="ev-owner-sep">›</span>
 					<a href="<?= UIR ?>Park/profile/<?= $breadcrumbParkId ?>"><?= $breadcrumbParkName ?></a>
 				<?php endif; ?>
@@ -607,8 +614,7 @@
 						<button class="ev-icon-btn" title="Print" onclick="evPrintRsvp()"><i class="fas fa-print"></i></button>
 					</div>
 				</div>
-				<?php if ($canManageAttendance): ?>
-					<?php if (count($rsvpList) > 0): ?>
+				<?php if ($loggedIn && count($rsvpList) > 0): ?>
 					<div style="margin-bottom:10px;position:relative;">
 						<i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#a0aec0;font-size:12px;pointer-events:none"></i>
 						<input type="text" id="ev-rsvp-search" placeholder="Filter by name…" oninput="evFilterRsvp(this.value)"
@@ -618,7 +624,7 @@
 					</div>
 					<table class="ev-table" id="ev-rsvp-table">
 						<thead>
-							<tr><th>Player</th><th>Status</th><th></th></tr>
+							<tr><th>Player</th><th>Status</th><?php if ($canManageAttendance): ?><th></th><?php endif; ?></tr>
 						</thead>
 						<tbody>
 							<?php foreach ($rsvpList as $attendee): ?>
@@ -631,12 +637,13 @@
 										<i class="fas fa-star" style="color:#b7791f;margin-right:4px"></i>Interested
 									<?php endif; ?>
 								</td>
+								<?php if ($canManageAttendance): ?>
 								<td style="text-align:right;white-space:nowrap">
 									<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen && !empty($attendee['LastClassId'])): ?>
 									<button class="ev-checkin-btn ev-checkin-as-btn" type="button"
 										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
 										onclick="evQuickCheckin(this, <?= (int)$attendee['MundaneId'] ?>, <?= (int)$attendee['LastClassId'] ?>)">
-										<i class="fas fa-user-check"></i> Check-in as <?= htmlspecialchars($attendee['LastClassName'] ?? '') ?>
+										<i class="fas fa-user-check"></i> <span class="ev-checkin-label">Check-in </span>as <?= htmlspecialchars($attendee['LastClassName'] ?? '') ?>
 									</button>
 									<?php endif; ?>
 									<button class="ev-checkin-btn<?= isset($checkedInIds[$attendee['MundaneId']]) ? ' ev-checkin-done' : '' ?>" type="button"
@@ -645,22 +652,22 @@
 										<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen): ?>
 										onclick="evOpenCheckinModal(<?= (int)$attendee['MundaneId'] ?>, <?= htmlspecialchars(json_encode($attendee['Persona']), ENT_QUOTES) ?>)"
 										<?php else: ?>disabled<?php endif; ?>>
-										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : 'Check In' ?>
+										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : '<span class="ev-checkin-label">Check-in </span>as...' ?>
 									</button>
 									<button class="ev-rsvp-del-btn" type="button"
 										onclick="evDeleteRsvp(this, <?= (int)$attendee['MundaneId'] ?>)" title="Remove RSVP">
 										<i class="fas fa-times"></i>
 									</button>
 								</td>
+								<?php endif; ?>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
 					</table>
-					<?php else: ?>
-					<div class="ev-empty">
-						<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
-					</div>
-					<?php endif; ?>
+				<?php elseif ($loggedIn): ?>
+				<div class="ev-empty">
+					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
+				</div>
 				<?php elseif ($rsvpCount === 0): ?>
 				<div class="ev-empty">
 					<i class="fas fa-calendar-check" style="margin-right:6px"></i><?php echo $isPastEvent ? 'No RSVPs' : 'No RSVPs yet' ?>
@@ -1213,6 +1220,7 @@ function fpAddTitle(label, calEl) {
 	title.textContent = label;
 	calEl.insertBefore(title, calEl.firstChild);
 }
+if (document.getElementById('ev-fp-start')) {
 var _fpOpts = {
 	enableTime: true,
 	dateFormat: 'Y-m-d\\TH:i',
@@ -1242,4 +1250,5 @@ var _fpStart = flatpickr('#ev-fp-start', Object.assign({}, _fpOpts, {
 var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	onReady: function(sel, str, fp) { fpAddTitle('End Date & Time', fp.calendarContainer); }
 }));
+}
 </script>

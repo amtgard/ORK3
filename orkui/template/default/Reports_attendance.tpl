@@ -75,6 +75,54 @@ if ($Type === 'Kingdom' && !empty($_summary_dates)) {
 	$_unique_parks = count($_park_ids);
 }
 
+/* ── Period label ── */
+$_is_navigated = isset($AttendanceDates) && ($AttendanceFromDate !== date('Y-m-d'));
+$_period_label = '';
+if ($AttendancePeriod === 'All') {
+	$_period_label = 'All Time';
+} elseif ($AttendancePeriod === 'Weeks') {
+	$_n = (int)$AttendanceNumPeriods;
+	if ($_n === 1) {
+		$_period_label = $_is_navigated
+			? 'Week ending ' . date('M j, Y', strtotime($AttendanceFromDate))
+			: 'Past Week';
+	} else {
+		$_period_label = $_is_navigated
+			? $_n . ' Weeks ending ' . date('M j, Y', strtotime($AttendanceFromDate))
+			: 'Past ' . $_n . ' Weeks';
+	}
+} elseif ($AttendancePeriod === 'Months') {
+	$_n = (int)$AttendanceNumPeriods;
+	$_months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+	if ($_n === 1) {
+		$_period_label = $_is_navigated
+			? date('F Y', strtotime($AttendanceFromDate))
+			: 'Past Month';
+	} else {
+		$_period_label = $_is_navigated
+			? $_n . ' Months ending ' . date('M Y', strtotime($AttendanceFromDate))
+			: 'Past ' . $_n . ' Months';
+	}
+} elseif ($AttendancePeriod === 'Week') {
+	$_period_label = 'Today';
+}
+
+/* ── Previous / Next navigation ── */
+$_nav_base   = UIR . 'Reports/attendance/' . $Type . '/' . $AttendanceId . '/' . $AttendancePeriod . '/' . $AttendanceNumPeriods . '/';
+$_today_ts   = strtotime(date('Y-m-d'));
+$_prev_url   = null;
+$_next_url   = null;
+if ($AttendancePeriod === 'Weeks') {
+	$_prev_url = $_nav_base . date('Y-m-d', strtotime($AttendanceFromDate . ' -' . $AttendanceNumPeriods . ' weeks'));
+	$_next_ts  = strtotime($AttendanceFromDate . ' +' . $AttendanceNumPeriods . ' weeks');
+	if ($_next_ts <= $_today_ts) $_next_url = $_nav_base . date('Y-m-d', $_next_ts);
+} elseif ($AttendancePeriod === 'Months') {
+	$_prev_url = $_nav_base . date('Y-m-d', strtotime($AttendanceFromDate . ' -' . $AttendanceNumPeriods . ' months'));
+	$_next_ts  = strtotime($AttendanceFromDate . ' +' . $AttendanceNumPeriods . ' months');
+	if ($_next_ts <= $_today_ts) $_next_url = $_nav_base . date('Y-m-d', $_next_ts);
+}
+
+
 /* ── Scope chip ── */
 $scope_label = '';
 $scope_link  = '';
@@ -134,6 +182,9 @@ if ($Type !== 'Event') {
 			<div class="rp-header-icon-title">
 				<i class="fas fa-users rp-header-icon"></i>
 				<h1 class="rp-header-title">Attendance</h1>
+<?php if ($_period_label): ?>
+				<span style="display:inline-flex;align-items:center;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:20px;padding:3px 11px;font-size:0.78rem;font-weight:600;color:rgba(255,255,255,0.9);white-space:nowrap;"><?=htmlspecialchars($_period_label)?></span>
+<?php endif; ?>
 			</div>
 <?php if ($scope_label): ?>
 			<div class="rp-header-scope">
@@ -153,6 +204,12 @@ if ($Type !== 'Event') {
 <?php endif; ?>
 		</div>
 		<div class="rp-header-actions">
+<?php if ($_prev_url): ?>
+			<a class="rp-btn-ghost" href="<?=$_prev_url?>"><i class="fas fa-chevron-left"></i> Previous</a>
+<?php endif; ?>
+<?php if ($_next_url): ?>
+			<a class="rp-btn-ghost" href="<?=$_next_url?>">Next <i class="fas fa-chevron-right"></i></a>
+<?php endif; ?>
 			<button class="rp-btn-ghost" id="rp-btn-csv"><i class="fas fa-download"></i> Export CSV</button>
 			<button class="rp-btn-ghost" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
 		</div>
