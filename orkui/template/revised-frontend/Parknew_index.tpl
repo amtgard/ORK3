@@ -691,7 +691,7 @@
 							</div>
 							<?php if ($CanAdminPark ?? false): ?>
 							<div class="plr-action-group">
-								<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Add Player</button>
+								<button class="plr-add-btn" onclick="pkOpenAddPlayerModal()"><i class="fas fa-user-plus"></i> Create Player</button>
 								<div class="plr-gear-wrap">
 									<button class="plr-gear-btn" id="pk-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 									<div class="plr-gear-menu" id="pk-plr-gear-menu">
@@ -1023,7 +1023,7 @@
 					<div class="kn-report-group">
 						<h5><i class="fas fa-users-cog"></i> Players</h5>
 						<ul>
-							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Add Player</a></li>
+							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Create Player</a></li>
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
 							<li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
@@ -1485,7 +1485,7 @@ var PkConfig = {
 <div id="pk-addplayer-overlay">
 	<div class="pk-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Add Player</h3>
+			<h3 class="pk-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Create Player</h3>
 			<button class="pk-modal-close-btn" id="pk-addplayer-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pk-modal-body">
