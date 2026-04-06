@@ -1219,6 +1219,17 @@
 	-webkit-appearance: none;
 }
 .pn-pagesize-select:focus { border-color: #90cdf4; }
+/* Table toolbar (pagesize + search side by side) */
+.pn-table-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 10px;
+}
+.pn-table-toolbar .pn-award-search-bar {
+	flex: 1;
+	min-width: 0;
+}
 /* Award search bar */
 .pn-award-search-bar {
 	position: relative;
