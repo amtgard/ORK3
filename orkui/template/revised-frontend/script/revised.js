@@ -365,7 +365,7 @@ function pnPageRange(current, total) {
 function pnSetPageSize(tableId, size) {
     var $table = $('#' + tableId);
     if (!$table.length) return;
-    $table.data('pagesize', parseInt(size));
+    $table.data('pagesize', size === 'all' ? 99999 : parseInt(size));
     pnPaginate($table, 1);
 }
 
@@ -654,7 +654,8 @@ if (PnConfig.recError) {
         p.classList.add('pn-rank-selected');
         input.value = p.dataset.rank;
     });
-    if (gid('pn-rec-award')) awInitPicker(gid('pn-rec-award'));
+    var _recAwardEl = document.getElementById('pn-rec-award');
+    if (_recAwardEl) awInitPicker(_recAwardEl);
     $('#pn-rec-award').on('change', function() {
         buildRecRankPills($(this).val());
         var aid = parseInt($(this).find(':selected').data('award-id') || 0);
