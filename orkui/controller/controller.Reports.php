@@ -958,7 +958,13 @@ class Controller_Reports extends Controller {
 			return;
 		}
 
-		$awardIds = implode(',', array_keys($awardCols));
+		$awardIds  = implode(',', array_keys($awardCols));
+		$gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
+		$cachedGrid   = Ork3::$Lib->ghettocache->get(__CLASS__ . '.ladder_grid', $gridCacheKey, 1200);
+		if ($cachedGrid !== false) {
+			$this->data['GridRows'] = $cachedGrid;
+			return;
+		}
 
 		// Location clause for players
 		if ($park_id > 0) {
@@ -1101,7 +1107,9 @@ class Controller_Reports extends Controller {
 			} while ($knightResult->Next());
 		}
 
-		$this->data['GridRows'] = array_values($playerData);
+		$gridRows = array_values($playerData);
+		Ork3::$Lib->ghettocache->cache(__CLASS__ . '.ladder_grid', $gridCacheKey, $gridRows);
+		$this->data['GridRows'] = $gridRows;
 	}
 
 	public function park_distance_matrix($type = null) {
