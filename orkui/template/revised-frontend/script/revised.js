@@ -5023,7 +5023,12 @@ $(document).ready(function() {
 
             var lbl = document.createElement('div');
             lbl.className   = 'kn-admin-config-label';
-            var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility', 'IncludePrincipalityInStatistics': 'Include Principality in Statistics' };
+            var keyLabels = {
+                'AwardRecsPublic': 'Award Recommendations Visibility',
+                'IncludePrincipalityInStatistics': 'Include Principality in Statistics',
+                'QualTestReeveEnabled': "Reeve's Test",
+                'QualTestCorporaEnabled': 'Corpora Test'
+            };
             lbl.textContent = keyLabels[cfg.Key] || cfg.Key;
             var keyHints = {
                 'AttendanceWeeklyMinimum': 'Minimum distinct weeks with at least one sign-in in the last 6 months. Leave blank to not require this.',
@@ -5098,6 +5103,32 @@ $(document).ready(function() {
                     Object.defineProperty(inp, 'value', {
                         get: function() { return this.checked ? '1' : '0'; }
                     });
+                } else if (cfg.Key === 'QualTestReeveEnabled' || cfg.Key === 'QualTestCorporaEnabled') {
+                    // Yes/No toggle button
+                    inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.value = String(val) === '1' ? '1' : '0';
+                    inp.className = 'kn-admin-config-input';
+                    inp.dataset.configId = cfg.ConfigurationId;
+                    inputs.appendChild(inp);
+
+                    var wrap = document.createElement('span');
+                    wrap.className = 'kn-toggle-wrap';
+                    var btnYes = document.createElement('button');
+                    btnYes.type = 'button'; btnYes.textContent = 'Yes';
+                    btnYes.className = 'kn-toggle-btn kn-toggle-btn-yes' + (inp.value === '1' ? ' kn-toggle-active' : '');
+                    var btnNo = document.createElement('button');
+                    btnNo.type = 'button'; btnNo.textContent = 'No';
+                    btnNo.className = 'kn-toggle-btn kn-toggle-btn-no' + (inp.value === '0' ? ' kn-toggle-active' : '');
+                    btnYes.addEventListener('click', function() { inp.value = '1'; btnYes.classList.add('kn-toggle-active'); btnNo.classList.remove('kn-toggle-active'); });
+                    btnNo.addEventListener('click', function() { inp.value = '0'; btnNo.classList.add('kn-toggle-active'); btnYes.classList.remove('kn-toggle-active'); });
+                    wrap.appendChild(btnYes);
+                    wrap.appendChild(btnNo);
+                    inputs.appendChild(wrap);
+                    // skip the default inp append below
+                    row.appendChild(inputs);
+                    container.appendChild(row);
+                    return;
                 } else {
                     inp = document.createElement('input');
                     inp.type  = (cfg.Type === 'color')  ? 'color'

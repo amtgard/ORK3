@@ -449,4 +449,113 @@ class Controller_QualTestAjax extends Controller {
             'expires_at'    => $expires,
         ]);
     }
+    // -----------------------------------------------------------------------
+    // bulkstatus
+    // POST: KingdomId, QuestionIds (JSON array or CSV), Status (active|archived)
+    // -----------------------------------------------------------------------
+    public function bulkstatus($p = null) {
+        $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+        $this->requireAdmin($kingdom_id);
+
+        $status = ($_POST['Status'] ?? '') === 'archived' ? 'archived' : 'active';
+
+        $raw = $_POST['QuestionIds'] ?? '';
+        if (is_string($raw) && substr($raw, 0, 1) === '[') {
+            $raw_ids = json_decode($raw, true);
+        } else {
+            $raw_ids = explode(',', $raw);
+        }
+        if (!is_array($raw_ids) || empty($raw_ids))
+            $this->jsonOut(['status' => 1, 'error' => 'No question IDs provided.']);
+
+        $question_ids = array_values(array_filter(array_map('intval', $raw_ids)));
+        if (empty($question_ids))
+            $this->jsonOut(['status' => 1, 'error' => 'No valid question IDs provided.']);
+
+
+        $result = Ork3::$Lib->qualtest->setQuestionStatusBatch($kingdom_id, $question_ids, $status);
+
+        if ($result === false)
+            $this->jsonOut(['status' => 1, 'error' => 'One or more questions do not belong to this kingdom.']);
+
+        $this->jsonOut(['status' => 0, 'updated' => $result]);
+    }
+
+    // -----------------------------------------------------------------------
+    // duplicatequestion
+    // POST: KingdomId, QuestionId
+    // -----------------------------------------------------------------------
+    public function duplicatequestion($p = null) {
+        $kingdom_id  = (int)($_POST['KingdomId']  ?? 0);
+        $question_id = (int)($_POST['QuestionId'] ?? 0);
+        $this->requireAdmin($kingdom_id);
+
+        if (!valid_id($question_id))
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
+
+        $q = Ork3::$Lib->qualtest->getQuestion($question_id);
+        if (!$q || (int)$q['KingdomId'] !== $kingdom_id)
+            $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
+
+        $new_id = Ork3::$Lib->qualtest->duplicateQuestion($question_id, $kingdom_id);
+        if (!$new_id)
+            $this->jsonOut(['status' => 1, 'error' => 'Failed to duplicate question.']);
+
+        $this->jsonOut(['status' => 0, 'new_question_id' => $new_id]);
+    }
+
+    // -----------------------------------------------------------------------
+    // previewtest
+    // POST: KingdomId, TestType
+    // -----------------------------------------------------------------------
+    public function previewtest($p = null) {
+        $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+        if (!valid_id($kingdom_id))
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid kingdom.']);
+
+        $this->requireAdmin($kingdom_id);
+
+        $test_type = $_POST['TestType'] ?? 'reeve';
+        $config    = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $questions = Ork3::$Lib->qualtest->getQuestionsForPreview($kingdom_id, $test_type, $config['QuestionCount']);
+
+        if ($questions === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'Not enough active questions available for this test.']);
+        }
+
+        $this->jsonOut([
+            'status'         => 0,
+            'questions'      => $questions,
+            'pass_percent'   => $config['PassPercent'],
+            'question_count' => count($questions),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // bulkimport
+    // POST: KingdomId, TestType, Questions (JSON string)
+    // -----------------------------------------------------------------------
+    public function bulkimport($p = null) {
+        $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+        $this->requireAdmin($kingdom_id);
+
+        $test_type = $_POST['TestType'] ?? 'reeve';
+        $raw       = $_POST['Questions'] ?? '';
+        $questions = json_decode($raw, true);
+
+        if (!is_array($questions) || empty($questions))
+            $this->jsonOut(['status' => 1, 'error' => 'No valid questions provided.']);
+
+        if (count($questions) > 200)
+            $this->jsonOut(['status' => 1, 'error' => 'Maximum 200 questions per batch.']);
+
+        $result = Ork3::$Lib->qualtest->saveQuestionBatch($kingdom_id, $test_type, $questions);
+
+        $this->jsonOut([
+            'status'   => 0,
+            'imported' => $result['imported'],
+            'errors'   => $result['errors'],
+        ]);
+    }
+
 }

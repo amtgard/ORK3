@@ -1026,6 +1026,13 @@
 						</a>
 					</div>
 					<?php endif; ?>
+					<?php if (!empty($IsLoggedIn) && $_qtMeta['enabled']): ?>
+					<div class="kn-qt-actions" style="margin-top:8px;">
+						<a class="kn-btn kn-btn-sm kn-btn-primary" href="<?= UIR ?>QualTest/take/<?= $kingdom_id ?>/<?= $_qtType ?>">
+							<i class="fas fa-play-circle"></i> Take Test
+						</a>
+					</div>
+					<?php endif; ?>
 				</div>
 				<?php endforeach; ?>
 			</div>

@@ -1,25 +1,21 @@
 <?php
 /* ── Pre-compute stats & scope ────────────────────────────── */
-$rows         = is_array($results ?? null) ? $results : [];
-$stats        = is_array($stats ?? null) ? $stats : [];
-$test_label   = "Reeve's Test";
-$test_icon    = 'fa-gavel';
-$now          = time();
+$rows       = is_array($results ?? null) ? $results : [];
+$stats      = is_array($stats ?? null) ? $stats : [];
+$test_label = $test_label ?? 'Test';
+$test_icon  = $test_icon  ?? 'fa-check';
+$now        = time();
 
 $qualPct = ($stats['ActivePlayers'] ?? 0) > 0
 	? round(($stats['ActiveQualified'] / $stats['ActivePlayers']) * 100, 1)
 	: 0;
 
 /* Scope chip */
-$scope_label = '';
+$scope_label = isset($KingdomName) ? $KingdomName : '';
 $scope_link  = '';
 $scope_icon  = 'fa-chess-rook';
 if (($ScopeType ?? '') === 'kingdom' && !empty($ScopeId)) {
-	global $DB;
-	$DB->Clear();
-	$kr = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . (int)$ScopeId . ' LIMIT 1');
-	$scope_label = ($kr && $kr->Next()) ? $kr->name : '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)$ScopeId;
+	$scope_link = UIR . 'Kingdom/profile/' . (int)$ScopeId;
 }
 ?>
 
@@ -71,8 +67,8 @@ if (($ScopeType ?? '') === 'kingdom' && !empty($ScopeId)) {
 	<div class="rp-header">
 		<div class="rp-header-left">
 			<div class="rp-header-icon-title">
-				<i class="fas <?=$test_icon?> rp-header-icon"></i>
-				<h1 class="rp-header-title"><?=$test_label?> Results</h1>
+				<i class="fas <?=htmlspecialchars($test_icon)?> rp-header-icon"></i>
+				<h1 class="rp-header-title"><?=htmlspecialchars($test_label)?> Results</h1>
 			</div>
 <?php if ($scope_label) : ?>
 			<div class="rp-header-scope">

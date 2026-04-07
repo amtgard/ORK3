@@ -175,7 +175,7 @@ class QualTest {
         $max_retakes     = max(0, (int)$max_retakes);
         $share_questions = ($test_type === 'reeve' && $share_questions) ? 1 : 0;
         $instructions_sql = ($instructions !== null && trim($instructions) !== '')
-            ? "'" . addslashes(trim($instructions)) . "'"
+            ? "'" . $this->esc(trim($instructions)) . "'"
             : 'NULL';
 
         $this->db->Clear();
@@ -331,13 +331,9 @@ class QualTest {
                  VALUES (' . $kingdom_id . ', \'' . $test_type . '\', \'' . $this->esc($question_text) . '\', \'active\', ' . $created_by . ')'
             );
             $this->db->Clear();
-            $ir = $this->db->DataSet(
-                'SELECT qual_question_id FROM ' . DB_PREFIX . 'qual_question
-                 WHERE kingdom_id = ' . $kingdom_id . '
-                 ORDER BY qual_question_id DESC LIMIT 1'
-            );
+            $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
             if ($ir && $ir->Next()) {
-                $question_id = (int)$ir->qual_question_id;
+                $question_id = (int)$ir->new_id;
             }
         }
 
@@ -764,13 +760,9 @@ class QualTest {
              VALUES (' . $dest_kingdom_id . ', \'reeve\', \'' . $this->esc($question_text) . '\', \'active\', ' . (int)$created_by . ')'
         );
         $this->db->Clear();
-        $ir = $this->db->DataSet(
-            'SELECT qual_question_id FROM ' . DB_PREFIX . 'qual_question
-             WHERE kingdom_id = ' . $dest_kingdom_id . '
-             ORDER BY qual_question_id DESC LIMIT 1'
-        );
-        if (!$ir || !$ir->Next()) return 0;
-        $new_qid = (int)$ir->qual_question_id;
+        $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
+        if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) return 0;
+        $new_qid = (int)$ir->new_id;
 
         foreach ($answers as $a) {
             $this->db->Clear();
@@ -1029,6 +1021,211 @@ class QualTest {
     }
 
     // -----------------------------------------------------------------------
+    // Admin Preview
+    // -----------------------------------------------------------------------
+
+    /**
+     * Like getQuestionsForTest but INCLUDES is_correct flags (admin preview).
+     */
+    public function getQuestionsForPreview($kingdom_id, $test_type, $limit) {
+        $test_type = $this->sanitizeType($test_type);
+        $limit     = max(1, (int)$limit);
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT qual_question_id, question_text
+             FROM ' . DB_PREFIX . 'qual_question
+             WHERE kingdom_id = ' . (int)$kingdom_id . '
+               AND test_type = \'' . $test_type . '\'
+               AND status = \'active\'
+             ORDER BY RAND()
+             LIMIT ' . $limit
+        );
+
+        $questions = [];
+        $qids      = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $qid = (int)$rs->qual_question_id;
+                $qids[] = $qid;
+                $questions[$qid] = [
+                    'QualQuestionId' => $qid,
+                    'QuestionText'   => $rs->question_text,
+                    'Answers'        => [],
+                ];
+            }
+        }
+
+        if (count($questions) < $limit) return null;
+
+        $ids_str = implode(',', $qids);
+        $this->db->Clear();
+        $ars = $this->db->DataSet(
+            'SELECT qual_answer_id, qual_question_id, answer_text, is_correct
+             FROM ' . DB_PREFIX . 'qual_answer
+             WHERE qual_question_id IN (' . $ids_str . ')
+             ORDER BY RAND()'
+        );
+        if ($ars) {
+            while ($ars->Next()) {
+                $qid = (int)$ars->qual_question_id;
+                if (isset($questions[$qid])) {
+                    $questions[$qid]['Answers'][] = [
+                        'QualAnswerId' => (int)$ars->qual_answer_id,
+                        'AnswerText'   => $ars->answer_text,
+                        'IsCorrect'    => (bool)(int)$ars->is_correct,
+                    ];
+                }
+            }
+        }
+
+        return array_values($questions);
+    }
+
+    // -----------------------------------------------------------------------
+    // Duplication
+    // -----------------------------------------------------------------------
+
+    /**
+     * Clone a question + answers within the same kingdom.
+     * Always creates the clone as 'active' status.
+     */
+    public function duplicateQuestion($question_id, $kingdom_id) {
+        $question_id = (int)$question_id;
+        $kingdom_id  = (int)$kingdom_id;
+
+        $q = $this->getQuestion($question_id);
+        if (!$q || (int)$q['KingdomId'] !== $kingdom_id) return 0;
+        if (count($q['Answers']) < 2) return 0;
+
+        $new_text  = 'Copy of ' . $q['QuestionText'];
+        $test_type = $this->sanitizeType($q['TestType']);
+
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_question
+             (kingdom_id, test_type, question_text, status, created_by)
+             VALUES (' . $kingdom_id . ', \'' . $test_type . '\', \'' . $this->esc($new_text) . '\', \'active\', 0)'
+        );
+        $this->db->Clear();
+        $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
+        if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) return 0;
+        $new_qid = (int)$ir->new_id;
+
+        foreach ($q['Answers'] as $a) {
+            $this->db->Clear();
+            $this->db->Execute(
+                'INSERT INTO ' . DB_PREFIX . 'qual_answer
+                 (qual_question_id, answer_text, is_correct)
+                 VALUES (' . $new_qid . ', \'' . $this->esc($a['AnswerText']) . '\', ' . ((int)(bool)$a['IsCorrect']) . ')'
+            );
+        }
+
+        return $new_qid;
+    }
+
+    /**
+     * Bulk-update question status for a set of IDs (verified against kingdom).
+     * Returns count of updated rows, or false if any IDs don't belong to the kingdom.
+     */
+    public function setQuestionStatusBatch($kingdom_id, $question_ids, $status) {
+        $kingdom_id = (int)$kingdom_id;
+        $status = ($status === 'archived') ? 'archived' : 'active';
+        if (empty($question_ids)) return 0;
+
+        $id_list = implode(',', array_map('intval', $question_ids));
+
+        // Verify ALL question IDs belong to this kingdom
+        $this->db->Clear();
+        $vr = $this->db->DataSet(
+            'SELECT qual_question_id FROM ' . DB_PREFIX . 'qual_question
+             WHERE qual_question_id IN (' . $id_list . ')
+               AND kingdom_id = ' . $kingdom_id
+        );
+        $verified_ids = [];
+        if ($vr) {
+            while ($vr->Next()) {
+                $verified_ids[] = (int)$vr->qual_question_id;
+            }
+        }
+
+        if (count($verified_ids) !== count($question_ids)) return false;
+
+        $safe_list = implode(',', $verified_ids);
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'qual_question
+             SET status = \'' . $status . '\'
+             WHERE qual_question_id IN (' . $safe_list . ')
+               AND kingdom_id = ' . $kingdom_id
+        );
+
+        return count($verified_ids);
+    }
+
+    // -----------------------------------------------------------------------
+    // Batch Operations
+    // -----------------------------------------------------------------------
+
+    /**
+     * Import multiple questions at once. Max 200 per batch.
+     * Returns ['imported' => int, 'errors' => [['index' => int, 'error' => string]]]
+     */
+    public function saveQuestionBatch($kingdom_id, $test_type, $questions_array) {
+        $kingdom_id = (int)$kingdom_id;
+        $test_type  = $this->sanitizeType($test_type);
+        $imported   = 0;
+        $errors     = [];
+
+        if (count($questions_array) > 200) {
+            return ['imported' => 0, 'errors' => [['index' => 0, 'error' => 'Maximum 200 questions per batch.']]];
+        }
+
+        foreach ($questions_array as $i => $q) {
+            $text = trim($q['QuestionText'] ?? '');
+            if (!$text) {
+                $errors[] = ['index' => $i, 'error' => 'Question text is empty.'];
+                continue;
+            }
+
+            $answers = is_array($q['Answers'] ?? null) ? $q['Answers'] : [];
+            $clean_answers = [];
+            $has_correct   = false;
+            foreach ($answers as $a) {
+                $atext = trim($a['AnswerText'] ?? '');
+                if (!$atext) continue;
+                $is_correct = !empty($a['IsCorrect']) ? 1 : 0;
+                if ($is_correct) $has_correct = true;
+                $clean_answers[] = ['AnswerText' => $atext, 'IsCorrect' => $is_correct];
+            }
+
+            if (count($clean_answers) < 2) {
+                $errors[] = ['index' => $i, 'error' => 'At least 2 non-empty answers required.'];
+                continue;
+            }
+            if (!$has_correct) {
+                $errors[] = ['index' => $i, 'error' => 'No correct answer marked.'];
+                continue;
+            }
+
+            $saved = $this->saveQuestion(0, [
+                'KingdomId'    => $kingdom_id,
+                'TestType'     => $test_type,
+                'QuestionText' => $text,
+                'Answers'      => $clean_answers,
+            ]);
+
+            if ($saved > 0) {
+                $imported++;
+            } else {
+                $errors[] = ['index' => $i, 'error' => 'Failed to save question.'];
+            }
+        }
+
+        return ['imported' => $imported, 'errors' => $errors];
+    }
+
+        // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 

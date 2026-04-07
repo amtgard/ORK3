@@ -5580,39 +5580,76 @@ pnRenderSparkline();
 .pn-qt-retake-warning i { margin-right: 5px; }
 .pn-qt-reset-retakes-btn { margin-top: 4px; }
 /* Quiz modal */
-#pn-quiz-overlay .pn-modal-box { width: 600px; max-width: calc(100vw - 40px); }
-.pn-quiz-progress { font-size: 0.8rem; color: #718096; margin-bottom: 12px; }
-.pn-quiz-progress-bar { height: 4px; background: #e2e8f0; border-radius: 2px; margin-bottom: 16px; }
-.pn-quiz-progress-bar-fill { height: 100%; background: #2b6cb0; border-radius: 2px; transition: width 0.3s; }
-.pn-quiz-q-text { font-size: 1rem; font-weight: 600; color: #2d3748; margin-bottom: 14px; line-height: 1.5; }
+#pn-quiz-overlay .pn-modal-box { width: 640px; max-width: calc(100vw - 40px); }
+
+/* Segmented progress bar */
+.pn-quiz-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.pn-quiz-progress { font-size: 0.8rem; font-weight: 600; color: #718096; }
+.pn-quiz-progress-score { font-size: 0.78rem; color: #a0aec0; }
+.pn-quiz-progress-segments { display: flex; gap: 3px; margin-bottom: 20px; }
+.pn-quiz-progress-seg { flex: 1; height: 7px; border-radius: 4px; background: #e2e8f0; transition: background 0.3s; }
+.pn-quiz-progress-seg-done { background: #38a169; }
+.pn-quiz-progress-seg-current { background: #2b6cb0; box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2); }
+
+/* Question text */
+.pn-quiz-q-text { font-size: 1.08rem; font-weight: 600; color: #2d3748; margin-bottom: 18px; line-height: 1.55; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+
+/* Answer labels — card style with radio indicator */
 .pn-quiz-answers { list-style: none; padding: 0; margin: 0 0 16px; }
 .pn-quiz-answer-item { margin-bottom: 8px; }
-.pn-quiz-answer-label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
-                         border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer;
-                         font-size: 0.92rem; color: #2d3748; transition: background 0.15s, border-color 0.15s; }
-.pn-quiz-answer-label:hover:not(.pn-quiz-disabled) { background: #ebf4ff; border-color: #bee3f8; }
-.pn-quiz-answer-label.pn-quiz-correct  { background: #c6f6d5; border-color: #38a169; color: #276749; pointer-events: none; }
-.pn-quiz-answer-label.pn-quiz-wrong    { background: #fed7d7; border-color: #e53e3e; color: #9b2c2c; pointer-events: none; }
-.pn-quiz-answer-label.pn-quiz-disabled { pointer-events: none; opacity: 0.6; }
+.pn-quiz-answer-label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+                         border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer;
+                         font-size: 0.92rem; color: #2d3748; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s; line-height: 1.45; }
+.pn-quiz-answer-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cbd5e0; flex-shrink: 0; margin-top: 1px;
+                         display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; }
+.pn-quiz-answer-radio-inner { width: 9px; height: 9px; border-radius: 50%; background: transparent; transition: background 0.15s; }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+    background: #f7fafc; border-color: #bee3f8; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) { border-color: #2b6cb0; background: #ebf8ff; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-correct  { background: #f0fff4; border-color: #38a169; color: #276749; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio { border-color: #38a169; background: #38a169; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-wrong    { background: #fff5f5; border-color: #e53e3e; color: #9b2c2c; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio { border-color: #e53e3e; background: #e53e3e; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-disabled { pointer-events: none; opacity: 0.55; }
 .pn-quiz-answer-label.pn-quiz-correct, .pn-quiz-answer-label.pn-quiz-wrong { opacity: 1; }
-.pn-quiz-feedback { padding: 10px 14px; border-radius: 6px; font-size: 0.92rem; font-weight: 600; margin-top: 10px; }
+
+/* Feedback bar with slide animation */
+.pn-quiz-feedback { padding: 0; border-radius: 6px; font-size: 0.92rem; font-weight: 600; margin-top: 0;
+                     overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease; }
+.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 70px; opacity: 1; padding: 10px 14px; margin-top: 12px; }
 .pn-quiz-fb-correct { background: #c6f6d5; color: #276749; }
 .pn-quiz-fb-wrong   { background: #fed7d7; color: #9b2c2c; }
-.pn-quiz-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.pn-quiz-result { text-align: center; padding: 20px 0; }
-.pn-quiz-result-icon { font-size: 3rem; margin-bottom: 10px; }
+.pn-quiz-nav { display: flex; justify-content: flex-end; align-items: center; margin-top: 12px; gap: 8px; }
+
+/* Result view */
+.pn-quiz-result { text-align: center; padding: 28px 0 20px; }
+.pn-quiz-result-icon { font-size: 3.5rem; margin-bottom: 12px; }
 .pn-quiz-result-pass { color: #276749; }
 .pn-quiz-result-fail { color: #9b2c2c; }
-.pn-quiz-result-score { font-size: 2rem; font-weight: 700; margin-bottom: 6px; }
-.pn-quiz-result-detail { font-size: 0.9rem; color: #4a5568; margin-bottom: 8px; }
-.pn-quiz-result-expiry { font-size: 0.85rem; color: #276749; font-weight: 600; margin-bottom: 16px; }
-.pn-quiz-loading { text-align: center; padding: 32px 0; color: #718096; }
+.pn-quiz-result-heading { font-size: 1.2rem; font-weight: 700; margin: 0 0 6px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
+.pn-quiz-result-heading-pass { color: #276749; }
+.pn-quiz-result-heading-fail { color: #9b2c2c; }
+.pn-quiz-result-score { font-size: 2.4rem; font-weight: 800; margin-bottom: 6px; line-height: 1.1; }
+.pn-quiz-result-breakdown { font-size: 0.88rem; color: #4a5568; margin-bottom: 4px; }
+.pn-quiz-result-detail { font-size: 0.85rem; color: #718096; margin-bottom: 12px; }
+.pn-quiz-result-expiry-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;
+    border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: #c6f6d5; color: #276749; margin-bottom: 16px; }
+
+/* Loading / error / instructions */
+.pn-quiz-loading { text-align: center; padding: 40px 0; color: #718096; }
 .pn-quiz-error-msg { background: #fed7d7; border: 1px solid #fc8181; color: #9b2c2c;
-                     padding: 10px 14px; border-radius: 4px; font-size: 0.88rem; margin-bottom: 10px; display: none; }
-.pn-quiz-instructions { padding: 16px 0; }
-.pn-quiz-instructions-icon { text-align: center; font-size: 2.5rem; color: #2b6cb0; margin-bottom: 12px; }
-.pn-quiz-instructions-body { font-size: 0.92rem; color: #2d3748; line-height: 1.65; margin-bottom: 20px; white-space: pre-line; }
-.pn-quiz-instructions-meta { font-size: 0.82rem; color: #718096; margin-bottom: 18px; }
+                     padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 12px; display: none; }
+.pn-quiz-instructions { padding: 20px 0; }
+.pn-quiz-instructions-icon { text-align: center; font-size: 2.5rem; color: #2b6cb0; margin-bottom: 14px; }
+.pn-quiz-instructions-body { padding: 12px 16px; background: #ebf4ff; border: 1px solid #bee3f8; border-left: 4px solid #2b6cb0;
+    border-radius: 0 6px 6px 0; font-size: 0.92rem; color: #2c5282; line-height: 1.65; margin-bottom: 18px; white-space: pre-line; }
+.pn-quiz-instructions-meta { font-size: 0.85rem; color: #718096; margin-bottom: 20px; text-align: center; }
 .pn-quiz-instructions-meta strong { color: #2d3748; }
 .pn-quiz-begin-row { text-align: center; }
 </style>
@@ -5640,11 +5677,14 @@ pnRenderSparkline();
 
 			<!-- Question view -->
 			<div id="pn-quiz-question-view" style="display:none">
-				<div class="pn-quiz-progress" id="pn-quiz-progress-text"></div>
-				<div class="pn-quiz-progress-bar"><div class="pn-quiz-progress-bar-fill" id="pn-quiz-bar-fill"></div></div>
+				<div class="pn-quiz-progress-header">
+					<div class="pn-quiz-progress" id="pn-quiz-progress-text"></div>
+					<div class="pn-quiz-progress-score" id="pn-quiz-progress-score"></div>
+				</div>
+				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments"></div>
 				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
 				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
-				<div class="pn-quiz-feedback" id="pn-quiz-feedback" style="display:none"></div>
+				<div class="pn-quiz-feedback" id="pn-quiz-feedback"></div>
 				<div id="pn-quiz-report-area" style="display:none;margin-top:10px;">
 					<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-quiz-report-btn" style="font-size:0.8rem;"><i class="fas fa-flag" style="color:#e53e3e;margin-right:5px;"></i>Report Question</button>
 					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;display:none;">
@@ -5671,9 +5711,16 @@ pnRenderSparkline();
 			<div id="pn-quiz-result-view" style="display:none">
 				<div class="pn-quiz-result">
 					<div class="pn-quiz-result-icon" id="pn-quiz-result-icon"></div>
+					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading"></h3>
 					<div class="pn-quiz-result-score" id="pn-quiz-result-score"></div>
+					<div class="pn-quiz-result-breakdown" id="pn-quiz-result-breakdown"></div>
 					<div class="pn-quiz-result-detail" id="pn-quiz-result-detail"></div>
-					<div class="pn-quiz-result-expiry" id="pn-quiz-result-expiry"></div>
+					<div id="pn-quiz-result-expiry-wrap" style="display:none">
+						<div class="pn-quiz-result-expiry-badge" id="pn-quiz-result-expiry">
+							<i class="fas fa-calendar-check"></i>
+							<span id="pn-quiz-result-expiry-text"></span>
+						</div>
+					</div>
 				</div>
 				<div class="pn-modal-footer">
 					<button class="pn-btn pn-btn-secondary" id="pn-quiz-done">Close</button>
@@ -5685,45 +5732,51 @@ pnRenderSparkline();
 </div>
 <script>
 (function() {
-	var overlay      = document.getElementById('pn-quiz-overlay');
-	var closeBtn     = document.getElementById('pn-quiz-close-btn');
-	var modalTitle   = document.getElementById('pn-quiz-modal-title');
-	var loading      = document.getElementById('pn-quiz-loading');
-	var errorMsg     = document.getElementById('pn-quiz-error');
-	var questionView = document.getElementById('pn-quiz-question-view');
-	var resultView   = document.getElementById('pn-quiz-result-view');
-	var progressTxt  = document.getElementById('pn-quiz-progress-text');
-	var barFill      = document.getElementById('pn-quiz-bar-fill');
-	var qText        = document.getElementById('pn-quiz-q-text');
-	var answersList  = document.getElementById('pn-quiz-answers');
-	var feedbackEl   = document.getElementById('pn-quiz-feedback');
-	var nextBtn      = document.getElementById('pn-quiz-next');
-	var submitBtn    = document.getElementById('pn-quiz-submit');
-	var doneBtn      = document.getElementById('pn-quiz-done');
-	var retakeBtn    = document.getElementById('pn-quiz-retake');
-	var reportArea   = document.getElementById('pn-quiz-report-area');
-	var reportBtn    = document.getElementById('pn-quiz-report-btn');
-	var reportForm   = document.getElementById('pn-quiz-report-form');
-	var reportReason = document.getElementById('pn-quiz-report-reason');
-	var reportSubmit = document.getElementById('pn-quiz-report-submit');
-	var reportCancel = document.getElementById('pn-quiz-report-cancel');
-	var reportThanks = document.getElementById('pn-quiz-report-thanks');
-	var resultIcon   = document.getElementById('pn-quiz-result-icon');
-	var resultScore  = document.getElementById('pn-quiz-result-score');
-	var resultDetail = document.getElementById('pn-quiz-result-detail');
-	var resultExpiry = document.getElementById('pn-quiz-result-expiry');
-	var instrView    = document.getElementById('pn-quiz-instructions-view');
-	var instrText    = document.getElementById('pn-quiz-instructions-text');
-	var instrMeta    = document.getElementById('pn-quiz-instructions-meta');
-	var beginBtn     = document.getElementById('pn-quiz-begin-btn');
+	var overlay        = document.getElementById('pn-quiz-overlay');
+	var closeBtn       = document.getElementById('pn-quiz-close-btn');
+	var modalTitle     = document.getElementById('pn-quiz-modal-title');
+	var loading        = document.getElementById('pn-quiz-loading');
+	var errorMsg       = document.getElementById('pn-quiz-error');
+	var questionView   = document.getElementById('pn-quiz-question-view');
+	var resultView     = document.getElementById('pn-quiz-result-view');
+	var progressTxt    = document.getElementById('pn-quiz-progress-text');
+	var progressScore  = document.getElementById('pn-quiz-progress-score');
+	var progressSegs   = document.getElementById('pn-quiz-progress-segments');
+	var qText          = document.getElementById('pn-quiz-q-text');
+	var answersList    = document.getElementById('pn-quiz-answers');
+	var feedbackEl     = document.getElementById('pn-quiz-feedback');
+	var nextBtn        = document.getElementById('pn-quiz-next');
+	var submitBtn      = document.getElementById('pn-quiz-submit');
+	var doneBtn        = document.getElementById('pn-quiz-done');
+	var retakeBtn      = document.getElementById('pn-quiz-retake');
+	var reportArea     = document.getElementById('pn-quiz-report-area');
+	var reportBtn      = document.getElementById('pn-quiz-report-btn');
+	var reportForm     = document.getElementById('pn-quiz-report-form');
+	var reportReason   = document.getElementById('pn-quiz-report-reason');
+	var reportSubmit   = document.getElementById('pn-quiz-report-submit');
+	var reportCancel   = document.getElementById('pn-quiz-report-cancel');
+	var reportThanks   = document.getElementById('pn-quiz-report-thanks');
+	var resultIcon     = document.getElementById('pn-quiz-result-icon');
+	var resultHeading  = document.getElementById('pn-quiz-result-heading');
+	var resultScore    = document.getElementById('pn-quiz-result-score');
+	var resultBreakdown= document.getElementById('pn-quiz-result-breakdown');
+	var resultDetail   = document.getElementById('pn-quiz-result-detail');
+	var resultExpiryWrap = document.getElementById('pn-quiz-result-expiry-wrap');
+	var resultExpiryText = document.getElementById('pn-quiz-result-expiry-text');
+	var instrView      = document.getElementById('pn-quiz-instructions-view');
+	var instrText      = document.getElementById('pn-quiz-instructions-text');
+	var instrMeta      = document.getElementById('pn-quiz-instructions-meta');
+	var beginBtn       = document.getElementById('pn-quiz-begin-btn');
 
 	var questions      = [];
 	var answers        = {};
+	var correctCount   = 0;
 	var currentIdx     = 0;
 	var passPercent    = 70;
 	var currentType    = '';
 	var currentKingdom = 0;
 	var currentLabel   = '';
+	var isChecking     = false;
 
 	function openModal(type, kingdom, label) {
 		currentType    = type;
@@ -5731,7 +5784,9 @@ pnRenderSparkline();
 		currentLabel   = label;
 		questions      = [];
 		answers        = {};
+		correctCount   = 0;
 		currentIdx     = 0;
+		isChecking     = false;
 
 		modalTitle.innerHTML = '<i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>' + label;
 		overlay.classList.add('pn-open');
@@ -5751,6 +5806,7 @@ pnRenderSparkline();
 				if (j.status !== 0) { showError(j.error || 'Unable to load test questions.'); return; }
 				questions   = j.questions;
 				passPercent = j.pass_percent;
+				buildProgressSegments();
 				if (j.instructions) {
 					showInstructions(j.instructions);
 				} else {
@@ -5771,16 +5827,39 @@ pnRenderSparkline();
 		renderQuestion(0);
 	});
 
+	function buildProgressSegments() {
+		progressSegs.innerHTML = '';
+		for (var i = 0; i < questions.length; i++) {
+			var seg = document.createElement('div');
+			seg.className = 'pn-quiz-progress-seg';
+			progressSegs.appendChild(seg);
+		}
+	}
+
+	function updateProgressSegments() {
+		var segs = progressSegs.querySelectorAll('.pn-quiz-progress-seg');
+		for (var i = 0; i < segs.length; i++) {
+			segs[i].className = 'pn-quiz-progress-seg';
+			if (answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-done');
+			}
+			if (i === currentIdx && !answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-current');
+			}
+		}
+	}
+
 	function renderQuestion(idx) {
 		var q     = questions[idx];
 		var total = questions.length;
 		currentIdx = idx;
 
 		progressTxt.textContent = 'Question ' + (idx + 1) + ' of ' + total;
-		barFill.style.width = Math.round(((idx + 1) / total) * 100) + '%';
+		progressScore.textContent = correctCount + ' correct so far';
+		updateProgressSegments();
 		qText.textContent = q.QuestionText;
 
-		feedbackEl.style.display = 'none';
+		feedbackEl.classList.remove('pn-quiz-feedback-show', 'pn-quiz-fb-correct', 'pn-quiz-fb-wrong');
 		feedbackEl.className = 'pn-quiz-feedback';
 		nextBtn.style.display   = 'none';
 		submitBtn.style.display = 'none';
@@ -5796,8 +5875,25 @@ pnRenderSparkline();
 			var label = document.createElement('label');
 			label.className = 'pn-quiz-answer-label';
 			label.dataset.answerId = a.QualAnswerId;
-			label.textContent = a.AnswerText;
+			label.setAttribute('tabindex', '0');
+			label.setAttribute('role', 'radio');
+			label.setAttribute('aria-checked', 'false');
+
+			var radio = document.createElement('span');
+			radio.className = 'pn-quiz-answer-radio';
+			var inner = document.createElement('span');
+			inner.className = 'pn-quiz-answer-radio-inner';
+			radio.appendChild(inner);
+			label.appendChild(radio);
+
+			var text = document.createElement('span');
+			text.textContent = a.AnswerText;
+			label.appendChild(text);
+
 			label.addEventListener('click', function() { checkAnswer(q, a.QualAnswerId); });
+			label.addEventListener('keydown', function(e) {
+				if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkAnswer(q, a.QualAnswerId); }
+			});
 			li.appendChild(label);
 			answersList.appendChild(li);
 		});
@@ -5806,9 +5902,20 @@ pnRenderSparkline();
 	}
 
 	function checkAnswer(q, selectedId) {
-		answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) {
-			l.classList.add('pn-quiz-disabled');
+		if (isChecking) return;
+		isChecking = true;
+
+		var allLabels = answersList.querySelectorAll('.pn-quiz-answer-label');
+		allLabels.forEach(function(l) {
+			l.classList.remove('pn-quiz-selected');
+			l.setAttribute('aria-checked', 'false');
 		});
+		var selLabel = answersList.querySelector('[data-answer-id="' + selectedId + '"]');
+		if (selLabel) {
+			selLabel.classList.add('pn-quiz-selected');
+			selLabel.setAttribute('aria-checked', 'true');
+		}
+		allLabels.forEach(function(l) { l.classList.add('pn-quiz-disabled'); });
 
 		var fd = new FormData();
 		fd.append('KingdomId',  currentKingdom);
@@ -5819,37 +5926,34 @@ pnRenderSparkline();
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
 				if (j.status !== 0) {
-					answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) { l.classList.remove('pn-quiz-disabled'); });
+					allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
 					showError(j.error || 'Error checking answer.');
+					isChecking = false;
 					return;
 				}
 				answers[q.QualQuestionId] = selectedId;
 
-				var selLabel = answersList.querySelector('[data-answer-id="' + selectedId + '"]');
-				var okLabel  = answersList.querySelector('[data-answer-id="' + j.correct_answer_id + '"]');
+				selLabel = answersList.querySelector('[data-answer-id="' + selectedId + '"]');
+				var okLabel = answersList.querySelector('[data-answer-id="' + j.correct_answer_id + '"]');
 
 				if (j.is_correct) {
-					if (selLabel) {
-						selLabel.innerHTML = '<i class="fas fa-check-circle" style="margin-right:7px;"></i>' + escHtml(selLabel.textContent);
-						selLabel.classList.add('pn-quiz-correct');
-					}
+					correctCount++;
+					if (selLabel) { selLabel.classList.remove('pn-quiz-selected'); selLabel.classList.add('pn-quiz-correct'); }
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-correct';
-					feedbackEl.innerHTML = '<i class="fas fa-check-circle"></i> Correct!';
+					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
 				} else {
-					if (selLabel) {
-						selLabel.innerHTML = '<i class="fas fa-times-circle" style="margin-right:7px;"></i>' + escHtml(selLabel.textContent);
-						selLabel.classList.add('pn-quiz-wrong');
-					}
-					if (okLabel) {
-						okLabel.innerHTML = '<i class="fas fa-check-circle" style="margin-right:7px;"></i>' + escHtml(okLabel.textContent);
-						okLabel.classList.add('pn-quiz-correct');
-					}
+					if (selLabel) { selLabel.classList.remove('pn-quiz-selected'); selLabel.classList.add('pn-quiz-wrong'); }
+					if (okLabel) { okLabel.classList.remove('pn-quiz-disabled'); okLabel.classList.add('pn-quiz-correct'); }
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
-					feedbackEl.innerHTML = '<i class="fas fa-times-circle"></i> Sorry, that\'s not correct.';
+					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
 					reportArea.style.display = 'block';
 					reportBtn.dataset.questionId = q.QualQuestionId;
 				}
-				feedbackEl.style.display = 'block';
+
+				isChecking = false;
+				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
+				progressScore.textContent = correctCount + ' correct so far';
+				updateProgressSegments();
 
 				if (currentIdx < questions.length - 1) {
 					nextBtn.style.display = 'inline-block';
@@ -5858,8 +5962,9 @@ pnRenderSparkline();
 				}
 			})
 			.catch(function() {
-				answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) { l.classList.remove('pn-quiz-disabled'); });
+				allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
 				showError('Network error. Please try again.');
+				isChecking = false;
 			});
 	}
 
@@ -5884,8 +5989,19 @@ pnRenderSparkline();
 		fetch(PnConfig.uir + 'QualTestAjax/reportquestion', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
+				if (j && j.status !== 0) {
+					reportForm.style.display = 'none';
+					reportBtn.style.display  = 'inline-block';
+					showError(j.error || 'Failed to submit report.');
+					return;
+				}
 				reportForm.style.display   = 'none';
 				reportThanks.style.display = 'inline';
+			})
+			.catch(function() {
+				reportForm.style.display = 'none';
+				reportBtn.style.display = 'inline-block';
+				showError('Failed to submit report. Please try again.');
 			});
 	});
 
@@ -5894,6 +6010,7 @@ pnRenderSparkline();
 	});
 
 	submitBtn.addEventListener('click', function() {
+		if (!confirm('Submit your test? This cannot be undone.')) return;
 		questionView.style.display = 'none';
 		showLoading(true);
 		var fd = new FormData();
@@ -5910,26 +6027,47 @@ pnRenderSparkline();
 			.catch(function() { showLoading(false); showError('Network error. Please try again.'); questionView.style.display = 'block'; });
 	});
 
+	function animateScore(target, duration) {
+		var start = null;
+		function step(ts) {
+			if (!start) start = ts;
+			var p = Math.min((ts - start) / duration, 1);
+			var eased = 1 - Math.pow(1 - p, 3);
+			resultScore.textContent = Math.round(eased * target) + '%';
+			if (p < 1) requestAnimationFrame(step);
+		}
+		requestAnimationFrame(step);
+	}
+
 	function showResult(j) {
 		if (j.passed) {
-			resultIcon.innerHTML  = '<i class="fas fa-check-circle pn-quiz-result-pass"></i>';
-			resultScore.className = 'pn-quiz-result-score pn-quiz-result-pass';
-			resultScore.textContent = j.score_percent + '%';
-			resultDetail.textContent = 'You got ' + j.correct + ' of ' + j.total + ' correct. Required: ' + j.pass_percent + '%. You passed!';
+			resultIcon.innerHTML    = '<i class="fas fa-check-circle pn-quiz-result-pass" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-pass';
+			resultHeading.textContent = 'Congratulations!';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-pass';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '% to pass. You scored ' + j.score_percent + '%. Well done!';
 			if (j.expires_at) {
 				var d = new Date(j.expires_at.replace(' ', 'T'));
-				resultExpiry.textContent = 'Your qualification is valid until ' + d.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) + '.';
+				resultExpiryText.textContent = 'Valid until ' + d.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+				resultExpiryWrap.style.display = 'block';
+			} else {
+				resultExpiryWrap.style.display = 'none';
 			}
 			retakeBtn.style.display = 'none';
 		} else {
-			resultIcon.innerHTML  = '<i class="fas fa-times-circle pn-quiz-result-fail"></i>';
-			resultScore.className = 'pn-quiz-result-score pn-quiz-result-fail';
-			resultScore.textContent = j.score_percent + '%';
-			resultDetail.textContent = 'You got ' + j.correct + ' of ' + j.total + ' correct. Required: ' + j.pass_percent + '% to pass.';
-			resultExpiry.textContent = '';
+			resultIcon.innerHTML    = '<i class="fas fa-times-circle pn-quiz-result-fail" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-fail';
+			resultHeading.textContent = 'Not Quite';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-fail';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '%, you scored ' + j.score_percent + '%. Keep studying and try again!';
+			resultExpiryWrap.style.display = 'none';
 			retakeBtn.style.display = 'inline-block';
 		}
 		resultView.style.display = 'block';
+		resultScore.textContent = '0%';
+		setTimeout(function() { animateScore(j.score_percent, 800); }, 200);
 
 		if (j.passed) {
 			var card = document.querySelector('.pn-qt-card[data-type="' + currentType + '"]');

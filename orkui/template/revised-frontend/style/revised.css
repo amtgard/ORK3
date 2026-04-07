@@ -6102,6 +6102,11 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 .kn-admin-config-input { padding:5px 8px; border:1.5px solid #e2e8f0; border-radius:5px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; }
 .kn-admin-config-input:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 2px rgba(66,153,225,0.12); }
 .kn-admin-config-sublabel { font-size:11px; color:#a0aec0; margin-right:2px; }
+.kn-toggle-wrap { display:inline-flex; border:1.5px solid #e2e8f0; border-radius:6px; overflow:hidden; }
+.kn-toggle-btn { padding:5px 14px; font-size:13px; font-weight:600; border:none; cursor:pointer; background:#f7fafc; color:#718096; transition:all 0.15s; }
+.kn-toggle-btn:first-child { border-right:1px solid #e2e8f0; }
+.kn-toggle-btn-yes.kn-toggle-active { background:#276749; color:#fff; }
+.kn-toggle-btn-no.kn-toggle-active { background:#9b2c2c; color:#fff; }
 .kn-admin-add-award-wrap { margin-top:12px; padding:14px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; }
 .kn-admin-add-award-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; }
 .kn-admin-form-hint { font-size:12px; color:#718096; line-height:1.5; margin:0 0 12px 0; }

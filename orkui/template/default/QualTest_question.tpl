@@ -50,6 +50,11 @@
 .qt-cancel-btn:hover { background: #cbd5e0; }
 .qt-error-banner { background: #fed7d7; border: 1px solid #fc8181; color: #9b2c2c; padding: 10px 14px;
                    border-radius: 4px; font-size: 0.88rem; margin-bottom: 16px; display: none; }
+.qt-quick-answers { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.qt-quick-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--rp-text-muted); }
+.qt-quick-pill { display: inline-block; padding: 4px 14px; border-radius: 16px; font-size: 0.8rem; font-weight: 600;
+                 cursor: pointer; border: 1px solid #cbd5e0; background: #f7fafc; color: #4a5568; transition: all 0.15s; }
+.qt-quick-pill:hover { background: #ebf4ff; border-color: #90cdf4; color: #2b6cb0; }
 </style>
 
 <div class="rp-root">
@@ -124,6 +129,13 @@
 
 					<div class="qt-field">
 						<label>Answer Choices <span style="color:#e53e3e">*</span></label>
+						<?php if (!$isEdit): ?>
+						<div class="qt-quick-answers">
+							<span class="qt-quick-label">Quick Answers:</span>
+							<button type="button" class="qt-quick-pill" data-answers="True,False">True / False</button>
+							<button type="button" class="qt-quick-pill" data-answers="Yes,No">Yes / No</button>
+						</div>
+						<?php endif; ?>
 						<div class="qt-field-hint">Radio button = correct answer.</div>
 						<ul class="qt-answers-list" id="qt-answers-list">
 							<?php foreach ($answers as $i => $a): ?>
@@ -192,6 +204,23 @@
 		             + '<button type="button" class="qt-remove-btn" title="Remove">&times;</button>';
 		attachRemove(li.querySelector('.qt-remove-btn'));
 		list.appendChild(li);
+	});
+
+	// Quick answer pills (True/False, Yes/No)
+	document.querySelectorAll('.qt-quick-pill').forEach(function(pill) {
+		pill.addEventListener('click', function() {
+			var vals = pill.dataset.answers.split(',');
+			list.innerHTML = '';
+			vals.forEach(function(text, i) {
+				var li = document.createElement('li');
+				li.className = 'qt-answer-row';
+				li.innerHTML = '<input type="radio" name="IsCorrect" value="' + i + '" title="Correct answer">'
+				             + '<input type="text" name="AnswerText[]" value="' + text + '" placeholder="Answer ' + (i + 1) + '">'
+				             + '<button type="button" class="qt-remove-btn" title="Remove">&times;</button>';
+				attachRemove(li.querySelector('.qt-remove-btn'));
+				list.appendChild(li);
+			});
+		});
 	});
 
 	var submitAction = 'return';
