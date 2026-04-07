@@ -130,7 +130,7 @@
 			<span><input type='text' class='name-field required-field' value='<?=$Admin_createplayer['UserName'] ?>' name='UserName' /></span>
 		</div>
 		<div>
-			<span>Password:</span>
+			<span>Password <em style="font-weight:normal;color:#888">(optional)</em>:</span>
 			<span><input type='password' value='<?=$Admin_createplayer['Password'] ?>' name='Password' id='Password1' /></span>
 		</div>
 		<div>

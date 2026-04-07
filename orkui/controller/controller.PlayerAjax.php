@@ -25,7 +25,7 @@ class Controller_PlayerAjax extends Controller {
 			$surname    = trim($_POST['Surname']    ?? '');
 			$email      = trim($_POST['Email']      ?? '');
 			$userName   = trim($_POST['UserName']   ?? '');
-			$password   = $_POST['Password']        ?? '';
+			$password   = $_POST['Password'] ?? '';
 			$restricted    = (int)($_POST['Restricted']   ?? 0);
 			$waivered      = (int)($_POST['Waivered']     ?? 0);
 			$pronounId     = (int)($_POST['PronounId']    ?? 0);
@@ -43,11 +43,6 @@ class Controller_PlayerAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'Username must be at least 4 characters.']);
 				exit;
 			}
-			if (!strlen($password)) {
-				echo json_encode(['status' => 1, 'error' => 'Password is required.']);
-				exit;
-			}
-
 			$request = [
 				'Token'         => $this->session->token,
 				'ParkId'        => $park_id,

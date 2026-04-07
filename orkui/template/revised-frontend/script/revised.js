@@ -7532,7 +7532,6 @@ function setupPronounPicker(cfg) {
             if (!persona)            { showFeedback(feedback, 'Persona is required.', false);                        return; }
             if (!username)           { showFeedback(feedback, 'Username is required.', false);                       return; }
             if (username.length < 4) { showFeedback(feedback, 'Username must be at least 4 characters.', false);    return; }
-            if (!password)           { showFeedback(feedback, 'Password is required.', false);                       return; }
 
             var btn = gid('kn-addplayer-submit');
             btn.disabled = true;
@@ -7634,7 +7633,6 @@ function setupPronounPicker(cfg) {
             if (!persona)            { showFeedback(feedback, 'Persona is required.', false);                        return; }
             if (!username)           { showFeedback(feedback, 'Username is required.', false);                       return; }
             if (username.length < 4) { showFeedback(feedback, 'Username must be at least 4 characters.', false);    return; }
-            if (!password)           { showFeedback(feedback, 'Password is required.', false);                       return; }
 
             var btn = gid('pk-addplayer-submit');
             btn.disabled = true;

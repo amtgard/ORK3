@@ -386,8 +386,8 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<input type="text" id="cp-cp-username" autocomplete="new-password" placeholder="min. 4 characters">
 				</div>
 				<div class="cp-field">
-					<label>Password <span style="color:#e53e3e">*</span></label>
-					<input type="password" id="cp-cp-password" autocomplete="new-password" placeholder="password">
+					<label>Password</label>
+					<input type="password" id="cp-cp-password" autocomplete="new-password" placeholder="optional">
 				</div>
 			</div>
 			<div class="cp-field-row">
@@ -946,7 +946,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		if (!persona)            { cpShowFeedback('cp-cp-feedback', 'Persona is required.', false); return; }
 		if (!username)           { cpShowFeedback('cp-cp-feedback', 'Username is required.', false); return; }
 		if (username.length < 4) { cpShowFeedback('cp-cp-feedback', 'Username must be at least 4 characters.', false); return; }
-		if (!password)           { cpShowFeedback('cp-cp-feedback', 'Password is required.', false); return; }
 		var restricted = document.querySelector('input[name="cp-cp-restricted"]:checked');
 		var waivered   = document.querySelector('input[name="cp-cp-waivered"]:checked');
 		var btn = this;

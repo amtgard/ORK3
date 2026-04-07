@@ -1665,8 +1665,8 @@ var KnConfig = {
 					<input type="text" id="kn-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">
 				</div>
 				<div class="plr-field">
-					<label>Password <span class="plr-req">*</span></label>
-					<input type="password" id="kn-addplayer-password" placeholder="password" autocomplete="new-password">
+					<label>Password</label>
+					<input type="password" id="kn-addplayer-password" placeholder="optional" autocomplete="new-password">
 				</div>
 			</div>
 			<div class="plr-field-row">
