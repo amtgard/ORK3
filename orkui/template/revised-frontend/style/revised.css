@@ -2258,7 +2258,6 @@
 .kn-ac-results.kn-ac-open { display:block; }
 #kn-award-overlay .kn-ac-results,
 #kn-rec-overlay .kn-ac-results {
-    position: fixed;
     z-index: var(--z-modal-top, 1200);
 }
 .kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
