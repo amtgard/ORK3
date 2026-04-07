@@ -94,9 +94,19 @@ class Controller_AttendanceAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'Invalid class']); exit;
 			}
 			$r = $this->Attendance->update_attendance($this->session->token, $attendance_id, $date, $credits, $classId, $mundaneId);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			if ($r['Status'] == 0) {
+				$editorId      = (int)$this->session->user_id;
+				$editorPersona = '';
+				global $DB;
+				$DB->Clear();
+				$row = $DB->DataSet("SELECT persona FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . $editorId . " LIMIT 1");
+				if ($row && $row->Size() > 0 && $row->Next()) {
+					$editorPersona = $row->persona;
+				}
+				echo json_encode(['status' => 0, 'editor_id' => $editorId, 'editor_persona' => $editorPersona]);
+			} else {
+				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			}
 
 		} elseif ($action === 'delete') {
 			$r = $this->Attendance->delete_attendance($this->session->token, $attendance_id);

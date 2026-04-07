@@ -554,7 +554,7 @@ class Controller_Player extends Controller {
 		$kingdomOfficers = $this->Kingdom->get_officers($this->session->kingdom_id, $this->session->token);
 		if (is_array($kingdomOfficers)) {
 			foreach ($kingdomOfficers as $officer) {
-				if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+				if (in_array($officer['OfficerRole'], ['Monarch', 'Regent', 'Prime Minister']) && $officer['MundaneId'] > 0)
 					$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Kingdom ' . $officer['OfficerRole']];
 			}
 		}
@@ -562,7 +562,7 @@ class Controller_Player extends Controller {
 			$parkOfficers = $this->Park->get_officers($playerParkId, $this->session->token);
 			if (is_array($parkOfficers)) {
 				foreach ($parkOfficers as $officer) {
-					if (in_array($officer['OfficerRole'], ['Monarch', 'Regent']) && $officer['MundaneId'] > 0)
+					if (in_array($officer['OfficerRole'], ['Monarch', 'Regent', 'Prime Minister']) && $officer['MundaneId'] > 0)
 						$preloadOfficers[] = ['MundaneId' => $officer['MundaneId'], 'Persona' => $officer['Persona'], 'Role' => 'Park ' . $officer['OfficerRole']];
 				}
 			}

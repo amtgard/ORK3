@@ -5135,8 +5135,9 @@
 #pn-revoke-all-save:disabled { opacity:0.55; cursor:not-allowed; }
 
 /* ---- Class Reconciliation modal (Playernew) ---- */
-#pn-reconcile-overlay .pn-modal-box { width:500px; max-width:calc(100vw - 40px); }
-#pn-reconcile-overlay .pn-modal-body { overflow-x: auto; }
+#pn-reconcile-overlay { top: 48px; }
+#pn-reconcile-overlay .pn-modal-box { width:500px; max-width:calc(100vw - 40px); max-height:calc(100dvh - 56px); display:flex; flex-direction:column; }
+#pn-reconcile-overlay .pn-modal-body { overflow-x: auto; overflow-y: auto; flex: 1 1 auto; }
 #pn-reconcile-table { border-radius:0; }
 #pn-reconcile-table th, #pn-reconcile-table td { padding:8px 12px; }
 

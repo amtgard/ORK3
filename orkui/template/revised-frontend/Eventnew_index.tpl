@@ -196,6 +196,28 @@
 .ev-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
 .ev-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
 .ev-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
+/* ── Edit Attendance Modal ─────────────────────── */
+.att-edit-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9990; align-items:center; justify-content:center; }
+.att-edit-overlay.att-edit-open { display:flex; }
+.att-edit-modal { background:#fff; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.3); width:360px; max-width:96vw; }
+.att-edit-modal-header { background:#1e1b4b; color:#fff; padding:14px 18px; border-radius:10px 10px 0 0; display:flex; align-items:center; justify-content:space-between; }
+.att-edit-modal-title { font-size:.9rem; font-weight:700; display:flex; align-items:center; gap:8px; }
+.att-edit-modal-close { background:none; border:none; color:rgba(255,255,255,.7); font-size:1.2rem; cursor:pointer; padding:0 2px; line-height:1; }
+.att-edit-modal-close:hover { color:#fff; }
+.att-edit-modal-body { padding:18px 18px 10px; }
+.att-edit-field { margin-bottom:14px; }
+.att-edit-label { display:block; font-size:.72rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+.att-edit-input, .att-edit-select { width:100%; padding:7px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.87rem; color:#111827; background:#fff; box-sizing:border-box; }
+.att-edit-input:focus, .att-edit-select:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,.15); }
+.att-edit-row { display:flex; gap:12px; }
+.att-edit-row .att-edit-field { flex:1; }
+.att-edit-row .att-edit-field.att-edit-field-sm { flex:0 0 90px; }
+.att-edit-feedback { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; border-radius:6px; padding:8px 12px; font-size:.82rem; margin-bottom:12px; display:none; }
+.att-edit-modal-footer { padding:12px 18px; border-top:1px solid #f3f4f6; display:flex; justify-content:flex-end; gap:8px; }
+.att-edit-btn-cancel { padding:7px 16px; background:#f3f4f6; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.85rem; cursor:pointer; }
+.att-edit-btn-save { padding:7px 16px; background:#4338ca; color:#fff; border:none; border-radius:6px; font-size:.85rem; font-weight:600; cursor:pointer; }
+.att-edit-btn-save:hover:not(:disabled) { background:#3730a3; }
+.att-edit-btn-save:disabled { opacity:.5; cursor:not-allowed; }
 </style>
 
 <?php // ---- HERO ---- ?>
@@ -569,14 +591,15 @@
 					</thead>
 					<tbody>
 						<?php foreach ($attendanceList as $att): ?>
-						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>" data-mundane-id="<?= (int)$att['MundaneId'] ?>">
+						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>" data-mundane-id="<?= (int)$att['MundaneId'] ?>" data-att-class="<?= (int)$att['ClassId'] ?>" data-att-date="<?= htmlspecialchars($att['Date'] ?? '') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a></td>
 							<td><?php if (!empty($att['KingdomId'])): ?><a href="<?= UIR ?>Kingdom/profile/<?= (int)$att['KingdomId'] ?>"><?= htmlspecialchars($att['KingdomName']) ?></a><?php else: ?><?= htmlspecialchars($att['KingdomName'] ?? '') ?><?php endif; ?></td>
 							<td><?php if (!empty($att['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$att['ParkId'] ?>"><?= htmlspecialchars($att['ParkName']) ?></a><?php else: ?><?= htmlspecialchars($att['ParkName'] ?? '') ?><?php endif; ?></td>
-							<td><?= htmlspecialchars($att['ClassName']) ?></td>
-							<td><?= htmlspecialchars($att['Credits']) ?></td>
+							<td class="ev-class-cell"><?= htmlspecialchars($att['ClassName']) ?></td>
+							<td class="ev-credits-cell"><?= htmlspecialchars($att['Credits']) ?></td>
 							<?php if ($canManageAttendance): ?>
 							<td class="ev-del-cell">
+								<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>
 								<a class="ev-del-link" title="Remove" href="#"
 									data-del-url="<?= UIR ?>AttendanceAjax/attendance/<?= (int)$att['AttendanceId'] ?>/delete"
 									onclick="evConfirmAttDelete(event, this)">×</a>
@@ -953,6 +976,44 @@
 	</div>
 </div>
 
+<?php if ($canManageAttendance): ?>
+<!-- ── Edit Attendance Modal ──────────────────────────── -->
+<div class="att-edit-overlay" id="ev-att-edit-overlay">
+	<div class="att-edit-modal">
+		<div class="att-edit-modal-header">
+			<div class="att-edit-modal-title">
+				<i class="fas fa-pencil-alt"></i> Edit Attendance
+			</div>
+			<button class="att-edit-modal-close" id="ev-att-edit-close" title="Close">&times;</button>
+		</div>
+		<div class="att-edit-modal-body">
+			<div class="att-edit-feedback" id="ev-att-edit-feedback" style="display:none"></div>
+			<input type="hidden" id="ev-att-edit-id">
+			<input type="hidden" id="ev-att-edit-date">
+			<input type="hidden" id="ev-att-edit-mundane">
+			<div class="att-edit-row">
+				<div class="att-edit-field">
+					<label class="att-edit-label">Class</label>
+					<select class="att-edit-select" id="ev-att-edit-class">
+						<?php foreach ($Classes ?? [] as $class): ?>
+						<option value="<?= (int)$class['ClassId'] ?>"><?= htmlspecialchars($class['Name']) ?></option>
+						<?php endforeach; ?>
+					</select>
+				</div>
+				<div class="att-edit-field att-edit-field-sm">
+					<label class="att-edit-label">Credits</label>
+					<input class="att-edit-input" type="number" id="ev-att-edit-credits" min="0.5" max="4" step="0.5">
+				</div>
+			</div>
+		</div>
+		<div class="att-edit-modal-footer">
+			<button class="att-edit-btn-cancel" id="ev-att-edit-cancel">Cancel</button>
+			<button class="att-edit-btn-save" id="ev-att-edit-save">Save</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
 <script>
 function evPositionDelTooltip(wrap) {
 	var btn = wrap.querySelector('button');
@@ -1251,4 +1312,86 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	onReady: function(sel, str, fp) { fpAddTitle('End Date & Time', fp.calendarContainer); }
 }));
 }
+<?php if ($canManageAttendance): ?>
+// ── Edit Attendance Modal ──────────────────────────────────
+(function() {
+	var lastCredits = 1;
+	var overlay = document.getElementById('ev-att-edit-overlay');
+	if (!overlay) return;
+
+	window.evOpenAttEdit = function(btn) {
+		var tr = btn.closest('tr');
+		document.getElementById('ev-att-edit-id').value      = tr.dataset.attId || '';
+		document.getElementById('ev-att-edit-date').value    = tr.dataset.attDate || '';
+		document.getElementById('ev-att-edit-mundane').value = tr.dataset.mundaneId || '';
+		var sel = document.getElementById('ev-att-edit-class');
+		sel.value = tr.dataset.attClass || '';
+		sel.style.borderColor = '';
+		var cred = document.getElementById('ev-att-edit-credits');
+		cred.value = lastCredits;
+		cred.style.borderColor = '';
+		document.getElementById('ev-att-edit-feedback').style.display = 'none';
+		document.getElementById('ev-att-edit-save').disabled = false;
+		document.getElementById('ev-att-edit-save').textContent = 'Save';
+		overlay.classList.add('att-edit-open');
+		document.body.style.overflow = 'hidden';
+	};
+
+	function closeModal() {
+		overlay.classList.remove('att-edit-open');
+		document.body.style.overflow = '';
+	}
+
+	document.getElementById('ev-att-edit-close').addEventListener('click', closeModal);
+	document.getElementById('ev-att-edit-cancel').addEventListener('click', closeModal);
+	overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && overlay.classList.contains('att-edit-open')) closeModal();
+	});
+
+	document.getElementById('ev-att-edit-save').addEventListener('click', function() {
+		var sel     = document.getElementById('ev-att-edit-class');
+		var credEl  = document.getElementById('ev-att-edit-credits');
+		var newClassId = parseInt(sel.value, 10);
+		var newCredits = parseFloat(credEl.value);
+		if (!newClassId) { sel.style.borderColor = '#ef4444'; return; }
+		if (isNaN(newCredits) || newCredits < 0) { credEl.style.borderColor = '#ef4444'; return; }
+		var attId     = document.getElementById('ev-att-edit-id').value;
+		var date      = document.getElementById('ev-att-edit-date').value;
+		var mundaneId = document.getElementById('ev-att-edit-mundane').value;
+		var saveBtn   = document.getElementById('ev-att-edit-save');
+		saveBtn.disabled = true;
+		saveBtn.textContent = '…';
+		$.post('<?= UIR ?>AttendanceAjax/attendance/' + attId + '/edit', {
+			Date: date, Credits: newCredits, ClassId: newClassId, MundaneId: mundaneId
+		}, function(r) {
+			if (r.status === 0) {
+				var newClassName = sel.options[sel.selectedIndex].text;
+				var tr = document.querySelector('#ev-attendance-table tr[data-att-id="' + attId + '"]');
+				if (tr) {
+					tr.dataset.attClass = newClassId;
+					var classCell = tr.querySelector('.ev-class-cell');
+					var credCell  = tr.querySelector('.ev-credits-cell');
+					if (classCell) classCell.textContent = newClassName;
+					if (credCell)  credCell.textContent  = newCredits;
+				}
+				lastCredits = newCredits;
+				closeModal();
+			} else {
+				saveBtn.disabled = false;
+				saveBtn.textContent = 'Save';
+				var fb = document.getElementById('ev-att-edit-feedback');
+				fb.textContent = r.error || 'Failed to save.';
+				fb.style.display = '';
+			}
+		}, 'json').fail(function() {
+			saveBtn.disabled = false;
+			saveBtn.textContent = 'Save';
+			var fb = document.getElementById('ev-att-edit-feedback');
+			fb.textContent = 'Request failed.';
+			fb.style.display = '';
+		});
+	});
+})();
+<?php endif; ?>
 </script>
