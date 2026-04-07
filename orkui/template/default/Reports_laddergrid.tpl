@@ -305,6 +305,41 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-dual-range input[type="range"]:focus { outline: none; }
 .lg-dual-range input[type="range"]:focus::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--rp-accent-mid); }
 
+/* ── Award filter pill row ──────────────────────────────────── */
+.lg-award-filter {
+	display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+	margin-bottom: 10px; padding: 8px 10px;
+	background: #f8fafc; border: 1px solid var(--rp-border); border-radius: 6px;
+}
+.lg-award-filter-label { font-size: 0.78rem; color: var(--rp-text-muted); white-space: nowrap; margin-right: 2px; }
+.lg-award-pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 1; }
+.lg-award-pill-sep { width: 1px; height: 18px; background: var(--rp-border); margin: 0 2px; }
+
+.lg-award-pill {
+	padding: 2px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 500;
+	border: 1px solid var(--rp-border); background: #fff; color: var(--rp-text-muted);
+	cursor: pointer; transition: all 0.12s; white-space: nowrap;
+}
+.lg-award-pill:hover { border-color: var(--rp-accent-mid); color: var(--rp-accent); }
+.lg-award-pill.lg-award-pill-active { color: #fff; border-color: transparent; }
+
+/* Group tints on inactive pills */
+.lg-award-pill-battle  { border-color: #93c5fd; color: #1e40af; }
+.lg-award-pill-sword   { border-color: #94a3b8; color: #334155; }
+.lg-award-pill-crown   { border-color: #fbbf24; color: #713f12; }
+.lg-award-pill-flame   { border-color: #fca5a5; color: #991b1b; }
+.lg-award-pill-serpent { border-color: #86efac; color: #14532d; }
+
+/* Active state uses the group's header colour as background */
+.lg-award-pill-battle.lg-award-pill-active  { background: #3b82f6; }
+.lg-award-pill-sword.lg-award-pill-active   { background: #64748b; }
+.lg-award-pill-crown.lg-award-pill-active   { background: #d97706; }
+.lg-award-pill-flame.lg-award-pill-active   { background: #ef4444; }
+.lg-award-pill-serpent.lg-award-pill-active { background: #22c55e; }
+.lg-award-pill.lg-award-pill-active:not([class*="lg-award-pill-battle"]):not([class*="lg-award-pill-sword"]):not([class*="lg-award-pill-crown"]):not([class*="lg-award-pill-flame"]):not([class*="lg-award-pill-serpent"]) {
+	background: var(--rp-accent);
+}
+
 /* ── Clickable stat card filter ─────────────────────────────── */
 .rp-stat-card-filter { cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; border: 1px dashed var(--rp-border); }
 .rp-stat-card-filter:hover { box-shadow: 0 0 0 2px var(--rp-accent-mid); border-color: var(--rp-accent-mid); }
@@ -428,6 +463,26 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 				</div>
 			</div>
 		</div>
+		<div class="lg-award-filter" id="lg-award-filter">
+			<span class="lg-award-filter-label"><i class="fas fa-filter"></i> Filter by award(s):</span>
+			<div class="lg-award-pills" id="lg-award-pills">
+<?php
+$_prevGroup = null;
+foreach ($awardList as $_aid => $_ainfo) :
+	$_grp = strtolower($_ainfo['KnightGroup'] ?? '');
+	if ($_grp !== $_prevGroup && $_prevGroup !== null) : ?>
+				<span class="lg-award-pill-sep"></span>
+<?php   endif; $_prevGroup = $_grp; ?>
+				<button class="lg-award-pill<?= $_grp ? ' lg-award-pill-' . $_grp : '' ?>"
+				        data-award-id="<?= $_aid ?>" type="button">
+					<?= htmlspecialchars($_ainfo['DisplayName'] ?? $_ainfo['Name']) ?>
+				</button>
+<?php endforeach; ?>
+			</div>
+			<button class="lg-pill lg-award-clear" id="lg-award-clear" type="button" style="display:none;">
+				<i class="fas fa-times"></i> Clear
+			</button>
+		</div>
 
 		<div style="overflow-x:auto;">
 			<table class="lg-table" id="lg-grid-table">
@@ -460,15 +515,24 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 <?php foreach ($rows as $row) : ?>
 <?php   $_knightGroups = $row['KnightGroups'] ?? []; ?>
 	<?php
-	$_isKnight = !empty($row['KnightGroups']) ? '1' : '0';
-	$_isMaster = '0';
-	$_maxRank  = 0;
-	foreach ($row['Awards'] as $_aw) {
-		if (!empty($_aw['IsMaster']))          { $_isMaster = '1'; $_maxRank = 13; }
-		elseif (($_aw['Rank'] ?? 0) > $_maxRank && $_maxRank < 13) { $_maxRank = (int)$_aw['Rank']; }
+	$_isKnight   = !empty($row['KnightGroups']) ? '1' : '0';
+	$_isMaster   = '0';
+	$_maxRank    = 0;
+	$_awardRanks = [];
+	foreach ($awardIds as $_aid) {
+		$_aw = $row['Awards'][$_aid] ?? null;
+		if ($_aw === null) { $_awardRanks[$_aid] = 0; continue; }
+		if (!empty($_aw['IsMaster'])) {
+			$_isMaster = '1'; $_maxRank = 13;
+			$_awardRanks[$_aid] = 999;
+		} else {
+			$_r = (int)($_aw['Rank'] ?? 0);
+			$_awardRanks[$_aid] = $_r;
+			if ($_r > $_maxRank && $_maxRank < 13) $_maxRank = $_r;
+		}
 	}
 ?>
-			<tr data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>">
+			<tr data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>" data-awards="<?= htmlspecialchars(json_encode($_awardRanks), ENT_QUOTES) ?>">
 					<td class="lg-col-player">
 						<a class="lg-player-link" href="<?= UIR . 'Player/profile/' . (int)$row['MundaneId'] ?>">
 							<?= htmlspecialchars($row['Persona']) ?>
@@ -514,9 +578,10 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 
 <script>
 (function () {
-	var showInactive = false;
-	var statFilter   = null; // null | 'knights' | 'masters'
+	var showInactive   = false;
+	var statFilter     = null; // null | 'knights' | 'masters'
 	var rankMin = 1, rankMax = 10;
+	var selectedAwards = new Set(); // empty = all awards
 	var table;
 
 	// Custom filters — run on every DataTables draw
@@ -527,9 +592,23 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 		if (!showInactive && row.getAttribute('data-recent') !== '1') return false;
 		if (statFilter === 'knights' && row.getAttribute('data-is-knight') !== '1') return false;
 		if (statFilter === 'masters' && row.getAttribute('data-is-master') !== '1') return false;
-		if (rankMin > 1 || rankMax < 10) {
-			var mr = parseInt(row.getAttribute('data-max-rank')) || 0;
+		if (selectedAwards.size > 0) {
+			// AND: player must have rank > 0 in every selected award.
+			// Rank slider then applies to the highest rank across those awards.
+			var awardData = JSON.parse(row.getAttribute('data-awards') || '{}');
 			var effectiveMax = rankMax === 10 ? 999 : rankMax;
+			var mr = 0;
+			var allPresent = true;
+			selectedAwards.forEach(function (aid) {
+				var r = awardData[aid] || 0;
+				if (r === 0) allPresent = false;
+				if (r > mr) mr = r;
+			});
+			if (!allPresent) return false;                       // missing at least one selected award
+			if (mr < rankMin || mr > effectiveMax) return false; // outside rank range
+		} else if (rankMin > 1 || rankMax < 10) {
+			var effectiveMax = rankMax === 10 ? 999 : rankMax;
+			var mr = parseInt(row.getAttribute('data-max-rank')) || 0;
 			if (mr < rankMin || mr > effectiveMax) return false;
 		}
 		return true;
@@ -607,6 +686,26 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 			statFilter = (statFilter === key) ? null : key;
 			$('#lg-filter-knights').toggleClass('lg-stat-active', statFilter === 'knights');
 			$('#lg-filter-masters').toggleClass('lg-stat-active', statFilter === 'masters');
+			table.draw();
+		});
+
+		// Award filter pills
+		$('#lg-award-pills').on('click', '.lg-award-pill', function () {
+			var aid = String($(this).data('award-id'));
+			if (selectedAwards.has(aid)) {
+				selectedAwards.delete(aid);
+				$(this).removeClass('lg-award-pill-active');
+			} else {
+				selectedAwards.add(aid);
+				$(this).addClass('lg-award-pill-active');
+			}
+			$('#lg-award-clear').toggle(selectedAwards.size > 0);
+			table.draw();
+		});
+		$('#lg-award-clear').on('click', function () {
+			selectedAwards.clear();
+			$('#lg-award-pills .lg-award-pill').removeClass('lg-award-pill-active');
+			$(this).hide();
 			table.draw();
 		});
 
