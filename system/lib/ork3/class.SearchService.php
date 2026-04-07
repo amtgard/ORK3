@@ -168,7 +168,9 @@ class SearchService extends Ork3 {
 						)";
 		}
 
-		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description
+		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description,
+					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'going') AS rsvp_going,
+					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'interested') AS rsvp_interested
 					from " . DB_PREFIX . "event e
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = e.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
@@ -212,7 +214,10 @@ class SearchService extends Ork3 {
 						'NextDate' => $d->event_start,
 						'NextDetailId' => $d->next_detail_id,
 						'ShortDescription' => $d->short_description,
-						'HasHeraldry' => $d->has_heraldry
+						'HasHeraldry' => $d->has_heraldry,
+						'RsvpGoing' => (int)$d->rsvp_going,
+						'RsvpInterested' => (int)$d->rsvp_interested,
+						'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested
 					);
 				if (!is_null($limit)) {
     				$limit--;
