@@ -879,9 +879,27 @@ class Controller_Reports extends Controller {
 		}
 
 		$this->template = 'Reports_laddergrid.tpl';
-		$this->data['page_title'] = ($type === 'Park' ? 'Park' : 'Kingdom') . ' Ladder Awards Grid';
 		$this->data['report_type'] = $type;
 		$this->data['report_id']   = $id;
+
+		// Fetch scope name(s) for title and filename
+		$scopeName = '';
+		if ($park_id > 0) {
+			$nr = $DB->DataSet("SELECT p.name AS park_name, k.name AS kingdom_name
+			                    FROM " . DB_PREFIX . "park p
+			                    LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+			                    WHERE p.park_id = {$park_id} LIMIT 1");
+			if ($nr && $nr->Size() > 0 && $nr->Next()) {
+				$scopeName = $nr->kingdom_name . ' — ' . $nr->park_name;
+			}
+		} elseif ($kingdom_id > 0) {
+			$nr = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = {$kingdom_id} LIMIT 1");
+			if ($nr && $nr->Size() > 0 && $nr->Next()) {
+				$scopeName = $nr->name;
+			}
+		}
+		$this->data['page_title'] = ($scopeName ?: ($type === 'Park' ? 'Park' : 'Kingdom')) . ' Ladder Awards Grid';
+		$this->data['scope_name'] = $scopeName;
 
 		if ($type === 'Park') {
 			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . $park_id . '&tab=reports';
@@ -908,6 +926,18 @@ class Controller_Reports extends Controller {
 
 		$awardResult = $DB->DataSet($kSql);
 		$awardCols = [];
+		// Canonical award name → knighthood group
+		$knightGroupMap = [
+			'Order of Battle'              => 'Battle',
+			'Order of the Warrior'         => 'Sword',
+			'Order of the Crown'           => 'Crown',
+			'Order of the Lion'            => 'Flame',
+			'Order of the Rose'            => 'Flame',
+			'Order of the Smith'           => 'Flame',
+			'Order of the Dragon'          => 'Serpent',
+			'Order of the Garber'          => 'Serpent',
+			'Order of the Owl'             => 'Serpent',
+		];
 		if ($awardResult && $awardResult->Size() > 0) {
 			do {
 				if (!$awardResult->award_id) continue;
@@ -916,6 +946,7 @@ class Controller_Reports extends Controller {
 				$awardCols[(int)$awardResult->award_id] = [
 					'Name'        => $name,
 					'DisplayName' => $display,
+					'KnightGroup' => $knightGroupMap[$name] ?? '',
 				];
 			} while ($awardResult->Next());
 		}
@@ -939,9 +970,10 @@ class Controller_Reports extends Controller {
 		}
 
 		// 2. Get players and their max rank per ladder award
-		$dataSql = "SELECT m.mundane_id, m.persona, a.award_id,
+		$dataSql = "SELECT m.mundane_id, m.persona, p.park_id, p.name AS park_name, a.award_id,
 			           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
 			         FROM ork_mundane m
+			         LEFT JOIN ork_park p ON p.park_id = m.park_id
 			         JOIN ork_awards ma ON ma.mundane_id = m.mundane_id
 			         JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 			         JOIN ork_award a ON a.award_id = ka.award_id
@@ -964,6 +996,8 @@ class Controller_Reports extends Controller {
 					$playerData[$mid] = [
 						'MundaneId' => $mid,
 						'Persona'   => $dataResult->persona,
+						'ParkId'    => (int)$dataResult->park_id,
+						'ParkName'  => $dataResult->park_name ?? '',
 						'Awards'    => [],
 					];
 				}
@@ -1040,8 +1074,32 @@ class Controller_Reports extends Controller {
 		}
 		foreach ($playerData as $mid => &$pRow) {
 			$pRow['RecentSignIn'] = isset($recentIds[$mid]);
+			$pRow['KnightGroups'] = [];
 		}
 		unset($pRow);
+
+		// 5. Get knighthood memberships for players in the grid
+		$knightSql = "SELECT ma.mundane_id, a.name AS knight_name
+		              FROM " . DB_PREFIX . "awards ma
+		              JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+		              JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+		              WHERE ma.mundane_id IN ({$mundaneIds})
+		                AND a.peerage = 'Knight'
+		                AND (ma.revoked = 0 OR ma.revoked IS NULL)
+		              GROUP BY ma.mundane_id, a.award_id";
+		$knightResult = $DB->DataSet($knightSql);
+		if ($knightResult && $knightResult->Size() > 0) {
+			$knightTypeMap = ['Battle' => 'Battle', 'Sword' => 'Sword', 'Crown' => 'Crown', 'Flame' => 'Flame', 'Serpent' => 'Serpent'];
+			do {
+				$mid = (int)$knightResult->mundane_id;
+				if (!isset($playerData[$mid])) continue;
+				// "Knight of the Flame" → "Flame", "Knight of the Crown" → "Crown", etc.
+				$type = ucfirst(strtolower(preg_replace('/^knight(?:hood)? of (?:the )?/i', '', $knightResult->knight_name)));
+				if (isset($knightTypeMap[$type])) {
+					$playerData[$mid]['KnightGroups'][$type] = true;
+				}
+			} while ($knightResult->Next());
+		}
 
 		$this->data['GridRows'] = array_values($playerData);
 	}
