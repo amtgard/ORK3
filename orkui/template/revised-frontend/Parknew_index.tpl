@@ -1196,6 +1196,12 @@ var PkConfig = {
 				<button type="button" class="pk-award-type-btn" id="pk-award-type-officers">
 					<i class="fas fa-crown" style="margin-right:5px"></i>Officer Titles
 				</button>
+				<button type="button" class="pk-award-type-btn" id="pk-award-type-achievements">
+					<i class="fas fa-star" style="margin-right:5px"></i>Achievement Titles
+				</button>
+				<button type="button" class="pk-award-type-btn" id="pk-award-type-associations">
+					<i class="fas fa-handshake" style="margin-right:5px"></i>Associations
+				</button>
 			</div>
 
 			<!-- Player search -->
@@ -1208,7 +1214,7 @@ var PkConfig = {
 
 			<!-- Award Select -->
 			<div class="pk-acct-field">
-				<label for="pk-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<label for="pk-award-select" id="pk-award-select-label">Award <span style="color:#e53e3e">*</span></label>
 				<select id="pk-award-select" name="KingdomAwardId">
 					<option value="">Select award...</option>
 					<?= $AwardOptions ?>
@@ -1252,6 +1258,7 @@ var PkConfig = {
 				<input type="text" id="pk-award-givenby-text" placeholder="Search by persona..." autocomplete="off" />
 				<input type="hidden" id="pk-award-givenby-id" value="" />
 				<div class="pk-ac-results" id="pk-award-givenby-results"></div>
+				<div id="pk-award-givenby-note" style="display:none;margin-top:6px;padding:8px 12px;background:#ebf8ff;border:1px solid #bee3f8;border-radius:6px;color:#2b6cb0;font-size:12px;line-height:1.5;"><i class="fas fa-info-circle" style="margin-right:5px"></i>This should reflect the person granting the association. For example, if a Knight is taking a Squire, enter the Knight's name here.</div>
 			</div>
 
 			<!-- Given At -->
@@ -1263,7 +1270,7 @@ var PkConfig = {
 				       value="<?= htmlspecialchars($park_name ?? '') ?>" />
 				<div class="pk-ac-results" id="pk-award-givenat-results"></div>
 				<input type="hidden" id="pk-award-park-id" value="<?= (int)$park_id ?>" />
-				<input type="hidden" id="pk-award-kingdom-id" value="0" />
+				<input type="hidden" id="pk-award-kingdom-id" value="<?= (int)($kingdom_id ?? 0) ?>" />
 				<input type="hidden" id="pk-award-event-id" value="0" />
 			</div>
 

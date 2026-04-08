@@ -1103,13 +1103,15 @@
 
 /* ---- Add Award / Add Title Modal ---- */
 .pn-award-type-row {
-	display: flex;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
 	gap: 8px;
 	margin-bottom: 16px;
 }
 .pn-award-type-btn {
-	flex: 1;
-	padding: 8px 0;
+	padding: 8px 4px;
+	min-height: 44px;
+	line-height: 1.2;
 	border: 2px solid #e2e8f0;
 	border-radius: 8px;
 	background: #fff;
@@ -1128,6 +1130,9 @@
 .pn-award-type-btn:hover:not(.pn-active) {
 	border-color: #cbd5e0;
 	background: #f7fafc;
+}
+@media (max-width: 400px) {
+	.pn-award-type-btn { font-size: 11px; }
 }
 /* Rank pills */
 .pn-rank-pills-wrap {
@@ -2250,10 +2255,11 @@
 .kn-load-more-btn:hover { border-color: var(--kn-accent, #276749); color: var(--kn-accent, #276749); }
 .kn-load-more-hint { display: block; font-size: 11px; color: #a0aec0; margin-top: 6px; }
 /* ---- Award entry modal (kn-award-*) ---- */
-.kn-award-type-row { display:flex; gap:8px; margin-bottom:16px; }
-.kn-award-type-btn { flex:1; padding:8px 0; border:2px solid #e2e8f0; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#4a5568; cursor:pointer; transition:all 0.15s; text-align:center; }
+.kn-award-type-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+.kn-award-type-btn { padding:8px 4px; min-height:44px; line-height:1.2; border:2px solid #e2e8f0; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#4a5568; cursor:pointer; transition:all 0.15s; text-align:center; }
 .kn-award-type-btn.kn-active { border-color:#2c5282; background:#ebf4ff; color:#2c5282; }
 .kn-award-type-btn:hover:not(.kn-active) { border-color:#cbd5e0; background:#f7fafc; }
+@media (max-width: 400px) { .kn-award-type-btn { font-size:11px; } }
 .kn-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
 .kn-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:all 0.12s; user-select:none; }
 .kn-rank-pill:hover { border-color: #90cdf4; color: var(--kn-accent-mid, #276749); background: #ebf4ff; }
@@ -3266,10 +3272,11 @@
 .pk-hoa-cta-body a:hover { text-decoration: underline; }
 
 /* ---- Award entry modal (pk-award-*) ---- */
-.pk-award-type-row { display:flex; gap:8px; margin-bottom:16px; }
-.pk-award-type-btn { flex:1; padding:8px 0; border:2px solid #e2e8f0; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#4a5568; cursor:pointer; transition:all 0.15s; text-align:center; }
+.pk-award-type-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+.pk-award-type-btn { padding:8px 4px; min-height:44px; line-height:1.2; border:2px solid #e2e8f0; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#4a5568; cursor:pointer; transition:all 0.15s; text-align:center; }
 .pk-award-type-btn.pk-active { border-color:#2c5282; background:#ebf4ff; color:#2c5282; }
 .pk-award-type-btn:hover:not(.pk-active) { border-color:#cbd5e0; background:#f7fafc; }
+@media (max-width: 400px) { .pk-award-type-btn { font-size:11px; } }
 .pk-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
 .pk-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:all 0.12s; user-select:none; }
 .pk-rank-pill.pk-rank-held { background:#ebf4ff; border-color:#90cdf4; color:#0891b2; }

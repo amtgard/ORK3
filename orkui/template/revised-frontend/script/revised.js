@@ -283,6 +283,7 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 
     window.awInitPicker = initPicker;
     window.awSyncTrigger = syncTrigger;
+    window.awCloseDropdown = closeDropdown;
 })();
 
 /* ===========================
@@ -655,7 +656,10 @@ if (PnConfig.recError) {
         input.value = p.dataset.rank;
     });
     var _recAwardEl = document.getElementById('pn-rec-award');
-    if (_recAwardEl) awInitPicker(_recAwardEl);
+    if (_recAwardEl) {
+        _recAwardEl.querySelectorAll('optgroup[label="Associate Titles"]').forEach(function(og) { og.parentNode.removeChild(og); });
+        awInitPicker(_recAwardEl);
+    }
     $('#pn-rec-award').on('change', function() {
         buildRecRankPills($(this).val());
         var aid = parseInt($(this).find(':selected').data('award-id') || 0);
@@ -1414,28 +1418,90 @@ if (PnConfig.recError) {
         var awardOptHTML = PnConfig.awardOptHTML;
         var officerOptHTML = PnConfig.officerOptHTML;
 
+        // Split awardOptHTML into: awards-only (Ladder+Custom+Other), achievements, associations
+        var awardsOnlyHTML, achievementsHTML, associationsHTML;
+        (function() {
+            var tmp = document.createElement('select');
+            tmp.innerHTML = awardOptHTML;
+            var aw  = '<option value="">Select award...</option>';
+            var ach = '<option value="">Select title...</option>';
+            var asc = '<option value="">Select association...</option>';
+            Array.from(tmp.children).forEach(function(child) {
+                if (child.tagName === 'OPTION') {
+                    if (child.value === '') return;
+                    aw += child.outerHTML;
+                } else if (child.tagName === 'OPTGROUP') {
+                    var lbl = child.label;
+                    if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
+                        ach += child.outerHTML;
+                    } else if (lbl === 'Associate Titles') {
+                        asc += child.outerHTML;
+                    } else {
+                        aw += child.outerHTML;
+                    }
+                }
+            });
+            awardsOnlyHTML = aw; achievementsHTML = ach; associationsHTML = asc;
+        })();
+
+        // Hide type buttons for empty buckets
+        (function() {
+            var tmp = document.createElement('select');
+            tmp.innerHTML = achievementsHTML;
+            var hasAch = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+            var btnAch = gid('pn-award-type-achievements');
+            if (btnAch) btnAch.style.display = hasAch ? '' : 'none';
+
+            tmp.innerHTML = associationsHTML;
+            var hasAsc = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+            var btnAsc = gid('pn-award-type-associations');
+            if (btnAsc) btnAsc.style.display = hasAsc ? '' : 'none';
+        })();
+
         var currentType = 'awards';
 
         function gid(id) { return document.getElementById(id); }
 
         // ---- Award Type Toggle ----
+        var pnTypeHTML = {
+            awards:       awardsOnlyHTML,
+            officers:     officerOptHTML,
+            achievements: achievementsHTML,
+            associations: associationsHTML
+        };
+        var pnTypeTitles = {
+            awards:       '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award',
+            officers:     '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title',
+            achievements: '<i class="fas fa-star" style="margin-right:8px;color:#744210"></i>Add Achievement Title',
+            associations: '<i class="fas fa-handshake" style="margin-right:8px;color:#276749"></i>Add Association'
+        };
+        var pnSelectLabelText = { awards: 'Award', officers: 'Title', achievements: 'Title', associations: 'Association' };
         function setAwardType(type) {
+            if (typeof awCloseDropdown === 'function') awCloseDropdown();
             currentType = type;
-            var isOfficer = (type === 'officers');
-            gid('pn-award-type-awards').classList.toggle('pn-active', !isOfficer);
-            gid('pn-award-type-officers').classList.toggle('pn-active', isOfficer);
-            gid('pn-award-modal-title').innerHTML = isOfficer
-                ? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
-                : '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
-            gid('pn-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+            var isAssoc = (type === 'associations');
+            gid('pn-award-modal-title').innerHTML = pnTypeTitles[type] || pnTypeTitles.awards;
+            gid('pn-award-select').innerHTML = pnTypeHTML[type] || awardsOnlyHTML;
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-award-custom-row').style.display  = 'none';
             gid('pn-award-info-line').innerHTML       = '';
             gid('pn-award-rank-val').value            = '';
+            var lbl = gid('pn-award-select-label');
+            if (lbl) lbl.innerHTML = (pnSelectLabelText[type] || 'Award') + ' <span style="color:#e53e3e">*</span>';
+            var note = gid('pn-award-givenby-note');
+            if (note) note.style.display = isAssoc ? '' : 'none';
+            var chips = gid('pn-award-officer-chips');
+            if (chips) chips.style.display = isAssoc ? 'none' : '';
+            ['awards', 'officers', 'achievements', 'associations'].forEach(function(t) {
+                var btn = gid('pn-award-type-' + t);
+                if (btn) btn.classList.toggle('pn-active', t === type);
+            });
             checkRequired();
         }
-        gid('pn-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
-        gid('pn-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+        gid('pn-award-type-awards').addEventListener('click',       function() { setAwardType('awards'); });
+        gid('pn-award-type-officers').addEventListener('click',     function() { setAwardType('officers'); });
+        gid('pn-award-type-achievements').addEventListener('click', function() { setAwardType('achievements'); });
+        gid('pn-award-type-associations').addEventListener('click', function() { setAwardType('associations'); });
 
         // ---- Award Picker init ----
         if (gid('pn-award-select')) awInitPicker(gid('pn-award-select'));
@@ -1634,7 +1700,7 @@ if (PnConfig.recError) {
             gid('pn-award-givenby-results').classList.remove('pn-ac-open');
             gid('pn-award-givenat-text').value = PnConfig.parkName;
             gid('pn-award-park-id').value = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value      = '0';
+            gid('pn-award-kingdom-id').value      = String(PnConfig.kingdomId || 0);
             gid('pn-award-event-id').value        = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             gid('pn-award-custom-name').value     = '';
@@ -1710,7 +1776,7 @@ if (PnConfig.recError) {
             gid('pn-award-select').value             = '';
             gid('pn-award-rank-val').value           = '';
             gid('pn-award-rank-row').style.display   = 'none';
-            gid('pn-award-rank-pills').innerHTML     = '';
+            gid('pn-rank-pills').innerHTML           = '';
             gid('pn-award-note').value               = '';
             gid('pn-award-char-count').textContent   = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
@@ -1719,11 +1785,12 @@ if (PnConfig.recError) {
             gid('pn-award-custom-row').style.display = 'none';
             gid('pn-award-givenat-text').value       = PnConfig.parkName;
             gid('pn-award-park-id').value            = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value         = '0';
+            gid('pn-award-kingdom-id').value         = String(PnConfig.kingdomId || 0);
             gid('pn-award-event-id').value           = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             checkRequired();
-            gid('pn-award-select').focus();
+            var _pnSelTrigger = gid('pn-award-select') && gid('pn-award-select')._awTrigger;
+            if (_pnSelTrigger) _pnSelTrigger.focus();
         }
         function pnDoSave(onSuccess) {
             var errEl   = gid('pn-award-error');
@@ -2396,12 +2463,54 @@ $(document).ready(function() {
 
 });
 (function() {
+    if (typeof KnConfig === 'undefined') return;
     if (!document.getElementById('kn-award-overlay')) return;
     var UIR_JS = KnConfig.uir;
     var SEARCH_URL = KnConfig.httpService + 'Search/SearchService.php';
     var KINGDOM_ID = KnConfig.kingdomId;
     var awardOptHTML = KnConfig.awardOptHTML;
     var officerOptHTML = KnConfig.officerOptHTML;
+
+    // Split awardOptHTML into: awards-only (Ladder+Custom+Other), achievements, associations
+    var awardsOnlyHTML, achievementsHTML, associationsHTML;
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = awardOptHTML;
+        var aw  = '<option value="">Select award...</option>';
+        var ach = '<option value="">Select title...</option>';
+        var asc = '<option value="">Select association...</option>';
+        Array.from(tmp.children).forEach(function(child) {
+            if (child.tagName === 'OPTION') {
+                if (child.value === '') return;
+                aw += child.outerHTML;
+            } else if (child.tagName === 'OPTGROUP') {
+                var lbl = child.label;
+                if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
+                    ach += child.outerHTML;
+                } else if (lbl === 'Associate Titles') {
+                    asc += child.outerHTML;
+                } else {
+                    aw += child.outerHTML;
+                }
+            }
+        });
+        awardsOnlyHTML = aw; achievementsHTML = ach; associationsHTML = asc;
+    })();
+
+    // Hide type buttons for empty buckets
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = achievementsHTML;
+        var hasAch = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAch = gid('kn-award-type-achievements');
+        if (btnAch) btnAch.style.display = hasAch ? '' : 'none';
+
+        tmp.innerHTML = associationsHTML;
+        var hasAsc = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAsc = gid('kn-award-type-associations');
+        if (btnAsc) btnAsc.style.display = hasAsc ? '' : 'none';
+    })();
+
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var knPlayerRanks = {};
@@ -2417,23 +2526,46 @@ $(document).ready(function() {
         gid('kn-award-save-same').disabled = !ok;
     }
 
+    var knTypeHTML = {
+        awards:       awardsOnlyHTML,
+        officers:     officerOptHTML,
+        achievements: achievementsHTML,
+        associations: associationsHTML
+    };
+    var knTypeTitles = {
+        awards:       '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award',
+        officers:     '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title',
+        achievements: '<i class="fas fa-star" style="margin-right:8px;color:#744210"></i>Add Achievement Title',
+        associations: '<i class="fas fa-handshake" style="margin-right:8px;color:#276749"></i>Add Association'
+    };
+    var knSelectLabelText = { awards: 'Award', officers: 'Title', achievements: 'Title', associations: 'Association' };
     function setAwardType(type) {
+        if (typeof awCloseDropdown === 'function') awCloseDropdown();
         currentType = type;
-        var isOfficer = type === 'officers';
-        gid('kn-award-modal-title').innerHTML = isOfficer
-            ? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
-            : '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
-        gid('kn-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+        var isAssoc = (type === 'associations');
+        gid('kn-award-modal-title').innerHTML = knTypeTitles[type] || knTypeTitles.awards;
+        gid('kn-award-select').innerHTML = knTypeHTML[type] || awardsOnlyHTML;
         gid('kn-award-rank-row').style.display   = 'none';
+        gid('kn-award-custom-row').style.display = 'none';
         gid('kn-award-rank-val').value           = '';
         gid('kn-award-info-line').innerHTML      = '';
-        gid('kn-award-type-awards').classList.toggle('kn-active', !isOfficer);
-        gid('kn-award-type-officers').classList.toggle('kn-active', isOfficer);
+        var lbl = gid('kn-award-select-label');
+        if (lbl) lbl.innerHTML = (knSelectLabelText[type] || 'Award') + ' <span style="color:#e53e3e">*</span>';
+        var note = gid('kn-award-givenby-note');
+        if (note) note.style.display = isAssoc ? '' : 'none';
+        var chips = gid('kn-award-officer-chips');
+        if (chips) chips.style.display = isAssoc ? 'none' : '';
+        ['awards', 'officers', 'achievements', 'associations'].forEach(function(t) {
+            var btn = gid('kn-award-type-' + t);
+            if (btn) btn.classList.toggle('kn-active', t === type);
+        });
         checkRequired();
     }
 
-    gid('kn-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
-    gid('kn-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+    gid('kn-award-type-awards').addEventListener('click',       function() { setAwardType('awards'); });
+    gid('kn-award-type-officers').addEventListener('click',     function() { setAwardType('officers'); });
+    gid('kn-award-type-achievements').addEventListener('click', function() { setAwardType('achievements'); });
+    gid('kn-award-type-associations').addEventListener('click', function() { setAwardType('associations'); });
 
     function buildRankPills(awardId) {
         var row   = gid('kn-award-rank-row');
@@ -2576,6 +2708,9 @@ $(document).ready(function() {
         var term = this.value.trim();
         if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenAtTimer);
+        gid('kn-award-park-id').value    = '0';
+        gid('kn-award-kingdom-id').value = '0';
+        gid('kn-award-event-id').value   = '0';
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -2629,6 +2764,7 @@ $(document).ready(function() {
         gid('kn-award-player-results').classList.remove('kn-ac-open');
         gid('kn-award-note').value               = '';
         gid('kn-award-char-count').textContent   = '400 characters remaining';
+        gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-givenby-text').value       = '';
         gid('kn-award-givenby-id').value         = '';
         gid('kn-award-givenby-results').classList.remove('kn-ac-open');
@@ -2784,6 +2920,7 @@ $(document).ready(function() {
         gid('kn-rank-pills').innerHTML           = '';
         gid('kn-award-note').value               = '';
         gid('kn-award-char-count').textContent   = '400 characters remaining';
+        gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-info-line').innerHTML      = '';
         gid('kn-award-custom-name').value        = '';
         gid('kn-award-custom-row').style.display = 'none';
@@ -2862,6 +2999,7 @@ $(document).ready(function() {
     });
 })();
 (function() {
+    if (typeof KnConfig === 'undefined') return;
     if (!document.getElementById('kn-rec-overlay')) return;
     var UIR_JS     = KnConfig.uir;
     var KINGDOM_ID = KnConfig.kingdomId;
@@ -2913,15 +3051,18 @@ $(document).ready(function() {
         if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
     }
 
-    if (gid('kn-rec-award-select')) awInitPicker(gid('kn-rec-award-select'));
-    gid('kn-rec-award-select').addEventListener('change', function() {
-        buildRecRankPills(this.value);
-        checkRequired();
-        var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
-        var desc = AWARD_DESCRIPTIONS[aid] || '';
-        var el = gid('kn-rec-award-desc');
-        if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
-    });
+    if (gid('kn-rec-award-select')) {
+        gid('kn-rec-award-select').querySelectorAll('optgroup[label="Associate Titles"]').forEach(function(og) { og.parentNode.removeChild(og); });
+        awInitPicker(gid('kn-rec-award-select'));
+        gid('kn-rec-award-select').addEventListener('change', function() {
+            buildRecRankPills(this.value);
+            checkRequired();
+            var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
+            var desc = AWARD_DESCRIPTIONS[aid] || '';
+            var el = gid('kn-rec-award-desc');
+            if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
+        });
+    }
 
     gid('kn-rec-player-text').addEventListener('input', function() {
         gid('kn-rec-player-id').value = '';
@@ -5310,6 +5451,47 @@ $(document).ready(function() {
     var PARK_ID = PkConfig.parkId;
     var awardOptHTML = PkConfig.awardOptHTML;
     var officerOptHTML = PkConfig.officerOptHTML;
+
+    // Split awardOptHTML into: awards-only (Ladder+Custom+Other), achievements, associations
+    var awardsOnlyHTML, achievementsHTML, associationsHTML;
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = awardOptHTML;
+        var aw  = '<option value="">Select award...</option>';
+        var ach = '<option value="">Select title...</option>';
+        var asc = '<option value="">Select association...</option>';
+        Array.from(tmp.children).forEach(function(child) {
+            if (child.tagName === 'OPTION') {
+                if (child.value === '') return;
+                aw += child.outerHTML;
+            } else if (child.tagName === 'OPTGROUP') {
+                var lbl = child.label;
+                if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
+                    ach += child.outerHTML;
+                } else if (lbl === 'Associate Titles') {
+                    asc += child.outerHTML;
+                } else {
+                    aw += child.outerHTML;
+                }
+            }
+        });
+        awardsOnlyHTML = aw; achievementsHTML = ach; associationsHTML = asc;
+    })();
+
+    // Hide type buttons for empty buckets
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = achievementsHTML;
+        var hasAch = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAch = gid('pk-award-type-achievements');
+        if (btnAch) btnAch.style.display = hasAch ? '' : 'none';
+
+        tmp.innerHTML = associationsHTML;
+        var hasAsc = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAsc = gid('pk-award-type-associations');
+        if (btnAsc) btnAsc.style.display = hasAsc ? '' : 'none';
+    })();
+
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var pkPlayerRanks = {};
@@ -5332,23 +5514,46 @@ $(document).ready(function() {
         gid('pk-award-save-same').disabled = !ok;
     }
 
+    var pkTypeHTML = {
+        awards:       awardsOnlyHTML,
+        officers:     officerOptHTML,
+        achievements: achievementsHTML,
+        associations: associationsHTML
+    };
+    var pkTypeTitles = {
+        awards:       '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award',
+        officers:     '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title',
+        achievements: '<i class="fas fa-star" style="margin-right:8px;color:#744210"></i>Add Achievement Title',
+        associations: '<i class="fas fa-handshake" style="margin-right:8px;color:#276749"></i>Add Association'
+    };
+    var pkSelectLabelText = { awards: 'Award', officers: 'Title', achievements: 'Title', associations: 'Association' };
     function setAwardType(type) {
+        if (typeof awCloseDropdown === 'function') awCloseDropdown();
         currentType = type;
-        var isOfficer = type === 'officers';
-        gid('pk-award-modal-title').innerHTML = isOfficer
-            ? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
-            : '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
-        gid('pk-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+        var isAssoc = (type === 'associations');
+        gid('pk-award-modal-title').innerHTML = pkTypeTitles[type] || pkTypeTitles.awards;
+        gid('pk-award-select').innerHTML = pkTypeHTML[type] || awardsOnlyHTML;
         gid('pk-award-rank-row').style.display   = 'none';
+        gid('pk-award-custom-row').style.display = 'none';
         gid('pk-award-rank-val').value           = '';
         gid('pk-award-info-line').innerHTML      = '';
-        gid('pk-award-type-awards').classList.toggle('pk-active', !isOfficer);
-        gid('pk-award-type-officers').classList.toggle('pk-active', isOfficer);
+        var lbl = gid('pk-award-select-label');
+        if (lbl) lbl.innerHTML = (pkSelectLabelText[type] || 'Award') + ' <span style="color:#e53e3e">*</span>';
+        var note = gid('pk-award-givenby-note');
+        if (note) note.style.display = isAssoc ? '' : 'none';
+        var chips = gid('pk-award-officer-chips');
+        if (chips) chips.style.display = isAssoc ? 'none' : '';
+        ['awards', 'officers', 'achievements', 'associations'].forEach(function(t) {
+            var btn = gid('pk-award-type-' + t);
+            if (btn) btn.classList.toggle('pk-active', t === type);
+        });
         checkRequired();
     }
 
-    gid('pk-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
-    gid('pk-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+    gid('pk-award-type-awards').addEventListener('click',       function() { setAwardType('awards'); });
+    gid('pk-award-type-officers').addEventListener('click',     function() { setAwardType('officers'); });
+    gid('pk-award-type-achievements').addEventListener('click', function() { setAwardType('achievements'); });
+    gid('pk-award-type-associations').addEventListener('click', function() { setAwardType('associations'); });
 
     function buildRankPills(awardId) {
         var row   = gid('pk-award-rank-row');
@@ -5495,6 +5700,9 @@ $(document).ready(function() {
         var term = this.value.trim();
         if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenAtTimer);
+        gid('pk-award-park-id').value    = '0';
+        gid('pk-award-kingdom-id').value = '0';
+        gid('pk-award-event-id').value   = '0';
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -5549,12 +5757,13 @@ $(document).ready(function() {
         gid('pk-award-player-results').classList.remove('pk-ac-open');
         gid('pk-award-note').value               = '';
         gid('pk-award-char-count').textContent   = '400 characters remaining';
+        gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-givenby-text').value       = '';
         gid('pk-award-givenby-id').value         = '';
         gid('pk-award-givenby-results').classList.remove('pk-ac-open');
         gid('pk-award-givenat-text').value = PkConfig.parkName;
         gid('pk-award-park-id').value = String(PkConfig.parkId);
-        gid('pk-award-kingdom-id').value         = '0';
+        gid('pk-award-kingdom-id').value         = String(PkConfig.kingdomId || 0);
         gid('pk-award-event-id').value           = '0';
         gid('pk-award-givenat-results').classList.remove('pk-ac-open');
         gid('pk-award-custom-name').value        = '';
@@ -5712,6 +5921,7 @@ $(document).ready(function() {
         gid('pk-rank-pills').innerHTML           = '';
         gid('pk-award-note').value               = '';
         gid('pk-award-char-count').textContent   = '400 characters remaining';
+        gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-info-line').innerHTML      = '';
         gid('pk-award-custom-name').value        = '';
         gid('pk-award-custom-row').style.display = 'none';
@@ -5843,15 +6053,18 @@ $(document).ready(function() {
         if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
     }
 
-    if (gid('pk-rec-award-select')) awInitPicker(gid('pk-rec-award-select'));
-    gid('pk-rec-award-select').addEventListener('change', function() {
-        buildRecRankPills(this.value);
-        checkRequired();
-        var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
-        var desc = AWARD_DESCRIPTIONS[aid] || '';
-        var el = gid('pk-rec-award-desc');
-        if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
-    });
+    if (gid('pk-rec-award-select')) {
+        gid('pk-rec-award-select').querySelectorAll('optgroup[label="Associate Titles"]').forEach(function(og) { og.parentNode.removeChild(og); });
+        awInitPicker(gid('pk-rec-award-select'));
+        gid('pk-rec-award-select').addEventListener('change', function() {
+            buildRecRankPills(this.value);
+            checkRequired();
+            var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
+            var desc = AWARD_DESCRIPTIONS[aid] || '';
+            var el = gid('pk-rec-award-desc');
+            if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
+        });
+    }
 
     // Player search
     gid('pk-rec-player-text').addEventListener('input', function() {

@@ -962,21 +962,28 @@
 							}
 						}
 						if (!isset($pnLadderProgress[$aid])) {
-							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank, 'Count' => 1, 'HasMaster' => $hasMaster];
+							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank,
+								'RankSet' => $rank > 0 ? [$rank => true] : [], 'UnrankedCount' => $rank === 0 ? 1 : 0, 'HasMaster' => $hasMaster];
 						} else {
-							$pnLadderProgress[$aid]['Count']++;
 							if ($rank > $pnLadderProgress[$aid]['Rank']) {
 								$pnLadderProgress[$aid]['Rank'] = $rank;
 							}
+							if ($rank > 0) {
+								$pnLadderProgress[$aid]['RankSet'][$rank] = true;
+							} else {
+								$pnLadderProgress[$aid]['UnrankedCount']++;
+							}
 						}
 					}
-					// Use max(highest_rank, total_entries) to account for unreconciled historical awards
+					// Use max(highest_rank, effective_count) to account for unreconciled historical awards.
+					// Effective count = distinct ranked entries + unranked entries (deduplicates duplicate ranks).
 					// Cap at maxRank per award (10 for most, 12 for Zodiac)
-					// Mark as approximate when count exceeds highest actual rank
+					// Mark as approximate when effective count exceeds highest actual rank
 					foreach ($pnLadderProgress as $_lpAid => &$lp) {
 						$_lpMax = ($_lpAid === 30) ? 12 : 10;
-						$lp['Approx'] = $lp['Count'] > $lp['Rank'];
-						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $lp['Count']));
+						$_effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
+						$lp['Approx'] = $_effectiveCount > $lp['Rank'];
+						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $_effectiveCount));
 					}
 					unset($lp);
 					// Add a complete tile for any masterhood held with no corresponding ladder progress
@@ -1219,7 +1226,7 @@
 											if (valid_id($detail['EventId'])) {
 												echo htmlspecialchars($detail['EventName']);
 											} else {
-												echo (trimlen($detail['ParkName']) > 0) ? htmlspecialchars($detail['ParkName']) . ', ' . htmlspecialchars($detail['KingdomName']) : htmlspecialchars($detail['KingdomName']);
+												echo (trimlen($detail['ParkName']) > 0) ? htmlspecialchars($detail['ParkName']) . (trimlen($detail['KingdomName']) > 0 ? ', ' . htmlspecialchars($detail['KingdomName']) : '') : htmlspecialchars($detail['KingdomName']);
 											}
 										?>
 									</td>
@@ -1960,11 +1967,17 @@
 				<button type="button" class="pn-award-type-btn" id="pn-award-type-officers">
 					<i class="fas fa-crown" style="margin-right:5px"></i>Officer Titles
 				</button>
+				<button type="button" class="pn-award-type-btn" id="pn-award-type-achievements">
+					<i class="fas fa-star" style="margin-right:5px"></i>Achievement Titles
+				</button>
+				<button type="button" class="pn-award-type-btn" id="pn-award-type-associations">
+					<i class="fas fa-handshake" style="margin-right:5px"></i>Associations
+				</button>
 			</div>
 
 			<!-- Award Select -->
 			<div class="pn-acct-field">
-				<label for="pn-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<label for="pn-award-select" id="pn-award-select-label">Award <span style="color:#e53e3e">*</span></label>
 				<select id="pn-award-select" name="KingdomAwardId">
 					<option value="">Select award…</option>
 					<?= $AwardOptions ?>
@@ -2008,6 +2021,7 @@
 				<input type="text" id="pn-award-givenby-text" placeholder="Or search by persona…" autocomplete="off" />
 				<input type="hidden" name="GivenById" id="pn-award-givenby-id" value="" />
 				<div class="pn-ac-results" id="pn-award-givenby-results"></div>
+				<div id="pn-award-givenby-note" style="display:none;margin-top:6px;padding:8px 12px;background:#ebf8ff;border:1px solid #bee3f8;border-radius:6px;color:#2b6cb0;font-size:12px;line-height:1.5;"><i class="fas fa-info-circle" style="margin-right:5px"></i>This should reflect the person granting the association. For example, if a Knight is taking a Squire, enter the Knight's name here.</div>
 			</div>
 
 			<!-- Given At -->
@@ -2019,7 +2033,7 @@
 				       value="<?= htmlspecialchars($this->__session->park_name ?? '') ?>" />
 				<div class="pn-ac-results" id="pn-award-givenat-results"></div>
 				<input type="hidden" name="ParkId" id="pn-award-park-id" value="<?= (int)$Player['ParkId'] ?>" />
-				<input type="hidden" name="KingdomId" id="pn-award-kingdom-id" value="0" />
+				<input type="hidden" name="KingdomId" id="pn-award-kingdom-id" value="<?= (int)($KingdomId ?? 0) ?>" />
 				<input type="hidden" name="EventId" id="pn-award-event-id" value="0" />
 			</div>
 
