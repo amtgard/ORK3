@@ -379,7 +379,10 @@ class Player extends Ork3 {
 		if (valid_id($request['AwardsId'])) {
 			$player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
 		}
-		$sql = "select distinct awards.*, a.*, ka.name as kingdom_awardname, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona, bwm.persona as entered_by_persona, bwm.mundane_id as entered_by_id
+		$sql = "select distinct awards.*, a.*,
+						COALESCE(a.is_title, ka.is_title) as is_title,
+						COALESCE(a.title_class, ka.title_class) as title_class,
+						ka.name as kingdom_awardname, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona, bwm.persona as entered_by_persona, bwm.mundane_id as entered_by_id
 					from " . DB_PREFIX . "awards awards
 						left join " . DB_PREFIX . "kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
@@ -390,7 +393,7 @@ class Player extends Ork3 {
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
 					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
 					order by
-						a.is_ladder, a.is_title, a.title_class, a.name, awards.rank, awards.date";
+						COALESCE(a.is_ladder, 0), COALESCE(a.is_title, ka.is_title, 0), COALESCE(a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
 		$r = $this->db->query($sql);
 		$response = array();

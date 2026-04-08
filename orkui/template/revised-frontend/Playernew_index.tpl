@@ -1021,7 +1021,7 @@
 								<td class="pn-col-nowrap">
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 									<?= htmlspecialchars($displayName) ?>
-									<?php if ($displayName != $detail['Name']): ?><span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span><?php endif; ?>
+									<?php if (trimlen($detail['Name'] ?? '') > 0 && $displayName != $detail['Name']): ?><span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span><?php endif; ?>
 								</td>
 								<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
@@ -1148,7 +1148,7 @@
 										<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 										<?= htmlspecialchars($displayName) ?>
 										<?php
-											if ($displayName != $detail['Name']): ?>
+											if (trimlen($detail['Name'] ?? '') > 0 && $displayName != $detail['Name']): ?>
 												<span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span>
 										<?php endif; ?>
 									</td>
