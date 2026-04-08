@@ -6802,7 +6802,9 @@ $(document).ready(function() {
         var className = pkClassNames[entry.ClassId] || '';
         var tr = document.createElement('tr');
         tr.dataset.attendanceId = entry.AttendanceId || 0;
-        tr.dataset.mundaneId = entry.MundaneId || 0;
+        tr.dataset.mundaneId    = entry.MundaneId || 0;
+        tr.dataset.classId      = entry.ClassId || 0;
+        tr.dataset.credits      = entry.Credits || 1;
         var td1 = document.createElement('td');
         var td1Link = document.createElement('a');
         td1Link.href = PkConfig.uir + 'Player/profile/' + (entry.MundaneId || 0);
@@ -6814,18 +6816,119 @@ $(document).ready(function() {
         td1Icon.style.cssText = 'margin-left:5px;font-size:10px;color:#a0aec0;vertical-align:middle';
         td1Link.appendChild(td1Icon);
         td1.appendChild(td1Link);
-        var td2 = document.createElement('td'); td2.textContent = className;
-        var td3 = document.createElement('td'); td3.textContent = entry.Credits || 1;
-        var td4 = document.createElement('td');
+        var td2 = document.createElement('td'); td2.className = 'pk-att-class-cell';  td2.textContent = className;
+        var td3 = document.createElement('td'); td3.className = 'pk-att-credits-cell'; td3.textContent = entry.Credits || 1;
+        var td4 = document.createElement('td'); td4.className = 'pk-att-actions-cell';
         if (entry.AttendanceId) {
-            var btn = document.createElement('button');
-            btn.className = 'pk-att-del-btn'; btn.title = 'Remove';
-            btn.innerHTML = '<i class="fas fa-times"></i>';
-            btn.addEventListener('click', function() { pkDeleteEnteredRow(btn); });
-            td4.appendChild(btn);
+            var editBtn = document.createElement('button');
+            editBtn.className = 'pk-att-edit-btn'; editBtn.title = 'Edit';
+            editBtn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+            editBtn.addEventListener('click', function() { pkInlineEditRow(tr); });
+            var delBtn = document.createElement('button');
+            delBtn.className = 'pk-att-del-btn'; delBtn.title = 'Remove';
+            delBtn.innerHTML = '<i class="fas fa-times"></i>';
+            delBtn.addEventListener('click', function() { pkDeleteEnteredRow(delBtn); });
+            td4.appendChild(editBtn);
+            td4.appendChild(delBtn);
         }
         tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
         return tr;
+    }
+
+    function pkInlineEditRow(tr) {
+        // Already in edit mode?
+        if (tr.classList.contains('pk-att-editing')) return;
+        tr.classList.add('pk-att-editing');
+
+        var td2 = tr.querySelector('.pk-att-class-cell');
+        var td3 = tr.querySelector('.pk-att-credits-cell');
+        var td4 = tr.querySelector('.pk-att-actions-cell');
+
+        var origClass   = tr.dataset.classId;
+        var origCredits = tr.dataset.credits;
+
+        // Replace class cell with select
+        var sel = document.createElement('select');
+        sel.className = 'pk-att-inline-select';
+        (PkConfig.classes || []).forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.ClassId; opt.textContent = c.ClassName;
+            if (String(c.ClassId) === String(origClass)) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        td2.innerHTML = ''; td2.appendChild(sel);
+
+        // Replace credits cell with input
+        var inp = document.createElement('input');
+        inp.type = 'number'; inp.min = '0.5'; inp.step = '0.5';
+        inp.value = origCredits; inp.className = 'pk-att-inline-credits';
+        td3.innerHTML = ''; td3.appendChild(inp);
+
+        // Replace action buttons with save/cancel
+        td4.innerHTML = '';
+        var saveBtn = document.createElement('button');
+        saveBtn.className = 'pk-att-save-btn'; saveBtn.title = 'Save';
+        saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+        var cancelBtn = document.createElement('button');
+        cancelBtn.className = 'pk-att-cancel-btn'; cancelBtn.title = 'Cancel';
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+        td4.appendChild(saveBtn); td4.appendChild(cancelBtn);
+
+        cancelBtn.addEventListener('click', function() {
+            tr.classList.remove('pk-att-editing');
+            td2.innerHTML = ''; td2.textContent = pkClassNames[origClass] || '';
+            td3.innerHTML = ''; td3.textContent = origCredits;
+            td4.innerHTML = '';
+            var editBtn = document.createElement('button');
+            editBtn.className = 'pk-att-edit-btn'; editBtn.title = 'Edit';
+            editBtn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+            editBtn.addEventListener('click', function() { pkInlineEditRow(tr); });
+            var delBtn = document.createElement('button');
+            delBtn.className = 'pk-att-del-btn'; delBtn.title = 'Remove';
+            delBtn.innerHTML = '<i class="fas fa-times"></i>';
+            delBtn.addEventListener('click', function() { pkDeleteEnteredRow(delBtn); });
+            td4.appendChild(editBtn); td4.appendChild(delBtn);
+        });
+
+        saveBtn.addEventListener('click', function() {
+            var newClass   = sel.value;
+            var newCredits = parseFloat(inp.value) || 1;
+            var aid        = tr.dataset.attendanceId;
+            var mid        = tr.dataset.mundaneId;
+            var date       = gid('pk-att-date').value;
+            saveBtn.disabled = true;
+            $.post(PkConfig.uir + 'AttendanceAjax/attendance/' + aid + '/edit',
+                { Date: date, Credits: newCredits, ClassId: newClass, MundaneId: mid },
+                function(r) {
+                    if (r && r.status === 0) {
+                        tr.dataset.classId = newClass;
+                        tr.dataset.credits = newCredits;
+                        tr.classList.remove('pk-att-editing');
+                        td2.innerHTML = ''; td2.textContent = pkClassNames[newClass] || '';
+                        td3.innerHTML = ''; td3.textContent = newCredits;
+                        td4.innerHTML = '';
+                        var editBtn = document.createElement('button');
+                        editBtn.className = 'pk-att-edit-btn'; editBtn.title = 'Edit';
+                        editBtn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+                        editBtn.addEventListener('click', function() { pkInlineEditRow(tr); });
+                        var delBtn = document.createElement('button');
+                        delBtn.className = 'pk-att-del-btn'; delBtn.title = 'Remove';
+                        delBtn.innerHTML = '<i class="fas fa-times"></i>';
+                        delBtn.addEventListener('click', function() { pkDeleteEnteredRow(delBtn); });
+                        td4.appendChild(editBtn); td4.appendChild(delBtn);
+                        pkLastClass[mid] = newClass;
+                    } else {
+                        pkAttShowFeedback((r && r.error) ? r.error : 'Save failed.', false);
+                        saveBtn.disabled = false;
+                    }
+                }, 'json'
+            ).fail(function() {
+                pkAttShowFeedback('Request failed. Please try again.', false);
+                saveBtn.disabled = false;
+            });
+        });
+
+        sel.focus();
     }
 
     window.pkDeleteEnteredRow = function(btn) {

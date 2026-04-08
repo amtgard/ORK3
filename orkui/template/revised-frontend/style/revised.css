@@ -4757,6 +4757,16 @@
 .pk-att-del-btn { background:none; border:none; color:#fc8181; cursor:pointer; padding:2px 6px; border-radius:4px; font-size:13px; line-height:1; }
 .pk-att-del-btn:hover { background:#fff5f5; color:#c53030; }
 .pk-att-del-btn:disabled { opacity:0.4; cursor:default; }
+.pk-att-edit-btn { background:none; border:none; color:#a0aec0; cursor:pointer; padding:2px 6px; border-radius:4px; font-size:12px; line-height:1; }
+.pk-att-edit-btn:hover { background:#ebf4ff; color:#2b6cb0; }
+.pk-att-save-btn { background:none; border:none; color:#48bb78; cursor:pointer; padding:2px 6px; border-radius:4px; font-size:13px; line-height:1; }
+.pk-att-save-btn:hover { background:#f0fff4; color:#276749; }
+.pk-att-save-btn:disabled { opacity:0.4; cursor:default; }
+.pk-att-cancel-btn { background:none; border:none; color:#a0aec0; cursor:pointer; padding:2px 6px; border-radius:4px; font-size:13px; line-height:1; }
+.pk-att-cancel-btn:hover { background:#f7fafc; color:#4a5568; }
+.pk-att-inline-select { font-size:12px; padding:2px 4px; border:1px solid #cbd5e0; border-radius:4px; max-width:120px; }
+.pk-att-inline-credits { font-size:12px; padding:2px 4px; border:1px solid #cbd5e0; border-radius:4px; width:52px; }
+.pk-att-editing td { background:#fffbeb !important; }
 .pk-att-entered-count { font-size:11px; font-weight:400; color:#a0aec0; margin-left:6px; text-transform:none; letter-spacing:0; }
 /* Search scope buttons */
 .pk-att-scope-btns { display:flex; margin-bottom:10px; border:1px solid #cbd5e0; border-radius:6px; overflow:hidden; }
