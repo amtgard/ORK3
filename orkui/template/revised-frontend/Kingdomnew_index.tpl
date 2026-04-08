@@ -920,6 +920,12 @@ var KnConfig = {
 				<button type="button" class="kn-award-type-btn" id="kn-award-type-officers">
 					<i class="fas fa-crown" style="margin-right:5px"></i>Officer Titles
 				</button>
+				<button type="button" class="kn-award-type-btn" id="kn-award-type-achievements">
+					<i class="fas fa-star" style="margin-right:5px"></i>Achievement Titles
+				</button>
+				<button type="button" class="kn-award-type-btn" id="kn-award-type-associations">
+					<i class="fas fa-handshake" style="margin-right:5px"></i>Associations
+				</button>
 			</div>
 
 			<!-- Player search -->
@@ -932,7 +938,7 @@ var KnConfig = {
 
 			<!-- Award Select -->
 			<div class="kn-acct-field">
-				<label for="kn-award-select">Award <span style="color:#e53e3e">*</span></label>
+				<label for="kn-award-select" id="kn-award-select-label">Award <span style="color:#e53e3e">*</span></label>
 				<select id="kn-award-select" name="KingdomAwardId">
 					<option value="">Select award...</option>
 					<?= $AwardOptions ?>
@@ -976,6 +982,7 @@ var KnConfig = {
 				<input type="text" id="kn-award-givenby-text" placeholder="Search by persona..." autocomplete="off" />
 				<input type="hidden" id="kn-award-givenby-id" value="" />
 				<div class="kn-ac-results" id="kn-award-givenby-results"></div>
+				<div id="kn-award-givenby-note" style="display:none;margin-top:6px;padding:8px 12px;background:#ebf8ff;border:1px solid #bee3f8;border-radius:6px;color:#2b6cb0;font-size:12px;line-height:1.5;"><i class="fas fa-info-circle" style="margin-right:5px"></i>This should reflect the person granting the association. For example, if a Knight is taking a Squire, enter the Knight's name here.</div>
 			</div>
 
 			<!-- Given At -->
