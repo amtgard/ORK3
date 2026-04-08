@@ -168,11 +168,6 @@ class Controller_Reports extends Controller {
 
 	public function player_award_recommendations($params=null) {
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-		if (!$_isOrkAdmin) {
-			header('Location: ' . UIR);
-			exit;
-		}
 		if (isset($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;
@@ -180,6 +175,21 @@ class Controller_Reports extends Controller {
 		if (isset($this->request->ParkId)) {
 			$type = 'Park';
 			$id = $this->request->ParkId;
+		}
+		$_scopeKingdomId = ($type ?? '') === 'Park'
+			? (int)Ork3::$Lib->park->GetParkKingdomId((int)($id ?? 0))
+			: (int)($id ?? 0);
+		$_knConfigs  = Common::get_configs($_scopeKingdomId, CFG_KINGDOM);
+		$_recsPublic = isset($_knConfigs['AwardRecsPublic'])
+			? (bool)(int)$_knConfigs['AwardRecsPublic']['Value']
+			: true;
+		$_isOrkAdmin    = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$_isKingdomUser = $_uid > 0 && $_scopeKingdomId > 0
+			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_scopeKingdomId, AUTH_CREATE);
+		$_canAccess = $_isOrkAdmin || $_isKingdomUser || ($_recsPublic && $_uid > 0);
+		if (!$_canAccess) {
+			header('Location: ' . UIR);
+			exit;
 		}
 		if (isset($this->request->Ladder))
 			$ladder = $this->request->Ladder;

@@ -270,6 +270,10 @@ class Controller_Kingdom extends Controller {
 		$this->data['kingdom_officers']    = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
 		$this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
 
+		$parentKingdomId = (int)($this->data['kingdom_info']['Info']['KingdomInfo']['ParentKingdomId'] ?? 0);
+		$this->data['ParentKingdomId']   = $parentKingdomId;
+		$this->data['ParentKingdomName'] = $parentKingdomId > 0 ? $this->Kingdom->get_kingdom_name($parentKingdomId) : '';
+
 		$this->data['AwardOptions']        = $this->Award->fetch_award_option_list($kingdom_id, 'Awards');
 		$this->data['OfficerOptions']      = $this->Award->fetch_award_option_list($kingdom_id, 'Officers');
 		$preloadOfficers = [];

@@ -90,13 +90,18 @@ class Controller
 			global $DB;
 			$uid = (int) $this->session->user_id;
 			$hkRow = $DB->DataSet(
-				"SELECT p.kingdom_id FROM ork_mundane m
+				"SELECT p.kingdom_id, k.parent_kingdom_id FROM ork_mundane m
 				 INNER JOIN ork_park p ON p.park_id = m.park_id
+				 INNER JOIN ork_kingdom k ON k.kingdom_id = p.kingdom_id
 				 WHERE m.mundane_id = {$uid} LIMIT 1"
 			);
-			$this->data['UserKingdomId'] = ($hkRow && $hkRow->Size() > 0 && $hkRow->Next())
-				? (int) $hkRow->kingdom_id
-				: 0;
+			if ($hkRow && $hkRow->Size() > 0 && $hkRow->Next()) {
+				$this->data['UserKingdomId']       = (int) $hkRow->kingdom_id;
+				$this->data['UserParentKingdomId'] = (int) $hkRow->parent_kingdom_id;
+			} else {
+				$this->data['UserKingdomId']       = 0;
+				$this->data['UserParentKingdomId'] = 0;
+			}
 		} else {
 			$this->data['UserKingdomId'] = 0;
 		}

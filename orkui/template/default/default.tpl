@@ -18,8 +18,9 @@
 			}
 		}
 	}
-	// Pin the logged-in user's home kingdom to the first slot
-	$hmUserKingdomId = isset($UserKingdomId) ? (int)$UserKingdomId : 0;
+	// Pin the logged-in user's home kingdom / principality to the first slot
+	$hmUserKingdomId       = isset($UserKingdomId)       ? (int)$UserKingdomId       : 0;
+	$hmUserParentKingdomId = isset($UserParentKingdomId) ? (int)$UserParentKingdomId : 0;
 
 	// Build a sort key by stripping common leading words before alphabetizing
 	$hmSortKey = function($name) {
@@ -37,13 +38,22 @@
 	usort($hmPrinz, function($a, $b) use ($hmSortKey) {
 		return strcmp($hmSortKey($a['KingdomName']), $hmSortKey($b['KingdomName']));
 	});
-	// Move user's home kingdom to front after sorting
-	if ($hmUserKingdomId > 0) {
+	// Move user's home kingdom to front after sorting (only if not in a principality)
+	if ($hmUserParentKingdomId === 0 && $hmUserKingdomId > 0) {
 		$pinIdx = array_search($hmUserKingdomId, array_map('intval', array_column($hmKingdoms, 'KingdomId')));
 		if ($pinIdx !== false) {
 			$pinned = array_splice($hmKingdoms, $pinIdx, 1);
 			$pinned[0]['_pinned'] = true;
 			array_unshift($hmKingdoms, $pinned[0]);
+		}
+	}
+	// Pin the user's principality in $hmPrinz
+	if ($hmUserParentKingdomId > 0 && $hmUserKingdomId > 0) {
+		$prinzIdx = array_search($hmUserKingdomId, array_map('intval', array_column($hmPrinz, 'KingdomId')));
+		if ($prinzIdx !== false) {
+			$pinnedPrinz = array_splice($hmPrinz, $prinzIdx, 1);
+			$pinnedPrinz[0]['_pinned'] = true;
+			array_unshift($hmPrinz, $pinnedPrinz[0]);
 		}
 	}
 
@@ -396,8 +406,9 @@
 }
 .hm-find-item:hover i { color: #2b6cb0; }
 
-/* ---- Pinned home kingdom indicator ---- */
-.hm-kingdom-card.hm-pinned {
+/* ---- Pinned home kingdom/principality indicator ---- */
+.hm-kingdom-card.hm-pinned,
+.hm-prinz-card.hm-pinned {
 	border-color: #bee3f8;
 	box-shadow: 0 0 0 2px #bee3f8;
 }
@@ -538,11 +549,14 @@
 		</div>
 		<div class="hm-prinz-grid">
 			<?php foreach ($hmPrinz as $p): ?>
-			<a class="hm-prinz-card" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
-				<img class="hm-prinz-heraldry"
-				     src="<?= htmlspecialchars($p['_heraldry']) ?>"
-				     onerror="this.style.display='none'"
-				     alt="<?= htmlspecialchars(stripslashes($p['KingdomName'])) ?>">
+			<a class="hm-prinz-card<?= !empty($p['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
+				<div class="hm-card-heraldry-wrap" style="position:relative">
+					<?php if (!empty($p['_pinned'])): ?><span class="hm-pin-badge">Your Principality</span><?php endif; ?>
+					<img class="hm-prinz-heraldry"
+					     src="<?= htmlspecialchars($p['_heraldry']) ?>"
+					     onerror="this.style.display='none'"
+					     alt="<?= htmlspecialchars(stripslashes($p['KingdomName'])) ?>">
+				</div>
 				<div class="hm-prinz-name"><?= htmlspecialchars(stripslashes($p['KingdomName'])) ?></div>
 				<div class="hm-prinz-stat"><?= (int)$p['ParkCount'] ?> parks &middot; <?= number_format($p['_weekly'], 1) ?>/wk</div>
 			</a>

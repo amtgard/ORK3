@@ -91,17 +91,35 @@
 	global $DB;
 	$__huid = (int)$this->__session->user_id;
 	$DB->Clear();
-	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name FROM ork_mundane m LEFT JOIN ork_park p ON m.park_id = p.park_id LEFT JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
+	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, pk.name as parent_kingdom_name FROM ork_mundane m LEFT JOIN ork_park p ON m.park_id = p.park_id LEFT JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id LEFT JOIN ork_kingdom pk ON k.parent_kingdom_id = pk.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
 	$__home = null;
 	if ($__homeResult && $__homeResult->Next() && $__homeResult->park_id) {
-		$__home = ['park_id' => $__homeResult->park_id, 'park_name' => $__homeResult->park_name, 'kingdom_id' => $__homeResult->kingdom_id, 'kingdom_name' => $__homeResult->kingdom_name];
+		$__home = [
+			'park_id'             => $__homeResult->park_id,
+			'park_name'           => $__homeResult->park_name,
+			'kingdom_id'          => $__homeResult->kingdom_id,
+			'kingdom_name'        => $__homeResult->kingdom_name,
+			'parent_kingdom_id'   => (int)$__homeResult->parent_kingdom_id,
+			'parent_kingdom_name' => $__homeResult->parent_kingdom_name,
+		];
 	}
 ?>
 <?php if ($__home) : ?>
+<?php if ($__home['parent_kingdom_id'] > 0) : ?>
+			<a href='<?=UIR?>Kingdom/profile/<?=(int)$__home['parent_kingdom_id']?>' class='nav-home-btn' title='My Kingdom: <?=htmlspecialchars($__home['parent_kingdom_name'])?>'>
+				<i class='fas fa-chess-rook'></i>
+				<span class='nav-home-label'><?=htmlspecialchars($__home['parent_kingdom_name'])?></span>
+			</a>
+			<a href='<?=UIR?>Kingdom/profile/<?=(int)$__home['kingdom_id']?>' class='nav-home-btn' title='My Principality: <?=htmlspecialchars($__home['kingdom_name'])?>'>
+				<i class='fas fa-crown'></i>
+				<span class='nav-home-label'><?=htmlspecialchars($__home['kingdom_name'])?></span>
+			</a>
+<?php else : ?>
 			<a href='<?=UIR?>Kingdom/profile/<?=(int)$__home['kingdom_id']?>' class='nav-home-btn' title='My Kingdom: <?=htmlspecialchars($__home['kingdom_name'])?>'>
 				<i class='fas fa-chess-rook'></i>
 				<span class='nav-home-label'><?=htmlspecialchars($__home['kingdom_name'])?></span>
 			</a>
+<?php endif; ?>
 			<a href='<?=UIR?>Park/profile/<?=(int)$__home['park_id']?>' class='nav-home-btn' title='My Park: <?=htmlspecialchars($__home['park_name'])?>'>
 				<i class='fas fa-tree'></i>
 				<span class='nav-home-label'><?=htmlspecialchars($__home['park_name'])?></span>
@@ -182,7 +200,7 @@
 	}
 
 	// User's home kingdom ID for priority sorting (0 = not logged in / unknown)
-	var nsKid = <?= (isset($__home) && $__home) ? (int)$__home['kingdom_id'] : 0 ?>;
+	var nsKid = <?= (isset($__home) && $__home) ? ((int)$__home['parent_kingdom_id'] > 0 ? (int)$__home['parent_kingdom_id'] : (int)$__home['kingdom_id']) : 0 ?>;
 	var nsPid = <?= (isset($__home) && $__home) ? (int)$__home['park_id'] : 0 ?>;
 	var nsUir = '<?= UIR ?>';
 

@@ -1408,6 +1408,15 @@
 	flex: 1;
 	min-width: 0;
 }
+.kn-parent-kingdom-link { margin-bottom: 4px; }
+.kn-parent-kingdom-link a {
+	color: rgba(255,255,255,0.7);
+	text-decoration: none;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.kn-parent-kingdom-link a:hover { color: #fff; }
 .kn-kingdom-name {
 	color: #fff;
 	font-size: 28px;

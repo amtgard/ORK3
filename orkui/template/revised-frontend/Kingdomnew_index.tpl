@@ -87,6 +87,13 @@
 		</div>
 
 		<div class="kn-hero-info">
+			<?php if ($IsPrinz && !empty($ParentKingdomId)): ?>
+			<div class="kn-parent-kingdom-link">
+				<a href="<?= UIR ?>Kingdom/profile/<?= (int)$ParentKingdomId ?>">
+					<i class="fas fa-chess-rook"></i> <?= htmlspecialchars($ParentKingdomName) ?>
+				</a>
+			</div>
+			<?php endif; ?>
 			<h1 class="kn-kingdom-name"><?= htmlspecialchars($kingdom_name) ?></h1>
 			<div class="kn-badges">
 				<span class="kn-badge kn-badge-green">
@@ -620,8 +627,8 @@
 					<div class="kn-report-group">
 						<h5><i class="fas fa-medal"></i> Awards</h5>
 						<ul>
-							<?php if ($IsLoggedIn): ?>
-							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Award Recommendations</a></li>
+							<?php if ($IsLoggedIn && (!empty($AwardRecsPublic) || !empty($CanManageKingdom))): ?>
+							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Recommendations</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
 							<?php if ($IsLoggedIn): ?>
