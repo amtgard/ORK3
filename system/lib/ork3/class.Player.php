@@ -311,6 +311,7 @@ class Player extends Ork3 {
 						'ShowMundaneFirst' => (int)$this->mundane->show_mundane_first,
 						'ShowMundaneLast' => (int)$this->mundane->show_mundane_last,
 						'ShowEmail' => (int)$this->mundane->show_email,
+						'MilestoneConfig' => $this->mundane->milestone_config,
 				);
 			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
@@ -990,6 +991,7 @@ class Player extends Ork3 {
 					$this->mundane->show_mundane_first = is_null($request['ShowMundaneFirst'])?$this->mundane->show_mundane_first:(int)$request['ShowMundaneFirst'];
 					$this->mundane->show_mundane_last = is_null($request['ShowMundaneLast'])?$this->mundane->show_mundane_last:(int)$request['ShowMundaneLast'];
 					$this->mundane->show_email = is_null($request['ShowEmail'])?$this->mundane->show_email:(int)$request['ShowEmail'];
+					$this->mundane->milestone_config = is_null($request['MilestoneConfig'])?$this->mundane->milestone_config:$request['MilestoneConfig'];
 				}
 
 				// reeve or corpora qual changes
@@ -1883,6 +1885,80 @@ class Player extends Ork3 {
 		} else {
 			return NoAuthorization();
 		}
+	}
+
+
+	public function GetCustomMilestones($mundane_id) {
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->mundane_id = (int)$mundane_id;
+		$results = array();
+		if ($milestones->find()) {
+			do {
+				$results[] = array(
+					'MilestoneId' => $milestones->milestone_id,
+					'MundaneId' => $milestones->mundane_id,
+					'Icon' => $milestones->icon,
+					'Description' => $milestones->description,
+					'MilestoneDate' => $milestones->milestone_date,
+				);
+			} while ($milestones->next());
+		}
+		return $results;
+	}
+
+	public function AddCustomMilestone($request) {
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($requester_id) || (int)$requester_id !== (int)$request['MundaneId']) {
+			return NoAuthorization();
+		}
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->mundane_id = (int)$request['MundaneId'];
+		$icon = trim($request['Icon']) ?: 'fa-star';
+		if (!preg_match('/^fa-[a-z0-9-]+$/', $icon)) $icon = 'fa-star';
+		$milestones->icon = $icon;
+		$milestones->description = trim($request['Description']);
+		$milestones->milestone_date = date('Y-m-d', strtotime($request['MilestoneDate']));
+		$milestones->save();
+		return Success($milestones->milestone_id);
+	}
+
+	public function UpdateCustomMilestone($request) {
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($requester_id) || (int)$requester_id !== (int)$request['MundaneId']) {
+			return NoAuthorization();
+		}
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->milestone_id = (int)$request['MilestoneId'];
+		$milestones->mundane_id = (int)$request['MundaneId'];
+		if (!$milestones->find()) {
+			return InvalidParameter('Milestone not found.');
+		}
+		$icon = trim($request['Icon']);
+		if ($icon && !preg_match('/^fa-[a-z0-9-]+$/', $icon)) $icon = '';
+		$milestones->icon = $icon ?: $milestones->icon;
+		$milestones->description = trim($request['Description']) ?: $milestones->description;
+		$milestones->milestone_date = !empty($request['MilestoneDate']) ? date('Y-m-d', strtotime($request['MilestoneDate'])) : $milestones->milestone_date;
+		$milestones->save();
+		return Success($milestones->milestone_id);
+	}
+
+	public function DeleteCustomMilestone($request) {
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($requester_id) || (int)$requester_id !== (int)$request['MundaneId']) {
+			return NoAuthorization();
+		}
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->milestone_id = (int)$request['MilestoneId'];
+		$milestones->mundane_id = (int)$request['MundaneId'];
+		if (!$milestones->find()) {
+			return InvalidParameter('Milestone not found.');
+		}
+		$milestones->delete();
+		return Success();
 	}
 
 	public function get_latest_attendance_date($mundane_id) {

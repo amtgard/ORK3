@@ -442,6 +442,64 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-belt-name:hover{text-decoration:underline}
 .pn-belt-title{font-size:11px;color:#718096;white-space:nowrap;flex-shrink:0}
 @media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-sidebar{flex:none;width:100%}}
+/* ===== Milestones Timeline ===== */
+.pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0}
+.pn-timeline-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 20px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;display:flex;align-items:center;gap:8px}
+.pn-timeline-heading i{color:var(--pn-accent,#4299e1);font-size:16px}
+.pn-timeline{position:relative;padding:10px 0 10px;margin:0}
+.pn-timeline::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;background:#e2e8f0;transform:translateX(-50%)}
+.pn-tl-item{position:relative;display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px}
+.pn-tl-item:last-child{margin-bottom:0}
+.pn-tl-left{width:calc(50% - 24px);text-align:right;padding-right:16px}
+.pn-tl-right{width:calc(50% - 24px);text-align:left;padding-left:16px}
+.pn-tl-node{position:absolute;left:50%;top:4px;width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid var(--pn-accent,#4299e1);display:flex;align-items:center;justify-content:center;transform:translateX(-50%);z-index:1;font-size:14px;color:var(--pn-accent,#4299e1)}
+.pn-tl-date{font-size:12px;color:var(--pn-accent,#4299e1);font-weight:600;line-height:1.4;padding-top:6px}
+.pn-tl-desc{font-size:13px;color:#2d3748;font-weight:500;line-height:1.4;padding-top:6px}
+.pn-tl-item:nth-child(odd) .pn-tl-left{order:1}
+.pn-tl-item:nth-child(odd) .pn-tl-right{order:3}
+.pn-tl-item:nth-child(odd) .pn-tl-node{order:2}
+.pn-tl-item:nth-child(even) .pn-tl-left{order:3;text-align:left;padding-left:16px;padding-right:0}
+.pn-tl-item:nth-child(even) .pn-tl-right{order:1;text-align:right;padding-right:16px;padding-left:0}
+.pn-tl-item:nth-child(even) .pn-tl-node{order:2}
+.pn-tl-empty{text-align:center;padding:24px 16px;color:#a0aec0;font-size:13px}
+@media(max-width:700px){
+.pn-timeline::before{left:18px}
+.pn-tl-item{flex-wrap:nowrap}
+.pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
+.pn-tl-left{display:none}
+.pn-tl-right{order:2!important;width:auto;flex:1;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-item:nth-child(even) .pn-tl-left{display:none}
+.pn-tl-item:nth-child(even) .pn-tl-right{order:2!important;text-align:left!important;padding-left:12px!important;padding-right:0!important}
+.pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
+}
+@media(min-width:701px){.pn-tl-date-mobile{display:none}}
+/* ===== Milestones Config (Design Modal) ===== */
+.pn-ms-toggle-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.pn-ms-toggle{display:flex;align-items:center;gap:10px;font-size:13px;color:#4a5568}
+.pn-ms-toggle input[type=checkbox]{width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)}
+.pn-ms-toggle i{width:20px;text-align:center;color:#718096;font-size:14px}
+.pn-ms-custom-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.pn-ms-custom-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px}
+.pn-ms-custom-row i{color:var(--pn-accent,#4299e1);font-size:14px;width:20px;text-align:center;flex-shrink:0}
+.pn-ms-custom-desc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2d3748;font-weight:500}
+.pn-ms-custom-date{color:#718096;font-size:11px;flex-shrink:0}
+.pn-ms-custom-actions{display:flex;gap:4px;flex-shrink:0}
+.pn-ms-custom-actions button{background:none;border:none;cursor:pointer;font-size:12px;color:#718096;padding:2px 4px;border-radius:3px}
+.pn-ms-custom-actions button:hover{background:#e2e8f0;color:#2d3748}
+.pn-ms-add-form{margin-top:16px;padding:14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px}
+.pn-ms-add-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.pn-ms-add-row .pn-ms-field{display:flex;flex-direction:column;gap:3px}
+.pn-ms-add-row .pn-ms-field label{font-size:11px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
+.pn-ms-add-row .pn-ms-field input,.pn-ms-add-row .pn-ms-field select{font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#fff}
+.pn-ms-add-row .pn-ms-field input[type=text]{width:180px}
+.pn-ms-add-row .pn-ms-field input[type=date]{width:130px}
+.pn-ms-add-btn{padding:6px 12px;font-size:12px;font-weight:600;background:var(--pn-accent,#4299e1);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap}
+.pn-ms-add-btn:hover{opacity:.9}
+.pn-ms-error{color:#e53e3e;font-size:12px;margin-top:6px;display:none}
+.pn-ms-icon-grid{display:flex;flex-wrap:wrap;gap:4px}
+.pn-ms-icon-opt{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:14px;color:#718096;background:#fff;transition:all .15s}
+.pn-ms-icon-opt:hover{border-color:#a0aec0;color:#4a5568;background:#f7fafc}
+.pn-ms-icon-opt.pn-ms-icon-active{border-color:var(--pn-accent,#4299e1);color:var(--pn-accent,#4299e1);background:#ebf8ff}
 /* ===== Design My Profile Modal ===== */
 .pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0}
 .pn-design-tab{padding:10px 18px;font-size:13px;font-weight:600;color:#718096;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap}
@@ -866,7 +924,16 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					$_hasAboutStory   = !empty(trim($Player['AboutStory'] ?? ''));
 					$_showBeltline    = (int)($Player['ShowBeltline'] ?? 1);
 					$_hasBeltline     = $_showBeltline && (!empty($BeltlinePeers) || !empty($BeltlineAssociates));
-					$_showAboutTab    = $_hasAboutPersona || $_hasAboutStory || $_hasBeltline || $isOwnProfile;
+					$_msConfig = json_decode($Player['MilestoneConfig'] ?? '', true);
+					if (!is_array($_msConfig)) $_msConfig = [];
+					$_hasMilestones = false;
+					if (is_array($Milestones)) {
+						foreach ($Milestones as $_ms) {
+							$_msType = $_ms['type'];
+							if (!isset($_msConfig[$_msType]) || $_msConfig[$_msType]) { $_hasMilestones = true; break; }
+						}
+					}
+					$_showAboutTab    = $_hasAboutPersona || $_hasAboutStory || $_hasBeltline || $_hasMilestones || $isOwnProfile;
 				?>
 				<?php if ($_showAboutTab): ?>
 				<li data-tab="about">
@@ -1104,10 +1171,50 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<div class="pn-about-content" id="pn-about-story-rendered"></div>
 							</div>
 							<?php endif; ?>
-							<?php if (!$_hasAboutPersona && !$_hasAboutStory && $isOwnProfile && !$_hasBeltline): ?>
+							<?php if (!$_hasAboutPersona && !$_hasAboutStory && $isOwnProfile && !$_hasBeltline && !$_hasMilestones): ?>
 							<div class="pn-about-empty">
 								<i class="fas fa-scroll" style="font-size:28px;color:#cbd5e0;margin-bottom:10px"></i>
 								<p>Your About section is empty. Click <strong>Design My Profile</strong> above to add a bio and tell your story!</p>
+							</div>
+							<?php endif; ?>
+							<?php
+								// Filter milestones based on config
+								$_visibleMilestones = [];
+								if (is_array($Milestones)) {
+									foreach ($Milestones as $_ms) {
+										$_msType = $_ms['type'];
+										// Default ON for all types if not configured
+										if (!isset($_msConfig[$_msType]) || $_msConfig[$_msType]) {
+											$_visibleMilestones[] = $_ms;
+										}
+									}
+								}
+							?>
+							<?php if (!empty($_visibleMilestones)): ?>
+							<div class="pn-timeline-section">
+								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> My Milestones</h3>
+								<div class="pn-timeline">
+									<?php foreach ($_visibleMilestones as $_idx => $_ms): ?>
+									<div class="pn-tl-item">
+																				<div class="pn-tl-left">
+											<div class="pn-tl-date"><?= date('M j, Y', strtotime($_ms['date'])) ?></div>
+										</div>
+										<div class="pn-tl-node"><i class="fas <?= htmlspecialchars($_ms['icon']) ?>"></i></div>
+										<div class="pn-tl-right">
+											<div class="pn-tl-desc"><?= htmlspecialchars($_ms['description']) ?></div>
+											<span class="pn-tl-date-mobile"><?= date('M j, Y', strtotime($_ms['date'])) ?></span>
+										</div>
+									</div>
+									<?php endforeach; ?>
+								</div>
+							</div>
+							<?php elseif ($isOwnProfile && empty($_hasAboutPersona) && empty($_hasAboutStory) && empty($_hasBeltline)): ?>
+							<div class="pn-timeline-section">
+								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> My Milestones</h3>
+								<div class="pn-tl-empty">
+									<i class="fas fa-stream" style="font-size:24px;color:#cbd5e0;margin-bottom:8px;display:block"></i>
+									No milestones to display yet. As you play, milestones will appear here automatically!
+								</div>
 							</div>
 							<?php endif; ?>
 						</div>
@@ -2256,6 +2363,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
 			<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
 			<button class="pn-design-tab" data-panel="focus"><i class="fas fa-crosshairs"></i> Photo Focus</button>
+			<button class="pn-design-tab" data-panel="milestones"><i class="fas fa-stream"></i> Milestones</button>
 		</div>
 		<div class="pn-acct-modal-body" style="max-height:60vh;overflow-y:auto">
 			<div class="pn-form-error" id="pn-design-error"></div>
@@ -2463,6 +2571,64 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				</div>
 				<?php endif; ?>
 			</div>
+
+			<!-- Milestones Panel -->
+			<div class="pn-design-panel" id="pn-design-milestones">
+				<div class="pn-design-hint" style="margin-bottom:14px">Choose which milestone types appear on your timeline. All types are shown by default.</div>
+				<div class="pn-ms-toggle-list" id="pn-ms-toggles">
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="first_signin" checked /><i class="fas fa-door-open"></i> First Sign-In</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="level6" checked /><i class="fas fa-hat-wizard"></i> Reached Level 6</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="master" checked /><i class="fas fa-star"></i> Earned Master</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="paragon" checked /><i class="fas fa-gem"></i> Earned Paragon</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="knight" checked /><i class="fas fa-shield-alt"></i> Earned Knight</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="title" checked /><i class="fas fa-crown"></i> Earned Title</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="became_associate" checked /><i class="fas fa-handshake"></i> Became Associate</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="took_associate" checked /><i class="fas fa-hand-holding-heart"></i> Took Associate</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="officer" checked /><i class="fas fa-landmark"></i> Served as Officer</label>
+					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="custom" checked /><i class="fas fa-pen"></i> Custom Milestones</label>
+				</div>
+				<div style="border-top:1px solid #e2e8f0;padding-top:16px;margin-top:8px">
+					<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px">Custom Milestones</div>
+					<div class="pn-ms-custom-list" id="pn-ms-custom-list"></div>
+					<div class="pn-ms-add-form" id="pn-ms-add-form">
+						<div class="pn-ms-add-row">
+							<div class="pn-ms-field">
+								<label>Description</label>
+								<input type="text" id="pn-ms-add-desc" maxlength="500" placeholder="What happened?" />
+							</div>
+							<div class="pn-ms-field">
+								<label>Date</label>
+								<input type="date" id="pn-ms-add-date" />
+							</div>
+							<div class="pn-ms-field" style="flex-basis:100%">
+								<label>Icon</label>
+								<div class="pn-ms-icon-grid" id="pn-ms-icon-grid">
+									<div class="pn-ms-icon-opt pn-ms-icon-active" data-icon="fa-star" title="Star"><i class="fas fa-star"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-trophy" title="Trophy"><i class="fas fa-trophy"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-heart" title="Heart"><i class="fas fa-heart"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-flag" title="Flag"><i class="fas fa-flag"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-bolt" title="Bolt"><i class="fas fa-bolt"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-fire" title="Fire"><i class="fas fa-fire"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-book" title="Book"><i class="fas fa-book"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-users" title="Group"><i class="fas fa-users"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-map-marker-alt" title="Map Pin"><i class="fas fa-map-marker-alt"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-campground" title="Camp"><i class="fas fa-campground"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-scroll" title="Scroll"><i class="fas fa-scroll"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-hammer" title="Hammer"><i class="fas fa-hammer"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-dragon" title="Dragon"><i class="fas fa-dragon"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-dice-d20" title="D20"><i class="fas fa-dice-d20"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-skull-crossbones" title="Skull"><i class="fas fa-skull-crossbones"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-fist-raised" title="Fist"><i class="fas fa-fist-raised"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-music" title="Music"><i class="fas fa-music"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-paint-brush" title="Paint"><i class="fas fa-paint-brush"></i></div>
+								</div>
+							</div>
+							<button class="pn-ms-add-btn" id="pn-ms-add-btn"><i class="fas fa-plus"></i> Add</button>
+						</div>
+						<div class="pn-ms-error" id="pn-ms-add-error"></div>
+					</div>
+				</div>
+			</div>
 		</div>
 
 		<div class="pn-modal-footer">
@@ -2610,6 +2776,8 @@ var PnConfig = {
 	hasImage:       <?= ($Player['HasImage'] > 0) ? 'true' : 'false' ?>,
 	imageUrl:       <?= json_encode($imageUrl) ?>,
 	playerTitles:   <?= json_encode($PlayerTitles ?? []) ?>,
+	milestoneConfig: <?= json_encode(json_decode($Player['MilestoneConfig'] ?? '{}', true) ?: new stdClass()) ?>,
+	customMilestones: <?= json_encode($CustomMilestones ?? []) ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -3019,6 +3187,14 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		fd.append('ShowMundaneLast', gid('pn-design-show-last').checked ? 1 : 0);
 		fd.append('ShowEmail', gid('pn-design-show-email').checked ? 1 : 0);
 
+		// Milestone config
+		var msConfig = {};
+		var msToggles = document.querySelectorAll('#pn-ms-toggles input[data-ms-type]');
+		for (var i = 0; i < msToggles.length; i++) {
+			msConfig[msToggles[i].getAttribute('data-ms-type')] = msToggles[i].checked ? 1 : 0;
+		}
+		fd.append('MilestoneConfig', JSON.stringify(msConfig));
+
 		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateprofile', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(result) {
@@ -3038,6 +3214,129 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 				btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
 			});
 	});
+})();
+
+// ---- Milestones Config (Design My Profile) ----
+(function() {
+	if (!PnConfig.isOwnProfile) return;
+
+	// Init toggles from saved config
+	var cfg = PnConfig.milestoneConfig || {};
+	var toggles = document.querySelectorAll('#pn-ms-toggles input[data-ms-type]');
+	for (var i = 0; i < toggles.length; i++) {
+		var msType = toggles[i].getAttribute('data-ms-type');
+		// Default ON if not in config
+		if (typeof cfg[msType] !== 'undefined' && !cfg[msType]) {
+			toggles[i].checked = false;
+		}
+	}
+
+	// Render custom milestones list
+	var customList = document.getElementById('pn-ms-custom-list');
+	var customData = PnConfig.customMilestones || [];
+	function renderCustomList() {
+		if (!customList) return;
+		if (customData.length === 0) {
+			customList.innerHTML = '<div style="font-size:12px;color:#a0aec0;padding:8px 0">No custom milestones yet.</div>';
+			return;
+		}
+		var html = '';
+		for (var i = 0; i < customData.length; i++) {
+			var m = customData[i];
+			var dateStr = m.MilestoneDate || '';
+			if (dateStr && dateStr !== '0000-00-00') {
+				var d = new Date(dateStr + 'T00:00:00');
+				dateStr = d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+			}
+			html += '<div class="pn-ms-custom-row" data-ms-id="' + m.MilestoneId + '">'
+				+ '<i class="fas ' + (m.Icon || 'fa-star').replace(/[^a-z0-9-]/g,'') + '"></i>'
+				+ '<span class="pn-ms-custom-desc">' + (m.Description || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>'
+				+ '<span class="pn-ms-custom-date">' + dateStr + '</span>'
+				+ '<span class="pn-ms-custom-actions">'
+				+ '<button title="Delete" onclick="pnDeleteMilestone(' + m.MilestoneId + ')"><i class="fas fa-trash-alt"></i></button>'
+				+ '</span></div>';
+		}
+		customList.innerHTML = html;
+	}
+	renderCustomList();
+
+	// Icon grid selection
+	var iconGrid = document.getElementById('pn-ms-icon-grid');
+	var selectedIcon = 'fa-star';
+	if (iconGrid) {
+		iconGrid.addEventListener('click', function(e) {
+			var opt = e.target.closest('.pn-ms-icon-opt');
+			if (!opt) return;
+			var prev = iconGrid.querySelector('.pn-ms-icon-active');
+			if (prev) prev.classList.remove('pn-ms-icon-active');
+			opt.classList.add('pn-ms-icon-active');
+			selectedIcon = opt.getAttribute('data-icon');
+		});
+	}
+
+	// Add custom milestone
+	var addBtn = document.getElementById('pn-ms-add-btn');
+	var addErr = document.getElementById('pn-ms-add-error');
+	if (addBtn) {
+		addBtn.addEventListener('click', function() {
+			var desc = document.getElementById('pn-ms-add-desc').value.trim();
+			var dt   = document.getElementById('pn-ms-add-date').value;
+			var icon = selectedIcon;
+			addErr.style.display = 'none';
+			if (!desc) { addErr.textContent = 'Description is required.'; addErr.style.display = ''; return; }
+			if (!dt)   { addErr.textContent = 'Date is required.'; addErr.style.display = ''; return; }
+			addBtn.disabled = true;
+			addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+			var fd = new FormData();
+			fd.append('Description', desc);
+			fd.append('MilestoneDate', dt);
+			fd.append('Icon', icon);
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/addmilestone', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(result) {
+					if (result && result.status === 0) {
+						customData.push({ MilestoneId: result.milestoneId, Icon: icon, Description: desc, MilestoneDate: dt });
+						renderCustomList();
+						document.getElementById('pn-ms-add-desc').value = '';
+						document.getElementById('pn-ms-add-date').value = '';
+						var prevIcon = iconGrid.querySelector('.pn-ms-icon-active');
+						if (prevIcon) prevIcon.classList.remove('pn-ms-icon-active');
+						var defIcon = iconGrid.querySelector('[data-icon="fa-star"]');
+						if (defIcon) defIcon.classList.add('pn-ms-icon-active');
+						selectedIcon = 'fa-star';
+					} else {
+						addErr.textContent = (result && result.error) || 'Failed to add milestone.';
+						addErr.style.display = '';
+					}
+					addBtn.disabled = false;
+					addBtn.innerHTML = '<i class="fas fa-plus"></i> Add';
+				})
+				.catch(function(e) {
+					addErr.textContent = 'Request failed.';
+					addErr.style.display = '';
+					addBtn.disabled = false;
+					addBtn.innerHTML = '<i class="fas fa-plus"></i> Add';
+				});
+		});
+	}
+
+	// Delete custom milestone
+	window.pnDeleteMilestone = function(msId) {
+		if (!confirm('Delete this custom milestone?')) return;
+		var fd = new FormData();
+		fd.append('MilestoneId', msId);
+		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletemilestone', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(result) {
+				if (result && result.status === 0) {
+					customData = customData.filter(function(m) { return m.MilestoneId !== msId; });
+					renderCustomList();
+				} else {
+					alert((result && result.error) || 'Failed to delete milestone.');
+				}
+			})
+			.catch(function() { alert('Request failed.'); });
+	};
 })();
 
 pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);

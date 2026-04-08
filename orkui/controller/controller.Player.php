@@ -635,6 +635,149 @@ class Controller_Player extends Controller {
 			if ($hasParagon) array_unshift($__titles, ['TitleName' => 'Paragon', 'OfficerRole' => 'none', 'Peerage' => 'Paragon', 'IsTitle' => 0]);
 			$this->data['PlayerTitles'] = $__titles;
 		}
+
+		// ===== Milestones Timeline Data =====
+		$__milestones = [];
+		$__awards = is_array($this->data['Details']['Awards']) ? $this->data['Details']['Awards'] : [];
+		$__attendance = is_array($this->data['Details']['Attendance']) ? $this->data['Details']['Attendance'] : [];
+		$__classes = is_array($this->data['Details']['Classes']) ? $this->data['Details']['Classes'] : [];
+
+		// 1. First Sign-In (earliest attendance date)
+		$__earliestDate = null;
+		foreach ($__attendance as $__a) {
+			if (!empty($__a['Date']) && $__a['Date'] !== '0000-00-00' && $__a['Date'] !== '1970-01-01') {
+				if ($__earliestDate === null || strtotime($__a['Date']) < strtotime($__earliestDate))
+					$__earliestDate = $__a['Date'];
+			}
+		}
+		if ($__earliestDate) {
+			$__milestones[] = ['type' => 'first_signin', 'date' => $__earliestDate, 'icon' => 'fa-door-open', 'description' => 'First sign-in at Amtgard'];
+		}
+
+		// 2. Reached Level 6 in Class
+		// Build attendance history per class to find earliest date with 53+ cumulative credits
+		$__classAttByDate = [];
+		foreach ($__attendance as $__a) {
+			$__cid = (int)($__a['ClassId'] ?? 0);
+			$__cdate = $__a['Date'] ?? '';
+			if ($__cid > 0 && !empty($__cdate) && $__cdate !== '0000-00-00') {
+				$__classAttByDate[$__cid][] = ['date' => $__cdate, 'credits' => (float)($__a['Credits'] ?? 0)];
+			}
+		}
+		foreach ($__classAttByDate as $__cid => $__entries) {
+			// Sort by date ascending
+			usort($__entries, function($a, $b) { return strtotime($a['date']) - strtotime($b['date']); });
+			$__cumCredits = 0;
+			// Also add reconciled credits for this class
+			foreach ($__classes as $__c) {
+				if ((int)$__c['ClassId'] === $__cid) {
+					$__cumCredits += (int)($__c['Reconciled'] ?? 0);
+					$__className = $__c['ClassName'];
+					break;
+				}
+			}
+			if (empty($__className)) continue;
+			foreach ($__entries as $__e) {
+				$__cumCredits += $__e['credits'];
+				if ($__cumCredits >= 53) {
+					$__milestones[] = ['type' => 'level6', 'date' => $__e['date'], 'icon' => 'fa-hat-wizard', 'description' => 'Reached Level 6 in ' . $__className];
+					break;
+				}
+			}
+			unset($__className);
+		}
+
+		// 3-6: Awards-based milestones
+		$__knightIds = [17, 18, 19, 20, 245];
+		$__knightNames = [17 => 'Sword', 18 => 'Flame', 19 => 'Serpent', 20 => 'Crown', 245 => 'Battle'];
+		foreach ($__awards as $__aw) {
+			$__aid = (int)($__aw['AwardId'] ?? 0);
+			$__awDate = $__aw['Date'] ?? '';
+			$__awName = !empty($__aw['KingdomAwardName']) ? $__aw['KingdomAwardName'] : (!empty($__aw['CustomAwardName']) ? $__aw['CustomAwardName'] : ($__aw['Name'] ?? ''));
+			$__officerRole = $__aw['OfficerRole'] ?? 'none';
+			$__isTitle = (int)($__aw['IsTitle'] ?? 0);
+
+			if (empty($__awDate) || $__awDate === '0000-00-00') continue;
+
+			// Knight
+			if (in_array($__aid, $__knightIds)) {
+				$__knLabel = isset($__knightNames[$__aid]) ? 'Knight of the ' . $__knightNames[$__aid] : 'Knighted';
+				$__milestones[] = ['type' => 'knight', 'date' => $__awDate, 'icon' => 'fa-shield-alt', 'description' => 'Earned ' . $__knLabel];
+			}
+
+			// Master (10th order of a ladder award)
+			if ((int)($__aw['Rank'] ?? 0) >= 10 && (int)($__aw['IsLadder'] ?? 0) === 1 && in_array($__officerRole, ['none', null]) && $__isTitle !== 1) {
+				$__milestones[] = ['type' => 'master', 'date' => $__awDate, 'icon' => 'fa-star', 'description' => 'Earned Master ' . $__awName];
+			}
+
+			// Paragon (class-specific paragon awards)
+			$__paragonIds = [37,38,39,40,41,241,42,43,44,45,46,47,242,49,50,51];
+			if (in_array($__aid, $__paragonIds)) {
+				$__milestones[] = ['type' => 'paragon', 'date' => $__awDate, 'icon' => 'fa-gem', 'description' => 'Earned ' . $__awName];
+			}
+
+			// Title (IsTitle=1 and OfficerRole is none, exclude paragons/knights already handled above)
+			if ($__isTitle === 1 && in_array($__officerRole, ['none', null]) && !in_array($__aid, $__paragonIds) && !in_array($__aid, $__knightIds)) {
+				$__milestones[] = ['type' => 'title', 'date' => $__awDate, 'icon' => 'fa-crown', 'description' => 'Earned the title ' . $__awName];
+			}
+
+			// Served as Officer (OfficerRole is not none)
+			if (!in_array($__officerRole, ['none', null, ''])) {
+				$__milestones[] = ['type' => 'officer', 'date' => $__awDate, 'icon' => 'fa-landmark', 'description' => 'Served as ' . $__awName];
+			}
+		}
+
+		// 7. Became Associate (peerage awards given TO this player - from BeltlinePeers data)
+		$__blPeerLabels = ['Squire' => 'Squire', 'Man-At-Arms' => 'Person-at-Arms', 'Lords-Page' => "Lord's Page", 'Page' => 'Page'];
+		if (!empty($this->data['BeltlinePeers'])) {
+			foreach ($this->data['BeltlinePeers'] as $__bp) {
+				$__peerDate = $__bp['Date'] ?? '';
+				if (empty($__peerDate) || $__peerDate === '0000-00-00') continue;
+				$__peerLabel = $__blPeerLabels[$__bp['Peerage']] ?? $__bp['Peerage'];
+				$__milestones[] = ['type' => 'became_associate', 'date' => $__peerDate, 'icon' => 'fa-handshake', 'description' => 'Became ' . $__peerLabel . ' to ' . $__bp['Persona']];
+			}
+		}
+
+		// 8. Took Associate (peerage awards given BY this player - from BeltlineAssociates data)
+		if (!empty($this->data['BeltlineAssociates'])) {
+			foreach ($this->data['BeltlineAssociates'] as $__ba) {
+				$__assocDate = $__ba['Date'] ?? '';
+				if (empty($__assocDate) || $__assocDate === '0000-00-00') continue;
+				$__assocLabel = $__blPeerLabels[$__ba['Peerage']] ?? $__ba['Peerage'];
+				$__milestones[] = ['type' => 'took_associate', 'date' => $__assocDate, 'icon' => 'fa-hand-holding-heart', 'description' => 'Took ' . $__ba['Persona'] . ' as ' . $__assocLabel];
+			}
+		}
+
+		// 9. Custom milestones from DB
+		$__customMs = $this->Player->get_custom_milestones((int)$id);
+		if (is_array($__customMs)) {
+			foreach ($__customMs as $__cm) {
+				$__milestones[] = [
+					'type' => 'custom',
+					'date' => $__cm['MilestoneDate'],
+					'icon' => $__cm['Icon'],
+					'description' => $__cm['Description'],
+					'milestoneId' => (int)$__cm['MilestoneId'],
+				];
+			}
+		}
+
+		// Deduplicate milestones with same description + date
+		$__seen = [];
+		$__milestones = array_filter($__milestones, function($m) use (&$__seen) {
+			$key = $m['date'] . '|' . $m['description'];
+			if (isset($__seen[$key])) return false;
+			$__seen[$key] = true;
+			return true;
+		});
+
+		// Sort chronologically ascending
+		usort($__milestones, function($a, $b) { return strtotime($a['date']) - strtotime($b['date']); });
+
+		$this->data['Milestones'] = $__milestones;
+		$this->data['CustomMilestones'] = is_array($__customMs) ? $__customMs : [];
+		$this->data['MilestoneConfig'] = $this->data['Player']['MilestoneConfig'] ?? '';
+
 	}
 
 

@@ -382,8 +382,68 @@ class Controller_PlayerAjax extends Controller {
 				'ShowMundaneFirst' => isset($_POST['ShowMundaneFirst']) ? (int)$_POST['ShowMundaneFirst'] : null,
 				'ShowMundaneLast'  => isset($_POST['ShowMundaneLast'])  ? (int)$_POST['ShowMundaneLast']  : null,
 				'ShowEmail'        => isset($_POST['ShowEmail'])        ? (int)$_POST['ShowEmail']        : null,
+				'MilestoneConfig'  => isset($_POST['MilestoneConfig'])  ? $_POST['MilestoneConfig']  : null,
 			];
 			$r = $this->Player->update_player($fields);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'addmilestone') {
+			$description = trim($_POST['Description'] ?? '');
+			$icon        = trim($_POST['Icon'] ?? 'fa-star');
+			$msDate      = trim($_POST['MilestoneDate'] ?? '');
+			if (!strlen($description)) {
+				echo json_encode(['status' => 1, 'error' => 'Description is required.']);
+				exit;
+			}
+			if (!strlen($msDate) || !strtotime($msDate)) {
+				echo json_encode(['status' => 1, 'error' => 'A valid date is required.']);
+				exit;
+			}
+			$r = $this->Player->add_custom_milestone([
+				'Token'         => $this->session->token,
+				'MundaneId'     => $player_id,
+				'Icon'          => $icon,
+				'Description'   => $description,
+				'MilestoneDate' => $msDate,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'milestoneId' => (int)($r['Detail'] ?? 0)])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'updatemilestone') {
+			$milestone_id = (int)($_POST['MilestoneId'] ?? 0);
+			$description  = trim($_POST['Description'] ?? '');
+			$icon         = trim($_POST['Icon'] ?? '');
+			$msDate       = trim($_POST['MilestoneDate'] ?? '');
+			if (!valid_id($milestone_id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid milestone ID.']);
+				exit;
+			}
+			$r = $this->Player->update_custom_milestone([
+				'Token'         => $this->session->token,
+				'MundaneId'     => $player_id,
+				'MilestoneId'   => $milestone_id,
+				'Icon'          => $icon,
+				'Description'   => $description,
+				'MilestoneDate' => $msDate,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'deletemilestone') {
+			$milestone_id = (int)($_POST['MilestoneId'] ?? 0);
+			if (!valid_id($milestone_id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid milestone ID.']);
+				exit;
+			}
+			$r = $this->Player->delete_custom_milestone([
+				'Token'         => $this->session->token,
+				'MundaneId'     => $player_id,
+				'MilestoneId'   => $milestone_id,
+			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);

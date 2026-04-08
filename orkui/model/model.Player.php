@@ -165,6 +165,22 @@ class Model_Player extends Model {
 		return $this->Player->RemoveImage($request);
 	}
 
+	function get_custom_milestones($mundane_id) {
+		return Ork3::$Lib->player->GetCustomMilestones($mundane_id);
+	}
+
+	function add_custom_milestone($request) {
+		return Ork3::$Lib->player->AddCustomMilestone($request);
+	}
+
+	function update_custom_milestone($request) {
+		return Ork3::$Lib->player->UpdateCustomMilestone($request);
+	}
+
+	function delete_custom_milestone($request) {
+		return Ork3::$Lib->player->DeleteCustomMilestone($request);
+	}
+
 	function get_latest_attendance_date($mundane_id) {
 		return Ork3::$Lib->player->get_latest_attendance_date($mundane_id);
 	}
