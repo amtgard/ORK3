@@ -139,7 +139,8 @@ class Controller_Player extends Controller {
 					case 'deleteaward':
 						$r = $this->Player->delete_player_award(array(
 								'Token' => $this->session->token,
-								'AwardsId' => $roastbeef
+								'AwardsId' => $roastbeef,
+								'RecipientId' => $id
 							));
 						break;
 					case 'updateaward':

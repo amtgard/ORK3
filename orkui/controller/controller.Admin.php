@@ -1246,13 +1246,15 @@ class Controller_Admin extends Controller {
 					case 'deleteaward':
 						$r = $this->Player->delete_player_award(array(
 								'Token' => $this->session->token,
-								'AwardsId' => $roastbeef
+								'AwardsId' => $roastbeef,
+								'RecipientId' => $id
 							));
 						break;
 					case 'revokeaward':
 						$r = $this->Player->revoke_player_award(array(
 								'Token' => $this->session->token,
 								'AwardsId' => $roastbeef,
+								'RecipientId' => $id,
 								'Revocation' => $detail_param
 							));
 						break;

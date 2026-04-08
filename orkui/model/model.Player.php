@@ -44,13 +44,24 @@ class Model_Player extends Model {
 		$details = array( 'Awards' => $awards['Awards'], 'Attendance' => $attendance['Attendance'], 'Classes' => $classes['Classes'] );
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $details);
 	}
-	
-	function delete_player_award($request) {
-		return $this->Player->RemoveAward($request);
+
+	private function bust_player_details_cache($request) {
+		$mundane_id = $request['RecipientId'] ?? $request['MundaneId'] ?? null;
+		if (!$mundane_id) return;
+		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+		Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
 	}
-	
+
+	function delete_player_award($request) {
+		$r = $this->Player->RemoveAward($request);
+		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
+		return $r;
+	}
+
 	function revoke_player_award($request) {
-		return $this->Player->RevokeAward($request);
+		$r = $this->Player->RevokeAward($request);
+		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
+		return $r;
 	}
 
 	function add_note($request) {
@@ -58,15 +69,21 @@ class Model_Player extends Model {
 	}
 	
 	function revoke_all_awards($request) {
-		return $this->Player->RevokeAllAwards($request);
+		$r = $this->Player->RevokeAllAwards($request);
+		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
+		return $r;
 	}
 	
 	function add_player_award($request) {
-		return $this->Player->AddAward($request);
+		$r = $this->Player->AddAward($request);
+		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
+		return $r;
 	}
-	
+
 	function update_player_award($request) {
-		return $this->Player->UpdateAward($request);
+		$r = $this->Player->UpdateAward($request);
+		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
+		return $r;
 	}
 
 	function reconcile_player_award($request) {

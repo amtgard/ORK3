@@ -114,9 +114,10 @@ class Controller_PlayerAjax extends Controller {
 				exit;
 			}
 			$r = $this->Player->revoke_player_award([
-				'Token'      => $this->session->token,
-				'AwardsId'   => $awards_id,
-				'Revocation' => $revocation,
+				'Token'       => $this->session->token,
+				'AwardsId'    => $awards_id,
+				'RecipientId' => $player_id,
+				'Revocation'  => $revocation,
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
@@ -216,8 +217,9 @@ class Controller_PlayerAjax extends Controller {
 				exit;
 			}
 			$r = $this->Player->delete_player_award([
-				'Token'    => $this->session->token,
-				'AwardsId' => $awards_id,
+				'Token'       => $this->session->token,
+				'AwardsId'    => $awards_id,
+				'RecipientId' => $player_id,
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
