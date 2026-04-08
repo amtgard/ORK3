@@ -1064,6 +1064,27 @@ class Controller_Admin extends Controller {
 		$this->data['PermInheritedKingdomName']  = $inheritedKingdomName;
 	}
 
+	public function permissionsgrid($path = null) {
+		$parts    = explode('/', $path ?? '');
+		$type     = in_array($parts[0] ?? '', ['Kingdom', 'Park']) ? $parts[0] : null;
+		$id       = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+		$uid = (int)($this->session->user_id ?? 0);
+
+		if (!$type || !$id) {
+			header('Location: ' . UIR . 'Admin');
+			exit;
+		}
+
+		$authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK];
+		$authType = $authTypeMap[$type];
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_EDIT)) {
+			header('Location: ' . UIR . 'Admin');
+			exit;
+		}
+
+		$this->template = '../revised-frontend/Admin_permissions_grid.tpl';
+	}
+
 	public function player($id) {
 		logtrace("player call", $_REQUEST);
 		$this->load_model('Player');
@@ -1902,6 +1923,121 @@ class Controller_Admin extends Controller {
 		}
 	}
 
+
+	public function roles($path = null) {
+		if (empty($this->session->user_id)) {
+			header('Location: ' . UIR . 'Login');
+			exit;
+		}
+		$parts = explode('/', $path ?? '');
+		$type  = ($parts[0] ?? '') === 'Kingdom' ? 'Kingdom' : null;
+		$id    = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+		$uid   = (int)($this->session->user_id ?? 0);
+
+		if (!$type || !valid_id($id)) {
+			header('Location: ' . UIR . 'Admin');
+			exit;
+		}
+
+		// Must have kingdom.auth.manage permission or legacy kingdom CREATE auth or be admin
+		if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.auth.manage', 'kingdom', $id, AUTH_CREATE)
+			&& !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			header('Location: ' . UIR . 'Admin/kingdom/' . $id);
+			exit;
+		}
+
+		$this->kingdom_route($id);
+		$this->load_model('Kingdom');
+
+		$kd = $this->Kingdom->get_kingdom_details($id);
+		foreach ($kd as $key => $detail) {
+			$this->data[$key] = $detail;
+		}
+		$this->data['page_title'] = "RBAC Roles: " . ($this->data['KingdomInfo']['KingdomName'] ?? '');
+		$this->data['IsPrinz']    = $this->data['KingdomInfo']['IsPrincipality'] ?? false;
+		$this->data['IsOrkAdmin'] = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+
+		// Available roles (system + custom for this kingdom)
+		$this->data['AvailableRoles'] = Ork3::$Lib->rbacservice->GetAvailableRoles($id);
+
+		// All role assignments scoped to this kingdom
+		global $DB;
+		$DB->Clear();
+		$sql = "SELECT ur.user_role_id, ur.mundane_id, ur.role_id, ur.kingdom_id, ur.park_id,
+				        ur.granted_by, ur.created_at, ur.expires_at,
+				        r.name AS role_name, r.display_name AS role_display_name, r.is_system,
+				        m.persona, m.username,
+				        g.persona AS granter_persona
+				 FROM " . DB_PREFIX . "user_role ur
+				 JOIN " . DB_PREFIX . "role r ON r.role_id = ur.role_id
+				 JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ur.mundane_id
+				 LEFT JOIN " . DB_PREFIX . "mundane g ON g.mundane_id = ur.granted_by
+				 WHERE ur.kingdom_id = " . (int)$id . "
+				   AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+				 ORDER BY r.display_name, m.persona";
+		$result = $DB->DataSet($sql);
+		$assignments = [];
+		if ($result !== false && $result->size() > 0) {
+			while ($result->Next()) {
+				$assignments[] = [
+					'UserRoleId'       => $result->user_role_id,
+					'MundaneId'        => $result->mundane_id,
+					'RoleId'           => $result->role_id,
+					'KingdomId'        => $result->kingdom_id,
+					'ParkId'           => $result->park_id,
+					'GrantedBy'        => $result->granted_by,
+					'CreatedAt'        => $result->created_at,
+					'ExpiresAt'        => $result->expires_at,
+					'RoleName'         => $result->role_name,
+					'RoleDisplayName'  => $result->role_display_name,
+					'IsSystem'         => $result->is_system,
+					'Persona'          => $result->persona,
+					'Username'         => $result->username,
+					'GranterPersona'   => $result->granter_persona,
+				];
+			}
+		}
+		$this->data['RoleAssignments'] = $assignments;
+
+		// Parks for scope selector
+		$r = $this->Kingdom->get_park_summary($id);
+		$this->data['park_summary'] = $r;
+
+		// All permissions from registry
+		$this->data['AllPermissions'] = PermissionRegistry::GetAll();
+
+		// Effective permissions for current user (escalation prevention)
+		$this->data['UserEffectivePermissions'] = Ork3::$Lib->rbacservice->GetEffectivePermissions($uid, 'kingdom', $id);
+
+		// Custom roles with permission counts
+		$customRoles = [];
+		foreach ($this->data['AvailableRoles'] as $role) {
+			if (!$role['IsSystem'] && $role['KingdomId'] == $id) {
+				$perms = Ork3::$Lib->rbacservice->GetRolePermissions($role['RoleId']);
+				$DB->Clear();
+				$sql = "SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "user_role WHERE role_id = " . (int)$role['RoleId'];
+				$cntResult = $DB->DataSet($sql);
+				$userCount = 0;
+				if ($cntResult && $cntResult->Next()) {
+					$userCount = (int)$cntResult->cnt;
+				}
+				$customRoles[] = [
+					'RoleId'       => $role['RoleId'],
+					'Name'         => $role['Name'],
+					'DisplayName'  => $role['DisplayName'],
+					'Description'  => $role['Description'],
+					'ScopeType'    => $role['ScopeType'],
+					'Permissions'  => $perms,
+					'PermCount'    => count($perms),
+					'UserCount'    => $userCount,
+				];
+			}
+		}
+		$this->data['CustomRoles'] = $customRoles;
+
+		$this->template = '../revised-frontend/Admin_roles.tpl';
+	}
+
 	public function kingdom($id = null) {
 		if (empty($this->session->user_id)) {
 			header('Location: ' . UIR . 'Login/login/Admin/kingdom/' . (int)$id);
@@ -1912,14 +2048,86 @@ class Controller_Admin extends Controller {
 			exit;
 		}
 		$this->kingdom_route($id);
-		$r = $this->Kingdom->get_kingdom_details($id);
-		foreach ($r as $key => $detail) {
+		$kd = $this->Kingdom->get_kingdom_details($id);
+		foreach ($kd as $key => $detail) {
 			$this->data[$key] = $detail;
 		}
-		$this->data[ 'page_title' ] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
+		$this->data['page_title'] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
 		$this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
 		$r = $this->Kingdom->get_park_summary($id);
 		$this->data['park_summary'] = $r;
+
+		// Auth flags for revised admin template
+		$uid = (int)($this->session->user_id ?? 0);
+		$this->data['CanEditKingdom']   = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.details.edit', 'kingdom', (int)$id, AUTH_EDIT);
+		$this->data['CanManageKingdom'] = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.officer.set', 'kingdom', (int)$id, AUTH_CREATE);
+		$this->data['CanAddPark']       = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, (int)$id, AUTH_CREATE);
+		$this->data['IsOrkAdmin']       = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+
+		$knConfigs  = Common::get_configs($id, CFG_KINGDOM);
+		$this->data['AwardRecsPublic'] = isset($knConfigs['AwardRecsPublic'])
+			? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
+
+		// Admin data for the revised template
+		$this->data['AdminInfo']       = [];
+		$this->data['AdminConfig']     = [];
+		$this->data['AdminParkTitles'] = [];
+		$this->data['AdminAwards']     = [];
+		if ($this->data['CanManageKingdom']) {
+			$parentKingdomId   = (int)($kd['KingdomInfo']['ParentKingdomId'] ?? 0);
+			$parentKingdomName = '';
+			if ($parentKingdomId > 0) {
+				$parentKingdomName = $this->Kingdom->get_kingdom_name($parentKingdomId);
+			}
+			$this->data['AdminInfo'] = [
+				'Name'             => $kd['KingdomInfo']['KingdomName']  ?? '',
+				'Abbreviation'     => $kd['KingdomInfo']['Abbreviation'] ?? '',
+				'Description'      => $kd['KingdomInfo']['Description']  ?? '',
+				'Url'              => $kd['KingdomInfo']['Url']          ?? '',
+				'IsPrincipality'   => !empty($kd['KingdomInfo']['IsPrincipality']),
+				'ParentKingdomId'  => $parentKingdomId,
+				'ParentKingdomName'=> $parentKingdomName,
+				'Active'           => $kd['KingdomInfo']['Active'] ?? 'Active',
+			];
+			$adminConfig = [];
+			foreach ($kd['KingdomConfiguration'] ?? [] as $cfg) {
+				if (!empty($cfg['UserSetting'])) {
+					$adminConfig[] = $cfg;
+				}
+			}
+			$this->data['AdminConfig']     = $adminConfig;
+			$this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
+
+			$rawAwards   = $kd['Awards']['Awards'] ?? [];
+			$adminAwards = [];
+			foreach ($rawAwards as $kawId => $aw) {
+				$adminAwards[] = [
+					'KingdomAwardId'   => (int)$kawId,
+					'KingdomAwardName' => $aw['KingdomAwardName']  ?? '',
+					'AwardId'          => (int)($aw['AwardId']     ?? 0),
+					'AwardName'        => $aw['AwardName']         ?? '',
+					'IsLadder'         => (int)($aw['IsLadder']    ?? 0),
+					'ReignLimit'       => (int)($aw['ReignLimit']  ?? 0),
+					'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),
+					'IsTitle'          => (int)($aw['IsTitle']     ?? 0),
+					'TitleClass'       => (int)($aw['TitleClass']  ?? 0),
+				];
+			}
+			$this->data['AdminAwards'] = $adminAwards;
+
+			$this->load_model('Award');
+			$sysAwardResult = $this->Award->GetAwardList(['IsLadder' => null, 'IsTitle' => null, 'OfficerRole' => 'Awards']);
+			$sysAwards = [];
+			if (($sysAwardResult['Status']['Status'] ?? 1) == 0) {
+				foreach ($sysAwardResult['Awards'] as $sa) {
+					$sysAwards[] = ['AwardId' => (int)$sa['AwardId'], 'Name' => $sa['AwardName'] ?? $sa['KingdomAwardName']];
+				}
+				usort($sysAwards, function($a, $b) { return strcasecmp($a['Name'], $b['Name']); });
+			}
+			$this->data['SystemAwards'] = $sysAwards;
+		}
+
+		$this->template = '../revised-frontend/Admin_kingdom.tpl';
 	}
 
 	public function park($id = null) {
@@ -2150,7 +2358,7 @@ class Controller_Admin extends Controller {
 			$this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
 			$r = $this->Kingdom->get_park_summary($id);
 			$this->data['park_summary'] = $r;
-			$this->template = 'Admin_kingdom.tpl';
+			$this->template = '../revised-frontend/Admin_kingdom.tpl';
 		} else if ($type == 'park') {
 			$this->park_route($id);
 			$r = $this->Park->get_park_info($id);

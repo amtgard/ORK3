@@ -10,11 +10,11 @@
 	$can_delete_recommendation = false;
 	if($this->__session->user_id) {
 		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_EDIT)) {
+			if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.edit', 'park', $this->__session->park_id, AUTH_EDIT)) {
 				$can_delete_recommendation = true;
 			}
 		} else if (isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_EDIT)) {
+			if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'kingdom.details.edit', 'kingdom', $this->__session->kingdom_id, AUTH_EDIT)) {
 				$can_delete_recommendation = true;
 			}
 		}

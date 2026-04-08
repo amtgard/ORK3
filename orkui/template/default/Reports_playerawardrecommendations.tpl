@@ -5,11 +5,11 @@ if ($this->__session->user_id) {
 	if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
 		$can_delete = true;
 	} else if (isset($this->__session->park_id)) {
-		if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_EDIT)) {
+		if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.recommendation.manage', 'park', $this->__session->park_id, AUTH_EDIT)) {
 			$can_delete = true;
 		}
 	} else if (isset($this->__session->kingdom_id)) {
-		if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_EDIT)) {
+		if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.recommendation.manage', 'kingdom', $this->__session->kingdom_id, AUTH_EDIT)) {
 			$can_delete = true;
 		}
 	}

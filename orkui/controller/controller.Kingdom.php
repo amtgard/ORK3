@@ -25,7 +25,7 @@ class Controller_Kingdom extends Controller {
 		unset($this->session->park_id);
 		unset($this->session->park_name);
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT)) {
+		if ($_uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'kingdom.details.edit', 'kingdom', (int)$id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			$this->data['menulist']['admin'] = array(
 					array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
@@ -65,7 +65,7 @@ class Controller_Kingdom extends Controller {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid     = (int)$kingdom_id;
 		$uid     = (int)($this->session->user_id ?? 0);
-		$isAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT);
+		$isAdmin = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.details.edit', 'kingdom', $kid, AUTH_EDIT);
 		$cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid, 'IsAdmin' => (int)$isAdmin]);
 		if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 1200)) !== false) {
 			header('Content-Type: application/json');
@@ -657,9 +657,9 @@ class Controller_Kingdom extends Controller {
 			}
 		}
 		$this->data['CanEditKingdom']   = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.details.edit', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
 		$this->data['CanManageKingdom'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.officer.set', 'kingdom', (int)$kingdom_id, AUTH_CREATE);
 		$this->data['CanAddPark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 		$this->data['IsOrkAdmin'] = $uid > 0

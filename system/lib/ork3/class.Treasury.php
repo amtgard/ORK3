@@ -49,7 +49,7 @@ class Treasury extends Ork3 {
         logtrace('Found Player', $request);
 				
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $player['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.dues.manage', 'park', $player['ParkId'], AUTH_EDIT)) {
 			$sql = "select 
 			                s.transaction_id 
 			            from " . DB_PREFIX . "split s 
@@ -72,7 +72,7 @@ class Treasury extends Ork3 {
 			return InvalidParameter('Player could not be found.');
 				
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $player['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.dues.manage', 'park', $player['ParkId'], AUTH_EDIT)) {
 				
 			$park_info = Ork3::$Lib->park->GetParkShortInfo(array('ParkId'=>$player['ParkId']));
 			if ($park_info['Status']['Status'] > 0)

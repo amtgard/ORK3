@@ -364,7 +364,7 @@ class Controller_ParkAjax extends Controller {
 
 		} elseif ($action === 'addauth') {
 			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+			if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'park.auth.manage', 'park', $park_id, AUTH_CREATE)) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
 			}
 			$mid  = (int)($_POST['MundaneId'] ?? 0);
@@ -397,7 +397,7 @@ class Controller_ParkAjax extends Controller {
 
 		} elseif ($action === 'removeauth') {
 			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+			if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'park.auth.manage', 'park', $park_id, AUTH_CREATE)) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
 			}
 			$this->load_model('Authorization');
@@ -437,6 +437,76 @@ class Controller_ParkAjax extends Controller {
 			]);
 			echo (!isset($r['Status']) || $r['Status'] == 0)
 				? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'officerhistory') {
+			$role = trim($_GET['Role'] ?? '');
+			$r = $this->Park->get_officer_history($park_id, strlen($role) > 0 ? $role : null);
+			echo json_encode([
+				'status'  => 0,
+				'history' => $r['History'] ?? [],
+			]);
+
+		} elseif ($action === 'addofficerhistory') {
+			$mid   = (int)($_POST['MundaneId'] ?? 0);
+			$role  = trim($_POST['Role']       ?? '');
+			$start = trim($_POST['StartDate']  ?? '');
+			$end   = trim($_POST['EndDate']    ?? '');
+			$notes = trim($_POST['Notes']      ?? '');
+
+			if (!$mid)          { echo json_encode(['status' => 1, 'error' => 'Please select a player.']); exit; }
+			if (!strlen($role)) { echo json_encode(['status' => 1, 'error' => 'Role is required.']);        exit; }
+			if (!strlen($start)){ echo json_encode(['status' => 1, 'error' => 'Start date is required.']); exit; }
+
+			$r = $this->Park->add_officer_history([
+				'Token'     => $this->session->token,
+				'ParkId'    => $park_id,
+				'MundaneId' => $mid,
+				'Role'      => $role,
+				'StartDate' => $start,
+				'EndDate'   => $end,
+				'Notes'     => $notes,
+			]);
+			echo (!isset($r['Status']) || $r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+				} elseif ($action === 'editofficerhistory') {
+			$ohid  = (int)($_POST['OfficerHistoryId'] ?? 0);
+			$role  = trim($_POST['Role']       ?? '');
+			$start = trim($_POST['StartDate']  ?? '');
+			$end   = trim($_POST['EndDate']    ?? '');
+			$notes = trim($_POST['Notes']      ?? '');
+
+			if (!$ohid)         { echo json_encode(['status' => 1, 'error' => 'Invalid history record.']); exit; }
+			if (!strlen($role)) { echo json_encode(['status' => 1, 'error' => 'Role is required.']);        exit; }
+			if (!strlen($start)){ echo json_encode(['status' => 1, 'error' => 'Start date is required.']); exit; }
+
+			$r = $this->Park->edit_officer_history([
+				'Token'            => $this->session->token,
+				'ParkId'           => $park_id,
+				'OfficerHistoryId' => $ohid,
+				'Role'             => $role,
+				'StartDate'        => $start,
+				'EndDate'          => $end,
+				'Notes'            => $notes,
+			]);
+			echo (!isset($r['Status']) || $r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+		} elseif ($action === 'deleteofficerhistory') {
+			$ohid = (int)($_POST['OfficerHistoryId'] ?? 0);
+
+			if (!$ohid) { echo json_encode(['status' => 1, 'error' => 'Invalid history record.']); exit; }
+
+			$r = $this->Park->delete_officer_history([
+				'Token'            => $this->session->token,
+				'ParkId'           => $park_id,
+				'OfficerHistoryId' => $ohid,
+			]);
+			echo (!isset($r['Status']) || $r['Status'] == 0)
+				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} else {
@@ -502,7 +572,7 @@ class Controller_ParkAjax extends Controller {
 			}
 		} elseif ($action === 'editpark') {
 			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+			if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.auth.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']); exit;
 			}
 			$this->load_model('Park');

@@ -31,7 +31,7 @@ class Event  extends Ork3 {
 			$this->event->park_id = 0;
 			$this->event->save();
 		} else if (valid_id($request['ParkId']) && valid_id($request['KingdomId']) && valid_id($mundane_id)
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.event.create', 'park', $request['ParkId'], AUTH_CREATE)) {
 			$park = new yapo($this->db, DB_PREFIX . 'park');
 			$park->clear();
 			$park->park_id = $request['ParkId'];
@@ -43,7 +43,7 @@ class Event  extends Ork3 {
 				return InvalidParameter(NULL, 'Problem processing request.');
 			}
 		} else if (valid_id($request['KingdomId']) && valid_id($mundane_id)
-						&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
+						&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.event.create', 'kingdom', $request['KingdomId'], AUTH_CREATE)) {
 			$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
 			$kingdom->clear();
 			$kingdom->kingdom_id = $request['KingdomId'];
@@ -191,7 +191,7 @@ class Event  extends Ork3 {
 	public function CreateEventDetails($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
-		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_CREATE)) {
+		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'event.detail.manage', 'event', $request['EventId'], AUTH_CREATE)) {
 
 			if (valid_id($request['Current']) && valid_id($request['EventId'])) {
 				$this->detail->clear();
@@ -247,7 +247,7 @@ class Event  extends Ork3 {
 		} else {
 			return InvalidParameter();
 		}
-		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'event.detail.manage', 'event', $event_id, AUTH_CREATE)) {
 			if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
 				$this->db->query('START TRANSACTION');
 				if ($request['Current']) {
@@ -287,7 +287,7 @@ class Event  extends Ork3 {
 		} else {
 			return InvalidParameter();
 		}
-		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'event.detail.manage', 'event', $event_id, AUTH_CREATE)) {
 			if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
 				return InvalidParameter('This event occurrence cannot be deleted because attendance has already been entered for it.');
 			$this->detail->clear();
@@ -389,7 +389,7 @@ class Event  extends Ork3 {
 
 		logtrace("SetEventDetails()",$request);
 		
-		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'event.edit', 'event', $request['EventId'], AUTH_EDIT)) {
 		
 			$this->detail->clear();
 			$this->detail->event_id = $request['EventId'];
@@ -455,7 +455,7 @@ class Event  extends Ork3 {
 			return InvalidParameter('EventId is required.');
 		}
 
-		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+		if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'event.delete', 'event', $event_id, AUTH_EDIT)) {
 			return NoAuthorization();
 		}
 
@@ -478,7 +478,7 @@ class Event  extends Ork3 {
 	public function SetEvent($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		
-		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'event.edit', 'event', $request['EventId'], AUTH_EDIT)) {
 				$this->event->clear();
 				$this->event->event_id = $request['EventId'];
 				$response = array();

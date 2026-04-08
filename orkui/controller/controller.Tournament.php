@@ -30,7 +30,7 @@ class Controller_Tournament extends Controller {
 		$this->data['park_name'] = $this->session->park_name;
 	
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+		if ($_uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'tournament.bracket.manage', 'park', (int)$this->session->park_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			$this->data['menulist']['admin'] = array(
 					array( 'url' => UIR.'Admin/tournament/'.$id, 'display' => 'tournament' ),

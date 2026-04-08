@@ -61,7 +61,7 @@ class Controller_EventAjax extends Controller {
 		}
 
 		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+		if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.attendance.manage', 'event', $event_id, AUTH_EDIT)) {
 			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
 			exit;
 		}
@@ -144,7 +144,7 @@ class Controller_EventAjax extends Controller {
 		}
 
 		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+		if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.rsvp.manage', 'event', $event_id, AUTH_EDIT)) {
 			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
 			exit;
 		}
@@ -171,7 +171,7 @@ class Controller_EventAjax extends Controller {
 		}
 
 		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+		if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.delete', 'event', $event_id, AUTH_CREATE)) {
 			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
 			exit;
 		}
@@ -205,7 +205,7 @@ class Controller_EventAjax extends Controller {
 		$uid = (int)$this->session->user_id;
 
 		if ($action === 'playersearch') {
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.auth.manage', 'event', $event_id, AUTH_CREATE)) {
 				echo json_encode([]); exit;
 			}
 			$q = trim($_GET['q'] ?? '');
@@ -259,7 +259,7 @@ class Controller_EventAjax extends Controller {
 			echo json_encode($results);
 
 		} elseif ($action === 'addauth') {
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.auth.manage', 'event', $event_id, AUTH_CREATE)) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
 			}
 			$mid  = (int)($_POST['MundaneId'] ?? 0);
@@ -288,7 +288,7 @@ class Controller_EventAjax extends Controller {
 			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
 		} elseif ($action === 'removeauth') {
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.auth.manage', 'event', $event_id, AUTH_CREATE)) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
 			}
 			$this->load_model('Authorization');
@@ -323,7 +323,7 @@ class Controller_EventAjax extends Controller {
 			exit;
 		}
 
-		if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+		if (!Ork3::$Lib->authorization->HasPermissionOrAuthority((int)$this->session->user_id, 'event.heraldry.manage', 'event', $event_id, AUTH_CREATE)) {
 			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
 			exit;
 		}

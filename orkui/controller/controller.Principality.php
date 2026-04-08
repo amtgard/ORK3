@@ -27,7 +27,7 @@ class Controller_Principality extends Controller {
 		unset($this->session->park_name);
 		$this->data['principality_name'] = $this->session->principality_name;
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
+		if ($_uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'kingdom.details.edit', 'kingdom', (int)$this->session->kingdom_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			$this->data['menulist']['admin'] = array(
 					array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Principality' )

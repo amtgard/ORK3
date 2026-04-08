@@ -61,11 +61,11 @@ class Tournament extends Ork3 {
 		$this->Tournament->tournament_id = $TournamentId;
 		if ($this->Tournament->find()) {
 			if (valid_id($this->Tournament->kingdom_id)) {
-				return Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->Tournament->kingdom_id, AUTH_EDIT);
+				return Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'tournament.bracket.manage', 'kingdom', $this->Tournament->kingdom_id, AUTH_EDIT);
 			} else if (valid_id($this->Tournament->park_id)) {
-				return Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->Tournament->park_id, AUTH_EDIT);
+				return Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'tournament.bracket.manage', 'park', $this->Tournament->park_id, AUTH_EDIT);
 			} else if (valid_id($this->Tournament->event_id)) {
-				return Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $this->Tournament->event_id, AUTH_EDIT);
+				return Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'tournament.bracket.manage', 'event', $this->Tournament->event_id, AUTH_EDIT);
 			}
 		} else {
 			return false;
@@ -166,11 +166,11 @@ class Tournament extends Ork3 {
 
 		$authorized = false;
 		if (valid_id($this->Tournament->kingdom_id)) {
-			$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->Tournament->kingdom_id, AUTH_EDIT);
+			$authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'tournament.delete', 'kingdom', $this->Tournament->kingdom_id, AUTH_EDIT);
 		} else if (valid_id($this->Tournament->park_id)) {
-			$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->Tournament->park_id, AUTH_EDIT);
+			$authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'tournament.delete', 'park', $this->Tournament->park_id, AUTH_EDIT);
 		} else if (valid_id($this->Tournament->event_id)) {
-			$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $this->Tournament->event_id, AUTH_EDIT);
+			$authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'tournament.delete', 'event', $this->Tournament->event_id, AUTH_EDIT);
 		}
 		if (!$authorized) return NoAuthorization();
 

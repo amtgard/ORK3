@@ -104,11 +104,11 @@ if ($_isOrkAdmin) {
 		// covers cases where a player's KingdomId differs from the scoped kingdom
 		// (e.g. parent/child kingdom relationships or data inconsistencies).
 		$_scopeKingdomAuth = $_scopeType === 'kingdom' && valid_id($_scopeId)
-			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$_scopeId, AUTH_EDIT);
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'player.edit', 'kingdom', (int)$_scopeId, AUTH_EDIT);
 		foreach ($roster as $player) {
 			$mid = (int)$player['MundaneId'];
 			$can = $_scopeKingdomAuth
-				|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
+				|| Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'player.edit', 'kingdom', (int)$player['KingdomId'], AUTH_EDIT);
 			$_canRemoveMap[$mid] = $can;
 			if ($can) $_canRemoveAny = true;
 		}

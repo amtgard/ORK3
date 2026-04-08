@@ -49,7 +49,7 @@ class Heraldry  extends Ork3 {
 		$mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
 
 		if ((($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT))
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT))
 			|| $mundane_id == $request['MundaneId']) {
 			$this->mundane->clear();
 			$this->mundane->mundane_id = $request['MundaneId'];
@@ -71,7 +71,7 @@ class Heraldry  extends Ork3 {
 		$mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
 	
 		if ((($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT))
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT))
 			|| $mundane_id == $request['MundaneId']) {
 			$this->mundane->clear();
 			$this->mundane->mundane_id = $request['MundaneId'];
@@ -158,7 +158,7 @@ class Heraldry  extends Ork3 {
     
 	public function SetKingdomHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.heraldry.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
 			$this->kingdom->clear();
 			$this->kingdom->kingdom_id = $request['KingdomId'];
 			if ($this->kingdom->find()) {
@@ -176,7 +176,7 @@ class Heraldry  extends Ork3 {
 	
 	public function RemoveKingdomHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.heraldry.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
 			$this->kingdom->clear();
 			$this->kingdom->kingdom_id = $request['KingdomId'];
 			if ($this->kingdom->find()) {
@@ -197,7 +197,7 @@ class Heraldry  extends Ork3 {
 	public function SetParkHeraldry($request) {
 	
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-			&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.heraldry.manage', 'park', $request['ParkId'], AUTH_EDIT)) {
     		$this->park->clear();
     		$this->park->park_id = $request['ParkId'];
     		if ($this->park->find()) {
@@ -215,7 +215,7 @@ class Heraldry  extends Ork3 {
 	
 	public function RemoveParkHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.heraldry.manage', 'park', $request['ParkId'], AUTH_EDIT)) {
 			$this->park->clear();
 			$this->park->park_id = $request['ParkId'];
 			if ($this->park->find()) {
@@ -235,7 +235,7 @@ class Heraldry  extends Ork3 {
 
 	public function SetUnitHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.heraldry.manage', 'unit', $request['UnitId'], AUTH_EDIT)) {
 //			logtrace("SetUnitHeraldry() :1", $request);
 			$this->unit->clear();
 			$this->unit->unit_id = $request['UnitId'];
@@ -254,7 +254,7 @@ class Heraldry  extends Ork3 {
 	
 	public function RemoveUnitHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.heraldry.manage', 'unit', $request['UnitId'], AUTH_EDIT)) {
 			$this->unit->clear();
 			$this->unit->unit_id = $request['UnitId'];
 			if ($this->unit->find()) {
@@ -274,7 +274,7 @@ class Heraldry  extends Ork3 {
 
 	public function SetEventHeraldry($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'event.heraldry.manage', 'event', $request['EventId'], AUTH_EDIT)) {
 			$this->event->clear();
 			$this->event->event_id = $request['EventId'];
 			if ($this->event->find()) {

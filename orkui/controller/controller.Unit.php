@@ -217,7 +217,7 @@ class Controller_Unit extends Controller {
 			exit;
 		}
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		$_canEdit = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
+		$_canEdit = $_uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'unit.edit', 'unit', (int)$unit_id, AUTH_EDIT);
 		$this->data['CanEdit'] = $_canEdit;
 
 		// ── Retire / Claim / Transfer state ───────────────────────────────

@@ -1272,9 +1272,9 @@ class Controller_Reports extends Controller {
 		if ($_isOrkAdmin) {
 			$can_edit = true;
 		} elseif ($type === 'Park' && valid_id($this->request->id)) {
-			$can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
+			$can_edit = Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'player.active_status.set', 'park', $this->request->id, AUTH_CREATE);
 		} elseif ($type === 'Kingdom' && valid_id($this->request->id)) {
-			$can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
+			$can_edit = Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'player.active_status.set', 'kingdom', $this->request->id, AUTH_EDIT);
 		}
 		$this->data['can_edit'] = $can_edit;
 

@@ -520,6 +520,9 @@
 				<li data-pktab="reports">
 					<i class="fas fa-chart-bar"></i><span class="pk-tab-label"> Reports</span>
 				</li>
+				<li data-pktab="officerhistory">
+					<i class="fas fa-history"></i><span class="pk-tab-label"> Officer History</span>
+				</li>
 				<?php if (!empty($ShowRecsTab)): ?>
 				<li data-pktab="recommendations">
 					<i class="fas fa-star"></i><span class="pk-tab-label"> Recommendations</span>
@@ -1135,6 +1138,46 @@
 				</div>
 			</div>
 
+			<!-- Officer History Tab -->
+			<div class="pk-tab-panel" id="pk-tab-officerhistory" style="display:none">
+				<div class="pk-oh-toolbar">
+					<select id="pk-oh-role-filter" class="pk-oh-filter-select" onchange="pkLoadOfficerHistory()">
+						<option value="">All Roles</option>
+						<option value="Monarch">Monarch</option>
+						<option value="Regent">Regent</option>
+						<option value="Prime Minister">Prime Minister</option>
+						<option value="Champion">Champion</option>
+						<option value="GMR">GMR</option>
+					</select>
+					<?php if (!empty($CanManagePark)): ?>
+					<button class="pk-btn pk-btn-secondary" onclick="pkOpenOhBackfillModal()">
+						<i class="fas fa-plus"></i> Add Historical Record
+					</button>
+					<?php endif; ?>
+				</div>
+				<div id="pk-oh-loading" style="text-align:center;padding:24px;color:#a0aec0;display:none">
+					<i class="fas fa-spinner fa-spin"></i> Loading officer history...
+				</div>
+				<div id="pk-oh-empty" style="text-align:center;padding:32px 16px;color:#a0aec0;display:none">
+					No officer history records found.
+				</div>
+				<table class="pk-oh-table" id="pk-oh-table" style="display:none">
+					<thead>
+						<tr>
+							<th>Role</th>
+							<th>Persona</th>
+							<th>Start Date</th>
+							<th>End Date</th>
+							<th>Notes</th>
+							<?php if (!empty($CanManagePark)): ?>
+							<th style="width:40px"></th>
+							<?php endif; ?>
+						</tr>
+					</thead>
+					<tbody id="pk-oh-tbody"></tbody>
+				</table>
+			</div>
+
 			<!-- Admin Tab -->
 			<?php if (!empty($CanAdminPark)): ?>
 			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
@@ -1316,6 +1359,251 @@
 	</div><!-- /pk-main -->
 
 </div><!-- /pk-layout -->
+
+<!-- Officer History Backfill Modal -->
+<?php if (!empty($CanManagePark)): ?>
+<div id="pk-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-history" style="margin-right:8px;color:#276749"></i>Add Officer History Record</h3>
+			<button class="pk-modal-close-btn" onclick="pkCloseOhBackfillModal()">&times;</button>
+		</div>
+		<div class="pk-modal-body" style="overflow:visible">
+			<div class="pk-form-error" id="pk-oh-bf-error"></div>
+			<div id="pk-oh-bf-success" class="pk-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record added successfully!
+			</div>
+
+			<div class="pk-acct-field" style="position:relative">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="pk-oh-bf-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="pk-oh-bf-player-id" value="" />
+				<div class="kn-ac-results" id="pk-oh-bf-player-results" style="position:fixed"></div>
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="pk-oh-bf-role">
+					<option value="">Select role...</option>
+					<option value="Monarch">Monarch</option>
+					<option value="Regent">Regent</option>
+					<option value="Prime Minister">Prime Minister</option>
+					<option value="Champion">Champion</option>
+					<option value="GMR">GMR</option>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="pk-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="pk-oh-bf-start" />
+				</div>
+				<div class="pk-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="pk-oh-bf-end" />
+				</div>
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="pk-oh-bf-notes" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-secondary" onclick="pkCloseOhBackfillModal()">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-oh-bf-save-btn" onclick="pkSaveOhBackfill()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Record
+			</button>
+		</div>
+	</div>
+</div>
+<!-- Officer History Edit Modal -->
+<?php if (!empty($CanManagePark)): ?>
+<div id="pk-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#276749"></i>Edit Officer History Record</h3>
+			<button class="pk-modal-close-btn" onclick="pkCloseOhEditModal()">&times;</button>
+		</div>
+		<div class="pk-modal-body">
+			<div class="pk-form-error" id="pk-oh-ed-error"></div>
+			<div id="pk-oh-ed-success" class="pk-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record updated successfully!
+			</div>
+			<input type="hidden" id="pk-oh-ed-id" value="" />
+
+			<div class="pk-acct-field">
+				<label>Player</label>
+				<input type="text" id="pk-oh-ed-player" disabled style="background:#f7fafc;color:#718096;cursor:not-allowed" />
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="pk-oh-ed-role">
+					<option value="Monarch">Monarch</option>
+					<option value="Regent">Regent</option>
+					<option value="Prime Minister">Prime Minister</option>
+					<option value="Champion">Champion</option>
+					<option value="GMR">GMR</option>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="pk-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="pk-oh-ed-start" />
+				</div>
+				<div class="pk-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="pk-oh-ed-end" />
+				</div>
+			</div>
+
+			<div class="pk-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="pk-oh-ed-notes" rows="2" maxlength="500"></textarea>
+			</div>
+		</div>
+		<div class="pk-modal-footer">
+			<button class="pk-btn pk-btn-secondary" onclick="pkCloseOhEditModal()">Cancel</button>
+			<button class="pk-btn pk-btn-primary" id="pk-oh-ed-save-btn" onclick="pkSaveOhEdit()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Changes
+			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php endif; ?>
+
+<style>
+/* Officer History Tab */
+.pk-oh-toolbar {
+	display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;
+}
+.pk-oh-filter-select {
+	padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;
+	color:#4a5568; background:#fff; cursor:pointer;
+}
+.pk-oh-table {
+	width:100%; border-collapse:collapse; font-size:13px;
+}
+.pk-oh-table thead th {
+	background:#f7fafc; border-bottom:2px solid #e2e8f0; padding:8px 10px;
+	text-align:left; font-weight:600; color:#4a5568; font-size:12px;
+	text-transform:uppercase; letter-spacing:.03em;
+}
+.pk-oh-table tbody tr { border-bottom:1px solid #edf2f7; }
+.pk-oh-table tbody tr:hover { background:#f7fafc; }
+.pk-oh-table tbody td { padding:8px 10px; color:#2d3748; vertical-align:middle; }
+.pk-oh-table .pk-oh-role-badge {
+	display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px;
+	font-weight:600; background:#f0fff4; color:#276749;
+}
+.pk-oh-table .pk-oh-current { background:#c6f6d5; color:#276749; }
+.pk-oh-del-btn {
+	background:none; border:none; color:#e53e3e; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s;
+}
+.pk-oh-del-btn:hover { opacity:1; background:#fed7d7; }
+.pk-oh-edit-btn {
+	background:none; border:none; color:#3182ce; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s; margin-right:2px;
+}
+.pk-oh-edit-btn:hover { opacity:1; background:#ebf8ff; }
+.pk-oh-notes-text { font-size:11px; color:#718096; font-style:italic; max-width:200px; }
+.pk-oh-bf-success {
+	background:#c6f6d5; color:#276749; padding:10px 14px; border-radius:6px;
+	font-size:13px; margin-bottom:12px; text-align:center;
+}
+/* Officer History Backfill Modal */
+#pk-oh-backfill-overlay .pk-modal-box {
+	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+	max-height:90vh; display:flex; flex-direction:column;
+}
+#pk-oh-backfill-overlay .pk-modal-header {
+	display:flex; align-items:center; justify-content:space-between;
+	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
+}
+#pk-oh-backfill-overlay .pk-modal-title {
+	font-size:16px; font-weight:700; color:#2d3748; margin:0;
+	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+}
+#pk-oh-backfill-overlay .pk-modal-close-btn {
+	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
+}
+#pk-oh-backfill-overlay .pk-modal-close-btn:hover { color:#4a5568; }
+#pk-oh-backfill-overlay .pk-modal-body {
+	padding:20px; overflow-y:auto; flex:1;
+}
+#pk-oh-backfill-overlay .pk-modal-footer {
+	padding:14px 20px; border-top:1px solid #e2e8f0;
+	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
+}
+#pk-oh-backfill-overlay .pk-acct-field { position:relative; margin-bottom:14px; }
+#pk-oh-backfill-overlay .pk-acct-field label {
+	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
+}
+#pk-oh-backfill-overlay .pk-acct-field input[type=text],
+#pk-oh-backfill-overlay .pk-acct-field input[type=date],
+#pk-oh-backfill-overlay .pk-acct-field select,
+#pk-oh-backfill-overlay .pk-acct-field textarea {
+	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
+	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
+}
+#pk-oh-backfill-overlay .pk-acct-field input:focus,
+#pk-oh-backfill-overlay .pk-acct-field select:focus,
+#pk-oh-backfill-overlay .pk-acct-field textarea:focus {
+	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
+}
+#pk-oh-edit-overlay .pk-modal-box {
+	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+	max-height:90vh; display:flex; flex-direction:column;
+}
+#pk-oh-edit-overlay .pk-modal-header {
+	display:flex; align-items:center; justify-content:space-between;
+	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
+}
+#pk-oh-edit-overlay .pk-modal-title {
+	font-size:16px; font-weight:700; color:#2d3748; margin:0;
+	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+}
+#pk-oh-edit-overlay .pk-modal-close-btn {
+	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
+}
+#pk-oh-edit-overlay .pk-modal-close-btn:hover { color:#4a5568; }
+#pk-oh-edit-overlay .pk-modal-body {
+	padding:20px; overflow-y:auto; flex:1;
+}
+#pk-oh-edit-overlay .pk-modal-footer {
+	padding:14px 20px; border-top:1px solid #e2e8f0;
+	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
+}
+#pk-oh-edit-overlay .pk-acct-field { position:relative; margin-bottom:14px; }
+#pk-oh-edit-overlay .pk-acct-field label {
+	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
+}
+#pk-oh-edit-overlay .pk-acct-field input[type=text],
+#pk-oh-edit-overlay .pk-acct-field input[type=date],
+#pk-oh-edit-overlay .pk-acct-field select,
+#pk-oh-edit-overlay .pk-acct-field textarea {
+	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
+	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
+}
+#pk-oh-edit-overlay .pk-acct-field input:focus,
+#pk-oh-edit-overlay .pk-acct-field select:focus,
+#pk-oh-edit-overlay .pk-acct-field textarea:focus {
+	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
+}
+#pk-oh-edit-overlay .pk-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+#pk-oh-backfill-overlay .pk-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+</style>
 
 <!-- =============================================
      JavaScript
@@ -2344,6 +2632,298 @@ $(function() {
 window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+
+// =============================================
+// Officer History Tab
+// =============================================
+var pkOhLoaded = false;
+var pkOhData   = [];
+
+function pkLoadOfficerHistory() {
+    var role = document.getElementById('pk-oh-role-filter').value;
+    var url  = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/officerhistory';
+    if (role) url += '?Role=' + encodeURIComponent(role);
+
+    document.getElementById('pk-oh-loading').style.display = '';
+    document.getElementById('pk-oh-table').style.display = 'none';
+    document.getElementById('pk-oh-empty').style.display = 'none';
+
+    $.getJSON(url, function(resp) {
+        document.getElementById('pk-oh-loading').style.display = 'none';
+        if (resp.status !== 0) { return; }
+        pkOhData = resp.history || [];
+        pkRenderOhTable(pkOhData);
+    }).fail(function() {
+        document.getElementById('pk-oh-loading').style.display = 'none';
+        document.getElementById('pk-oh-empty').style.display = '';
+        document.getElementById('pk-oh-empty').textContent = 'Failed to load officer history.';
+    });
+}
+
+function pkRenderOhTable(data) {
+    var tbody = document.getElementById('pk-oh-tbody');
+    var table = document.getElementById('pk-oh-table');
+    var empty = document.getElementById('pk-oh-empty');
+    tbody.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = '';
+        empty.textContent = 'No officer history records found.';
+        return;
+    }
+
+    table.style.display = '';
+    empty.style.display = 'none';
+    var canEdit = PkConfig.canManage;
+
+    for (var i = 0; i < data.length; i++) {
+        var h = data[i];
+        var tr = document.createElement('tr');
+        var isCurrent = !h.EndDate;
+        var roleBadge = '<span class="pk-oh-role-badge' + (isCurrent ? ' pk-oh-current' : '') + '">' +
+                        pkHtmlEsc(h.Role) + (isCurrent ? ' (current)' : '') + '</span>';
+
+        var persona = h.MundaneId > 0
+            ? (isCurrent ? '<i class="fas fa-crown" style="color:#d69e2e;margin-right:4px" title="Current officer"></i>' : '') +
+              '<a href="' + PkConfig.uir + 'Player/profile/' + h.MundaneId + '">' + pkHtmlEsc(h.Persona || 'Unknown') + '</a>'
+            : '<em style="color:#a0aec0">Vacant</em>';
+
+        var startStr = h.StartDate ? pkFormatDate(h.StartDate) : '';
+        var endStr   = h.EndDate   ? pkFormatDate(h.EndDate)   : (isCurrent ? '<em style="color:#38a169">Present</em>' : '');
+        var notes    = h.Notes ? '<span class="pk-oh-notes-text">' + pkHtmlEsc(h.Notes) + '</span>' : '';
+
+        var delCell = '';
+        if (canEdit) {
+            delCell = '<td style="white-space:nowrap">' +
+                '<button class="pk-oh-edit-btn" onclick="pkOpenOhEditModal(' + i + ')" title="Edit record"><i class="fas fa-pencil-alt"></i></button>' +
+                '<button class="pk-oh-del-btn" onclick="pkDeleteOhRecord(' + h.OfficerHistoryId + ')" title="Delete record"><i class="fas fa-trash-alt"></i></button>' +
+                '</td>';
+        }
+
+        tr.innerHTML = '<td>' + roleBadge + '</td>' +
+                        '<td>' + persona + '</td>' +
+                        '<td>' + startStr + '</td>' +
+                        '<td>' + endStr + '</td>' +
+                        '<td>' + notes + '</td>' +
+                        delCell;
+        tbody.appendChild(tr);
+    }
+}
+
+function pkFormatDate(dateStr) {
+    if (!dateStr) return '';
+    var d = new Date(dateStr + 'T00:00:00');
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function pkHtmlEsc(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+}
+
+function pkDeleteOhRecord(ohid) {
+    if (!confirm('Delete this officer history record?')) return;
+    $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deleteofficerhistory',
+        { OfficerHistoryId: ohid },
+        function(resp) {
+            if (resp.status === 0) {
+                pkLoadOfficerHistory();
+            } else {
+                alert(resp.error || 'Failed to delete record.');
+            }
+        }, 'json'
+    ).fail(function() { alert('Network error.'); });
+}
+
+// Backfill modal
+function pkOpenOhBackfillModal() {
+    var overlay = document.getElementById('pk-oh-backfill-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('pk-oh-bf-error').textContent = '';
+    document.getElementById('pk-oh-bf-error').style.display = 'none';
+    document.getElementById('pk-oh-bf-success').style.display = 'none';
+    document.getElementById('pk-oh-bf-player-text').value = '';
+    document.getElementById('pk-oh-bf-player-id').value = '';
+    document.getElementById('pk-oh-bf-role').value = '';
+    document.getElementById('pk-oh-bf-start').value = '';
+    document.getElementById('pk-oh-bf-end').value = '';
+    document.getElementById('pk-oh-bf-notes').value = '';
+}
+
+function pkCloseOhBackfillModal() {
+    document.getElementById('pk-oh-backfill-overlay').style.display = 'none';
+    var results = document.getElementById('pk-oh-bf-player-results');
+    results.innerHTML = '';
+    results.classList.remove('kn-ac-open');
+}
+
+function pkSaveOhBackfill() {
+    var mid   = document.getElementById('pk-oh-bf-player-id').value;
+    var role  = document.getElementById('pk-oh-bf-role').value;
+    var start = document.getElementById('pk-oh-bf-start').value;
+    var end   = document.getElementById('pk-oh-bf-end').value;
+    var notes = document.getElementById('pk-oh-bf-notes').value;
+    var errEl = document.getElementById('pk-oh-bf-error');
+
+    if (!mid)   { errEl.textContent = 'Please select a player.';  errEl.style.display = ''; return; }
+    if (!role)  { errEl.textContent = 'Role is required.';         errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.';   errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('pk-oh-bf-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/addofficerhistory',
+        { MundaneId: mid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+            if (resp.status === 0) {
+                document.getElementById('pk-oh-bf-success').style.display = '';
+                setTimeout(function() {
+                    pkCloseOhBackfillModal();
+                    pkLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save record.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Edit modal
+function pkOpenOhEditModal(idx) {
+    var h = pkOhData[idx];
+    if (!h) return;
+    var overlay = document.getElementById('pk-oh-edit-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('pk-oh-ed-error').textContent = '';
+    document.getElementById('pk-oh-ed-error').style.display = 'none';
+    document.getElementById('pk-oh-ed-success').style.display = 'none';
+    document.getElementById('pk-oh-ed-id').value = h.OfficerHistoryId;
+    document.getElementById('pk-oh-ed-player').value = h.Persona || h.UserName || '(unknown)';
+    document.getElementById('pk-oh-ed-role').value = h.Role;
+    document.getElementById('pk-oh-ed-start').value = h.StartDate || '';
+    document.getElementById('pk-oh-ed-end').value = h.EndDate || '';
+    document.getElementById('pk-oh-ed-notes').value = h.Notes || '';
+}
+
+function pkCloseOhEditModal() {
+    document.getElementById('pk-oh-edit-overlay').style.display = 'none';
+}
+
+function pkSaveOhEdit() {
+    var ohid  = document.getElementById('pk-oh-ed-id').value;
+    var role  = document.getElementById('pk-oh-ed-role').value;
+    var start = document.getElementById('pk-oh-ed-start').value;
+    var end   = document.getElementById('pk-oh-ed-end').value;
+    var notes = document.getElementById('pk-oh-ed-notes').value;
+    var errEl = document.getElementById('pk-oh-ed-error');
+
+    if (!role)  { errEl.textContent = 'Role is required.';       errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.'; errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('pk-oh-ed-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/editofficerhistory',
+        { OfficerHistoryId: ohid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+            if (resp.status === 0) {
+                document.getElementById('pk-oh-ed-success').style.display = '';
+                setTimeout(function() {
+                    pkCloseOhEditModal();
+                    pkLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save changes.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Player autocomplete for backfill modal
+(function() {
+    var input   = document.getElementById('pk-oh-bf-player-text');
+    var hidden  = document.getElementById('pk-oh-bf-player-id');
+    var results = document.getElementById('pk-oh-bf-player-results');
+    if (!input) return;
+    var debounce;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounce);
+        hidden.value = '';
+        var q = input.value.trim();
+        if (q.length < 2) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); return; }
+        debounce = setTimeout(function() {
+            var url = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch?q=' + encodeURIComponent(q) + '&scope=all&include_inactive=1';
+            $.getJSON(url, function(data) {
+                results.innerHTML = '';
+                if (!data || data.length === 0) {
+                    results.innerHTML = '<div class="kn-ac-item kn-ac-empty">No results</div>';
+                    if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                    results.classList.add('kn-ac-open');
+                    return;
+                }
+                for (var i = 0; i < data.length; i++) {
+                    var d = data[i];
+                    var el = document.createElement('div');
+                    el.className = 'kn-ac-item';
+                    el.setAttribute('data-id', d.MundaneId);
+                    el.innerHTML = '<span class="kn-ac-persona">' + pkHtmlEsc(d.Persona) + '</span>' +
+                                   '<span class="kn-ac-park">' + pkHtmlEsc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + '</span>';
+                    el.addEventListener('click', (function(dd) {
+                        return function() {
+                            input.value = dd.Persona;
+                            hidden.value = dd.MundaneId;
+                            results.innerHTML = '';
+                            results.classList.remove('kn-ac-open');
+                        };
+                    })(d));
+                    results.appendChild(el);
+                }
+                if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                results.classList.add('kn-ac-open');
+            });
+        }, 250);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!results.contains(e.target) && e.target !== input) {
+            results.innerHTML = '';
+            results.classList.remove('kn-ac-open');
+        }
+    });
+})();
+
+// Hook into tab activation to lazy-load officer history
+$(document).on('click', '.pk-tab-nav li[data-pktab="officerhistory"]', function() {
+    if (!pkOhLoaded) {
+        pkOhLoaded = true;
+        pkLoadOfficerHistory();
+    }
+});
 </script>
 
 <?php if (!empty($IsLoggedIn)): ?>

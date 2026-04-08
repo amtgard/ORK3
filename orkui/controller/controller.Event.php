@@ -23,7 +23,7 @@ class Controller_Event extends Controller {
 			$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->data['EventDetails']['ParkId'], 'display' => $this->data['EventDetails']['EventInfo'][0]['ParkName'] );
 			$this->data['menu']['event'] = array( 'url' => UIR.'Event/index/'.$id, 'display' => $this->data['EventDetails']['Name'] );
 			$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-			if ($_uid > 0 && valid_id($id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_EVENT, (int)$id, AUTH_EDIT)) {
+			if ($_uid > 0 && valid_id($id) && Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'event.edit', 'event', (int)$id, AUTH_EDIT)) {
 				$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 				$this->data['menulist']['admin'] = array(
 					array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Event' )
@@ -58,7 +58,7 @@ class Controller_Event extends Controller {
 		}
 
 		$can_manage = $uid > 0 && valid_id($event_id)
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.edit', 'event', $event_id, AUTH_CREATE);
 		$this->data['CanManageEvent'] = $can_manage;
 
 		$rsvp_data = [];
@@ -122,7 +122,7 @@ class Controller_Event extends Controller {
 			'display' => $details['Name'],
 		];
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		$can_manage = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+		$can_manage = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.detail.manage', 'event', $event_id, AUTH_CREATE);
 		if ( $can_manage ) {
 			$this->data['menu']['admin'] = [
 				'url'      => UIR . 'Admin/event/' . $event_id,
@@ -199,7 +199,7 @@ class Controller_Event extends Controller {
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['CanManageEvent'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority( $uid, AUTH_EVENT, $event_id, AUTH_CREATE );
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $uid, 'event.detail.manage', 'event', $event_id, AUTH_CREATE );
 	}
 
 	public function detail( $p = null ) {
@@ -260,7 +260,7 @@ class Controller_Event extends Controller {
 		$this->data['DefaultKingdomId']   = $this->session->kingdom_id   ?? 0;
 
 		if ( $action === 'deletedetail' && $uid > 0 ) {
-			if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+			if ( Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.attendance.manage', 'event', $event_id, AUTH_CREATE) ) {
 				global $DB;
 				$checkAtt  = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "attendance WHERE event_calendardetail_id = " . $detail_id . " LIMIT 1");
 				$attCnt    = ($checkAtt && $checkAtt->Size() > 0 && $checkAtt->Next()) ? (int)$checkAtt->cnt : 0;
@@ -299,7 +299,7 @@ class Controller_Event extends Controller {
 		if ( strlen($action) > 0 && $uid > 0 ) {
 
 			if ( $action === 'edit' ) {
-				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+				if ( Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.attendance.manage', 'event', $event_id, AUTH_CREATE) ) {
 					$this->request->save('Eventnew_edit', true);
 					$newName = trim($this->request->Eventnew_edit->EventName ?? '');
 					if ( $newName ) {
@@ -340,7 +340,7 @@ class Controller_Event extends Controller {
 				}
 
 			} elseif ( $action === 'reconcile' ) {
-				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+				if ( Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.attendance.manage', 'event', $event_id, AUTH_CREATE) ) {
 					$today   = date('Y-m-d');
 					$attData = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
 					$pastAtt = array_filter(
@@ -493,9 +493,9 @@ class Controller_Event extends Controller {
 		$this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
 		$this->data['CanManageEvent'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.edit', 'event', $event_id, AUTH_CREATE);
 		$this->data['CanManageAttendance'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'event.edit', 'event', $event_id, AUTH_EDIT);
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
@@ -557,7 +557,7 @@ class Controller_Event extends Controller {
 			$this->data['AtParkName'] = ($row && $row->Size() > 0 && $row->Next()) ? $row->name : '';
 		}
 
-		if ( !$uid || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+		if ( !$uid || !Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'park.event.create', 'event', $event_id, AUTH_CREATE) ) {
 			header('Location: ' . UIR . 'Login');
 			return;
 		}

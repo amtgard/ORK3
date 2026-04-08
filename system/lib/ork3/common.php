@@ -472,7 +472,7 @@ class Common
             where ka.award_id in ";
   }
   
-	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0 )
+	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0 )
 	{
 		$this->officer->clear();
 		if (isset($kingdom_id)) $this->officer->kingdom_id = $kingdom_id;
@@ -480,9 +480,13 @@ class Common
 		$this->officer->role = $role;
 		$this->officer->system = $system;
 		if ( $this->officer->find() ) {
+			$old_mundane_id = $this->officer->mundane_id;
+			$officer_changed = false;
+
 			if ( 'Champion' == $role || 'GMR' == $role) {
 				$this->officer->mundane_id = $new_officer_id;
 				$this->officer->save();
+				$officer_changed = true;
 			} else {
 				$this->authorization->clear();
 				$this->authorization->authorization_id = $this->officer->authorization_id;
@@ -491,8 +495,61 @@ class Common
 					$this->authorization->mundane_id = $new_officer_id;
 					$this->officer->save();
 					$this->authorization->save();
+					$officer_changed = true;
 				}
 			}
+
+			// Record officer history only if the officer was actually changed
+			if ( $officer_changed && (int)$old_mundane_id !== (int)$new_officer_id ) {
+				$this->record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by );
+
+				// RBAC dual-write: sync officer role to ork_user_role
+				if ( isset( Ork3::$Lib->rbacservice ) ) {
+					try {
+						Ork3::$Lib->rbacservice->SyncOfficerRole( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by );
+					} catch ( Exception $e ) {
+						logtrace( 'RBAC SyncOfficerRole failed', $e->getMessage() );
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Record officer change in the ork_officer_history table.
+	 * Closes the previous officer's open record and opens a new one (unless vacating).
+	 */
+	private function record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_mundane_id, $role, $changed_by = 0 )
+	{
+		global $DB;
+		$kid  = (int)$kingdom_id;
+		$pid  = (int)$park_id;
+		$role_esc = mysql_real_escape_string( $role );
+		$cb   = (int)$changed_by;
+		$today = date( 'Y-m-d' );
+
+		// Close any open history record for this role (where end_date IS NULL)
+		if ( (int)$old_mundane_id > 0 ) {
+			$DB->Clear();
+			$DB->Execute(
+				"UPDATE " . DB_PREFIX . "officer_history
+				 SET end_date = '" . $today . "'
+				 WHERE kingdom_id = " . $kid . "
+				   AND park_id = " . $pid . "
+				   AND role = '" . $role_esc . "'
+				   AND end_date IS NULL"
+			);
+		}
+
+		// Open a new history record for the incoming officer (skip if vacating)
+		if ( (int)$new_mundane_id > 0 ) {
+			$mid = (int)$new_mundane_id;
+			$DB->Clear();
+			$DB->Execute(
+				"INSERT INTO " . DB_PREFIX . "officer_history
+				 (kingdom_id, park_id, mundane_id, role, start_date, end_date, changed_by, created_at)
+				 VALUES (" . $kid . ", " . $pid . ", " . $mid . ", '" . $role_esc . "', '" . $today . "', NULL, " . ($cb > 0 ? $cb : 'NULL') . ", NOW())"
+			);
 		}
 	}
 
@@ -503,6 +560,13 @@ class Common
 		$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create' );
 		$this->create_officer( $kingdom_id, $park_id, 'Champion', null );
 		$this->create_officer( $kingdom_id, $park_id, 'GMR', null );
+		if ( valid_id( $principality_id ) ) {
+			$this->create_officer( $kingdom_id, $park_id, 'Monarch', 'create', 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'Regent', 'create', 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create', 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'Champion', null, 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'GMR', null, 1, $principality_id );
+		}
 	}
 
 	private function create_officer( $kingdom_id, $park_id, $role, $authorization, $system = 0, $principality_id = 0 )
@@ -526,6 +590,11 @@ class Common
 			}
 		}
 		$this->officer->save();
+
+		// RBAC dual-write: notify that a new officer slot was created
+		if ( isset( Ork3::$Lib->rbacservice ) ) {
+			Ork3::$Lib->rbacservice->SyncNewOfficerSlot( $kingdom_id, $park_id, $role );
+		}
 	}
 
 	public static function get_configs( $id, $type = CFG_KINGDOM )

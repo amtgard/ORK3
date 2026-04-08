@@ -8,12 +8,12 @@
 	$can_delete_recommendation = false;
 	if($this->__session->user_id) {
 		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.edit', 'park', $this->__session->park_id, AUTH_CREATE)) {
 				$can_delete_recommendation = true;
 			}
 		}
 		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'kingdom.details.edit', 'kingdom', $this->__session->kingdom_id, AUTH_CREATE)) {
 				$can_delete_recommendation = true;
 			}
 		}
@@ -66,8 +66,8 @@
 
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
-	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
-	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
+	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.edit', 'park', $Player['ParkId'], AUTH_EDIT);
+	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.award.manage', 'park', $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
