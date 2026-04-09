@@ -906,6 +906,22 @@
 						239 => [240],     // Order of the Crown      → Master Crown
 						243 => [244],     // Order of Battle         → Battlemaster
 					];
+					$pnOrderNames = [
+						21  => ['Order of the Rose',    'Rose'],
+						22  => ['Order of the Smith',   'Smith'],
+						23  => ['Order of the Lion',    'Lion'],
+						24  => ['Order of the Owl',     'Owl'],
+						25  => ['Order of the Dragon',  'Dragon'],
+						26  => ['Order of the Garber',  'Garber'],
+						27  => ['Order of the Warrior', 'Warrior'],
+						28  => ['Order of the Jovius',  'Jovius'],
+						29  => ['Order of the Mask',    'Mask'],
+						30  => ['Order of the Zodiac',  'Zodiac'],
+						32  => ['Order of the Hydra',   'Hydra'],
+						33  => ['Order of the Griffin', 'Griffin'],
+						239 => ['Order of the Crown',   'Crown'],
+						243 => ['Order of Battle',      'Battle'],
+					];
 					// Index all award_ids the player holds (including titles)
 					$pnHeldAwardIds = [];
 					foreach ($awardsList as $a) {
@@ -947,6 +963,19 @@
 						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $lp['Count']));
 					}
 					unset($lp);
+					// Add a complete tile for any masterhood held with no corresponding ladder progress
+					foreach ($pnOrderToMaster as $orderId => $masterIds) {
+						if (isset($pnLadderProgress[$orderId])) continue;
+						$hasMaster = false;
+						foreach ($masterIds as $masterId) {
+							if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
+						}
+						if (!$hasMaster) continue;
+						$maxRank = ($orderId === 30) ? 12 : 10;
+						$name  = $pnOrderNames[$orderId][0] ?? 'Unknown Order';
+						$short = $pnOrderNames[$orderId][1] ?? $name;
+						$pnLadderProgress[$orderId] = ['Name' => $name, 'Short' => $short, 'Rank' => $maxRank, 'Count' => 0, 'HasMaster' => true, 'Approx' => false];
+					}
 					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
 				<?php if (!empty($pnLadderProgress)): ?>
