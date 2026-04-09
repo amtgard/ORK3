@@ -11413,3 +11413,41 @@ window.recsExportPrint = function(dt, title) {
         }
     });
 })();
+// ── Email spell-checker ──────────────────────────────────────────────────────
+// Attaches a "Did you mean …?" suggestion banner to an email input.
+// inputId:      id of the <input type="email"> element
+// suggestionId: id of the companion .esc-suggestion <div>
+window.initEmailSpellCheck = function(inputId, suggestionId) {
+    var input = document.getElementById(inputId);
+    var box   = document.getElementById(suggestionId);
+    if (!input || !box) return;
+
+    var useBtn     = box.querySelector('.esc-suggestion-use');
+    var dismissBtn = box.querySelector('.esc-suggestion-dismiss');
+    var suggText   = box.querySelector('.esc-suggestion strong');
+
+    function check() {
+        if (typeof window.EmailSpellChecker === 'undefined') return;
+        var val = (input.value || '').trim();
+        if (!val) { box.classList.remove('esc-visible'); return; }
+        var result = window.EmailSpellChecker.run({ email: val });
+        if (result && result.full && result.full !== val) {
+            suggText.textContent = result.full;
+            box.classList.add('esc-visible');
+        } else {
+            box.classList.remove('esc-visible');
+        }
+    }
+
+    input.addEventListener('blur', check);
+
+    if (useBtn) useBtn.addEventListener('click', function() {
+        input.value = suggText.textContent;
+        box.classList.remove('esc-visible');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    if (dismissBtn) dismissBtn.addEventListener('click', function() {
+        box.classList.remove('esc-visible');
+    });
+};
