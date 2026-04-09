@@ -500,6 +500,15 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-ms-icon-opt{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:14px;color:#718096;background:#fff;transition:all .15s}
 .pn-ms-icon-opt:hover{border-color:#a0aec0;color:#4a5568;background:#f7fafc}
 .pn-ms-icon-opt.pn-ms-icon-active{border-color:var(--pn-accent,#4299e1);color:var(--pn-accent,#4299e1);background:#ebf8ff}
+/* ===== Compact Milestones Sidebar ===== */
+.pn-cms-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-top:12px}
+.pn-cms-title{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:8px;display:flex;align-items:center;gap:6px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-cms-title i{color:var(--pn-accent,#4299e1);font-size:12px}
+.pn-cms-item{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid #f0f4f8;font-size:12px}
+.pn-cms-item:last-child{border-bottom:none;padding-bottom:0}
+.pn-cms-icon{color:var(--pn-accent,#4299e1);font-size:12px;flex-shrink:0;width:16px;display:inline-flex;align-items:center;justify-content:center}
+.pn-cms-line{flex:1;min-width:0;color:#4a5568;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pn-cms-line strong{color:#718096;font-weight:500;margin-right:2px}
 /* ===== Design My Profile Modal ===== */
 .pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0}
 .pn-design-tab{padding:10px 18px;font-size:13px;font-weight:600;color:#718096;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap}
@@ -926,13 +935,19 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					$_hasBeltline     = $_showBeltline && (!empty($BeltlinePeers) || !empty($BeltlineAssociates));
 					$_msConfig = json_decode($Player['MilestoneConfig'] ?? '', true);
 					if (!is_array($_msConfig)) $_msConfig = [];
+					$_msCompact = !empty($_msConfig['compact_milestones']);
 					$_hasMilestones = false;
+					$_visibleMilestones = [];
 					if (is_array($Milestones)) {
 						foreach ($Milestones as $_ms) {
 							$_msType = $_ms['type'];
-							if (!isset($_msConfig[$_msType]) || $_msConfig[$_msType]) { $_hasMilestones = true; break; }
+							if (!isset($_msConfig[$_msType]) || $_msConfig[$_msType]) {
+								$_hasMilestones = true;
+								$_visibleMilestones[] = $_ms;
+							}
 						}
 					}
+					$_showSidebar = $_hasBeltline || ($_msCompact && !empty($_visibleMilestones));
 					$_showAboutTab    = $_hasAboutPersona || $_hasAboutStory || $_hasBeltline || $_hasMilestones || $isOwnProfile;
 				?>
 				<?php if ($_showAboutTab): ?>
@@ -953,9 +968,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<?php if ($_showRecs): ?><li data-tab="recommendations">
 					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count" id="pn-recs-tab-count"></span>
 				</li><?php endif; ?>
+				<?php if ($canEditAdmin || ($LoggedIn && $isOwnProfile && is_array($Notes) && count($Notes) > 0)): ?>
 				<li data-tab="history">
 					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count" id="pn-notes-tab-count"></span>
 				</li>
+				<?php endif; ?>
 				<li data-tab="classes">
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
@@ -1177,19 +1194,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<p>Your About section is empty. Click <strong>Design My Profile</strong> above to add a bio and tell your story!</p>
 							</div>
 							<?php endif; ?>
-							<?php
-								// Filter milestones based on config
-								$_visibleMilestones = [];
-								if (is_array($Milestones)) {
-									foreach ($Milestones as $_ms) {
-										$_msType = $_ms['type'];
-										// Default ON for all types if not configured
-										if (!isset($_msConfig[$_msType]) || $_msConfig[$_msType]) {
-											$_visibleMilestones[] = $_ms;
-										}
-									}
-								}
-							?>
+
+							<?php if (!$_msCompact): ?>
 							<?php if (!empty($_visibleMilestones)): ?>
 							<div class="pn-timeline-section">
 								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> My Milestones</h3>
@@ -1217,9 +1223,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								</div>
 							</div>
 							<?php endif; ?>
+							<?php endif; // !$_msCompact ?>
 						</div>
-						<?php if ($_hasBeltline): ?>
+						<?php if ($_showSidebar): ?>
 						<div class="pn-about-sidebar">
+							<?php if ($_hasBeltline): ?>
 							<?php if (!empty($BeltlinePeers)): ?>
 							<div class="pn-belt-card">
 								<div class="pn-belt-card-title"><i class="fas fa-shield-alt"></i> My Peer<?= count($BeltlinePeers) > 1 ? 's' : '' ?></div>
@@ -1256,8 +1264,20 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<?php endforeach; ?>
 							</div>
 							<?php endif; ?>
+							<?php endif; // $_hasBeltline ?>
+							<?php if ($_msCompact && !empty($_visibleMilestones)): ?>
+							<div class="pn-cms-card">
+								<div class="pn-cms-title"><i class="fas fa-stream"></i> My Milestones</div>
+								<?php foreach ($_visibleMilestones as $_cms): ?>
+								<div class="pn-cms-item">
+									<i class="fas <?= htmlspecialchars($_cms['icon']) ?> pn-cms-icon"></i>
+									<div class="pn-cms-line"><strong><?= date('m/y', strtotime($_cms['date'])) ?></strong> &ndash; <?= htmlspecialchars($_cms['description']) ?></div>
+								</div>
+								<?php endforeach; ?>
+							</div>
+							<?php endif; ?>
 						</div>
-						<?php endif; ?>
+						<?php endif; // $_showSidebar ?>
 					</div>
 				</div>
 				<?php endif; ?>
@@ -1728,6 +1748,13 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 
 			<!-- Notes Tab -->
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
+				<?php $notesList = is_array($Notes) ? $Notes : array(); ?>
+				<?php if ($isOwnProfile): ?>
+				<div class="pn-notes-infobox">
+					<i class="fas fa-info-circle pn-notes-infobox-icon"></i>
+					<div>This tab contains historically imported notes about your profile from previous versions of the ORK. If these notes are still relevant, such as containing a title or award not listed in the other tabs, reach out to your local Monarch or Prime Minister to reconcile those notes. Once all notes have been reconciled, <a href="#" id="pn-clear-notes-link">click here to close out your notes tab</a>. This cannot be undone.</div>
+				</div>
+				<?php endif; ?>
 				<?php if ($canEditAdmin): ?>
 				<div class="pn-notes-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAddNoteModal()"><i class="fas fa-plus"></i> Add Note</button>
@@ -2574,6 +2601,13 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 
 			<!-- Milestones Panel -->
 			<div class="pn-design-panel" id="pn-design-milestones">
+				<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e2e8f0">
+					<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+						<input type="checkbox" id="pn-ms-compact" style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Compact Milestones
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Move your milestones to a compact sidebar list (icon + mm/yy &ndash; title) instead of the large timeline at the bottom of About.</div>
+				</div>
 				<div class="pn-design-hint" style="margin-bottom:14px">Choose which milestone types appear on your timeline. All types are shown by default.</div>
 				<div class="pn-ms-toggle-list" id="pn-ms-toggles">
 					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="first_signin" checked /><i class="fas fa-door-open"></i> First Sign-In</label>
@@ -3193,6 +3227,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		for (var i = 0; i < msToggles.length; i++) {
 			msConfig[msToggles[i].getAttribute('data-ms-type')] = msToggles[i].checked ? 1 : 0;
 		}
+		var compactEl = gid('pn-ms-compact');
+		msConfig['compact_milestones'] = (compactEl && compactEl.checked) ? 1 : 0;
 		fd.append('MilestoneConfig', JSON.stringify(msConfig));
 
 		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateprofile', { method: 'POST', body: fd })
@@ -3222,6 +3258,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 
 	// Init toggles from saved config
 	var cfg = PnConfig.milestoneConfig || {};
+	var compactToggle = document.getElementById('pn-ms-compact');
+	if (compactToggle) compactToggle.checked = !!cfg['compact_milestones'];
 	var toggles = document.querySelectorAll('#pn-ms-toggles input[data-ms-type]');
 	for (var i = 0; i < toggles.length; i++) {
 		var msType = toggles[i].getAttribute('data-ms-type');
@@ -3441,6 +3479,25 @@ pnRenderSparkline();
 	</div>
 </div>
 <?php endif; ?>
+
+<!-- Clear Notes Confirm Modal -->
+<div class="pn-overlay" id="pn-clearnotes-overlay" style="display:none">
+	<div class="pn-modal-box" style="width:440px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#c05621"></i>Close Out Notes Tab</h3>
+			<button class="pn-modal-close-btn" id="pn-clearnotes-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div id="pn-clearnotes-feedback" style="display:none"></div>
+			<p style="margin:0 0 12px;font-size:14px;color:var(--ork-text)">This will permanently delete all notes on your profile and remove the Notes tab. This cannot be undone.</p>
+			<p style="margin:0;font-size:13px;color:var(--ork-text-muted)">Make sure you have reconciled any relevant information with your Monarch or Prime Minister before continuing.</p>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-clearnotes-cancel">Cancel</button>
+			<button class="pn-btn" id="pn-clearnotes-confirm" style="background:#c05621;color:#fff"><i class="fas fa-trash"></i> Delete All Notes</button>
+		</div>
+	</div>
+</div>
 
 <!-- Player Add Attendance Modal -->
 <style>

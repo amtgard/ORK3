@@ -9727,6 +9727,63 @@ function setupPronounPicker(cfg) {
             })
             .catch(function() { self.disabled = false; alert('Request failed.'); });
         });
+
+        // Clear notes tab confirm modal
+        .on('click', '#pn-clear-notes-link', function(e) {
+            e.preventDefault();
+            var overlay = gid('pn-clearnotes-overlay');
+            if (overlay) { overlay.style.display = ''; }
+        });
+        .on('click', '#pn-clearnotes-close-btn, #pn-clearnotes-cancel', function() {
+            var overlay = gid('pn-clearnotes-overlay');
+            if (overlay) { overlay.style.display = 'none'; }
+        });
+        .on('click', '#pn-clearnotes-overlay', function(e) {
+            if ($(e.target).is('#pn-clearnotes-overlay')) {
+                var overlay = gid('pn-clearnotes-overlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+        });
+        .on('click', '#pn-clearnotes-confirm', function() {
+            var btn = this;
+            var fb  = gid('pn-clearnotes-feedback');
+            btn.disabled = true;
+            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/clearnotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: '',
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    // Hide overlay, tab panel, and tab li
+                    var overlay = gid('pn-clearnotes-overlay');
+                    if (overlay) overlay.style.display = 'none';
+                    var tabPanel = gid('pn-tab-history');
+                    if (tabPanel) tabPanel.style.display = 'none';
+                    var tabLi = document.querySelector('[data-tab=history]');
+                    if (tabLi) tabLi.style.display = 'none';
+                    // Switch to awards tab
+                    var awardsLi = document.querySelector('[data-tab=awards]');
+                    if (awardsLi) awardsLi.click();
+                } else {
+                    btn.disabled = false;
+                    if (fb) {
+                        fb.textContent = data.error || 'Error removing notes.';
+                        fb.className = 'pn-feedback pn-feedback-err';
+                        fb.style.display = '';
+                    }
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                if (fb) {
+                    fb.textContent = 'Request failed.';
+                    fb.className = 'pn-feedback pn-feedback-err';
+                    fb.style.display = '';
+                }
+            });
+        });
     });
 })();
 

@@ -5421,6 +5421,10 @@ html[data-theme="dark"] .plr-merge-warning { background:rgba(197,48,48,0.15); bo
 #pn-addnote-overlay .pn-modal-box { width:480px; max-width:calc(100vw - 40px); }
 .pn-addnote-date-row { display:flex; gap:12px; }
 .pn-notes-toolbar { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.pn-notes-infobox { display:flex; gap:12px; align-items:flex-start; background:#ebf8ff; border:1px solid #bee3f8; border-radius:8px; padding:14px 16px; margin-bottom:16px; font-size:13px; color:#2c5282; line-height:1.5; }
+.pn-notes-infobox-icon { color:#3182ce; font-size:16px; flex-shrink:0; margin-top:1px; }
+.pn-notes-infobox a { color:#2b6cb0; font-weight:600; }
+.pn-notes-infobox a:hover { text-decoration:underline; }
 .pn-note-del-btn { background:none; border:1px solid transparent; color:#a0aec0; cursor:pointer; width:24px; height:24px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
 .pn-note-del-btn:hover { background:#fff5f5; border-color:#fc8181; color:#e53e3e; }
 
@@ -8385,3 +8389,12 @@ html[data-theme="dark"] .pk-att-ac-inactive-badge {
 }
 
 /* @media fallbacks */
+/* Notes infobox dark mode */
+html[data-theme="dark"] .pn-notes-infobox { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
+html[data-theme="dark"] .pn-notes-infobox a { color: #90cdf4; }
+html[data-theme="dark"] .pn-notes-infobox-icon { color: #63b3ed; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox a { color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox-icon { color: #63b3ed; }
+}

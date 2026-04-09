@@ -210,6 +210,15 @@ class Controller_PlayerAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'clearnotes') {
+			$r = $this->Player->clear_notes([
+				'Token'     => $this->session->token,
+				'MundaneId' => $player_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'moveplayer') {
 			$dest_park_id = (int)($_POST['ParkId'] ?? 0);
 			if (!valid_id($dest_park_id)) {

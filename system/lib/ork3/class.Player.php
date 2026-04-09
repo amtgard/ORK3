@@ -178,6 +178,18 @@ class Player extends Ork3 {
 		return NoAuthorization();
 	}
 
+	public function ClearNotes($request) {
+		if (!valid_id($request['MundaneId'])) return InvalidParameter('Invalid player ID.');
+		$uid = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if ($uid <= 0) return NoAuthorization();
+		$thePlayer = $this->player_info($request['MundaneId']);
+		$isOwn  = $uid === (int)$request['MundaneId'];
+		$isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT);
+		if (!$isOwn && !$isAdmin) return NoAuthorization();
+		$this->db->query('DELETE FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . intval($request['MundaneId']));
+		return Success();
+	}
+
 	public function SetPlayerReconciledCredits($request) {
 
 		$thePlayer = $this->player_info($request['MundaneId']);
