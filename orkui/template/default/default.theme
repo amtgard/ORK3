@@ -467,6 +467,15 @@ endif;
 .emp-save { background:#4299e1; color:#fff; border:none; border-radius:6px; padding:9px 22px; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
 .emp-save:hover:not(:disabled) { background:#2b6cb0; }
 .emp-save:disabled { opacity:.6; cursor:not-allowed; }
+.emp-suggestion { display:none; align-items:center; gap:8px; margin-top:6px; padding:7px 10px; background:#ebf8ff; border:1px solid #bee3f8; border-radius:5px; font-size:12px; color:#2b6cb0; line-height:1.4; }
+.emp-suggestion.emp-suggestion-visible { display:flex; }
+.emp-suggestion i { flex-shrink:0; color:#4299e1; }
+.emp-suggestion-text { flex:1; }
+.emp-suggestion strong { font-weight:700; }
+.emp-suggestion-use { background:#4299e1; color:#fff; border:none; padding:3px 9px; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.emp-suggestion-use:hover { background:#2b6cb0; }
+.emp-suggestion-dismiss { background:none; border:none; color:#90cdf4; font-size:16px; line-height:1; cursor:pointer; padding:0 2px; flex-shrink:0; }
+.emp-suggestion-dismiss:hover { color:#4299e1; }
 </style>
 <div class="emp-overlay" id="emp-overlay">
   <div class="emp-modal" role="dialog" aria-modal="true" aria-labelledby="emp-title">
@@ -478,11 +487,11 @@ endif;
     <div class="emp-field">
       <label for="emp-email">Email address</label>
       <input type="email" id="emp-email" name="emp-email" placeholder="you@example.com" autocomplete="email">
-      <div class="esc-suggestion" id="emp-email-suggestion" role="alert">
+      <div class="emp-suggestion" id="emp-suggestion" role="alert">
         <i class="fas fa-magic"></i>
-        <span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
-        <button type="button" class="esc-suggestion-use">Use it</button>
-        <button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+        <span class="emp-suggestion-text">Did you mean <strong id="emp-suggestion-val"></strong>?</span>
+        <button type="button" class="emp-suggestion-use" id="emp-suggestion-use">Use it</button>
+        <button type="button" class="emp-suggestion-dismiss" id="emp-suggestion-dismiss" aria-label="Dismiss">&times;</button>
       </div>
       <div class="emp-error" id="emp-error"></div>
     </div>
@@ -497,23 +506,25 @@ endif;
   var SKIP_KEY = 'emp_skipped';
   if (sessionStorage.getItem(SKIP_KEY)) return;
 
-  var overlay = document.getElementById('emp-overlay');
-  var input   = document.getElementById('emp-email');
-  var saveBtn = document.getElementById('emp-save');
-  var skipBtn = document.getElementById('emp-skip');
-  var errEl   = document.getElementById('emp-error');
+  var overlay    = document.getElementById('emp-overlay');
+  var input      = document.getElementById('emp-email');
+  var saveBtn    = document.getElementById('emp-save');
+  var skipBtn    = document.getElementById('emp-skip');
+  var errEl      = document.getElementById('emp-error');
+  var suggBox    = document.getElementById('emp-suggestion');
+  var suggVal    = document.getElementById('emp-suggestion-val');
+  var suggUse    = document.getElementById('emp-suggestion-use');
+  var suggDismiss = document.getElementById('emp-suggestion-dismiss');
 
-  function open()  { overlay.classList.add('emp-open');    setTimeout(function(){ if (input) input.focus(); }, 50); }
+  function open()  { overlay.classList.add('emp-open'); setTimeout(function(){ input.focus(); }, 50); }
   function close() { overlay.classList.remove('emp-open'); }
   function showErr(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
   function clearErr()   { errEl.style.display = 'none'; }
+  function hideSugg()   { suggBox.classList.remove('emp-suggestion-visible'); }
 
-  // Auto-open after a short delay so the page settles first
   setTimeout(open, 400);
 
-  // Close on backdrop click
   overlay.addEventListener('click', function(e) { if (e.target === overlay) { sessionStorage.setItem(SKIP_KEY, '1'); close(); } });
-
   skipBtn.addEventListener('click', function() { sessionStorage.setItem(SKIP_KEY, '1'); close(); });
 
   saveBtn.addEventListener('click', function() {
@@ -542,21 +553,33 @@ endif;
       });
   });
 
-  // Allow Enter key to submit
   input.addEventListener('keydown', function(e) { if (e.key === 'Enter') saveBtn.click(); });
 
-  // Wire up email spell-checker if available (loaded on some pages)
-  if (typeof window.initEmailSpellCheck === 'function') {
-    initEmailSpellCheck('emp-email', 'emp-email-suggestion');
-  } else {
-    // Lazy-load and init after the bundle is available
+  // Spell-checker: runs on blur; self-contained, no dependency on revised.js
+  function runSpellCheck() {
+    if (typeof window.EmailSpellChecker === 'undefined') return;
+    var val = (input.value || '').trim();
+    if (!val) { hideSugg(); return; }
+    var result = window.EmailSpellChecker.run({ email: val });
+    if (result && result.full && result.full !== val) {
+      suggVal.textContent = result.full;
+      suggBox.classList.add('emp-suggestion-visible');
+    } else {
+      hideSugg();
+    }
+  }
+  input.addEventListener('blur', runSpellCheck);
+  suggUse.addEventListener('click', function() {
+    input.value = suggVal.textContent;
+    hideSugg();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  suggDismiss.addEventListener('click', hideSugg);
+
+  // Load the spell-checker bundle (tiny, ~6.6 KB) once the modal is open
+  if (typeof window.EmailSpellChecker === 'undefined') {
     var sc = document.createElement('script');
     sc.src = '<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js';
-    sc.onload = function() {
-      if (typeof window.initEmailSpellCheck === 'function') {
-        initEmailSpellCheck('emp-email', 'emp-email-suggestion');
-      }
-    };
     document.head.appendChild(sc);
   }
 })();
