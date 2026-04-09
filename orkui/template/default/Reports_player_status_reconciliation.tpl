@@ -100,6 +100,9 @@ html[data-theme="dark"] .psr-empty { color: var(--ork-text-muted); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .psr-reactivate-header { background: #1a365d; color: #90cdf4; border-color: #2a4365; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .psr-deactivate-header { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .psr-bulk-bar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-done-icon { color: #68d391; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-error-msg { color: #feb2b2; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-empty { color: var(--ork-text-muted); }
 }
 </style>
 

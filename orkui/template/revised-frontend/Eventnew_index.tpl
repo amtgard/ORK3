@@ -266,6 +266,9 @@ html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondar
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-modal { background: var(--ork-card-bg); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-input, html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-modal-footer { border-top-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 }
 </style>
 

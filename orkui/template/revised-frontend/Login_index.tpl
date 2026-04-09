@@ -372,6 +372,15 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
   html:not([data-theme="light"]):not([data-theme="dark"]) .lg-no-account { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .lg-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .lg-session-notice { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-logo-sword { color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-logo-text span { color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-subheading { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-label { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-divider { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-divider::before,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-divider::after { background: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-links { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-links a { color: var(--ork-link); }
 }
 </style>
 
