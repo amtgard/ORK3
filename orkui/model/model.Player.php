@@ -12,6 +12,10 @@ class Model_Player extends Model {
         return $this->Player->RemoveNote($request);
     }
 
+    function clear_notes($request) {
+        return $this->Player->ClearNotes($request);
+    }
+
     function edit_note($request) {
         return Ork3::$Lib->player->EditNote($request);
     }
