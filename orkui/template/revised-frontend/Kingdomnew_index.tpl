@@ -550,6 +550,19 @@
 						Loading map&hellip;
 					</div>
 					<div id="kn-map-container" style="display:none">
+						<?php if (!empty($HeatmapWeights)): ?>
+						<div class="kn-hm-toggle-row" id="kn-hm-toggle-row">
+							<span class="kn-hm-toggle-label"><i class="fas fa-fire" style="margin-right:5px;color:#e53e3e"></i>Heatmap:</span>
+							<div class="kn-hm-toggle">
+								<button class="kn-hm-btn kn-hm-active" id="kn-hm-btn-participation" onclick="knHeatmapMode('participation')">
+									<i class="fas fa-sign-in-alt" style="margin-right:4px"></i>By Participation
+								</button>
+								<button class="kn-hm-btn" id="kn-hm-btn-residents" onclick="knHeatmapMode('residents')">
+									<i class="fas fa-home" style="margin-right:4px"></i>By Residents
+								</button>
+							</div>
+						</div>
+						<?php endif; ?>
 						<div class="kn-map-layout">
 							<div class="kn-map-wrap">
 								<div id="kn-map"></div>
@@ -887,6 +900,7 @@ var KnConfig = {
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	heatmapWeights:   <?= json_encode(array_values(array_map(function($pid, $w) { return ['id' => (int)$pid, 'participation' => (int)$w['participation'], 'residents' => (int)$w['residents']]; }, array_keys($HeatmapWeights ?? []), array_values($HeatmapWeights ?? []))), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1709,8 +1723,25 @@ var KnConfig = {
 	</div>
 </div>
 
-<!-- Move Player Modal -->
+<!-- Heatmap toggle + Move Player Modal -->
 <style>
+/* ---- Heatmap mode toggle ---- */
+.kn-hm-toggle-row {
+	display:flex; align-items:center; gap:10px; padding:8px 12px;
+	background:#f7fafc; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;
+}
+.kn-hm-toggle-label { font-size:12px; font-weight:700; color:#4a5568; white-space:nowrap; }
+.kn-hm-toggle {
+	display:flex; background:#edf2f7; border-radius:20px; padding:3px; gap:3px;
+}
+.kn-hm-btn {
+	padding:5px 14px; border:none; border-radius:17px; font-size:11px; font-weight:600;
+	cursor:pointer; background:transparent; color:#718096;
+	transition:background 0.15s,color 0.15s,box-shadow 0.15s; white-space:nowrap;
+}
+.kn-hm-btn.kn-hm-active { background:#fff; color:#c53030; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+.kn-hm-btn:hover:not(.kn-hm-active) { color:#4a5568; background:rgba(255,255,255,0.5); }
+/* ---- Move Player Modal ---- */
 .kn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
 .kn-mp-toggle-btn {
 	flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600;

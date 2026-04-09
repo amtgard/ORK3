@@ -384,6 +384,41 @@ class Controller_Kingdom extends Controller {
 		}
 		$this->data['kingdom_park_days'] = $parkDays;
 
+		// Heatmap weights: per-park active player counts (participation + residents)
+		$heatmapWeights = [];
+		// Participation: distinct players who signed in AT the park in the past 365 days
+		$hmPartSql = "SELECT a.park_id, COUNT(DISTINCT a.mundane_id) AS cnt
+			FROM ork_attendance a
+			INNER JOIN ork_park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+			WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 365 DAY) AND a.mundane_id > 0
+			GROUP BY a.park_id";
+		$DB->Clear();
+		$hmPartResult = $DB->DataSet($hmPartSql);
+		if ($hmPartResult && $hmPartResult->Size() > 0) {
+			while ($hmPartResult->Next()) {
+				$pid = (int)$hmPartResult->park_id;
+				if (!isset($heatmapWeights[$pid])) $heatmapWeights[$pid] = ['participation' => 0, 'residents' => 0];
+				$heatmapWeights[$pid]['participation'] = (int)$hmPartResult->cnt;
+			}
+		}
+		// Residents: players whose home park IS this park AND who signed in anywhere in the past 365 days
+		$hmResSql = "SELECT m.park_id, COUNT(DISTINCT a.mundane_id) AS cnt
+			FROM ork_attendance a
+			INNER JOIN ork_mundane m ON m.mundane_id = a.mundane_id AND m.park_id = a.park_id
+			INNER JOIN ork_park p ON p.park_id = m.park_id AND p.kingdom_id = {$kid}
+			WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 365 DAY) AND a.mundane_id > 0
+			GROUP BY m.park_id";
+		$DB->Clear();
+		$hmResResult = $DB->DataSet($hmResSql);
+		if ($hmResResult && $hmResResult->Size() > 0) {
+			while ($hmResResult->Next()) {
+				$pid = (int)$hmResResult->park_id;
+				if (!isset($heatmapWeights[$pid])) $heatmapWeights[$pid] = ['participation' => 0, 'residents' => 0];
+				$heatmapWeights[$pid]['residents'] = (int)$hmResResult->cnt;
+			}
+		}
+		$this->data['HeatmapWeights'] = $heatmapWeights;
+
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['IsLoggedIn']       = $uid > 0;
 
