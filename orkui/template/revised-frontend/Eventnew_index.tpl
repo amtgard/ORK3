@@ -157,6 +157,20 @@
 	border: 5px solid transparent; border-top-color: #1a202c;
 }
 .ev-del-detail-wrap:hover .ev-del-detail-tooltip { display: block; }
+@keyframes ev-credits-pulse {
+	0%   { box-shadow: 0 0 0 0 rgba(66,153,225,.7); border-color: #4299e1; }
+	60%  { box-shadow: 0 0 0 6px rgba(66,153,225,0); border-color: #4299e1; }
+	100% { box-shadow: 0 0 0 0 rgba(66,153,225,0); border-color: #e2e8f0; }
+}
+.ev-credits-pulse { animation: ev-credits-pulse 1s ease-out; }
+.ev-rsvp-th-tooltip { position:relative; display:inline-block; cursor:default; }
+.ev-rsvp-th-tooltip .ev-rsvp-th-tip {
+	display:none; position:fixed; background:#1a202c; color:#fff; font-size:12px;
+	padding:7px 11px; border-radius:4px; white-space:normal; max-width:280px; line-height:1.45;
+	pointer-events:none; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,.25);
+	transform:translateX(-50%) translateY(calc(-100% - 8px));
+}
+.ev-rsvp-th-tooltip:hover .ev-rsvp-th-tip { display:block; }
 /* Heraldry edit overlay */
 .ev-heraldry-edit-wrap { position: relative; display: inline-block; cursor: pointer; }
 .ev-heraldry-edit-overlay {
@@ -647,17 +661,42 @@
 					</div>
 					<table class="ev-table" id="ev-rsvp-table">
 						<thead>
-							<tr><th>Player</th><th>Status</th><?php if ($canManageAttendance): ?><th></th><?php endif; ?></tr>
+							<tr>
+									<th>Player</th>
+									<th>Kingdom</th>
+									<th>Park</th>
+									<th>Status</th>
+									<th style="white-space:nowrap">Waivered?
+									<span class="ev-rsvp-th-tooltip" style="font-size:11px;color:#a0aec0;margin-left:2px">(?)<span class="ev-rsvp-th-tip">This column indicates that the player's profile is marked as having a waiver. Please follow your kingdom, park, and/or event policy for confirming or completing waivers at check-in if necessary.</span></span>
+								</th>
+									<?php if ($canManageAttendance): ?>
+									<th style="text-align:right;white-space:nowrap">
+										<label style="display:block;font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Sign-in Credits</label>
+										<input type="number" id="ev-rsvp-credits" value="1" min="0.25" step="0.25"
+											style="width:55px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px;text-align:center"
+											oninput="evSyncCredits(this.value)" title="Credits to assign on quick check-in">
+									</th>
+									<?php endif; ?>
+								</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($rsvpList as $attendee): ?>
 							<tr>
-								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a><?php if (!empty($attendee['KingdomAbbr']) || !empty($attendee['ParkAbbr'])): ?> <span style="font-size:.8em;color:#718096">(<?= htmlspecialchars($attendee['KingdomAbbr'] ?? '') ?>:<?= htmlspecialchars($attendee['ParkAbbr'] ?? '') ?>)</span><?php endif; ?></td>
+								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a></td>
+								<td style="white-space:nowrap"><?= htmlspecialchars($attendee['KingdomAbbr'] ?? '') ?></td>
+								<td style="white-space:nowrap"><?= htmlspecialchars($attendee['ParkAbbr'] ?? '') ?></td>
 								<td style="white-space:nowrap">
 									<?php if ($attendee['Status'] === 'going'): ?>
 										<i class="fas fa-check-circle" style="color:#276749;margin-right:4px"></i>Going
 									<?php else: ?>
 										<i class="fas fa-star" style="color:#b7791f;margin-right:4px"></i>Interested
+									<?php endif; ?>
+								</td>
+								<td style="text-align:center;white-space:nowrap">
+									<?php if (!empty($attendee['Waivered'])): ?>
+										<i class="fas fa-check-circle" style="color:#276749" title="Waivered"></i>
+									<?php else: ?>
+										<i class="fas fa-circle" style="color:#cbd5e0" title="Not waivered"></i>
 									<?php endif; ?>
 								</td>
 								<?php if ($canManageAttendance): ?>
@@ -1026,6 +1065,7 @@ function evPositionDelTooltip(wrap) {
 
 var _evSavedCredits = parseFloat(localStorage.getItem('ev_credits_default')) || null;
 if (_evSavedCredits) { var _evCr = document.getElementById('ev-Credits'); if (_evCr) _evCr.value = _evSavedCredits; }
+var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _evSavedCredits) _evRsvpCr.value = _evSavedCredits;
 var EvConfig = {
 	uir:        '<?= UIR ?>',
 	httpService:'<?= HTTP_SERVICE ?>',
@@ -1113,12 +1153,47 @@ var EvConfig = {
 		if (tabId === 'ev-tab-attendance') {
 			setTimeout(function() { initEvAttDt(); }, 0);
 		}
+		if (tabId === 'ev-tab-rsvp') {
+			evPulseRsvpCredits();
+		}
 	};
 	// Init now if the attendance tab is already visible on page load
 	$(function() {
 		if (document.querySelector('#ev-tab-attendance.ev-tab-visible')) initEvAttDt();
 	});
 	window.evInitAttDt = initEvAttDt;
+})();
+(function() {
+	window.evPulseRsvpCredits = function() {
+		var el = document.getElementById('ev-rsvp-credits');
+		if (!el) return;
+		var count = 0;
+		function pulse() {
+			if (count >= 3) return;
+			count++;
+			el.classList.remove('ev-credits-pulse');
+			void el.offsetWidth; // reflow to restart animation
+			el.classList.add('ev-credits-pulse');
+			el.addEventListener('animationend', function onEnd() {
+				el.removeEventListener('animationend', onEnd);
+				setTimeout(pulse, 200);
+			});
+		}
+		pulse();
+	};
+	$(function() {
+		if (document.querySelector('#ev-tab-rsvp.ev-tab-visible')) evPulseRsvpCredits();
+	});
+	// Position the fixed waivered tooltip on mouseenter so it tracks the (?) span
+	document.addEventListener('mouseenter', function(e) {
+		var wrap = e.target.closest && e.target.closest('.ev-rsvp-th-tooltip');
+		if (!wrap) return;
+		var tip = wrap.querySelector('.ev-rsvp-th-tip');
+		if (!tip) return;
+		var r = wrap.getBoundingClientRect();
+		tip.style.left = (r.left + r.width / 2) + 'px';
+		tip.style.top  = (r.top - 8) + 'px';
+	}, true);
 })();
 <?php if ($canManage && ($CalendarDetailCount ?? 1) > 1): ?>
 (function() {
@@ -1190,8 +1265,10 @@ function evSyncCredits(val) {
 	if (!(n > 0)) return;
 	var modal = document.querySelector('#ev-checkin-form [name="Credits"]');
 	var form  = document.getElementById('ev-Credits');
+	var rsvp  = document.getElementById('ev-rsvp-credits');
 	if (modal && modal !== document.activeElement) modal.value = n;
 	if (form  && form  !== document.activeElement) form.value  = n;
+	if (rsvp  && rsvp  !== document.activeElement) rsvp.value  = n;
 	if (typeof evSaveCredits === 'function') evSaveCredits(n);
 }
 function evFilterRsvp(q) {

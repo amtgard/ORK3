@@ -361,7 +361,6 @@ class Controller_Player extends Controller {
 
 		global $DB;
 		$DB->Clear();
-		$playerParkId = (int)$this->data['Player']['ParkId'];
 		$officerSql   = "SELECT o.role, o.park_id,
 			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park') ELSE 'Kingdom' END AS entity_type,
 			CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
@@ -370,7 +369,6 @@ class Controller_Player extends Controller {
 			LEFT JOIN ork_park p ON o.park_id = p.park_id AND o.park_id > 0
 			LEFT JOIN ork_parktitle pt ON p.parktitle_id = pt.parktitle_id
 			WHERE o.mundane_id = " . (int)$id . "
-			  AND (o.park_id = $playerParkId OR o.park_id = 0)
 			ORDER BY o.park_id DESC, o.role";
 		$officerResult = $DB->DataSet($officerSql);
 		$officerRoles  = [];
