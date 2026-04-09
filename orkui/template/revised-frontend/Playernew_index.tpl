@@ -1256,6 +1256,22 @@
 			<!-- Attendance Tab -->
 			<div class="pn-tab-panel" id="pn-tab-attendance" style="display:none">
 				<?php $attendanceList = is_array($Details['Attendance']) ? $Details['Attendance'] : array(); ?>
+				<?php
+				// Build per-park edit authority lookup — one HasAuthority call per unique park
+				$parkEditAuth = [];
+				if (isset($this->__session->user_id)) {
+					$uniqueParkIds = array_unique(array_filter(array_column(
+						array_filter($attendanceList, fn($a) => (int)($a['EventId'] ?? 0) === 0),
+						'ParkId'
+					)));
+					foreach ($uniqueParkIds as $pid) {
+						$parkEditAuth[(int)$pid] = Ork3::$Lib->authorization->HasAuthority(
+							$this->__session->user_id, AUTH_PARK, (int)$pid, AUTH_EDIT
+						);
+					}
+				}
+				$canEditAnyAttendance = !empty(array_filter($parkEditAuth));
+				?>
 				<?php if ($canEditAdmin): ?>
 				<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
 					<button class="pn-btn pn-btn-primary" onclick="pnOpenPlayerAttModal()"><i class="fas fa-plus"></i> Add Attendance</button>
@@ -1281,11 +1297,12 @@
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="text">Class</th>
 								<th data-sorttype="numeric">Credits</th>
-								<?php if ($canEditAdmin): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canEditAnyAttendance): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($attendanceList as $detail): ?>
+								<?php $canEditThisAtt = $parkEditAuth[(int)($detail['ParkId'] ?? 0)] ?? false; ?>
 								<tr>
 									<td class="pn-col-nowrap">
 										<?php if ($detail['ParkId'] > 0): ?>
@@ -1299,9 +1316,9 @@
 									<td><a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= htmlspecialchars($detail['EventName']) ?></a></td>
 									<td><?= trimlen($detail['Flavor']) > 0 ? htmlspecialchars($detail['Flavor']) : htmlspecialchars($detail['ClassName']) ?></td>
 									<td class="pn-col-numeric"><?= $detail['Credits'] ?></td>
-									<?php if ($canEditAdmin): ?>
+									<?php if ($canEditAnyAttendance): ?>
 									<td class="pn-award-actions-cell">
-										<?php if ((int)$detail['EventId'] === 0): ?>
+										<?php if ($canEditThisAtt && (int)$detail['EventId'] === 0): ?>
 										<button class="pn-award-action-btn pn-award-edit-btn pn-att-edit-btn"
 										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
 										        data-date="<?= htmlspecialchars($detail['Date']) ?>"
@@ -1311,6 +1328,7 @@
 										        title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>
 										<button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"
 										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
+										        data-mundane-id="<?= (int)$detail['MundaneId'] ?>"
 										        title="Delete attendance"><i class="fas fa-trash"></i></button>
 										<?php endif; ?>
 									</td>
@@ -2183,6 +2201,7 @@ var PnConfig = {
 	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
 	lastClassId:      <?= $_lastClassId ?>,
 	attendanceDates:  <?= json_encode(array_values(array_unique(array_filter(array_map(function($a) { return $a['Date'] ?? ''; }, is_array($Details['Attendance']) ? $Details['Attendance'] : []))))) ?>,
+	canEditAnyAttendance: <?= !empty($canEditAnyAttendance) ? 'true' : 'false' ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -2288,6 +2307,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- Player Add Attendance Modal -->
 <style>
@@ -2336,7 +2356,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 </div>
 
 <!-- Edit Attendance Modal -->
-<?php if ($canEditAdmin): ?>
+<?php if ($canEditAnyAttendance): ?>
 <div class="pn-overlay" id="pn-att-edit-overlay">
 	<div class="pn-modal-box" style="max-width:400px">
 		<div class="pn-modal-header">
@@ -2418,6 +2438,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 </div>
 <?php endif; ?>
 
+<?php if ($canManageAwards): ?>
 <!-- Revoke All Awards Modal -->
 <div class="pn-overlay" id="pn-revoke-all-overlay">
 	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px);">

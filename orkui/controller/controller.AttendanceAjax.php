@@ -20,16 +20,22 @@ class Controller_AttendanceAjax extends Controller {
 
 		if ($action === 'add') {
 			$this->load_model('Attendance');
+			$mundaneId = (int)($_POST['MundaneId'] ?? 0);
 			$r = $this->Attendance->add_attendance(
 				$this->session->token,
 				$_POST['AttendanceDate'] ?? date('Y-m-d'),
 				$park_id,
 				null,
-				(int)($_POST['MundaneId'] ?? 0),
+				$mundaneId,
 				(int)($_POST['ClassId']   ?? 0),
 				(float)($_POST['Credits'] ?? 1)
 			);
 			if ($r['Status'] == 0) {
+				if ($mundaneId) {
+					$this->load_model('Player');
+					$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundaneId]);
+					Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
+				}
 				echo json_encode(['status' => 0, 'attendanceId' => (int)($r['Detail'] ?? 0)]);
 			} else {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
@@ -109,7 +115,8 @@ class Controller_AttendanceAjax extends Controller {
 			}
 
 		} elseif ($action === 'delete') {
-			$r = $this->Attendance->delete_attendance($this->session->token, $attendance_id);
+			$mundaneId = (int)($_POST['MundaneId'] ?? 0);
+			$r = $this->Attendance->delete_attendance($this->session->token, $attendance_id, $mundaneId);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);

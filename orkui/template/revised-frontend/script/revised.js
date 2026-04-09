@@ -10510,7 +10510,7 @@ window.pnCloseUnitCreateModal = function() {
 
 // ---- Player Attendance Edit/Delete (Playernew) ----
 (function() {
-    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAnyAttendance) return;
 
     var BASE_URL = PnConfig.uir + 'AttendanceAjax/attendance/';
     function gid(id) { return document.getElementById(id); }
@@ -10602,11 +10602,12 @@ window.pnCloseUnitCreateModal = function() {
     });
 
     $(document).on('click', '.pn-att-del-btn', function() {
-        var attId = this.dataset.attId;
+        var attId    = this.dataset.attId;
+        var mundaneId = this.dataset.mundaneId || '';
         var btn   = this;
         if (!confirm('Delete this attendance record?')) return;
         btn.disabled = true;
-        $.post(BASE_URL + attId + '/delete', {}, function(r) {
+        $.post(BASE_URL + attId + '/delete', { MundaneId: mundaneId }, function(r) {
             btn.disabled = false;
             if (r && r.status === 0) {
                 location.reload();

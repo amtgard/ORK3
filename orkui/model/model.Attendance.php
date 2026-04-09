@@ -20,7 +20,7 @@ class Model_Attendance extends Model {
 	}
 	
 	function update_attendance($token, $attendance_id, $date, $credits, $class_id, $mundane_id) {
-		return $this->Attendance->SetAttendance(array(
+		$r = $this->Attendance->SetAttendance(array(
 			'Token'        => $token,
 			'AttendanceId' => $attendance_id,
 			'MundaneId'    => $mundane_id,
@@ -28,6 +28,11 @@ class Model_Attendance extends Model {
 			'Credits'      => $credits,
 			'ClassId'      => $class_id,
 		));
+		if ($r['Status'] == 0 && $mundane_id) {
+			$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+			Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
+		}
+		return $r;
 	}
 	
   function lookup_by_faces($request) {
@@ -35,8 +40,13 @@ class Model_Attendance extends Model {
     return $p->LookupByFaces($request);
   }
   
-	function delete_attendance($token, $attendance_id) {
-		return $this->Attendance->RemoveAttendance(array('Token'=>$token, 'AttendanceId' => $attendance_id ));
+	function delete_attendance($token, $attendance_id, $mundane_id = null) {
+		$r = $this->Attendance->RemoveAttendance(array('Token'=>$token, 'AttendanceId' => $attendance_id ));
+		if ($r['Status'] == 0 && $mundane_id) {
+			$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+			Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
+		}
+		return $r;
 	}
 	
 	function get_attendance_for_date($park_id, $date) {
