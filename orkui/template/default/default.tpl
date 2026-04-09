@@ -468,10 +468,7 @@
 <!-- =============================================
      Downtime Info Box
      ============================================= -->
-<div class="hm-infobox">
-	<span class="hm-infobox-icon">&#x2139;&#xFE0F;</span>
-	<span>Welcome to ORK 3.5 Dragon! We anticipate heavier than normal usage over the next few days as players log in to check out the exciting new updates. You may experience performance impacts or longer load times than usual. We appreciate your patience in advance!</span>
-</div>
+
 
 <!-- =============================================
      Stats Bar
