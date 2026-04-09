@@ -426,32 +426,25 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 			</h4>
 <?php if (count($_auths) > 0): ?>
 			<ul class="kn-officer-list">
-<?php foreach ($_auths as $_auth): $__aid = (int)$_auth['AuthorizationId']; ?>
+<?php foreach ($_auths as $_auth):
+	$__aid      = (int)$_auth['AuthorizationId'];
+	$__mgr_js   = addslashes($_auth['Persona'] ?: $_auth['UserName']);
+?>
 				<li>
 					<span class="kn-officer-role" style="font-size:10px;">Manager</span>
 					<span class="kn-officer-name" style="display:flex;align-items:center;justify-content:space-between;">
 						<a href="<?=UIR?>Player/profile/<?=(int)$_auth['MundaneId']?>">
 							<?=htmlspecialchars($_auth['Persona'] ?: $_auth['UserName'])?>
 						</a>
-						<div id="un-mgr-btns-<?=$__aid?>">
-							<button class="pn-btn pn-btn-ghost pn-btn-sm"
-								onclick="unToggleConfirm('mgr', <?=$__aid?>)"
-								title="Remove manager" style="color:#e53e3e;">
-								<i class="fas fa-times"></i>
-							</button>
-						</div>
-						<div class="pn-delete-confirm" id="un-mgr-<?=$__aid?>">
-							<span style="color:#e53e3e;font-weight:600;">Remove manager?</span>
-							<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline">
-								<input type="hidden" name="Action" value="deleteauth">
-								<input type="hidden" name="AuthorizationId" value="<?=$__aid?>">
-								<button type="submit" class="pn-delete-yes">Yes</button>
-							</form>
-							<button class="pn-delete-no"
-								onclick="document.getElementById('un-mgr-<?=$__aid?>').classList.remove('pn-active');document.getElementById('un-mgr-btns-<?=$__aid?>').style.display=''">
-								No
-							</button>
-						</div>
+						<form method="post" action="<?=htmlspecialchars($_base_url)?>" id="un-mgr-form-<?=$__aid?>" style="display:none">
+							<input type="hidden" name="Action" value="deleteauth">
+							<input type="hidden" name="AuthorizationId" value="<?=$__aid?>">
+						</form>
+						<button class="pn-btn pn-btn-ghost pn-btn-sm"
+							onclick="pnConfirm({title:'Remove Manager',message:'Remove <?=$__mgr_js?> as a manager?',confirmText:'Remove',danger:true},function(){document.getElementById('un-mgr-form-<?=$__aid?>').submit()})"
+							title="Remove manager" style="color:#e53e3e;">
+							<i class="fas fa-times"></i>
+						</button>
 					</span>
 				</li>
 <?php endforeach; ?>
@@ -505,6 +498,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 	$_um_id       = (int)($_m['UnitMundaneId'] ?? 0);
 	$_role_esc    = htmlspecialchars($_m['UnitRole']  ?? '', ENT_QUOTES);
 	$_title_esc   = htmlspecialchars($_m['UnitTitle'] ?? '', ENT_QUOTES);
+	$_persona_js  = addslashes($_persona);
 	$_last_signin = $_m['LastSignIn'] ?? '';
 	$_is_active   = !empty($_last_signin) && $_last_signin >= $_cutoff;
 ?>
@@ -545,47 +539,29 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					</td>
 <?php if ($_can_edit): ?>
 					<td style="white-space:nowrap;">
-						<div class="un-action-btns" id="un-btns-<?=$_um_id?>">
+						<form method="post" action="<?=htmlspecialchars($_base_url)?>" id="un-retire-form-<?=$_um_id?>" style="display:none">
+							<input type="hidden" name="Action" value="retire_member">
+							<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
+						</form>
+						<form method="post" action="<?=htmlspecialchars($_base_url)?>" id="un-remove-form-<?=$_um_id?>" style="display:none">
+							<input type="hidden" name="Action" value="remove_member">
+							<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
+						</form>
+						<div class="un-action-btns">
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
 								onclick="unOpenEditMember(<?=$_um_id?>, '<?=$_role_esc?>', '<?=$_title_esc?>')"
 								title="Edit role / title">
 								<i class="fas fa-pen"></i>
 							</button>
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
-								onclick="unToggleConfirm('retire', <?=$_um_id?>)"
+								onclick="pnConfirm({title:'Retire Member',message:'Retire <?=$_persona_js?> from the unit?',confirmText:'Retire',danger:true},function(){document.getElementById('un-retire-form-<?=$_um_id?>').submit()})"
 								title="Retire member" style="color:#c05621;">
 								<i class="fas fa-user-minus"></i>
 							</button>
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
-								onclick="unToggleConfirm('remove', <?=$_um_id?>)"
+								onclick="pnConfirm({title:'Remove Member',message:'Permanently remove <?=$_persona_js?> from the unit?',confirmText:'Remove',danger:true},function(){document.getElementById('un-remove-form-<?=$_um_id?>').submit()})"
 								title="Remove member" style="color:#e53e3e;">
 								<i class="fas fa-times"></i>
-							</button>
-						</div>
-						<!-- Retire confirm -->
-						<div class="pn-delete-confirm" id="un-retire-<?=$_um_id?>">
-							<span>Retire?</span>
-							<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline">
-								<input type="hidden" name="Action" value="retire_member">
-								<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
-								<button type="submit" class="pn-delete-yes">Yes</button>
-							</form>
-							<button class="pn-delete-no"
-								onclick="document.getElementById('un-retire-<?=$_um_id?>').classList.remove('pn-active');document.getElementById('un-btns-<?=$_um_id?>').style.display=''">
-								No
-							</button>
-						</div>
-						<!-- Remove confirm -->
-						<div class="pn-delete-confirm" id="un-remove-<?=$_um_id?>">
-							<span style="color:#e53e3e;font-weight:600;">Remove permanently?</span>
-							<form method="post" action="<?=htmlspecialchars($_base_url)?>" style="display:inline">
-								<input type="hidden" name="Action" value="remove_member">
-								<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
-								<button type="submit" class="pn-delete-yes">Yes</button>
-							</form>
-							<button class="pn-delete-no"
-								onclick="document.getElementById('un-remove-<?=$_um_id?>').classList.remove('pn-active');document.getElementById('un-btns-<?=$_um_id?>').style.display=''">
-								No
 							</button>
 						</div>
 					</td>
@@ -1030,23 +1006,7 @@ function unOpenEditMember(unitMundaneId, role, title) {
 	document.getElementById('un-edit-title').value = title;
 	unOpenModal('un-modal-edit-member');
 }
-function unToggleConfirm(type, id) {
-	/* hide all other open confirms */
-	document.querySelectorAll('.pn-delete-confirm.pn-active').forEach(function (el) {
-		el.classList.remove('pn-active');
-		var suffix = el.id.replace('un-retire-','').replace('un-remove-','').replace('un-mgr-','');
-		var btns = document.getElementById('un-mgr-btns-' + suffix) || document.getElementById('un-btns-' + suffix);
-		if (btns) btns.style.display = '';
-	});
-	var el   = document.getElementById('un-' + type + '-' + id);
-	var btns = type === 'mgr'
-		? document.getElementById('un-mgr-btns-' + id)
-		: document.getElementById('un-btns-' + id);
-	if (el) {
-		el.classList.add('pn-active');
-		if (btns) btns.style.display = 'none';
-	}
-}
+
 /* Close modals on backdrop click */
 document.querySelectorAll('.pn-overlay').forEach(function (overlay) {
 	overlay.addEventListener('click', function (e) {
