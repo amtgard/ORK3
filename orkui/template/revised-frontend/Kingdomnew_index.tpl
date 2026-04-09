@@ -1079,17 +1079,17 @@
 				<div class="kn-modal-box" style="max-width:480px">
 					<div class="kn-modal-header">
 						<h3 class="kn-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
-						<button class="kn-modal-close" onclick="knCpCloseNewCourt()">&times;</button>
+						<button class="kn-modal-close-btn" onclick="knCpCloseNewCourt()">&times;</button>
 					</div>
 					<div class="kn-modal-body">
-						<div class="kn-field">
-							<label class="kn-field-label">Court Name <span style="color:#e53e3e">*</span></label>
-							<input type="text" id="kn-cp-new-name" class="kn-input" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
+						<div class="kn-acct-field">
+							<label >Court Name <span style="color:#e53e3e">*</span></label>
+							<input type="text" id="kn-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
 						</div>
 						<?php if (!empty($CourtUpcomingEvents)): ?>
-						<div class="kn-field">
-							<label class="kn-field-label">Link to Event (optional)</label>
-							<select id="kn-cp-new-event" class="kn-input" onchange="knCpOnEventChange(this,'kn-cp-new-date')">
+						<div class="kn-acct-field">
+							<label >Link to Event (optional)</label>
+							<select id="kn-cp-new-event" onchange="knCpOnEventChange(this,'kn-cp-new-date')">
 								<option value="0" data-start="">— None —</option>
 								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
 								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
@@ -1099,9 +1099,9 @@
 							</select>
 						</div>
 						<?php endif; ?>
-						<div class="kn-field">
-							<label class="kn-field-label">Date</label>
-							<input type="date" id="kn-cp-new-date" class="kn-input">
+						<div class="kn-acct-field">
+							<label >Date</label>
+							<input type="date" id="kn-cp-new-date" >
 						</div>
 						<div id="kn-cp-new-error" style="color:#c53030;font-size:13px;margin-top:8px;display:none"></div>
 					</div>

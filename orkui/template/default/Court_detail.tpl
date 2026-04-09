@@ -83,11 +83,13 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-award-list { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
 .cp-award-row { background: #fff; border-bottom: 1px solid #edf2f7; }
 .cp-award-row:last-child { border-bottom: none; }
-.cp-award-row-main { display: grid; grid-template-columns: 20px 150px 1fr 240px 95px 160px; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; }
+.cp-award-row-main { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; }
 .cp-award-row-main:hover { background: #f7fafc; }
 .cp-award-drag { color: #cbd5e0; cursor: grab; font-size: 14px; }
-.cp-award-recipient { font-weight: 700; color: #2d3748; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-award-name { color: #4a5568; font-size: 13px; display: flex; align-items: center; gap: 5px; min-width: 0; }
+.cp-award-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-award-line1 { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #2d3748; font-size: 14px; min-width: 0; }
+.cp-award-park { font-weight: 400; color: #718096; font-size: 11px; letter-spacing: .2px; flex-shrink: 0; }
+.cp-award-line2 { display: flex; align-items: center; gap: 5px; color: #4a5568; font-size: 13px; min-width: 0; flex-wrap: wrap; }
 .cp-award-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 1; }
 .cp-note-btn { background: none; border: none; cursor: pointer; color: #a0aec0; font-size: 12px; padding: 0 2px; flex-shrink: 0; line-height: 1; transition: color .15s; }
 .cp-note-btn:hover { color: #4a5568; }
@@ -97,12 +99,11 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 #cp-note-popup-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #a0aec0; }
 #cp-note-popup-close { background: none; border: none; color: #718096; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; margin-left: 12px; flex-shrink: 0; }
 #cp-note-popup-close:hover { color: #fff; }
-.cp-award-rank { color: #718096; font-size: 12px; }
-.cp-award-flags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.cp-award-status-col { display: flex; align-items: center; justify-content: flex-end; }
-.cp-award-row-main > .fa-chevron-down { justify-self: end; }
-.cp-flag-local { background: #fff3cd; color: #856404; border: 1px solid #ffc107; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
-.cp-flag-rec { background: #e8f4fd; color: #1a6e9a; border: 1px solid #bee3f8; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.cp-award-rank { color: #a0aec0; font-size: 12px; flex-shrink: 0; }
+.cp-award-flags { display: inline-flex; gap: 5px; align-items: center; flex-shrink: 0; }
+.cp-award-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.cp-flag-local { background: #fff3cd; color: #856404; border: 1px solid #ffc107; width: 20px; height: 20px; border-radius: 50%; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: default; }
+.cp-flag-rec   { background: #e8f4fd; color: #1a6e9a; border: 1px solid #bee3f8; width: 20px; height: 20px; border-radius: 50%; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: default; }
 .cp-type-ladder { background: #faf5ff; color: #6b46c1; border: 1px solid #d6bcfa; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .cp-type-title  { background: #fffff0; color: #975a16; border: 1px solid #f6e05e; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .cp-type-award  { background: #f0fff4; color: #276749; border: 1px solid #9ae6b4; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
@@ -231,6 +232,14 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-stat-ready { color:#276749; font-weight:600; }
 .cp-stat-wip   { color:#c05621; font-weight:600; }
 .cp-stat-none  { color:#718096; }
+
+/* Award type accent border */
+.cp-aw-type-title  { border-left: 4px solid #d69e2e !important; }
+.cp-aw-type-ladder { border-left: 4px solid #9f7aea !important; }
+.cp-aw-type-award  { border-left: 4px solid #38a169 !important; }
+
+/* Published mode: hide drag column */
+.cp-list-published .cp-reorder-btns { visibility: hidden; pointer-events: none; }
 </style>
 
 <?php if ($error): ?>
@@ -321,11 +330,15 @@ $_total_awards = count($courtAwards ?? []);
 <?php if (!$error): ?>
 <div class="cp-page" style="padding-top:0;padding-bottom:0;margin-bottom:0">
 <div class="cp-status-bar">
-    <span><?= $_total_awards ?> award<?= $_total_awards !== 1 ? 's' : '' ?></span>
+    <span id="cp-sb-total"><?= $_total_awards ?> award<?= $_total_awards !== 1 ? 's' : '' ?></span>
     <span class="cp-status-sep"> &middot; </span>
-    <span>Scrolls: <span class="cp-stat-ready"><?= $_scroll_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_scroll_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_scroll_counts[0] ?> not started</span></span>
+    <span class="cp-sb-scroll">Scrolls: <span class="cp-stat-ready"><?= $_scroll_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_scroll_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_scroll_counts[0] ?> not started</span></span>
     <span class="cp-status-sep"> &middot; </span>
-    <span>Regalia: <span class="cp-stat-ready"><?= $_regalia_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_regalia_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_regalia_counts[0] ?> not started</span></span>
+    <span class="cp-sb-regalia">Regalia: <span class="cp-stat-ready"><?= $_regalia_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_regalia_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_regalia_counts[0] ?> not started</span></span>
+    <?php if (in_array($courtSt, ['published','complete'])): ?>
+    <span class="cp-status-sep"> &middot; </span>
+    <span class="cp-sb-progress" id="cp-sb-progress"></span>
+    <?php endif; ?>
 </div>
 </div>
 <?php endif; ?>
@@ -423,7 +436,7 @@ $_total_awards = count($courtAwards ?? []);
         <?php endif; ?>
     </div>
 
-    <div class="cp-award-list" id="cp-award-list">
+    <div class="cp-award-list<?= in_array($courtSt, ['published','complete']) ? ' cp-list-published' : '' ?>" id="cp-award-list">
         <?php if (empty($courtAwards)): ?>
         <div class="cp-award-empty" id="cp-award-empty">
             <i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>
@@ -445,54 +458,42 @@ $_total_awards = count($courtAwards ?? []);
                 $typeClass = 'cp-type-award'; $typeIcon = 'fa-award'; $typeLabel = 'Award';
             }
         ?>
-        <div class="cp-award-row<?= $ast === 'given' ? ' cp-granted' : ($ast === 'cancelled' ? ' cp-skipped' : '') ?>"
+        <div class="cp-award-row<?= $ast === 'given' ? ' cp-granted' : ($ast === 'cancelled' ? ' cp-skipped' : '') ?> cp-aw-type-<?= $aw['IsTitle'] ? 'title' : ($aw['IsLadder'] ? 'ladder' : 'award') ?>"
              id="cp-aw-<?= (int)$aw['CourtAwardId'] ?>"
              data-court-award-id="<?= (int)$aw['CourtAwardId'] ?>"
              data-sort="<?= (int)$aw['SortOrder'] ?>">
-            <div class="cp-award-row-main" onclick="<?= $courtSt === 'published' ? '' : 'cpToggleAward(' . (int)$aw['CourtAwardId'] . ')' ?>">
+            <div class="cp-award-row-main" onclick="cpToggleAward(<?= (int)$aw['CourtAwardId'] ?>)">
                 <div class="cp-reorder-btns">
                     <button class="cp-reorder-btn" title="Move up" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,-1)">&#9650;</button>
                     <button class="cp-reorder-btn" title="Move down" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,1)">&#9660;</button>
                 </div>
-                <div class="cp-award-recipient"><?= htmlspecialchars($aw['Persona']) ?><?php if (!empty($aw['ParkAbbrev'])): ?> <span style="font-size:11px;font-weight:400;color:#718096;letter-spacing:.2px"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?></div>
-                <div class="cp-award-name">
-                    <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?><?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span style="color:#a0aec0"> &mdash; Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?></span>
-                    <?php if (!empty($aw['Notes'])): ?>
-                    <button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>
-                    <?php endif; ?>
+                <div class="cp-award-info">
+                    <div class="cp-award-line1 cp-award-name">
+                        <?= htmlspecialchars($aw['Persona']) ?>
+                        <?php if (!empty($aw['ParkAbbrev'])): ?><span class="cp-award-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
+                        <?php if (!empty($aw['Notes'])): ?><button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button><?php endif; ?>
+                    </div>
+                    <div class="cp-award-line2">
+                        <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?><?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="cp-award-rank"> &mdash; Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?></span>
+                        <span class="cp-award-flags">
+                            <?php if ($aw['PassToLocal']): ?><span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span><?php endif; ?>
+                            <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" title="From Recommendation"><i class="fas fa-star"></i></span><?php endif; ?>
+                            <span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i></span>
+                            <span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="<?= $aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i></span>
+                        </span>
+                    </div>
                 </div>
-                <div class="cp-award-flags">
-                    <span class="<?= $typeClass ?>"><i class="fas <?= $typeIcon ?>"></i> <?= $typeLabel ?></span>
-                    <?php if ($aw['PassToLocal']): ?>
-                    <span class="cp-flag-local"><i class="fas fa-arrow-down"></i> Pass to Local</span>
-                    <?php endif; ?>
-                    <?php if ($aw['RecommendationsId']): ?>
-                    <span class="cp-flag-rec"><i class="fas fa-star"></i> From Rec</span>
-                    <?php endif; ?>
-                    <?php if ($courtSt === 'draft'): ?>
-                    <span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)">
-                        <i class="fas fa-print"></i>
-                    </span>
-                    <span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="<?= $aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)">
-                        <i class="fas fa-medal"></i>
-                    </span>
-                    <?php endif; ?>
-                </div>
-                <div class="cp-award-status-col">
+                <div class="cp-award-right">
                     <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
+                    <?php if ($courtSt === 'published' && !in_array($ast, ['given','cancelled'])): ?>
+                    <div class="cp-grant-actions" onclick="event.stopPropagation()">
+                        <button class="cp-btn-grant" onclick="cpGrantAward(<?= (int)$aw['CourtAwardId'] ?>)"><i class="fas fa-check"></i> Grant</button>
+                        <button class="cp-btn-skip" onclick="cpSkipAward(<?= (int)$aw['CourtAwardId'] ?>)"><i class="fas fa-forward"></i> Skip</button>
+                    </div>
+                    <?php else: ?>
+                    <i class="fas fa-chevron-down" style="color:#cbd5e0;font-size:12px;flex-shrink:0"></i>
+                    <?php endif; ?>
                 </div>
-                <?php if ($courtSt === 'published' && !in_array($ast, ['given','cancelled'])): ?>
-                <div class="cp-grant-actions" onclick="event.stopPropagation()">
-                    <button class="cp-btn-grant" onclick="cpGrantAward(<?= (int)$aw['CourtAwardId'] ?>)">
-                        <i class="fas fa-check"></i> Grant
-                    </button>
-                    <button class="cp-btn-skip" onclick="cpSkipAward(<?= (int)$aw['CourtAwardId'] ?>)">
-                        <i class="fas fa-forward"></i> Skip
-                    </button>
-                </div>
-                <?php else: ?>
-                <i class="fas fa-chevron-down" style="color:#cbd5e0;font-size:12px;flex-shrink:0"></i>
-                <?php endif; ?>
             </div>
             <div class="cp-award-row-expand" id="cp-aw-expand-<?= (int)$aw['CourtAwardId'] ?>">
                 <div class="cp-expand-grid">
@@ -525,27 +526,27 @@ $_total_awards = count($courtAwards ?? []);
                     <div>
                         <div class="cp-expand-label">Scroll Maker</div>
                         <div style="position:relative">
-                            <input type="text" id="cp-scroll-maker-text-<?= $caid ?>"
-                                   class="cp-maker-ac" data-drop="cp-scroll-drop-<?= $caid ?>" data-hidden="cp-scroll-maker-id-<?= $caid ?>"
+                            <input type="text" id="cp-scroll-maker-text-<?= (int)$aw['CourtAwardId'] ?>"
+                                   class="cp-maker-ac" data-drop="cp-scroll-drop-<?= (int)$aw['CourtAwardId'] ?>" data-hidden="cp-scroll-maker-id-<?= (int)$aw['CourtAwardId'] ?>"
                                    placeholder="Search by persona…"
                                    value="<?= htmlspecialchars($aw['ScrollMakerPersona'] ?? '') ?>"
                                    autocomplete="off"
                                    style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px">
-                            <input type="hidden" id="cp-scroll-maker-id-<?= $caid ?>" value="<?= (int)($aw['ScrollMakerId'] ?? 0) ?>">
-                            <div id="cp-scroll-drop-<?= $caid ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
+                            <input type="hidden" id="cp-scroll-maker-id-<?= (int)$aw['CourtAwardId'] ?>" value="<?= (int)($aw['ScrollMakerId'] ?? 0) ?>">
+                            <div id="cp-scroll-drop-<?= (int)$aw['CourtAwardId'] ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
                         </div>
                     </div>
                     <div>
                         <div class="cp-expand-label">Regalia Maker</div>
                         <div style="position:relative">
-                            <input type="text" id="cp-regalia-maker-text-<?= $caid ?>"
-                                   class="cp-maker-ac" data-drop="cp-regalia-drop-<?= $caid ?>" data-hidden="cp-regalia-maker-id-<?= $caid ?>"
+                            <input type="text" id="cp-regalia-maker-text-<?= (int)$aw['CourtAwardId'] ?>"
+                                   class="cp-maker-ac" data-drop="cp-regalia-drop-<?= (int)$aw['CourtAwardId'] ?>" data-hidden="cp-regalia-maker-id-<?= (int)$aw['CourtAwardId'] ?>"
                                    placeholder="Search by persona…"
                                    value="<?= htmlspecialchars($aw['RegaliaMakerPersona'] ?? '') ?>"
                                    autocomplete="off"
                                    style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px">
-                            <input type="hidden" id="cp-regalia-maker-id-<?= $caid ?>" value="<?= (int)($aw['RegaliaMakerId'] ?? 0) ?>">
-                            <div id="cp-regalia-drop-<?= $caid ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
+                            <input type="hidden" id="cp-regalia-maker-id-<?= (int)$aw['CourtAwardId'] ?>" value="<?= (int)($aw['RegaliaMakerId'] ?? 0) ?>">
+                            <div id="cp-regalia-drop-<?= (int)$aw['CourtAwardId'] ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
                         </div>
                     </div>
                 </div>
@@ -974,11 +975,54 @@ $_total_awards = count($courtAwards ?? []);
                     if (type === 'scroll') award.ScrollStatus = d.newStatus;
                     else award.RegaliaStatus = d.newStatus;
                 }
+                cpRefreshStatusBar();
             } else {
                 alert(d.error || 'Could not update tracking status.');
             }
         });
     };
+
+    // Recompute and update the status bar counts from current DOM state
+    function cpRefreshStatusBar() {
+        var scroll  = {0:0, 1:0, 2:0};
+        var regalia = {0:0, 1:0, 2:0};
+        document.querySelectorAll('#cp-award-list .cp-award-row').forEach(function(row) {
+            var si = row.querySelector('.cp-tracking-icon[data-type="scroll"]');
+            var ri = row.querySelector('.cp-tracking-icon[data-type="regalia"]');
+            if (si) { var s = parseInt(si.dataset.status,10)||0; scroll[Math.min(2,Math.max(0,s))]++; }
+            if (ri) { var r = parseInt(ri.dataset.status,10)||0; regalia[Math.min(2,Math.max(0,r))]++; }
+        });
+        var bar = document.querySelector('.cp-status-bar');
+        if (!bar) return;
+        // Update scroll text (second span[class] child)
+        var scrollSpan = bar.querySelector('.cp-sb-scroll');
+        if (scrollSpan) {
+            scrollSpan.innerHTML = 'Scrolls: <span class="cp-stat-ready">'+scroll[2]+' ready</span>, <span class="cp-stat-wip">'+scroll[1]+' in progress</span>, <span class="cp-stat-none">'+scroll[0]+' not started</span>';
+        }
+        var regaliaSpan = bar.querySelector('.cp-sb-regalia');
+        if (regaliaSpan) {
+            regaliaSpan.innerHTML = 'Regalia: <span class="cp-stat-ready">'+regalia[2]+' ready</span>, <span class="cp-stat-wip">'+regalia[1]+' in progress</span>, <span class="cp-stat-none">'+regalia[0]+' not started</span>';
+        }
+    }
+
+    function cpRefreshProgress() {
+        var prog = document.getElementById('cp-sb-progress');
+        if (!prog) return;
+        var rows = document.querySelectorAll('#cp-award-list .cp-award-row');
+        var granted = 0, skipped = 0, total = 0;
+        rows.forEach(function(row) {
+            total++;
+            if (row.classList.contains('cp-granted')) granted++;
+            else if (row.classList.contains('cp-skipped')) skipped++;
+        });
+        var remaining = total - granted - skipped;
+        prog.innerHTML =
+            '<span style="color:#276749;font-weight:600"><i class="fas fa-check-circle"></i> ' + granted + ' granted</span>' +
+            (skipped > 0 ? ' &nbsp;<span style="color:#718096">' + skipped + ' skipped</span>' : '') +
+            ' &nbsp;<span style="color:#4a5568">' + remaining + ' remaining</span>';
+    }
+    // Initialise progress counter on page load
+    if (document.querySelector('#cp-sb-progress')) cpRefreshProgress();
 
     function cpSaveOrder() {
         var rows  = Array.from(document.querySelectorAll('#cp-award-list .cp-award-row'));
@@ -1012,7 +1056,8 @@ $_total_awards = count($courtAwards ?? []);
                     if (ptl && !existing) {
                         var span = document.createElement('span');
                         span.className = 'cp-flag-local';
-                        span.innerHTML = '<i class="fas fa-arrow-down"></i> Pass to Local';
+                        span.title = 'Pass to Local';
+                        span.innerHTML = '<i class="fas fa-arrow-down"></i>';
                         flagsEl.insertBefore(span, flagsEl.firstChild);
                     } else if (!ptl && existing) {
                         existing.remove();
@@ -1062,6 +1107,7 @@ $_total_awards = count($courtAwards ?? []);
                     var actionsEl = row.querySelector('.cp-grant-actions');
                     if (actionsEl) actionsEl.innerHTML = '<span style="font-size:12px;color:#276749;font-weight:700"><i class="fas fa-check-circle"></i> Granted</span>';
                 }
+                cpRefreshProgress();
             } else {
                 alert(d.error || 'Could not grant award.');
             }
@@ -1081,6 +1127,7 @@ $_total_awards = count($courtAwards ?? []);
                     var actionsEl = row.querySelector('.cp-grant-actions');
                     if (actionsEl) actionsEl.innerHTML = '<span style="font-size:12px;color:#a0aec0;font-weight:700"><i class="fas fa-forward"></i> Skipped</span>';
                 }
+                cpRefreshProgress();
             } else {
                 alert(d.error || 'Could not skip award.');
             }
@@ -1317,30 +1364,26 @@ $_total_awards = count($courtAwards ?? []);
     function cpAppendAwardRow(aw) {
         var empty = gid('cp-award-empty');
         if (empty) empty.remove();
-        var typeBadge = aw.IsTitle
-            ? '<span class="cp-type-title"><i class="fas fa-crown"></i> Title</span>'
-            : (aw.IsLadder
-                ? '<span class="cp-type-ladder"><i class="fas fa-layer-group"></i> Ladder</span>'
-                : '<span class="cp-type-award"><i class="fas fa-award"></i> Award</span>');
-        var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local"><i class="fas fa-arrow-down"></i> Pass to Local</span>' : '';
-        var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec"><i class="fas fa-star"></i> From Rec</span>' : '';
-        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? ' <span style="color:#a0aec0">&mdash; Rank ' + aw.Rank + '</span>' : '';
+        var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span>' : '';
+        var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" title="From Recommendation"><i class="fas fa-star"></i></span>' : '';
+        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="cp-award-rank"> &mdash; Rank ' + aw.Rank + '</span>' : '';
         var html = '<div class="cp-award-row" id="cp-aw-' + aw.CourtAwardId + '" data-court-award-id="' + aw.CourtAwardId + '" data-sort="' + aw.SortOrder + '">' +
             '<div class="cp-award-row-main" onclick="cpToggleAward(' + aw.CourtAwardId + ')">' +
             '<div class="cp-reorder-btns">' +
             '<button class="cp-reorder-btn" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',-1)">&#9650;</button>' +
             '<button class="cp-reorder-btn" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',1)">&#9660;</button>' +
             '</div>' +
-            '<div class="cp-award-recipient">' + esc(aw.Persona) + (aw.ParkAbbrev ? ' <span style="font-size:11px;font-weight:400;color:#718096;letter-spacing:.2px">' + esc(aw.ParkAbbrev) + '</span>' : '') + '</div>' +
-            '<div class="cp-award-name"><span class="cp-award-name-text">' + esc(aw.AwardName) + rankStr + '</span>' +
+            '<div class="cp-award-info">' +
+            '<div class="cp-award-line1 cp-award-name">' + esc(aw.Persona) + (aw.ParkAbbrev ? ' <span class="cp-award-park">' + esc(aw.ParkAbbrev) + '</span>' : '') +
             (aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>' : '') +
             '</div>' +
-            '<div class="cp-award-flags">' + typeBadge + ptlBadge + recBadge +
-            (courtStatus === 'draft' ? '<span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span>' +
-            '<span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span>' : '') +
-            '</div>' +
-            '<div class="cp-award-status-col"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span></div>' +
-            '<i class="fas fa-chevron-down" style="color:#cbd5e0;font-size:12px;flex-shrink:0"></i></div>' +
+            '<div class="cp-award-line2"><span class="cp-award-name-text">' + esc(aw.AwardName) + rankStr + '</span>' +
+            '<span class="cp-award-flags">' + ptlBadge + recBadge +
+            '<span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span>' +
+            '<span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span>' +
+            '</span></div></div>' +
+            '<div class="cp-award-right"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span>' +
+            '<i class="fas fa-chevron-down" style="color:#cbd5e0;font-size:12px;flex-shrink:0"></i></div></div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
             '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea></div>' +

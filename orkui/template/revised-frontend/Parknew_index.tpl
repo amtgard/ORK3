@@ -1581,19 +1581,19 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 			<!-- New Court Modal (park-scoped) -->
 			<div class="pk-overlay" id="pk-cp-new-court-modal" style="display:none">
 				<div class="pk-modal-box" style="max-width:480px">
-					<div class="pk-modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e8f0">
+					<div class="pk-modal-header">
 						<h3 class="pk-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
 						<button class="pk-modal-close-btn" onclick="pkCpCloseNewCourt()" aria-label="Close">&times;</button>
 					</div>
 					<div class="pk-modal-body">
 						<div class="pk-acct-field">
 							<label>Court Name <span style="color:#e53e3e">*</span></label>
-							<input type="text" id="pk-cp-new-name" class="pk-input" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
+							<input type="text" id="pk-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
 						</div>
 						<?php if (!empty($CourtUpcomingEvents)): ?>
 						<div class="pk-acct-field">
 							<label>Link to Event (optional)</label>
-							<select id="pk-cp-new-event" class="pk-input" onchange="pkCpOnEventChange(this,'pk-cp-new-date')">
+							<select id="pk-cp-new-event" onchange="pkCpOnEventChange(this,'pk-cp-new-date')">
 								<option value="0" data-start="">— None —</option>
 								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
 								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
@@ -1605,7 +1605,7 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 						<?php endif; ?>
 						<div class="pk-acct-field">
 							<label>Date</label>
-							<input type="date" id="pk-cp-new-date" class="pk-input">
+							<input type="date" id="pk-cp-new-date" >
 						</div>
 						<div id="pk-cp-new-error" class="pk-form-error" style="display:none"></div>
 					</div>

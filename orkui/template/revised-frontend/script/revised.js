@@ -16306,6 +16306,8 @@ window.recsExportPrint = function(dt, title) {
         if (!e.target.closest('.kn-rec-filter-info')) {
             document.querySelectorAll('.kn-rec-filter-popover.kn-pop-open').forEach(function(p) { p.classList.remove('kn-pop-open'); });
         }
+    });
+})();
 
 // ---- Snooze-aware filter + dropdown-close (Park page) ----
 // ---- Recommendations tab filter bar (Kingdomnew + Parknew) ----
