@@ -11,7 +11,7 @@ class Controller_Login extends Controller {
 	public function index($action = null) {
 		$this->template = '../revised-frontend/Login_index.tpl';
 		if (($_GET['msg'] ?? '') === 'session_replaced') {
-			$this->data['session_message'] = 'You were logged in from another device. Please log in again.';
+			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
 		}
 	}
 
@@ -24,7 +24,7 @@ class Controller_Login extends Controller {
 	public function login($location = null) {
 		$this->template = '../revised-frontend/Login_index.tpl';
 		if (($_GET['msg'] ?? '') === 'session_replaced') {
-			$this->data['session_message'] = 'You were logged in from another device. Please log in again.';
+			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
 		}
 		if (strlen(trim($this->session->location)) == 0) {
 			$this->session->location = $location;
