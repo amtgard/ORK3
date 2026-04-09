@@ -343,6 +343,32 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-radio-group { display: flex; gap: 16px; }
 .cp-radio-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 /* inline autocomplete dropdown (kn-ac-results already in revised.css) */
+/* =====================================================
+   DARK MODE — Admin award modals (.cp-*)
+   ===================================================== */
+html[data-theme="dark"] .cp-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .cp-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .cp-modal-close:hover { color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-footer { background: var(--ork-bg-secondary); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .cp-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .cp-field input[type=text], html[data-theme="dark"] .cp-field input[type=email],
+html[data-theme="dark"] .cp-field input[type=password], html[data-theme="dark"] .cp-field input[type=date],
+html[data-theme="dark"] .cp-field select, html[data-theme="dark"] .cp-field textarea {
+  background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .cp-feedback-ok  { background: #1c4532; color: #9ae6b4; border-color: #276749; }
+html[data-theme="dark"] .cp-feedback-err { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16; color: #fbd38d; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .cp-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .cp-modal-header { border-bottom-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .cp-modal-footer { background: var(--ork-bg-secondary); border-top-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .cp-field label { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .cp-field input[type=text], html:not([data-theme="light"]):not([data-theme="dark"]) .cp-field select, html:not([data-theme="light"]):not([data-theme="dark"]) .cp-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .cp-warning { background: #744210; border-color: #975a16; color: #fbd38d; }
+}
 </style>
 
 <!-- ---- Create Player ---- -->

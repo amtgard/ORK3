@@ -85,6 +85,22 @@ if (($report_type ?? null) === 'Park') {
 .psr-empty { text-align: center; padding: 24px; color: #a0aec0; font-style: italic; }
 
 table.psr-table td input[type="checkbox"] { margin: 0; vertical-align: middle; }
+/* =====================================================
+   DARK MODE — Player status reconciliation (.psr-*)
+   ===================================================== */
+html[data-theme="dark"] .psr-reactivate-header { background: #1a365d; color: #90cdf4; border-color: #2a4365; }
+html[data-theme="dark"] .psr-deactivate-header { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .psr-bulk-bar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .psr-bulk-bar .psr-selected-count,
+html[data-theme="dark"] .psr-bulk-bar .psr-select-all-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .psr-done-icon { color: #68d391; }
+html[data-theme="dark"] .psr-error-msg { color: #feb2b2; }
+html[data-theme="dark"] .psr-empty { color: var(--ork-text-muted); }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-reactivate-header { background: #1a365d; color: #90cdf4; border-color: #2a4365; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-deactivate-header { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-bulk-bar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+}
 </style>
 
 <div class="rp-root">

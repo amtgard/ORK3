@@ -135,6 +135,28 @@
               border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
               border-radius: 50%; animation: rc-spin .6s linear infinite; }
 @keyframes rc-spin { to { transform: rotate(360deg); } }
+/* =====================================================
+   DARK MODE — Player reconcile table (.rc-*)
+   ===================================================== */
+html[data-theme="dark"] .rc-group-hdr td { background: #1a365d; color: #90cdf4; border-top-color: #2a4365; }
+html[data-theme="dark"] .rc-real-badge { background: var(--ork-bg-secondary); border-color: #2a4365; color: #90cdf4; }
+html[data-theme="dark"] .rc-table input[type="text"],
+html[data-theme="dark"] .rc-table input[type="number"],
+html[data-theme="dark"] .rc-table input[type="date"],
+html[data-theme="dark"] .rc-table select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .rc-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .rc-ac-item { color: var(--ork-text); }
+html[data-theme="dark"] .rc-ac-item:hover { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .rc-ac-item-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .rc-row-error td { background: #742a2a !important; }
+html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rc-group-hdr td { background: #1a365d; color: #90cdf4; border-top-color: #2a4365; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rc-table input[type="text"], html:not([data-theme="light"]):not([data-theme="dark"]) .rc-table select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rc-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rc-ac-item { color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rc-row-error td { background: #742a2a !important; }
+}
 </style>
 
 <div class="rc-wrap">

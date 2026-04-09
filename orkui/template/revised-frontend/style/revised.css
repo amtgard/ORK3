@@ -6142,7 +6142,50 @@ table.dataTable.adm-table tbody tr.even:hover {
 	.aw-pick-item { padding: 10px 12px 10px 18px; }
 	.aw-pick-item.aw-active { padding-left: 15px; }
 	.aw-pick-group-label { padding: 10px 12px 5px; }
-=======
+}
+
+/* =====================================================
+   DARK MODE — Searchable Award Dropdown (.aw-*)
+   ===================================================== */
+html[data-theme="dark"] .aw-picker-trigger {
+  background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .aw-picker-trigger:hover { border-color: var(--ork-border); }
+html[data-theme="dark"] .aw-picker-trigger.aw-has-value { color: var(--ork-text); }
+html[data-theme="dark"] .aw-dropdown {
+  background: var(--ork-card-bg); border-color: var(--ork-border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+html[data-theme="dark"] .aw-dropdown-search {
+  background: var(--ork-card-bg); color: var(--ork-text);
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .aw-dropdown-search-wrap i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .aw-pick-group-label {
+  background: var(--ork-bg-secondary); color: var(--ork-text-secondary);
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .aw-pick-item:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .aw-pick-item:focus { background: var(--ork-bg-tertiary); outline: none; }
+html[data-theme="dark"] .aw-pick-item.aw-active {
+  background: var(--ork-bg-secondary); border-left-color: var(--ork-link);
+}
+html[data-theme="dark"] .aw-pick-name { color: var(--ork-text); }
+html[data-theme="dark"] .aw-pick-desc { color: var(--ork-text-muted); }
+html[data-theme="dark"] .aw-pick-standalone { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .aw-pick-empty { color: var(--ork-text-muted); }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-picker-trigger { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-picker-trigger.aw-has-value { color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-dropdown { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-dropdown-search { background: var(--ork-card-bg); color: var(--ork-text); border-bottom-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-pick-group-label { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-pick-item:hover { background: var(--ork-bg-tertiary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-pick-item.aw-active { background: var(--ork-bg-secondary); border-left-color: var(--ork-link); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-pick-name { color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .aw-pick-desc { color: var(--ork-text-muted); }
+}
+
 /* =====================================================
    DARK MODE — Critical Component Overrides
    Fixes for hardcoded colors missed in initial pass

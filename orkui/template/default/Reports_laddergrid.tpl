@@ -378,6 +378,96 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 	.lg-table th.lg-col-award { width: 28px; min-width: 28px; max-width: 28px; }
 	.lg-th-inner { font-size: 0.65rem; width: 70px; }
 }
+/* =====================================================
+   DARK MODE — Ladder grid knight group palette
+   ===================================================== */
+html[data-theme="dark"] th.lg-group-battle  { background: #1e3a5f !important; color: #90cdf4; }
+html[data-theme="dark"] th.lg-group-battle .lg-th-inner { color: #90cdf4; }
+html[data-theme="dark"] .lg-group-header-row th.lg-group-battle { border-left-color: #2a4a7f; }
+html[data-theme="dark"] td.lg-group-battle  { background: #1a2d45 !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-group-battle { background: #172540 !important; }
+
+html[data-theme="dark"] th.lg-group-sword  { background: #2d3748 !important; color: #cbd5e0; }
+html[data-theme="dark"] th.lg-group-sword .lg-th-inner { color: #cbd5e0; }
+html[data-theme="dark"] .lg-group-header-row th.lg-group-sword { border-left-color: #4a5568; }
+html[data-theme="dark"] td.lg-group-sword  { background: #252f3d !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-group-sword { background: #202838 !important; }
+
+html[data-theme="dark"] th.lg-group-crown  { background: #3d2b00 !important; color: #fbd38d; }
+html[data-theme="dark"] th.lg-group-crown .lg-th-inner { color: #fbd38d; }
+html[data-theme="dark"] .lg-group-header-row th.lg-group-crown { border-left-color: #975a16; }
+html[data-theme="dark"] td.lg-group-crown  { background: #2e2000 !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-group-crown { background: #281c00 !important; }
+
+html[data-theme="dark"] th.lg-group-flame  { background: #3d1a1a !important; color: #fca5a5; }
+html[data-theme="dark"] th.lg-group-flame .lg-th-inner { color: #fca5a5; }
+html[data-theme="dark"] .lg-group-header-row th.lg-group-flame { border-left-color: #9b2c2c; }
+html[data-theme="dark"] td.lg-group-flame  { background: #2e1414 !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-group-flame { background: #281010 !important; }
+
+html[data-theme="dark"] th.lg-group-serpent { background: #1a3a2a !important; color: #9ae6b4; }
+html[data-theme="dark"] th.lg-group-serpent .lg-th-inner { color: #9ae6b4; }
+html[data-theme="dark"] .lg-group-header-row th.lg-group-serpent { border-left-color: #276749; }
+html[data-theme="dark"] td.lg-group-serpent { background: #142e22 !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-group-serpent { background: #10261c !important; }
+
+/* Knight cell highlights */
+html[data-theme="dark"] .lg-table tbody tr:nth-child(n) td.lg-cell-knight-battle  { background: #2a4a7f !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(n) td.lg-cell-knight-sword   { background: #4a5568 !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(n) td.lg-cell-knight-crown   { background: #7c4400 !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(n) td.lg-cell-knight-flame   { background: #7c2020 !important; }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(n) td.lg-cell-knight-serpent { background: #1a5c3a !important; }
+
+/* Hover */
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-battle  { background: #1e3a5f !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-sword   { background: #2d3748 !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-crown   { background: #3d2b00 !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-flame   { background: #3d1a1a !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-group-serpent { background: #1a3a2a !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-battle  { background: #3a5f9f !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-sword   { background: #5a6a80 !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-crown   { background: #9c5800 !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-flame   { background: #9c3030 !important; }
+html[data-theme="dark"] .lg-table tbody tr:hover td.lg-cell-knight-serpent { background: #246b48 !important; }
+
+/* Sticky player column + misc */
+html[data-theme="dark"] .lg-table th.lg-col-player,
+html[data-theme="dark"] .lg-table td.lg-col-player { background: var(--ork-card-bg); }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-col-park { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-col-player { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .lg-table td.lg-col-award { border-left-color: var(--ork-border); }
+html[data-theme="dark"] .lg-award-filter { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .lg-pill { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .lg-award-pill { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .lg-award-pill-battle  { border-color: #2a4a7f; color: #90cdf4; }
+html[data-theme="dark"] .lg-award-pill-sword   { border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .lg-award-pill-crown   { border-color: #975a16; color: #fbd38d; }
+html[data-theme="dark"] .lg-award-pill-flame   { border-color: #9b2c2c; color: #fca5a5; }
+html[data-theme="dark"] .lg-award-pill-serpent { border-color: #276749; color: #9ae6b4; }
+html[data-theme="dark"] .lg-dual-range-track { background: var(--ork-border); }
+html[data-theme="dark"] .lg-showing-inactive tr[data-recent="0"] td.lg-col-player::after { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-battle  { background: #1e3a5f !important; color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-battle  { background: #1a2d45 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-sword   { background: #2d3748 !important; color: #cbd5e0; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-sword   { background: #252f3d !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-crown   { background: #3d2b00 !important; color: #fbd38d; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-crown   { background: #2e2000 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-flame   { background: #3d1a1a !important; color: #fca5a5; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-flame   { background: #2e1414 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-serpent { background: #1a3a2a !important; color: #9ae6b4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-serpent { background: #142e22 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-battle  { background: #2a4a7f !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-sword   { background: #4a5568 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-crown   { background: #7c4400 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-flame   { background: #7c2020 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-serpent { background: #1a5c3a !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table th.lg-col-player,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table td.lg-col-player { background: var(--ork-card-bg); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-award-filter { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+}
 </style>
 
 <div class="rp-root">

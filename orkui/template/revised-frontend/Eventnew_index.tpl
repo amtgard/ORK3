@@ -232,6 +232,41 @@
 .att-edit-btn-save { padding:7px 16px; background:#4338ca; color:#fff; border:none; border-radius:6px; font-size:.85rem; font-weight:600; cursor:pointer; }
 .att-edit-btn-save:hover:not(:disabled) { background:#3730a3; }
 .att-edit-btn-save:disabled { opacity:.5; cursor:not-allowed; }
+/* =====================================================
+   DARK MODE — Eventnew components
+   ===================================================== */
+html[data-theme="dark"] .ev-checkin-locked { background: #744210; border-color: #975a16; color: #fbd38d; }
+html[data-theme="dark"] .ev-checkin-locked i { color: #f6ad55; }
+html[data-theme="dark"] .ev-icon-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-icon-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-modal-btn-delete { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .ev-modal-btn-delete:hover:not(:disabled) { background: #9b2c2c; }
+html[data-theme="dark"] .ev-img-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .ev-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ev-img-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .ev-img-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-upload-area { border-color: var(--ork-border); color: var(--ork-text-secondary); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .ev-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ev-upload-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .ev-fp-title { background: #1a365d; color: #90cdf4; }
+html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-checkin-locked { background: #744210; border-color: #975a16; color: #fbd38d; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-icon-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-img-modal { background: var(--ork-card-bg); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-upload-area { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-fp-title { background: #1a365d; color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-modal { background: var(--ork-card-bg); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-input, html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+}
 </style>
 
 <?php // ---- HERO ---- ?>
