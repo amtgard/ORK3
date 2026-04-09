@@ -436,6 +436,133 @@ document.getElementById('wn-overlay').addEventListener('click', function(e) {
 <?php endif; ?>
 <?php endif; ?>
 
+
+<?php
+// ── Email prompt modal ──────────────────────────────────────────────────────
+// Show once per browser session (sessionStorage) to players with no email.
+if ($this->__session->token != null):
+	$__empUid = (int)$this->__session->user_id;
+	$DB->Clear();
+	$__empRow = $DB->DataSet("SELECT email FROM ork_mundane WHERE mundane_id = $__empUid LIMIT 1");
+	$__showEmailPrompt = $__empRow && $__empRow->Next() && empty(trim($__empRow->email ?? ''));
+endif;
+?>
+<?php if (!empty($__showEmailPrompt)): ?>
+<style>
+.emp-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10100; align-items:center; justify-content:center; }
+.emp-overlay.emp-open { display:flex; }
+.emp-modal { background:#fff; border-radius:12px; padding:28px 28px 22px; max-width:440px; width:92%; box-shadow:0 8px 40px rgba(0,0,0,0.28); font-family:inherit; }
+.emp-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.emp-header-icon { font-size:26px; color:#4299e1; flex-shrink:0; }
+.emp-title { font-size:17px; font-weight:700; color:#2d3748; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; margin:0; }
+.emp-body { font-size:13px; color:#4a5568; line-height:1.6; margin-bottom:14px; }
+.emp-field { margin-bottom:12px; }
+.emp-field label { display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px; }
+.emp-field input[type="email"] { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #e2e8f0; border-radius:5px; font-size:14px; color:#2d3748; }
+.emp-field input[type="email"]:focus { outline:none; border-color:#4299e1; box-shadow:0 0 0 3px rgba(66,153,225,.15); }
+.emp-error { display:none; color:#e53e3e; font-size:12px; margin-top:4px; }
+.emp-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:4px; }
+.emp-skip { background:none; border:none; color:#a0aec0; font-size:13px; cursor:pointer; padding:4px 8px; }
+.emp-skip:hover { color:#718096; }
+.emp-save { background:#4299e1; color:#fff; border:none; border-radius:6px; padding:9px 22px; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
+.emp-save:hover:not(:disabled) { background:#2b6cb0; }
+.emp-save:disabled { opacity:.6; cursor:not-allowed; }
+</style>
+<div class="emp-overlay" id="emp-overlay">
+  <div class="emp-modal" role="dialog" aria-modal="true" aria-labelledby="emp-title">
+    <div class="emp-header">
+      <i class="fas fa-envelope emp-header-icon"></i>
+      <span class="emp-title" id="emp-title">Add a recovery email</span>
+    </div>
+    <p class="emp-body">It looks like you don't have a recovery email address on file. If you ever forget your username or password, we can help. Please enter your email address below to continue using the ORK.</p>
+    <div class="emp-field">
+      <label for="emp-email">Email address</label>
+      <input type="email" id="emp-email" name="emp-email" placeholder="you@example.com" autocomplete="email">
+      <div class="esc-suggestion" id="emp-email-suggestion" role="alert">
+        <i class="fas fa-magic"></i>
+        <span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
+        <button type="button" class="esc-suggestion-use">Use it</button>
+        <button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+      </div>
+      <div class="emp-error" id="emp-error"></div>
+    </div>
+    <div class="emp-actions">
+      <button class="emp-skip" id="emp-skip" type="button">Skip for now</button>
+      <button class="emp-save" id="emp-save" type="button">Save email</button>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var SKIP_KEY = 'emp_skipped';
+  if (sessionStorage.getItem(SKIP_KEY)) return;
+
+  var overlay = document.getElementById('emp-overlay');
+  var input   = document.getElementById('emp-email');
+  var saveBtn = document.getElementById('emp-save');
+  var skipBtn = document.getElementById('emp-skip');
+  var errEl   = document.getElementById('emp-error');
+
+  function open()  { overlay.classList.add('emp-open');    setTimeout(function(){ if (input) input.focus(); }, 50); }
+  function close() { overlay.classList.remove('emp-open'); }
+  function showErr(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+  function clearErr()   { errEl.style.display = 'none'; }
+
+  // Auto-open after a short delay so the page settles first
+  setTimeout(open, 400);
+
+  // Close on backdrop click
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) { sessionStorage.setItem(SKIP_KEY, '1'); close(); } });
+
+  skipBtn.addEventListener('click', function() { sessionStorage.setItem(SKIP_KEY, '1'); close(); });
+
+  saveBtn.addEventListener('click', function() {
+    clearErr();
+    var email = (input.value || '').trim();
+    if (!email) { showErr('Please enter your email address.'); input.focus(); return; }
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    var fd = new FormData();
+    fd.append('email', email);
+    fetch('<?= UIR ?>PlayerAjax/save_my_email', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.status === 0) {
+          close();
+        } else {
+          showErr(data.error || 'Something went wrong. Please try again.');
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save email';
+        }
+      })
+      .catch(function() {
+        showErr('Network error. Please try again.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save email';
+      });
+  });
+
+  // Allow Enter key to submit
+  input.addEventListener('keydown', function(e) { if (e.key === 'Enter') saveBtn.click(); });
+
+  // Wire up email spell-checker if available (loaded on some pages)
+  if (typeof window.initEmailSpellCheck === 'function') {
+    initEmailSpellCheck('emp-email', 'emp-email-suggestion');
+  } else {
+    // Lazy-load and init after the bundle is available
+    var sc = document.createElement('script');
+    sc.src = '<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js';
+    sc.onload = function() {
+      if (typeof window.initEmailSpellCheck === 'function') {
+        initEmailSpellCheck('emp-email', 'emp-email-suggestion');
+      }
+    };
+    document.head.appendChild(sc);
+  }
+})();
+</script>
+<?php endif; ?>
+
 <footer style="margin-top:40px;padding:18px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:11px;color:#94a3b8;text-align:center;line-height:1.7;">
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
