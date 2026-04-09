@@ -378,4 +378,27 @@ class Controller_PlayerAjax extends Controller {
 			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 		exit;
 	}
+	public function save_my_email() {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$email = trim($_POST['email'] ?? '');
+		if (!strlen($email)) {
+			echo json_encode(['status' => 1, 'error' => 'Email address is required.']);
+			exit;
+		}
+		if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+			echo json_encode(['status' => 1, 'error' => 'Please enter a valid email address.']);
+			exit;
+		}
+		$mundane_id = (int)$this->session->user_id;
+		global $DB;
+		$DB->Clear();
+		$DB->email = $email;
+		$DB->Execute("UPDATE ork_mundane SET email = :email WHERE mundane_id = $mundane_id");
+		echo json_encode(['status' => 0]);
+		exit;
+	}
 }
