@@ -1978,6 +1978,10 @@ function knRenderMapSidebar(loc) {
     parkEl.style.display = 'flex';
 }
 
+// Heatmap instance (module-level so knHeatmapMode can access it)
+var _knHeatmapLayer = null;
+var _knHeatmapMode  = 'participation';
+
 window.knInitMap = async function() {
     if (!document.getElementById('kn-map')) return;
     document.getElementById('kn-map-loading').style.display = 'none';
@@ -1985,6 +1989,7 @@ window.knInitMap = async function() {
 
     const { Map } = await google.maps.importLibrary("maps");
     const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
+    const { HeatmapLayer } = await google.maps.importLibrary("visualization");
 
     var map = new google.maps.Map(document.getElementById('kn-map'), {
         center: {lat: 0, lng: 0},
@@ -2022,6 +2027,49 @@ window.knInitMap = async function() {
                 knRenderMapSidebar(loc);
             });
         })(knMapLocations[i]);
+    }
+
+    // ---- Heatmap layer ----
+    if (KnConfig.heatmapWeights && KnConfig.heatmapWeights.length > 0) {
+        // Build a lookup: park_id -> lat/lng
+        var latLngById = {};
+        for (var i = 0; i < knMapLocations.length; i++) {
+            latLngById[knMapLocations[i].id] = {lat: knMapLocations[i].lat, lng: knMapLocations[i].lng};
+        }
+        function knBuildHeatmapData(mode) {
+            var pts = [];
+            for (var j = 0; j < KnConfig.heatmapWeights.length; j++) {
+                var hw  = KnConfig.heatmapWeights[j];
+                var wt  = hw[mode] || 0;
+                var ll  = latLngById[hw.id];
+                if (!ll || wt <= 0) continue;
+                pts.push({ location: new google.maps.LatLng(ll.lat, ll.lng), weight: wt });
+            }
+            return pts;
+        }
+        _knHeatmapLayer = new HeatmapLayer({
+            data: knBuildHeatmapData('participation'),
+            map:  map,
+            radius: 40,
+            dissipating: true
+        });
+        // Expose to toggle buttons
+        window._knHeatmapBuildData = knBuildHeatmapData;
+        window._knHeatmapMap       = map;
+    }
+};
+
+// ---- Heatmap mode toggle (called from template toggle buttons) ----
+window.knHeatmapMode = function(mode) {
+    _knHeatmapMode = mode;
+    // Update button states
+    var btnP = document.getElementById('kn-hm-btn-participation');
+    var btnR = document.getElementById('kn-hm-btn-residents');
+    if (btnP) btnP.classList.toggle('kn-hm-active', mode === 'participation');
+    if (btnR) btnR.classList.toggle('kn-hm-active', mode === 'residents');
+    // Update heatmap data
+    if (_knHeatmapLayer && window._knHeatmapBuildData) {
+        _knHeatmapLayer.setData(window._knHeatmapBuildData(mode));
     }
 };
 
@@ -2081,7 +2129,7 @@ function knActivateTab(tab) {
     if (tab === 'map' && !knMapLoaded && knMapLocations.length > 0) {
         knMapLoaded = true;
         var s = document.createElement('script');
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=knInitMap&v=weekly&libraries=marker';
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=knInitMap&v=weekly&libraries=marker,visualization';
         document.head.appendChild(s);
     }
     if (tab === 'events' && knCalendar) {
