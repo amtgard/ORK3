@@ -1637,6 +1637,12 @@
 				<label for="pn-acct-email">Email</label>
 				<input type="email" id="pn-acct-email" name="Email" value="<?= htmlspecialchars($Player['Email'] ?? '') ?>" />
 				<div id="pn-acct-email-warn" style="display:none;color:#e53e3e;font-size:0.82rem;margin-top:4px;">Double check the format of your email address.</div>
+				<div id="pn-acct-email-suggestion" class="esc-suggestion" role="alert">
+					<i class="fas fa-magic"></i>
+					<span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
+					<button type="button" class="esc-suggestion-use">Use it</button>
+					<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+				</div>
 			</div>
 			<div class="pn-acct-field">
 				<label for="pn-acct-username">Username <span style="color:#e53e3e">*</span></label>
@@ -2265,6 +2271,7 @@ var PnConfig = {
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
@@ -2635,4 +2642,5 @@ $(function() {
 		});
 	}
 });
+initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
 </script>

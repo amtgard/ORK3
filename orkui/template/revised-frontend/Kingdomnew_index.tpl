@@ -1672,6 +1672,12 @@ var KnConfig = {
 				<div class="plr-field plr-field-grow">
 					<label>Email</label>
 					<input type="email" id="kn-addplayer-email" placeholder="email@example.com">
+					<div id="kn-addplayer-email-suggestion" class="esc-suggestion" role="alert">
+						<i class="fas fa-magic"></i>
+						<span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
+						<button type="button" class="esc-suggestion-use">Use it</button>
+						<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+					</div>
 				</div>
 			</div>
 			<div class="plr-field-row">
@@ -2101,6 +2107,7 @@ var KnConfig = {
 
 })();
 </script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -2131,4 +2138,5 @@ $(function() {
 });
 window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
 window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
+initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
 </script>

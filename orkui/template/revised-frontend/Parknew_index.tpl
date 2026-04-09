@@ -1521,6 +1521,12 @@ var PkConfig = {
 				<div class="plr-field plr-field-grow">
 					<label>Email</label>
 					<input type="email" id="pk-addplayer-email" placeholder="email@example.com">
+					<div id="pk-addplayer-email-suggestion" class="esc-suggestion" role="alert">
+						<i class="fas fa-magic"></i>
+						<span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
+						<button type="button" class="esc-suggestion-use">Use it</button>
+						<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+					</div>
 				</div>
 			</div>
 			<div class="plr-field-row">
@@ -2016,6 +2022,7 @@ var PkConfig = {
 
 <?php endif; ?>
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -2046,4 +2053,5 @@ $(function() {
 });
 window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
+initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
 </script>
