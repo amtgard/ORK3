@@ -385,6 +385,12 @@ html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondar
 html[data-theme="dark"] .att-qa-open-btn { background: var(--ork-bg-secondary); color: var(--ork-link); border-color: var(--ork-border); }
 html[data-theme="dark"] .att-qa-feedback.att-qa-fb-err { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
 html[data-theme="dark"] .att-qa-feedback.att-qa-fb-ok  { background: #1c4532; color: #9ae6b4; border-color: #276749; }
+html[data-theme="dark"] .att-qa-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-qa-table th { color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-table td { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-select,
+html[data-theme="dark"] .att-qa-credits-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-card-header { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
@@ -394,6 +400,9 @@ html[data-theme="dark"] .att-qa-feedback.att-qa-fb-ok  { background: #1c4532; co
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-modal { background: var(--ork-card-bg); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-input, html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-qa-modal { background: var(--ork-card-bg); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-qa-select,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .att-qa-credits-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 }
 </style>
 

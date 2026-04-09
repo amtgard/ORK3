@@ -447,6 +447,7 @@ html[data-theme="dark"] .lg-award-pill-flame   { border-color: #9b2c2c; color: #
 html[data-theme="dark"] .lg-award-pill-serpent { border-color: #276749; color: #9ae6b4; }
 html[data-theme="dark"] .lg-dual-range-track { background: var(--ork-border); }
 html[data-theme="dark"] .lg-showing-inactive tr[data-recent="0"] td.lg-col-player::after { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-battle  { background: #1e3a5f !important; color: #90cdf4; }
@@ -467,6 +468,7 @@ html[data-theme="dark"] .lg-showing-inactive tr[data-recent="0"] td.lg-col-playe
   html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table th.lg-col-player,
   html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table td.lg-col-player { background: var(--ork-card-bg); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .lg-award-filter { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-cell-master { color: #c4b5fd; }
 }
 </style>
 
