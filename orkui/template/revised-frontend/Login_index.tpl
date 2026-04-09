@@ -1,6 +1,7 @@
 <?php
-	$error  = isset($error)  ? $error  : '';
-	$detail = isset($detail) ? $detail : '';
+	$error           = isset($error)           ? $error           : '';
+	$detail          = isset($detail)          ? $detail          : '';
+	$session_message = isset($session_message) ? $session_message : '';
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 
@@ -192,6 +193,19 @@
 	font-weight: 600;
 	margin-top: 4px;
 }
+.lg-session-notice {
+	margin-top: 0;
+	margin-bottom: 16px;
+	padding: 10px 14px;
+	background: #ebf8ff;
+	border: 1px solid #90cdf4;
+	border-radius: 6px;
+	font-size: 13px;
+	color: #2b6cb0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
 
 /* Right panel — features */
 .lg-features-panel {
@@ -339,6 +353,12 @@
 			<i class="fas fa-shield-alt lg-logo-sword"></i>
 			<div class="lg-logo-text">Amtgard <span>Online Record Keeper</span></div>
 		</div>
+
+		<?php if (strlen($session_message) > 0): ?>
+			<div class="lg-session-notice">
+				<i class="fas fa-sign-in-alt"></i> <?= htmlspecialchars($session_message) ?>
+			</div>
+		<?php endif; ?>
 
 		<h2 class="lg-heading">Welcome back</h2>
 		<p class="lg-subheading">Sign in to access your records and community</p>

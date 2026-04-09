@@ -34,6 +34,36 @@ class Controller
 			$this->data[ 'page_title' ] = $this->method;
 		}
 		$this->data['LoggedIn'] = isset($this->session->user_id);
+
+		// Proactive stale-session check: if the session token no longer matches the DB,
+		// the user logged in on another device — clear session and redirect to login.
+		$_skipTokenCheck = in_array(get_class($this), [
+			'Controller_Login',
+			'Controller_SearchAjax',
+			'Controller_AttendanceAjax',
+			'Controller_EventAjax',
+			'Controller_KingdomAjax',
+			'Controller_ParkAjax',
+			'Controller_PlayerAjax',
+			'Controller_AdminAjax',
+			'Controller_WnAjax',
+		]);
+		if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
+			global $DB;
+			$DB->Clear();
+			$_uid_check = (int)$this->session->user_id;
+			$_tok_check = $this->session->token;
+			$_rs = $DB->DataSet("SELECT token FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_uid_check} LIMIT 1");
+			if (!$_rs || !$_rs->Next() || $_rs->token !== $_tok_check) {
+				unset($_SESSION['is_authorized_mundane_id']);
+				session_unset();
+				session_destroy();
+				header('Location: ' . UIR . 'Login/login&msg=session_replaced');
+				exit;
+			}
+			$DB->Clear();
+		}
+
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
 		$this->data[ 'controller_title' ] = get_class( $this );
