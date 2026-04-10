@@ -2244,6 +2244,16 @@ class Controller_Admin extends Controller {
 		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
 		$this->data['menu']['park'] = array( 'url' => UIR.'Park/profile/'.$this->session->park_id, 'display' => $this->session->park_name );
 	}
+
+	public function stateofamtgard($duh = null) {
+		if (!isset($this->session->user_id)) {
+			header('Location: ' . UIR . 'Home/index/login'); exit;
+		}
+		$this->data['Kingdoms'] = Ork3::$Lib->stateofamtgard->getActiveKingdoms();
+		$this->data['page_title'] = 'State of Amtgard Report';
+		$this->template = '../revised-frontend/StateOfAmtgard_index.tpl';
+	}
+
 }
 
 ?>
