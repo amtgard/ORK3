@@ -191,6 +191,20 @@
 
 ?>
 <style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; }</style>
+<?php
+$_pnNameFont = !empty($Player['NameFont']) ? $Player['NameFont'] : '';
+$_pnFontAllowed = ['Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'];
+if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
+?>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<?php if ($_pnNameFont): ?>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=<?= str_replace(' ', '+', htmlspecialchars($_pnNameFont)) ?>&display=swap">
+<style>#pn-hero-persona,.pn-hero-preview-name,#pn-name-preview{font-family:'<?= htmlspecialchars($_pnNameFont) ?>',serif!important}</style>
+<?php endif; ?>
+<?php if (!empty($isOwnProfile)): ?>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel&family=Cinzel+Decorative&family=IM+Fell+English&family=UnifrakturMaguntia&family=Metamorphous&family=Uncial+Antiqua&family=Pirata+One&family=Almendra&family=Pinyon+Script&family=Great+Vibes&display=swap">
+<?php endif; ?>
 <style>
 /* ===== My Amtgard Dashboard ===== */
 .pna-alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
@@ -559,6 +573,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 /* ===== Accent color applied to stat cards ===== */
 .pn-stat-card{border-top:3px solid var(--pn-accent,#4299e1)}
 .pn-tab-nav li.pn-tab-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
+.pn-font-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:4px}
+.pn-font-card{border:2px solid #e2e8f0;border-radius:8px;padding:10px 8px;cursor:pointer;text-align:center;transition:border-color .15s,box-shadow .15s;background:#fff;user-select:none}
+.pn-font-card:hover{border-color:#a0aec0;background:#f7fafc}
+.pn-font-card.pn-active{border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 2px rgba(66,153,225,0.2);background:#ebf8ff}
+.pn-font-card-sample{font-size:16px;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
+.pn-font-card-label{font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
 @media(max-width:600px){
 .pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .pn-name-parts{flex-direction:column;gap:8px}
@@ -593,7 +613,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					$_pnDisplayName .= ((int)($Player['SuffixComma'] ?? 0) ? ', ' : ' ') . htmlspecialchars($Player['NameSuffix']);
 				}
 			?>
-			<h1 class="pn-persona">
+			<h1 class="pn-persona" id="pn-hero-persona">
 				<?= $_pnDisplayName ?>
 				<?php if ($isKnight): ?>
 					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
@@ -2555,6 +2575,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<input type="text" id="pn-design-pronunciation" placeholder="Ex. veh-ree-lah nigh-born" value="<?= htmlspecialchars($Player['PronunciationGuide'] ?? '') ?>" maxlength="200" />
 					<div class="pn-design-hint">Help others pronounce your persona name correctly. Shown in parentheses under your name.</div>
 				</div>
+				<div class="pn-design-field" style="margin-top:16px">
+					<label>Name Font</label>
+					<div class="pn-design-hint" style="margin-bottom:8px">Choose a decorative font for your persona name in the hero header.</div>
+					<div class="pn-font-picker" id="pn-font-picker"></div>
+				</div>
 				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
 					<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:12px">Persona Display Controls</div>
 					<div class="pn-design-field" style="margin-bottom:10px">
@@ -2812,6 +2837,7 @@ var PnConfig = {
 	playerTitles:   <?= json_encode($PlayerTitles ?? []) ?>,
 	milestoneConfig: <?= json_encode(json_decode($Player['MilestoneConfig'] ?? '{}', true) ?: new stdClass()) ?>,
 	customMilestones: <?= json_encode($CustomMilestones ?? []) ?>,
+	nameFont:        <?= json_encode($Player['NameFont'] ?? '') ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -2843,34 +2869,29 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var fy = parseFloat(img.dataset.focusY);
 		var fs = parseFloat(img.dataset.focusSize);
 		if (isNaN(fx) || isNaN(fy) || isNaN(fs)) return;
-		var nw = img.naturalWidth, nh = img.naturalHeight;
-		if (!nw || !nh) return;
 		var box = img.parentElement;
 		var cw = box.offsetWidth || 110, ch = box.offsetHeight || 110;
-		// Focus circle diameter in natural image pixels
-		var minDim = Math.min(nw, nh);
-		var diameter = (fs / 100) * minDim;
-		// Scale so the focus circle fills the container
-		var scale = Math.max(cw, ch) / diameter;
-		var sw = nw * scale, sh = nh * scale;
-		// Focus center in scaled coordinates
-		var cx = (fx / 100) * sw, cy = (fy / 100) * sh;
-		// Offset to center the focus point in the container
-		var ox = cx - cw / 2, oy = cy - ch / 2;
-		// Clamp so we don't show outside the image
-		ox = Math.max(0, Math.min(sw - cw, ox));
-		oy = Math.max(0, Math.min(sh - ch, oy));
+		// Zoom: fs=100 → 1x (fills container), fs=50 → 2x, etc.
+		// Using object-fit:cover preserves aspect ratio and handles EXIF rotation correctly.
+		var zoom = 100 / Math.max(15, fs);
+		var ew = cw * zoom, eh = ch * zoom;
+		// Focal point within the (zoomed) element
+		var ox = (fx / 100) * ew - cw / 2;
+		var oy = (fy / 100) * eh - ch / 2;
+		ox = Math.max(0, Math.min(ew - cw, ox));
+		oy = Math.max(0, Math.min(eh - ch, oy));
 		img.style.position = 'absolute';
-		img.style.width = sw + 'px';
-		img.style.height = sh + 'px';
+		img.style.width = ew + 'px';
+		img.style.height = eh + 'px';
 		img.style.left = (-ox) + 'px';
 		img.style.top = (-oy) + 'px';
-		img.style.objectFit = 'initial';
+		img.style.objectFit = 'cover';
+		img.style.objectPosition = fx + '% ' + fy + '%';
 		img.style.maxWidth = 'none';
 	}
 	imgs.forEach(function(img) {
-		if (img.complete && img.naturalWidth) applyFocus(img);
-		else img.addEventListener('load', function() { applyFocus(img); });
+		applyFocus(img);
+		if (!img.complete) img.addEventListener('load', function() { applyFocus(img); });
 	});
 })();
 
@@ -3062,6 +3083,86 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	suffixCustom.addEventListener('input', updateNamePreview);
 	coreInput.addEventListener('input', updateNamePreview);
 
+	// Font picker
+	var PN_FONTS = [
+		{key:'',label:'Default',family:'inherit'},
+		{key:'Cinzel',label:'Cinzel',family:'Cinzel'},
+		{key:'Cinzel Decorative',label:'Cinzel Deco',family:"'Cinzel Decorative'"},
+		{key:'IM Fell English',label:'IM Fell English',family:"'IM Fell English'"},
+		{key:'UnifrakturMaguntia',label:'Unifraktur',family:'UnifrakturMaguntia'},
+		{key:'Metamorphous',label:'Metamorphous',family:'Metamorphous'},
+		{key:'Uncial Antiqua',label:'Uncial Antiqua',family:"'Uncial Antiqua'"},
+		{key:'Pirata One',label:'Pirata One',family:"'Pirata One'"},
+		{key:'Almendra',label:'Almendra',family:'Almendra'},
+		{key:'Pinyon Script',label:'Pinyon Script',family:"'Pinyon Script'"},
+		{key:'Great Vibes',label:'Great Vibes',family:"'Great Vibes'"},
+	];
+	var pnSelectedFont = PnConfig.nameFont || '';
+	var pnLoadedFonts = {};
+	function pnLoadFont(key) {
+		if (!key || pnLoadedFonts[key]) return;
+		var link = document.createElement('link');
+		link.rel = 'stylesheet';
+		link.href = 'https://fonts.googleapis.com/css2?family=' + key.replace(/ /g, '+') + '&display=swap';
+		document.head.appendChild(link);
+		pnLoadedFonts[key] = true;
+	}
+	function pnApplyFont(key) {
+		var f = null;
+		for (var _i = 0; _i < PN_FONTS.length; _i++) { if (PN_FONTS[_i].key === key) { f = PN_FONTS[_i]; break; } }
+		if (!f) f = PN_FONTS[0];
+		var fam = f.family;
+		var preview = gid('pn-name-preview');
+		var heroPreview = document.querySelector('.pn-hero-preview-name');
+		var heroName = gid('pn-hero-persona');
+		if (preview) preview.style.fontFamily = fam;
+		if (heroPreview) heroPreview.style.fontFamily = fam;
+		if (heroName) heroName.style.fontFamily = fam;
+	}
+	function pnRenderFontPicker() {
+		var container = gid('pn-font-picker');
+		if (!container) return;
+		var sample = (PnConfig.namePrefix ? PnConfig.namePrefix + ' ' : '') + PnConfig.playerPersona;
+		var html = '';
+		for (var _j = 0; _j < PN_FONTS.length; _j++) {
+			var _f = PN_FONTS[_j];
+			var _active = _f.key === pnSelectedFont;
+			html += '<div class="pn-font-card' + (_active ? ' pn-active' : '') + '" data-font-key="' + escHtml(_f.key) + '">';
+			html += '<div class="pn-font-card-sample" style="font-family:' + _f.family + '">' + escHtml(sample) + '</div>';
+			html += '<div class="pn-font-card-label">' + escHtml(_f.label) + '</div>';
+			html += '</div>';
+		}
+		container.innerHTML = html;
+		for (var _k = 1; _k < PN_FONTS.length; _k++) pnLoadFont(PN_FONTS[_k].key);
+		container.addEventListener('click', function(e) {
+			var card = e.target.closest('.pn-font-card');
+			if (!card) return;
+			pnSelectedFont = card.getAttribute('data-font-key');
+			var cards = container.querySelectorAll('.pn-font-card');
+			for (var _m = 0; _m < cards.length; _m++) cards[_m].classList.toggle('pn-active', cards[_m] === card);
+			if (pnSelectedFont) pnLoadFont(pnSelectedFont);
+			pnApplyFont(pnSelectedFont);
+		});
+	}
+	pnRenderFontPicker();
+	if (pnSelectedFont) { pnLoadFont(pnSelectedFont); pnApplyFont(pnSelectedFont); }
+	// Re-render after all fonts land — fonts.ready resolves too early (before downloads finish).
+	// fonts.load() per family triggers downloads and resolves only when each is paint-ready.
+	if (document.fonts && document.fonts.load) {
+		Promise.all([
+			document.fonts.load('16px Cinzel'),
+			document.fonts.load('16px "Cinzel Decorative"'),
+			document.fonts.load('16px "IM Fell English"'),
+			document.fonts.load('16px UnifrakturMaguntia'),
+			document.fonts.load('16px Metamorphous'),
+			document.fonts.load('16px "Uncial Antiqua"'),
+			document.fonts.load('16px "Pirata One"'),
+			document.fonts.load('16px Almendra'),
+			document.fonts.load("16px 'Pinyon Script'"),
+			document.fonts.load("16px 'Great Vibes'"),
+		]).then(function() { pnRenderFontPicker(); });
+	}
+
 	// Photo focus tool
 	var focusImg = null, focusCanvas = null, focusCtx = null;
 	var focusCircle = { x: PnConfig.photoFocusX, y: PnConfig.photoFocusY, size: PnConfig.photoFocusSize };
@@ -3230,6 +3331,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var compactEl = gid('pn-ms-compact');
 		msConfig['compact_milestones'] = (compactEl && compactEl.checked) ? 1 : 0;
 		fd.append('MilestoneConfig', JSON.stringify(msConfig));
+			fd.append('NameFont', pnSelectedFont || '');
 
 		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateprofile', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })

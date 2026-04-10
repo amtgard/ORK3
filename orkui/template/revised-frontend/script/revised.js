@@ -9729,22 +9729,22 @@ function setupPronounPicker(cfg) {
         });
 
         // Clear notes tab confirm modal
-        .on('click', '#pn-clear-notes-link', function(e) {
+        $(document).on('click', '#pn-clear-notes-link', function(e) {
             e.preventDefault();
             var overlay = gid('pn-clearnotes-overlay');
             if (overlay) { overlay.style.display = ''; }
         });
-        .on('click', '#pn-clearnotes-close-btn, #pn-clearnotes-cancel', function() {
+        $(document).on('click', '#pn-clearnotes-close-btn, #pn-clearnotes-cancel', function() {
             var overlay = gid('pn-clearnotes-overlay');
             if (overlay) { overlay.style.display = 'none'; }
         });
-        .on('click', '#pn-clearnotes-overlay', function(e) {
+        $(document).on('click', '#pn-clearnotes-overlay', function(e) {
             if ($(e.target).is('#pn-clearnotes-overlay')) {
                 var overlay = gid('pn-clearnotes-overlay');
                 if (overlay) overlay.style.display = 'none';
             }
         });
-        .on('click', '#pn-clearnotes-confirm', function() {
+        $(document).on('click', '#pn-clearnotes-confirm', function() {
             var btn = this;
             var fb  = gid('pn-clearnotes-feedback');
             btn.disabled = true;

@@ -324,6 +324,7 @@ class Player extends Ork3 {
 						'ShowMundaneLast' => (int)$this->mundane->show_mundane_last,
 						'ShowEmail' => (int)$this->mundane->show_email,
 						'MilestoneConfig' => $this->mundane->milestone_config,
+						'NameFont' => $this->mundane->name_font,
 				);
 			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
@@ -1004,6 +1005,7 @@ class Player extends Ork3 {
 					$this->mundane->show_mundane_last = is_null($request['ShowMundaneLast'])?$this->mundane->show_mundane_last:(int)$request['ShowMundaneLast'];
 					$this->mundane->show_email = is_null($request['ShowEmail'])?$this->mundane->show_email:(int)$request['ShowEmail'];
 					$this->mundane->milestone_config = is_null($request['MilestoneConfig'])?$this->mundane->milestone_config:$request['MilestoneConfig'];
+						$this->mundane->name_font = is_null($request['NameFont'])?$this->mundane->name_font:$request['NameFont'];
 				}
 
 				// reeve or corpora qual changes

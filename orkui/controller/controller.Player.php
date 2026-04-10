@@ -707,7 +707,14 @@ class Controller_Player extends Controller {
 
 			// Master (10th order of a ladder award)
 			if ((int)($__aw['Rank'] ?? 0) >= 10 && (int)($__aw['IsLadder'] ?? 0) === 1 && in_array($__officerRole, ['none', null]) && $__isTitle !== 1) {
-				$__milestones[] = ['type' => 'master', 'date' => $__awDate, 'icon' => 'fa-star', 'description' => 'Earned Master ' . $__awName];
+				// Strip "Order of the/Order of" prefix; otherwise the name IS the title (e.g. Warlord, Battlemaster)
+				$__masterLabel = $__awName;
+				if (stripos($__masterLabel, 'order of the ') === 0) {
+					$__masterLabel = 'Master ' . substr($__masterLabel, 13);
+				} elseif (stripos($__masterLabel, 'order of ') === 0) {
+					$__masterLabel = 'Master ' . substr($__masterLabel, 9);
+				}
+				$__milestones[] = ['type' => 'master', 'date' => $__awDate, 'icon' => 'fa-star', 'description' => 'Earned ' . $__masterLabel];
 			}
 
 			// Paragon (class-specific paragon awards)
@@ -761,6 +768,29 @@ class Controller_Player extends Controller {
 				];
 			}
 		}
+
+		// Cross-type dedup:
+		// 1. Remove 'title' milestones for peerage terms (already covered by 'became_associate')
+		// 2. Remove 'title' milestones for "Master X" that duplicate an existing 'master' milestone
+		$__masterMsNames = [];
+		foreach ($__milestones as $__m) {
+			if ($__m['type'] === 'master') {
+				$__masterMsNames[] = strtolower(preg_replace('/^Earned (?:Master )?/', '', $__m['description']));
+			}
+		}
+		$__peerageTerms = ['squire', 'man-at-arms', 'person-at-arms', "lord's page", 'page'];
+		$__milestones = array_values(array_filter($__milestones, function($m) use ($__masterMsNames, $__peerageTerms) {
+			if ($m['type'] !== 'title') return true;
+			$__tn = strtolower(preg_replace('/^Earned the title /', '', $m['description']));
+			if (in_array($__tn, $__peerageTerms)) return false;
+			if (substr($__tn, 0, 7) === 'master ') {
+				$__kw = substr($__tn, 7);
+				foreach ($__masterMsNames as $__mn) {
+					if (strpos($__mn, $__kw) !== false) return false;
+				}
+			}
+			return true;
+		}));
 
 		// Deduplicate milestones with same description + date
 		$__seen = [];
