@@ -575,7 +575,6 @@
 <div class='info-container'>
 	<h3>Player Operations for <?=$Player['Persona'] ?></h3>
 	<ul>
-		<li><a href='<?=UIR ?>Unit/create/<?=$Player['MundaneId'] ?>'>Create Company, Household, or Event Group</a></li>
 		<li>Events
 			<ul>
 				<li><a href='<?=UIR ?>Admin/createevent&MundaneId=<?=$Player['MundaneId'] ?>'>Create Event</a></li>

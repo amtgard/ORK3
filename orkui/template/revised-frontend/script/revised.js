@@ -9612,6 +9612,48 @@ window.pnCloseUnitCreateModal = function() {
             if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open'))
                 pnCloseUnitCreateModal();
         });
+
+        // ---- Confirmation dialog ----
+        var confirmOverlay = document.getElementById('pn-unit-confirm-overlay');
+        var submitBtn      = document.getElementById('pn-unit-create-submit-btn');
+        var confirmBack    = document.getElementById('pn-unit-confirm-back');
+        var confirmYes     = document.getElementById('pn-unit-confirm-yes');
+        var nameInput      = document.getElementById('pn-unit-create-name');
+        var typeSelect     = document.getElementById('pn-unit-create-type');
+
+        if (submitBtn && confirmOverlay) {
+            submitBtn.addEventListener('click', function() {
+                var form = document.getElementById('pn-unit-create-form');
+                if (form && !form.reportValidity()) return;
+                var name = nameInput ? nameInput.value.trim() : '';
+                var type = typeSelect ? typeSelect.value : 'unit';
+                document.getElementById('pn-unit-confirm-name').textContent = name || '(unnamed)';
+                document.getElementById('pn-unit-confirm-type').textContent = type;
+                overlay.classList.remove('pn-open');
+                confirmOverlay.classList.add('pn-open');
+            });
+        }
+        if (confirmBack && confirmOverlay) {
+            confirmBack.addEventListener('click', function() {
+                confirmOverlay.classList.remove('pn-open');
+                overlay.classList.add('pn-open');
+            });
+        }
+        if (confirmYes) {
+            confirmYes.addEventListener('click', function() {
+                confirmOverlay.classList.remove('pn-open');
+                document.body.style.overflow = '';
+                document.getElementById('pn-unit-create-form').submit();
+            });
+        }
+        if (confirmOverlay) {
+            confirmOverlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    confirmOverlay.classList.remove('pn-open');
+                    overlay.classList.add('pn-open');
+                }
+            });
+        }
     });
 })();
 

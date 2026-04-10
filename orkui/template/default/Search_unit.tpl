@@ -373,7 +373,11 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 			<h3 class="uc-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#3182ce"></i>Create Company or Household</h3>
 			<button class="uc-close-btn" id="uc-close-btn" aria-label="Close">&times;</button>
 		</div>
-		<form method="post" action="<?=UIR?>Unit/create/<?=(int)$this->__session->user_id?>">
+		<div style="background:#ebf8ff;border-bottom:1px solid #bee3f8;padding:10px 16px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#2c5282;line-height:1.5;">
+			<i class="fas fa-info-circle" style="margin-top:2px;flex-shrink:0;color:#3182ce;"></i>
+			<span>This creates a <strong>brand new</strong> Company or Household with you as the manager. To join an existing unit, ask its manager to add you.</span>
+		</div>
+		<form method="post" action="<?=UIR?>Unit/create/<?=(int)$this->__session->user_id?>" id="uc-create-form">
 			<input type="hidden" name="Action" value="create">
 			<div class="uc-modal-body">
 				<div class="uc-field">
@@ -382,7 +386,7 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 				</div>
 				<div class="uc-field">
 					<label>Type</label>
-					<select name="Type">
+					<select name="Type" id="uc-type-select">
 						<option value="Household">Household</option>
 						<option value="Company">Company</option>
 					</select>
@@ -394,17 +398,36 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 			</div>
 			<div class="uc-modal-footer">
 				<button type="button" class="uc-btn uc-btn-secondary" id="uc-cancel-btn">Cancel</button>
-				<button type="submit" class="uc-btn uc-btn-primary"><i class="fas fa-plus"></i> Create</button>
+				<button type="button" class="uc-btn uc-btn-primary" id="uc-submit-btn"><i class="fas fa-plus"></i> Create</button>
 			</div>
 		</form>
 	</div>
 </div>
+<div class="uc-overlay" id="uc-confirm-overlay">
+	<div class="uc-modal" style="max-width:400px;">
+		<div class="uc-modal-header">
+			<h3 class="uc-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#3182ce"></i>Confirm Creation</h3>
+		</div>
+		<div class="uc-modal-body">
+			<p style="margin:0 0 8px;font-size:14px;">You are about to create a new <strong id="uc-confirm-type"></strong> named <strong id="uc-confirm-name"></strong>.</p>
+			<p style="margin:0;font-size:13px;color:#718096;">You will become its manager. Other players must be added by a manager — they cannot join on their own.</p>
+		</div>
+		<div class="uc-modal-footer">
+			<button type="button" class="uc-btn uc-btn-secondary" id="uc-confirm-back">Go Back</button>
+			<button type="button" class="uc-btn uc-btn-primary" id="uc-confirm-yes"><i class="fas fa-check"></i> Yes, Create It</button>
+		</div>
+	</div>
+</div>
 <script>
 (function() {
-	var overlay   = document.getElementById('uc-overlay');
-	var openBtn   = document.getElementById('uc-open-btn');
-	var closeBtn  = document.getElementById('uc-close-btn');
-	var cancelBtn = document.getElementById('uc-cancel-btn');
+	var overlay        = document.getElementById('uc-overlay');
+	var confirmOverlay = document.getElementById('uc-confirm-overlay');
+	var openBtn        = document.getElementById('uc-open-btn');
+	var closeBtn       = document.getElementById('uc-close-btn');
+	var cancelBtn      = document.getElementById('uc-cancel-btn');
+	var submitBtn      = document.getElementById('uc-submit-btn');
+	var confirmBack    = document.getElementById('uc-confirm-back');
+	var confirmYes     = document.getElementById('uc-confirm-yes');
 	if (!overlay || !openBtn) return;
 	function openModal() {
 		overlay.classList.add('uc-open');
@@ -414,15 +437,47 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 	}
 	function closeModal() {
 		overlay.classList.remove('uc-open');
+		confirmOverlay.classList.remove('uc-open');
 		document.body.style.overflow = '';
 	}
 	openBtn.addEventListener('click', openModal);
 	closeBtn.addEventListener('click', closeModal);
 	cancelBtn.addEventListener('click', closeModal);
 	overlay.addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+	submitBtn.addEventListener('click', function() {
+		var form = document.getElementById('uc-create-form');
+		if (form && !form.reportValidity()) return;
+		var name = document.getElementById('uc-name-input').value.trim();
+		var type = document.getElementById('uc-type-select').value;
+		document.getElementById('uc-confirm-name').textContent = name || '(unnamed)';
+		document.getElementById('uc-confirm-type').textContent = type;
+		overlay.classList.remove('uc-open');
+		confirmOverlay.classList.add('uc-open');
+	});
+	confirmBack.addEventListener('click', function() {
+		confirmOverlay.classList.remove('uc-open');
+		overlay.classList.add('uc-open');
+	});
+	confirmYes.addEventListener('click', function() {
+		confirmOverlay.classList.remove('uc-open');
+		document.body.style.overflow = '';
+		document.getElementById('uc-create-form').submit();
+	});
+	confirmOverlay.addEventListener('click', function(e) {
+		if (e.target === this) {
+			confirmOverlay.classList.remove('uc-open');
+			overlay.classList.add('uc-open');
+		}
+	});
 	document.addEventListener('keydown', function(e) {
-		if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('uc-open'))
-			closeModal();
+		if (e.key === 'Escape' || e.keyCode === 27) {
+			if (confirmOverlay.classList.contains('uc-open')) {
+				confirmOverlay.classList.remove('uc-open');
+				overlay.classList.add('uc-open');
+			} else if (overlay.classList.contains('uc-open')) {
+				closeModal();
+			}
+		}
 	});
 }());
 </script>

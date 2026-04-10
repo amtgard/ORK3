@@ -2536,16 +2536,20 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Create Company or Household</h3>
 			<button class="pn-modal-close-btn" id="pn-unit-create-close-btn" aria-label="Close" onclick="pnCloseUnitCreateModal()">&times;</button>
 		</div>
-		<form method="post" action="<?= UIR ?>Unit/create/<?= (int)$Player['MundaneId'] ?>">
+		<div style="background:var(--ork-bg-secondary,#ebf8ff);border-bottom:1px solid var(--ork-border,#bee3f8);padding:10px 16px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ork-text-secondary,#2c5282);line-height:1.5;">
+			<i class="fas fa-info-circle" style="margin-top:2px;flex-shrink:0;color:#3182ce;"></i>
+			<span>This creates a <strong>brand new</strong> Company or Household with you as the manager. To join an existing unit, ask its manager to add you.</span>
+		</div>
+		<form method="post" action="<?= UIR ?>Unit/create/<?= (int)$Player['MundaneId'] ?>" id="pn-unit-create-form">
 			<input type="hidden" name="Action" value="create">
 			<div class="pn-acct-modal-body">
 				<div class="pn-acct-field">
 					<label>Name <span style="color:#e53e3e">*</span></label>
-					<input type="text" name="Name" required placeholder="Enter a name…" autocomplete="off">
+					<input type="text" name="Name" required placeholder="Enter a name…" autocomplete="off" id="pn-unit-create-name">
 				</div>
 				<div class="pn-acct-field">
 					<label>Type</label>
-					<select name="Type">
+					<select name="Type" id="pn-unit-create-type">
 						<option value="Household">Household</option>
 						<option value="Company">Company</option>
 					</select>
@@ -2557,9 +2561,30 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 			</div>
 			<div class="pn-modal-footer">
 				<button type="button" class="pn-btn pn-btn-secondary" id="pn-unit-create-cancel" onclick="pnCloseUnitCreateModal()">Cancel</button>
-				<button type="submit" class="pn-btn pn-btn-primary"><i class="fas fa-plus"></i> Create</button>
+				<button type="button" class="pn-btn pn-btn-primary" id="pn-unit-create-submit-btn"><i class="fas fa-plus"></i> Create</button>
 			</div>
 		</form>
+	</div>
+</div>
+
+<!-- Unit Create Confirmation Dialog -->
+<div class="pn-overlay" id="pn-unit-confirm-overlay">
+	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Confirm Creation</h3>
+		</div>
+		<div class="pn-modal-body" style="padding:20px;">
+			<p style="margin:0 0 8px;font-size:14px;color:var(--ork-text,#2d3748);">
+				You are about to create a new <strong id="pn-unit-confirm-type"></strong> named <strong id="pn-unit-confirm-name"></strong>.
+			</p>
+			<p style="margin:0;font-size:13px;color:var(--ork-text-muted,#718096);">
+				You will become its manager. Other players must be added by a manager — they cannot join on their own.
+			</p>
+		</div>
+		<div class="pn-modal-footer">
+			<button type="button" class="pn-btn pn-btn-secondary" id="pn-unit-confirm-back">Go Back</button>
+			<button type="button" class="pn-btn pn-btn-primary" id="pn-unit-confirm-yes"><i class="fas fa-check"></i> Yes, Create It</button>
+		</div>
 	</div>
 </div>
 <?php endif; ?>
