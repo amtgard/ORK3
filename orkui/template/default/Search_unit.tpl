@@ -81,6 +81,10 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 	background: transparent !important; border: none !important; padding: 0 !important;
 	border-radius: 0 !important; text-shadow: none !important;
 }
+html[data-theme="dark"] .uc-modal-title,
+html:not([data-theme="light"]):not([data-theme="dark"]) .uc-modal-title {
+	background: transparent !important; border: none !important; color: #e2e8f0; text-shadow: none !important;
+}
 .uc-close-btn { background: none; border: none; font-size: 20px; color: #718096; cursor: pointer; line-height: 1; padding: 0 4px; }
 .uc-close-btn:hover { color: #2d3748; }
 .uc-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }

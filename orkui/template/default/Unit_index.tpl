@@ -140,6 +140,14 @@ $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d
 	padding: 0;
 	border-radius: 0;
 }
+/* Override dark-mode h1 rule which has higher specificity (html[data-theme] h1 > .class) */
+html[data-theme="dark"] .un-hero-name,
+html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
+	background: transparent;
+	border: none;
+	color: #fff;
+	text-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
 .un-hero-actions {
 	flex-shrink: 0;
 	display: flex;

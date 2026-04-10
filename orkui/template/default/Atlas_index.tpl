@@ -65,6 +65,10 @@ $atKingdomCount = count($atKingdomIds);
 	background:transparent; border:none; padding:0; border-radius:0;
 	text-shadow:none;
 }
+html[data-theme="dark"] .at-header-title,
+html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
+	background:transparent; border:none; color:#e2e8f0; text-shadow:none;
+}
 .at-header-sub { font-size:13px; color:#718096; margin-top:1px; }
 
 /* ── Stats bar ── */

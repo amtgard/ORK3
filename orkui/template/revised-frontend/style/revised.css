@@ -74,8 +74,8 @@ html[data-theme="dark"] {
   --ork-overlay: rgba(0,0,0,0.7);
   --ork-overlay-light: rgba(30,32,44,0.88);
   --ork-hero-lightness: 22%;
-  --ork-accent-lightness: 65%;
-  --ork-accent-mid-lightness: 58%;
+  --ork-accent-lightness: 70%;
+  --ork-accent-mid-lightness: 72%;
   --ork-btn-txt-lightness: 90%;
 
   /* Badge vars - inverted */
@@ -172,8 +172,8 @@ html[data-theme="dark"] .pk-btn-white {
     --ork-overlay: rgba(0,0,0,0.7);
     --ork-overlay-light: rgba(30,32,44,0.88);
     --ork-hero-lightness: 22%;
-    --ork-accent-lightness: 65%;
-    --ork-accent-mid-lightness: 58%;
+    --ork-accent-lightness: 70%;
+    --ork-accent-mid-lightness: 72%;
     --ork-btn-txt-lightness: 90%;
 
     /* Badge vars - inverted */
@@ -1138,6 +1138,7 @@ html[data-theme="dark"] .pk-btn-white {
 .pn-acct-field input[type="text"],
 .pn-acct-field input[type="email"],
 .pn-acct-field input[type="password"],
+.pn-acct-field input[type="url"],
 .pn-acct-field select {
 	width: 100%;
 	padding: 8px 10px;
@@ -1721,7 +1722,7 @@ html[data-theme="dark"] .pk-btn-white {
 }
 .kn-btn:hover { opacity: 0.85; }
 .kn-btn-white   { background: #fff; color: var(--kn-btn-txt); }
-.kn-btn-outline { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+.kn-btn-outline { background: rgba(255,255,255,0.15); color: #fff !important; border: 1px solid rgba(255,255,255,0.4); }
 .kn-btn-primary { background: var(--kn-accent, #276749); color: #fff; }
 .kn-btn-primary:hover:not(:disabled) { opacity: 0.85; }
 .kn-btn-secondary { background: #edf2f7; color: #4a5568; }
@@ -2799,7 +2800,7 @@ html[data-theme="dark"] .pk-btn-white {
 }
 .pk-btn:hover { opacity: 0.85; }
 .pk-btn-white   { background: #fff; color: var(--pk-btn-txt); }
-.pk-btn-outline { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+.pk-btn-outline { background: rgba(255,255,255,0.15); color: #fff !important; border: 1px solid rgba(255,255,255,0.4); }
 .pk-btn-primary { background: #2c5282; color: #fff; }
 .pk-btn-primary:hover:not(:disabled) { background: #2a4a7f; }
 .pk-btn-secondary { background: #edf2f7; color: #4a5568; }
@@ -6205,11 +6206,74 @@ html[data-theme="dark"] .pn-rank-pill {
   border-color: var(--ork-border);
 }
 
-/* Table hover states */
+/* ── kn/pk/pn-table full dark mode ─────────────────────────────────────── */
+html[data-theme="dark"] .kn-table,
+html[data-theme="dark"] .pk-table,
+html[data-theme="dark"] .pn-table {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+}
+html[data-theme="dark"] .kn-table thead th,
+html[data-theme="dark"] .pk-table thead th,
+html[data-theme="dark"] .pn-table thead th {
+  background: var(--ork-bg-secondary) !important;
+  color: var(--ork-text-muted) !important;
+  border-color: var(--ork-border) !important;
+  text-shadow: none !important;
+}
 html[data-theme="dark"] .kn-table thead th:hover,
 html[data-theme="dark"] .pk-table thead th:hover,
 html[data-theme="dark"] .pn-table thead th:hover {
+  background: var(--ork-bg-tertiary) !important;
+}
+html[data-theme="dark"] .kn-table tbody td,
+html[data-theme="dark"] .pk-table tbody td,
+html[data-theme="dark"] .pn-table tbody td {
+  color: var(--ork-text-secondary) !important;
+  border-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .kn-table tbody tr:hover,
+html[data-theme="dark"] .pn-table tbody tr:hover {
   background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .pk-table tbody tr:hover td {
+  background: var(--ork-bg-tertiary) !important;
+}
+html[data-theme="dark"] .kn-table tbody tr.kn-pinned-row {
+  background: rgba(66,153,225,0.08);
+}
+html[data-theme="dark"] .kn-table tbody tr.kn-pinned-row:hover {
+  background: rgba(66,153,225,0.14);
+}
+html[data-theme="dark"] .kn-table tfoot td,
+html[data-theme="dark"] .pk-table tfoot td,
+html[data-theme="dark"] .pn-table tfoot td {
+  background: var(--ork-bg-secondary);
+  color: var(--ork-text-secondary);
+  border-color: var(--ork-border);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table thead th,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table thead th,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table thead th {
+    background: var(--ork-bg-secondary) !important;
+    color: var(--ork-text-muted) !important;
+    border-color: var(--ork-border) !important;
+    text-shadow: none !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table tbody td,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table tbody td,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table tbody td {
+    color: var(--ork-text-secondary) !important;
+    border-color: var(--ork-border) !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table tfoot td,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table tfoot td,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table tfoot td {
+    background: var(--ork-bg-secondary);
+    color: var(--ork-text-secondary);
+    border-color: var(--ork-border);
+  }
 }
 
 /* Editable modal inputs (kn-emod-input) */
@@ -6538,7 +6602,7 @@ html[data-theme="dark"] .kn-rec-filter-btn.kn-rec-filter-active {
 html[data-theme="dark"] .kn-btn-outline,
 html[data-theme="dark"] .pk-btn-outline {
   background: rgba(0,0,0,0.2);
-  color: #fff;
+  color: #fff !important;
   border: 1px solid rgba(0,0,0,0.3);
   text-shadow: 0 1px 2px rgba(0,0,0,0.4);
 }
@@ -6603,7 +6667,7 @@ html[data-theme="dark"] .pk-btn-white {
   html:not([data-theme="light"]):not([data-theme="dark"]) .kn-btn-outline,
   html:not([data-theme="light"]):not([data-theme="dark"]) .pk-btn-outline {
     background: rgba(0,0,0,0.2);
-    color: #fff;
+    color: #fff !important;
     border: 1px solid rgba(0,0,0,0.3);
   }
 }
@@ -6629,10 +6693,21 @@ html[data-theme="dark"] #theme_container .kn-description-url,
 html[data-theme="dark"] #theme_container .kn-table a,
 html[data-theme="dark"] #theme_container .kn-report-group a,
 html[data-theme="dark"] #theme_container .kn-prinz-name a,
+html[data-theme="dark"] .kn-load-more-btn,
 html[data-theme="dark"] #theme_container .kn-load-more-btn,
 html[data-theme="dark"] #theme_container .kn-award-success,
 html[data-theme="dark"] #kn-events-cal .fc .fc-list-event-title a {
   color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%));
+}
+html[data-theme="dark"] .kn-description-body,
+html[data-theme="dark"] .kn-description-card {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .kn-load-more-btn,
+html[data-theme="dark"] .pk-load-more-btn {
+  background: var(--ork-bg-secondary);
+  border-color: var(--ork-border);
+  color: var(--ork-text-secondary);
 }
 html[data-theme="dark"] .kn-load-more-btn:hover {
   border-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
@@ -6680,10 +6755,26 @@ html[data-theme="dark"] .kn-players-toolbar .kn-view-btn.kn-view-active {
   border-color: hsl(var(--kn-hue), var(--kn-sat), 45%);
   color: #fff;
 }
+html[data-theme="dark"] .kn-page-btn,
+html[data-theme="dark"] .pk-page-btn {
+  background: var(--ork-bg-secondary);
+  border-color: var(--ork-border);
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .kn-page-btn:hover:not(:disabled),
+html[data-theme="dark"] .pk-page-btn:hover:not(.pk-page-disabled) {
+  background: var(--ork-bg-tertiary);
+  border-color: var(--ork-text-muted);
+}
 html[data-theme="dark"] .kn-page-btn.kn-page-active {
   background: hsl(var(--kn-hue), var(--kn-sat), 45%);
   border-color: hsl(var(--kn-hue), var(--kn-sat), 45%);
   color: #fff;
+}
+html[data-theme="dark"] .pk-page-btn.pk-page-active {
+  background: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 35%);
+  border-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 45%);
+  color: #e2e8f0;
 }
 html[data-theme="dark"] .kn-btn-primary,
 html[data-theme="dark"] .kn-emod-btn-go {
@@ -6698,22 +6789,89 @@ html[data-theme="dark"] .kn-thumb.kn-evt-kingdom {
   border-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
 }
 html[data-theme="dark"] .kn-thumb.kn-evt-park {
-  border-color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%));
+  border-color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 72%));
+}
+/* Event list links use consistent blue instead of heraldry-derived color
+   which can produce warm/low-contrast tones for some kingdoms */
+html[data-theme="dark"] #kn-events-table a {
+  color: var(--ork-link-bright) !important;
+}
+html[data-theme="dark"] .kn-filter-toggle.kn-filter-on {
+  color: #e2e8f0 !important;
+  background: var(--ork-bg-tertiary) !important;
 }
 html[data-theme="dark"] .kn-filter-toggle[data-filter="kingdom-event"].kn-filter-on {
-  background: hsl(calc(var(--kn-hue) + 35), 65%, 45%);
-  border-color: hsl(calc(var(--kn-hue) + 35), 65%, 45%);
-  color: #fff;
+  border-color: hsl(calc(var(--kn-hue) + 35), 55%, 55%) !important;
+}
+html[data-theme="dark"] .kn-filter-toggle[data-filter="park-event"].kn-filter-on {
+  border-color: #9f7aea !important;
+}
+html[data-theme="dark"] .kn-filter-toggle[data-filter="park-day"].kn-filter-on {
+  border-color: #d4a537 !important;
 }
 html[data-theme="dark"] .kn-filter-toggle[data-filter="kingdom-event"]:hover:not(.kn-filter-on) {
-  border-color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%));
-  color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%));
+  border-color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 72%));
+  color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 72%));
 }
 html[data-theme="dark"] #kn-events-cal .fc .fc-button-primary {
   background-color: hsl(var(--kn-hue), var(--kn-sat), 45%) !important;
   border-color: hsl(var(--kn-hue), var(--kn-sat), 45%) !important;
   color: #fff !important;
 }
+
+/* ── Park events calendar dark mode ───────────────────────────────────── */
+html[data-theme="dark"] #pk-events-cal {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-toolbar-title {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-col-header-cell-cushion {
+  color: var(--ork-text-muted);
+  text-decoration: none;
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-daygrid-day-number {
+  color: var(--ork-text-secondary);
+  text-decoration: none;
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-day-other .fc-daygrid-day-number {
+  color: var(--ork-text-lighter);
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-button-primary {
+  background-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 35%) !important;
+  border-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 45%) !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-button-primary:not(:disabled).fc-button-active {
+  background-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 25%) !important;
+  border-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 35%) !important;
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-list-event-title a {
+  color: var(--ork-link-bright);
+}
+html[data-theme="dark"] #pk-events-cal .fc-theme-standard td,
+html[data-theme="dark"] #pk-events-cal .fc-theme-standard th,
+html[data-theme="dark"] #pk-events-cal .fc-theme-standard .fc-scrollgrid {
+  border-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-daygrid-day {
+  background: var(--ork-card-bg);
+}
+html[data-theme="dark"] #pk-events-cal .fc .fc-day-today {
+  background: rgba(66,153,225,0.08) !important;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal .fc .fc-toolbar-title { color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal .fc .fc-col-header-cell-cushion { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal .fc .fc-daygrid-day-number { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal .fc-theme-standard td,
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal .fc-theme-standard th,
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal .fc-theme-standard .fc-scrollgrid { border-color: var(--ork-border) !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #pk-events-cal .fc .fc-button-primary { background-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 35%) !important; border-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 45%) !important; color: #e2e8f0 !important; }
+}
+
 html[data-theme="dark"] .kn-ac-item:hover,
 html[data-theme="dark"] .kn-ac-item:focus,
 html[data-theme="dark"] .kn-ac-item.kn-ac-focused {
@@ -6783,6 +6941,10 @@ html[data-theme="dark"] .pk-filter-toggle[data-filter="event"]:hover:not(.pk-fil
   html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container .kn-description-body a {
     color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%));
   }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-description-body,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-description-card {
+    color: var(--ork-text);
+  }
   html:not([data-theme="light"]):not([data-theme="dark"]) .kn-tab-nav li.kn-tab-active {
     color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
     border-bottom-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
@@ -6800,6 +6962,44 @@ html[data-theme="dark"] .pk-filter-toggle[data-filter="event"]:hover:not(.pk-fil
     background: var(--ork-bg-secondary);
     border-color: var(--ork-border);
     color: var(--ork-text-muted);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-filter-toggle.kn-filter-on {
+    color: #e2e8f0 !important;
+    background: var(--ork-bg-tertiary) !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-filter-toggle[data-filter="kingdom-event"].kn-filter-on {
+    border-color: hsl(calc(var(--kn-hue) + 35), 55%, 55%) !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-filter-toggle[data-filter="park-event"].kn-filter-on {
+    border-color: #9f7aea !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-filter-toggle[data-filter="park-day"].kn-filter-on {
+    border-color: #d4a537 !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) #kn-events-table a {
+    color: var(--ork-link-bright) !important;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-page-btn,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-page-btn {
+    background: var(--ork-bg-secondary);
+    border-color: var(--ork-border);
+    color: var(--ork-text-secondary);
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-page-btn.kn-page-active {
+    background: hsl(var(--kn-hue), var(--kn-sat), 45%);
+    border-color: hsl(var(--kn-hue), var(--kn-sat), 45%);
+    color: #fff;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-page-btn.pk-page-active {
+    background: hsl(var(--pk-hue), var(--pk-sat), 45%);
+    border-color: hsl(var(--pk-hue), var(--pk-sat), 45%);
+    color: #fff;
+  }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-load-more-btn,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-load-more-btn {
+    background: var(--ork-bg-secondary);
+    border-color: var(--ork-border);
+    color: var(--ork-text-secondary);
   }
   html:not([data-theme="light"]):not([data-theme="dark"]) .kn-view-btn.kn-view-active {
     background: hsl(var(--kn-hue), var(--kn-sat), 45%);
@@ -6943,12 +7143,90 @@ html[data-theme="dark"] .kn-admin-panel-body { border-top-color: var(--ork-borde
 html[data-theme="dark"] .kn-admin-field input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .kn-admin-table th { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border-color: var(--ork-border); }
 html[data-theme="dark"] .kn-admin-table td { border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .kn-admin-tinput { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-admin-table tfoot td { background: var(--ork-bg-secondary) !important; border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-admin-tinput,
+html[data-theme="dark"] .kn-admin-tnumeric,
+html[data-theme="dark"] .kn-admin-tselect { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .kn-admin-config-row { border-color: var(--ork-border); }
 html[data-theme="dark"] .kn-admin-config-label { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .kn-admin-config-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .kn-admin-config-input:focus { border-color: #90cdf4; }
 html[data-theme="dark"] .kn-admin-config-sublabel { color: var(--ork-text-muted); }
+/* Add Award / Add Kingdom-Specific Award forms */
+/* Operations section */
+html[data-theme="dark"] .kn-admin-ops-info strong { color: var(--ork-text); }
+html[data-theme="dark"] .kn-admin-ops-info p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-admin-ops-btn-danger {
+  background: rgba(197,48,48,0.15);
+  color: #fc8181;
+  border-color: #c53030;
+}
+html[data-theme="dark"] .kn-admin-ops-btn-danger:hover {
+  background: rgba(197,48,48,0.25);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-ops-info strong { color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-ops-info p { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-ops-btn-danger { background: rgba(197,48,48,0.15); color: #fc8181; border-color: #c53030; }
+}
+/* Add Award / Add Kingdom-Specific Award forms */
+html[data-theme="dark"] .kn-admin-add-award-wrap {
+  background: var(--ork-bg-secondary);
+  border-color: var(--ork-border);
+}
+html[data-theme="dark"] .kn-admin-add-award-title { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-admin-form-hint { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-admin-add-btn {
+  background: transparent;
+  border-color: var(--ork-border);
+  color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .kn-admin-add-btn:hover {
+  background: var(--ork-bg-tertiary);
+  border-color: var(--ork-text-muted);
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .kn-admin-alias-trigger {
+  background: var(--ork-input-bg);
+  border-color: var(--ork-input-border);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .kn-admin-alias-dropdown {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .kn-admin-alias-search {
+  background: var(--ork-input-bg);
+  border-color: var(--ork-border);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .kn-admin-alias-item {
+  color: var(--ork-text-secondary);
+  border-color: var(--ork-border);
+}
+html[data-theme="dark"] .kn-admin-alias-item:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-admin-alias-empty { color: var(--ork-text-muted); }
+/* Add Award form inputs (plain input[type=text/number] without kn-admin-tinput class) */
+html[data-theme="dark"] .kn-admin-add-award-wrap input[type="text"],
+html[data-theme="dark"] .kn-admin-add-award-wrap input[type="number"] {
+  background: var(--ork-input-bg);
+  border-color: var(--ork-input-border);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .kn-admin-field label { color: var(--ork-text-secondary); }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-add-award-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-add-award-title { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-form-hint { color: var(--ork-text-secondary); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-add-btn { background: transparent; border-color: var(--ork-border); color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-alias-trigger { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-alias-dropdown { background: var(--ork-card-bg); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-alias-search { background: var(--ork-input-bg); border-color: var(--ork-border); color: var(--ork-text); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-alias-item { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-add-award-wrap input[type="text"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-add-award-wrap input[type="number"] { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+}
 
 /* =====================================================
    DARK MODE — Park About / Directions / Schedule cards
@@ -7305,6 +7583,10 @@ html[data-theme="dark"] .kn-admin-feedback {
   }
   html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-field label { color: var(--ork-text-secondary); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-hint-inline { color: var(--ork-text-muted); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-table tfoot td { background: var(--ork-bg-secondary) !important; border-color: var(--ork-border); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-tinput,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-tnumeric,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-admin-tselect { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 }
 
 /* =====================================================
@@ -7336,6 +7618,7 @@ html[data-theme="dark"] .pn-acct-field input[type="email"],
 html[data-theme="dark"] .pn-acct-field input[type="password"],
 html[data-theme="dark"] .pn-acct-field input[type="date"],
 html[data-theme="dark"] .pn-acct-field input[type="number"],
+html[data-theme="dark"] .pn-acct-field input[type="url"],
 html[data-theme="dark"] .pn-acct-field select,
 html[data-theme="dark"] .pn-acct-field textarea {
   background: var(--ork-input-bg);
@@ -7385,6 +7668,7 @@ html[data-theme="dark"] .pronoun-clear-btn:hover {
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="password"],
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="date"],
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="number"],
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="url"],
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field select,
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-radio-group label { color: var(--ork-text-secondary); }
@@ -8299,6 +8583,61 @@ html[data-theme="dark"] .ev-stat-card-link:hover {
 html[data-theme="dark"] .dataTables_empty {
   color: var(--ork-text-muted) !important;
   background: var(--ork-card-bg) !important;
+}
+
+/* ── Park recs DataTable dark mode ───────────────────────────────────── */
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable thead th,
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable thead td {
+  background: var(--ork-bg-secondary) !important;
+  color: var(--ork-text-muted) !important;
+  border-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr {
+  background: var(--ork-card-bg) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr:hover td,
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.odd:hover td,
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.even:hover td {
+  background: var(--ork-bg-tertiary) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody td {
+  color: var(--ork-text-secondary) !important;
+  border-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.odd td {
+  background: var(--ork-card-bg) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.even td {
+  background: var(--ork-bg-secondary) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_length,
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_filter,
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_info,
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_paginate {
+  color: var(--ork-text-secondary) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_filter input,
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_length select {
+  background: var(--ork-input-bg) !important;
+  border-color: var(--ork-input-border) !important;
+  color: var(--ork-text) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_paginate .paginate_button {
+  background: var(--ork-bg-secondary) !important;
+  border-color: var(--ork-border) !important;
+  color: var(--ork-text-secondary) !important;
+}
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .pk-recs-table-wrap .dataTables_paginate .paginate_button.current:hover {
+  background: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 35%) !important;
+  border-color: hsl(var(--pk-hue), calc(var(--pk-sat) * 0.7), 45%) !important;
+  color: #e2e8f0 !important;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-recs-table-wrap table.dataTable thead th { background: var(--ork-bg-secondary) !important; color: var(--ork-text-muted) !important; border-color: var(--ork-border) !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-recs-table-wrap table.dataTable tbody td { color: var(--ork-text-secondary) !important; border-color: var(--ork-border) !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-recs-table-wrap table.dataTable tbody tr.odd td { background: var(--ork-card-bg) !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-recs-table-wrap table.dataTable tbody tr.even td { background: var(--ork-bg-secondary) !important; }
 }
 
 /* =====================================================

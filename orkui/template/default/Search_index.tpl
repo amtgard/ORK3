@@ -18,6 +18,10 @@
 	font-size:22px; font-weight:700; color:#2d3748; margin:0;
 	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
 }
+html[data-theme="dark"] .sr-header-title,
+html:not([data-theme="light"]):not([data-theme="dark"]) .sr-header-title {
+	background:transparent; border:none; color:#e2e8f0; text-shadow:none;
+}
 .sr-header-sub { font-size:13px; color:#718096; margin-top:1px; }
 
 /* ── Search bar ── */
@@ -138,6 +142,25 @@
 	.sr-search-hint { display:none; }
 	.sr-table th:first-child,
 	.sr-table td:first-child { display:none; } /* hide Kingdom on mobile */
+}
+
+html[data-theme="dark"] .sr-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .sr-table tbody tr:hover td { color: var(--ork-text); }
+html[data-theme="dark"] .sr-player-name { color: var(--ork-text); }
+html[data-theme="dark"] .sr-row-inactive td { color: var(--ork-text-muted); }
+html[data-theme="dark"] .sr-row-inactive:hover td { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .sr-row-banned td { background: rgba(197,48,48,0.1); }
+html[data-theme="dark"] .sr-row-banned:hover td { background: rgba(197,48,48,0.2); }
+html[data-theme="dark"] .sr-badge-inactive { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .sr-overflow-warning { background: #744210; color: #fbd38d; }
+
+@media (prefers-color-scheme: dark) {
+	html:not([data-theme="light"]):not([data-theme="dark"]) .sr-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+	html:not([data-theme="light"]):not([data-theme="dark"]) .sr-table tbody tr:hover td { color: var(--ork-text); }
+	html:not([data-theme="light"]):not([data-theme="dark"]) .sr-player-name { color: var(--ork-text); }
+	html:not([data-theme="light"]):not([data-theme="dark"]) .sr-row-inactive td { color: var(--ork-text-muted); }
+	html:not([data-theme="light"]):not([data-theme="dark"]) .sr-row-banned td { background: rgba(197,48,48,0.1); }
+	html:not([data-theme="light"]):not([data-theme="dark"]) .sr-row-banned:hover td { background: rgba(197,48,48,0.2); }
 }
 </style>
 

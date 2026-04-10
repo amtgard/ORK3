@@ -73,8 +73,8 @@ html[data-theme="dark"] {
   --ork-overlay: rgba(0,0,0,0.7);
   --ork-overlay-light: rgba(30,32,44,0.88);
   --ork-hero-lightness: 22%;
-  --ork-accent-lightness: 65%;
-  --ork-accent-mid-lightness: 58%;
+  --ork-accent-lightness: 70%;
+  --ork-accent-mid-lightness: 72%;
   --ork-btn-txt-lightness: 90%;
   --ork-card-bg-rgb: 45,55,72;
 
@@ -180,8 +180,8 @@ html[data-theme="dark"] .en-btn-white {
     --ork-input-border: #4a5568;
     --ork-overlay: rgba(0,0,0,0.7);
     --ork-hero-lightness: 22%;
-    --ork-accent-lightness: 65%;
-    --ork-accent-mid-lightness: 58%;
+    --ork-accent-lightness: 70%;
+    --ork-accent-mid-lightness: 72%;
     --ork-btn-txt-lightness: 90%;
     --ork-card-bg-rgb: 45,55,72;
     --ork-overlay-light: rgba(30,32,44,0.88);
@@ -7550,6 +7550,11 @@ html[data-theme="dark"] a {
 html[data-theme="dark"] a:hover {
 	color: #90cdf4;
 }
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3,
+html[data-theme="dark"] h4,
+html[data-theme="dark"] h5,
 html[data-theme="dark"] h1,
 html[data-theme="dark"] h2,
 html[data-theme="dark"] h3,
