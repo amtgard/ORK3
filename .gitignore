@@ -41,4 +41,3 @@ ork.zip
 config.tmpprod.php
 .DS_Store
 .vscode/
-system/lib/ork3/class.Authorization.php
