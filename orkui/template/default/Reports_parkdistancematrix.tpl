@@ -23,6 +23,23 @@ $_pdm_count  = count($_pdm_parks);
 }
 .pdm-table td.pdm-self { background: #edf2f7; color: #a0aec0; }
 .pdm-table th.pdm-corner { background: #f7fafc; }
+html[data-theme="dark"] .pdm-table th, html[data-theme="dark"] .pdm-table td { border-color: #4a5568; }
+html[data-theme="dark"] .pdm-table td.pdm-rowhead { background: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .pdm-table td.pdm-rowhead a { color: #90cdf4; }
+html[data-theme="dark"] .pdm-table td.pdm-location { background: #2d3748; color: #718096; }
+html[data-theme="dark"] .pdm-table th.pdm-colhead { background: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .pdm-table th.pdm-corner { background: #2d3748; }
+html[data-theme="dark"] .pdm-table td.pdm-self { background: #374151; color: #718096; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td { border-color: #4a5568; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-rowhead { background: #2d3748; color: #e2e8f0; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-rowhead a { color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-location { background: #2d3748; color: #718096; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th.pdm-colhead { background: #2d3748; color: #e2e8f0; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th.pdm-corner { background: #2d3748; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-self { background: #374151; color: #718096; }
+}
 </style>
 
 <div class="rp-root">
@@ -41,7 +58,7 @@ $_pdm_count  = count($_pdm_parks);
 
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Straight-line distance in miles between every pair of active parks with GPS coordinates on file. Color scale is relative to this kingdom's own min/max — <span style="background:hsl(120,70%,65%);padding:0 4px;border-radius:3px;">green</span> = closest, <span style="background:hsl(55,95%,60%);padding:0 4px;border-radius:3px;">yellow</span> = mid, <span style="background:hsl(25,90%,50%);color:#fff;padding:0 4px;border-radius:3px;">orange</span> = farthest. Does not account for roads or terrain.</span>
+		<span>Straight-line distance in miles between every pair of active parks with GPS coordinates on file. Color scale is relative to this kingdom's own min/max — <span style="background:hsl(120,70%,65%);color:rgba(0,0,0,0.8);padding:0 4px;border-radius:3px;">green</span> = closest, <span style="background:hsl(55,95%,60%);color:rgba(0,0,0,0.8);padding:0 4px;border-radius:3px;">yellow</span> = mid, <span style="background:hsl(25,90%,50%);color:#fff;padding:0 4px;border-radius:3px;">orange</span> = farthest. Does not account for roads or terrain.</span>
 	</div>
 
 <?php if (!empty($error)): ?>
@@ -111,7 +128,7 @@ $_pdm_count  = count($_pdm_parks);
 					$hue = round(55 - $tt * 30); $sat = round(95 - $tt * 5); $light = round(60 - $tt * 10);
 				}
 ?>
-					<td style="background:hsl(<?=$hue?>,<?=$sat?>%,<?=$light?>%)" title="<?=htmlspecialchars($row['Name'])?> → <?=htmlspecialchars($col['Name'])?>"><?=$miles?></td>
+					<td style="background:hsl(<?=$hue?>,<?=$sat?>%,<?=$light?>%);color:rgba(0,0,0,0.8)" title="<?=htmlspecialchars($row['Name'])?> → <?=htmlspecialchars($col['Name'])?>"><?=$miles?></td>
 <?php 		else: ?>
 					<td>N/A</td>
 <?php 		endif; endforeach; ?>

@@ -1965,11 +1965,11 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			<button class="kn-modal-close-btn" id="kn-claimpark-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body" style="padding:20px">
-			<p style="font-size:14px;color:#2d3748;margin:0 0 10px">To claim a park, please submit documentation, including Althing results if possible, authorizing the move to:</p>
+			<p style="font-size:14px;color:var(--ork-text);margin:0 0 10px">To claim a park, please submit documentation, including Althing results if possible, authorizing the move to:</p>
 			<p style="font-size:15px;font-weight:600;margin:0 0 14px">
 				<a href="mailto:Contracts@amtgard.com?subject=<?= rawurlencode('Park Claim Request — ' . ($kingdom_name ?? '')) ?>&body=<?= rawurlencode("Kingdom: " . ($kingdom_name ?? '') . "\nPark Name: \nAlthing Results: \nReason for Claim: ") ?>">Contracts@amtgard.com</a>
 			</p>
-			<p style="font-size:12px;color:#718096;margin:0">Include the park name, your kingdom, and any supporting documentation.</p>
+			<p style="font-size:12px;color:var(--ork-text-muted);margin:0">Include the park name, your kingdom, and any supporting documentation.</p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end">
 			<button class="kn-btn-ghost" id="kn-claimpark-cancel">Close</button>

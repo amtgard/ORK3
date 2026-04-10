@@ -10384,7 +10384,7 @@ window.pnCloseUnitCreateModal = function() {
                                 : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
                             var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
                             return '<div class="kn-ac-item' + (same ? ' kn-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '"')
+                                + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
                                 + '>' + escHtml(pl.Persona) + sub + '</div>';
@@ -10427,6 +10427,8 @@ window.pnCloseUnitCreateModal = function() {
 
         makePlayerSearch('kn-merge-keep-name',   'kn-merge-keep-id',   'kn-merge-keep-results',   'kn-merge-remove-id');
         makePlayerSearch('kn-merge-remove-name', 'kn-merge-remove-id', 'kn-merge-remove-results', 'kn-merge-keep-id');
+        acKeyNav(gid('kn-merge-keep-name'),   gid('kn-merge-keep-results'),   'kn-ac-open', '.kn-ac-item[data-id]');
+        acKeyNav(gid('kn-merge-remove-name'), gid('kn-merge-remove-results'), 'kn-ac-open', '.kn-ac-item[data-id]');
 
         gid('kn-mergeplayer-submit').addEventListener('click', function() {
             var btn        = gid('kn-mergeplayer-submit');
@@ -10921,7 +10923,7 @@ window.pnCloseUnitCreateModal = function() {
                                 : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
                             var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
                             return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '"')
+                                + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
                                 + '>' + escHtml(pl.Persona) + sub + '</div>';
@@ -10964,6 +10966,8 @@ window.pnCloseUnitCreateModal = function() {
 
         makePlayerSearch('pk-merge-keep-name',   'pk-merge-keep-id',   'pk-merge-keep-results',   'pk-merge-remove-id');
         makePlayerSearch('pk-merge-remove-name', 'pk-merge-remove-id', 'pk-merge-remove-results', 'pk-merge-keep-id');
+        acKeyNav(gid('pk-merge-keep-name'),   gid('pk-merge-keep-results'),   'pk-ac-open', '.pk-ac-item[data-id]');
+        acKeyNav(gid('pk-merge-remove-name'), gid('pk-merge-remove-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
 
         gid('pk-mergeplayer-submit').addEventListener('click', function() {
             var keepId     = gid('pk-merge-keep-id').value;

@@ -94,9 +94,11 @@
 				</h4>
 				<div class="ec-row">
 					<div class="ec-field ec-full">
-						<label>Event Description</label>
+						<label style="display:flex;align-items:center;gap:6px;">
+							Event Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
+							<button type="button" class="kn-md-help-btn" onclick="document.getElementById('ec-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+						</label>
 						<textarea name="Description" rows="6" placeholder="Describe the event — activities, schedule, what to bring, camping info, etc."></textarea>
-						<span class="ec-field-hint">HTML is supported.</span>
 					</div>
 				</div>
 			</div>
@@ -270,4 +272,33 @@ function ecCancelAndReturn(ev, eventId) {
 		.finally(function () { window.location.href = EcConfig.returnUrl; });
 }
 </script>
+<!-- Markdown Help Modal -->
+<div id="ec-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
+	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-hashtag" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<button class="kn-modal-close-btn" onclick="document.getElementById('ec-md-help-overlay').classList.remove('kn-open')">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="padding:16px 20px">
+			<table class="kn-md-help-table">
+				<thead><tr><th>You type</th><th>Result</th></tr></thead>
+				<tbody>
+					<tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+					<tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+					<tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+					<tr><td><code>[link](https://...)</code></td><td><a href="#">link</a></td></tr>
+					<tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+					<tr><td><code>- item</code></td><td>• Bullet list</td></tr>
+					<tr><td><code>1. item</code></td><td>1. Numbered list</td></tr>
+					<tr><td><code># Heading</code></td><td><strong>Large heading</strong></td></tr>
+					<tr><td><code>## Heading</code></td><td><strong>Smaller heading</strong></td></tr>
+					<tr><td><code>&gt; quote</code></td><td><em>Blockquote</em></td></tr>
+					<tr><td>Blank line</td><td>New paragraph</td></tr>
+					<tr><td>Single newline</td><td>Line break</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

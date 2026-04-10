@@ -135,7 +135,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .uc-modal-title {
 		</div>
 <?php if (!empty($LoggedIn)): ?>
 		<div class="rp-header-actions">
-			<button class="uc-new-btn" id="uc-open-btn">
+			<button class="rp-btn-ghost" id="uc-open-btn">
 				<i class="fas fa-plus"></i> New Unit
 			</button>
 		</div>

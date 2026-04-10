@@ -335,20 +335,39 @@ details > summary::-webkit-details-marker { display: none; }
 <?php endif; ?>
 
 	/* ── Highcharts grouped bar chart ── */
+	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+		(document.documentElement.getAttribute('data-theme') !== 'light' &&
+		 window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+	var _textColor   = _isDark ? '#a0aec0' : '#444';
+	var _ttBg        = _isDark ? '#2d3748' : '#ffffff';
+	var _ttBorder    = _isDark ? '#4a5568' : '#cccccc';
+	var _ttTextColor = _isDark ? '#e2e8f0' : '#333333';
 	new Highcharts.Chart({
 		chart  : { renderTo: 'npa-chart', type: 'column', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
-		title  : { text: 'New vs Returning Players by Park' },
+		title  : { text: 'New vs Returning Players by Park', style: { color: _textColor } },
 		xAxis  : {
 			categories: <?=json_encode($chart_parks)?>,
-			labels    : { rotation: -30, style: { fontSize: '11px' } }
+			labels    : { rotation: -30, style: { fontSize: '11px', color: _textColor } },
+			lineColor : _isDark ? '#4a5568' : '#ccd6eb',
+			tickColor : _isDark ? '#4a5568' : '#ccd6eb'
 		},
-		yAxis  : { title: { text: 'Players' }, allowDecimals: false, min: 0 },
+		yAxis  : {
+			title       : { text: 'Players', style: { color: _textColor } },
+			labels      : { style: { color: _textColor } },
+			allowDecimals: false, min: 0,
+			gridLineColor: _isDark ? '#2d3748' : '#e6e6e6'
+		},
+		tooltip: {
+			backgroundColor: _ttBg,
+			borderColor    : _ttBorder,
+			style          : { color: _ttTextColor }
+		},
+		legend : { enabled: true, itemStyle: { color: _textColor }, itemHoverStyle: { color: _isDark ? '#e2e8f0' : '#000' } },
 		series : [
 			{ name: 'New Players',       data: <?=json_encode($chart_new)?>,       color: '#4338ca' },
 			{ name: 'Returning Players', data: <?=json_encode($chart_returning)?>,  color: '#10b981' }
 		],
-		credits: { enabled: false },
-		legend : { enabled: true }
+		credits: { enabled: false }
 	});
 <?php endif; ?>
 }());

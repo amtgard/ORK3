@@ -1127,7 +1127,7 @@ function initPlayerSearch(cfg) {
 		if (!items.length) return;
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
-			if (focusIdx > 0) items[focusIdx].classList.remove('un-ac-focused');
+			if (focusIdx >= 0) items[focusIdx].classList.remove('un-ac-focused');
 			focusIdx = Math.min(focusIdx + 1, items.length - 1);
 			items[focusIdx].classList.add('un-ac-focused');
 			items[focusIdx].scrollIntoView({ block: 'nearest' });

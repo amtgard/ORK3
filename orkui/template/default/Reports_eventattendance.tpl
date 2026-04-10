@@ -35,6 +35,47 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 	filter: grayscale(0.5);
 	transition: opacity 0.2s, filter 0.2s;
 }
+html[data-theme="dark"] .rp-stats-filter-notice { background: #2d2b0e; border-color: #854d0e; color: #fde68a; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_filter input,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_length select {
+  background: #374151; border-color: #4a5568; color: #e2e8f0; outline: none;
+}
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_filter input:focus,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_length select:focus {
+  border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.2);
+}
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_filter label,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_length label { color: #a0aec0; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_info { color: #718096; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button { background: #374151 !important; border-color: #4a5568 !important; color: #cbd5e0 !important; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button:hover { background: #4a5568 !important; border-color: #718096 !important; color: #e2e8f0 !important; }
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover { background: #2d3748 !important; border-color: #4a5568 !important; color: #718096 !important; }
+html[data-theme="dark"] .rp-main table.dataTable thead th { background: #374151; color: #e2e8f0; border-color: #4a5568; }
+html[data-theme="dark"] .rp-main table.dataTable thead th:hover { background: #4a5568; }
+html[data-theme="dark"] .rp-main table.dataTable tbody td { border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .rp-main table.dataTable tbody tr:hover > td { background: #4a5568; }
+html[data-theme="dark"] .rp-main table.dataTable tbody tr.odd > td,
+html[data-theme="dark"] .rp-main table.dataTable tbody tr.even > td { background: #1a202c; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-stats-filter-notice { background: #2d2b0e; border-color: #854d0e; color: #fde68a; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_filter input,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_length select { background: #374151; border-color: #4a5568; color: #e2e8f0; outline: none; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_filter input:focus,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_length select:focus { border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.2); }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_filter label,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_length label { color: #a0aec0; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_info { color: #718096; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button { background: #374151 !important; border-color: #4a5568 !important; color: #cbd5e0 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button:hover { background: #4a5568 !important; border-color: #718096 !important; color: #e2e8f0 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover { background: #2d3748 !important; border-color: #4a5568 !important; color: #718096 !important; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main table.dataTable thead th { background: #374151; color: #e2e8f0; border-color: #4a5568; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main table.dataTable tbody td { border-color: #4a5568; color: #cbd5e0; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main table.dataTable tbody tr:hover > td { background: #4a5568; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main table.dataTable tbody tr.odd > td,
+  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-main table.dataTable tbody tr.even > td { background: #1a202c; }
+}
 </style>
 
 <div class="rp-root">
