@@ -87,4 +87,49 @@ class Controller_AdminAjax extends Controller {
 		exit;
 	}
 
+
+	public function stateofamtgard($section = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['error' => 'Not logged in.']); exit;
+		}
+		// stateofamtgard endpoints are open to all logged-in users
+		$start = preg_replace('/[^0-9\-]/', '', $_GET['start'] ?? date('Y') . '-01-01');
+		$end   = preg_replace('/[^0-9\-]/', '', $_GET['end']   ?? date('Y') . '-12-31');
+		$raw_kingdoms = isset($_GET['kingdoms']) && is_array($_GET['kingdoms']) ? $_GET['kingdoms'] : [];
+		$kingdom_ids = array_values(array_filter(array_map('intval', $raw_kingdoms)));
+
+		$sor = Ork3::$Lib->stateofamtgard;
+		switch (trim($section ?? '')) {
+			case 'kingdoms':
+				echo json_encode(['kingdoms' => $sor->getKingdomSignIns($start, $end, $kingdom_ids)]);
+				break;
+			case 'classes':
+				echo json_encode(['classes' => $sor->getClassSignIns($start, $end, $kingdom_ids)]);
+				break;
+			case 'parks':
+				echo json_encode(['parks' => $sor->getParksAnalysis($start, $end, $kingdom_ids)]);
+				break;
+			case 'players':
+				echo json_encode(['players' => $sor->getPlayerStats($start, $end, $kingdom_ids)]);
+				break;
+			case 'cohorts':
+				echo json_encode(['cohorts' => $sor->getPlayerCohorts($start, $end, $kingdom_ids)]);
+				break;
+			case 'classtrends':
+				echo json_encode(['classtrends' => $sor->getClassTrends($start, $end, $kingdom_ids)]);
+				break;
+			case 'monthly':
+				echo json_encode(['monthly' => $sor->getMonthlyBreakdown($start, $end, $kingdom_ids)]);
+				break;
+			case 'longevity':
+				echo json_encode(['longevity' => $sor->getPlayerLongevity($start, $end, $kingdom_ids)]);
+				break;
+			default:
+				echo json_encode(['error' => 'Unknown section.']);
+		}
+		exit;
+	}
+
+
 }
