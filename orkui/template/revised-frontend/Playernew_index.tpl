@@ -779,9 +779,9 @@
 							<?php endif; ?>
 						</div>
 
-						<!-- Recent Awards (60 days) -->
+						<!-- Recent Awards (100 days) -->
 						<?php
-						$_ma60awd = date('Y-m-d', strtotime('-60 days'));
+						$_ma60awd = date('Y-m-d', strtotime('-100 days'));
 						$_maRecAwd = array_values(array_filter($_maDash_awd, function($a) use ($_ma60awd) {
 							return !$a['IsTitle'] && !empty($a['Date']) && $a['Date'] >= $_ma60awd;
 						}));
