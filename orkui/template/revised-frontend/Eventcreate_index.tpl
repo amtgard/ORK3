@@ -77,7 +77,7 @@
 					</div>
 					<div class="ec-field">
 						<label>End Date &amp; Time</label>
-						<input type="text" name="EndDate" id="ec-fp-end" autocomplete="off" required<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
+						<input type="text" name="EndDate" id="ec-fp-end" autocomplete="off"<?= !empty($PresetEndDate) ? ' value="' . htmlspecialchars($PresetEndDate) . '"' : '' ?>>
 					</div>
 				</div>
 			</div>
@@ -186,7 +186,7 @@
 					</div>
 					<div class="ec-field ec-md">
 						<label>Country</label>
-						<input type="text" name="Country" value="">
+						<input type="text" name="Country" value="United States">
 					</div>
 				</div>
 			</div>
