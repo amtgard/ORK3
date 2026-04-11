@@ -106,10 +106,10 @@
 		$_maDash_cls = is_array($Details['Classes'])    ? $Details['Classes']    : [];
 		usort($_maDash_att, function($a, $b) { return strtotime($b['Date']) - strtotime($a['Date']); });
 		usort($_maDash_awd, function($a, $b) { return strtotime($b['Date']) - strtotime($a['Date']); });
-		// First credit date (oldest attendance)
+		// First credit date (oldest non-zero attendance)
 		$_maFirstDate = null;
 		foreach ($_maDash_att as $_fa) {
-			if (!empty($_fa['Date']) && $_fa['Date'] !== '1970-01-01') {
+			if (!empty($_fa['Date']) && $_fa['Date'] !== '0000-00-00' && $_fa['Date'] !== '1970-01-01') {
 				if ($_maFirstDate === null || strtotime($_fa['Date']) < strtotime($_maFirstDate))
 					$_maFirstDate = $_fa['Date'];
 			}
