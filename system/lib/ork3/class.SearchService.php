@@ -169,7 +169,7 @@ class SearchService extends Ork3 {
 						)";
 		}
 
-		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description,
+		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description, cd.event_type as event_type,
 					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'going') AS rsvp_going,
 					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'interested') AS rsvp_interested
 					from " . DB_PREFIX . "event e
@@ -218,7 +218,8 @@ class SearchService extends Ork3 {
 						'HasHeraldry' => $d->has_heraldry,
 						'RsvpGoing' => (int)$d->rsvp_going,
 						'RsvpInterested' => (int)$d->rsvp_interested,
-						'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested
+						'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested,
+						'EventType' => $d->event_type ?? ''
 					);
 				if (!is_null($limit)) {
     				$limit--;
