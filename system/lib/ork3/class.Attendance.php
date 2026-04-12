@@ -298,38 +298,80 @@ class Attendance  extends Ork3 {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		if (!valid_id($mundane_id)) return NoAuthorization();
 
-		$park_id    = (int)($request['ParkId'] ?? 0);
-		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+		$park_id                 = (int)($request['ParkId'] ?? 0);
+		$kingdom_id              = (int)($request['KingdomId'] ?? 0);
+		$event_id                = (int)($request['EventId'] ?? 0);
+		$event_calendardetail_id = (int)($request['EventCalendarDetailId'] ?? 0);
 
-		if (valid_id($park_id)) {
+		// Credits is required, must be > 0
+		if (!isset($request['Credits']) || $request['Credits'] === '' || (float)$request['Credits'] <= 0) {
+			return InvalidParameter('Credits is required.');
+		}
+		$credits = (float)$request['Credits'];
+		if ($credits > 10) $credits = 10.0;
+
+		$expires_at = null;
+
+		if (valid_id($event_id)) {
+			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+				// Allow event staff with can_attendance permission
+				$ok = false;
+				if (valid_id($event_calendardetail_id)) {
+					$this->db->Clear();
+					$row = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $event_calendardetail_id . ' AND mundane_id = ' . $mundane_id . ' AND can_attendance = 1 LIMIT 1');
+					if ($row && $row->Next()) $ok = true;
+				}
+				if (!$ok) return NoAuthorization();
+			}
+			// Resolve event end -> expires 24h after event end
+			if (valid_id($event_calendardetail_id)) {
+				$detail = Ork3::$Lib->event->GetEventDetail(['EventCalendarDetailId' => $event_calendardetail_id]);
+				if (($detail['Status']['Status'] ?? 1) != 0) return InvalidParameter('Could not load event detail.');
+				$cd          = $detail['CalendarEventDetails'][0] ?? [];
+				$event_end   = $cd['EventEnd']   ?? '';
+				$event_start = $cd['EventStart'] ?? '';
+			} else {
+				$this->db->Clear();
+				$row = $this->db->DataSet('SELECT MAX(event_end) AS event_end, MAX(event_start) AS event_start FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $event_id);
+				if (!$row || !$row->Next()) return InvalidParameter('Event not found.');
+				$event_end   = $row->event_end;
+				$event_start = $row->event_start;
+			}
+			if (!$event_end || $event_end === '0000-00-00 00:00:00') $event_end = $event_start;
+			if (!$event_end) return InvalidParameter('Event has no end date.');
+			$expires_at = date('Y-m-d H:i:s', strtotime($event_end) + 86400);
+			if (strtotime($expires_at) <= time()) return InvalidParameter('This event has already ended.');
+		} elseif (valid_id($park_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
 				return NoAuthorization();
 		} elseif (valid_id($kingdom_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
 				return NoAuthorization();
 		} else {
-			return InvalidParameter('ParkId or KingdomId required.');
+			return InvalidParameter('ParkId, KingdomId, or EventId required.');
 		}
 
-		$hours   = min(96, max(1, (int)($request['Hours'] ?? 3)));
-		$credits = (float)($request['Credits'] ?? 1.0);
-		if ($credits <= 0 || $credits > 10) $credits = 1.0;
+		if ($expires_at === null) {
+			$hours      = min(96, max(1, (int)($request['Hours'] ?? 3)));
+			$expires_at = date('Y-m-d H:i:s', time() + $hours * 3600);
+		}
 
-		$token      = bin2hex(random_bytes(24));
-		$expires_at = date('Y-m-d H:i:s', time() + $hours * 3600);
+		$token = bin2hex(random_bytes(24));
 
 		$this->attendance_link->clear();
-		$this->attendance_link->token      = $token;
-		$this->attendance_link->park_id    = $park_id;
-		$this->attendance_link->kingdom_id = $kingdom_id;
-		$this->attendance_link->by_whom_id = $mundane_id;
-		$this->attendance_link->credits    = $credits;
-		$this->attendance_link->expires_at = $expires_at;
-		$this->attendance_link->created_at = date('Y-m-d H:i:s');
+		$this->attendance_link->token                   = $token;
+		$this->attendance_link->park_id                 = $park_id;
+		$this->attendance_link->kingdom_id              = $kingdom_id;
+		$this->attendance_link->event_id                = $event_id;
+		$this->attendance_link->event_calendardetail_id = $event_calendardetail_id;
+		$this->attendance_link->by_whom_id              = $mundane_id;
+		$this->attendance_link->credits                 = $credits;
+		$this->attendance_link->expires_at              = $expires_at;
+		$this->attendance_link->created_at              = date('Y-m-d H:i:s');
 		$this->attendance_link->save();
 
 		if (!$this->attendance_link->link_id) return InvalidParameter('Could not create link.');
-		return Success($token);
+		return Success(['Token' => $token, 'ExpiresAt' => $expires_at]);
 	}
 
 	public function GetAttendanceLinkInfo($request) {
@@ -342,11 +384,13 @@ class Attendance  extends Ork3 {
 		if (strtotime($this->attendance_link->expires_at) <= time()) return InvalidParameter('This sign-in link has expired.');
 
 		return Success([
-			'LinkId'    => (int)$this->attendance_link->link_id,
-			'ParkId'    => (int)$this->attendance_link->park_id,
-			'KingdomId' => (int)$this->attendance_link->kingdom_id,
-			'Credits'   => (float)$this->attendance_link->credits,
-			'ExpiresAt' => $this->attendance_link->expires_at,
+			'LinkId'                 => (int)$this->attendance_link->link_id,
+			'ParkId'                 => (int)$this->attendance_link->park_id,
+			'KingdomId'              => (int)$this->attendance_link->kingdom_id,
+			'EventId'                => (int)$this->attendance_link->event_id,
+			'EventCalendarDetailId'  => (int)$this->attendance_link->event_calendardetail_id,
+			'Credits'                => (float)$this->attendance_link->credits,
+			'ExpiresAt'              => $this->attendance_link->expires_at,
 		]);
 	}
 
@@ -362,12 +406,26 @@ class Attendance  extends Ork3 {
 		if (!$this->attendance_link->find()) return InvalidParameter('Link not found.');
 		if (strtotime($this->attendance_link->expires_at) <= time()) return InvalidParameter('This sign-in link has expired.');
 
-		$park_id    = (int)$this->attendance_link->park_id;
-		$kingdom_id = (int)$this->attendance_link->kingdom_id;
-		$credits    = (float)$this->attendance_link->credits;
+		$park_id                 = (int)$this->attendance_link->park_id;
+		$kingdom_id              = (int)$this->attendance_link->kingdom_id;
+		$event_id                = (int)$this->attendance_link->event_id;
+		$event_calendardetail_id = (int)$this->attendance_link->event_calendardetail_id;
+		$credits                 = (float)$this->attendance_link->credits;
 
 		$class_id = (int)($request['ClassId'] ?? 0);
 		if (!valid_id($class_id)) return InvalidParameter('Class is required.');
+
+		// Event-scoped link: use the event's date and resolve park/kingdom from event
+		$attendance_date = date('Y-m-d');
+		if (valid_id($event_id)) {
+			$detail = Ork3::$Lib->event->GetEventDetail(['EventCalendarDetailId' => $event_calendardetail_id]);
+			if (($detail['Status']['Status'] ?? 1) != 0) return InvalidParameter('Could not load event.');
+			$cd = $detail['CalendarEventDetails'][0] ?? [];
+			$attendance_date = !empty($cd['EventStart']) ? date('Y-m-d', strtotime($cd['EventStart'])) : $attendance_date;
+			if (!valid_id($park_id) && !empty($cd['AtParkId']))   $park_id = (int)$cd['AtParkId'];
+			$ev = Ork3::$Lib->event->GetEvent(['EventId' => $event_id]);
+			if (!valid_id($kingdom_id) && !empty($ev['KingdomId'])) $kingdom_id = (int)$ev['KingdomId'];
+		}
 
 		// If park-level link, resolve kingdom_id from park record
 		if (valid_id($park_id) && !valid_id($kingdom_id)) {
@@ -380,16 +438,22 @@ class Attendance  extends Ork3 {
 		$player_row = $this->db->query('SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
 		$persona    = ($player_row && isset($player_row->persona)) ? (string)$player_row->persona : '';
 
-		$today = date('Y-m-d');
-
-		// Check for duplicate sign-in today
+		// Check for duplicate sign-in: for events, check by event_calendardetail_id; for park, by date+park
 		$this->db->Clear();
-		$check = $this->db->query(
-			'SELECT attendance_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id .
-			" AND date = '" . $today . "' AND park_id = " . $park_id . ' AND kingdom_id = ' . $kingdom_id .
-			' AND event_id = 0 LIMIT 1'
-		);
-		if ($check && $check->attendance_id) return InvalidParameter('You have already signed in today.');
+		if (valid_id($event_calendardetail_id)) {
+			$check = $this->db->query(
+				'SELECT attendance_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id .
+				' AND event_calendardetail_id = ' . $event_calendardetail_id . ' LIMIT 1'
+			);
+			if ($check && $check->attendance_id) return InvalidParameter('You have already signed in to this event.');
+		} else {
+			$check = $this->db->query(
+				'SELECT attendance_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id .
+				" AND date = '" . $attendance_date . "' AND park_id = " . $park_id . ' AND kingdom_id = ' . $kingdom_id .
+				' AND event_id = 0 LIMIT 1'
+			);
+			if ($check && $check->attendance_id) return InvalidParameter('You have already signed in today.');
+		}
 
 		$this->attendance->clear();
 		$this->attendance->park_id                  = $park_id;
@@ -397,14 +461,14 @@ class Attendance  extends Ork3 {
 		$this->attendance->mundane_id               = $mundane_id;
 		$this->attendance->persona                  = $persona;
 		$this->attendance->class_id                 = $class_id;
-		$this->attendance->date                     = $today;
+		$this->attendance->date                     = $attendance_date;
 		$this->attendance->credits                  = $credits;
 		$this->attendance->note                     = '';
 		$this->attendance->flavor                   = '';
 		$this->attendance->by_whom_id               = $mundane_id;
 		$this->attendance->entered_at               = date('Y-m-d H:i:s');
-		$this->attendance->event_id                 = 0;
-		$this->attendance->event_calendardetail_id  = 0;
+		$this->attendance->event_id                 = $event_id;
+		$this->attendance->event_calendardetail_id  = $event_calendardetail_id;
 		$this->attendance->date_year                = 0;
 		$this->attendance->date_month               = 0;
 		$this->attendance->date_week3               = 0;
@@ -426,17 +490,30 @@ class Attendance  extends Ork3 {
 
 		$park_id    = (int)($request['ParkId'] ?? 0);
 		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+		$event_id   = (int)($request['EventId'] ?? 0);
 
-		if (valid_id($park_id)) {
+		if (valid_id($event_id)) {
+			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+				$ecdid = (int)($request['EventCalendarDetailId'] ?? 0);
+				$ok = false;
+				if (valid_id($ecdid)) {
+					$this->db->Clear();
+					$row = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $ecdid . ' AND mundane_id = ' . $mundane_id . ' AND can_attendance = 1 LIMIT 1');
+					if ($row && $row->Next()) $ok = true;
+				}
+				if (!$ok) return NoAuthorization();
+			}
+			$where = 'event_id = ' . $event_id;
+		} elseif (valid_id($park_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
 				return NoAuthorization();
-			$where = 'park_id = ' . $park_id;
+			$where = 'park_id = ' . $park_id . ' AND event_id = 0';
 		} elseif (valid_id($kingdom_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
 				return NoAuthorization();
-			$where = 'kingdom_id = ' . $kingdom_id . ' AND (park_id = 0 OR park_id IS NULL)';
+			$where = 'kingdom_id = ' . $kingdom_id . ' AND (park_id = 0 OR park_id IS NULL) AND event_id = 0';
 		} else {
-			return InvalidParameter('ParkId or KingdomId required.');
+			return InvalidParameter('ParkId, KingdomId, or EventId required.');
 		}
 
 		$this->db->Clear();
@@ -470,10 +547,19 @@ class Attendance  extends Ork3 {
 
 		$park_id    = (int)$this->attendance_link->park_id;
 		$kingdom_id = (int)$this->attendance_link->kingdom_id;
+		$event_id   = (int)$this->attendance_link->event_id;
+		$ecdid      = (int)$this->attendance_link->event_calendardetail_id;
 		$authorized = false;
-		if (valid_id($park_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
+		if (valid_id($event_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT))
 			$authorized = true;
-		elseif (valid_id($kingdom_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
+		elseif (valid_id($event_id) && valid_id($ecdid)) {
+			$this->db->Clear();
+			$row = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $ecdid . ' AND mundane_id = ' . $mundane_id . ' AND can_attendance = 1 LIMIT 1');
+			if ($row && $row->Next()) $authorized = true;
+		}
+		if (!$authorized && valid_id($park_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
+			$authorized = true;
+		if (!$authorized && valid_id($kingdom_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
 			$authorized = true;
 		if (!$authorized) return NoAuthorization();
 

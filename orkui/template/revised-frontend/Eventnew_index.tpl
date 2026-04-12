@@ -180,6 +180,32 @@
 	100% { box-shadow: 0 0 0 0 rgba(66,153,225,0); border-color: #e2e8f0; }
 }
 .ev-credits-pulse { animation: ev-credits-pulse 1s ease-out; }
+/* Sign-in link modal */
+#ev-signin-link-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9050; align-items:center; justify-content:center; }
+#ev-signin-link-overlay.ev-open { display:flex; }
+.ev-signin-link-modal { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.22); width:min(520px, calc(100vw - 32px)); max-height:calc(100vh - 40px); overflow:auto; }
+.ev-signin-link-modal-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e2e8f0; background:#f7fafc; font-size:15px; font-weight:700; color:#2d3748; }
+.ev-signin-link-close { background:none; border:none; font-size:22px; color:#718096; cursor:pointer; padding:0 4px; line-height:1; }
+.ev-signin-link-modal-body { padding:18px 22px 22px; }
+.ev-signin-link-blurb { margin:0 0 14px; font-size:13px; color:#4a5568; line-height:1.5; }
+.ev-signin-link-row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+.ev-signin-link-field { display:flex; flex-direction:column; }
+.ev-signin-link-field label { font-size:11px; font-weight:700; color:#718096; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+.ev-signin-link-field input { padding:6px 9px; border:1px solid #cbd5e0; border-radius:5px; font-size:13px; width:120px; }
+.ev-signin-link-hint { margin-top:8px; font-size:11px; color:#718096; }
+.ev-signin-link-url-row { display:flex; gap:6px; align-items:center; margin-top:12px; }
+.ev-signin-link-url-row input { flex:1; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:4px; background:#fff; }
+#ev-signin-link-expires { margin-top:6px; font-size:11px; color:#718096; }
+#ev-signin-links-wrap { margin-top:14px; border-top:1px solid #e2e8f0; padding-top:10px; }
+#ev-signin-links-toggle { background:none; border:none; padding:0; cursor:pointer; font-size:12px; color:#4a5568; display:flex; align-items:center; gap:6px; }
+#ev-signin-links-chevron { font-size:10px; transition:transform .15s; }
+#ev-signin-links-loading, #ev-signin-links-empty { font-size:12px; color:#a0aec0; padding:4px 0; }
+#ev-signin-links-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
+#ev-signin-links-table th { color:#718096; text-align:left; padding:4px 6px; font-weight:600; }
+/* QR modal */
+#ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9100; align-items:center; justify-content:center; }
+#ev-qr-overlay .ev-qr-box { background:#fff; border-radius:12px; padding:28px 28px 20px; box-shadow:0 8px 32px rgba(0,0,0,0.22); max-width:320px; width:calc(100vw - 40px); text-align:center; }
+#ev-qr-img { width:220px; height:220px; border:1px solid #e2e8f0; border-radius:6px; display:block; margin:0 auto 14px; }
 .ev-rsvp-th-tooltip { position:relative; display:inline-block; cursor:default; }
 .ev-rsvp-th-tooltip .ev-rsvp-th-tip {
 	display:none; position:fixed; background:#1a202c; color:#fff; font-size:12px;
@@ -855,6 +881,9 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				</div>
 				<?php endif; ?>
 				<div class="ev-export-bar">
+					<?php if ($canManageAttendance && $checkinOpen): ?>
+					<button type="button" class="ev-icon-btn" id="ev-signin-link-open-btn" title="Sign-in Link" onclick="evOpenSigninLinkModal()" style="display:inline-flex;align-items:center;gap:6px"><i class="fas fa-qrcode"></i> Sign-In Link</button>
+					<?php endif; ?>
 					<button class="ev-icon-btn" title="Export CSV" onclick="evExportAttendanceCsv()"><i class="fas fa-download"></i></button>
 					<button class="ev-icon-btn" title="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>
 				</div>
@@ -1450,6 +1479,76 @@ function evPositionDelTooltip(wrap) {
 var _evSavedCredits = parseFloat(localStorage.getItem('ev_credits_default')) || null;
 if (_evSavedCredits) { var _evCr = document.getElementById('ev-Credits'); if (_evCr) _evCr.value = _evSavedCredits; }
 var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _evSavedCredits) _evRsvpCr.value = _evSavedCredits;
+</script>
+<?php if ($canManageAttendance && $checkinOpen): ?>
+<!-- Sign-in Link Modal -->
+<div id="ev-signin-link-overlay" onclick="if(event.target===this)evCloseSigninLinkModal()">
+	<div class="ev-signin-link-modal">
+		<div class="ev-signin-link-modal-header">
+			<span><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Event Sign-In Link</span>
+			<button type="button" onclick="evCloseSigninLinkModal()" class="ev-signin-link-close">&times;</button>
+		</div>
+		<div class="ev-signin-link-modal-body">
+			<p class="ev-signin-link-blurb">Generate a shareable URL and QR code for players to sign themselves in to this event. The link expires 24 hours after the event ends.</p>
+			<div class="ev-signin-link-row">
+				<div class="ev-signin-link-field">
+					<label>Credits per sign-in <span style="color:#e53e3e">*</span></label>
+					<input type="number" id="ev-signin-credits" min="0.5" max="10" step="0.5" placeholder="" required>
+				</div>
+				<div class="ev-signin-link-field" style="justify-content:flex-end">
+					<button type="button" class="ev-submit-btn" id="ev-signin-gen-btn" disabled>
+						<i class="fas fa-link"></i> Generate
+					</button>
+				</div>
+			</div>
+			<div id="ev-signin-link-result" style="display:none">
+				<div class="ev-signin-link-url-row">
+					<input type="text" id="ev-signin-link-url" readonly>
+					<button type="button" class="ev-icon-btn" id="ev-signin-copy-btn" title="Copy">
+						<i class="fas fa-copy"></i> Copy
+					</button>
+					<button type="button" class="ev-icon-btn" id="ev-signin-qr-btn" title="QR Code">
+						<i class="fas fa-qrcode"></i> QR
+					</button>
+				</div>
+				<div id="ev-signin-link-expires"></div>
+			</div>
+			<div id="ev-signin-links-wrap">
+				<button type="button" id="ev-signin-links-toggle">
+					<i class="fas fa-chevron-right" id="ev-signin-links-chevron"></i>
+					<span>Active Links</span> <span id="ev-signin-links-count"></span>
+				</button>
+				<div id="ev-signin-links-body" style="display:none">
+					<div id="ev-signin-links-loading">Loading&hellip;</div>
+					<div id="ev-signin-links-empty" style="display:none">No active links.</div>
+					<table id="ev-signin-links-table" style="display:none">
+						<thead><tr><th>Expires</th><th>Cr.</th><th></th></tr></thead>
+						<tbody id="ev-signin-links-tbody"></tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<!-- Sign-in QR Code Modal -->
+<div id="ev-qr-overlay" onclick="if(event.target===this)evCloseQrModal()">
+	<div class="ev-qr-box">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<button type="button" onclick="evCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="ev-qr-img" src="" alt="QR Code">
+		<div id="ev-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="ev-qr-download" href="" download="signin-qr.png" class="ev-icon-btn" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
+	</div>
+</div>
+<?php endif; ?>
+<script>
+function evCloseQrModal() { if (typeof orkCloseQrModal === 'function') orkCloseQrModal('ev-qr-overlay'); }
+</script>
+<script>
 var EvConfig = {
 	uir:        '<?= UIR ?>',
 	httpService:'<?= HTTP_SERVICE ?>',
@@ -1457,6 +1556,8 @@ var EvConfig = {
 	canManageSchedule: <?= !empty($canManageSchedule) ? 'true' : 'false' ?>,
 	canManageFeast:    <?= !empty($canManageFeast) ? 'true' : 'false' ?>,
 	canManageStaff:    <?= !empty($canManageStaff) ? 'true' : 'false' ?>,
+	canManageAttendance: <?= !empty($canManageAttendance) ? 'true' : 'false' ?>,
+	checkinOpen:       <?= !empty($checkinOpen) ? 'true' : 'false' ?>,
 	kingdomId:  <?= $kingdomId ?>,
 	eventId:    <?= $eventId ?>,
 	detailId:   <?= $detailId ?>,

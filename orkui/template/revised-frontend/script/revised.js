@@ -6463,6 +6463,7 @@ $(document).ready(function() {
    Event Detail (EvConfig)
    =========================== */
 (function() {
+    if (typeof EvConfig === 'undefined') return;
     // ---- Tab switching ----
     window.evShowTab = function(li, tabId) {
         var nav    = document.getElementById('ev-tab-nav');
@@ -7387,12 +7388,12 @@ $(document).ready(function() {
             }
         });
 
-        // Auto-set end = start + 1hr when start changes (only if end is blank)
+        // Auto-set end = start + 1hr whenever start changes
         var schedStartEl = gid('ev-sched-start');
         if (schedStartEl) {
             schedStartEl.addEventListener('change', function() {
                 var endEl = gid('ev-sched-end');
-                if (!endEl || endEl.value) return;
+                if (!endEl) return;
                 var ts = new Date(this.value);
                 if (isNaN(ts)) return;
                 ts.setHours(ts.getHours() + 1);
@@ -8988,6 +8989,181 @@ $(document).ready(function() {
         }, 'json').fail(function() {
             document.getElementById('pk-att-links-loading').style.display = 'none';
             document.getElementById('pk-att-links-empty').style.display = '';
+        });
+    }
+});
+
+
+// ============================================================
+// Eventnew — Sign-in Link & QR (event-scoped)
+window.evOpenSigninLinkModal = function() {
+    var ov = document.getElementById('ev-signin-link-overlay');
+    if (!ov) return;
+    ov.classList.add('ev-open');
+    document.body.style.overflow = 'hidden';
+};
+window.evCloseSigninLinkModal = function() {
+    var ov = document.getElementById('ev-signin-link-overlay');
+    if (!ov) return;
+    ov.classList.remove('ev-open');
+    document.body.style.overflow = '';
+};
+$(document).ready(function() {
+    if (typeof EvConfig === 'undefined') return;
+    if (!EvConfig.canManageAttendance || !EvConfig.checkinOpen) return;
+    var genBtn  = document.getElementById('ev-signin-gen-btn');
+    var copyBtn = document.getElementById('ev-signin-copy-btn');
+    var creditsEl = document.getElementById('ev-signin-credits');
+    if (!genBtn || !creditsEl) return;
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var ov = document.getElementById('ev-signin-link-overlay');
+            if (ov && ov.classList.contains('ev-open')) evCloseSigninLinkModal();
+        }
+    });
+
+    var evCurrentToken   = '';
+    var evCurrentExpires = '';
+    var evLinksLoaded    = false;
+    var evLinksOpen      = false;
+
+    function evSyncGenBtn() {
+        var v = parseFloat(creditsEl.value);
+        genBtn.disabled = !(v > 0);
+    }
+    creditsEl.addEventListener('input', evSyncGenBtn);
+    evSyncGenBtn();
+
+    genBtn.addEventListener('click', function() {
+        var credits = parseFloat(creditsEl.value);
+        if (!(credits > 0)) { creditsEl.focus(); return; }
+        genBtn.disabled = true;
+        var origHtml = '<i class="fas fa-link"></i> Generate';
+        genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
+        document.getElementById('ev-signin-link-result').style.display = 'none';
+        $.post(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/create',
+            { Credits: credits, EventCalendarDetailId: EvConfig.detailId },
+            function(r) {
+                genBtn.innerHTML = origHtml;
+                evSyncGenBtn();
+                if (r && r.status === 0) {
+                    evCurrentToken   = r.token;
+                    evCurrentExpires = r.expires || '';
+                    document.getElementById('ev-signin-link-url').value = r.url;
+                    document.getElementById('ev-signin-link-expires').textContent = r.expires;
+                    document.getElementById('ev-signin-link-result').style.display = '';
+                    orkCopyToClipboard(r.url, copyBtn,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                    evLinksLoaded = false;
+                    if (evLinksOpen) evLoadActiveLinks();
+                } else {
+                    alert((r && r.error) ? r.error : 'Could not generate link.');
+                }
+            }, 'json'
+        ).fail(function() {
+            genBtn.innerHTML = origHtml;
+            evSyncGenBtn();
+            alert('Request failed.');
+        });
+    });
+
+    copyBtn.addEventListener('click', function() {
+        var url = document.getElementById('ev-signin-link-url').value;
+        if (!url) return;
+        orkCopyToClipboard(url, copyBtn,
+            '<i class="fas fa-check"></i> Copied!',
+            '<i class="fas fa-copy"></i> Copy');
+    });
+
+    var qrBtn = document.getElementById('ev-signin-qr-btn');
+    if (qrBtn) {
+        qrBtn.addEventListener('click', function() {
+            if (!evCurrentToken) return;
+            orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
+                evCurrentToken, evCurrentExpires, EvConfig.uir);
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var o = document.getElementById('ev-qr-overlay');
+            if (o && o.style.display !== 'none') { if (typeof evCloseQrModal === 'function') evCloseQrModal(); }
+        }
+    });
+
+    var toggleBtn = document.getElementById('ev-signin-links-toggle');
+    var chevron   = document.getElementById('ev-signin-links-chevron');
+    var body      = document.getElementById('ev-signin-links-body');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            evLinksOpen = !evLinksOpen;
+            body.style.display = evLinksOpen ? '' : 'none';
+            chevron.style.transform = evLinksOpen ? 'rotate(90deg)' : '';
+            if (evLinksOpen && !evLinksLoaded) evLoadActiveLinks();
+        });
+    }
+
+    function evLoadActiveLinks() {
+        evLinksLoaded = true;
+        document.getElementById('ev-signin-links-loading').style.display = '';
+        document.getElementById('ev-signin-links-empty').style.display   = 'none';
+        document.getElementById('ev-signin-links-table').style.display   = 'none';
+        $.get(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/list',
+            { EventCalendarDetailId: EvConfig.detailId }, function(r) {
+            document.getElementById('ev-signin-links-loading').style.display = 'none';
+            if (!r || r.status !== 0 || !r.links.length) {
+                document.getElementById('ev-signin-links-empty').style.display = '';
+                document.getElementById('ev-signin-links-count').textContent = '';
+                return;
+            }
+            document.getElementById('ev-signin-links-count').textContent = '(' + r.links.length + ')';
+            var tbody = document.getElementById('ev-signin-links-tbody');
+            tbody.innerHTML = '';
+            r.links.forEach(function(lnk) {
+                var exp = new Date(lnk.ExpiresAt.replace(' ', 'T'));
+                var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+                var tr = document.createElement('tr');
+                tr.dataset.linkId = lnk.LinkId;
+                tr.innerHTML =
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('ev-signin-links-table').style.display = '';
+            tbody.querySelectorAll('.ev-signin-links-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    orkCopyToClipboard(this.dataset.url, this,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            tbody.querySelectorAll('.ev-signin-links-revoke').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lid = this.dataset.id;
+                    var row = this.closest('tr');
+                    this.disabled = true;
+                    $.post(EvConfig.uir + 'AttendanceAjax/link/delete/' + lid, function(r) {
+                        if (r && r.status === 0) {
+                            row.remove();
+                            var remaining = tbody.querySelectorAll('tr').length;
+                            if (!remaining) {
+                                document.getElementById('ev-signin-links-table').style.display = 'none';
+                                document.getElementById('ev-signin-links-empty').style.display = '';
+                                document.getElementById('ev-signin-links-count').textContent = '';
+                            } else {
+                                document.getElementById('ev-signin-links-count').textContent = '(' + remaining + ')';
+                            }
+                        }
+                    }, 'json');
+                });
+            });
+        }, 'json').fail(function() {
+            document.getElementById('ev-signin-links-loading').style.display = 'none';
+            document.getElementById('ev-signin-links-empty').style.display = '';
         });
     }
 });
