@@ -22,8 +22,29 @@
 }
 .sr-header {
 	background: linear-gradient(135deg, #276749 0%, #1a4a30 100%);
-	padding: 28px 32px 24px;
+	padding: 32px 32px 28px;
 	color: #fff;
+	text-align: center;
+}
+.sr-header .sr-eyebrow {
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	opacity: 0.75;
+	margin-bottom: 6px;
+}
+.sr-header h1 {
+	margin: 0 0 6px;
+	font-size: 28px;
+	font-weight: 800;
+	background: transparent;
+	border: none;
+	padding: 0;
+	border-radius: 0;
+	text-shadow: 0 2px 6px rgba(0,0,0,0.25);
+	color: #fff;
+	line-height: 1.15;
 }
 .sr-header h2 {
 	margin: 0 0 4px;
@@ -41,6 +62,24 @@
 	font-size: 13px;
 	opacity: 0.85;
 }
+.sr-intro {
+	background: #f7fafc;
+	border: 1px solid #e2e8f0;
+	border-left: 4px solid #276749;
+	border-radius: 6px;
+	padding: 14px 16px;
+	margin-bottom: 22px;
+	font-size: 13px;
+	line-height: 1.55;
+	color: #2d3748;
+}
+.sr-intro strong { color: #1a4a30; }
+.sr-intro ul {
+	margin: 8px 0 0 0;
+	padding: 0 0 0 18px;
+	color: #4a5568;
+}
+.sr-intro li { margin-bottom: 4px; }
 .sr-body {
 	padding: 28px 32px 32px;
 }
@@ -196,10 +235,21 @@
 <!-- Registration form -->
 <div class="sr-wrap">
 	<div class="sr-header">
-		<h2><i class="fas fa-user-plus" style="margin-right:8px"></i>Join <?= htmlspecialchars($park_name) ?></h2>
-		<p>Create your ORK account and register with this park</p>
+		<div class="sr-eyebrow">Welcome to</div>
+		<h1><?= htmlspecialchars($park_name) ?>!</h1>
+		<p>Create your free ORK account &amp; join the park</p>
 	</div>
 	<div class="sr-body">
+		<div class="sr-intro">
+			You've been invited to join <strong><?= htmlspecialchars($park_name) ?></strong> on the <strong>Online Record Keeper (ORK)</strong> — the official Amtgard system that tracks players, attendance, awards, and ranks.
+			<ul>
+				<li>Sign in at park to earn attendance credits toward your awards</li>
+				<li>Track your awards, classes, and progression over time</li>
+				<li>RSVP to events and stay in the loop with your park</li>
+				<li>Show your kingdom officers you're an active player</li>
+			</ul>
+			<div style="margin-top:8px;font-size:12px;color:#718096">It only takes about a minute. After you register, you'll be automatically signed in and added to the park.</div>
+		</div>
 		<!-- A5: Client-side countdown timer -->
 		<div class="sr-timer" id="sr-timer" aria-live="polite">Time remaining: <span id="sr-timer-value">--:--</span></div>
 

@@ -32,7 +32,12 @@ class Controller_SignIn extends Controller {
 
 		// Resolve scope name
 		$scope_name = 'your group';
-		if (valid_id($link['ParkId'])) {
+		if (valid_id($link['EventId'] ?? 0)) {
+			global $DB;
+			$DB->Clear();
+			$row = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$link['EventId'] . ' LIMIT 1');
+			if ($row && $row->Next()) $scope_name = $row->name ?: $scope_name;
+		} elseif (valid_id($link['ParkId'])) {
 			$this->load_model('Park');
 			$scope_name = $this->Park->get_park_name($link['ParkId']) ?: $scope_name;
 		} elseif (valid_id($link['KingdomId'])) {

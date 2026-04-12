@@ -112,10 +112,14 @@ class Model_Attendance extends Model {
 		return ['prev' => $prev, 'next' => $next];
 	}
 
-	function get_attendance_links($token, $scope, $id) {
+	function get_attendance_links($token, $scope, $id, $event_calendardetail_id = 0) {
 		$args = ['Token' => $token];
-		if ($scope === 'park') $args['ParkId'] = $id;
-		else $args['KingdomId'] = $id;
+		if ($scope === 'park')         $args['ParkId']    = $id;
+		elseif ($scope === 'kingdom')  $args['KingdomId'] = $id;
+		else {
+			$args['EventId']               = $id;
+			$args['EventCalendarDetailId'] = (int)$event_calendardetail_id;
+		}
 		return $this->Attendance->GetAttendanceLinks($args);
 	}
 
