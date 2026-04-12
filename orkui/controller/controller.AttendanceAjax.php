@@ -163,13 +163,14 @@ class Controller_AttendanceAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'list') {
-			if ($scope !== 'park' && $scope !== 'kingdom') {
+			if (!in_array($scope, ['park', 'kingdom', 'event'], true)) {
 				echo json_encode(['status' => 1, 'error' => 'Invalid scope']); exit;
 			}
 			if (!valid_id($id)) {
 				echo json_encode(['status' => 1, 'error' => 'Invalid ID']); exit;
 			}
-			$r = $this->Attendance->get_attendance_links($this->session->token, $scope, $id);
+			$ecdid = (int)($_GET['EventCalendarDetailId'] ?? 0);
+			$r = $this->Attendance->get_attendance_links($this->session->token, $scope, $id, $ecdid);
 			if ($r['Status'] == 0) {
 				$links = array_map(function($lnk) {
 					$lnk['Url'] = HTTP_UI_REMOTE . 'index.php?Route=SignIn/index/' . $lnk['Token'];
@@ -181,7 +182,7 @@ class Controller_AttendanceAjax extends Controller {
 			}
 
 		} elseif ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-			if ($scope !== 'park' && $scope !== 'kingdom') {
+			if (!in_array($scope, ['park', 'kingdom', 'event'], true)) {
 				echo json_encode(['status' => 1, 'error' => 'Invalid scope']);
 				exit;
 			}
@@ -189,21 +190,33 @@ class Controller_AttendanceAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'Invalid ID']);
 				exit;
 			}
-			$hours   = min(96, max(1, (int)($_POST['Hours']   ?? 3)));
-			$credits = (float)($_POST['Credits'] ?? 1.0);
+			// Credits is required for all scopes
+			if (!isset($_POST['Credits']) || $_POST['Credits'] === '' || (float)$_POST['Credits'] <= 0) {
+				echo json_encode(['status' => 1, 'error' => 'Credits is required.']);
+				exit;
+			}
+			$credits = (float)$_POST['Credits'];
 
-			$args = ['Token' => $this->session->token, 'Hours' => $hours, 'Credits' => $credits];
+			$args = ['Token' => $this->session->token, 'Credits' => $credits];
 			if ($scope === 'park') {
 				$args['ParkId'] = $id;
-			} else {
+				$args['Hours'] = min(96, max(1, (int)($_POST['Hours'] ?? 3)));
+			} elseif ($scope === 'kingdom') {
 				$args['KingdomId'] = $id;
+				$args['Hours'] = min(96, max(1, (int)($_POST['Hours'] ?? 3)));
+			} else {
+				$args['EventId'] = $id;
+				$args['EventCalendarDetailId'] = (int)($_POST['EventCalendarDetailId'] ?? 0);
 			}
 
 			$r = $this->Attendance->create_attendance_link($args);
 			if ($r['Status'] == 0) {
-				$token   = $r['Detail'];
-				$url     = HTTP_UI_REMOTE . 'index.php?Route=SignIn/index/' . $token;
-				$expires = date('D, M j g:i a T', time() + $hours * 3600);
+				$detail     = $r['Detail'];
+				$token      = is_array($detail) ? ($detail['Token'] ?? '') : $detail;
+				$expires_at = is_array($detail) ? ($detail['ExpiresAt'] ?? null) : null;
+				$expires_ts = $expires_at ? strtotime($expires_at) : (time() + (($args['Hours'] ?? 3) * 3600));
+				$url        = HTTP_UI_REMOTE . 'index.php?Route=SignIn/index/' . $token;
+				$expires    = date('D, M j g:i a T', $expires_ts);
 				echo json_encode(['status' => 0, 'url' => $url, 'token' => $token, 'expires' => 'Expires ' . $expires]);
 			} else {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
