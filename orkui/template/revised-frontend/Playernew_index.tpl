@@ -570,6 +570,46 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-md-toggle-btn.pn-active{background:var(--pn-accent,#4299e1);color:#fff;border-color:var(--pn-accent,#4299e1)}
 .pn-md-preview{min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;line-height:1.7;color:#4a5568;background:#fafafa}
 .pn-md-preview h1,.pn-md-preview h2,.pn-md-preview h3,.pn-md-preview h4,.pn-md-preview h5,.pn-md-preview h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+/* ===== Welcome Panel ===== */
+.pn-welcome-hero{display:flex;gap:14px;align-items:flex-start;background:linear-gradient(135deg,#ebf8ff,#faf5ff);border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.pn-welcome-icon{flex:0 0 auto;width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#4299e1,#9f7aea);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 12px rgba(102,126,234,0.25)}
+.pn-welcome-hero-text h4{margin:0 0 6px 0;font-size:17px;font-weight:700;color:#2d3748;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-welcome-hero-text p{margin:0;font-size:13px;line-height:1.55;color:#4a5568}
+.pn-welcome-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.pn-welcome-card{border:1px solid #e2e8f0;border-radius:10px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.pn-welcome-card:hover{border-color:var(--pn-accent,#4299e1);box-shadow:0 4px 14px rgba(66,153,225,0.15);transform:translateY(-1px)}
+.pn-welcome-card-head{display:flex;align-items:center;gap:10px}
+.pn-welcome-card-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0}
+.pn-wc-blue{background:linear-gradient(135deg,#4299e1,#2c5282)}
+.pn-wc-purple{background:linear-gradient(135deg,#9f7aea,#553c9a)}
+.pn-wc-gold{background:linear-gradient(135deg,#ecc94b,#975a16)}
+.pn-wc-teal{background:linear-gradient(135deg,#38b2ac,#234e52)}
+.pn-wc-rose{background:linear-gradient(135deg,#fc8181,#9b2c2c)}
+.pn-welcome-card-title{font-size:14px;font-weight:700;color:#2d3748}
+.pn-welcome-card-body{font-size:12px;line-height:1.5;color:#4a5568;flex:1}
+.pn-welcome-mock{background:#f7fafc;border:1px solid #edf2f7;border-radius:6px;padding:10px;display:flex;align-items:center;justify-content:center;min-height:48px}
+.pn-wm-about{flex-direction:column;align-items:stretch;gap:5px;padding:10px 12px}
+.pn-wm-line{height:6px;border-radius:3px;background:#cbd5e0}
+.pn-wm-line-h{height:8px;width:55%;background:#a0aec0}
+.pn-wm-line-short{width:70%}
+.pn-wm-colors{gap:6px}
+.pn-wm-colors span{width:20px;height:20px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.08)}
+.pn-wm-name{gap:6px;flex-wrap:wrap}
+.pn-wm-pill{font-size:10px;font-weight:600;padding:3px 8px;border-radius:10px;background:#bee3f8;color:#2c5282}
+.pn-wm-name-core{font-family:Georgia,serif;font-size:14px;font-weight:700;color:#2d3748}
+.pn-wm-focus-frame{width:60px;height:40px;border-radius:4px;background:linear-gradient(135deg,#cbd5e0,#a0aec0);position:relative;overflow:hidden}
+.pn-wm-focus-target{position:absolute;top:50%;left:50%;width:18px;height:18px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 1px rgba(0,0,0,0.3)}
+.pn-wm-milestones{position:relative;height:36px;padding:0}
+.pn-wm-ms-line{position:absolute;left:6%;right:6%;top:50%;height:2px;background:#cbd5e0;transform:translateY(-50%)}
+.pn-wm-ms-dot{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:var(--pn-accent,#4299e1);transform:translate(-50%,-50%);box-shadow:0 0 0 2px #fff}
+.pn-welcome-card-cta{margin-top:auto;align-self:flex-start;background:none;border:none;color:var(--pn-accent,#4299e1);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:5px}
+.pn-welcome-card-cta i{font-size:10px;transition:transform .15s}
+.pn-welcome-card:hover .pn-welcome-card-cta i{transform:translateX(3px)}
+.pn-welcome-tips{background:#fffbeb;border:1px solid #fef3c7;border-left:4px solid #f6ad55;border-radius:8px;padding:12px 14px}
+.pn-welcome-tips-title{font-size:12px;font-weight:700;color:#975a16;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.pn-welcome-tips-title i{margin-right:5px}
+.pn-welcome-tips ul{margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:#744210}
+.pn-welcome-tips li{margin-bottom:2px}
 /* ===== Accent color applied to stat cards ===== */
 .pn-stat-card{border-top:3px solid var(--pn-accent,#4299e1)}
 .pn-tab-nav li.pn-tab-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
@@ -2406,7 +2446,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<button class="pn-modal-close-btn" id="pn-design-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-design-tabs">
-			<button class="pn-design-tab pn-active" data-panel="about"><i class="fas fa-scroll"></i> About</button>
+			<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-hand-sparkles"></i> Welcome</button>
+			<button class="pn-design-tab" data-panel="about"><i class="fas fa-scroll"></i> About</button>
 			<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
 			<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
 			<button class="pn-design-tab" data-panel="focus"><i class="fas fa-crosshairs"></i> Photo Focus</button>
@@ -2415,8 +2456,110 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 		<div class="pn-acct-modal-body" style="max-height:60vh;overflow-y:auto">
 			<div class="pn-form-error" id="pn-design-error"></div>
 
+			<!-- Welcome Panel -->
+			<div class="pn-design-panel pn-active" id="pn-design-welcome">
+				<div class="pn-welcome-hero">
+					<div class="pn-welcome-icon"><i class="fas fa-palette"></i></div>
+					<div class="pn-welcome-hero-text">
+						<h4>Welcome to your Profile Customizer!</h4>
+						<p>This is your space to make your profile feel like <em>you</em>. Tell your story, pick your colors, build your name, and frame your favorite photo &mdash; all from one place. Click any tab below to get started, or read on for a quick tour.</p>
+					</div>
+				</div>
+				<div class="pn-welcome-grid">
+					<div class="pn-welcome-card" data-go="about">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-blue"><i class="fas fa-scroll"></i></div>
+							<div class="pn-welcome-card-title">About</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Write your bio and persona story. Both fields support <strong>Markdown</strong> for headings, lists, and links.
+						</div>
+						<div class="pn-welcome-mock pn-wm-about">
+							<div class="pn-wm-line pn-wm-line-h"></div>
+							<div class="pn-wm-line"></div>
+							<div class="pn-wm-line"></div>
+							<div class="pn-wm-line pn-wm-line-short"></div>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open About <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="colors">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-purple"><i class="fas fa-palette"></i></div>
+							<div class="pn-welcome-card-title">Colors</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Pick a preset, build a gradient, or set custom hex colors for your hero, tabs, and stat cards.
+						</div>
+						<div class="pn-welcome-mock pn-wm-colors">
+							<span style="background:#2c5282"></span>
+							<span style="background:#276749"></span>
+							<span style="background:#9b2c2c"></span>
+							<span style="background:#553c9a"></span>
+							<span style="background:#975a16"></span>
+							<span style="background:linear-gradient(135deg,#1a365d,#553c9a)"></span>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Colors <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="name">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-gold"><i class="fas fa-signature"></i></div>
+							<div class="pn-welcome-card-title">Name</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Add a prefix or suffix from your earned titles, set a pronunciation guide, and pick a decorative font.
+						</div>
+						<div class="pn-welcome-mock pn-wm-name">
+							<span class="pn-wm-pill">Syr</span>
+							<span class="pn-wm-name-core">Avery</span>
+							<span class="pn-wm-pill">the Bold</span>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Name <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="focus">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-teal"><i class="fas fa-crosshairs"></i></div>
+							<div class="pn-welcome-card-title">Photo Focus</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Frame your photo so the most important part &mdash; usually your face &mdash; stays centered everywhere it appears.
+						</div>
+						<div class="pn-welcome-mock pn-wm-focus">
+							<div class="pn-wm-focus-frame">
+								<div class="pn-wm-focus-target"></div>
+							</div>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Photo Focus <i class="fas fa-arrow-right"></i></button>
+					</div>
+					<div class="pn-welcome-card" data-go="milestones">
+						<div class="pn-welcome-card-head">
+							<div class="pn-welcome-card-icon pn-wc-rose"><i class="fas fa-stream"></i></div>
+							<div class="pn-welcome-card-title">Milestones</div>
+						</div>
+						<div class="pn-welcome-card-body">
+							Curate which awards, titles, and events show up on your <em>My Milestones</em> timeline on the About tab.
+						</div>
+						<div class="pn-welcome-mock pn-wm-milestones">
+							<div class="pn-wm-ms-line"></div>
+							<div class="pn-wm-ms-dot" style="left:10%"></div>
+							<div class="pn-wm-ms-dot" style="left:35%"></div>
+							<div class="pn-wm-ms-dot" style="left:60%"></div>
+							<div class="pn-wm-ms-dot" style="left:85%"></div>
+						</div>
+						<button class="pn-welcome-card-cta" type="button">Open Milestones <i class="fas fa-arrow-right"></i></button>
+					</div>
+				</div>
+				<div class="pn-welcome-tips">
+					<div class="pn-welcome-tips-title"><i class="fas fa-lightbulb"></i> Quick tips</div>
+					<ul>
+						<li>Changes save when you click <strong>Save</strong> at the bottom &mdash; nothing is permanent until then.</li>
+						<li>You can come back any time by clicking <strong>Design My Profile</strong> on your profile.</li>
+						<li>Not sure where to start? Try <strong>Colors</strong> first &mdash; the visual change is instant and fun.</li>
+					</ul>
+				</div>
+			</div>
+
 			<!-- About Panel -->
-			<div class="pn-design-panel pn-active" id="pn-design-about">
+			<div class="pn-design-panel" id="pn-design-about">
 				<div class="pn-design-field">
 					<label>About <?= htmlspecialchars($Player['Persona']) ?></label>
 					<div class="pn-md-preview-toggle">
@@ -2920,14 +3063,23 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	});
 
 	// Tab switching
+	function pnSwitchDesignPanel(name) {
+		document.querySelectorAll('.pn-design-tab').forEach(function(t) { t.classList.remove('pn-active'); });
+		document.querySelectorAll('.pn-design-panel').forEach(function(p) { p.classList.remove('pn-active'); });
+		var tabBtn = document.querySelector('.pn-design-tab[data-panel="' + name + '"]');
+		if (tabBtn) tabBtn.classList.add('pn-active');
+		var panel = gid('pn-design-' + name);
+		if (panel) panel.classList.add('pn-active');
+		if (name === 'focus') initFocusTool();
+	}
 	document.querySelectorAll('.pn-design-tab').forEach(function(tab) {
-		tab.addEventListener('click', function() {
-			document.querySelectorAll('.pn-design-tab').forEach(function(t) { t.classList.remove('pn-active'); });
-			document.querySelectorAll('.pn-design-panel').forEach(function(p) { p.classList.remove('pn-active'); });
-			tab.classList.add('pn-active');
-			var panel = gid('pn-design-' + tab.dataset.panel);
-			if (panel) panel.classList.add('pn-active');
-			if (tab.dataset.panel === 'focus') initFocusTool();
+		tab.addEventListener('click', function() { pnSwitchDesignPanel(tab.dataset.panel); });
+	});
+	// Welcome card jump links
+	document.querySelectorAll('.pn-welcome-card').forEach(function(card) {
+		card.addEventListener('click', function() {
+			var target = card.dataset.go;
+			if (target) pnSwitchDesignPanel(target);
 		});
 	});
 
