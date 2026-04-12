@@ -49,10 +49,17 @@
 	$province   = $cd['Province']   ?? '';
 	$postalCode = $cd['PostalCode'] ?? '';
 	$country    = $cd['Country']    ?? '';
-	$locationDisplay = implode(', ', array_filter([$address, $city, $province, $country]));
+	// If $address already contains a fully-formatted address (≥2 commas, e.g. from a map-picker
+	// autocomplete), trust it and don't re-append city/province/country, which would duplicate.
+	if (substr_count($address, ',') >= 2) {
+		$locationDisplay = $address;
+	} else {
+		$locationDisplay = implode(', ', array_filter([$address, $city, $province, $country]));
+	}
 	$mapQueryAddress = implode(', ', array_filter([$address, $city, $province, $postalCode, $country]));
 
 	$eventType = $cd['EventType'] ?? '';
+	$externalLinks = $ExternalLinks ?? [];
 
 	// Park address fallback (used when event has no address)
 	$atParkAddress    = trim($AtParkAddress    ?? '');
@@ -576,28 +583,6 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 		</div>
 		<?php endif; ?>
 
-		<?php if ($websiteUrl): ?>
-		<div class="ev-card">
-			<h4><i class="fas fa-external-link-alt" style="margin-right:5px"></i>Website</h4>
-			<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank" rel="noopener" class="ev-map-btn">
-				<?= htmlspecialchars($websiteName ?: $websiteUrl) ?>
-			</a>
-		</div>
-		<?php endif; ?>
-
-		<?php $externalLinks = $ExternalLinks ?? []; ?>
-		<?php if (!empty($externalLinks)): ?>
-		<div class="ev-card">
-			<h4><i class="fas fa-link" style="margin-right:5px"></i>Links</h4>
-			<?php foreach ($externalLinks as $_el): ?>
-			<?php if (trim($_el['Url']) && trim($_el['Title'])): ?>
-			<a href="<?= htmlspecialchars($_el['Url']) ?>" target="_blank" class="ev-map-btn" style="margin-top:6px">
-				<i class="<?= htmlspecialchars($_el['Icon']) ?>"></i> <?= htmlspecialchars($_el['Title']) ?>
-			</a>
-			<?php endif; ?>
-			<?php endforeach; ?>
-		</div>
-		<?php endif; ?>
 
 	</div><!-- /.ev-sidebar -->
 
@@ -659,9 +644,11 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 							</div>
 						<?php endif; ?>
 					</div>
-					<?php if (!empty($eventFees)): ?>
-					<div style="flex:0 0 220px">
-						<div class="ev-card" style="margin-bottom:0">
+					<?php $_hasFees = !empty($eventFees); $_hasLinks = !empty($externalLinks); ?>
+					<?php if ($_hasFees || $_hasLinks): ?>
+					<div style="flex:0 0 240px">
+						<?php if ($_hasFees): ?>
+						<div class="ev-card" style="margin-bottom:<?= $_hasLinks ? '14px' : '0' ?>">
 							<h4><i class="fas fa-ticket-alt" style="margin-right:5px"></i>Admission &amp; Fees</h4>
 							<?php foreach ($eventFees as $fee): ?>
 							<div class="ev-detail-row">
@@ -670,10 +657,22 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 							</div>
 							<?php endforeach; ?>
 						</div>
+						<?php endif; ?>
+						<?php if ($_hasLinks): ?>
+						<div class="ev-card" style="margin-bottom:0">
+							<h4><i class="fas fa-link" style="margin-right:5px"></i>Links</h4>
+							<?php foreach ($externalLinks as $_el): ?>
+								<?php if (trim($_el['Url']) && trim($_el['Title'])): ?>
+								<a href="<?= htmlspecialchars($_el['Url']) ?>" target="_blank" class="ev-map-btn" style="margin-top:6px">
+									<i class="<?= htmlspecialchars($_el['Icon']) ?>"></i> <?= htmlspecialchars($_el['Title']) ?>
+								</a>
+								<?php endif; ?>
+							<?php endforeach; ?>
+						</div>
+						<?php endif; ?>
 					</div>
 					<?php endif; ?>
 				</div>
-			</div>
 			</div><!-- /.ev-tab-panel (details) -->
 
 			<?php // ---- Schedule Tab ---- ?>
@@ -1004,8 +1003,8 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 							<?php foreach ($rsvpList as $attendee): ?>
 							<tr>
 								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a></td>
-								<td style="white-space:nowrap"><?= htmlspecialchars($attendee['KingdomAbbr'] ?? '') ?></td>
-								<td style="white-space:nowrap"><?= htmlspecialchars($attendee['ParkAbbr'] ?? '') ?></td>
+								<td style="white-space:nowrap"><?php if (!empty($attendee['KingdomId']) && !empty($attendee['KingdomAbbr'])): ?><a href="<?= UIR ?>Kingdom/profile/<?= (int)$attendee['KingdomId'] ?>" target="_blank" rel="noopener"><?= htmlspecialchars($attendee['KingdomAbbr']) ?></a><?php else: ?><?= htmlspecialchars($attendee['KingdomAbbr'] ?? '') ?><?php endif; ?></td>
+								<td style="white-space:nowrap"><?php if (!empty($attendee['ParkId']) && !empty($attendee['ParkAbbr'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$attendee['ParkId'] ?>" target="_blank" rel="noopener"><?= htmlspecialchars($attendee['ParkAbbr']) ?></a><?php else: ?><?= htmlspecialchars($attendee['ParkAbbr'] ?? '') ?><?php endif; ?></td>
 								<td style="white-space:nowrap">
 									<?php if ($attendee['Status'] === 'going'): ?>
 										<i class="fas fa-check-circle ev-rsvp-going-icon" style="color:#276749;margin-right:4px"></i>Going
