@@ -650,8 +650,9 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 					<?php endif; ?>
 				</div>
 			</div>
+			</div><!-- /.ev-tab-panel (details) -->
 
-			<?php // ---- Attendance Tab ---- ?>
+			<?php // ---- Schedule Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-schedule">
 
 				<?php if ($canManageSchedule): ?>
