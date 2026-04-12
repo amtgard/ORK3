@@ -674,8 +674,9 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 					<?php endif; ?>
 				</div>
 			</div>
+			</div><!-- /.ev-tab-panel (details) -->
 
-			<?php // ---- Attendance Tab ---- ?>
+			<?php // ---- Schedule Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-schedule">
 
 				<?php if ($canManageSchedule): ?>
