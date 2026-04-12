@@ -83,7 +83,31 @@
 	$pkCalEvents = [];
 	foreach ($eventList as $ev) {
 		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
-		if (!empty($ev['is_park_day'])) {
+		if (!empty($ev['_IsCalendarItem'])) {
+			$allDay = !empty($ev['AllDay']);
+			$calEv = [
+				'title'         => $ev['Name'],
+				'start'         => $allDay ? substr($ev['NextDate'], 0, 10) : $ev['NextDate'],
+				'color'         => '#64748b',
+				'type'          => 'calendar-item',
+				'allDay'        => $allDay,
+				'extendedProps' => [
+					'calendarItemId' => $ev['CalendarItemId'],
+					'description'    => $ev['Description'] ?? '',
+					'rawStart'       => $ev['NextDate'],
+					'rawEnd'         => $ev['NextEndDate'] ?? $ev['NextDate'],
+				],
+			];
+			$startDate = substr($ev['NextDate'], 0, 10);
+			$endDate   = substr($ev['NextEndDate'] ?? $ev['NextDate'], 0, 10);
+			if ($endDate > $startDate) {
+				$endDt = new DateTime($endDate);
+				if ($allDay) $endDt->modify('+1 day');
+				$calEv['end'] = $allDay ? $endDt->format('Y-m-d') : ($ev['NextEndDate'] ?? '');
+			} elseif (!$allDay) {
+				$calEv['end'] = $ev['NextEndDate'] ?? '';
+			}
+		} elseif (!empty($ev['is_park_day'])) {
 			$calEv = [
 				'title' => $ev['Name'],
 				'start' => $ev['NextDate'] . 'T' . $ev['park_day_time'],
@@ -596,13 +620,14 @@
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
-						<?php if (count($parkDayList) > 0): ?>
 						<div id="pk-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
 							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
 							<button class="pk-filter-toggle pk-filter-on" data-filter="event">Events</button>
+							<button class="pk-filter-toggle pk-filter-on" data-filter="calendar-item">Calendar Items</button>
+							<?php if (count($parkDayList) > 0): ?>
 							<button class="pk-filter-toggle" data-filter="park-day">Park Days</button>
+							<?php endif; ?>
 						</div>
-						<?php endif; ?>
 						<?php if ($CanAdminPark): ?>
 						<button onclick="pkOpenEventModal()"style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
@@ -628,28 +653,42 @@
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-							<tr<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
-								<td>
-									<div class="pk-tiny-heraldry">
-										<?php if ($event['HasHeraldry'] == 1): ?>
-											<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
-											     loading="lazy"
-											     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
-										<?php else: ?>
-											<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
-										<?php endif; ?>
+								<?php if (!empty($event['_IsCalendarItem'])): ?>
+								<tr data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
+									<td>
+										<span class="pk-ci-pill"><i class="fas fa-calendar-day"></i> Calendar Item</span>
 										<?= htmlspecialchars($event['Name']) ?>
-									</div>
-								</td>
-								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
-									<?php if (0 != $event['NextDate']): ?>
-										<?= date('M. j, Y', strtotime($event['NextDate'])) ?>
-										<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
-									<?php endif; ?>
-								</td>
-								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
-							<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
-							</tr>
+									</td>
+									<td class="pk-date-col" data-sortval="<?= htmlspecialchars($event['NextDate']) ?>">
+										<?= $event['NextDate'] ? date('M. j, Y', strtotime($event['NextDate'])) : '' ?>
+									</td>
+									<td class="pk-date-col" style="text-align:center;color:#a0aec0">—</td>
+									<td class="pk-date-col" style="text-align:center;color:#a0aec0">—</td>
+								</tr>
+								<?php else: ?>
+								<tr data-type="event"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
+									<td>
+										<div class="pk-tiny-heraldry">
+											<?php if ($event['HasHeraldry'] == 1): ?>
+												<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
+												     loading="lazy"
+												     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
+											<?php else: ?>
+												<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
+											<?php endif; ?>
+											<?= htmlspecialchars($event['Name']) ?>
+										</div>
+									</td>
+									<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
+										<?php if (0 != $event['NextDate']): ?>
+											<?= date('M. j, Y', strtotime($event['NextDate'])) ?>
+											<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+										<?php endif; ?>
+									</td>
+									<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
+									<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
+								</tr>
+								<?php endif; ?>
 							<?php endforeach; ?>
 							<?php foreach ($parkDayList as $pkDay): ?>
 							<?php
@@ -1483,34 +1522,104 @@ var PkConfig = {
 </div>
 
 <?php if ($CanAdminPark ?? false): ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
 		<div class="pk-emod-header">
-			<h3 class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
+			<h3 id="pk-emod-title" class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
 		</div>
 		<div class="pk-emod-body">
+
+			<div class="pk-emod-typesel">
+				<label class="pk-emod-typeopt">
+					<input type="radio" name="pk-emod-type" value="event" checked>
+					<span><i class="fas fa-flag"></i> Amtgard Event</span>
+				</label>
+				<label class="pk-emod-typeopt">
+					<input type="radio" name="pk-emod-type" value="calendar-item">
+					<span><i class="fas fa-calendar-day"></i> Calendar Item</span>
+				</label>
+			</div>
+
 			<div class="pk-emod-field">
-				<label class="pk-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
+				<label class="pk-emod-label">Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
 			</div>
 			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
 			</div>
-			<p class="pk-emod-hint" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+			<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+
+			<!-- Calendar-item-only fields -->
+			<div class="pk-emod-ci-only" style="display:none">
+				<div class="pk-emod-field" style="margin-top:12px">
+					<label class="pk-emod-check-label">
+						<input type="checkbox" id="pk-ci-allday"> All day
+					</label>
+				</div>
+				<div style="display:flex;gap:10px;margin-top:8px">
+					<div class="pk-emod-field" style="flex:1">
+						<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="pk-emod-input" id="pk-ci-start" autocomplete="off" placeholder="Select start…">
+					</div>
+					<div class="pk-emod-field" style="flex:1">
+						<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="pk-emod-input" id="pk-ci-end" autocomplete="off" placeholder="Select end…">
+					</div>
+				</div>
+				<div class="pk-emod-field" style="margin-top:10px">
+					<label class="pk-emod-label">Description</label>
+					<textarea class="pk-emod-input" id="pk-ci-description" rows="3" placeholder="Optional details…"></textarea>
+				</div>
+				<div class="pk-emod-ci-note">
+					<i class="fas fa-info-circle" style="margin-right:6px"></i>
+					Calendar Items are lightweight. They do <strong>not</strong> support RSVPs, sign-ins, schedules, attendance, heraldry, pricing, or event authorization lists. Use an Amtgard Event for those.
+				</div>
+			</div>
+
 			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
 		</div>
 		<div class="pk-emod-footer">
 			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
 			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
-				Create Event <i class="fas fa-arrow-right"></i>
+				<span id="pk-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
 			</button>
 		</div>
 	</div>
 </div>
 
 <?php endif; ?>
+
+<!-- Calendar Item Detail Overlay (read/edit/delete) — available to all viewers -->
+<div class="pk-ci-overlay" id="pk-ci-overlay">
+	<div class="pk-ci-box">
+		<div class="pk-ci-header">
+			<h3><i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>Calendar Item</h3>
+			<button class="pk-emod-close" onclick="pkCloseCalendarItemOverlay()">&times;</button>
+		</div>
+		<div class="pk-ci-body">
+			<div class="pk-ci-name" id="pk-ci-view-name"></div>
+			<div class="pk-ci-meta">
+				<i class="fas fa-clock" style="margin-right:6px;color:#a0aec0"></i>
+				<span id="pk-ci-view-when"></span>
+			</div>
+			<div class="pk-ci-scope" id="pk-ci-view-scope"></div>
+			<div class="pk-ci-description" id="pk-ci-view-desc"></div>
+		</div>
+		<div class="pk-ci-footer">
+			<button class="pk-emod-btn-cancel" onclick="pkCloseCalendarItemOverlay()">Close</button>
+			<button class="pk-emod-btn-cancel" id="pk-ci-edit-btn" style="display:none" onclick="pkEditCalendarItem()">
+				<i class="fas fa-pencil-alt"></i> Edit
+			</button>
+			<button class="pk-emod-btn-cancel" id="pk-ci-delete-btn" style="display:none;color:#c53030;border-color:#fc8181" onclick="pkDeleteCalendarItem()">
+				<i class="fas fa-trash"></i> Delete
+			</button>
+		</div>
+	</div>
+</div>
 
 <?php if ($CanAdminPark ?? false): ?>
 <!-- Add Player Modal -->

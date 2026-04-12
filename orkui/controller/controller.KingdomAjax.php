@@ -696,6 +696,54 @@ class Controller_KingdomAjax extends Controller {
 			}
 		}
 
+		// Calendar items (kingdom- or park-scoped) overlapping the range
+		$ciSql = "
+			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day,
+			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
+			       p.abbreviation AS park_abbr
+			FROM " . DB_PREFIX . "calendar_item ci
+			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = ci.park_id
+			WHERE ci.kingdom_id = {$kid}
+			  AND ci.event_start < '{$end}'
+			  AND ci.event_end   >= '{$start}'
+			ORDER BY ci.event_start";
+		$DB->Clear();
+		$ciResult = $DB->DataSet($ciSql);
+		if ($ciResult && $ciResult->Size() > 0) {
+			while ($ciResult->Next()) {
+				$isPark = (int)$ciResult->park_id > 0;
+				$abbr   = ($isPark && $ciResult->park_abbr) ? $ciResult->park_abbr . ': ' : '';
+				$allDay = (int)$ciResult->all_day === 1;
+				$ev = [
+					'title'         => $abbr . $ciResult->name,
+					'start'         => $allDay ? substr($ciResult->event_start, 0, 10) : $ciResult->event_start,
+					'color'         => '#64748b',
+					'type'          => 'calendar-item',
+					'allDay'        => $allDay,
+					'extendedProps' => [
+						'calendarItemId' => (int)$ciResult->calendar_item_id,
+						'description'    => (string)$ciResult->description,
+						'parkId'         => (int)$ciResult->park_id,
+						'kingdomId'      => (int)$ciResult->kingdom_id,
+						'parkAbbr'       => $ciResult->park_abbr ?? '',
+						'rawStart'       => $ciResult->event_start,
+						'rawEnd'         => $ciResult->event_end,
+					],
+				];
+				// Multi-day: emit an exclusive end for FullCalendar (next day after the end date for all-day).
+				$startDate = substr($ciResult->event_start, 0, 10);
+				$endDate   = substr($ciResult->event_end,   0, 10);
+				if ($endDate > $startDate) {
+					$endDt = new DateTime($endDate);
+					if ($allDay) $endDt->modify('+1 day');
+					$ev['end'] = $allDay ? $endDt->format('Y-m-d') : $ciResult->event_end;
+				} elseif (!$allDay) {
+					$ev['end'] = $ciResult->event_end;
+				}
+				$events[] = $ev;
+			}
+		}
+
 		// Park day recurrences expanded for the requested range
 		$pdSql = "
 			SELECT pd.park_id, pd.recurrence, pd.week_day, pd.week_of_month,
