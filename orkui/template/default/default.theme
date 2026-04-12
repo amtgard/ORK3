@@ -233,45 +233,6 @@ $downtime_note  = 'The ORK and ORK APIs may not be available during this window.
 <?php endif; ?>
 <?php endif; ?>
 
-			<?php
-				// =====================================================
-				// A/B/C/D EXPERIMENT (April Fools): Player profile redesign cycler.
-				// Visible only on Player/profile/* routes. Click to cycle:
-				//   A (live) → B (Geocities) → C (MS-DOS) → D (D&D sheet) → A
-				// Remove this block to retire the experiment.
-				// =====================================================
-				$__vbReq   = $_SERVER['REQUEST_URI'] ?? '';
-				$__vbIsPP  = (stripos($__vbReq, 'Route=Player/profile') !== false) || (stripos($__vbReq, '/Player/profile') !== false);
-				if ($__vbIsPP):
-					$__vbCur    = $_GET['design'] ?? '';
-					$__vbNextMap = ['' => 'b', 'a' => 'b', 'b' => 'c', 'c' => 'd', 'd' => 'a'];
-					$__vbNext   = $__vbNextMap[$__vbCur] ?? 'b';
-					$__vbToUrl  = preg_replace('/([?&])design=[a-z]/i', '$1design=' . $__vbNext, $__vbReq);
-					if ($__vbToUrl === $__vbReq) {
-						$__vbToUrl .= (strpos($__vbReq, '?') === false ? '?' : '&') . 'design=' . $__vbNext;
-					}
-					$__vbStateLabel = ['a'=>'Live (2026)','b'=>'Geocities (1998)','c'=>'MS-DOS (1985)','d'=>'D&D Character Sheet'];
-					$__vbCurKey = in_array($__vbCur, ['b','c','d'], true) ? $__vbCur : 'a';
-					$__vbTitle  = 'Design: ' . $__vbStateLabel[$__vbCurKey] . ' — click for next';
-					$__vbStateClass = 'nav-vb-state-' . $__vbCurKey;
-			?>
-			<a class='nav-icon-btn nav-vb-toggle <?= $__vbStateClass ?><?= $__vbCurKey !== 'a' ? ' nav-vb-on' : '' ?>' href='<?= htmlspecialchars($__vbToUrl) ?>' title='<?= htmlspecialchars($__vbTitle) ?>'>
-				<i class='<?= $__vbCurKey === 'a' ? 'far fa-eye' : 'fas fa-eye' ?>'></i>
-			</a>
-			<style>
-				.nav-vb-toggle{position:relative;transition:transform .15s,filter .15s}
-				.nav-vb-toggle:hover{transform:scale(1.1)}
-				.nav-vb-toggle.nav-vb-state-b{color:#ff00ff;animation:navVbBlink 1.1s steps(2,end) infinite,navVbHue 4s linear infinite;text-shadow:0 0 6px #ff00ff,0 0 12px #00ffff}
-				.nav-vb-toggle.nav-vb-state-b::after{content:"";position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:#fff700;box-shadow:0 0 0 2px #fff,0 0 10px #fff700;animation:navVbBlink 1.1s steps(2,end) infinite}
-				.nav-vb-toggle.nav-vb-state-c{color:#00ff00;text-shadow:0 0 4px #00ff00,0 0 10px #00ff00;font-family:"Courier New",monospace}
-				.nav-vb-toggle.nav-vb-state-c::after{content:"_";position:absolute;right:4px;bottom:6px;color:#00ff00;font-family:"Courier New",monospace;font-weight:700;font-size:14px;animation:navVbBlink 1s steps(2,end) infinite;text-shadow:0 0 4px #00ff00}
-				.nav-vb-toggle.nav-vb-state-d{color:#7a1c1c;text-shadow:0 0 6px #c9a14b}
-				.nav-vb-toggle.nav-vb-state-d::after{content:"\271C";position:absolute;top:3px;right:3px;color:#c9a14b;font-size:11px;text-shadow:0 0 4px #c9a14b}
-				@keyframes navVbBlink{0%,49%{opacity:1}50%,100%{opacity:.25}}
-				@keyframes navVbHue{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
-			</style>
-			<?php endif; ?>
-
 			<!-- Resources dropdown -->
 			<div class='nav-dropdown-wrap' id='nav-resources-wrap'>
 				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>
