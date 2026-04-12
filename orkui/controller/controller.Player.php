@@ -264,14 +264,16 @@ class Controller_Player extends Controller {
 	}
 
 	public function profile( $id = null ) {
-		// A/B/C EXPERIMENT (April Fools): ?design=b → Geocities, ?design=c → MS-DOS.
-		// To remove: delete this block, delete Playernew_index_{b,c}.tpl, and
-		// remove the eyeball block in default.theme.
+		// A/B/C/D EXPERIMENT (April Fools): b=Geocities, c=MS-DOS, d=D&D sheet.
+		// To remove: delete this block, delete Playernew_index_{b,c,d}.tpl,
+		// and remove the eyeball block in default.theme.
 		$__designVariant = $_GET['design'] ?? '';
 		if ($__designVariant === 'b') {
 			$this->template = '../revised-frontend/Playernew_index_b.tpl';
 		} elseif ($__designVariant === 'c') {
 			$this->template = '../revised-frontend/Playernew_index_c.tpl';
+		} elseif ($__designVariant === 'd') {
+			$this->template = '../revised-frontend/Playernew_index_d.tpl';
 		} else {
 			$this->template = '../revised-frontend/Playernew_index.tpl';
 		}
