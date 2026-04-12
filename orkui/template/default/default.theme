@@ -233,6 +233,36 @@ $downtime_note  = 'The ORK and ORK APIs may not be available during this window.
 <?php endif; ?>
 <?php endif; ?>
 
+			<?php
+				// =====================================================
+				// A/B EXPERIMENT (April Fools): Player profile redesign toggle.
+				// Visible only on Player/profile/* routes. Toggles between
+				// the live design (A) and the Geocities 1998 variant (B)
+				// via ?design=b. Remove this block to retire the experiment.
+				// =====================================================
+				$__vbReq   = $_SERVER['REQUEST_URI'] ?? '';
+				$__vbIsPP  = (stripos($__vbReq, 'Route=Player/profile') !== false) || (stripos($__vbReq, '/Player/profile') !== false);
+				if ($__vbIsPP):
+					$__vbIsB    = (($_GET['design'] ?? '') === 'b');
+					$__vbToUrl  = preg_replace('/([?&])design=[a-z]/i', '$1design=' . ($__vbIsB ? 'a' : 'b'), $__vbReq);
+					if ($__vbToUrl === $__vbReq) {
+						$__vbToUrl .= (strpos($__vbReq, '?') === false ? '?' : '&') . 'design=' . ($__vbIsB ? 'a' : 'b');
+					}
+					$__vbTitle  = $__vbIsB ? 'Return to the year 2026' : 'Travel back to 1998';
+			?>
+			<a class='nav-icon-btn nav-vb-toggle<?= $__vbIsB ? ' nav-vb-on' : '' ?>' href='<?= htmlspecialchars($__vbToUrl) ?>' title='<?= $__vbTitle ?>'>
+				<i class='<?= $__vbIsB ? 'fas fa-eye' : 'far fa-eye' ?>'></i>
+			</a>
+			<style>
+				.nav-vb-toggle{position:relative;transition:transform .15s,filter .15s}
+				.nav-vb-toggle:hover{transform:scale(1.1)}
+				.nav-vb-toggle.nav-vb-on{color:#ff00ff;animation:navVbBlink 1.1s steps(2,end) infinite,navVbHue 4s linear infinite;text-shadow:0 0 6px #ff00ff,0 0 12px #00ffff}
+				.nav-vb-toggle.nav-vb-on::after{content:"";position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:#fff700;box-shadow:0 0 0 2px #fff,0 0 10px #fff700,0 0 16px #fff700;animation:navVbBlink 1.1s steps(2,end) infinite}
+				@keyframes navVbBlink{0%,49%{opacity:1}50%,100%{opacity:.25}}
+				@keyframes navVbHue{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
+			</style>
+			<?php endif; ?>
+
 			<!-- Resources dropdown -->
 			<div class='nav-dropdown-wrap' id='nav-resources-wrap'>
 				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>
