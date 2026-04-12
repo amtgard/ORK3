@@ -264,11 +264,14 @@ class Controller_Player extends Controller {
 	}
 
 	public function profile( $id = null ) {
-		// A/B EXPERIMENT (April Fools): ?design=b loads the Geocities-vintage variant.
-		// To remove: delete this if-block, delete Playernew_index_b.tpl, and remove
-		// the eyeball block in default.theme.
-		if (($_GET['design'] ?? '') === 'b') {
+		// A/B/C EXPERIMENT (April Fools): ?design=b → Geocities, ?design=c → MS-DOS.
+		// To remove: delete this block, delete Playernew_index_{b,c}.tpl, and
+		// remove the eyeball block in default.theme.
+		$__designVariant = $_GET['design'] ?? '';
+		if ($__designVariant === 'b') {
 			$this->template = '../revised-frontend/Playernew_index_b.tpl';
+		} elseif ($__designVariant === 'c') {
+			$this->template = '../revised-frontend/Playernew_index_c.tpl';
 		} else {
 			$this->template = '../revised-frontend/Playernew_index.tpl';
 		}
