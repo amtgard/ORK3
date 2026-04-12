@@ -264,7 +264,14 @@ class Controller_Player extends Controller {
 	}
 
 	public function profile( $id = null ) {
-		$this->template = '../revised-frontend/Playernew_index.tpl';
+		// A/B EXPERIMENT: ?design=b loads the subtle "illuminated" variant.
+		// To remove: delete this if-block, delete Playernew_index_b.tpl, and
+		// remove the eyeball block in default.theme.
+		if (($_GET['design'] ?? '') === 'b') {
+			$this->template = '../revised-frontend/Playernew_index_b.tpl';
+		} else {
+			$this->template = '../revised-frontend/Playernew_index.tpl';
+		}
 
 		$params    = explode('/', $id ?? '');
 		$id        = $params[0];
