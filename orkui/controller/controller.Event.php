@@ -593,7 +593,8 @@ class Controller_Event extends Controller {
 			'SELECT event_schedule_id AS EventScheduleId, title AS Title,
 			        start_time AS StartTime, end_time AS EndTime,
 			        location AS Location, description AS Description, category AS Category,
-			        secondary_category AS SecondaryCategory
+			        secondary_category AS SecondaryCategory,
+			        menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
 			FROM ' . DB_PREFIX . 'event_schedule
 			WHERE event_calendardetail_id = ' . $detail_id . '
 			ORDER BY start_time'
@@ -602,14 +603,18 @@ class Controller_Event extends Controller {
 		if ($scheduleRows) {
 			while ($scheduleRows->Next()) {
 				$scheduleList[] = [
-					'EventScheduleId' => (int)$scheduleRows->EventScheduleId,
-					'Title'           => $scheduleRows->Title,
-					'StartTime'       => $scheduleRows->StartTime,
-					'EndTime'         => $scheduleRows->EndTime,
-					'Location'        => $scheduleRows->Location,
-					'Description'     => $scheduleRows->Description,
+					'EventScheduleId'   => (int)$scheduleRows->EventScheduleId,
+					'Title'             => $scheduleRows->Title,
+					'StartTime'         => $scheduleRows->StartTime,
+					'EndTime'           => $scheduleRows->EndTime,
+					'Location'          => $scheduleRows->Location,
+					'Description'       => $scheduleRows->Description,
 					'Category'          => $scheduleRows->Category,
 					'SecondaryCategory' => $scheduleRows->SecondaryCategory ?? '',
+					'Menu'              => $scheduleRows->Menu,
+					'Cost'              => $scheduleRows->Cost !== null ? (float)$scheduleRows->Cost : null,
+					'Dietary'           => $scheduleRows->Dietary,
+					'Allergens'         => $scheduleRows->Allergens,
 				];
 			}
 		}
@@ -683,28 +688,9 @@ class Controller_Event extends Controller {
 		}
 		$this->data['ExternalLinks'] = $linkList;
 
-		// Load feast meals for this occurrence
-		$DB->Clear();
-		$mealRows = $DB->DataSet(
-			'SELECT event_meal_id AS EventMealId, title AS Title, cost AS Cost, menu AS Menu, dietary AS Dietary, allergens AS Allergens
-			FROM ' . DB_PREFIX . 'event_meal
-			WHERE event_calendardetail_id = ' . $detail_id . '
-			ORDER BY event_meal_id'
-		);
-		$mealList = [];
-		if ($mealRows) {
-			while ($mealRows->Next()) {
-				$mealList[] = [
-					'EventMealId' => (int)$mealRows->EventMealId,
-					'Title'       => $mealRows->Title,
-					'Cost'        => $mealRows->Cost !== null ? (float)$mealRows->Cost : null,
-					'Menu'        => $mealRows->Menu,
-					'Dietary'     => $mealRows->Dietary ?? '',
-					'Allergens'   => $mealRows->Allergens ?? '',
-				];
-			}
-		}
-		$this->data['MealList'] = $mealList;
+		// MealList is derived from ScheduleList — rows with category or secondary_category 'Feast and Food'
+		// (ork_event_meal table removed; meal fields are now columns on ork_event_schedule)
+		$this->data['MealList'] = array_values(array_filter($this->data['ScheduleList'], fn($s) => ($s['Category'] ?? '') === 'Feast and Food' || ($s['SecondaryCategory'] ?? '') === 'Feast and Food'));
 	}
 
 	public function create( $p = null ) {
