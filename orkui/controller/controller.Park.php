@@ -111,13 +111,21 @@ class Controller_Park extends Controller
 		$evtSql = "
 			SELECT e.event_id, e.name, p.name AS park_name,
 			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
-			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'going') AS rsvp_going,
-		       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested
+			       COALESCE(rsvp.rsvp_going, 0) AS rsvp_going,
+			       COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 			    AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
+			LEFT JOIN (
+			    SELECT
+			        event_calendardetail_id,
+			        SUM(status = 'going') AS rsvp_going,
+			        SUM(status = 'interested') AS rsvp_interested
+			    FROM ork_event_rsvp
+			    GROUP BY event_calendardetail_id
+			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
 			WHERE e.park_id = {$pid}
 			ORDER BY cd.event_start, e.name";
 		$DB->Clear();
@@ -179,8 +187,8 @@ class Controller_Park extends Controller
 			ORDER BY m.persona";
 			$DB->Clear();
 			$rosterResult = $DB->DataSet($rosterSql);
-			if ($rosterResult && $rosterResult->Size() > 0) {
-				do {
+			if ($rosterResult) {
+				while ($rosterResult->Next()) {
 					$parkPlayers[] = [
 						'MundaneId'    => (int)$rosterResult->mundane_id,
 						'Persona'      => $rosterResult->persona,
@@ -191,7 +199,7 @@ class Controller_Park extends Controller
 						'LastClass'    => $rosterResult->last_class,
 						'OfficerRoles' => $rosterResult->officer_roles,
 					];
-				} while ($rosterResult->Next());
+				}
 			}
 			Ork3::$Lib->ghettocache->cache(__CLASS__ . '.park_players', $pkRosterCacheKey, $parkPlayers);
 		}

@@ -48,6 +48,7 @@ class Controller_Kingdom extends Controller {
 	}
 
 	public function park_monthly_json($kingdom_id = null) {
+		session_write_close(); // release session lock so navigation is not blocked
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$summary = $this->Report->GetKingdomParkMonthlyAverages(['KingdomId' => $kingdom_id]);
 		$result = array();
@@ -60,6 +61,7 @@ class Controller_Kingdom extends Controller {
 	}
 
 	public function park_averages_json($kingdom_id = null) {
+		session_write_close(); // release session lock so navigation is not blocked
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid     = (int)$kingdom_id;
 		$uid     = (int)($this->session->user_id ?? 0);
@@ -175,6 +177,7 @@ class Controller_Kingdom extends Controller {
 	}
 
 	public function players_json($kingdom_id = null) {
+		session_write_close(); // release session lock so navigation is not blocked
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid = (int)$kingdom_id;
 		$cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid]);
@@ -307,13 +310,21 @@ class Controller_Kingdom extends Controller {
 		$evtSql = "
 			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
 			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
-			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'going') AS rsvp_going,
-		       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested
+			       COALESCE(rsvp.rsvp_going, 0) AS rsvp_going,
+			       COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 			    AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
+			LEFT JOIN (
+			    SELECT
+			        event_calendardetail_id,
+			        SUM(status = 'going') AS rsvp_going,
+			        SUM(status = 'interested') AS rsvp_interested
+			    FROM ork_event_rsvp
+			    GROUP BY event_calendardetail_id
+			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
 			WHERE e.kingdom_id = {$kid}
 			ORDER BY cd.event_start, p.name, e.name";
 		$DB->Clear();
