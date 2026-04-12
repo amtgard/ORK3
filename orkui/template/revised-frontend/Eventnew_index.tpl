@@ -741,10 +741,10 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 							$evSecCat     = $item['SecondaryCategory'] ?? '';
 							$evSecCatCfg  = $evSecCat ? ($evSchedCategories[$evSecCat] ?? $evSchedCategories['Other']) : null;
 						?>
-						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
+						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['StartTime'])) ?></td>
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['EndTime'])) ?></td>
-							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" title="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" title="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?></td>
+							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" title="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" title="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" title="Has menu"></i><?php endif; ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
 							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Playernew/index/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
 							<td><?= htmlspecialchars($item['Description']) ?></td>
@@ -776,10 +776,10 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 			<?php // ---- Feast Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-feast">
 
-				<?php if ($canManageFeast): ?>
+				<?php if ($canManageFeast || $canManageSchedule): ?>
 				<div style="margin-bottom:14px">
-					<button type="button" class="ev-submit-btn" style="float:right" onclick="evOpenMealModal()">
-						<i class="fas fa-plus"></i> Add Meal
+					<button type="button" class="ev-submit-btn" style="float:right" onclick="evOpenFeastScheduleModal()">
+						<i class="fas fa-plus"></i> Add Feast Item
 					</button>
 				</div>
 				<?php endif; ?>
@@ -787,22 +787,35 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 				<div id="ev-meal-list">
 				<?php if (!empty($mealList)): ?>
 				<?php foreach ($mealList as $meal): ?>
-				<div class="ev-meal-card" id="ev-meal-card-<?= (int)$meal['EventMealId'] ?>">
+				<?php
+					$_mTimeHtml = '';
+					if (!empty($meal['StartTime'])) {
+						$_mTimeHtml = date('g:ia', strtotime($meal['StartTime']));
+						if (!empty($meal['EndTime'])) $_mTimeHtml .= ' – ' . date('g:ia', strtotime($meal['EndTime']));
+					}
+				?>
+				<div class="ev-meal-card" id="ev-meal-card-<?= (int)$meal['EventScheduleId'] ?>" data-schedule-id="<?= (int)$meal['EventScheduleId'] ?>">
 					<div class="ev-meal-card-header">
 						<span class="ev-meal-title"><i class="fas fa-utensils" style="color:#e65100;margin-right:7px"></i><?= htmlspecialchars($meal['Title']) ?></span>
 						<span style="display:flex;align-items:center;gap:10px">
 							<?php if ($meal['Cost'] !== null): ?>
 							<span class="ev-meal-cost"><?= (float)$meal['Cost'] == 0 ? '<span style="color:#276749;font-weight:600">Free</span>' : '<span style="font-weight:600">$' . number_format((float)$meal['Cost'], 2) . '</span>' ?></span>
 							<?php endif; ?>
-							<?php if ($canManageFeast): ?>
-							<button class="ev-edit-btn" title="Edit meal"
-								onclick='evOpenEditMealModal(<?= htmlspecialchars(json_encode(["EventMealId"=>(int)$meal["EventMealId"],"Title"=>$meal["Title"],"Cost"=>$meal["Cost"],"Menu"=>$meal["Menu"]??"","Dietary"=>$meal["Dietary"]??"","Allergens"=>$meal["Allergens"]??""]), ENT_QUOTES) ?>)'>
+							<?php if ($canManageFeast || $canManageSchedule): ?>
+							<button class="ev-edit-btn" title="Edit feast item"
+								onclick='evOpenFeastEditModal(<?= htmlspecialchars(json_encode(["EventScheduleId"=>(int)$meal["EventScheduleId"],"Title"=>$meal["Title"],"StartTime"=>$meal["StartTime"]??"","EndTime"=>$meal["EndTime"]??"","Location"=>$meal["Location"]??"","Description"=>$meal["Description"]??"","Category"=>$meal["Category"]??"","SecondaryCategory"=>$meal["SecondaryCategory"]??"","Leads"=>$meal["Leads"]??[],"Menu"=>$meal["Menu"]??"","Cost"=>$meal["Cost"],"Dietary"=>$meal["Dietary"]??"","Allergens"=>$meal["Allergens"]??""]), ENT_QUOTES) ?>)'>
 								<i class="fas fa-pencil-alt"></i></button>
-							<button class="ev-del-link" title="Remove meal" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1"
-								onclick="evRemoveMeal(this, <?= (int)$meal['EventMealId'] ?>)">&times;</button>
+							<button class="ev-del-link" title="Remove feast item" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1"
+								onclick="evRemoveFeastCard(this, <?= (int)$meal['EventScheduleId'] ?>)">&times;</button>
 							<?php endif; ?>
 						</span>
 					</div>
+					<?php if ($_mTimeHtml || !empty($meal['Location'])): ?>
+					<div style="padding:5px 14px 0;font-size:12px;color:#718096">
+						<?php if ($_mTimeHtml): ?><i class="fas fa-clock" style="margin-right:4px"></i><?= htmlspecialchars($_mTimeHtml) ?><?php endif; ?>
+						<?php if (!empty($meal['Location'])): ?><?php if ($_mTimeHtml): ?> &nbsp;&middot;&nbsp; <?php endif; ?><i class="fas fa-map-marker-alt" style="margin-right:4px"></i><?= htmlspecialchars($meal['Location']) ?><?php endif; ?>
+					</div>
+					<?php endif; ?>
 					<?php if (!empty(trim($meal['Menu'] ?? ''))): ?>
 					<div class="ev-meal-menu"><?= htmlspecialchars($meal['Menu']) ?></div>
 					<?php endif; ?>
@@ -1601,71 +1614,6 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 }
 </style>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<?php if ($canManageFeast): ?>
-<!-- Feast Meal Modal -->
-<div class="ev-modal-overlay" id="ev-meal-modal">
-	<div class="ev-modal">
-		<div class="ev-modal-header">
-			<h3><i class="fas fa-utensils" style="margin-right:8px;color:#e65100"></i>Add Meal</h3>
-			<button class="ev-modal-close" type="button" onclick="evCloseMealModal()">&times;</button>
-		</div>
-		<div class="ev-modal-body">
-			<div class="ev-modal-row">
-				<div class="ev-modal-field ev-field-full">
-					<label>Title <span style="color:#e53e3e">*</span></label>
-					<input type="text" id="ev-meal-title" placeholder="Evening Feast, Potluck Lunch, etc." autocomplete="off" style="width:100%">
-				</div>
-			</div>
-			<div class="ev-modal-row">
-				<div class="ev-modal-field" style="max-width:160px">
-					<label>Cost <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
-					<input type="number" id="ev-meal-cost" min="0" step="0.01" placeholder="0.00" style="width:100%">
-				</div>
-			</div>
-			<div class="ev-modal-row">
-				<div class="ev-modal-field ev-field-full">
-					<label>Menu <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
-					<textarea id="ev-meal-menu" rows="5" placeholder="List dishes, courses, dietary notes..." style="width:100%;resize:vertical"></textarea>
-				</div>
-			</div>
-				<div class="ev-modal-row">
-				<div class="ev-modal-field ev-field-full">
-					<label style="margin-bottom:6px;display:block">Dietary <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
-					<div class="ev-meal-cb-group">
-						<label><input type="checkbox" class="ev-meal-dietary-cb" value="Vegetarian Option"> Vegetarian Option</label>
-						<label><input type="checkbox" class="ev-meal-dietary-cb" value="Vegan Option"> Vegan Option</label>
-						<label><input type="checkbox" class="ev-meal-dietary-cb" value="Kosher"> Kosher</label>
-						<label><input type="checkbox" class="ev-meal-dietary-cb" value="Halal"> Halal</label>
-					</div>
-				</div>
-			</div>
-			<div class="ev-modal-row">
-				<div class="ev-modal-field ev-field-full">
-					<label style="margin-bottom:6px;display:block">Contains Allergens <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
-					<div class="ev-meal-cb-group">
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Dairy"> Dairy</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Eggs"> Eggs</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Fish"> Fish</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Shellfish"> Shellfish</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Tree Nuts"> Tree Nuts</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Peanuts"> Peanuts</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Wheat"> Wheat</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Soy"> Soy</label>
-						<label><input type="checkbox" class="ev-meal-allergen-cb" value="Sesame"> Sesame</label>
-					</div>
-				</div>
-			</div>
-		<div class="ev-modal-error" id="ev-meal-error" style="display:none"></div>
-		</div>
-		<div class="ev-modal-footer">
-			<button class="ev-btn ev-btn-outline" type="button" onclick="evCloseMealModal()">Cancel</button>
-			<button class="ev-submit-btn" type="button" id="ev-meal-save-btn" onclick="evSubmitMeal()">
-				<i class="fas fa-save"></i> Save Meal
-			</button>
-		</div>
-	</div>
-</div>
-<?php endif; ?>
 <?php if ($canManageSchedule): ?>
 <!-- Schedule Modal -->
 <div class="ev-modal-overlay" id="ev-schedule-modal">
@@ -1753,6 +1701,49 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 					<textarea id="ev-sched-description" rows="3" placeholder="Optional details..." style="width:100%;resize:vertical"></textarea>
 				</div>
 			</div>
+			<!-- Meal details panel (shown when category or secondary category is Feast and Food) -->
+			<div id="ev-sched-meal-panel" style="display:none;border-top:1px solid #f7d9c4;margin-top:8px;padding-top:10px">
+				<div style="font-size:12px;font-weight:700;color:#e65100;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px"><i class="fas fa-utensils" style="margin-right:5px"></i>Meal Details</div>
+				<div class="ev-modal-row">
+					<div class="ev-modal-field" style="max-width:160px">
+						<label>Cost <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
+						<input type="number" id="ev-sched-meal-cost" min="0" step="0.01" placeholder="0.00" style="width:100%">
+					</div>
+				</div>
+				<div class="ev-modal-row">
+					<div class="ev-modal-field ev-field-full">
+						<label>Menu <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
+						<textarea id="ev-sched-meal-menu" rows="3" placeholder="List dishes, courses, dietary notes..." style="width:100%;resize:vertical"></textarea>
+					</div>
+				</div>
+				<div class="ev-modal-row">
+					<div class="ev-modal-field ev-field-full">
+						<label style="margin-bottom:6px;display:block">Dietary <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
+						<div class="ev-meal-cb-group">
+							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Vegetarian Option"> Vegetarian Option</label>
+							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Vegan Option"> Vegan Option</label>
+							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Kosher"> Kosher</label>
+							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Halal"> Halal</label>
+						</div>
+					</div>
+				</div>
+				<div class="ev-modal-row">
+					<div class="ev-modal-field ev-field-full">
+						<label style="margin-bottom:6px;display:block">Contains Allergens <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
+						<div class="ev-meal-cb-group">
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Dairy"> Dairy</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Eggs"> Eggs</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Fish"> Fish</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Shellfish"> Shellfish</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Tree Nuts"> Tree Nuts</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Peanuts"> Peanuts</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Wheat"> Wheat</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Soy"> Soy</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Sesame"> Sesame</label>
+						</div>
+					</div>
+				</div>
+			</div><!-- /#ev-sched-meal-panel -->
 			<div class="ev-modal-error" id="ev-sched-error" style="display:none"></div>
 		</div>
 		<div class="ev-modal-footer">
@@ -2118,161 +2109,227 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	});
 })();
 <?php endif; ?>
-
-<?php if ($canManageFeast): ?>
-var _evEditingMealId = null;
-function evOpenMealModal() {
-	_evEditingMealId = null;
-	document.querySelector('#ev-meal-modal .ev-modal-header h3').innerHTML = '<i class="fas fa-utensils" style="margin-right:8px;color:#e65100"></i>Add Meal';
-	document.getElementById('ev-meal-title').value = '';
-	document.getElementById('ev-meal-cost').value = '';
-	document.getElementById('ev-meal-menu').value = '';
-	document.querySelectorAll('.ev-meal-dietary-cb, .ev-meal-allergen-cb').forEach(function(cb) { cb.checked = false; });
-	var err = document.getElementById('ev-meal-error');
-	if (err) { err.style.display = 'none'; err.textContent = ''; }
-	document.getElementById('ev-meal-modal').classList.add('ev-modal-open');
-	document.body.style.overflow = 'hidden';
 }
-function evOpenEditMealModal(meal) {
-	_evEditingMealId = meal.EventMealId;
-	document.querySelector('#ev-meal-modal .ev-modal-header h3').innerHTML = '<i class="fas fa-utensils" style="margin-right:8px;color:#e65100"></i>Edit Meal';
-	document.getElementById('ev-meal-title').value = meal.Title || '';
-	document.getElementById('ev-meal-cost').value  = meal.Cost !== null && meal.Cost !== undefined ? meal.Cost : '';
-	document.getElementById('ev-meal-menu').value  = meal.Menu || '';
-	var dietary   = (meal.Dietary   || '').split(',').map(function(s){return s.trim();});
-	var allergens = (meal.Allergens || '').split(',').map(function(s){return s.trim();});
-	document.querySelectorAll('.ev-meal-dietary-cb').forEach(function(cb)  { cb.checked = dietary.indexOf(cb.value)   >= 0; });
-	document.querySelectorAll('.ev-meal-allergen-cb').forEach(function(cb) { cb.checked = allergens.indexOf(cb.value) >= 0; });
-	var err = document.getElementById('ev-meal-error');
-	if (err) { err.style.display = 'none'; err.textContent = ''; }
-	document.getElementById('ev-meal-modal').classList.add('ev-modal-open');
-	document.body.style.overflow = 'hidden';
-}
-function evCloseMealModal() {
-	document.getElementById('ev-meal-modal').classList.remove('ev-modal-open');
-	document.body.style.overflow = '';
-}
-document.getElementById('ev-meal-modal').addEventListener('click', function(e) {
-	if (e.target === this) evCloseMealModal();
-});
-function evSubmitMeal() {
-	var title = document.getElementById('ev-meal-title').value.trim();
-	var cost  = document.getElementById('ev-meal-cost').value.trim();
-	var menu  = document.getElementById('ev-meal-menu').value.trim();
-	var err   = document.getElementById('ev-meal-error');
-	err.style.display = 'none'; err.textContent = '';
 
-	if (!title) { err.textContent = 'A title is required.'; err.style.display = 'block'; return; }
 
-	var btn = document.getElementById('ev-meal-save-btn');
-	btn.disabled = true;
+// ── Feast / Schedule integration helpers ─────────────────────────────────────
+(function() {
+	if (!EvConfig.canManageFeast && !EvConfig.canManageSchedule) return;
 
-	var dietary   = Array.from(document.querySelectorAll('.ev-meal-dietary-cb:checked')).map(function(c) { return c.value; }).join(',');
-	var allergens = Array.from(document.querySelectorAll('.ev-meal-allergen-cb:checked')).map(function(c) { return c.value; }).join(',');
-	var fd = new FormData();
-	fd.append('Title', title);
-	if (cost !== '') fd.append('Cost', cost);
-	fd.append('Menu', menu);
-	fd.append('Dietary',   dietary);
-	fd.append('Allergens', allergens);
-
-	var url = _evEditingMealId
-		? EvConfig.uir + 'EventAjax/edit_meal/' + EvConfig.eventId + '/' + EvConfig.detailId
-		: EvConfig.uir + 'EventAjax/add_meal/'  + EvConfig.eventId + '/' + EvConfig.detailId;
-	if (_evEditingMealId) fd.append('MealId', _evEditingMealId);
-	fetch(url, { method: 'POST', body: fd })
-	.then(function(r) { return r.json(); })
-	.then(function(data) {
-		btn.disabled = false;
-		if (data.status !== 0) { err.textContent = data.error || 'Error saving meal.'; err.style.display = 'block'; return; }
-		evCloseMealModal();
-		if (_evEditingMealId) {
-			evReplaceMealCard(_evEditingMealId, data.meal);
-		} else {
-			evAppendMealCard(data.meal);
-			document.getElementById('ev-meal-empty').style.display = 'none';
-			var tab = document.querySelector('[data-tab="ev-tab-feast"] .ev-tab-count');
-			if (tab) tab.textContent = parseInt(tab.textContent || '0') + 1;
-		}
-	})
-	.catch(function() { btn.disabled = false; err.textContent = 'Network error.'; err.style.display = 'block'; });
-}
-function evAppendMealCard(meal) {
-	var costHtml = '';
-	if (meal.Cost !== null && meal.Cost !== undefined) {
-		costHtml = '<span class="ev-meal-cost">' + (parseFloat(meal.Cost) === 0
-			? '<span style="color:#276749;font-weight:600">Free</span>'
-			: '<span style="font-weight:600">$' + parseFloat(meal.Cost).toFixed(2) + '</span>') + '</span>';
+	// Show/hide the meal-details panel based on category selects
+	function evSchedToggleMealPanel() {
+		var cat    = document.getElementById('ev-sched-category');
+		var secCat = document.getElementById('ev-sched-secondary-category');
+		var panel  = document.getElementById('ev-sched-meal-panel');
+		if (!panel) return;
+		var isFeast = (cat && cat.value === 'Feast and Food') || (secCat && secCat.value === 'Feast and Food');
+		panel.style.display = isFeast ? '' : 'none';
 	}
-	var menuHtml = meal.Menu ? '<div class="ev-meal-menu">' + meal.Menu.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '';
-	var editBtn = '<button class="ev-edit-btn" title="Edit meal" onclick="evOpenEditMealModal(' + JSON.stringify(meal).replace(/"/g, '&quot;') + ')"><i class="fas fa-pencil-alt"></i></button>';
-	var delBtn  = '<button class="ev-del-link" title="Remove meal" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1" onclick="evRemoveMeal(this,' + meal.EventMealId + ')">&times;</button>';
-	var footerHtml = '';
-	var dietaryArr  = meal.Dietary   ? meal.Dietary.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
-	var allergenArr = meal.Allergens ? meal.Allergens.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
-	if (dietaryArr.length || allergenArr.length) {
-		var tags = dietaryArr.map(function(s) { return '<span class="ev-meal-tag ev-meal-tag-dietary"><i class="fas fa-leaf"></i>' + s.replace(/&/g,'&amp;') + '</span>'; })
-			.concat(allergenArr.map(function(s) { return '<span class="ev-meal-tag ev-meal-tag-allergen"><i class="fas fa-exclamation-triangle"></i>' + s.replace(/&/g,'&amp;') + '</span>'; }));
-		footerHtml = '<div class="ev-meal-footer">' + tags.join('') + '</div>';
-	}
-	var html = '<div class="ev-meal-card" id="ev-meal-card-' + meal.EventMealId + '">'
-		+ '<div class="ev-meal-card-header">'
-		+ '<span class="ev-meal-title"><i class="fas fa-utensils" style="color:#e65100;margin-right:7px"></i>' + meal.Title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>'
-		+ '<span style="display:flex;align-items:center;gap:10px">' + costHtml + editBtn + delBtn + '</span>'
-		+ '</div>' + menuHtml + footerHtml + '</div>';
-	document.getElementById('ev-meal-list').insertAdjacentHTML('beforeend', html);
-}
-function evReplaceMealCard(mealId, meal) {
-	var old = document.getElementById('ev-meal-card-' + mealId);
-	if (!old) return;
-	var tmp = document.createElement('div');
-	var costHtml = '';
-	if (meal.Cost !== null && meal.Cost !== undefined) {
-		costHtml = '<span class="ev-meal-cost">' + (parseFloat(meal.Cost) === 0
-			? '<span style="color:#276749;font-weight:600">Free</span>'
-			: '<span style="font-weight:600">$' + parseFloat(meal.Cost).toFixed(2) + '</span>') + '</span>';
-	}
-	var menuHtml = meal.Menu ? '<div class="ev-meal-menu">' + meal.Menu.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' : '';
-	var editBtn  = '<button class="ev-edit-btn" title="Edit meal" onclick="evOpenEditMealModal(' + JSON.stringify(meal).replace(/"/g, '&quot;') + ')"><i class="fas fa-pencil-alt"></i></button>';
-	var delBtn   = '<button class="ev-del-link" title="Remove meal" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1" onclick="evRemoveMeal(this,' + meal.EventMealId + ')">&times;</button>';
-	var footerHtml = '';
-	var dietaryArr  = meal.Dietary   ? meal.Dietary.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
-	var allergenArr = meal.Allergens ? meal.Allergens.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
-	if (dietaryArr.length || allergenArr.length) {
-		var tags = dietaryArr.map(function(s) { return '<span class="ev-meal-tag ev-meal-tag-dietary"><i class="fas fa-leaf"></i>' + s.replace(/&/g,'&amp;') + '</span>'; })
-			.concat(allergenArr.map(function(s) { return '<span class="ev-meal-tag ev-meal-tag-allergen"><i class="fas fa-exclamation-triangle"></i>' + s.replace(/&/g,'&amp;') + '</span>'; }));
-		footerHtml = '<div class="ev-meal-footer">' + tags.join('') + '</div>';
-	}
-	var html = '<div class="ev-meal-card" id="ev-meal-card-' + meal.EventMealId + '">'
-		+ '<div class="ev-meal-card-header">'
-		+ '<span class="ev-meal-title"><i class="fas fa-utensils" style="color:#e65100;margin-right:7px"></i>' + meal.Title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>'
-		+ '<span style="display:flex;align-items:center;gap:10px">' + costHtml + editBtn + delBtn + '</span>'
-		+ '</div>' + menuHtml + footerHtml + '</div>';
-	tmp.innerHTML = html;
-	old.parentNode.replaceChild(tmp.firstChild, old);
-}
-function evRemoveMeal(btn, mealId) {
-	pnConfirm({ title: 'Remove Meal?', message: 'Remove this meal from the event?', confirmText: 'Remove', danger: true }, function() {
-		btn.disabled = true;
-		var fd = new FormData();
-		fd.append('MealId', mealId);
-		fetch(EvConfig.uir + 'EventAjax/remove_meal/' + EvConfig.eventId + '/' + EvConfig.detailId, {
-			method: 'POST', body: fd
-		})
-		.then(function(r) { return r.json(); })
-		.then(function(data) {
-			if (data.status !== 0) { btn.disabled = false; return; }
-			var card = document.getElementById('ev-meal-card-' + mealId);
-			if (card) card.remove();
-			var tab = document.querySelector('[data-tab="ev-tab-feast"] .ev-tab-count');
-			if (tab) tab.textContent = Math.max(0, parseInt(tab.textContent || '0') - 1);
-			var list = document.getElementById('ev-meal-list');
-			if (list && !list.querySelector('.ev-meal-card')) {
-				document.getElementById('ev-meal-empty').style.display = '';
-			}
-		})
-		.catch(function() { btn.disabled = false; });
+
+	// Wire category change handlers
+	window.addEventListener('DOMContentLoaded', function() {
+		var cat    = document.getElementById('ev-sched-category');
+		var secCat = document.getElementById('ev-sched-secondary-category');
+		if (cat)    cat.addEventListener('change',    evSchedToggleMealPanel);
+		if (secCat) secCat.addEventListener('change', evSchedToggleMealPanel);
 	});
-}
-<?php endif; ?>
+
+	// Also wire immediately in case DOM is already ready
+	(function tryWire() {
+		var cat = document.getElementById('ev-sched-category');
+		if (cat) {
+			cat.addEventListener('change', evSchedToggleMealPanel);
+			var secCat = document.getElementById('ev-sched-secondary-category');
+			if (secCat) secCat.addEventListener('change', evSchedToggleMealPanel);
+		}
+	})();
+
+	// Clear meal panel fields
+	function evSchedClearMealFields() {
+		var cost = document.getElementById('ev-sched-meal-cost');
+		var menu = document.getElementById('ev-sched-meal-menu');
+		if (cost) cost.value = '';
+		if (menu) menu.value = '';
+		document.querySelectorAll('.ev-sched-dietary-cb, .ev-sched-allergen-cb').forEach(function(cb) { cb.checked = false; });
+	}
+
+	// Populate meal panel from a meal data object
+	function evSchedPopulateMealFields(meal) {
+		var cost = document.getElementById('ev-sched-meal-cost');
+		var menu = document.getElementById('ev-sched-meal-menu');
+		if (cost) cost.value = (meal.Cost !== null && meal.Cost !== undefined) ? meal.Cost : '';
+		if (menu) menu.value = meal.Menu || '';
+		var dietary   = (meal.Dietary   || '').split(',').map(function(s){return s.trim();});
+		var allergens = (meal.Allergens || '').split(',').map(function(s){return s.trim();});
+		document.querySelectorAll('.ev-sched-dietary-cb').forEach(function(cb)  { cb.checked = dietary.indexOf(cb.value)   >= 0; });
+		document.querySelectorAll('.ev-sched-allergen-cb').forEach(function(cb) { cb.checked = allergens.indexOf(cb.value) >= 0; });
+	}
+
+	// Open schedule modal pre-set to Feast and Food category (Add mode)
+	window.evOpenFeastScheduleModal = function() {
+		if (typeof evOpenScheduleModal === 'function') evOpenScheduleModal();
+		// Pre-set category after modal opens
+		setTimeout(function() {
+			var cat = document.getElementById('ev-sched-category');
+			if (cat) { cat.value = 'Feast and Food'; evSchedToggleMealPanel(); }
+			evSchedClearMealFields();
+		}, 20);
+	};
+
+	// Open schedule modal in edit mode from a feast card (no table row available)
+	window.evOpenFeastEditModal = function(meal) {
+		// Build a synthetic row-like object and call evOpenScheduleModal in edit mode
+		var modal = document.getElementById('ev-schedule-modal');
+		if (!modal) return;
+		var modeEl = document.getElementById('ev-sched-mode');
+		var idEl   = document.getElementById('ev-sched-id');
+		var titleEl = document.getElementById('ev-sched-title');
+		var catEl   = document.getElementById('ev-sched-category');
+		var secCatEl = document.getElementById('ev-sched-secondary-category');
+		var locEl   = document.getElementById('ev-sched-location');
+		var descEl  = document.getElementById('ev-sched-description');
+		var startEl = document.getElementById('ev-sched-start');
+		var endEl   = document.getElementById('ev-sched-end');
+		var errEl   = document.getElementById('ev-sched-error');
+		var titleLbl = document.getElementById('ev-sched-modal-title');
+		var saveLbl  = document.getElementById('ev-sched-save-label');
+		if (!modeEl || !idEl || !titleEl || !catEl || !startEl || !endEl) return;
+		modeEl.value  = 'edit';
+		idEl.value    = meal.EventScheduleId;
+		if (titleLbl) titleLbl.textContent = 'Edit Schedule Item';
+		if (saveLbl)  saveLbl.textContent  = 'Save Changes';
+		titleEl.value  = meal.Title || '';
+		catEl.value    = meal.Category || 'Feast and Food';
+		if (secCatEl) secCatEl.value = meal.SecondaryCategory || '';
+		if (locEl)  locEl.value  = meal.Location || '';
+		if (descEl) descEl.value = meal.Description || '';
+		if (errEl)  { errEl.style.display = 'none'; errEl.textContent = ''; }
+		// Leads
+		try { window.evSchedLeads = meal.Leads || []; } catch(e) { window.evSchedLeads = []; }
+		if (typeof evRenderSchedLeads === 'function') evRenderSchedLeads();
+		// Collapse staff quick-add
+		var qaList = document.getElementById('ev-sched-staff-qa-list');
+		var qaChevron = document.getElementById('ev-sched-staff-qa-chevron');
+		if (qaList) qaList.style.display = 'none';
+		if (qaChevron) qaChevron.style.transform = '';
+		if (typeof evRefreshStaffQuickAdd === 'function') evRefreshStaffQuickAdd();
+		// Times
+		if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
+		if (EvConfig.eventEnd)   { startEl.max = EvConfig.eventEnd;   endEl.max = EvConfig.eventEnd; }
+		if (meal.StartTime) startEl.value = meal.StartTime.replace(' ', 'T').substring(0, 16);
+		if (meal.EndTime)   endEl.value   = meal.EndTime.replace(' ', 'T').substring(0, 16);
+		// Meal fields
+		evSchedToggleMealPanel();
+		evSchedPopulateMealFields(meal);
+		modal.style.display = 'flex';
+		document.body.style.overflow = 'hidden';
+		setTimeout(function() { titleEl.focus(); }, 50);
+	};
+
+	// Patch evSubmitSchedule to include meal fields on submit.
+	// Strategy: temporarily override FormData.prototype.append so that when the
+	// original function calls fd.append('Leads', ...) we tack on Menu/Cost/Dietary/
+	// Allergens right after. Restored in a finally block so we never leave the
+	// prototype mutated even if the inner function throws.
+	var _origEvSubmitSchedule = window.evSubmitSchedule;
+	window.evSubmitSchedule = function() {
+		var panel = document.getElementById('ev-sched-meal-panel');
+		var hasMealPanel = panel && panel.style.display !== 'none';
+		var _origAppend = FormData.prototype.append;
+		if (hasMealPanel) {
+			var cost = document.getElementById('ev-sched-meal-cost');
+			var menu = document.getElementById('ev-sched-meal-menu');
+			var dietary   = Array.from(document.querySelectorAll('.ev-sched-dietary-cb:checked')).map(function(c){return c.value;}).join(',');
+			var allergens = Array.from(document.querySelectorAll('.ev-sched-allergen-cb:checked')).map(function(c){return c.value;}).join(',');
+			var extra = {
+				Cost:      cost ? cost.value.trim() : '',
+				Menu:      menu ? menu.value.trim() : '',
+				Dietary:   dietary,
+				Allergens: allergens
+			};
+			var injected = false;
+			FormData.prototype.append = function(key, val) {
+				_origAppend.call(this, key, val);
+				if (!injected && key === 'Leads') {
+					injected = true;
+					_origAppend.call(this, 'Cost',      extra.Cost);
+					_origAppend.call(this, 'Menu',      extra.Menu);
+					_origAppend.call(this, 'Dietary',   extra.Dietary);
+					_origAppend.call(this, 'Allergens', extra.Allergens);
+				}
+			};
+		}
+		try {
+			_origEvSubmitSchedule();
+		} finally {
+			FormData.prototype.append = _origAppend;
+		}
+	};
+
+	// Remove a feast card and hit remove_schedule endpoint
+	window.evRemoveFeastCard = function(btn, scheduleId) {
+		pnConfirm({ title: 'Remove Feast Item?', message: 'Remove this feast item from the event?', confirmText: 'Remove', danger: true }, function() {
+			btn.disabled = true;
+			var fd = new FormData();
+			fd.append('ScheduleId', scheduleId);
+			fetch(EvConfig.uir + 'EventAjax/remove_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+				method: 'POST', body: fd,
+				headers: { 'X-Requested-With': 'XMLHttpRequest' }
+			})
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				if (data.status !== 0) { btn.disabled = false; return; }
+				var card = document.getElementById('ev-meal-card-' + scheduleId);
+				if (card) card.remove();
+				var tab = document.querySelector('[data-tab="ev-tab-feast"] .ev-tab-count');
+				if (tab) tab.textContent = Math.max(0, parseInt(tab.textContent || '0') - 1);
+				var list = document.getElementById('ev-meal-list');
+				if (list && !list.querySelector('.ev-meal-card')) {
+					var empty = document.getElementById('ev-meal-empty');
+					if (empty) empty.style.display = '';
+				}
+				// Also remove the corresponding schedule row if visible
+				var schedRow = document.getElementById('ev-schedule-row-' + scheduleId);
+				if (schedRow) {
+					var daySection = schedRow.closest('.ev-sched-day-section');
+					schedRow.remove();
+					if (daySection) {
+						var tbody = daySection.querySelector('tbody');
+						if (tbody && tbody.querySelectorAll('tr').length === 0) daySection.remove();
+					}
+					var schTab = document.querySelector('[data-tab="ev-tab-schedule"] .ev-tab-count');
+					if (schTab) schTab.textContent = Math.max(0, parseInt(schTab.textContent || '0') - 1);
+				}
+			})
+			.catch(function() { btn.disabled = false; });
+		});
+	};
+
+	// Also patch evOpenScheduleModal to reset meal fields on open (add mode)
+	var _origEvOpenScheduleModal = window.evOpenScheduleModal;
+	window.evOpenScheduleModal = function() {
+		if (_origEvOpenScheduleModal) _origEvOpenScheduleModal();
+		evSchedClearMealFields();
+		evSchedToggleMealPanel();
+	};
+
+	// Patch evOpenScheduleEditModal to also populate meal fields from row data-attrs
+	var _origEvOpenScheduleEditModal = window.evOpenScheduleEditModal;
+	window.evOpenScheduleEditModal = function(scheduleId, btn) {
+		if (_origEvOpenScheduleEditModal) _origEvOpenScheduleEditModal(scheduleId, btn);
+		var row = btn ? btn.closest('tr') : null;
+		if (row) {
+			evSchedToggleMealPanel();
+			evSchedPopulateMealFields({
+				Menu:      row.getAttribute('data-menu')      || '',
+				Cost:      row.getAttribute('data-cost')      || null,
+				Dietary:   row.getAttribute('data-dietary')   || '',
+				Allergens: row.getAttribute('data-allergens') || ''
+			});
+		} else {
+			evSchedClearMealFields();
+			evSchedToggleMealPanel();
+		}
+	};
+})();
 </script>
