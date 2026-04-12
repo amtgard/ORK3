@@ -11,6 +11,15 @@
 		<?php endif ; ?>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
+		<?php if ($page_title === 'Home') : ?>
+		<meta property="og:type" content="website">
+		<meta property="og:site_name" content="ORK 3 - Amtgard Online Record Keeper">
+		<meta property="og:title" content="ORK 3 - Amtgard Online Record Keeper">
+		<meta property="og:description" content="The Online Record Keeper for the Amtgard International LARP.">
+		<meta property="og:image" content="<?= HTTP_ASSETS ?>images/clippy_large.png">
+		<meta property="og:image:width" content="1075">
+		<meta property="og:image:height" content="1075">
+		<?php endif; ?>
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
 
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous" referrerpolicy="no-referrer">
