@@ -598,6 +598,35 @@ class Controller_Kingdom extends Controller {
 				];
 			}
 		}
+		// Merge calendar items into the event summary list (distinguished by _IsCalendarItem).
+		$ciSql = "
+			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day, ci.park_id,
+			       ci.event_start, ci.event_end, p.name AS park_name, p.abbreviation AS park_abbr
+			FROM " . DB_PREFIX . "calendar_item ci
+			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = ci.park_id
+			WHERE ci.kingdom_id = {$kid}
+			  AND ci.event_end >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+			  AND ci.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
+			ORDER BY ci.event_start";
+		$DB->Clear();
+		$ciResult = $DB->DataSet($ciSql);
+		while ($ciResult && $ciResult->Next()) {
+			$eventSummary[] = [
+				'CalendarItemId' => (int)$ciResult->calendar_item_id,
+				'Name'           => $ciResult->name,
+				'ParkName'       => $ciResult->park_name,
+				'ParkAbbr'       => $ciResult->park_abbr,
+				'NextDate'       => $ciResult->event_start,
+				'NextEndDate'    => $ciResult->event_end,
+				'AllDay'         => (int)$ciResult->all_day,
+				'Description'    => $ciResult->description,
+				'_IsCalendarItem'=> true,
+				'_IsParkEvent'   => (int)$ciResult->park_id > 0,
+			];
+		}
+		usort($eventSummary, function($a, $b) {
+			return strcmp($a['NextDate'] ?? '', $b['NextDate'] ?? '');
+		});
 		$this->data['event_summary'] = $eventSummary;
 
 		// Hide the "Load more" button when there are no events past the initial 12-month window.

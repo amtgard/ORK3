@@ -2393,7 +2393,7 @@ if (typeof KnConfig !== 'undefined') {
 var knMapLoaded = false;
 var knCalLoaded = false;
 var knCalendar  = null;
-var knFilters   = { 'kingdom-event': true, 'park-event': true, 'park-day': false };
+var knFilters   = { 'kingdom-event': true, 'park-event': true, 'calendar-item': true, 'park-day': false };
 var knCalCache  = {}; // raw events keyed by "startISO|endISO" — avoids re-fetching on filter toggle
 
 function orkIsDarkMode() {
@@ -2479,8 +2479,9 @@ function knRenderCalendar() {
             if (raw) {
                 // Re-apply filter from cache — no HTTP request needed
                 successCallback(raw.filter(function(e) {
-                    if (e.type === 'park-day') return knFilters['park-day'];
-                    if (e.type === 'park-event') return knFilters['park-event'];
+                    if (e.type === 'park-day')      return knFilters['park-day'];
+                    if (e.type === 'park-event')    return knFilters['park-event'];
+                    if (e.type === 'calendar-item') return knFilters['calendar-item'];
                     return knFilters['kingdom-event'];
                 }));
                 return;
@@ -2490,8 +2491,9 @@ function knRenderCalendar() {
                     if (data && data.status === 0) {
                         knCalCache[cacheKey] = data.events || [];
                         successCallback((data.events || []).filter(function(e) {
-                            if (e.type === 'park-day') return knFilters['park-day'];
-                            if (e.type === 'park-event') return knFilters['park-event'];
+                            if (e.type === 'park-day')      return knFilters['park-day'];
+                            if (e.type === 'park-event')    return knFilters['park-event'];
+                            if (e.type === 'calendar-item') return knFilters['calendar-item'];
                             return knFilters['kingdom-event'];
                         }));
                     } else {
@@ -2502,6 +2504,8 @@ function knRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
+            var ciId = info.event.extendedProps && info.event.extendedProps.calendarItemId;
+            if (ciId) { knShowCalendarItemOverlay(ciId); return; }
             if (info.event.url) window.location.href = info.event.url;
         },
         eventDidMount: function(info) {
@@ -3789,14 +3793,86 @@ $(document).ready(function() {
         el.textContent = msg; el.style.display = '';
     }
 
+    var CI_CREATE_URL = KnConfig.uir + 'CalendarItemAjax/create';
+    var CI_UPDATE_URL = KnConfig.uir + 'CalendarItemAjax/update';
+    var CI_DELETE_URL = KnConfig.uir + 'CalendarItemAjax/delete';
+    var CI_GET_URL    = KnConfig.uir + 'CalendarItemAjax/get/';
+    var knCiEditingId = 0; // 0 = create mode; >0 = editing existing item
+    var knCiFlatStart = null, knCiFlatEnd = null;
+
+    function knCiResetForm(presetDate) {
+        document.getElementById('kn-ci-park-name').value = '';
+        document.getElementById('kn-ci-park-id').value   = '';
+        document.getElementById('kn-ci-description').value = '';
+        document.getElementById('kn-ci-allday').checked = false;
+        knCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    function knCiRebuildPickers(startVal, endVal, allDay) {
+        if (knCiFlatStart) { knCiFlatStart.destroy(); knCiFlatStart = null; }
+        if (knCiFlatEnd)   { knCiFlatEnd.destroy();   knCiFlatEnd   = null; }
+        var fmt = allDay ? 'Y-m-d' : 'Y-m-d H:i';
+        var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        knCiFlatStart = flatpickr('#kn-ci-start', Object.assign({}, opts, {
+            onChange: function(sel) {
+                if (!sel[0] || !knCiFlatEnd) return;
+                if (!knCiFlatEnd.selectedDates[0] || knCiFlatEnd.selectedDates[0] < sel[0]) {
+                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
+                    knCiFlatEnd.setDate(end, true);
+                }
+            }
+        }));
+        knCiFlatEnd = flatpickr('#kn-ci-end', opts);
+        if (startVal) knCiFlatStart.setDate(startVal, true);
+        if (endVal)   knCiFlatEnd.setDate(endVal, true);
+    }
+
+    function knGetModalType() {
+        var r = document.querySelector('input[name="kn-emod-type"]:checked');
+        return r ? r.value : 'event';
+    }
+
+    function knApplyModalType() {
+        var t = knGetModalType();
+        var isCi = (t === 'calendar-item');
+        document.querySelectorAll('.kn-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
+        document.querySelectorAll('.kn-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        document.getElementById('kn-emod-go-label').textContent = isCi ? (knCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
+        var title = document.getElementById('kn-emod-title');
+        title.innerHTML = isCi
+            ? '<i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>' + (knCiEditingId > 0 ? 'Edit Calendar Item' : 'New Calendar Item')
+            : '<i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event';
+        knUpdateGoBtn();
+        if (isCi && !knCiFlatStart) {
+            var presetDate = document.getElementById('kn-event-modal').dataset.presetDate || '';
+            knCiResetForm(presetDate);
+        }
+    }
+
+    function knUpdateGoBtn() {
+        var t = knGetModalType();
+        var ok;
+        if (t === 'calendar-item') {
+            ok = !!document.getElementById('kn-event-name').value.trim()
+              && !!document.getElementById('kn-ci-start').value
+              && !!document.getElementById('kn-ci-end').value;
+        } else {
+            ok = !!document.getElementById('kn-event-name').value.trim();
+        }
+        document.getElementById('kn-emod-go-btn').disabled = !ok;
+    }
+
     window.knOpenEventModal = function(dateStr) {
         var modal = document.getElementById('kn-event-modal');
         modal.dataset.presetDate = dateStr || '';
+        knCiEditingId = 0;
+        // Default to Amtgard Event on fresh open.
+        var typeRadios = document.querySelectorAll('input[name="kn-emod-type"]');
+        typeRadios.forEach(function(r) { r.disabled = false; r.checked = (r.value === 'event'); });
         document.getElementById('kn-event-name').value     = '';
         document.getElementById('kn-event-park-name').value = '';
         document.getElementById('kn-event-park-id').value   = '';
         document.getElementById('kn-emod-feedback').style.display = 'none';
-        document.getElementById('kn-emod-go-btn').disabled  = true;
         var dateRow  = document.getElementById('kn-emod-date-row');
         var dateText = document.getElementById('kn-emod-date-text');
         if (dateRow && dateText) {
@@ -3808,6 +3884,8 @@ $(document).ready(function() {
                 dateRow.style.display = 'none';
             }
         }
+        knCiResetForm(dateStr || '');
+        knApplyModalType();
         modal.classList.add('kn-emod-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { document.getElementById('kn-event-name').focus(); }, 50);
@@ -3819,6 +3897,7 @@ $(document).ready(function() {
     };
 
     window.knCreateEvent = function() {
+        if (knGetModalType() === 'calendar-item') return knSubmitCalendarItem();
         var name   = document.getElementById('kn-event-name').value.trim();
         var parkId = parseInt(document.getElementById('kn-event-park-id').value) || 0;
         if (!name) return;
@@ -3840,33 +3919,169 @@ $(document).ready(function() {
         ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
     };
 
+    function knSubmitCalendarItem() {
+        var name    = document.getElementById('kn-event-name').value.trim();
+        var allDay  = document.getElementById('kn-ci-allday').checked ? 1 : 0;
+        var start   = document.getElementById('kn-ci-start').value;
+        var end     = document.getElementById('kn-ci-end').value;
+        var desc    = document.getElementById('kn-ci-description').value;
+        var parkId  = parseInt(document.getElementById('kn-ci-park-id').value) || 0;
+        if (!name || !start || !end) return;
+
+        var btn = document.getElementById('kn-emod-go-btn');
+        btn.disabled = true;
+
+        var payload = {
+            Name: name, Description: desc, AllDay: allDay,
+            EventStart: start, EventEnd: end,
+            KingdomId: KnConfig.kingdomId, ParkId: parkId
+        };
+        var url = CI_CREATE_URL;
+        if (knCiEditingId > 0) { payload.CalendarItemId = knCiEditingId; url = CI_UPDATE_URL; }
+
+        $.post(url, payload, function(r) {
+            if (r && r.status === 0) {
+                knCloseEventModal();
+                knCalCache = {}; // bust cached raw events so the new item appears
+                if (knCalendar) knCalendar.refetchEvents();
+                // List view rows are rendered server-side; reload so they appear in the list.
+                setTimeout(function() { window.location.reload(); }, 150);
+            } else {
+                knEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
+                btn.disabled = false;
+            }
+        }, 'json').fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+    }
+
+    // ---- View / edit / delete overlay ----
+    var knCiCurrent = null;
+
+    window.knShowCalendarItemOverlay = function(id) {
+        $.getJSON(CI_GET_URL + id, function(r) {
+            if (!r || r.status !== 0) { alert((r && r.error) || 'Calendar item not found.'); return; }
+            knCiCurrent = r;
+            document.getElementById('kn-ci-view-name').textContent = r.Name || '';
+            document.getElementById('kn-ci-view-when').textContent = knCiFormatWhen(r);
+            document.getElementById('kn-ci-view-scope').textContent = r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item';
+            var descEl = document.getElementById('kn-ci-view-desc');
+            descEl.textContent = r.Description || '';
+            descEl.style.display = r.Description ? '' : 'none';
+            document.getElementById('kn-ci-edit-btn').style.display   = r.CanEdit ? '' : 'none';
+            document.getElementById('kn-ci-delete-btn').style.display = r.CanEdit ? '' : 'none';
+            document.getElementById('kn-ci-overlay').classList.add('kn-ci-open');
+            document.body.style.overflow = 'hidden';
+        }).fail(function() { alert('Failed to load calendar item.'); });
+    };
+
+    window.knCloseCalendarItemOverlay = function() {
+        document.getElementById('kn-ci-overlay').classList.remove('kn-ci-open');
+        document.body.style.overflow = '';
+    };
+
+    function knCiFormatWhen(r) {
+        var s = r.EventStart || '';
+        var e = r.EventEnd   || s;
+        var sd = s.substring(0, 10), ed = e.substring(0, 10);
+        var sdObj = new Date(sd + 'T00:00:00');
+        var edObj = new Date(ed + 'T00:00:00');
+        var fmt = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
+        if (r.AllDay == 1 || r.AllDay === true) {
+            return (sd === ed)
+                ? 'All day · ' + sdObj.toLocaleDateString(undefined, fmt)
+                : 'All day · ' + sdObj.toLocaleDateString(undefined, fmt) + ' → ' + edObj.toLocaleDateString(undefined, fmt);
+        }
+        var tfmt = { hour: 'numeric', minute: '2-digit' };
+        var startStr = new Date(s.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        var endStr   = new Date(e.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        return (sd === ed)
+            ? startStr + ' → ' + new Date(e.replace(' ', 'T')).toLocaleTimeString(undefined, tfmt)
+            : startStr + ' → ' + endStr;
+    }
+
+    window.knEditCalendarItem = function() {
+        if (!knCiCurrent) return;
+        knCloseCalendarItemOverlay();
+        var modal = document.getElementById('kn-event-modal');
+        modal.dataset.presetDate = '';
+        knCiEditingId = knCiCurrent.CalendarItemId;
+        document.querySelectorAll('input[name="kn-emod-type"]').forEach(function(r) {
+            r.checked = (r.value === 'calendar-item');
+            r.disabled = true; // cannot switch type when editing an existing item
+        });
+        document.getElementById('kn-event-name').value = knCiCurrent.Name || '';
+        document.getElementById('kn-ci-description').value = knCiCurrent.Description || '';
+        document.getElementById('kn-ci-allday').checked = (knCiCurrent.AllDay == 1);
+        document.getElementById('kn-ci-park-id').value = knCiCurrent.ParkId || '';
+        document.getElementById('kn-ci-park-name').value = ''; // user can re-select if they want to change
+        document.getElementById('kn-emod-feedback').style.display = 'none';
+        document.getElementById('kn-emod-date-row').style.display = 'none';
+        var sVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventStart.substring(0, 10) : knCiCurrent.EventStart.replace(' ', 'T').substring(0, 16).replace('T', ' ');
+        var eVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventEnd.substring(0, 10)   : knCiCurrent.EventEnd.replace(' ', 'T').substring(0, 16).replace('T', ' ');
+        knCiRebuildPickers(sVal, eVal, (knCiCurrent.AllDay == 1));
+        knApplyModalType();
+        modal.classList.add('kn-emod-open');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.knDeleteCalendarItem = function() {
+        if (!knCiCurrent) return;
+        if (!confirm('Delete this calendar item? This cannot be undone.')) return;
+        $.post(CI_DELETE_URL, { CalendarItemId: knCiCurrent.CalendarItemId }, function(r) {
+            if (r && r.status === 0) {
+                knCloseCalendarItemOverlay();
+                window.location.reload();
+            } else {
+                alert((r && r.error) || 'Failed to delete calendar item.');
+            }
+        }, 'json').fail(function() { alert('Request failed.'); });
+    };
+
     $(document).ready(function() {
-        $('#kn-event-name').on('input', function() {
-            document.getElementById('kn-emod-go-btn').disabled = !this.value.trim();
-        }).on('keydown', function(e) {
+        $('#kn-event-name, #kn-ci-start, #kn-ci-end').on('input change', function() { knUpdateGoBtn(); });
+        $('#kn-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('kn-emod-go-btn').disabled) knCreateEvent();
         });
-
-        $('#kn-event-park-name').autocomplete({
-            source: function(req, res) {
-                $.getJSON(KnConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Park', name: req.term, kingdom_id: KnConfig.kingdomId, limit: 8 },
-                    function(data) { res($.map(data || [], function(v) { return { label: v.Name, value: v.ParkId }; })); }
-                );
-            },
-            focus:  function(e, ui) { $('#kn-event-park-name').val(ui.item.label); return false; },
-            select: function(e, ui) { $('#kn-event-park-name').val(ui.item.label); $('#kn-event-park-id').val(ui.item.value); return false; },
-            change: function(e, ui) { if (!ui.item) $('#kn-event-park-id').val(''); return false; },
-            delay: 250, minLength: 2
+        $(document).on('change', 'input[name="kn-emod-type"]', knApplyModalType);
+        $('#kn-ci-allday').on('change', function() {
+            var allDay  = this.checked;
+            var curS    = document.getElementById('kn-ci-start').value;
+            var curE    = document.getElementById('kn-ci-end').value;
+            // Reset to just the date portion when toggling to all-day.
+            knCiRebuildPickers(curS ? curS.substring(0, 10) : '', curE ? curE.substring(0, 10) : '', allDay);
+            knUpdateGoBtn();
         });
+
+        function knWireParkAutocomplete(inputSel, hiddenSel) {
+            $(inputSel).autocomplete({
+                source: function(req, res) {
+                    $.getJSON(KnConfig.httpService + 'Search/SearchService.php',
+                        { Action: 'Search/Park', name: req.term, kingdom_id: KnConfig.kingdomId, limit: 8 },
+                        function(data) { res($.map(data || [], function(v) { return { label: v.Name, value: v.ParkId }; })); }
+                    );
+                },
+                focus:  function(e, ui) { $(inputSel).val(ui.item.label); return false; },
+                select: function(e, ui) { $(inputSel).val(ui.item.label); $(hiddenSel).val(ui.item.value); return false; },
+                change: function(e, ui) { if (!ui.item) $(hiddenSel).val(''); return false; },
+                delay: 250, minLength: 2
+            });
+        }
+        knWireParkAutocomplete('#kn-event-park-name', '#kn-event-park-id');
+        knWireParkAutocomplete('#kn-ci-park-name',    '#kn-ci-park-id');
 
         var knEvtOverlay = document.getElementById('kn-event-modal');
         if (knEvtOverlay) {
             knEvtOverlay.addEventListener('click', function(e) { if (e.target === this) knCloseEventModal(); });
         }
+        var knCiOverlayEl = document.getElementById('kn-ci-overlay');
+        if (knCiOverlayEl) {
+            knCiOverlayEl.addEventListener('click', function(e) { if (e.target === this) knCloseCalendarItemOverlay(); });
+        }
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && document.getElementById('kn-event-modal') &&
-                document.getElementById('kn-event-modal').classList.contains('kn-emod-open')) knCloseEventModal();
+            if (e.key !== 'Escape') return;
+            var m = document.getElementById('kn-event-modal');
+            if (m && m.classList.contains('kn-emod-open')) { knCloseEventModal(); return; }
+            var o = document.getElementById('kn-ci-overlay');
+            if (o && o.classList.contains('kn-ci-open')) { knCloseCalendarItemOverlay(); }
         });
     });
 })();
@@ -5796,7 +6011,7 @@ var pkCalEvents;
 if (typeof PkConfig !== 'undefined') { pkCalEvents = PkConfig.calEvents; }
 var pkCalParkDays = [];
 if (typeof PkConfig !== 'undefined' && PkConfig.calParkDays) { pkCalParkDays = PkConfig.calParkDays; }
-var pkFilters   = { 'event': true, 'park-day': false };
+var pkFilters   = { 'event': true, 'calendar-item': true, 'park-day': false };
 var pkCalLoaded = false;
 var pkCalendar  = null;
 
@@ -5850,14 +6065,17 @@ function pkRenderCalendar() {
         height: 'auto',
         events: function(fetchInfo, successCallback) {
             var combined = [];
-            if (pkFilters['event']) {
-                pkCalEvents.forEach(function(e) {
-                    var ev = { title: e.title, start: e.start, color: e.color };
-                    if (e.url) ev.url = e.url;
-                    if (e.end) ev.end = e.end;
-                    combined.push(ev);
-                });
-            }
+            pkCalEvents.forEach(function(e) {
+                var isCi = (e.type === 'calendar-item');
+                if (isCi  && !pkFilters['calendar-item']) return;
+                if (!isCi && !pkFilters['event'])         return;
+                var ev = { title: e.title, start: e.start, color: e.color };
+                if (e.url)    ev.url    = e.url;
+                if (e.end)    ev.end    = e.end;
+                if (e.allDay !== undefined) ev.allDay = e.allDay;
+                if (e.extendedProps) ev.extendedProps = e.extendedProps;
+                combined.push(ev);
+            });
             if (pkFilters['park-day']) {
                 pkCalParkDays.forEach(function(e) {
                     combined.push({ title: e.title, start: e.start, color: e.color });
@@ -5867,6 +6085,8 @@ function pkRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
+            var ciId = info.event.extendedProps && info.event.extendedProps.calendarItemId;
+            if (ciId) { pkShowCalendarItemOverlay(ciId); return; }
             if (info.event.url) window.location.href = info.event.url;
         },
         dayCellDidMount: function(info) {
@@ -6982,20 +7202,84 @@ $(document).ready(function() {
 (function() {
     if (typeof PkConfig === 'undefined') return;
 
-    var CREATE_URL  = PkConfig.uir + 'EventAjax/create';
+    var CREATE_URL    = PkConfig.uir + 'EventAjax/create';
+    var CI_CREATE_URL = PkConfig.uir + 'CalendarItemAjax/create';
+    var CI_UPDATE_URL = PkConfig.uir + 'CalendarItemAjax/update';
+    var CI_DELETE_URL = PkConfig.uir + 'CalendarItemAjax/delete';
+    var CI_GET_URL    = PkConfig.uir + 'CalendarItemAjax/get/';
+
+    var pkCiEditingId = 0;
+    var pkCiFlatStart = null, pkCiFlatEnd = null;
+    var pkCiCurrent   = null;
 
     function pkEvFeedback(msg) {
         var el = document.getElementById('pk-emod-feedback');
         el.textContent = msg; el.style.display = '';
     }
 
+    function pkCiRebuildPickers(startVal, endVal, allDay) {
+        if (pkCiFlatStart) { pkCiFlatStart.destroy(); pkCiFlatStart = null; }
+        if (pkCiFlatEnd)   { pkCiFlatEnd.destroy();   pkCiFlatEnd   = null; }
+        var fmt  = allDay ? 'Y-m-d' : 'Y-m-d H:i';
+        var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        pkCiFlatStart = flatpickr('#pk-ci-start', Object.assign({}, opts, {
+            onChange: function(sel) {
+                if (!sel[0] || !pkCiFlatEnd) return;
+                if (!pkCiFlatEnd.selectedDates[0] || pkCiFlatEnd.selectedDates[0] < sel[0]) {
+                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
+                    pkCiFlatEnd.setDate(end, true);
+                }
+            }
+        }));
+        pkCiFlatEnd = flatpickr('#pk-ci-end', opts);
+        if (startVal) pkCiFlatStart.setDate(startVal, true);
+        if (endVal)   pkCiFlatEnd.setDate(endVal, true);
+    }
+
+    function pkCiResetForm(presetDate) {
+        document.getElementById('pk-ci-description').value = '';
+        document.getElementById('pk-ci-allday').checked = false;
+        pkCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    function pkGetModalType() {
+        var r = document.querySelector('input[name="pk-emod-type"]:checked');
+        return r ? r.value : 'event';
+    }
+
+    function pkApplyModalType() {
+        var t = pkGetModalType();
+        var isCi = (t === 'calendar-item');
+        document.querySelectorAll('.pk-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
+        document.querySelectorAll('.pk-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        document.getElementById('pk-emod-go-label').textContent = isCi ? (pkCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
+        var title = document.getElementById('pk-emod-title');
+        title.innerHTML = isCi
+            ? '<i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>' + (pkCiEditingId > 0 ? 'Edit Calendar Item' : 'New Calendar Item')
+            : '<i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event';
+        pkUpdateGoBtn();
+    }
+
+    function pkUpdateGoBtn() {
+        var t = pkGetModalType();
+        var ok;
+        if (t === 'calendar-item') {
+            ok = !!document.getElementById('pk-event-name').value.trim()
+              && !!document.getElementById('pk-ci-start').value
+              && !!document.getElementById('pk-ci-end').value;
+        } else {
+            ok = !!document.getElementById('pk-event-name').value.trim();
+        }
+        document.getElementById('pk-emod-go-btn').disabled = !ok;
+    }
+
     window.pkOpenEventModal = function(dateStr) {
         var modal = document.getElementById('pk-event-modal');
         modal.dataset.presetDate = dateStr || '';
+        pkCiEditingId = 0;
+        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) { r.disabled = false; r.checked = (r.value === 'event'); });
         document.getElementById('pk-event-name').value = '';
         document.getElementById('pk-emod-feedback').style.display = 'none';
-        document.getElementById('pk-emod-go-btn').disabled = true;
-        // Show date hint when opened from a calendar cell
         var dateRow  = document.getElementById('pk-emod-date-row');
         var dateText = document.getElementById('pk-emod-date-text');
         if (dateRow && dateText) {
@@ -7007,6 +7291,8 @@ $(document).ready(function() {
                 dateRow.style.display = 'none';
             }
         }
+        pkCiResetForm(dateStr || '');
+        pkApplyModalType();
         modal.classList.add('pk-emod-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { document.getElementById('pk-event-name').focus(); }, 50);
@@ -7018,6 +7304,7 @@ $(document).ready(function() {
     };
 
     window.pkCreateEvent = function() {
+        if (pkGetModalType() === 'calendar-item') return pkSubmitCalendarItem();
         var name = document.getElementById('pk-event-name').value.trim();
         if (!name) return;
         var btn = document.getElementById('pk-emod-go-btn');
@@ -7037,20 +7324,144 @@ $(document).ready(function() {
         ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
     };
 
+    function pkSubmitCalendarItem() {
+        var name   = document.getElementById('pk-event-name').value.trim();
+        var allDay = document.getElementById('pk-ci-allday').checked ? 1 : 0;
+        var start  = document.getElementById('pk-ci-start').value;
+        var end    = document.getElementById('pk-ci-end').value;
+        var desc   = document.getElementById('pk-ci-description').value;
+        if (!name || !start || !end) return;
+
+        var btn = document.getElementById('pk-emod-go-btn');
+        btn.disabled = true;
+
+        var payload = {
+            Name: name, Description: desc, AllDay: allDay,
+            EventStart: start, EventEnd: end,
+            KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId
+        };
+        var url = CI_CREATE_URL;
+        if (pkCiEditingId > 0) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
+
+        $.post(url, payload, function(r) {
+            if (r && r.status === 0) {
+                pkCloseEventModal();
+                setTimeout(function() { window.location.reload(); }, 150);
+            } else {
+                pkEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
+                btn.disabled = false;
+            }
+        }, 'json').fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+    }
+
+    // ---- View / edit / delete overlay ----
+    window.pkShowCalendarItemOverlay = function(id) {
+        $.getJSON(CI_GET_URL + id, function(r) {
+            if (!r || r.status !== 0) { alert((r && r.error) || 'Calendar item not found.'); return; }
+            pkCiCurrent = r;
+            document.getElementById('pk-ci-view-name').textContent = r.Name || '';
+            document.getElementById('pk-ci-view-when').textContent = pkCiFormatWhen(r);
+            document.getElementById('pk-ci-view-scope').textContent = r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item';
+            var descEl = document.getElementById('pk-ci-view-desc');
+            descEl.textContent = r.Description || '';
+            descEl.style.display = r.Description ? '' : 'none';
+            document.getElementById('pk-ci-edit-btn').style.display   = r.CanEdit ? '' : 'none';
+            document.getElementById('pk-ci-delete-btn').style.display = r.CanEdit ? '' : 'none';
+            document.getElementById('pk-ci-overlay').classList.add('pk-ci-open');
+            document.body.style.overflow = 'hidden';
+        }).fail(function() { alert('Failed to load calendar item.'); });
+    };
+
+    window.pkCloseCalendarItemOverlay = function() {
+        document.getElementById('pk-ci-overlay').classList.remove('pk-ci-open');
+        document.body.style.overflow = '';
+    };
+
+    function pkCiFormatWhen(r) {
+        var s = r.EventStart || '';
+        var e = r.EventEnd   || s;
+        var sd = s.substring(0, 10), ed = e.substring(0, 10);
+        var sdObj = new Date(sd + 'T00:00:00');
+        var edObj = new Date(ed + 'T00:00:00');
+        var fmt = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
+        if (r.AllDay == 1 || r.AllDay === true) {
+            return (sd === ed)
+                ? 'All day · ' + sdObj.toLocaleDateString(undefined, fmt)
+                : 'All day · ' + sdObj.toLocaleDateString(undefined, fmt) + ' → ' + edObj.toLocaleDateString(undefined, fmt);
+        }
+        var tfmt = { hour: 'numeric', minute: '2-digit' };
+        var startStr = new Date(s.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        var endStr   = new Date(e.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        return (sd === ed)
+            ? startStr + ' → ' + new Date(e.replace(' ', 'T')).toLocaleTimeString(undefined, tfmt)
+            : startStr + ' → ' + endStr;
+    }
+
+    window.pkEditCalendarItem = function() {
+        if (!pkCiCurrent) return;
+        pkCloseCalendarItemOverlay();
+        var modal = document.getElementById('pk-event-modal');
+        if (!modal) { alert('You do not have permission to edit this item.'); return; }
+        modal.dataset.presetDate = '';
+        pkCiEditingId = pkCiCurrent.CalendarItemId;
+        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) {
+            r.checked = (r.value === 'calendar-item');
+            r.disabled = true;
+        });
+        document.getElementById('pk-event-name').value = pkCiCurrent.Name || '';
+        document.getElementById('pk-ci-description').value = pkCiCurrent.Description || '';
+        document.getElementById('pk-ci-allday').checked = (pkCiCurrent.AllDay == 1);
+        document.getElementById('pk-emod-feedback').style.display = 'none';
+        document.getElementById('pk-emod-date-row').style.display = 'none';
+        var sVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventStart.substring(0, 10) : pkCiCurrent.EventStart.substring(0, 16).replace('T', ' ');
+        var eVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventEnd.substring(0, 10)   : pkCiCurrent.EventEnd.substring(0, 16).replace('T', ' ');
+        pkCiRebuildPickers(sVal, eVal, (pkCiCurrent.AllDay == 1));
+        pkApplyModalType();
+        modal.classList.add('pk-emod-open');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.pkDeleteCalendarItem = function() {
+        if (!pkCiCurrent) return;
+        if (!confirm('Delete this calendar item? This cannot be undone.')) return;
+        $.post(CI_DELETE_URL, { CalendarItemId: pkCiCurrent.CalendarItemId }, function(r) {
+            if (r && r.status === 0) {
+                pkCloseCalendarItemOverlay();
+                window.location.reload();
+            } else {
+                alert((r && r.error) || 'Failed to delete calendar item.');
+            }
+        }, 'json').fail(function() { alert('Request failed.'); });
+    };
+
     $(document).ready(function() {
-        $('#pk-event-name').on('input', function() {
-            document.getElementById('pk-emod-go-btn').disabled = !this.value.trim();
-        }).on('keydown', function(e) {
+        $('#pk-event-name, #pk-ci-start, #pk-ci-end').on('input change', function() { pkUpdateGoBtn(); });
+        $('#pk-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('pk-emod-go-btn').disabled) pkCreateEvent();
+        });
+        $(document).on('change', 'input[name="pk-emod-type"]', pkApplyModalType);
+        $('#pk-ci-allday').on('change', function() {
+            var allDay = this.checked;
+            var curS = document.getElementById('pk-ci-start').value;
+            var curE = document.getElementById('pk-ci-end').value;
+            pkCiRebuildPickers(curS ? curS.substring(0, 10) : '', curE ? curE.substring(0, 10) : '', allDay);
+            pkUpdateGoBtn();
         });
 
         var pkEvtOverlay = document.getElementById('pk-event-modal');
         if (pkEvtOverlay) {
             pkEvtOverlay.addEventListener('click', function(e) { if (e.target === this) pkCloseEventModal(); });
         }
+        var pkCiOverlayEl = document.getElementById('pk-ci-overlay');
+        if (pkCiOverlayEl) {
+            pkCiOverlayEl.addEventListener('click', function(e) { if (e.target === this) pkCloseCalendarItemOverlay(); });
+        }
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && document.getElementById('pk-event-modal') &&
-                document.getElementById('pk-event-modal').classList.contains('pk-emod-open')) pkCloseEventModal();
+            if (e.key !== 'Escape') return;
+            var m = document.getElementById('pk-event-modal');
+            if (m && m.classList.contains('pk-emod-open')) { pkCloseEventModal(); return; }
+            var o = document.getElementById('pk-ci-overlay');
+            if (o && o.classList.contains('pk-ci-open')) { pkCloseCalendarItemOverlay(); }
         });
     });
 })();

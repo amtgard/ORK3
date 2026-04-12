@@ -2183,17 +2183,21 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 .kn-filter-toggle.kn-filter-on { color:#fff; }
 .kn-filter-toggle[data-filter="kingdom-event"].kn-filter-on { background:var(--kn-accent-mid, #276749); border-color:var(--kn-accent-mid, #276749); }
 .kn-filter-toggle[data-filter="park-event"].kn-filter-on    { background:#6b46c1; border-color:#6b46c1; }
+.kn-filter-toggle[data-filter="calendar-item"].kn-filter-on { background:#64748b; border-color:#64748b; }
 .kn-filter-toggle[data-filter="park-day"].kn-filter-on      { background:#b7791f; border-color:#b7791f; }
 .kn-filter-toggle[data-filter="kingdom-event"]:hover:not(.kn-filter-on) { border-color:var(--kn-accent-mid, #276749); color:var(--kn-accent-mid, #276749); }
 .kn-filter-toggle[data-filter="park-event"]:hover:not(.kn-filter-on)    { border-color:#6b46c1; color:#6b46c1; }
+.kn-filter-toggle[data-filter="calendar-item"]:hover:not(.kn-filter-on) { border-color:#64748b; color:#64748b; }
 .kn-filter-toggle[data-filter="park-day"]:hover:not(.kn-filter-on)      { border-color:#b7791f; color:#b7791f; }
 
 .pk-filter-toggle { padding:3px 10px; border:1px solid #cbd5e0; background:#fff; border-radius:20px; font-size:11px; font-weight:600; color:#718096; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; }
 .pk-filter-toggle.pk-filter-on { color:#fff; }
-.pk-filter-toggle[data-filter="event"].pk-filter-on    { background:var(--pk-accent, #0891b2); border-color:var(--pk-accent, #0891b2); }
-.pk-filter-toggle[data-filter="park-day"].pk-filter-on { background:#b7791f; border-color:#b7791f; }
-.pk-filter-toggle[data-filter="event"]:hover:not(.pk-filter-on)    { border-color:var(--pk-accent, #0891b2); color:var(--pk-accent, #0891b2); }
-.pk-filter-toggle[data-filter="park-day"]:hover:not(.pk-filter-on) { border-color:#b7791f; color:#b7791f; }
+.pk-filter-toggle[data-filter="event"].pk-filter-on         { background:var(--pk-accent, #0891b2); border-color:var(--pk-accent, #0891b2); }
+.pk-filter-toggle[data-filter="calendar-item"].pk-filter-on { background:#64748b; border-color:#64748b; }
+.pk-filter-toggle[data-filter="park-day"].pk-filter-on      { background:#b7791f; border-color:#b7791f; }
+.pk-filter-toggle[data-filter="event"]:hover:not(.pk-filter-on)         { border-color:var(--pk-accent, #0891b2); color:var(--pk-accent, #0891b2); }
+.pk-filter-toggle[data-filter="calendar-item"]:hover:not(.pk-filter-on) { border-color:#64748b; color:#64748b; }
+.pk-filter-toggle[data-filter="park-day"]:hover:not(.pk-filter-on)      { border-color:#b7791f; color:#b7791f; }
 
 /* Park tile grid */
 .kn-park-tiles {
@@ -2933,6 +2937,132 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 .kn-emod-input { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 5px; font-size: 14px; color: #2d3748; background: #fff; box-sizing: border-box; }
 .kn-emod-input:focus { outline: none; border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(66,153,225,0.15); }
 .kn-emod-feedback { margin-top: 10px; padding: 8px 12px; border-radius: 5px; font-size: 13px; background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; }
+
+/* ---- Modal type selector (Event vs Calendar Item) ---- */
+.kn-emod-typesel, .pk-emod-typesel {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 16px;
+	padding: 4px;
+	background: #f7fafc;
+	border-radius: 8px;
+}
+.kn-emod-typeopt, .pk-emod-typeopt {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 9px 10px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 600;
+	color: #718096;
+	transition: background 0.15s, color 0.15s;
+}
+.kn-emod-typeopt:hover, .pk-emod-typeopt:hover { color: #4a5568; }
+.kn-emod-typeopt input, .pk-emod-typeopt input { display: none; }
+.kn-emod-typeopt:has(input:checked),
+.pk-emod-typeopt:has(input:checked) {
+	background: #fff;
+	color: #276749;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.kn-emod-typeopt:has(input:disabled),
+.pk-emod-typeopt:has(input:disabled) { cursor: default; opacity: 0.75; }
+.kn-emod-check-label, .pk-emod-check-label {
+	display: inline-flex; align-items: center; gap: 8px;
+	font-size: 13px; font-weight: 600; color: #4a5568; cursor: pointer;
+}
+.kn-emod-check-label input, .pk-emod-check-label input { width: 15px; height: 15px; cursor: pointer; }
+.kn-emod-ci-note, .pk-emod-ci-note {
+	margin-top: 14px;
+	padding: 10px 12px;
+	border-radius: 6px;
+	background: #fffbeb;
+	border-left: 3px solid #f6ad55;
+	font-size: 12px;
+	line-height: 1.5;
+	color: #744210;
+}
+
+/* ---- Calendar Item list-row pill ---- */
+.kn-ci-pill, .pk-ci-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: #edf2f7;
+	color: #64748b;
+	border: 1px solid #e2e8f0;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 2px 7px;
+	border-radius: 10px;
+	margin-right: 6px;
+	vertical-align: middle;
+}
+
+/* ---- Calendar Item view overlay ---- */
+.kn-ci-overlay, .pk-ci-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.5);
+	z-index: 1100;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+.kn-ci-overlay.kn-ci-open, .pk-ci-overlay.pk-ci-open { display: flex; }
+.kn-ci-box, .pk-ci-box {
+	background: #fff;
+	border-radius: 10px;
+	width: 100%;
+	max-width: 460px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+	overflow: hidden;
+}
+.kn-ci-header, .pk-ci-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #f7fafc;
+}
+.kn-ci-header h3, .pk-ci-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
+.kn-ci-body, .pk-ci-body { padding: 20px; }
+.kn-ci-name, .pk-ci-name { font-size: 18px; font-weight: 700; color: #2d3748; margin-bottom: 10px; }
+.kn-ci-meta, .pk-ci-meta { font-size: 13px; color: #4a5568; margin-bottom: 8px; }
+.kn-ci-scope, .pk-ci-scope {
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: #718096;
+	background: #edf2f7;
+	padding: 3px 8px;
+	border-radius: 10px;
+	margin-bottom: 12px;
+}
+.kn-ci-description, .pk-ci-description {
+	font-size: 13px;
+	color: #4a5568;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	padding: 10px 12px;
+	background: #f7fafc;
+	border-radius: 6px;
+	border-left: 3px solid #cbd5e0;
+}
+.kn-ci-footer, .pk-ci-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
 
 /* ===========================
    Park Profile (pk-)
