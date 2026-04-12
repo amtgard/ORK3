@@ -233,6 +233,35 @@ $downtime_note  = 'The ORK and ORK APIs may not be available during this window.
 <?php endif; ?>
 <?php endif; ?>
 
+			<?php
+				// =====================================================
+				// A/B EXPERIMENT: Player profile redesign toggle (eyeball)
+				// Visible only on Player/profile/* routes. Toggles between
+				// the live design (A) and the experimental "hardcore" B
+				// variant via ?design=b. Remove this entire <?php block
+				// to retire the experiment.
+				// =====================================================
+				$__vbReq   = $_SERVER['REQUEST_URI'] ?? '';
+				$__vbIsPP  = (stripos($__vbReq, 'Route=Player/profile') !== false) || (stripos($__vbReq, '/Player/profile') !== false);
+				if ($__vbIsPP):
+					$__vbIsB    = (($_GET['design'] ?? '') === 'b');
+					$__vbToUrl  = preg_replace('/([?&])design=[a-z]/i', '$1design=' . ($__vbIsB ? 'a' : 'b'), $__vbReq);
+					if ($__vbToUrl === $__vbReq) {
+						$__vbToUrl .= (strpos($__vbReq, '?') === false ? '?' : '&') . 'design=' . ($__vbIsB ? 'a' : 'b');
+					}
+					$__vbTitle  = $__vbIsB ? 'Switch to standard profile design' : 'Try the experimental profile redesign';
+			?>
+			<a class='nav-icon-btn nav-vb-toggle<?= $__vbIsB ? ' nav-vb-on' : '' ?>' href='<?= htmlspecialchars($__vbToUrl) ?>' title='<?= $__vbTitle ?>'>
+				<i class='<?= $__vbIsB ? 'fas fa-eye' : 'far fa-eye' ?>'></i>
+			</a>
+			<style>
+				.nav-vb-toggle{position:relative}
+				.nav-vb-toggle.nav-vb-on{color:#fbbf24}
+				.nav-vb-toggle.nav-vb-on::after{content:"";position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:#fbbf24;box-shadow:0 0 0 2px #fff,0 0 8px #fbbf24}
+				.nav-vb-toggle:hover{transform:scale(1.05)}
+			</style>
+			<?php endif; ?>
+
 			<!-- Resources dropdown -->
 			<div class='nav-dropdown-wrap' id='nav-resources-wrap'>
 				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>

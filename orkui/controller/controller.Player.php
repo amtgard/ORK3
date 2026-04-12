@@ -264,7 +264,14 @@ class Controller_Player extends Controller {
 	}
 
 	public function profile( $id = null ) {
-		$this->template = '../revised-frontend/Playernew_index.tpl';
+		// A/B test toggle: ?design=b loads the experimental hardcore-redesign template.
+		// To remove the experiment: delete this if-block, delete Playernew_index_b.tpl,
+		// and remove the eyeball button block in default.theme.
+		if (($_GET['design'] ?? '') === 'b') {
+			$this->template = '../revised-frontend/Playernew_index_b.tpl';
+		} else {
+			$this->template = '../revised-frontend/Playernew_index.tpl';
+		}
 
 		$params    = explode('/', $id ?? '');
 		$id        = $params[0];
