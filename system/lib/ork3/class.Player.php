@@ -1779,6 +1779,26 @@ class Player extends Ork3 {
 		return $date ? date('Y-m-d', strtotime($date)) : null;
 	}
 
+	// Earliest valid attendance credit date at a specific park — used as a
+	// fallback for "Park Member Since" when the mundane record lacks one.
+	public function get_earliest_park_attendance_date($mundane_id, $park_id) {
+		if (!(int)$mundane_id || !(int)$park_id) {
+			return null;
+		}
+		$sql = "select min(date) as earliest_date from " . DB_PREFIX . "attendance
+		        where mundane_id = " . (int)$mundane_id . "
+		          and park_id = " . (int)$park_id . "
+		          and date is not null
+		          and date >= '1988-01-01'";
+		$r = $this->db->query($sql);
+		if ($r === false || $r->size() == 0) {
+			return null;
+		}
+		$r->next();
+		$date = $r->earliest_date;
+		return $date ? date('Y-m-d', strtotime($date)) : null;
+	}
+
 }
 
 ?>
