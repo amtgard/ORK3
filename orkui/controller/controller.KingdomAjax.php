@@ -755,7 +755,8 @@ class Controller_KingdomAjax extends Controller {
 		$q                = trim($_GET['q']               ?? '');
 		$scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude'
 		$park_id          = (int)($_GET['park_id']        ?? 0);
-		$include_inactive = !empty($_GET['include_inactive']);
+		$include_inactive  = !empty($_GET['include_inactive']);
+		$include_suspended = !empty($_GET['include_suspended']);
 		if (strlen($q) < 2) {
 			echo json_encode([]);
 			exit;
@@ -808,15 +809,16 @@ class Controller_KingdomAjax extends Controller {
 			FROM ork_mundane m
 			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
-			WHERE m.suspended = 0 AND LENGTH(m.persona) > 0
-			  " . ($include_inactive ? "" : "AND m.active = 1") . "
+			WHERE LENGTH(m.persona) > 0
+			  " . ($include_suspended ? "" : "AND m.suspended = 0") . "
+			  " . ($include_inactive  ? "" : "AND m.active = 1")    . "
 			  {$kingdom_clause}
 			  {$park_clause}
 			  AND (m.persona LIKE '%{$term}%'
 			    OR m.given_name LIKE '%{$term}%'
 			    OR m.surname LIKE '%{$term}%'
 			    OR m.username LIKE '%{$term}%')
-			ORDER BY m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona
+			ORDER BY m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona
 			LIMIT 15";
 
 		$DB->Clear();
