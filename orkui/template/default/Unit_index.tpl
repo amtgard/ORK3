@@ -1169,3 +1169,19 @@ document.getElementById('un-modal-add-manager').addEventListener('transitionend'
 });
 <?php endif; ?>
 </script>
+<style>
+/* DataTables pagination dark mode — end of page to guarantee last cascade position */
+html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_button,
+html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_button:hover {
+  background-color: #2d3748 !important; background-image: none !important;
+  border-color: #4a5568 !important; color: #cbd5e0 !important;
+}
+html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background-color: #2b6cb0 !important; background-image: none !important;
+  color: #fff !important; border-color: #2b6cb0 !important;
+}
+html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_button.disabled {
+  opacity: 0.4 !important;
+}
+</style>

@@ -387,70 +387,7 @@ html[data-theme="dark"] .pn-active-tab-label { background: var(--ork-card-bg); c
 html[data-theme="dark"] .pn-persona { color: #fff !important; background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
 
 /* ============================================================
-   @media prefers-color-scheme: dark (auto-detect fallback)
-   ============================================================ */
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-hero { background-color: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-number { color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-icon { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-stat-label { color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-card h4 { color: var(--ork-text); background: transparent; border: none; border-bottom: 1px solid var(--ork-border); padding: 0 0 8px 0; border-radius: 0; text-shadow: none; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-detail-label { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-detail-value { color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--ork-text); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mini-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mini-table td { color: var(--ork-text); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="text"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="date"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="number"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="url"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field input[type="password"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field select,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-tenure-years { color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-class-name { color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar-wrap { background: var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar { background: linear-gradient(90deg,#48bb78,#38a169) !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-bar-max { background: linear-gradient(90deg,#f6ad55,#c05621) !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-feed-label a { color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-feed-row { border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-warning { background: var(--ork-alert-warning-bg, #744210); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pna-alert-info { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); color: var(--ork-alert-info-text, #90cdf4); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-table td { color: var(--ork-text); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ladder-item { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mp-toggle { background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .btn-danger-confirm { background: #fc8181; color: #1a202c; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .required-indicator { color: #feb2b2; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item { color: var(--ork-text); border-bottom-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item:hover,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-ac-item.pn-ac-focused { background: var(--ork-bg-secondary); color: var(--ork-link-bright); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip.pn-selected { background: var(--ork-bg-tertiary); border-color: var(--ork-link); color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-page-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip:hover { background: var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-officer-chip span { color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-active-tab-label { background: var(--ork-card-bg); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-persona { color: #fff !important; background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
-}
-</style>
+   </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 

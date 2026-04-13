@@ -174,7 +174,7 @@
 		<!-- Officers -->
 		<?php if (count($officerList) > 0 || ($CanManageKingdom ?? false)): ?>
 		<div class="kn-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;background:transparent;border:none;padding:0;border-radius:0;">
+			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if ($CanManageKingdom ?? false): ?>
 				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" title="Edit officers">
@@ -207,7 +207,7 @@
 		?>
 		<?php if (!empty($_knDescription)): ?>
 		<div class="kn-card kn-description-card">
-			<h4 style="background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-info-circle"></i> About</h4>
+			<h4 class="kn-bare-heading"><i class="fas fa-info-circle"></i> About</h4>
 			<div class="kn-description-body"><?= preg_replace('/<img[^>]*>/i', '', (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($_knDescription)) ?></div>
 			<?php if (!empty($kingdom_info['Info']['KingdomInfo']['Url'] ?? '')): ?>
 			<a class="kn-description-url" href="<?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?>" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:4px;font-size:11px"></i><?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?></a>
@@ -217,7 +217,7 @@
 
 		<!-- Quick Links -->
 		<div class="kn-card">
-			<h4 style="background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-link"></i> Quick Links</h4>
+			<h4 class="kn-bare-heading"><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="kn-link-list">
 				<li>
 					<span class="kn-link-icon"><i class="fas fa-search"></i></span>
@@ -441,7 +441,7 @@
 			<!-- Events Tab -->
 			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
@@ -1774,15 +1774,7 @@ var KnConfig = {
 /* ===================================================================
    DARK MODE OVERRIDES — Kingdomnew profile
    Activated by: html[data-theme="dark"]
-   Auto-detected by: @media (prefers-color-scheme: dark) when no manual pref
    =================================================================== */
-
-/* ============================================================
-   html[data-theme="dark"] overrides
-   ============================================================ */
-/* Hero: the hero bg is dynamically driven by --kn-hue/--kn-sat + --ork-hero-lightness (72% in dark).
-   No override needed for .kn-hero itself — lightness var handles it. */
-html[data-theme="dark"] .kn-stat-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; }
 html[data-theme="dark"] .kn-stat-number { color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
 html[data-theme="dark"] .kn-stat-icon { color: var(--ork-text-muted); }
 html[data-theme="dark"] .kn-stat-label { color: var(--ork-text-secondary); }
@@ -1836,40 +1828,7 @@ html[data-theme="dark"] .kn-sidebar { background: var(--ork-bg-secondary); borde
 html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
 
 /* ============================================================
-   @media prefers-color-scheme: dark (auto-detect fallback)
-   ============================================================ */
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-number { color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-icon { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-stat-label { color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-tab-nav li.kn-tab-active { background: var(--ork-card-bg); color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-row-link:hover { background: var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-sub-pop { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-sub-url-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-sub-copy-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field input[type="text"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field input[type="date"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field select,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-mp-toggle { background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-mp-toggle-btn.kn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container .kn-link-list a { color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container .kn-reports-grid a { color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-map-sidebar-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
-}
-</style>
+   </style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">

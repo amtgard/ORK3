@@ -61,6 +61,29 @@
 .gp-kd-tile { background:#fff; border:1px solid var(--rp-border); border-radius:7px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; font-size:13px; text-decoration:none; color:var(--rp-text); transition:box-shadow .12s, border-color .12s; }
 .gp-kd-tile:hover { border-color:var(--rp-accent-mid); box-shadow:0 2px 8px rgba(56,161,105,.12); color:var(--rp-accent-dark); }
 .gp-kd-tile i { opacity:.4; font-size:12px; }
+
+/* =====================================================
+   DARK MODE
+   ===================================================== */
+html[data-theme="dark"] .ap-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .ap-card-header { background:var(--ork-bg-secondary); border-bottom-color:var(--ork-border); color:var(--ork-text-muted); }
+html[data-theme="dark"] .ap-field input { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
+html[data-theme="dark"] .ap-section { color:var(--ork-text-secondary); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .ap-explainer { background:rgba(56,161,105,0.1); border-color:rgba(56,161,105,0.3); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .ap-explainer-title { color:#9ae6b4; }
+html[data-theme="dark"] .ap-table th { background:var(--ork-bg-secondary); border-bottom-color:var(--ork-border); color:var(--ork-text-muted); text-shadow:none; }
+html[data-theme="dark"] .ap-table td { border-bottom-color:var(--ork-border); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .ap-table tr:hover td { background:var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ap-role-admin { background:rgba(197,48,48,0.15); color:#feb2b2; }
+html[data-theme="dark"] .ap-del { border-color:rgba(197,48,48,0.4); color:#fc8181; }
+html[data-theme="dark"] .ap-del:hover { background:rgba(197,48,48,0.15); }
+html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-color:#c53030; color:#fff; }
+html[data-theme="dark"] .ap-empty { color:var(--ork-text-muted); }
+html[data-theme="dark"] .kn-ac-results { background:var(--ork-card-bg); border-color:var(--ork-border); box-shadow:0 4px 12px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .kn-ac-item { color:var(--ork-text); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .kn-ac-item:hover, html[data-theme="dark"] .kn-ac-item.kn-ac-focused { background:var(--ork-bg-tertiary); color:var(--ork-link-bright); }
+html[data-theme="dark"] .gp-kd-tile { background:var(--ork-card-bg); border-color:var(--ork-border); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2px 8px rgba(72,187,120,0.15); color:var(--ork-text); }
 </style>
 
 <div class="rp-root">

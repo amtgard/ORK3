@@ -116,20 +116,6 @@ html[data-theme="dark"] .ap-del { border-color:rgba(197,48,48,0.4); color:#fc818
 html[data-theme="dark"] .ap-del:hover { background:rgba(197,48,48,0.15); }
 html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-color:#c53030; color:#fff; }
 
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-ac-results { background:var(--ork-card-bg); border-color:var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-ac-item { color:var(--ork-text); border-bottom-color:var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-ac-item:hover,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-ac-item:focus,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .kn-ac-item.kn-ac-focused { background:var(--ork-bg-tertiary); color:var(--ork-link-bright); outline:none; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ap-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ap-field input,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ap-field select { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ap-table td { color:var(--ork-text-secondary); border-bottom-color:var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ap-table tr:hover td { background:var(--ork-bg-tertiary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ap-role-block { background:var(--ork-bg-secondary); border-color:var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ap-explainer { background:rgba(56,161,105,0.1); border-color:rgba(56,161,105,0.3); color:var(--ork-text-secondary); }
-}
 </style>
 
 <div class="rp-root">

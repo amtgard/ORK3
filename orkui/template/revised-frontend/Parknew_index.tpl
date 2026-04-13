@@ -296,7 +296,7 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if (!empty($CanAdminPark)): ?>
 				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" title="Edit officers">
@@ -341,7 +341,7 @@
 
 		<!-- Quick Links -->
 		<div class="pk-card">
-			<h4><i class="fas fa-link"></i> Quick Links</h4>
+			<h4 class="kn-bare-heading"><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="pk-link-list">
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-search"></i></span>
@@ -581,7 +581,7 @@
 			<!-- Events Tab -->
 			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
@@ -1068,7 +1068,7 @@
 					<span class="kn-rec-filter-info">
 						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 						<div class="kn-rec-filter-popover">
-							<h4>About These Filters</h4>
+							<h4 class="kn-bare-heading">About These Filters</h4>
 							<dl>
 								<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
 								<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
@@ -1469,7 +1469,7 @@ var PkConfig = {
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
 		<div class="pk-emod-header">
-			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
+			<h3 class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
 		</div>
 		<div class="pk-emod-body">
@@ -1800,14 +1800,7 @@ var PkConfig = {
 /* ===================================================================
    DARK MODE OVERRIDES — Parknew profile
    Activated by: html[data-theme="dark"]
-   Auto-detected by: @media (prefers-color-scheme: dark) when no manual pref
    =================================================================== */
-
-/* ============================================================
-   html[data-theme="dark"] overrides
-   ============================================================ */
-/* Hero: bg driven by --pk-hue/--pk-sat + --ork-hero-lightness (72% in dark). No override needed. */
-html[data-theme="dark"] .pk-stat-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; }
 html[data-theme="dark"] .pk-stat-number { color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
 html[data-theme="dark"] .pk-stat-icon { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-stat-label { color: var(--ork-text-secondary); }
@@ -1862,37 +1855,7 @@ html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
 html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
 
 /* ============================================================
-   @media prefers-color-scheme: dark (auto-detect fallback)
-   ============================================================ */
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-number { color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-icon { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-stat-label { color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-tab-nav li.pk-tab-active { background: var(--ork-card-bg); color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-day-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field input[type="text"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field input[type="date"],
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field select,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-mp-toggle { background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pk-mp-toggle-btn.pk-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-toolbar { background: var(--ork-bg-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-col-header-cell { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-daygrid-day { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .fc-day-today { background: var(--ork-bg-tertiary) !important; }
-}
-</style>
+   </style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
