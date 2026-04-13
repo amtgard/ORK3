@@ -426,7 +426,7 @@
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Park Member Since</span>
-				<span class="pn-detail-value"><?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?></span>
+				<span class="pn-detail-value"><?= (!empty($Player['ParkMemberSince']) && $Player['ParkMemberSince'] !== '0000-00-00') ? htmlspecialchars($Player['ParkMemberSince']) : 'N/A' ?></span>
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Player Since</span>

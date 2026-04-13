@@ -201,6 +201,18 @@ class Controller_Player extends Controller {
 		$this->data['Player'] = $this->Player->fetch_player($id);
 		$this->data['Player']['LastSignInDate']   = $this->Player->get_latest_attendance_date($id);
 		$this->data['Player']['PlayerSinceDate']  = $this->Player->get_earliest_attendance_date($id);
+		// Fallback Park Member Since to earliest attendance at the member park
+		// when the mundane record has no stored date (legacy imports, older accounts).
+		$_pms = $this->data['Player']['ParkMemberSince'] ?? null;
+		if (empty($_pms) || $_pms === '0000-00-00') {
+			$_memberParkId = (int)($this->data['Player']['ParkId'] ?? 0);
+			if ($_memberParkId > 0) {
+				$_fallback = $this->Player->get_earliest_park_attendance_date($id, $_memberParkId);
+				if (!empty($_fallback)) {
+					$this->data['Player']['ParkMemberSince'] = $_fallback;
+				}
+			}
+		}
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details'] = $this->Player->fetch_player_details($id);
