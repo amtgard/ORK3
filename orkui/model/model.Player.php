@@ -155,6 +155,10 @@ class Model_Player extends Model {
 	function get_latest_attendance_date($mundane_id) {
 		return Ork3::$Lib->player->get_latest_attendance_date($mundane_id);
 	}
+
+	function get_earliest_attendance_date($mundane_id) {
+		return Ork3::$Lib->player->get_earliest_attendance_date($mundane_id);
+	}
 }
 
 ?>

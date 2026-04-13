@@ -1763,6 +1763,22 @@ class Player extends Ork3 {
 		return $date ? date('Y-m-d', strtotime($date)) : null;
 	}
 
+	// Earliest valid attendance credit date — floors at 1988-01-01 (Amtgard's
+	// founding year) to filter out corrupt/zero dates from legacy imports.
+	public function get_earliest_attendance_date($mundane_id) {
+		$sql = "select min(date) as earliest_date from " . DB_PREFIX . "attendance
+		        where mundane_id = " . (int)$mundane_id . "
+		          and date is not null
+		          and date >= '1988-01-01'";
+		$r = $this->db->query($sql);
+		if ($r === false || $r->size() == 0) {
+			return null;
+		}
+		$r->next();
+		$date = $r->earliest_date;
+		return $date ? date('Y-m-d', strtotime($date)) : null;
+	}
+
 }
 
 ?>
