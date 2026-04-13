@@ -708,7 +708,14 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				'Meeting'           => ['icon' => 'fa-users',           'color' => '#276749', 'bg' => '#f0fff4'],
 				'Other'             => ['icon' => 'fa-star',            'color' => '#757575', 'bg' => '#fafafa'],
 			];
+			$evGridTodayKey = date('Ymd');
 			?>
+			<div class="ev-grid-view-toolbar">
+				<div class="ev-grid-view-toggle" aria-label="Schedule view">
+					<button type="button" class="ev-grid-view-btn" data-ev-view="list" aria-pressed="true"><i class="fas fa-list-ul"></i> List</button>
+					<button type="button" class="ev-grid-view-btn" data-ev-view="grid" aria-pressed="false"><i class="fas fa-th"></i> Grid</button>
+				</div>
+			</div>
 			<div id="ev-sched-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
 			<div id="ev-schedule-container">
 			<?php
@@ -777,6 +784,155 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 			</div>
 			<?php endforeach; ?>
 			</div><!-- /#ev-schedule-container -->
+
+			<div id="ev-schedule-grid-container" style="display:none">
+			<?php
+			// Build per-day grid data using same $scheduleByDay bucketing.
+			foreach ($scheduleByDay as $dayKey => $dayItems):
+				$dayTs = strtotime($dayItems[0]['StartTime']);
+
+				// Collect min/max and per-category buckets
+				$catBuckets = [];
+				$minStart = PHP_INT_MAX;
+				$maxEnd   = 0;
+				foreach ($dayItems as $it) {
+					$s = strtotime($it['StartTime']);
+					$e = strtotime($it['EndTime']);
+					if ($e < $s) $e = $s;
+					if ($s < $minStart) $minStart = $s;
+					if ($e > $maxEnd)   $maxEnd   = $e;
+					$cat = $it['Category'] ?? 'Other';
+					if (!isset($evSchedCategories[$cat])) $cat = 'Other';
+					$catBuckets[$cat][] = ['item' => $it, 'start' => $s, 'end' => $e];
+				}
+				if ($minStart === PHP_INT_MAX) continue;
+
+				// Snap to half-hour grid, pad ±30min
+				$gridStart = (int) floor($minStart / 1800) * 1800 - 1800;
+				$gridEnd   = (int) ceil ($maxEnd   / 1800) * 1800 + 1800;
+				$totalSlots = max(1, (int)(($gridEnd - $gridStart) / 1800));
+
+				// Only categories with items (preserve palette order)
+				$activeCats = [];
+				foreach ($evSchedCategories as $cName => $cCfg) {
+					if (!empty($catBuckets[$cName])) $activeCats[] = $cName;
+				}
+				if (empty($activeCats)) continue;
+
+				// Overlap lane assignment per category
+				$laneMap = []; // [scheduleId => ['lane'=>i,'lanes'=>n]]
+				foreach ($activeCats as $cName) {
+					$items = $catBuckets[$cName];
+					usort($items, function($a,$b){ return $a['start'] <=> $b['start']; });
+					$laneEnds = [];
+					$assigns = [];
+					foreach ($items as $entry) {
+						$placed = false;
+						foreach ($laneEnds as $li => $laneEnd) {
+							if ($laneEnd <= $entry['start']) {
+								$laneEnds[$li] = $entry['end'];
+								$assigns[] = ['entry' => $entry, 'lane' => $li];
+								$placed = true;
+								break;
+							}
+						}
+						if (!$placed) {
+							$laneEnds[] = $entry['end'];
+							$assigns[]  = ['entry' => $entry, 'lane' => count($laneEnds) - 1];
+						}
+					}
+					$total = max(1, count($laneEnds));
+					foreach ($assigns as $a) {
+						$sid = (int)$a['entry']['item']['EventScheduleId'];
+						$laneMap[$cName][$sid] = ['lane' => $a['lane'], 'lanes' => $total];
+					}
+					$catBuckets[$cName] = $items; // sorted
+				}
+
+				$nCols = count($activeCats);
+				$bodyHeight = $totalSlots * 28;
+			?>
+				<div class="ev-grid-day" data-date="<?= date('Y-m-d', $dayTs) ?>" data-day-key="<?= $dayKey ?>" data-grid-start="<?= $gridStart ?>" data-grid-end="<?= $gridEnd ?>">
+					<div class="ev-grid-day-header"><?= date('l, F j, Y', $dayTs) ?></div>
+					<div class="ev-grid-scroller">
+						<div class="ev-grid-inner" style="--ev-grid-cols: <?= $nCols ?>;">
+							<div class="ev-grid-header-row">
+								<div class="ev-grid-time-col-head"></div>
+								<?php foreach ($activeCats as $cName):
+									$cCfg = $evSchedCategories[$cName];
+									$cCount = count($catBuckets[$cName]);
+								?>
+								<div class="ev-grid-cat-head" style="background:<?= $cCfg['bg'] ?>;border-bottom-color:<?= $cCfg['color'] ?>">
+									<i class="fas fa-fw <?= $cCfg['icon'] ?>" style="color:<?= $cCfg['color'] ?>"></i>
+									<span class="ev-grid-cat-label" style="color:<?= $cCfg['color'] ?>"><?= htmlspecialchars($cName) ?></span>
+									<span class="ev-grid-cat-count"><?= (int)$cCount ?></span>
+								</div>
+								<?php endforeach; ?>
+							</div>
+							<div class="ev-grid-body-row" style="height:<?= $bodyHeight ?>px">
+								<div class="ev-grid-time-col">
+									<?php for ($s = 0; $s < $totalSlots; $s++):
+										$tt = $gridStart + $s * 1800;
+										$isHour = (date('i', $tt) === '00');
+									?>
+									<div class="ev-grid-time-slot<?= $isHour ? ' ev-grid-time-hour' : ' ev-grid-time-half' ?>" style="top:<?= $s * 28 ?>px">
+										<?php if ($isHour): ?><span class="ev-grid-time-lbl"><?= date('ga', $tt) ?></span><?php endif; ?>
+									</div>
+									<?php endfor; ?>
+									<div class="ev-grid-now-dot" style="display:none"></div>
+								</div>
+								<?php foreach ($activeCats as $cName):
+									$cCfg = $evSchedCategories[$cName];
+								?>
+								<div class="ev-grid-col" style="background:repeating-linear-gradient(to bottom, transparent 0, transparent 55px, #f4f6f8 55px, #f4f6f8 56px)">
+									<?php foreach ($catBuckets[$cName] as $entry):
+										$it  = $entry['item'];
+										$sid = (int)$it['EventScheduleId'];
+										$startM = ($entry['start'] - $gridStart) / 60;
+										$durM   = max(30, ($entry['end'] - $entry['start']) / 60);
+										$topPx  = ($startM / 30) * 28;
+										$hPx    = max(28, ($durM / 30) * 28);
+										$lane   = $laneMap[$cName][$sid]['lane']  ?? 0;
+										$lanes  = $laneMap[$cName][$sid]['lanes'] ?? 1;
+										$leftPct  = ($lanes > 1) ? ($lane / $lanes) * 100 : 0;
+										$widthPct = ($lanes > 1) ? (100 / $lanes) : 100;
+										$secCat    = $it['SecondaryCategory'] ?? '';
+										$secCfg    = $secCat ? ($evSchedCategories[$secCat] ?? null) : null;
+										$hasMenu   = ($cName === 'Feast and Food' || $secCat === 'Feast and Food') && !empty($it['Menu']);
+										$compact   = ($hPx < 42);
+										$blockLabel = $it['Title'] . ' at ' . date('g:ia', $entry['start']);
+									?>
+									<div class="ev-grid-block<?= $compact ? ' ev-grid-block-compact' : '' ?>"
+										data-schedule-id="<?= $sid ?>"
+										tabindex="0" role="button" aria-label="<?= htmlspecialchars($blockLabel, ENT_QUOTES) ?>"
+										style="top:<?= (int)round($topPx) ?>px;height:<?= (int)round($hPx) ?>px;left:calc(<?= $leftPct ?>% + 2px);width:calc(<?= $widthPct ?>% - 4px);background:<?= $cCfg['bg'] ?>;border-left-color:<?= $cCfg['color'] ?>;<?= $secCfg ? 'box-shadow: inset -4px 0 0 '. $secCfg['color'] .', 0 1px 2px rgba(0,0,0,0.08);' : '' ?>"
+										onclick="evGridBlockClick(<?= $sid ?>, event)">
+										<div class="ev-grid-block-title">
+											<?= htmlspecialchars($it['Title']) ?>
+											<?php if ($hasMenu): ?><i class="fas fa-scroll" style="color:#e65100;font-size:9px;margin-left:3px" title="Has menu"></i><?php endif; ?>
+										</div>
+										<div class="ev-grid-block-time"><?= date('g:ia', $entry['start']) ?> – <?= date('g:ia', $entry['end']) ?></div>
+										<?php if (!empty($it['Location'])): ?>
+										<div class="ev-grid-block-loc"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($it['Location']) ?></div>
+										<?php endif; ?>
+										<?php if (!empty($it['Leads'])): ?>
+										<div class="ev-grid-block-leads">
+											<?php foreach (array_slice($it['Leads'], 0, 3) as $_ld): ?>
+												<span class="ev-grid-lead-chip"><?= htmlspecialchars($_ld['Persona']) ?></span>
+											<?php endforeach; ?>
+										</div>
+										<?php endif; ?>
+									</div>
+									<?php endforeach; ?>
+								</div>
+								<?php endforeach; ?>
+								<div class="ev-grid-now-line" style="display:none"></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			<?php endforeach; ?>
+			</div><!-- /#ev-schedule-grid-container -->
 			<div class="ev-empty" id="ev-schedule-empty"<?= empty($scheduleList) ? '' : ' style="display:none"' ?>>
 				<i class="fas fa-clock" style="margin-right:6px"></i>No schedule items yet
 			</div>
@@ -1554,6 +1710,7 @@ var EvConfig = {
 	httpService:'<?= HTTP_SERVICE ?>',
 	canManage:         <?= !empty($canManage) ? 'true' : 'false' ?>,
 	canManageSchedule: <?= !empty($canManageSchedule) ? 'true' : 'false' ?>,
+	evGridTodayKey: '<?= $evGridTodayKey ?? date('Ymd') ?>',
 	canManageFeast:    <?= !empty($canManageFeast) ? 'true' : 'false' ?>,
 	canManageStaff:    <?= !empty($canManageStaff) ? 'true' : 'false' ?>,
 	canManageAttendance: <?= !empty($canManageAttendance) ? 'true' : 'false' ?>,
@@ -2415,3 +2572,307 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	};
 })();
 </script>
+<style>
+/* ==================================================
+   Schedule Grid View (ev-grid-*)
+   ================================================== */
+.ev-grid-view-toolbar { display:flex; justify-content:flex-end; margin-bottom:10px; }
+.ev-grid-view-toggle {
+	display:inline-flex; background:#fff; border:1px solid #e2e8f0;
+	border-radius:999px; padding:3px; gap:2px;
+	box-shadow:0 1px 2px rgba(0,0,0,0.04);
+}
+.ev-grid-view-btn {
+	background:transparent; border:none; padding:6px 14px;
+	font-size:12px; font-weight:600; color:#718096; cursor:pointer;
+	border-radius:999px; display:inline-flex; align-items:center; gap:6px;
+	transition: background .15s, color .15s;
+}
+.ev-grid-view-btn:hover { color:#2d3748; }
+.ev-grid-view-btn.ev-grid-view-active {
+	background:#2d3748; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.15);
+}
+.ev-grid-view-btn i { font-size:11px; }
+
+.ev-grid-day { margin-bottom:24px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+.ev-grid-day-header {
+	padding:10px 14px; font-size:13px; font-weight:700; color:#2d3748;
+	background:#f7fafc; border-bottom:1px solid #e2e8f0;
+	text-transform:uppercase; letter-spacing:.04em;
+}
+.ev-grid-scroller { overflow-x:auto; overflow-y:hidden; }
+.ev-grid-inner { display:block; min-width:100%; }
+
+.ev-grid-header-row {
+	display:grid;
+	grid-template-columns: 80px repeat(var(--ev-grid-cols, 1), minmax(160px, 1fr));
+	z-index:2;
+	background:#fff;
+}
+.ev-grid-time-col-head { border-bottom:2px solid #e2e8f0; background:#fff; }
+.ev-grid-cat-head {
+	padding:8px 10px; font-size:11px; font-weight:700;
+	text-transform:uppercase; letter-spacing:.05em;
+	border-bottom:2px solid #cbd5e0; border-left:1px solid #edf2f7;
+	display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden;
+}
+.ev-grid-cat-label { flex:1; overflow:hidden; text-overflow:ellipsis; }
+.ev-grid-cat-count {
+	background:rgba(255,255,255,0.7); border:1px solid rgba(0,0,0,0.08);
+	color:#4a5568; font-size:10px; padding:1px 6px; border-radius:10px;
+}
+.ev-grid-body-row {
+	display:grid;
+	grid-template-columns: 80px repeat(var(--ev-grid-cols, 1), minmax(160px, 1fr));
+	position:relative;
+}
+.ev-grid-time-col { position:relative; background:#fafbfc; border-right:1px solid #e2e8f0; }
+.ev-grid-time-slot {
+	position:absolute; left:0; right:0; height:28px;
+	border-top:1px solid transparent;
+	pointer-events:none;
+}
+.ev-grid-time-hour { border-top-color:#e2e8f0; }
+.ev-grid-time-half { border-top-color:#f1f3f5; }
+.ev-grid-time-lbl {
+	position:absolute; top:-7px; right:8px;
+	font-size:10px; font-weight:700; color:#718096;
+	font-variant:small-caps; letter-spacing:.03em;
+	background:#fafbfc; padding:0 4px;
+}
+.ev-grid-col { position:relative; border-left:1px solid #edf2f7; }
+.ev-grid-block {
+	position:absolute;
+	border:1px solid rgba(0,0,0,0.06); border-left:4px solid #999;
+	border-radius:4px; padding:5px 7px 4px; overflow:hidden;
+	box-shadow:0 1px 2px rgba(0,0,0,0.08);
+	cursor:pointer; transition: transform .1s, box-shadow .15s;
+	font-size:11px; line-height:1.3; color:#2d3748;
+}
+.ev-grid-block:hover { box-shadow:0 3px 8px rgba(0,0,0,0.16); transform:translateY(-1px); z-index:3; }
+.ev-grid-block-title {
+	font-weight:700; font-size:11px; color:#1a202c;
+	white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.ev-grid-block-time {
+	font-size:10px; color:#718096; margin-top:1px;
+	white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.ev-grid-block-loc {
+	font-size:10px; color:#4a5568; margin-top:2px;
+	white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.ev-grid-block-loc i { font-size:9px; margin-right:2px; color:#a0aec0; }
+.ev-grid-block-leads { margin-top:3px; display:flex; flex-wrap:wrap; gap:3px; }
+.ev-grid-lead-chip {
+	background:rgba(255,255,255,0.65); border:1px solid rgba(0,0,0,0.07);
+	color:#4a5568; font-size:9px; padding:1px 5px; border-radius:8px;
+	white-space:nowrap;
+}
+.ev-grid-block-compact .ev-grid-block-time,
+.ev-grid-block-compact .ev-grid-block-loc,
+.ev-grid-block-compact .ev-grid-block-leads { display:none; }
+.ev-grid-block-compact .ev-grid-block-title { font-size:10px; line-height:1.25; }
+.ev-grid-block:focus-visible { outline:2px solid #4299e1; outline-offset:1px; }
+.ev-grid-popover-flip:before { top:auto; bottom:-6px; border-bottom:none; border-top:6px solid #fff; }
+
+.ev-grid-now-line {
+	position:absolute; left:80px; right:0; height:2px;
+	background:#e53e3e; z-index:4; pointer-events:none;
+	box-shadow:0 0 4px rgba(229,62,62,0.5);
+}
+.ev-grid-now-dot {
+	position:absolute; width:10px; height:10px; border-radius:50%;
+	background:#e53e3e; left:66px; margin-top:-5px; z-index:5;
+	box-shadow:0 0 0 2px #fafbfc;
+}
+
+/* Popover for non-editors */
+.ev-grid-popover {
+	position:absolute; z-index:9500; background:#fff;
+	border:1px solid #e2e8f0; border-radius:8px;
+	box-shadow:0 8px 24px rgba(0,0,0,0.18);
+	padding:12px 14px; min-width:220px; max-width:320px;
+	font-size:12px; color:#2d3748;
+}
+.ev-grid-popover h5 { margin:0 0 6px; font-size:13px; color:#1a202c; font-weight:700;
+	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
+.ev-grid-popover .ev-gp-row { margin-top:4px; color:#4a5568; font-size:11px; }
+.ev-grid-popover .ev-gp-row i { width:12px; color:#a0aec0; margin-right:4px; }
+
+@media (max-width: 700px) {
+	#ev-schedule-grid-container { display:none !important; }
+	#ev-schedule-container      { display:block !important; }
+	.ev-grid-view-toolbar       { display:none !important; }
+}
+</style>
+<script>
+(function() {
+	var listEl = document.getElementById('ev-schedule-container');
+	var gridEl = document.getElementById('ev-schedule-grid-container');
+	if (!listEl || !gridEl) return;
+
+	var STORAGE_KEY = 'ev-sched-view-mode';
+	var btns = document.querySelectorAll('.ev-grid-view-btn');
+	var isMobile = function() { return window.matchMedia('(max-width: 700px)').matches; };
+
+	function applyMode(mode, opts) {
+		opts = opts || {};
+		if (isMobile()) mode = 'list';
+		if (mode !== 'grid') mode = 'list';
+		if (mode === 'grid') {
+			listEl.style.display = 'none';
+			gridEl.style.display = '';
+			updateNowLines();
+		} else {
+			listEl.style.display = '';
+			gridEl.style.display = 'none';
+		}
+		btns.forEach(function(b) {
+			var active = b.getAttribute('data-ev-view') === mode;
+			b.classList.toggle('ev-grid-view-active', active);
+			b.setAttribute('aria-pressed', active ? 'true' : 'false');
+		});
+		if (opts.persist === true) {
+			try { localStorage.setItem(STORAGE_KEY, mode); } catch(e) {}
+		}
+	}
+
+	btns.forEach(function(b) {
+		b.addEventListener('click', function() { applyMode(b.getAttribute('data-ev-view'), {persist:true}); });
+	});
+
+	var initial = 'list';
+	try { initial = localStorage.getItem(STORAGE_KEY) || 'list'; } catch(e) {}
+	applyMode(initial, {persist:false});
+	window.addEventListener('resize', function() {
+		// Re-evaluate when crossing mobile breakpoint
+		applyMode(localStorage.getItem(STORAGE_KEY) || 'list', {persist:false});
+	});
+
+	// "Now" indicator
+	function updateNowLines() {
+		var todayKey = (window.EvConfig && EvConfig.evGridTodayKey) || '';
+		var nowSec = Math.floor(Date.now() / 1000);
+		document.querySelectorAll('.ev-grid-day').forEach(function(day) {
+			var dk    = day.getAttribute('data-day-key');
+			var gs    = parseInt(day.getAttribute('data-grid-start'), 10);
+			var ge    = parseInt(day.getAttribute('data-grid-end'), 10);
+			var line  = day.querySelector('.ev-grid-now-line');
+			var dot   = day.querySelector('.ev-grid-now-dot');
+			if (!line || !dot) return;
+			if (dk !== todayKey || nowSec < gs || nowSec > ge) {
+				line.style.display = 'none';
+				dot.style.display  = 'none';
+				return;
+			}
+			var offsetMin = (nowSec - gs) / 60;
+			var px = (offsetMin / 30) * 28;
+			line.style.top = px + 'px';
+			line.style.display = '';
+			dot.style.top  = px + 'px';
+			dot.style.display = '';
+		});
+	}
+	var evGridNowTimer = null;
+	function startNowTimer() {
+		if (evGridNowTimer !== null) return;
+		if (!document.querySelector('.ev-grid-day .ev-grid-now-line')) return;
+		updateNowLines();
+		evGridNowTimer = setInterval(updateNowLines, 60000);
+	}
+	function stopNowTimer() {
+		if (evGridNowTimer !== null) { clearInterval(evGridNowTimer); evGridNowTimer = null; }
+	}
+	updateNowLines();
+	startNowTimer();
+	document.addEventListener('visibilitychange', function() {
+		if (document.hidden) { stopNowTimer(); }
+		else { startNowTimer(); }
+	});
+	window.addEventListener('pagehide', stopNowTimer);
+
+	// Click handler — editors go through existing list row's edit button so the
+	// external revised.js closest('tr') lookup + meal-field patch both work.
+	// Non-editors get a lightweight popover with details (no alert/confirm).
+	var openPopover = null;
+	function closePopover() {
+		if (openPopover && openPopover.parentNode) openPopover.parentNode.removeChild(openPopover);
+		openPopover = null;
+	}
+	document.addEventListener('click', function(e) {
+		if (openPopover && !openPopover.contains(e.target) && !e.target.closest('.ev-grid-block')) {
+			closePopover();
+		}
+	});
+	document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePopover(); });
+	document.addEventListener('keydown', function(e) {
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		var blk = e.target && e.target.closest && e.target.closest('.ev-grid-block');
+		if (!blk) return;
+		if (e.key === ' ') e.preventDefault();
+		var sid = parseInt(blk.getAttribute('data-schedule-id'), 10);
+		if (!sid) return;
+		window.evGridBlockClick(sid, { stopPropagation: function(){}, currentTarget: blk });
+	});
+	document.addEventListener('keydown', function(e) {
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		var blk = e.target && e.target.closest && e.target.closest('.ev-grid-block');
+		if (!blk) return;
+		if (e.key === ' ') e.preventDefault();
+		var sid = parseInt(blk.getAttribute('data-schedule-id'), 10);
+		if (!sid) return;
+		window.evGridBlockClick(sid, { stopPropagation: function(){}, currentTarget: blk });
+	});
+
+	window.evGridBlockClick = function(scheduleId, evt) {
+		if (evt) { evt.stopPropagation(); }
+		closePopover();
+		if (window.EvConfig && EvConfig.canManageSchedule) {
+			var row = document.getElementById('ev-schedule-row-' + scheduleId);
+			if (!row) return;
+			var editBtn = row.querySelector('.ev-edit-link');
+			if (editBtn) editBtn.click();
+			return;
+		}
+		// Non-editor popover
+		var row = document.getElementById('ev-schedule-row-' + scheduleId);
+		if (!row) return;
+		var title    = row.getAttribute('data-title')       || '';
+		var start    = row.getAttribute('data-start')       || '';
+		var end      = row.getAttribute('data-end')         || '';
+		var loc      = row.getAttribute('data-location')    || '';
+		var desc     = row.getAttribute('data-description') || '';
+		function fmt(s) { if (!s) return ''; var d = new Date(s); if (isNaN(d.getTime())) return s; return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
+		var timeStr = (start || end) ? (fmt(start) + (end ? ' – ' + fmt(end) : '')) : '';
+
+		var pop = document.createElement('div');
+		pop.className = 'ev-grid-popover';
+		var safe = function(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+		var html = '<h5>' + safe(title) + '</h5>';
+		if (timeStr) html += '<div class="ev-gp-row"><i class="fas fa-clock"></i>' + safe(timeStr) + '</div>';
+		if (loc)     html += '<div class="ev-gp-row"><i class="fas fa-map-marker-alt"></i>' + safe(loc) + '</div>';
+		if (desc)    html += '<div class="ev-gp-row" style="margin-top:8px;line-height:1.4">' + safe(desc) + '</div>';
+		pop.innerHTML = html;
+		document.body.appendChild(pop);
+
+		// Position near the clicked block
+		var target = evt && evt.currentTarget ? evt.currentTarget : null;
+		var r = target ? target.getBoundingClientRect() : { left: 20, top: 60, right: 220, bottom: 100 };
+		var pr = pop.getBoundingClientRect();
+		var left = r.left + window.scrollX;
+		var top  = r.bottom + window.scrollY + 6;
+		if (left + pr.width > window.scrollX + document.documentElement.clientWidth - 10) {
+			left = window.scrollX + document.documentElement.clientWidth - pr.width - 10;
+		}
+		if (top + pr.height > window.scrollY + window.innerHeight - 10) {
+			top = r.top + window.scrollY - pr.height - 6;
+			pop.classList.add('ev-grid-popover-flip');
+		}
+		pop.style.left = left + 'px';
+		pop.style.top  = top  + 'px';
+		openPopover = pop;
+	};
+})();
+</script>
+
