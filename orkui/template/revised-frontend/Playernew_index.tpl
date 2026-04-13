@@ -425,8 +425,12 @@
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
 			</div>
 			<div class="pn-detail-row">
-				<span class="pn-detail-label">Member Since</span>
+				<span class="pn-detail-label">Park Member Since</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?></span>
+			</div>
+			<div class="pn-detail-row">
+				<span class="pn-detail-label">Player Since</span>
+				<span class="pn-detail-value"><?= $Player['PlayerSinceDate'] ? htmlspecialchars($Player['PlayerSinceDate']) : 'N/A' ?></span>
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Last Sign-In</span>
