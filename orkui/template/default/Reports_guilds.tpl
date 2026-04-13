@@ -56,11 +56,6 @@ if (isset($this->__session->park_id) && !empty($Guilds)) {
 html[data-theme="dark"] .rp-guild-pill { background: var(--ork-bg-secondary); border-color: #4c51bf; color: #a5b4fc; }
 html[data-theme="dark"] .rp-guild-pill:hover { background: #2d3748; border-color: #818cf8; color: #c7d2fe; }
 html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active { background: #4338ca; border-color: #4338ca; color: #fff; }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-guild-pill { background: var(--ork-bg-secondary); border-color: #4c51bf; color: #a5b4fc; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-guild-pill:hover { background: #2d3748; border-color: #818cf8; color: #c7d2fe; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .rp-guild-pill.rp-guild-pill-active { background: #4338ca; border-color: #4338ca; color: #fff; }
-}
 </style>
 
 <div class="rp-root">

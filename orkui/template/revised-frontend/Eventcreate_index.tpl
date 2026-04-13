@@ -208,9 +208,6 @@
 <style>
 .ev-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
 html[data-theme="dark"] .ev-fp-title { background: #1a365d; color: #90cdf4; }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .ev-fp-title { background: #1a365d; color: #90cdf4; }
-}
 </style>
 <script>
 function ecFpAddTitle(label, calEl) {

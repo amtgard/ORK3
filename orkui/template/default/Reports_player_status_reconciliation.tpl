@@ -115,22 +115,6 @@ html[data-theme="dark"] #psr-table-reactivate_wrapper .dataTables_length label,
 html[data-theme="dark"] #psr-table-deactivate_wrapper .dataTables_length label,
 html[data-theme="dark"] #psr-table-reactivate_wrapper .dataTables_info,
 html[data-theme="dark"] #psr-table-deactivate_wrapper .dataTables_info { color: var(--ork-text-muted) !important; }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-reactivate-header { background: var(--ork-bg-secondary); color: #90cdf4; border-color: var(--ork-border); border-left: 3px solid #63b3ed; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-reactivate-header h3 { color: #90cdf4 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-deactivate-header { background: var(--ork-bg-secondary); color: #fc8181; border-color: var(--ork-border); border-left: 3px solid #fc8181; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-deactivate-header h3 { color: #fc8181 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-bulk-bar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-done-icon { color: #68d391; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-error-msg { color: #feb2b2; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .psr-empty { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) #psr-table-reactivate_wrapper .dataTables_filter input,
-  html:not([data-theme="light"]):not([data-theme="dark"]) #psr-table-deactivate_wrapper .dataTables_filter input,
-  html:not([data-theme="light"]):not([data-theme="dark"]) #psr-table-reactivate_wrapper .dataTables_length select,
-  html:not([data-theme="light"]):not([data-theme="dark"]) #psr-table-deactivate_wrapper .dataTables_length select {
-    background: var(--ork-input-bg) !important; border-color: var(--ork-input-border) !important; color: var(--ork-text) !important; outline: none !important;
-  }
-}
 </style>
 
 <div class="rp-root">

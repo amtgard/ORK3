@@ -214,16 +214,6 @@ html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-selec
 html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
 html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-card-header { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-input, html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-chart-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-chart-title { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-modal { background: var(--ork-card-bg); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-input, html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
-}
 </style>
 
 <div class="rp-root">

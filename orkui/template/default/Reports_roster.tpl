@@ -192,7 +192,7 @@ if ($_isOrkAdmin) {
 				</div>
 				<div class="rp-filter-card-body">
 <?php if ($is_suspended) : ?>
-					<label style="display:flex;align-items:center;gap:8px;font-size:.9em;color:#4a5568;cursor:pointer;user-select:none;">
+					<label style="display:flex;align-items:center;gap:8px;font-size:.9em;color:var(--ork-text-secondary,#4a5568);cursor:pointer;user-select:none;">
 						<input type="checkbox" id="rp-propagates-filter" style="width:14px;height:14px;accent-color:#c53030;cursor:pointer;">
 						Propagating suspensions only
 					</label>
@@ -354,7 +354,7 @@ if ($_isOrkAdmin) {
 					<td><?php
 					$_prop = $player['SuspensionPropagates'] ?? null;
 					if ($_prop === null)  echo '<span style="color:#a0aec0">—</span>';
-					elseif ($_prop)       echo '<span title="Propagates to all Kingdoms" style="color:#2d3748">Yes</span>';
+					elseif ($_prop)       echo '<span title="Propagates to all Kingdoms" style="color:var(--ork-text,#2d3748)">Yes</span>';
 					else                  echo '<span title="Local only" style="color:#a0aec0">No</span>';
 				?></td>
 					<td><?=htmlspecialchars($player['Suspendator'] ?? '')?></td>

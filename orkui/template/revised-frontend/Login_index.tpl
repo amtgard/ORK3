@@ -364,24 +364,6 @@ html[data-theme="dark"] .lg-links a { color: var(--ork-link); }
 html[data-theme="dark"] .lg-no-account { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
 html[data-theme="dark"] .lg-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-form-panel { background: var(--ork-card-bg); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-logo-text { color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-btn-oauth { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-no-account { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-session-notice { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-logo-sword { color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-logo-text span { color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-subheading { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-label { color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-divider { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-divider::before,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-divider::after { background: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-links { color: var(--ork-text-muted); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-links a { color: var(--ork-link); }
-}
 </style>
 
 <div class="lg-wrap">

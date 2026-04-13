@@ -30,16 +30,6 @@ html[data-theme="dark"] .pdm-table td.pdm-location { background: #2d3748; color:
 html[data-theme="dark"] .pdm-table th.pdm-colhead { background: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .pdm-table th.pdm-corner { background: #2d3748; }
 html[data-theme="dark"] .pdm-table td.pdm-self { background: #374151; color: #718096; }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td { border-color: #4a5568; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-rowhead { background: #2d3748; color: #e2e8f0; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-rowhead a { color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-location { background: #2d3748; color: #718096; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th.pdm-colhead { background: #2d3748; color: #e2e8f0; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table th.pdm-corner { background: #2d3748; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .pdm-table td.pdm-self { background: #374151; color: #718096; }
-}
 </style>
 
 <div class="rp-root">

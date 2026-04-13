@@ -391,19 +391,6 @@ html[data-theme="dark"] .att-qa-table td { border-bottom-color: var(--ork-border
 html[data-theme="dark"] .att-qa-select,
 html[data-theme="dark"] .att-qa-credits-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-card-header { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-input, html:not([data-theme="light"]):not([data-theme="dark"]) .att-form-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-chart-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-chart-title { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-modal { background: var(--ork-card-bg); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-input, html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-qa-modal { background: var(--ork-card-bg); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-qa-select,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .att-qa-credits-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-}
 </style>
 
 <div class="rp-root">

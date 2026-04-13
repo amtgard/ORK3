@@ -138,6 +138,68 @@
 	font-weight: 600;
 	margin-top: 4px;
 }
+
+/* ===========================
+   Dark Mode
+   =========================== */
+html[data-theme="dark"] .fp-wrap {
+	background: var(--ork-card-bg);
+	box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .fp-logo-icon {
+	color: #90cdf4;
+}
+html[data-theme="dark"] .fp-logo-text {
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .fp-logo-text span {
+	color: #90cdf4;
+}
+html[data-theme="dark"] .fp-heading {
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .fp-subheading {
+	color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .fp-label {
+	color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .fp-input {
+	background: var(--ork-bg-secondary);
+	border-color: var(--ork-border);
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .fp-input:focus {
+	background: var(--ork-bg-tertiary);
+	border-color: #63b3ed;
+	box-shadow: 0 0 0 3px rgba(99,179,237,0.2);
+}
+html[data-theme="dark"] .fp-divider {
+	color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .fp-divider::before,
+html[data-theme="dark"] .fp-divider::after {
+	background: var(--ork-border);
+}
+html[data-theme="dark"] .fp-btn {
+	background: #2b4c7e;
+}
+html[data-theme="dark"] .fp-btn:hover {
+	background: #3a5f96;
+}
+html[data-theme="dark"] .fp-back {
+	color: #90cdf4;
+}
+html[data-theme="dark"] .fp-message-success {
+	background: #1c4532;
+	border-color: #276749;
+	color: #9ae6b4;
+}
+html[data-theme="dark"] .fp-message-error {
+	background: #742a2a;
+	border-color: #c53030;
+	color: #fed7d7;
+}
 </style>
 
 <div class="fp-wrap">

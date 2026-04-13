@@ -449,27 +449,6 @@ html[data-theme="dark"] .lg-dual-range-track { background: var(--ork-border); }
 html[data-theme="dark"] .lg-showing-inactive tr[data-recent="0"] td.lg-col-player::after { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
 html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-battle  { background: #1e3a5f !important; color: #90cdf4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-battle  { background: #1a2d45 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-sword   { background: #2d3748 !important; color: #cbd5e0; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-sword   { background: #252f3d !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-crown   { background: #3d2b00 !important; color: #fbd38d; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-crown   { background: #2e2000 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-flame   { background: #3d1a1a !important; color: #fca5a5; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-flame   { background: #2e1414 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) th.lg-group-serpent { background: #1a3a2a !important; color: #9ae6b4; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) td.lg-group-serpent { background: #142e22 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-battle  { background: #2a4a7f !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-sword   { background: #4a5568 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-crown   { background: #7c4400 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-flame   { background: #7c2020 !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table tbody tr:nth-child(n) td.lg-cell-knight-serpent { background: #1a5c3a !important; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table th.lg-col-player,
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-table td.lg-col-player { background: var(--ork-card-bg); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-award-filter { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .lg-cell-master { color: #c4b5fd; }
-}
 </style>
 
 <div class="rp-root">

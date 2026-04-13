@@ -509,20 +509,10 @@ html[data-theme="dark"] .hm-card-heraldry-wrap::after {
 html[data-theme="dark"] .hm-kingdom-card:hover {
   border-color: var(--ork-border-dark);
 }
-html[data-theme="dark"] .hm-kingdom-card.hm-pinned {
-  border-color: var(--ork-border-dark);
-  box-shadow: 0 0 0 2px var(--ork-border-dark);
-}
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-heraldry-wrap::after {
-    background: linear-gradient(to bottom, rgba(45,55,72,0) 0%, rgba(45,55,72,0.6) 40%, #2d3748 100%);
-  }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-stat-value { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-stat-label { color: rgba(255,255,255,0.6); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-card-stat { color: rgba(255,255,255,0.6); }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-section-title { color: #fff; }
-  html:not([data-theme="light"]):not([data-theme="dark"]) .hm-welcome-title { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.5); background: transparent; border: none; padding: 0; border-radius: 0; }
+html[data-theme="dark"] .hm-kingdom-card.hm-pinned,
+html[data-theme="dark"] .hm-prinz-card.hm-pinned {
+  border-color: var(--ork-link);
+  box-shadow: 0 0 0 2px var(--ork-link);
 }
 </style>
 

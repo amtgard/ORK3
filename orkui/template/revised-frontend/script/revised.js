@@ -48,29 +48,32 @@ function orkInitTheme() {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
     }
-    // else: no attribute → CSS prefers-color-scheme media query handles it
 
     // Wire up the toggle button
     var btn = document.getElementById('ork-theme-toggle');
     if (btn) {
         btn.addEventListener('click', function() {
-            var current = document.documentElement.getAttribute('data-theme');
-            var isDark;
-            if (current === 'dark') {
-                isDark = false;
-            } else if (current === 'light') {
-                isDark = true;
-            } else {
-                // Currently auto — check what system prefers and toggle opposite
-                isDark = !window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }
-            if (isDark) {
+            var stored = localStorage.getItem('ork_theme');
+            // Cycle: auto → dark → light → auto (keyed off stored pref, not data-theme)
+            if (!stored) {
+                // auto → dark
                 document.documentElement.setAttribute('data-theme', 'dark');
                 localStorage.setItem('ork_theme', 'dark');
-            } else {
+            } else if (stored === 'dark') {
+                // dark → light
                 document.documentElement.setAttribute('data-theme', 'light');
                 localStorage.setItem('ork_theme', 'light');
+            } else {
+                // light → auto: remove pref, re-apply OS preference live
+                localStorage.removeItem('ork_theme');
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                }
             }
             // Update icon
             orkUpdateThemeIcon();
@@ -86,24 +89,48 @@ function orkInitTheme() {
         });
         orkUpdateThemeIcon();
     }
+
+    // Live OS preference listener — only fires when user is in auto mode (no stored pref)
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            if (localStorage.getItem('ork_theme')) return; // user has a manual pref, ignore
+            if (e.matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+            var heroImg = document.querySelector('.kn-heraldry-frame img, .pk-heraldry-frame img');
+            if (heroImg && heroImg.complete) {
+                if (typeof knApplyHeroColor === 'function') knApplyHeroColor(heroImg);
+                if (typeof pkApplyHeroColor === 'function') pkApplyHeroColor(heroImg);
+                if (typeof evApplyHeroColor === 'function') evApplyHeroColor();
+                if (typeof enApplyHeroColor === 'function') enApplyHeroColor();
+                if (typeof ecApplyBannerColor === 'function') ecApplyBannerColor();
+            }
+        });
+    }
 }
 
 function orkUpdateThemeIcon() {
     var btn = document.getElementById('ork-theme-toggle');
     if (!btn) return;
-    var current = document.documentElement.getAttribute('data-theme');
-    var effectiveDark;
-    if (current === 'dark') {
-        effectiveDark = true;
-    } else if (current === 'light') {
-        effectiveDark = false;
+    var stored = localStorage.getItem('ork_theme');
+    // Sun icon (light mode)
+    var sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>';
+    // Moon icon (dark mode)
+    var moonSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11.807A9.002 9.002 0 0 1 10.049 2a9.942 9.942 0 0 0-5.12 2.735c-3.905 3.905-3.905 10.237 0 14.142 3.906 3.906 10.237 3.905 14.143 0a9.946 9.946 0 0 0 2.735-5.119A9.003 9.003 0 0 1 12 11.807z"/></svg>';
+    // Auto icon (half sun/moon — circle with left half filled)
+    var autoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18V4a8 8 0 0 1 0 16z"/></svg>';
+    if (stored === 'dark') {
+        btn.setAttribute('title', 'Dark mode (click for light)');
+        btn.innerHTML = moonSvg;
+    } else if (stored === 'light') {
+        btn.setAttribute('title', 'Light mode (click for auto)');
+        btn.innerHTML = sunSvg;
     } else {
-        effectiveDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        btn.setAttribute('title', 'Auto mode (follows OS setting, click for dark)');
+        btn.innerHTML = autoSvg;
     }
-    btn.setAttribute('title', effectiveDark ? 'Switch to light mode' : 'Switch to dark mode');
-    btn.innerHTML = effectiveDark
-        ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>'
-        : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11.807A9.002 9.002 0 0 1 10.049 2a9.942 9.942 0 0 0-5.12 2.735c-3.905 3.905-3.905 10.237 0 14.142 3.906 3.906 10.237 3.905 14.143 0a9.946 9.946 0 0 0 2.735-5.119A9.003 9.003 0 0 1 12 11.807z"/></svg>';
 }
 
 // Run theme init on DOMContentLoaded to ensure button is in DOM
@@ -408,7 +435,7 @@ function pnPageRange(current, total) {
                     '<h3 class="pn-modal-title" id="pn-confirm-title"></h3>' +
                     '<button class="pn-modal-close-btn" id="pn-confirm-close-btn" aria-label="Close">&times;</button>' +
                 '</div>' +
-                '<div class="pn-modal-body"><p id="pn-confirm-message" style="margin:0;font-size:14px;color:#4a5568"></p></div>' +
+                '<div class="pn-modal-body"><p id="pn-confirm-message" class="pn-confirm-message"></p></div>' +
                 '<div class="pn-modal-footer">' +
                     '<button class="pn-btn pn-btn-secondary" id="pn-confirm-cancel">Cancel</button>' +
                     '<button class="pn-btn" id="pn-confirm-ok">Confirm</button>' +
@@ -6644,11 +6671,16 @@ $(document).ready(function() {
         var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
         var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
         var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
+        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
             '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
-            '<td>' + kingCell + '</td><td>' + parkCell + '</td>' +
-            '<td>' + escHtml(att.ClassName || '') + '</td><td>' + escHtml(att.Credits || '') + '</td>' +
-            '<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a></td>' +
+            '<td>' + kingCell + '</td>' +
+            '<td>' + parkCell + '</td>' +
+            '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
+            '<td class="ev-credits-cell">' + escHtml(att.Credits || '') + '</td>' +
+            '<td class="ev-del-cell">' +
+                '<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
+                '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
+            '</td>' +
             '</tr>';
         var tableBody = document.querySelector('#ev-attendance-table tbody');
         if (tableBody) {
@@ -6761,13 +6793,14 @@ $(document).ready(function() {
                 var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
                 var kingCell  = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
                 var parkCell  = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-                var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
+                var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
                     '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
                     '<td>' + kingCell + '</td>' +
                     '<td>' + parkCell + '</td>' +
-                    '<td>' + escHtml(att.ClassName || '') + '</td>' +
-                    '<td>' + escHtml(att.Credits || '') + '</td>' +
+                    '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
+                    '<td class="ev-credits-cell">' + escHtml(att.Credits || '') + '</td>' +
                     '<td class="ev-del-cell">' +
+                        '<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
                         '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
                     '</td>' +
                 '</tr>';

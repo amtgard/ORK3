@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<script>
-		(function(){var t=localStorage.getItem('ork_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');else if(t==='light')document.documentElement.setAttribute('data-theme','light');})();
+		(function(){var t=localStorage.getItem('ork_theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(t==='light'){document.documentElement.setAttribute('data-theme','light');}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.setAttribute('data-theme','dark');}})();
 		</script>
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
@@ -68,17 +68,7 @@
 	html[data-theme="dark"] .wn-subtitle { color: #a0aec0; }
 	html[data-theme="dark"] .wn-all-versions { border-color: #63b3ed; color: #63b3ed; }
 	html[data-theme="dark"] .wn-all-versions:hover { background: #374151; }
-	@media (prefers-color-scheme: dark) {
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-overlay { background: rgba(0,0,0,0.7); }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-modal { background: #2d3748; color: #e2e8f0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-title { color: #e2e8f0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-item-title { color: #e2e8f0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-item-body { color: #cbd5e0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-subtitle { color: #a0aec0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-all-versions { border-color: #63b3ed; color: #63b3ed; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .wn-all-versions:hover { background: #374151; }
-	}
-
+	
 	/* Dark mode toggle button */
 	.nav-theme-toggle {
 		background: transparent;
@@ -105,16 +95,7 @@
 	html[data-theme="dark"] .information-table td { border-color: #4a5568; color: #cbd5e0; }
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
-	@media (prefers-color-scheme: dark) {
-		html:not([data-theme="light"]):not([data-theme="dark"]) body { background-color: #1a202c; color: #e2e8f0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container { background-color: #1a202c; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table { background-color: #2d3748; border-color: #4a5568; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table th { background-color: #374151; color: #e2e8f0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) .information-table td { border-color: #4a5568; color: #cbd5e0; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container a { color: #63b3ed; }
-		html:not([data-theme="light"]):not([data-theme="dark"]) #theme_container a:hover { color: #90cdf4; }
-	}
-	</style>
+		</style>
 </head>
 	<body>
 		<div id='theme_container'>
@@ -124,7 +105,6 @@
 ?>
 
 		</div>
-
 
 	<nav id='newmenu'>
 		<a id='nav-mobile-home' href='<?=UIR?>'><i class='fas fa-home'></i></a>
@@ -252,7 +232,6 @@
 <?php endif; ?>
 		</div>
 	</nav>
-
 
 	<script>
 	// ---- Search toggle ----
@@ -670,14 +649,21 @@ endif;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
 
-  function _setIcon(btn, dark) {
+  function _setIcon(btn) {
     if (!btn) return;
-    if (dark) {
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
-      btn.title = 'Switch to light mode';
+    var stored = localStorage.getItem('ork_theme');
+    var sunSvg  = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+    var moonSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    var autoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/><line x1="12" y1="2" x2="12" y2="22" stroke-dasharray="4 4"/></svg>';
+    if (stored === 'dark') {
+      btn.innerHTML = moonSvg;
+      btn.title = 'Dark mode (click for light)';
+    } else if (stored === 'light') {
+      btn.innerHTML = sunSvg;
+      btn.title = 'Light mode (click for auto)';
     } else {
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-      btn.title = 'Switch to dark mode';
+      btn.innerHTML = autoSvg;
+      btn.title = 'Auto mode (follows OS setting, click for dark)';
     }
   }
 
@@ -687,15 +673,44 @@ endif;
       document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.setAttribute('data-theme', 'dark');
     }
+
+    // Live OS preference listener — only fires when user is in auto mode (no stored pref)
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+        if (localStorage.getItem('ork_theme')) return; // user has a manual pref, ignore
+        if (e.matches) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+      });
+    }
+
     var btn = document.getElementById('ork-theme-toggle');
-    _setIcon(btn, _isDark());
+    _setIcon(btn);
     if (btn) {
       btn.addEventListener('click', function() {
-        var dark = !_isDark();
-        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-        localStorage.setItem('ork_theme', dark ? 'dark' : 'light');
-        _setIcon(btn, dark);
+        var stored = localStorage.getItem('ork_theme');
+        // Cycle: auto → dark → light → auto (keyed off stored pref, not data-theme)
+        if (!stored) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          localStorage.setItem('ork_theme', 'dark');
+        } else if (stored === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'light');
+          localStorage.setItem('ork_theme', 'light');
+        } else {
+          // light → auto: remove preference, re-apply OS preference live
+          localStorage.removeItem('ork_theme');
+          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.removeAttribute('data-theme');
+          }
+        }
+        _setIcon(btn);
       });
     }
   }
