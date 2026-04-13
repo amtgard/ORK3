@@ -4756,6 +4756,8 @@
 .pk-att-added-list li.pk-att-prior::before { color:#a0aec0; }
 .pk-att-ac-sep { border-top:1px solid #e2e8f0; margin:3px 0; height:0; padding:0; cursor:default; pointer-events:none; list-style:none; }
 .pk-att-ac-suspended { color:#c53030 !important; font-style:italic; }
+.pk-att-ac-inactive { color:#718096 !important; font-style:italic; }
+.pk-att-ac-inactive-badge { display:inline-block; background:#fed7d7; color:#c53030; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; margin-left:6px; font-style:normal; letter-spacing:0.3px; text-transform:uppercase; }
 /* Attendance modal tabs */
 .pk-att-tabs { display:flex; border-bottom:2px solid #e2e8f0; margin-bottom:14px; gap:0; }
 .pk-att-tab { background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; padding:8px 16px; font-size:13px; font-weight:600; color:#718096; cursor:pointer; display:flex; align-items:center; gap:6px; transition:color 0.15s, border-color 0.15s; }

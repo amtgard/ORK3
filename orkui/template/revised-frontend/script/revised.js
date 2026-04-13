@@ -7329,6 +7329,7 @@ $(document).ready(function() {
         pkBuildClassOptions();
         gid('pk-att-player-name').value = '';
         gid('pk-att-player-id').value   = '';
+        pkAttSelectedInactive = false;
         pkAttHideFeedback();
         pkAttUpdateAddBtn();
         // Reset to Search tab and clear quick-add rows so they rebuild fresh
@@ -7458,17 +7459,23 @@ $(document).ready(function() {
         if (!cls)  { pkAttShowFeedback('Select a class.', false); return; }
         var btn = gid('pk-att-add-btn');
         btn.disabled = true;
+        var wasInactive = pkAttSelectedInactive;
         pkSubmit(
             { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred },
-            function(ok, err, aid) {
+            function(ok, err, aid, reactivated) {
                 if (ok) {
                     var midInt = parseInt(pid, 10);
                     pkAttEntered[midInt] = true;
                     pkLastClass[midInt]  = cls;
-                    pkAttHideFeedback();
+                    if (reactivated || wasInactive) {
+                        pkAttShowFeedback(name + ' reactivated and attendance added.', true);
+                    } else {
+                        pkAttHideFeedback();
+                    }
                     pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred });
                     gid('pk-att-player-name').value = '';
                     gid('pk-att-player-id').value   = '';
+                    pkAttSelectedInactive = false;
                     pkUpdateQuickAddEntered();
                 } else {
                     pkAttShowFeedback(err, false);
@@ -7481,9 +7488,9 @@ $(document).ready(function() {
     // --- Core AJAX ---
     function pkSubmit(data, cb) {
         $.post(ADD_URL, data, function(r) {
-            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0); }
-            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0);
-        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0); });
+            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0, !!r.reactivated); }
+            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0, false);
+        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0, false); });
     }
 
     // --- Feedback helpers ---
@@ -7595,51 +7602,74 @@ $(document).ready(function() {
     function pkAttAbbr(v) {
         return (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
     }
+    // Tracks whether the currently selected player in the search field is inactive.
+    // When true, clicking Add triggers a reactivation confirm dialog before submit.
+    var pkAttSelectedInactive = false;
+
+    function pkAttMakeItem(v) {
+        return {
+            label: v.Persona + ' \u2014 ' + pkAttAbbr(v),
+            name: v.Persona,
+            value: v.MundaneId,
+            suspended: !!(v.PenaltyBox || v.Suspended),
+            inactive: (typeof v.Active !== 'undefined') ? (parseInt(v.Active, 10) === 0) : false
+        };
+    }
     var pkAttAC = $('#pk-att-player-name').autocomplete({
         source: function(req, res) {
             var s = req.term;
-            function toItems(list) {
-                var items = [];
+            function splitToItems(list, seen) {
+                var active = [], inactive = [];
                 $.each(list || [], function(i, v) {
-                    if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                    items.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
+                    var mid = parseInt(v.MundaneId, 10);
+                    if (pkAttEntered[mid]) return;
+                    if (seen && seen[mid]) return;
+                    if (seen) seen[mid] = true;
+                    var item = pkAttMakeItem(v);
+                    if (item.inactive) inactive.push(item); else active.push(item);
                 });
+                return { active: active, inactive: inactive };
+            }
+            function assemble(groups, inactiveItems) {
+                var sep = { label: '', name: '', value: null, separator: true };
+                var items = [];
+                groups.forEach(function(g) {
+                    if (!g || !g.length) return;
+                    if (items.length) items.push(sep);
+                    items = items.concat(g);
+                });
+                if (inactiveItems && inactiveItems.length) {
+                    if (items.length) items.push(sep);
+                    items = items.concat(inactiveItems);
+                }
                 return items;
             }
             if (pkAttScope === 'park') {
                 $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 12 })
-                    .done(function(r) { res(toItems(r)); });
+                    .done(function(r) {
+                        var split = splitToItems(r);
+                        res(assemble([split.active], split.inactive));
+                    });
             } else if (pkAttScope === 'kingdom') {
                 $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 12 })
-                    .done(function(r) { res(toItems(r)); });
+                    .done(function(r) {
+                        var split = splitToItems(r);
+                        res(assemble([split.active], split.inactive));
+                    });
             } else {
                 $.when(
                     $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 8 }),
                     $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 8 }),
                     $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, limit: 8 })
                 ).done(function(parkRes, kingRes, allRes) {
-                    var seen = {}, parkItems = [], kingItems = [], otherItems = [];
-                    $.each(parkRes[0] || [], function(i, v) {
-                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                        seen[v.MundaneId] = true;
-                        parkItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
-                    });
-                    $.each(kingRes[0] || [], function(i, v) {
-                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                        if (seen[v.MundaneId]) return;
-                        seen[v.MundaneId] = true;
-                        kingItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
-                    });
-                    $.each(allRes[0] || [], function(i, v) {
-                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                        if (seen[v.MundaneId]) return;
-                        otherItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
-                    });
-                    var sep = { label: '', name: '', value: null, separator: true };
-                    var items = parkItems;
-                    if (kingItems.length) { if (items.length) items.push(sep); items = items.concat(kingItems); }
-                    if (otherItems.length) { if (items.length) items.push(sep); items = items.concat(otherItems); }
-                    res(items);
+                    var seen = {};
+                    var parkSplit  = splitToItems(parkRes[0],  seen);
+                    var kingSplit  = splitToItems(kingRes[0],  seen);
+                    var otherSplit = splitToItems(allRes[0],   seen);
+                    var inactiveAll = parkSplit.inactive
+                        .concat(kingSplit.inactive)
+                        .concat(otherSplit.inactive);
+                    res(assemble([parkSplit.active, kingSplit.active, otherSplit.active], inactiveAll));
                 });
             }
         },
@@ -7648,6 +7678,7 @@ $(document).ready(function() {
             if (!ui.item.value) return false;
             $('#pk-att-player-name').val(ui.item.name);
             $('#pk-att-player-id').val(ui.item.value);
+            pkAttSelectedInactive = !!ui.item.inactive;
             // Pre-fill class from last class map
             var lastCls = pkLastClass[parseInt(ui.item.value, 10)];
             if (lastCls) {
@@ -7657,18 +7688,35 @@ $(document).ready(function() {
             pkAttUpdateAddBtn();
             return false;
         },
-        change: function(e, ui) { if (!ui.item) { $('#pk-att-player-id').val(''); pkAttUpdateAddBtn(); } return false; },
+        change: function(e, ui) {
+            if (!ui.item) {
+                $('#pk-att-player-id').val('');
+                pkAttSelectedInactive = false;
+                pkAttUpdateAddBtn();
+            }
+            return false;
+        },
         delay: 250, minLength: 2,
     });
     $('#pk-att-player-name').on('input', function() {
-        if (!$(this).val()) { pkAttAC.autocomplete('close'); $('#pk-att-player-id').val(''); pkAttUpdateAddBtn(); }
+        if (!$(this).val()) {
+            pkAttAC.autocomplete('close');
+            $('#pk-att-player-id').val('');
+            pkAttSelectedInactive = false;
+            pkAttUpdateAddBtn();
+        }
     });
     pkAttAC.data('autocomplete')._renderItem = function(ul, item) {
         if (item.separator) {
             return $('<li class="pk-att-ac-sep">').appendTo(ul);
         }
         var a = $('<a>');
-        if (item.suspended) {
+        if (item.inactive) {
+            a.addClass('pk-att-ac-inactive').html(
+                $('<span>').text(item.label).html() +
+                '<span class="pk-att-ac-inactive-badge">inactive</span>'
+            );
+        } else if (item.suspended) {
             a.addClass('pk-att-ac-suspended').html(
                 '<i class="fas fa-ban" style="margin-right:5px;font-size:11px"></i>' + $('<span>').text(item.label).html()
             );
@@ -7677,6 +7725,23 @@ $(document).ready(function() {
         }
         return $('<li></li>').data('item.autocomplete', item).append(a).appendTo(ul);
     };
+
+    // Capture-phase click interceptor on the Add button: if the selected player
+    // is inactive, confirm before the regular submit handler fires. The backend
+    // auto-reactivates on successful add; this dialog makes the side effect
+    // visible to the user.
+    (function() {
+        var addBtn = gid('pk-att-add-btn');
+        if (!addBtn) return;
+        addBtn.addEventListener('click', function(e) {
+            if (!pkAttSelectedInactive) return;
+            var ok = confirm('You have selected a player whose record has been marked inactive. By adding attendance for this player, the ORK will automatically reactivate their profile. Proceed?');
+            if (!ok) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+            }
+        }, true);
+    }());
 });
 
 // ---- Shared: pronoun picker helper ----

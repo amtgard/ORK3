@@ -31,12 +31,25 @@ class Controller_AttendanceAjax extends Controller {
 				(float)($_POST['Credits'] ?? 1)
 			);
 			if ($r['Status'] == 0) {
+				// Auto-reactivate the player's profile if marked inactive. Adding
+				// attendance for an inactive player implicitly reactivates them.
+				$reactivated = 0;
+				if ($mundaneId > 0) {
+					global $DB;
+					$DB->Clear();
+					$chk = $DB->DataSet("SELECT active FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . $mundaneId . " LIMIT 1");
+					if ($chk && $chk->Size() > 0 && $chk->Next() && (int)$chk->active === 0) {
+						$DB->Clear();
+						$DB->Execute("UPDATE " . DB_PREFIX . "mundane SET active = 1 WHERE mundane_id = " . $mundaneId);
+						$reactivated = 1;
+					}
+				}
 				if ($mundaneId) {
 					$this->load_model('Player');
 					$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundaneId]);
 					Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
 				}
-				echo json_encode(['status' => 0, 'attendanceId' => (int)($r['Detail'] ?? 0)]);
+				echo json_encode(['status' => 0, 'attendanceId' => (int)($r['Detail'] ?? 0), 'reactivated' => $reactivated]);
 			} else {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			}
