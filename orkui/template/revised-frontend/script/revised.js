@@ -1585,7 +1585,7 @@ if (PnConfig.recError) {
             var term = this.value.trim();
             if (term.length < 2) { gid('pn-award-givenby-results').classList.remove('pn-ac-open'); return; }
             givenByTimer = setTimeout(function() {
-                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
+                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
                 fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                     var results = gid('pn-award-givenby-results');
                     if (!data || !data.length) {
@@ -1596,6 +1596,7 @@ if (PnConfig.recError) {
                                 + escHtml(p.Persona)
                                 + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
                                 + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                                + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                 + '</div>';
                         }).join('');
                     }
@@ -2680,14 +2681,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-givenby-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 el.classList.add('kn-ac-open');
@@ -5671,14 +5673,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 pkFixedAcPosition(gid('pk-award-givenby-text'), el);
@@ -8185,15 +8188,34 @@ function setupPronounPicker(cfg) {
                 var term = this.value.trim();
                 if (term.length < 2) { editGbResults.classList.remove('pn-ac-open'); return; }
                 editGbTimer = setTimeout(function() {
-                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + PnConfig.kingdomId + '&limit=8';
+                    // SearchService already returns inactive and suspended players; sort
+                    // them last and badge them so users can knowingly attribute historical
+                    // awards to a now-banned officer during reconciliation.
+                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + PnConfig.kingdomId + '&limit=15';
                     fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                         if (!data || !data.length) {
                             editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
                         } else {
+                            function rank(p) {
+                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
+                                var inactive = parseInt(p.Active, 10) === 0;
+                                if (banned)   return 2;
+                                if (inactive) return 1;
+                                return 0;
+                            }
+                            data.sort(function(a, b) {
+                                var ra = rank(a), rb = rank(b);
+                                if (ra !== rb) return ra - rb;
+                                return (a.Persona || '').localeCompare(b.Persona || '');
+                            });
                             editGbResults.innerHTML = data.map(function(p) {
+                                var inactive = parseInt(p.Active, 10) === 0;
+                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
                                 return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                     + escHtml(p.Persona)
                                     + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
+                                    + (inactive ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                                    + (banned   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                     + '</div>';
                             }).join('');
                         }
