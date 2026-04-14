@@ -108,11 +108,11 @@ class Controller_Kingdom extends Controller {
 		// Kingdom-level unique-player-week total: deduplicated by (year, week, player)
 		// across the whole kingdom — avoids double-counting players who attend multiple parks in one week
 		$knSql = "SELECT COUNT(*) AS katt FROM (
-				SELECT mundane_id FROM " . DB_PREFIX . "attendance
-				WHERE kingdom_id = {$kid}
-					AND date > DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
-					AND mundane_id > 0
-				GROUP BY date_year, date_week3, mundane_id
+				SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				WHERE a.date > DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
+					AND a.mundane_id > 0
+				GROUP BY a.date_year, a.date_week3, a.mundane_id
 			) t";
 		$DB->Clear();
 		$knResult = $DB->DataSet($knSql);
@@ -120,7 +120,22 @@ class Controller_Kingdom extends Controller {
 		if ($knResult && $knResult->Size() > 0 && $knResult->Next()) {
 			$katt = (int)$knResult->katt;
 		}
-		$result['_kingdom'] = ['att' => $katt];
+		// Kingdom-level unique-player-month total: deduplicated by (year, month, player)
+		// across the whole kingdom — avoids double-counting players who attend multiple parks in one month
+		$knMoSql = "SELECT COUNT(*) AS kmo FROM (
+				SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+					AND a.mundane_id > 0
+				GROUP BY a.date_year, a.date_month, a.mundane_id
+			) t";
+		$DB->Clear();
+		$knMoResult = $DB->DataSet($knMoSql);
+		$kmo = 0;
+		if ($knMoResult && $knMoResult->Size() > 0 && $knMoResult->Next()) {
+			$kmo = (int)$knMoResult->kmo;
+		}
+		$result['_kingdom'] = ['att' => $katt, 'mo' => $kmo];
 
 		// Previous-period trend data — only for users with kingdom-level auth
 		if ($isAdmin) {

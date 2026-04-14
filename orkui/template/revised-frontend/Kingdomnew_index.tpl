@@ -1906,19 +1906,20 @@ var KnConfig = {
 					if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
 				}
 			}
-			// Stat cards — use kingdom-level deduped total for weekly (avoids double-counting multi-park players)
+			// Stat cards — use kingdom-level deduped totals (avoids double-counting multi-park players)
 			var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
+			var moBase = (data._kingdom && data._kingdom.mo) ? data._kingdom.mo : totalMo;
 			var statWk = document.getElementById('kn-stat-avgwk');
 			var statMo = document.getElementById('kn-stat-avgmo');
 			if (statWk) statWk.textContent = (wkBase / 26).toFixed(1);
-			if (statMo) statMo.textContent = (totalMo / 12).toFixed(1);
+			if (statMo) statMo.textContent = (moBase / 12).toFixed(1);
 			// Footer totals
 			var footWk = document.getElementById('kn-total-avgwk');
 			var footMo = document.getElementById('kn-total-avgmo');
 			var footTp = document.getElementById('kn-total-tp');
 			var footTm = document.getElementById('kn-total-tm');
 			if (footWk) footWk.textContent = (wkBase / 26).toFixed(2);
-			if (footMo) footMo.textContent = (totalMo / 12).toFixed(1);
+			if (footMo) footMo.textContent = (moBase / 12).toFixed(1);
 			if (footTp) footTp.textContent = totalTp;
 			if (footTm) footTm.textContent = totalTm;
 		})
