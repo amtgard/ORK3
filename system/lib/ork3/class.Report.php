@@ -1113,7 +1113,6 @@ class Report  extends Ork3 {
 										$native_populace
 										$waivered_peeps
 										date > '$per_period'
-										and a.kingdom_id = '$escaped_kingdom_id'
 										and a.mundane_id > 0
 									group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
@@ -1157,7 +1156,6 @@ class Report  extends Ork3 {
 							from " . DB_PREFIX . "attendance a
 							where
 								date > '$monthly_period'
-								and a.kingdom_id = '$escaped_kingdom_id'
 								and a.mundane_id > 0
 							group by a.date_year, a.date_month, a.mundane_id, a.park_id) mundanesbymonth
 					group by mundanesbymonth.park_id";

@@ -98,6 +98,8 @@ class Park extends Ork3
 			$this->park->clear();
 			$this->park->park_id = $request[ 'ParkId' ];
 			if ( $this->park->find() && $this->park->park_id == $request[ 'ParkId' ] ) {
+				$old_kingdom_id = (int)$this->park->kingdom_id;
+				$new_kingdom_id = (int)$request[ 'KingdomId' ];
 				$this->park->kingdom_id = $request[ 'KingdomId' ];
 				if ( !empty( $request[ 'Abbreviation' ] ) ) {
 					$this->park->abbreviation = strtoupper( $request[ 'Abbreviation' ] );
@@ -109,6 +111,18 @@ class Park extends Ork3
 				// Move all officers in the park to the new kingdom
 				$sql = "update " . DB_PREFIX . "officer set kingdom_id = '" . mysql_real_escape_string( $request[ 'KingdomId' ] ) . "' where park_id = '" . mysql_real_escape_string( $request[ 'ParkId' ] ) . "'";
 				$this->db->query( $sql );
+				// Bust park averages cache for both old and new kingdoms
+				foreach ( [ $old_kingdom_id, $new_kingdom_id ] as $_kid ) {
+					// Report.GetKingdomParkAverages — used for park list on kingdom profile page
+					$_bust_key = Ork3::$Lib->ghettocache->key([ 'KingdomId' => $_kid ]);
+					Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages', $_bust_key);
+					Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $_bust_key);
+					// Controller_Kingdom.park_averages_json — used for AJAX stats on parks tab (admin and non-admin variants)
+					foreach ( [ 0, 1 ] as $_is_admin ) {
+						$_bust_key2 = Ork3::$Lib->ghettocache->key([ 'KingdomId' => $_kid, 'IsAdmin' => $_is_admin ]);
+						Ork3::$Lib->ghettocache->bust('Controller_Kingdom.park_averages_json', $_bust_key2);
+					}
+				}
 				return Success();
 			} else {
 				return InvalidParameter( NULL, 'There was an issue accessing the park.' );
