@@ -7162,6 +7162,15 @@ a.unimplemented, div.unimplemented, .unimplemented h3, .unimplemented .form-cont
 	color: #ccc;
 	background-color: #f8f8f8;
 }
+html[data-theme="dark"] a.unimplemented,
+html[data-theme="dark"] div.unimplemented,
+html[data-theme="dark"] .unimplemented h3,
+html[data-theme="dark"] .unimplemented .form-container input,
+html[data-theme="dark"] .unimplemented .form-container select,
+html[data-theme="dark"] .unimplemented .information-table th {
+	color: #718096;
+	background-color: #242b38;
+}
 .gm-style-iw {
     max-width: 90%;
     overflow: auto;
@@ -8067,6 +8076,7 @@ html[data-theme="dark"] .info-container h3 {
   background: var(--ork-bg-secondary);
   border-color: var(--ork-border);
   color: var(--ork-text);
+  text-shadow: none;
 }
 html[data-theme="dark"] .info-container h3:after {
   color: var(--ork-text-muted);
