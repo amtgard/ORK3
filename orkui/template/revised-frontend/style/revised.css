@@ -6221,6 +6221,24 @@ html[data-theme="dark"] .pk-award-success {
   color: #9ae6b4;
 }
 
+/* Autocomplete dropdowns in Park modals */
+html[data-theme="dark"] .pk-ac-results {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .pk-ac-item {
+  color: var(--ork-text);
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .pk-ac-item:hover,
+html[data-theme="dark"] .pk-ac-item:focus,
+html[data-theme="dark"] .pk-ac-item.pk-ac-focused {
+  background: var(--ork-bg-tertiary);
+  color: var(--ork-link-bright);
+  outline: none;
+}
+
 /* Native date input — hint browser to use dark chrome */
 html[data-theme="dark"] input[type="date"] {
   color-scheme: dark;
