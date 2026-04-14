@@ -94,7 +94,11 @@ class Heraldry  extends Ork3 {
 			if ($heraldry !== false) {
 				$src_id = ucwords($table) . 'Id';
 				$base = $path . sprintf("%0" . $img_len . "d", $request[$src_id]);
-				$use_png = Common::gd_has_transparency($heraldry);
+				// Trust the client-declared PNG mime: alpha may be sparse enough
+				// to evade gd_has_transparency's grid sampling. Falling through
+				// to JPEG would mask transparency with a black background.
+				$use_png = (strtolower($request['HeraldryMimeType']) === 'image/png')
+					|| Common::gd_has_transparency($heraldry);
 
 				if (file_exists($base . '.jpg')) unlink($base . '.jpg');
 				if (file_exists($base . '.png')) unlink($base . '.png');

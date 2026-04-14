@@ -47,7 +47,7 @@ $_hr_label = match($_hr_type) {
 	aspect-ratio: 1 / 1;
 	overflow: hidden;
 	border-radius: 5px;
-	background: #f1f5f9;
+	background: transparent;
 	text-decoration: none;
 	display: block;
 	cursor: pointer;

@@ -321,7 +321,7 @@
 	flex-shrink: 0;
 	border-radius: 4px;
 	overflow: hidden;
-	background: #f0f4f8;
+	background: transparent;
 	display: flex;
 	align-items: center;
 	justify-content: center;

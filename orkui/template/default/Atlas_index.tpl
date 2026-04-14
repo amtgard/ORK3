@@ -163,7 +163,7 @@ $atKingdomCount = count($atKingdomIds);
 .at-park-heraldry {
 	width:84px; height:84px; border-radius:8px;
 	object-fit:contain;
-	background:#fff; border:2px solid rgba(255,255,255,.5);
+	background:transparent; border:2px solid rgba(255,255,255,.5);
 	box-shadow:0 2px 8px rgba(0,0,0,.18);
 }
 .at-park-heraldry-placeholder {

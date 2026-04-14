@@ -9,8 +9,8 @@ $_scope_pid  = (int)($ScopeParkId    ?? 0);
 <style>
 .ul-thumb {
 	width: 38px; height: 38px; border-radius: 5px;
-	object-fit: cover; border: 1px solid var(--rp-border);
-	background: var(--rp-bg-light); display: block;
+	object-fit: contain; border: 1px solid var(--rp-border);
+	background: transparent; display: block;
 }
 .ul-type-badge {
 	display: inline-block; padding: 2px 8px; border-radius: 10px;

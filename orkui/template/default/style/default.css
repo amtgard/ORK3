@@ -285,7 +285,7 @@ a:hover {
 	margin: 10px;
 	display: inline-block;
 	vertical-align: top;
-	background-color: white;
+	background-color: transparent;
 }
 .suspended-player {
 	border: 1px solid #fcc;

@@ -1814,7 +1814,7 @@
 }
 .kn-park-tile-img-wrap {
 	height: 96px;
-	background: #f7fafc;
+	background: transparent;
 	border-bottom: 1px solid #e2e8f0;
 	display: flex;
 	align-items: center;
@@ -2074,7 +2074,7 @@
 }
 .kn-park-heraldry {
 	width: 84px; height: 84px; border-radius: 8px;
-	object-fit: contain; background: #fff;
+	object-fit: contain; background: transparent;
 	border: 2px solid rgba(255,255,255,.5);
 	box-shadow: 0 2px 8px rgba(0,0,0,.18);
 }
@@ -3588,7 +3588,7 @@
 	aspect-ratio: 1;
 	object-fit: contain;
 	border-radius: 6px;
-	background: #f7fafc;
+	background: transparent;
 	border: 1px solid #e2e8f0;
 	display: block;
 	margin-bottom: 12px;
@@ -4194,7 +4194,7 @@
 	aspect-ratio: 1;
 	object-fit: contain;
 	border-radius: 6px;
-	background: #f7fafc;
+	background: transparent;
 	border: 1px solid #e2e8f0;
 	display: block;
 	margin-bottom: 12px;

@@ -732,6 +732,7 @@ if (PnConfig.recError) {
         var UPLOAD_URL = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/update';
         var imgType  = null;  // 'photo' | 'heraldry'
         var origImg  = null;  // HTMLImageElement (resized if needed)
+        var origImgIsPng = false; // source was PNG — preserve alpha on output
         var cropBox  = null;  // {x,y,w,h} in image pixels
         var dispScale = 1;    // display scale factor
         var cropBound = null; // bound event listener refs for cleanup
@@ -796,6 +797,7 @@ if (PnConfig.recError) {
                 this.value = '';
                 return;
             }
+            origImgIsPng = (imgType === 'heraldry') && (ext === 'png' || file.type === 'image/png');
             gid('pn-img-error').style.display = 'none';
 
             function loadIntoModal(blob) {
@@ -815,14 +817,13 @@ if (PnConfig.recError) {
             }
 
             if (file.size > 348836) {
-                var isPng = (file.type === 'image/png');
                 gid('pn-img-resize-notice').textContent = 'Resizing\u2026';
                 resizeImageToLimit(file, 348836, function(blob) {
                     gid('pn-img-resize-notice').textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + '\u00a0KB';
                     loadIntoModal(blob);
                 }, function(errMsg) {
                     showError(errMsg);
-                }, isPng);
+                }, origImgIsPng);
             } else {
                 loadIntoModal(file);
             }
@@ -987,23 +988,26 @@ if (PnConfig.recError) {
             outCanvas.width  = Math.round(cb.w);
             outCanvas.height = Math.round(cb.h);
             outCanvas.getContext('2d').drawImage(origImg, cb.x, cb.y, cb.w, cb.h, 0, 0, cb.w, cb.h);
+            var outMime    = origImgIsPng ? 'image/png'  : 'image/jpeg';
+            var outQuality = origImgIsPng ? undefined    : 0.88;
             outCanvas.toBlob(function(blob) {
                 if (blob.size > 348836) {
                     resizeImageToLimit(blob, 348836, doUpload, function(err) {
                         showStep('pn-img-step-select');
                         showError(err);
-                    }, false);
+                    }, origImgIsPng);
                 } else {
                     doUpload(blob);
                 }
-            }, 'image/jpeg', 0.88);
+            }, outMime, outQuality);
         }
 
         function doUpload(blob) {
             showStep('pn-img-step-uploading');
             var fd = new FormData();
             fd.append('Update', 'Update Media');
-            fd.append(imgType === 'photo' ? 'PlayerImage' : 'Heraldry', blob, 'image.jpg');
+            var outName = origImgIsPng ? 'image.png' : 'image.jpg';
+            fd.append(imgType === 'photo' ? 'PlayerImage' : 'Heraldry', blob, outName);
             fetch(UPLOAD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
