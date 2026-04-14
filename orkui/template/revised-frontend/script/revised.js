@@ -4941,22 +4941,38 @@ $(document).ready(function() {
                 var done = gid('kn-heraldry-step-done');
                 if (sel) sel.style.display = 'none';
                 if (upl) upl.style.display = '';
-                var fd = new FormData();
-                fd.append('Heraldry', file);
-                fetch(UPLOAD_URL, { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(r) {
+
+                function doUpload(blob) {
+                    var fd = new FormData();
+                    fd.append('Heraldry', blob, file.name);
+                    fetch(UPLOAD_URL, { method: 'POST', body: fd })
+                        .then(function(r) { return r.json(); })
+                        .then(function(r) {
+                            if (upl) upl.style.display = 'none';
+                            if (r && r.status === 0) {
+                                setTimeout(function() { window.location.reload(); }, 1200);
+                            } else {
+                                if (sel) sel.style.display = '';
+                                alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
+                            }
+                        })
+                        .catch(function() {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert('Request failed. Please try again.');
+                        });
+                }
+
+                if (file.size > 348836) {
+                    var isPng = (file.type === 'image/png');
+                    resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
                         if (upl) upl.style.display = 'none';
-                        if (r && r.status === 0) {
-                            setTimeout(function() { window.location.reload(); }, 1200);
-                        } else {
-                            alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
-                        }
-                    })
-                    .catch(function() {
                         if (sel) sel.style.display = '';
-                        alert('Request failed. Please try again.');
-                    });
+                        alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                    }, isPng);
+                } else {
+                    doUpload(file);
+                }
             });
         }
 
@@ -10391,25 +10407,39 @@ window.pnCloseUnitCreateModal = function() {
                 var done = gid('pk-heraldry-step-done');
                 if (sel) sel.style.display = 'none';
                 if (upl) upl.style.display = '';
-                var fd = new FormData();
-                fd.append('Heraldry', file);
-                fetch(UPLOAD_URL, { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(r) {
-                        if (upl) upl.style.display = 'none';
-                        if (r && r.status === 0) {
-                            if (done) done.style.display = '';
-                            setTimeout(function() { window.location.reload(); }, 1200);
-                        } else {
+
+                function doUpload(blob) {
+                    var fd = new FormData();
+                    fd.append('Heraldry', blob, file.name);
+                    fetch(UPLOAD_URL, { method: 'POST', body: fd })
+                        .then(function(r) { return r.json(); })
+                        .then(function(r) {
+                            if (upl) upl.style.display = 'none';
+                            if (r && r.status === 0) {
+                                if (done) done.style.display = '';
+                                setTimeout(function() { window.location.reload(); }, 1200);
+                            } else {
+                                if (sel) sel.style.display = '';
+                                alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
+                            }
+                        })
+                        .catch(function() {
+                            if (upl) upl.style.display = 'none';
                             if (sel) sel.style.display = '';
-                            alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
-                        }
-                    })
-                    .catch(function() {
+                            alert('Request failed. Please try again.');
+                        });
+                }
+
+                if (file.size > 348836) {
+                    var isPng = (file.type === 'image/png');
+                    resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
                         if (upl) upl.style.display = 'none';
                         if (sel) sel.style.display = '';
-                        alert('Request failed. Please try again.');
-                    });
+                        alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                    }, isPng);
+                } else {
+                    doUpload(file);
+                }
             });
         }
 
