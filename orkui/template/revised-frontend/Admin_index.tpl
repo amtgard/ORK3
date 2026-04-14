@@ -236,7 +236,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 						foreach ($allRows as $row):
 							$isPrinz  = (bool)$row['IsPrincipality'];
 					?>
-					<tr data-name="<?= htmlspecialchars(strtolower($row['KingdomName'])) ?>">
+					<tr data-name="<?= htmlspecialchars(strtolower($row['KingdomName'])) ?>" data-kingdom-id="<?= (int)$row['KingdomId'] ?>" <?= $isPrinz ? 'data-parent-id="' . (int)$row['ParentKingdomId'] . '"' : '' ?>>
 						<td>
 							<a href="<?= UIR ?>Kingdom/profile/<?= (int)$row['KingdomId'] ?>" style="color:#3182ce;text-decoration:none;font-weight:<?= $isPrinz ? '400' : '600' ?>">
 								<?= $isPrinz ? '&ensp;↳ ' : '' ?><?= htmlspecialchars($row['KingdomName']) ?>
@@ -1219,7 +1219,14 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 	/* --------------------------------------------------
 	   Kingdom overview table — sort + filter
 	   -------------------------------------------------- */
-	var sortCol = 0, sortAsc = true;
+	var sortCol = -1, sortAsc = true;
+	var cpSkipWords = /^(the|kingdom|empire|freehold|principality|of)\s+/i;
+	function cpSortKey(name) {
+		var s = name.trim();
+		var prev;
+		do { prev = s; s = s.replace(cpSkipWords, ''); } while (s !== prev);
+		return s.toLowerCase();
+	}
 	function cpSort(col) {
 		if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = col === 0; }
 		document.querySelectorAll('.cp-kd-table thead th').forEach(function(th, i) {
@@ -1227,15 +1234,32 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 			if (i === sortCol) th.classList.add(sortAsc ? 'cp-sort-asc' : 'cp-sort-desc');
 		});
 		var tbody = document.getElementById('cp-kd-tbody');
-		var rows  = Array.from(tbody.querySelectorAll('tr'));
-		rows.sort(function(a, b) {
+		var allRows = Array.from(tbody.querySelectorAll('tr'));
+
+		// Separate kingdoms from principalities
+		var kingdoms = allRows.filter(function(r) { return !r.dataset.parentId; });
+		var prinzMap  = {};
+		allRows.filter(function(r) { return !!r.dataset.parentId; }).forEach(function(r) {
+			var pid = r.dataset.parentId;
+			if (!prinzMap[pid]) prinzMap[pid] = [];
+			prinzMap[pid].push(r);
+		});
+
+		// Sort kingdoms only
+		kingdoms.sort(function(a, b) {
 			var av = a.children[sortCol].innerText.trim().replace(/,/g,'');
 			var bv = b.children[sortCol].innerText.trim().replace(/,/g,'');
 			var ai = parseFloat(av), bi = parseFloat(bv);
-			var cmp = isNaN(ai) || isNaN(bi) ? av.localeCompare(bv) : ai - bi;
+			var cmp = isNaN(ai) || isNaN(bi) ? cpSortKey(av).localeCompare(cpSortKey(bv)) : ai - bi;
 			return sortAsc ? cmp : -cmp;
 		});
-		rows.forEach(function(r) { tbody.appendChild(r); });
+
+		// Re-insert: kingdom row followed immediately by its principalities
+		kingdoms.forEach(function(r) {
+			tbody.appendChild(r);
+			var kid = r.dataset.kingdomId;
+			if (prinzMap[kid]) prinzMap[kid].forEach(function(p) { tbody.appendChild(p); });
+		});
 	}
 	function cpFilterTable(q) {
 		q = q.toLowerCase().trim();
@@ -1426,5 +1450,6 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 
 	window.cpSort        = cpSort;
 	window.cpFilterTable = cpFilterTable;
+	cpSort(0); // apply prefix-stripped alphabetical sort on load
 })();
 </script>
