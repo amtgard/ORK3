@@ -11,7 +11,7 @@ define('ORK_VERSION', '3.5.1 Owl');
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
 	['version' => '3.5.1 Owl', 'date' => '2026-04-18', 'items' => [
-		['icon' => 'fas fa-moon', 'title' => 'Dark Mode', 'body' => 'The ORK now supports dark mode! Use the moon icon in the navigation bar to switch between light, dark, and system-default themes. Your preference is saved automatically.'],
+		['icon' => 'fas fa-moon', 'title' => 'Dark Mode', 'body' => 'The ORK now supports dark mode! The theme toggle has three modes — click to cycle: Auto (half-circle icon — follows your OS setting) → Dark (moon) → Light (sun). Your preference is saved automatically.'],
 		['icon' => 'fas fa-desktop', 'title' => 'Follows Your System', 'body' => 'If you leave the theme set to automatic, the ORK will follow your device\'s light or dark preference and update instantly when it changes.'],
 		['icon' => 'fas fa-paint-brush', 'title' => 'Full Coverage', 'body' => 'Dark mode is supported across player, kingdom, and park profiles, as well as the navigation, modals, tables, calendars, and all other site components.'],
 	]],
