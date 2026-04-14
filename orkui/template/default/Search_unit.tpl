@@ -12,8 +12,8 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 <style>
 .su-thumb {
 	width: 38px; height: 38px; border-radius: 5px;
-	object-fit: cover; border: 1px solid var(--rp-border);
-	background: var(--rp-bg-light); display: block;
+	object-fit: contain; border: 1px solid var(--rp-border);
+	background: transparent; display: block;
 }
 .su-type-badge {
 	display: inline-block; padding: 2px 8px; border-radius: 10px;
