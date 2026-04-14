@@ -118,13 +118,18 @@ class Attendance  extends Ork3 {
 				return InvalidParameter();
 		}
 		
+		// Compute date partition columns and set them before the INSERT.
+		$_parts = $this->_computeDatePartitions($this->attendance->date);
+		$this->attendance->date_year  = $_parts['date_year'];
+		$this->attendance->date_month = $_parts['date_month'];
+		$this->attendance->date_week3 = $_parts['date_week3'];
+		$this->attendance->date_week6 = $_parts['date_week6'];
+		
 		$attendance_id = $this->attendance->save();
 		
 		logtrace("Attendance->AddAttendance()", array($this->attendance->lastSql(), $request, $detail));
 		
         if ($this->attendance->attendance_id) {
-          $sql = "update " . DB_PREFIX . "attendance set date_year = year(`date`), date_month = month(`date`), date_week3 = week(`date`, 3), date_week6 = week(`date`, 6) where attendance_id = " . $this->attendance->attendance_id;
-          $this->db->query($sql);
     		  return Success($this->attendance->attendance_id);
         }
         return InvalidParameter();
@@ -166,6 +171,12 @@ class Attendance  extends Ork3 {
 		$this->attendance->credits = $request['Credits'];
 		$this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$this->attendance->entered_at = date("Y-m-d H:i:s");
+		// Recompute date partitions when date changes.
+		$_parts = $this->_computeDatePartitions($this->attendance->date);
+		$this->attendance->date_year  = $_parts['date_year'];
+		$this->attendance->date_month = $_parts['date_month'];
+		$this->attendance->date_week3 = $_parts['date_week3'];
+		$this->attendance->date_week6 = $_parts['date_week6'];
 		
 		$this->attendance->save();
 		
@@ -273,6 +284,41 @@ class Attendance  extends Ork3 {
 		$this->attendance->delete();
 		
 		return Success($this->attendance->attendance_id);
+	}
+
+	private function _computeDatePartitions($date_str) {
+		// Guard: empty/null date_str causes strtotime() to return false → epoch silently.
+		$_ts = strtotime($date_str);
+		if (!$_ts) {
+			return ['date_year' => 0, 'date_month' => 0, 'date_week3' => 0, 'date_week6' => 0];
+		}
+		// Compute YEAR(), MONTH(), WEEK(date,3), WEEK(date,6) equivalents.
+		// date_week3 = ISO 8601 week (Monday-start) — PHP date('W') matches WEEK(date,3).
+		// date_week6 = Sunday-start, week 1 contains Jan 1 — use MariaDB directly to ensure
+		//              year-boundary correctness (last days of Dec / first days of Jan can
+		//              belong to the prior or next year's week in MariaDB's mode-6 semantics).
+		$_safe = date('Y-m-d', $_ts); // normalize to safe SQL date string
+		$this->db->Clear();
+		// YapoMysql::DataSet() does NOT pre-advance the cursor; call ->Next() before reading.
+		$_rs = $this->db->DataSet(
+			"SELECT YEAR('{$_safe}') AS yr, MONTH('{$_safe}') AS mo," .
+			" WEEK('{$_safe}', 3) AS wk3, WEEK('{$_safe}', 6) AS wk6"
+		);
+		if ($_rs && $_rs->Next() && $_rs->yr !== null) {
+			return [
+				'date_year'  => (int)$_rs->yr,
+				'date_month' => (int)$_rs->mo,
+				'date_week3' => (int)$_rs->wk3,
+				'date_week6' => (int)$_rs->wk6,
+			];
+		}
+		// Fallback to PHP if DB call fails (PHP date('W') = ISO week = WEEK(date,3))
+		return [
+			'date_year'  => (int)date('Y', $_ts),
+			'date_month' => (int)date('n', $_ts),
+			'date_week3' => (int)date('W', $_ts),
+			'date_week6' => 0,
+		];
 	}
 
 	public function _create_system_classes() {

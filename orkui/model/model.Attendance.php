@@ -83,14 +83,29 @@ class Model_Attendance extends Model {
 		global $DB;
 		$pid  = (int)$park_id;
 		$date = date('Y-m-d', strtotime($date)); // sanitize to valid date
-		$DB->Clear();
 		$prev = null;
-		$r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date < '{$date}' ORDER BY date DESC LIMIT 1");
-		if ($r && $r->Next()) $prev = $r->att_date;
-		$DB->Clear();
 		$next = null;
-		$r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date > '{$date}' ORDER BY date ASC LIMIT 1");
-		if ($r && $r->Next()) $next = $r->att_date;
+		// Single UNION ALL query replaces two separate round-trips.
+		// mundane_id > 0 filter intentionally omitted: parks can have headcount-only records
+		// (mundane_id = 0) on certain dates; filtering them breaks date navigation for those parks.
+		$DB->Clear();
+		$sql = "(SELECT 'prev' AS direction, DATE(date) AS att_date
+		        FROM " . DB_PREFIX . "attendance
+		        WHERE park_id = {$pid} AND date < '{$date}'
+		        ORDER BY date DESC LIMIT 1)
+		       UNION ALL
+		       (SELECT 'next' AS direction, DATE(date) AS att_date
+		        FROM " . DB_PREFIX . "attendance
+		        WHERE park_id = {$pid} AND date > '{$date}'
+		        ORDER BY date ASC LIMIT 1)";
+		$r = $DB->DataSet($sql);
+		// YapoMysql::DataSet() does NOT pre-advance; use while->Next() to iterate rows.
+		if ($r) {
+			while ($r->Next()) {
+				if ($r->direction === 'prev') $prev = $r->att_date;
+				else                          $next = $r->att_date;
+			}
+		}
 		return ['prev' => $prev, 'next' => $next];
 	}
 }

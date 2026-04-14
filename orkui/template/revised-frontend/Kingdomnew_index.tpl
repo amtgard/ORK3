@@ -1868,61 +1868,77 @@ var KnConfig = {
 	if (!kingdomId) return;
 
 	// ---- Park averages + player counts (AJAX) ----
-	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
-		.then(function(r) { return r.json(); })
-		.then(function(data) {
-			var totalAtt = 0, totalMo = 0, totalTp = 0, totalTm = 0;
-			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
-			function knTrend(cur, prev, decimals) {
-				if (prev === undefined) return '';
-				if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';
-				if (cur < prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' + prev.toFixed(decimals) + ' (prev period)">&#9660;</span>';
-				return '';
-			}
-			for (var parkId in data) {
-				if (parkId === '_kingdom') continue;
-				var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
-				var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
-				var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
-				totalAtt += att; totalMo += mo; totalTp += tp; totalTm += tm;
-				// Tile view
-				var tile = document.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
-				if (tile) {
-					var wkEl = tile.querySelector('.kn-avgwk-tile');
-					var moEl = tile.querySelector('.kn-avgmo-tile');
-					if (wkEl) wkEl.innerHTML = (att / 26).toFixed(1) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 1);
-					if (moEl) moEl.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);
+	// AbortController lets navigation cancel in-flight requests immediately.
+	var knAvgsDone  = false;
+	var knAbortCtrl = new AbortController();
+	window.addEventListener('pagehide', function() { knAbortCtrl.abort(); });
+	// On bfcache restore: re-create the controller and re-fetch if averages didn't complete.
+	window.addEventListener('pageshow', function(e) {
+		if (!e.persisted) return;
+		knAbortCtrl = new AbortController();
+		if (!knAvgsDone) knFetchAverages();
+		// knLoadPlayers() early-returns when knPlayersLoaded===true (already done),
+		// and uses knAbortCtrl.signal directly on click — no extra work needed here.
+	});
+	function knFetchAverages() {
+		fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId, { signal: knAbortCtrl.signal })
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				var totalAtt = 0, totalMo = 0, totalTp = 0, totalTm = 0;
+				var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
+				function knTrend(cur, prev, decimals) {
+					if (prev === undefined) return '';
+					if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';
+					if (cur < prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' + prev.toFixed(decimals) + ' (prev period)">&#9660;</span>';
+					return '';
 				}
-				// List view row
-				var row = document.querySelector('tr[data-park-id="' + parkId + '"]');
-				if (row) {
-					var wkTd = row.querySelector('.kn-avgwk-row');
-					var moTd = row.querySelector('.kn-avgmo-row');
-					var tpTd = row.querySelector('.kn-tp-row');
-					var tmTd = row.querySelector('.kn-tm-row');
-					if (wkTd) { wkTd.innerHTML = (att / 26).toFixed(2) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 2); wkTd.setAttribute('data-sortval', att / 26); }
-					if (moTd) { moTd.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);  moTd.setAttribute('data-sortval', mo / 12); }
-					if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
-					if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
+				for (var parkId in data) {
+					if (parkId === '_kingdom') continue;
+					var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
+					var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
+					var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
+					totalAtt += att; totalMo += mo; totalTp += tp; totalTm += tm;
+					// Tile view
+					var tile = document.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
+					if (tile) {
+						var wkEl = tile.querySelector('.kn-avgwk-tile');
+						var moEl = tile.querySelector('.kn-avgmo-tile');
+						if (wkEl) wkEl.innerHTML = (att / 26).toFixed(1) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 1);
+						if (moEl) moEl.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);
+					}
+					// List view row
+					var row = document.querySelector('tr[data-park-id="' + parkId + '"]');
+					if (row) {
+						var wkTd = row.querySelector('.kn-avgwk-row');
+						var moTd = row.querySelector('.kn-avgmo-row');
+						var tpTd = row.querySelector('.kn-tp-row');
+						var tmTd = row.querySelector('.kn-tm-row');
+						if (wkTd) { wkTd.innerHTML = (att / 26).toFixed(2) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 2); wkTd.setAttribute('data-sortval', att / 26); }
+						if (moTd) { moTd.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);  moTd.setAttribute('data-sortval', mo / 12); }
+						if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
+						if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
+					}
 				}
-			}
-			// Stat cards — use kingdom-level deduped total for weekly (avoids double-counting multi-park players)
-			var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
-			var statWk = document.getElementById('kn-stat-avgwk');
-			var statMo = document.getElementById('kn-stat-avgmo');
-			if (statWk) statWk.textContent = (wkBase / 26).toFixed(1);
-			if (statMo) statMo.textContent = (totalMo / 12).toFixed(1);
-			// Footer totals
-			var footWk = document.getElementById('kn-total-avgwk');
-			var footMo = document.getElementById('kn-total-avgmo');
-			var footTp = document.getElementById('kn-total-tp');
-			var footTm = document.getElementById('kn-total-tm');
-			if (footWk) footWk.textContent = (wkBase / 26).toFixed(2);
-			if (footMo) footMo.textContent = (totalMo / 12).toFixed(1);
-			if (footTp) footTp.textContent = totalTp;
-			if (footTm) footTm.textContent = totalTm;
-		})
-		.catch(function(err) { console.error('Kingdom park_averages_json failed:', err); });
+				// Stat cards — use kingdom-level deduped total for weekly (avoids double-counting multi-park players)
+				var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
+				var statWk = document.getElementById('kn-stat-avgwk');
+				var statMo = document.getElementById('kn-stat-avgmo');
+				if (statWk) statWk.textContent = (wkBase / 26).toFixed(1);
+				if (statMo) statMo.textContent = (totalMo / 12).toFixed(1);
+				// Footer totals
+				var footWk = document.getElementById('kn-total-avgwk');
+				var footMo = document.getElementById('kn-total-avgmo');
+				var footTp = document.getElementById('kn-total-tp');
+				var footTm = document.getElementById('kn-total-tm');
+				if (footWk) footWk.textContent = (wkBase / 26).toFixed(2);
+				if (footMo) footMo.textContent = (totalMo / 12).toFixed(1);
+				if (footTp) footTp.textContent = totalTp;
+				if (footTm) footTm.textContent = totalTm;
+				knAvgsDone = true;
+			})
+			.catch(function(err) { if (err.name !== 'AbortError') console.error('Kingdom park_averages_json failed:', err); });
+	}
+	knFetchAverages();
 
 	// ---- Players tab: lazy-load on first click ----
 	function knHtmlEsc(s) {
@@ -1973,7 +1989,7 @@ var KnConfig = {
 	function knLoadPlayers() {
 		if (knPlayersLoaded) return;
 		var uir = '<?= UIR ?>';
-		fetch(uir + 'Kingdom/players_json/' + kingdomId)
+		fetch(uir + 'Kingdom/players_json/' + kingdomId, { signal: knAbortCtrl.signal })
 			.then(function(r) { return r.json(); })
 			.then(function(data) {
 				knPlayersLoaded = true;
@@ -2043,7 +2059,8 @@ var KnConfig = {
 				var loadEl = document.getElementById('kn-players-loading');
 				if (loadEl) loadEl.style.display = 'none';
 			})
-			.catch(function() {
+			.catch(function(err) {
+				if (err.name === 'AbortError') return;
 				knPlayersLoaded = false;
 				var loadEl = document.getElementById('kn-players-loading');
 				if (loadEl) loadEl.innerHTML = '<span style="color:#e53e3e">Failed to load players.</span>';
