@@ -2432,6 +2432,7 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 .kn-award-type-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
 .kn-award-type-btn { padding:8px 4px; min-height:44px; line-height:1.2; border:2px solid var(--ork-border); border-radius:8px; background:var(--ork-card-bg); font-size:13px; font-weight:600; color:var(--ork-text-secondary); cursor:pointer; transition:all 0.15s; text-align:center; }
 .kn-award-type-btn.kn-active { border-color:#2c5282; background:#ebf4ff; color:#2c5282; }
+html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; background:rgba(99,179,237,0.15); color:#90cdf4; }
 .kn-award-type-btn:hover:not(.kn-active) { border-color:var(--ork-border-dark); background:var(--ork-bg-secondary); }
 @media (max-width: 400px) { .kn-award-type-btn { font-size:11px; } }
 .kn-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
@@ -2462,6 +2463,8 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 #kn-award-overlay.kn-open, #kn-rec-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
 #kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #kn-award-overlay .kn-modal-header, #kn-rec-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
+/* Reset global h1-h6 box styles for all kn modal titles (fights orkui.css gray box) */
+.kn-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
 #kn-award-overlay .kn-modal-title, #kn-rec-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-award-overlay .kn-modal-close-btn, #kn-rec-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
 #kn-award-overlay .kn-modal-close-btn:hover, #kn-rec-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
@@ -5590,10 +5593,10 @@ html[data-theme="dark"] .plr-merge-warning { background:rgba(197,48,48,0.15); bo
 .pronoun-row select { flex: 1; min-width: 0; }
 .pronoun-custom-btn {
     font-size: 12px; padding: 5px 10px; border-radius: 4px; flex-shrink: 0;
-    border: 1px solid #e2e8f0; background: #f7fafc; color: #4a5568; cursor: pointer;
+    border: 1px solid var(--ork-border, #e2e8f0); background: var(--ork-bg-secondary, #f7fafc); color: var(--ork-text-secondary, #4a5568); cursor: pointer;
     display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
 }
-.pronoun-custom-btn:hover { background: #edf2f7; border-color: #cbd5e0; }
+.pronoun-custom-btn:hover { background: var(--ork-bg-tertiary, #edf2f7); border-color: var(--ork-border-dark, #cbd5e0); }
 .pronoun-picker-panel {
     margin-top: 8px; padding: 12px; background: #f7fafc;
     border: 1px solid #e2e8f0; border-radius: 8px;
