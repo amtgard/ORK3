@@ -44,11 +44,11 @@
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
-	// Check if player has any reconcilable historical awards
+	// Check if player has any reconcilable historical awards (ladder only — matches reconcile page filter)
 	$hasHistorical = false;
 	if ($canManageAwards && is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
+			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
 				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
 					$hasHistorical = true;
 					break;
@@ -61,7 +61,7 @@
 	$hasHistoricalTip = false;
 	if (is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1) {
+			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
 				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
 					$hasHistoricalTip = true;
 					break;
