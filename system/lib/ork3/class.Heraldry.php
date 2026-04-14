@@ -100,6 +100,10 @@ class Heraldry  extends Ork3 {
 				$use_png = (strtolower($request['HeraldryMimeType']) === 'image/png')
 					|| Common::gd_has_transparency($heraldry);
 
+				if ($use_png) {
+					$heraldry = Common::gd_trim_transparent($heraldry);
+				}
+
 				if (file_exists($base . '.jpg')) unlink($base . '.jpg');
 				if (file_exists($base . '.png')) unlink($base . '.png');
 

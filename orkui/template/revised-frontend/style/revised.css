@@ -1517,31 +1517,47 @@ html[data-theme="dark"] .pk-btn-white {
 	position: relative;
 	display: flex;
 	align-items: center;
-	padding: 24px 30px;
-	gap: 24px;
+	padding: 16px 32px 16px 36px;
+	gap: 32px;
 	z-index: 1;
 }
-.kn-heraldry-wrap { position: relative; flex-shrink: 0; }
-.kn-heraldry-frame {
-	width: 110px;
-	height: 110px;
-	border-radius: 8px;
-	overflow: hidden;
-	border: 3px solid rgba(255,255,255,0.8);
-	background: rgba(0,0,0,0.15);
+.kn-heraldry-wrap {
+	position: relative;
+	flex-shrink: 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
+.kn-heraldry-wrap::before {
+	content: "";
+	position: absolute;
+	inset: -20px;
+	background: radial-gradient(ellipse at center, rgba(255,255,255,0.06) 0%, transparent 65%);
+	pointer-events: none;
+	z-index: 0;
+}
+.kn-heraldry-wrap > * { position: relative; z-index: 1; }
+.kn-heraldry-frame {
+	height: 156px;
+	width: auto;
+	max-width: 195px;
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	overflow: visible;
+	display: block;
+}
 .kn-heraldry-edit-btn {
 	position: absolute;
-	bottom: 4px;
-	right: 4px;
-	width: 26px;
-	height: 26px;
+	top: -6px;
+	right: -6px;
+	width: 28px;
+	height: 28px;
 	border-radius: 50%;
-	background: rgba(0,0,0,0.55);
-	border: none;
+	background: rgba(15,23,42,0.85);
+	border: 1px solid rgba(255,255,255,0.25);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
 	color: #fff;
 	font-size: 12px;
 	cursor: pointer;
@@ -1549,7 +1565,8 @@ html[data-theme="dark"] .pk-btn-white {
 	align-items: center;
 	justify-content: center;
 	opacity: 0;
-	transition: opacity 0.18s;
+	transition: opacity 0.15s ease;
+	z-index: 3;
 }
 .kn-heraldry-wrap:hover .kn-heraldry-edit-btn { opacity: 1; }
 #kn-heraldry-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
@@ -1557,15 +1574,19 @@ html[data-theme="dark"] .pk-btn-white {
 #kn-heraldry-overlay.kn-open .pn-modal-box,
 #kn-heraldry-overlay.kn-open .kn-modal-box { transform:translateY(0) scale(1); opacity:1; }
 .kn-heraldry-frame img {
-	width: 100%;
-	height: 100%;
+	height: 156px;
+	width: auto;
+	max-width: 195px;
 	object-fit: contain;
 	margin: 0;
 	padding: 0;
 	border: none;
-	border-radius: 0;
-	max-width: none;
+	border-radius: 4px;
 	max-height: none;
+	filter:
+		drop-shadow(0 1px 0 rgba(255,255,255,0.25))
+		drop-shadow(0 6px 14px rgba(0,0,0,0.45))
+		drop-shadow(0 2px 4px rgba(0,0,0,0.35));
 }
 .kn-hero-info {
 	flex: 1;
@@ -2179,9 +2200,14 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 	/* Show the active-tab name label below the icon strip */
 	.kn-active-tab-label { display: block; }
 }
+@media (max-width: 900px) {
+	.kn-heraldry-frame { height: 128px; max-width: 160px; }
+	.kn-heraldry-frame img { height: 128px; max-width: 160px; }
+}
 @media (max-width: 425px) {
-	.kn-hero-content { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
-	.kn-heraldry-frame { width: 80px; height: 80px; }
+	.kn-hero-content { flex-direction: column; text-align: center; padding: 20px; gap: 16px; }
+	.kn-heraldry-frame { height: 96px; max-width: 120px; }
+	.kn-heraldry-frame img { height: 96px; max-width: 120px; }
 	.kn-kingdom-name { font-size: 22px; }
 	.kn-badges { justify-content: center; }
 	.kn-hero-actions { align-items: center; flex-direction: row; flex-wrap: wrap; justify-content: center; }
@@ -2635,33 +2661,51 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 24px;
-	padding: 24px 30px;
+	gap: 32px;
+	padding: 16px 32px 16px 36px;
 	color: #fff;
 	z-index: 1;
 }
-.pk-hero-left { flex-shrink: 0; }
-.pk-heraldry-frame {
-	width: 110px;
-	height: 110px;
-	border-radius: 8px;
-	overflow: hidden;
-	border: 3px solid rgba(255,255,255,0.8);
-	background: rgba(0,0,0,0.15);
+.pk-hero-left {
+	position: relative;
+	flex-shrink: 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
+.pk-hero-left::before {
+	content: "";
+	position: absolute;
+	inset: -20px;
+	background: radial-gradient(ellipse at center, rgba(255,255,255,0.06) 0%, transparent 65%);
+	pointer-events: none;
+	z-index: 0;
+}
+.pk-hero-left > * { position: relative; z-index: 1; }
+.pk-heraldry-frame {
+	height: 156px;
+	width: auto;
+	max-width: 195px;
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	overflow: visible;
+	display: block;
+}
 .pk-heraldry-frame img {
-	width: 100%;
-	height: 100%;
+	height: 156px;
+	width: auto;
+	max-width: 195px;
 	object-fit: contain;
 	margin: 0;
 	padding: 0;
 	border: none;
-	border-radius: 0;
-	max-width: none;
+	border-radius: 4px;
 	max-height: none;
+	filter:
+		drop-shadow(0 1px 0 rgba(255,255,255,0.25))
+		drop-shadow(0 6px 14px rgba(0,0,0,0.45))
+		drop-shadow(0 2px 4px rgba(0,0,0,0.35));
 }
 .pk-hero-center { flex: 1; min-width: 0; }
 .pk-kingdom-link { margin-bottom: 4px; }
@@ -3287,6 +3331,10 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 }
 
 /* ---- Responsive ---- */
+@media (max-width: 900px) {
+	.pk-heraldry-frame { height: 128px; max-width: 160px; }
+	.pk-heraldry-frame img { height: 128px; max-width: 160px; }
+}
 @media (max-width: 768px) {
 	.pk-hero-content { flex-wrap: wrap; }
 	.pk-hero-right { width: 100%; align-items: stretch; }
@@ -5445,15 +5493,19 @@ html[data-theme="dark"] .plr-merge-warning { background:rgba(197,48,48,0.15); bo
    ================================================================ */
 
 /* ---- Heraldry edit button ---- */
-.pk-heraldry-editable { position: relative; cursor: pointer; }
+.pk-heraldry-editable { cursor: pointer; }
 .pk-heraldry-edit-btn {
-    position: absolute; bottom: 6px; right: 6px;
-    width: 32px; height: 32px; border-radius: 50%;
-    background: rgba(0,0,0,0.6); color: #fff; border: none; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; font-size: 14px;
-    opacity: 0; transition: opacity 0.2s; z-index: 2;
+    position: absolute; top: -6px; right: -6px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(15,23,42,0.85); color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+    opacity: 0; transition: opacity 0.15s ease; z-index: 3;
 }
-.pk-heraldry-editable:hover .pk-heraldry-edit-btn { opacity: 1; }
+.pk-hero-left:hover .pk-heraldry-edit-btn { opacity: 1; }
 
 /* ---- Autocomplete dropdown ---- */
 .pk-ac-results {
@@ -6032,8 +6084,9 @@ table.dataTable.adm-table tbody tr.even:hover {
 
 /* === Park Profile: 425px Hero Breakpoint === */
 @media (max-width: 425px) {
-    .pk-hero-content { flex-direction: column; text-align: center; padding: 16px; }
-    .pk-heraldry-frame { width: 80px; height: 80px; }
+    .pk-hero-content { flex-direction: column; text-align: center; gap: 16px; padding: 20px; }
+    .pk-heraldry-frame { height: 96px; max-width: 120px; }
+    .pk-heraldry-frame img { height: 96px; max-width: 120px; }
 }
 
 /* === Accessibility: Reduced Motion === */

@@ -5089,16 +5089,19 @@ $(document).ready(function() {
                         });
                 }
 
-                if (file.size > 348836) {
-                    var isPng = (file.type === 'image/png');
-                    resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
-                        if (upl) upl.style.display = 'none';
-                        if (sel) sel.style.display = '';
-                        alert(errMsg || 'Could not resize image. Please choose a smaller file.');
-                    }, isPng);
-                } else {
-                    doUpload(file);
-                }
+                trimTransparentEdges(file, function(trimmed) {
+                    file = trimmed;
+                    if (file.size > 348836) {
+                        var isPng = (file.type === 'image/png');
+                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                        }, isPng);
+                    } else {
+                        doUpload(file);
+                    }
+                });
             });
         }
 
@@ -10581,16 +10584,19 @@ window.pnCloseUnitCreateModal = function() {
                         });
                 }
 
-                if (file.size > 348836) {
-                    var isPng = (file.type === 'image/png');
-                    resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
-                        if (upl) upl.style.display = 'none';
-                        if (sel) sel.style.display = '';
-                        alert(errMsg || 'Could not resize image. Please choose a smaller file.');
-                    }, isPng);
-                } else {
-                    doUpload(file);
-                }
+                trimTransparentEdges(file, function(trimmed) {
+                    file = trimmed;
+                    if (file.size > 348836) {
+                        var isPng = (file.type === 'image/png');
+                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                        }, isPng);
+                    } else {
+                        doUpload(file);
+                    }
+                });
             });
         }
 
