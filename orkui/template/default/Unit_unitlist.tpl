@@ -91,6 +91,15 @@ html[data-theme="dark"] .uc-modal-title,
 html:not([data-theme="light"]):not([data-theme="dark"]) .uc-modal-title {
 	background: transparent !important; border: none !important; color: #e2e8f0; text-shadow: none !important;
 }
+html[data-theme="dark"] .uc-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .uc-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .uc-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .uc-field label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .uc-field input,
+html[data-theme="dark"] .uc-field select { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .uc-btn-secondary { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .uc-btn-secondary:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background: rgba(66,153,225,0.1) !important; border-color: #4299e1 !important; color: #90cdf4 !important; }
 .uc-close-btn { background: none; border: none; font-size: 20px; color: #718096; cursor: pointer; line-height: 1; padding: 0 4px; }
 .uc-close-btn:hover { color: #2d3748; }
 .uc-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
