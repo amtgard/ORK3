@@ -653,6 +653,13 @@ html[data-theme="dark"] .pk-btn-white {
 	color: #a0aec0;
 	font-size: 11px;
 }
+.pn-table .pn-award-alias-sub {
+	display: block;
+	margin-top: 2px;
+	color: #718096;
+	font-size: 11px;
+	font-style: italic;
+}
 
 /* Ladder award progress widgets */
 .pn-ladder-grid {

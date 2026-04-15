@@ -1573,6 +1573,10 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 										'KingdomName'=> $detail['KingdomName'],
 										'EventId'    => (int)$detail['EventId'],
 										'EventName'  => $detail['EventName'],
+										'AwardId'    => (int)($detail['AwardId'] ?? 0),
+										'CustomName' => $detail['CustomAwardName'] ?? '',
+										'AliasAwardId'   => (int)($detail['AliasAwardId'] ?? 0),
+										'AliasAwardName' => $detail['AliasAwardName'] ?? '',
 									], JSON_HEX_QUOT | JSON_HEX_APOS); ?>
 									<button class="pn-award-action-btn pn-award-edit-btn"
 									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
@@ -1729,6 +1733,10 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 											'KingdomName'    => $detail['KingdomName'],
 											'EventId'        => (int)$detail['EventId'],
 											'EventName'      => $detail['EventName'],
+											'AwardId'        => (int)($detail['AwardId'] ?? 0),
+											'CustomName'     => $detail['CustomAwardName'] ?? '',
+											'AliasAwardId'   => (int)($detail['AliasAwardId'] ?? 0),
+											'AliasAwardName' => $detail['AliasAwardName'] ?? '',
 										], JSON_HEX_QUOT | JSON_HEX_APOS); ?>
 										<button class="pn-award-action-btn pn-award-edit-btn"
 										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
