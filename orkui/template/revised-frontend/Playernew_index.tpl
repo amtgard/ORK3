@@ -2750,6 +2750,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<option value="__custom__"<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
 							</select>
 							<input type="text" id="pn-name-prefix-custom" placeholder="Syr, Lady, Archon, Captain, etc..." style="margin-top:6px;<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NamePrefix'] : '') ?>" />
+							<div class="pn-name-custom-warn" id="pn-name-prefix-warn" style="display:<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>;margin-top:6px;padding:8px 10px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:11.5px;color:#744210;line-height:1.4"><i class="fas fa-info-circle" style="color:#d69e2e;margin-right:6px"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not earned is not allowed.</div>
 						</div>
 					</div>
 					<div class="pn-name-core">
@@ -2772,6 +2773,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<option value="__custom__"<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
 							</select>
 							<input type="text" id="pn-name-suffix-custom" placeholder="the Overpowered, the Realmstrider, Esquire" style="margin-top:6px;<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NameSuffix'] : '') ?>" />
+							<div class="pn-name-custom-warn" id="pn-name-suffix-warn" style="display:<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>;margin-top:6px;padding:8px 10px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:11.5px;color:#744210;line-height:1.4"><i class="fas fa-info-circle" style="color:#d69e2e;margin-right:6px"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not earned is not allowed.</div>
 						</div>
 					</div>
 				</div>
@@ -3297,13 +3299,19 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		updateNamePreview();
 	});
 	prefixSel.addEventListener('change', function() {
-		prefixCustom.style.display = this.value === '__custom__' ? '' : 'none';
-		if (this.value !== '__custom__') prefixCustom.value = '';
+		var isCustom = this.value === '__custom__';
+		prefixCustom.style.display = isCustom ? '' : 'none';
+		var warn = gid('pn-name-prefix-warn');
+		if (warn) warn.style.display = isCustom ? '' : 'none';
+		if (!isCustom) prefixCustom.value = '';
 		updateNamePreview();
 	});
 	suffixSel.addEventListener('change', function() {
-		suffixCustom.style.display = this.value === '__custom__' ? '' : 'none';
-		if (this.value !== '__custom__') suffixCustom.value = '';
+		var isCustom = this.value === '__custom__';
+		suffixCustom.style.display = isCustom ? '' : 'none';
+		var warn = gid('pn-name-suffix-warn');
+		if (warn) warn.style.display = isCustom ? '' : 'none';
+		if (!isCustom) suffixCustom.value = '';
 		updateNamePreview();
 	});
 	prefixCustom.addEventListener('input', updateNamePreview);
