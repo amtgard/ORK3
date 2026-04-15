@@ -913,7 +913,7 @@ class Player extends Ork3 {
 		}
 
 		$notices = '';
-		if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)
+		if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
 			|| $requester_id == $request['MundaneId']) {
 
             if (Ork3::$Lib->authorization->HasAuthority($request['MundaneId'], AUTH_ADMIN, 0, AUTH_EDIT)
@@ -968,10 +968,10 @@ class Player extends Ork3 {
 				logtrace("Mundane DB 2", $this->mundane);
 				$this->mundane->restricted = is_null($request['Restricted']) ? $this->mundane->restricted : ($request['Restricted'] ? 1 : 0);
 
-				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
     				$this->mundane->active = is_null($request['Active']) ? $this->mundane->restricted : ($request['Active']?1:0);
 				}
-				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 					$pms = $request['ParkMemberSince'];
 					$this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
 				}
