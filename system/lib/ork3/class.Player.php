@@ -1575,13 +1575,29 @@ class Player extends Ork3 {
 				$set_awards_id  = intval($request['AwardsId']);
 
 				// Custom Title reclassification: allow switching between Custom Award and Custom Title sentinels,
-				// updating custom_name and alias_award_id in the same write.
+				// updating custom_name, alias_award_id, and kingdomaward_id in the same write.
 				$extra_sql = '';
 				$ctid = $this->getCustomTitleAwardId();
 				if (array_key_exists('AwardId', $request) && valid_id($request['AwardId'])) {
 					$req_award_id = (int)$request['AwardId'];
 					if ($req_award_id === 94 || $req_award_id === $ctid) {
 						$extra_sql .= ', award_id=' . $req_award_id;
+						// Also rewrite kingdomaward_id so AwardsForPlayer's ka->a join yields the
+						// correct base award (is_title flag, peerage, etc). Find the matching
+						// kingdomaward row in the same kingdom as the existing row.
+						$curKaKingdomId = 0;
+						if (valid_id($awards->kingdomaward_id)) {
+							$kq = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdomaward WHERE kingdomaward_id = " . (int)$awards->kingdomaward_id . " LIMIT 1");
+							if ($kq && $kq->size() > 0) { $kq->next(); $curKaKingdomId = (int)$kq->kingdom_id; }
+						}
+						if ($curKaKingdomId > 0) {
+							$targetName = ($req_award_id === $ctid) ? 'Custom Title' : 'Custom Award';
+							$tq = $this->db->query("SELECT kingdomaward_id FROM " . DB_PREFIX . "kingdomaward WHERE kingdom_id = " . $curKaKingdomId . " AND award_id = " . $req_award_id . " AND name = '" . addslashes($targetName) . "' LIMIT 1");
+							if ($tq && $tq->size() > 0) {
+								$tq->next();
+								$extra_sql .= ', kingdomaward_id=' . (int)$tq->kingdomaward_id;
+							}
+						}
 					}
 				}
 				if (array_key_exists('CustomName', $request)) {
