@@ -158,9 +158,25 @@ A PHP constant `AWARD_CUSTOM_TITLE` is added wherever `AWARD_CUSTOM_AWARD` lives
 - Alias validation in `class.Player.php` prevents clients from aliasing to officer-role awards or to the Custom Title sentinel itself.
 - The alias dropdown is server-rendered, so clients can't inject arbitrary ids; the server also revalidates.
 
+## Edit Modal / Reconciliation Flow
+
+The **Edit Award** modal on Playernew (and wherever else award editing is surfaced) must also support converting an existing entry into a Custom Title — the lightweight reconciliation path for historically mis-categorized Custom Awards.
+
+- When opening the edit modal on a row whose `award_id = CUSTOM_AWARD_SENTINEL` (94) **or** `award_id = CUSTOM_TITLE_SENTINEL`, expose:
+  - A toggle / radio-pair: **"This is a…" → Custom Award | Custom Title**
+  - When "Custom Title" is selected, the alias dropdown (same optgroup structure as the add-flow) appears beneath the custom-name box.
+  - Current alias (if any) is preselected.
+- Saving the edit:
+  - Writes the effective `award_id` (94 or the Custom Title sentinel) and `alias_award_id` to the row.
+  - Any ladder rank / peerage semantics are **recomputed on read** via the COALESCE join — no denormalized fields to resync.
+  - The dangeraudit trail records the change like any other award edit.
+- This flow is the "reconcile" path requested for kingdoms that have already given titles as Custom Awards. They can edit the existing row instead of revoking and re-giving.
+- Going in the other direction (Custom Title → Custom Award) is also allowed via the same toggle; alias_award_id is cleared on save.
+- **Out of scope:** Bulk reclassification. Users reconcile one row at a time via the edit modal.
+
 ## Non-Goals / Explicitly Out of Scope
 
-- **Editing existing Custom Award entries into Custom Titles** — no backfill UI in this pass. Users re-give if they want the alias.
+- **Bulk backfill UI** for mass-converting historical Custom Awards to Custom Titles — per-row edit only.
 - **Kingdom-level Custom Title catalogs** — this is an instance-level feature, not a kingdom palette. A future enhancement could add saved presets.
 - **Ladder reconciliation** — Custom Titles don't appear in the historical reconcile flow.
 - **Revocation behavior** — uses existing award revocation path; no special handling.
@@ -184,7 +200,8 @@ A PHP constant `AWARD_CUSTOM_TITLE` is added wherever `AWARD_CUSTOM_AWARD` lives
 ## Files Touched
 
 - `db-migrations/2026-04-14-custom-titles.sql` *(new)*
-- `system/lib/ork3/class.Player.php` — `add_player_award()`, `update_player_award()`: accept/persist `AliasAwardId`, validation, effective-award cap resolution
+- `system/lib/ork3/class.Player.php` — `add_player_award()`, `update_player_award()`: accept/persist `AliasAwardId`, allow converting between Custom Award ↔ Custom Title sentinel, validation, effective-award cap resolution
+- `orkui/controller/controller.Award.php` — `addawards`: pass `AliasAwardId` through; wherever update is handled, pass it through
 - `system/lib/ork3/class.Report.php` — `BeltlineData()`: alias join + effective column resolution
 - `orkui/controller/controller.Player.php` — `addaward`/`updateaward` cases, Titles query, My Associates query
 - `orkui/controller/controller.Playernew.php` — Titles tab data, Awards data, `$CustomTitleAliasOptions` build
