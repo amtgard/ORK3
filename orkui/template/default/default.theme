@@ -448,6 +448,7 @@ foreach ($WHATS_NEW_ITEMS as $__release) {
     </div>
     <ul class="wn-items">
     <?php foreach ($__currentRelease['items'] as $__item): ?>
+      <?php if (!empty($__item['notes_only'])) continue; ?>
       <li class="wn-item">
         <span class="wn-item-icon"><i class="<?=htmlspecialchars($__item['icon'])?>"></i></span>
         <div>

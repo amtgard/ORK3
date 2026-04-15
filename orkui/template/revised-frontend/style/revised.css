@@ -8336,4 +8336,35 @@ html[data-theme="dark"] .cp-kd-table tbody tr:hover { background: var(--ork-bg-s
 html[data-theme="dark"] .cp-kd-table tbody td { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .cp-kd-principality { color: var(--ork-text-muted); }
 
+/* =====================================================
+   DARK MODE — PR #454 additions (QoL updates)
+   ===================================================== */
+/* Email spell-checker suggestion banner */
+html[data-theme="dark"] .esc-suggestion {
+	background: var(--ork-alert-info-bg);
+	border-color: var(--ork-alert-info-border);
+	color: var(--ork-alert-info-text);
+}
+html[data-theme="dark"] .esc-suggestion i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .esc-suggestion-use { background: #3182ce; color: #fff; }
+html[data-theme="dark"] .esc-suggestion-use:hover { background: #4299e1; }
+html[data-theme="dark"] .esc-suggestion-dismiss { color: var(--ork-text-muted); }
+html[data-theme="dark"] .esc-suggestion-dismiss:hover { color: var(--ork-text); }
+
+/* Association helper note under "Given By" field (inline styles → !important override) */
+html[data-theme="dark"] #pn-award-givenby-note,
+html[data-theme="dark"] #kn-award-givenby-note,
+html[data-theme="dark"] #pk-award-givenby-note {
+	background: var(--ork-alert-info-bg) !important;
+	border-color: var(--ork-alert-info-border) !important;
+	color: var(--ork-alert-info-text) !important;
+}
+
+/* Inactive-player badge in park attendance autocomplete */
+html[data-theme="dark"] .pk-att-ac-inactive { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] .pk-att-ac-inactive-badge {
+	background: var(--ork-badge-red-bg);
+	color: var(--ork-badge-red-text);
+}
+
 /* @media fallbacks */

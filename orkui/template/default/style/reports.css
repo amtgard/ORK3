@@ -1277,3 +1277,29 @@ html[data-theme="dark"] .lg-search-bar input {
 html[data-theme="dark"] .lg-search-bar label {
   color: var(--ork-text-muted, #a0aec0);
 }
+
+/* ── Stat card info tooltip + view toggle (PR #454) ── */
+html[data-theme="dark"] .rp-stat-tip-icon {
+	background: var(--ork-bg-tertiary, #374151);
+	color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .rp-stat-tip-text {
+	background: var(--ork-text, #e2e8f0);
+	color: var(--ork-bg, #1a202c);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .rp-view-btn {
+	background: var(--ork-card-bg, #2d3748);
+	color: var(--ork-text-secondary, #cbd5e0);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .rp-view-btn:hover {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border-dark, #718096);
+}
+html[data-theme="dark"] .rp-view-btn-active,
+html[data-theme="dark"] .rp-view-btn-active:hover {
+	background: #4338ca;
+	color: #fff;
+	border-color: #4338ca;
+}

@@ -256,6 +256,14 @@ html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-selec
 html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
 html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+/* RSVP table: sign-in credits input + waivered tooltip (PR #454) */
+html[data-theme="dark"] #ev-rsvp-credits {
+	background: var(--ork-input-bg) !important;
+	border-color: var(--ork-input-border) !important;
+	color: var(--ork-text) !important;
+}
+html[data-theme="dark"] #ev-rsvp-table thead th label { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); color: var(--ork-bg, #1a202c); }
 </style>
 
 <?php // ---- HERO ---- ?>
