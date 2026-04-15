@@ -109,6 +109,7 @@ class Controller_Award extends Controller
 			'GivenById' => $this->request->Award_addawards->GivenById,
 			'Note' => $this->request->Award_addawards->Note,
 			'CustomName' => $this->request->Award_addawards->AwardName,
+			'AliasAwardId' => $this->request->Award_addawards->AliasAwardId ?? 0,
 			'ParkId' => valid_id($this->request->Award_addawards->ParkId) ? $this->request->Award_addawards->ParkId : 0,
 			'KingdomId' => valid_id($this->request->Award_addawards->KingdomId) ? $this->request->Award_addawards->KingdomId : 0,
 			'EventId' => valid_id($this->request->Award_addawards->EventId) ? $this->request->Award_addawards->EventId : 0
