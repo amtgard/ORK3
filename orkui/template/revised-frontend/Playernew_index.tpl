@@ -2414,6 +2414,44 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<div class="pn-edit-award-name-display" id="pn-edit-award-name"></div>
 			</div>
 
+			<!-- Custom Award ↔ Custom Title reclassification (shown only when editing a custom entry) -->
+			<div class="pn-acct-field" id="pn-edit-type-row" style="display:none">
+				<label>Type</label>
+				<div style="display:flex;gap:14px;align-items:center;padding:4px 0">
+					<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:500">
+						<input type="radio" name="pn-edit-type" id="pn-edit-type-award" value="custom_award"> Custom Award
+					</label>
+					<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:500">
+						<input type="radio" name="pn-edit-type" id="pn-edit-type-title" value="custom_title"> Custom Title
+					</label>
+				</div>
+			</div>
+			<div class="pn-acct-field" id="pn-edit-custom-name-row" style="display:none">
+				<label for="pn-edit-custom-name" id="pn-edit-custom-name-label">Custom Name</label>
+				<input type="text" id="pn-edit-custom-name" maxlength="64" />
+			</div>
+			<div class="pn-acct-field" id="pn-edit-alias-row" style="display:none">
+				<label for="pn-edit-alias">Alias of <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<select id="pn-edit-alias">
+					<option value="0">— None —</option>
+					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
+					<optgroup label="Peerage Ladder">
+						<?php foreach ($CustomTitleAliasOptions['Peerage'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?> (<?= htmlspecialchars($_opt['Peerage']) ?>)</option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+					<?php if (!empty($CustomTitleAliasOptions['Titles'])): ?>
+					<optgroup label="Other Titles">
+						<?php foreach ($CustomTitleAliasOptions['Titles'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?></option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+				</select>
+				<div style="font-size:11px;color:#718096;margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
+			</div>
+
 			<div class="pn-acct-field" id="pn-edit-rank-row" style="display:none">
 				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select</span></label>
 				<div class="pn-rank-pills-wrap" id="pn-edit-rank-pills"></div>
@@ -2990,6 +3028,8 @@ var PnConfig = {
 	lastClassId:      <?= $_lastClassId ?>,
 	attendanceDates:  [],  // populated async by PlayerAjax/attendance
 	canEditAnyAttendance: <?= !empty($canEditAdmin) ? 'true' : 'false' ?>,
+	customAwardId:      <?= (int)($CustomAwardId ?? 94) ?>,
+	customTitleAwardId: <?= (int)($CustomTitleAwardId ?? 0) ?>,
 	isOwnProfile:     <?= !empty($isOwnProfile) ? 'true' : 'false' ?>,
 	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
 	classToParagon:   <?= json_encode($pnClassToParagon) ?>,

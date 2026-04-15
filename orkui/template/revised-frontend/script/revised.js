@@ -8527,6 +8527,37 @@ function setupPronounPicker(cfg) {
         }
         var fb = gid('pn-edit-award-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+
+        // Custom Award / Custom Title reclassification UI
+        var awardIdNum = parseInt(data.AwardId || 0, 10);
+        var isCA = awardIdNum === parseInt(PnConfig.customAwardId || 0, 10);
+        var isCT = PnConfig.customTitleAwardId && awardIdNum === parseInt(PnConfig.customTitleAwardId, 10);
+        var typeRow = gid('pn-edit-type-row');
+        var customRow = gid('pn-edit-custom-name-row');
+        var customInput = gid('pn-edit-custom-name');
+        var customLabel = gid('pn-edit-custom-name-label');
+        var aliasRow = gid('pn-edit-alias-row');
+        var aliasSel = gid('pn-edit-alias');
+        var radioA = gid('pn-edit-type-award');
+        var radioT = gid('pn-edit-type-title');
+        if (typeRow) typeRow.style.display = (isCA || isCT) ? '' : 'none';
+        if (customRow) customRow.style.display = (isCA || isCT) ? '' : 'none';
+        if (aliasRow) aliasRow.style.display = isCT ? '' : 'none';
+        if (radioA) radioA.checked = isCA;
+        if (radioT) radioT.checked = isCT;
+        if (customInput) customInput.value = data.CustomName || data.displayName || '';
+        if (customLabel) customLabel.textContent = isCT ? 'Custom Title Name' : 'Custom Award Name';
+        if (aliasSel) aliasSel.value = String(data.AliasAwardId || 0);
+
+        function pnEditTypeChanged() {
+            var nowCT = radioT && radioT.checked;
+            if (aliasRow) aliasRow.style.display = nowCT ? '' : 'none';
+            if (!nowCT && aliasSel) aliasSel.value = '0';
+            if (customLabel) customLabel.textContent = nowCT ? 'Custom Title Name' : 'Custom Award Name';
+        }
+        if (radioA) radioA.onchange = pnEditTypeChanged;
+        if (radioT) radioT.onchange = pnEditTypeChanged;
+
         var overlay = gid('pn-award-edit-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
     };
@@ -8804,6 +8835,19 @@ function setupPronounPicker(cfg) {
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/reconcileaward/' + currentAwardsId;
                 } else {
                     fd.append('Rank', gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '');
+                    // Custom Award/Title reclassification payload
+                    var editRadioA = gid('pn-edit-type-award');
+                    var editRadioT = gid('pn-edit-type-title');
+                    if (editRadioA && (editRadioA.checked || editRadioT.checked)) {
+                        var targetAwardId = editRadioT.checked
+                            ? parseInt(PnConfig.customTitleAwardId || 0, 10)
+                            : parseInt(PnConfig.customAwardId || 0, 10);
+                        if (targetAwardId > 0) fd.append('AwardId', String(targetAwardId));
+                        var cn = gid('pn-edit-custom-name');
+                        if (cn) fd.append('AwardName', cn.value || '');
+                        var alSel = gid('pn-edit-alias');
+                        fd.append('AliasAwardId', (editRadioT.checked && alSel) ? (alSel.value || '0') : '0');
+                    }
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId;
                 }
 
