@@ -1564,7 +1564,40 @@ class Player extends Ork3 {
 				$set_at_event_id   = valid_id($request['EventId']) ? intval($request['EventId']) : 0;
 				$set_awards_id  = intval($request['AwardsId']);
 
-				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . ' WHERE awards_id=' . $set_awards_id;
+				// Custom Title reclassification: allow switching between Custom Award and Custom Title sentinels,
+				// updating custom_name and alias_award_id in the same write.
+				$extra_sql = '';
+				$ctid = $this->getCustomTitleAwardId();
+				if (array_key_exists('AwardId', $request) && valid_id($request['AwardId'])) {
+					$req_award_id = (int)$request['AwardId'];
+					if ($req_award_id === 94 || $req_award_id === $ctid) {
+						$extra_sql .= ', award_id=' . $req_award_id;
+					}
+				}
+				if (array_key_exists('CustomName', $request)) {
+					$extra_sql .= ", custom_name='" . addslashes($request['CustomName']) . "'";
+				}
+				if (array_key_exists('AliasAwardId', $request)) {
+					$new_alias = (!empty($request['AliasAwardId']) && (int)$request['AliasAwardId'] > 0) ? (int)$request['AliasAwardId'] : 0;
+					if ($new_alias > 0) {
+						// Validate alias target
+						$chk = $this->db->query("SELECT award_id, is_title, peerage, officer_role FROM " . DB_PREFIX . "award WHERE award_id = " . $new_alias . " LIMIT 1");
+						$bad = true;
+						if ($chk && $chk->size() > 0) {
+							$chk->next();
+							if ((int)$chk->award_id !== $ctid && $chk->officer_role === 'none'
+							    && ((int)$chk->is_title === 1 || !in_array($chk->peerage, array('', 'None'), true))) {
+								$bad = false;
+							}
+						}
+						if ($bad) return InvalidParameter();
+						$extra_sql .= ', alias_award_id=' . $new_alias;
+					} else {
+						$extra_sql .= ', alias_award_id=NULL';
+					}
+				}
+
+				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
 				$this->db->query($sql);
 
 				return Success($set_awards_id);
@@ -1657,6 +1690,7 @@ class Player extends Ork3 {
 		$award->at_kingdom_id = $awards->at_kingdom_id;
 		$award->at_event_id = $awards->at_event_id;
 		$award->custom_name = $awards->custom_name;
+		$award->alias_award_id = $awards->alias_award_id;
 		$award->award_id = $awards->award_id;
 		return $award;
 	}
