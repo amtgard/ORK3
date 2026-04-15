@@ -154,12 +154,12 @@
 	<div class="kn-stat-card">
 		<div class="kn-stat-icon"><i class="fas fa-users"></i></div>
 		<div class="kn-stat-number" id="kn-stat-avgwk">—</div>
-		<div class="kn-stat-label">Avg / Week</div>
+		<div class="kn-stat-label">Avg / Week <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per week across all parks in this Kingdom, averaged over the past 6 months. A player attending multiple parks in one week counts once.</span></span></div>
 	</div>
 	<div class="kn-stat-card">
 		<div class="kn-stat-icon"><i class="fas fa-chart-line"></i></div>
 		<div class="kn-stat-number" id="kn-stat-avgmo">—</div>
-		<div class="kn-stat-label">Avg / Month</div>
+		<div class="kn-stat-label">Avg / Month <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per month across all parks in this Kingdom, averaged over the past 12 months. A player attending multiple parks in one month counts once.</span></span></div>
 	</div>
 </div>
 
@@ -371,8 +371,8 @@
 								<tr>
 									<th data-sorttype="text">Park</th>
 									<th data-sorttype="text">Type</th>
-									<th data-sorttype="numeric" class="kn-col-numeric" title="Average unique sign-ins per week over 26 weeks">Avg/Wk</th>
-									<th data-sorttype="numeric" class="kn-col-numeric" title="Average unique sign-ins per month over 12 months">Avg/Mo</th>
+									<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per week over the past 6 months">Avg/Wk</th>
+									<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per month over the past 12 months">Avg/Mo</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players who signed in at this park in the past 12 months">Total Players</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players whose home park is here who signed in at this park in the past 12 months">Total Members</th>
 									<?php if ($CanManageKingdom ?? false): ?><th data-sorttype="none" style="width:32px"></th><?php endif; ?>
@@ -1884,7 +1884,8 @@ var KnConfig = {
 	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
-			var totalAtt = 0, totalMo = 0, totalTp = 0, totalTm = 0;
+			var totalAtt = 0, totalTp = 0, totalTm = 0;
+			var wkCount = (data._kingdom && data._kingdom.wk_count) ? data._kingdom.wk_count : 26;
 			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
 			function knTrend(cur, prev, decimals) {
 				if (prev === undefined) return '';
@@ -1897,14 +1898,14 @@ var KnConfig = {
 				var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
 				var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
 				var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
-				totalAtt += att; totalMo += mo; totalTp += tp; totalTm += tm;
+				totalAtt += att; totalTp += tp; totalTm += tm;
 				// Tile view
 				var tile = document.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
 				if (tile) {
 					var wkEl = tile.querySelector('.kn-avgwk-tile');
 					var moEl = tile.querySelector('.kn-avgmo-tile');
-					if (wkEl) wkEl.innerHTML = (att / 26).toFixed(1) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 1);
-					if (moEl) moEl.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);
+					if (wkEl) wkEl.innerHTML = (att / wkCount).toFixed(1) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 1);
+					if (moEl) moEl.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1);
 				}
 				// List view row
 				var row = document.querySelector('tr[data-park-id="' + parkId + '"]');
@@ -1913,26 +1914,26 @@ var KnConfig = {
 					var moTd = row.querySelector('.kn-avgmo-row');
 					var tpTd = row.querySelector('.kn-tp-row');
 					var tmTd = row.querySelector('.kn-tm-row');
-					if (wkTd) { wkTd.innerHTML = (att / 26).toFixed(2) + knTrend(att / 26, prevAtt !== undefined ? prevAtt / 26 : undefined, 2); wkTd.setAttribute('data-sortval', att / 26); }
-					if (moTd) { moTd.innerHTML = (mo / 12).toFixed(1)  + knTrend(mo / 12,  prevMo  !== undefined ? prevMo  / 12 : undefined, 1);  moTd.setAttribute('data-sortval', mo / 12); }
+					if (wkTd) { wkTd.innerHTML = (att / wkCount).toFixed(2) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 2); wkTd.setAttribute('data-sortval', att / wkCount); }
+					if (moTd) { moTd.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1); moTd.setAttribute('data-sortval', mo); }
 					if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
 					if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
 				}
 			}
-			// Stat cards — use kingdom-level deduped totals (avoids double-counting multi-park players)
+			// Stat cards — use kingdom-level deduped values (avoids double-counting multi-park players)
 			var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
-			var moBase = (data._kingdom && data._kingdom.mo) ? data._kingdom.mo : totalMo;
+			var moBase = (data._kingdom && data._kingdom.mo) ? data._kingdom.mo : 0;
 			var statWk = document.getElementById('kn-stat-avgwk');
 			var statMo = document.getElementById('kn-stat-avgmo');
-			if (statWk) statWk.textContent = (wkBase / 26).toFixed(1);
-			if (statMo) statMo.textContent = (moBase / 12).toFixed(1);
+			if (statWk) statWk.textContent = (wkBase / wkCount).toFixed(1);
+			if (statMo) statMo.textContent = moBase.toFixed(1);
 			// Footer totals
 			var footWk = document.getElementById('kn-total-avgwk');
 			var footMo = document.getElementById('kn-total-avgmo');
 			var footTp = document.getElementById('kn-total-tp');
 			var footTm = document.getElementById('kn-total-tm');
-			if (footWk) footWk.textContent = (wkBase / 26).toFixed(2);
-			if (footMo) footMo.textContent = (moBase / 12).toFixed(1);
+			if (footWk) footWk.textContent = (wkBase / wkCount).toFixed(2);
+			if (footMo) footMo.textContent = moBase.toFixed(1);
 			if (footTp) footTp.textContent = totalTp;
 			if (footTm) footTm.textContent = totalTm;
 		})

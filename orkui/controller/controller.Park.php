@@ -197,21 +197,47 @@ class Controller_Park extends Controller
 		}
 		$this->data['park_players'] = $parkPlayers;
 
-		// Monthly average: unique players per month over past year (matches Kingdomnew formula)
+		// Monthly average: average of distinct players per month over past year
 		$monthlyAvgSql = "
-			SELECT COUNT(DISTINCT a.mundane_id, a.date_year, a.date_month) AS total_player_months,
-			       COUNT(DISTINCT a.date_year, a.date_month) AS active_months
-			FROM ork_attendance a
-			WHERE a.park_id = {$pid}
-			  AND a.date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
-			  AND a.mundane_id > 0";
+			SELECT AVG(monthly_unique) AS avg_per_month FROM (
+				SELECT COUNT(DISTINCT a.mundane_id) AS monthly_unique
+				FROM ork_attendance a
+				WHERE a.park_id = {$pid}
+				  AND a.date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+				  AND a.mundane_id > 0
+				GROUP BY a.date_year, a.date_month
+			) sub";
 		$DB->Clear();
 		$maResult = $DB->DataSet($monthlyAvgSql);
 		$this->data['MonthlyAvg'] = 0;
 		if ($maResult && $maResult->Next()) {
-			$_totalPM      = (int)$maResult->total_player_months;
-			$_activeMonths = (int)$maResult->active_months;
-			if ($_totalPM > 0 && $_activeMonths > 0) $this->data['MonthlyAvg'] = round($_totalPM / $_activeMonths, 1);
+			$_avg = (float)$maResult->avg_per_month;
+			if ($_avg > 0) $this->data['MonthlyAvg'] = round($_avg, 1);
+		}
+
+		// Weekly average: same formula as Top Parks report — deduplicated player-weeks / week_count.
+		// Uses the same 6-month window and >= boundary so the number matches the ranking report.
+		$wkStart = date('Y-m-d', strtotime('-6 month'));
+		$wkEnd   = date('Y-m-d');
+		$wkCount = max(1, (int)ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
+		$escapedWkStart = mysql_real_escape_string($wkStart);
+		$escapedWkEnd   = mysql_real_escape_string($wkEnd);
+		$weeklyAvgSql = "
+			SELECT COUNT(*) AS player_weeks FROM (
+				SELECT a.mundane_id
+				FROM ork_attendance a
+				WHERE a.park_id = {$pid}
+				  AND a.date >= '{$escapedWkStart}'
+				  AND a.date <= '{$escapedWkEnd}'
+				  AND a.mundane_id > 0
+				GROUP BY a.date_year, a.date_week3, a.mundane_id
+			) sub";
+		$DB->Clear();
+		$waResult = $DB->DataSet($weeklyAvgSql);
+		$this->data['WeeklyAvg'] = 0;
+		if ($waResult && $waResult->Next()) {
+			$_wk = (int)$waResult->player_weeks;
+			if ($_wk > 0) $this->data['WeeklyAvg'] = round($_wk / $wkCount, 2);
 		}
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;

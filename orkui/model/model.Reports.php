@@ -129,6 +129,15 @@ class Model_Reports extends Model {
 		return $r;
 	}
 
+	function get_monthly_chart_data($type, $id, $period, $num_periods, $from_date = null) {
+		$report_from = $from_date ?? date('Y-m-d');
+		if ('All' == $period) {
+			return $this->Report->GetMonthlyChartData(['KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'ReportFromDate'=>$report_from, 'Periods'=>360, 'PerWeeks'=>0, 'PerMonths'=>1]);
+		} else {
+			return $this->Report->GetMonthlyChartData(['KingdomId'=>$type=='Kingdom'?$id:null, 'ParkId'=>$type=='Park'?$id:null, 'PrincipalityId'=>$type=='Principality'?$id:null, 'ReportFromDate'=>$report_from, 'Periods'=>$num_periods, 'PerWeeks'=>$period=='Weeks'?1:0, 'PerMonths'=>$period=='Months'?1:0]);
+		}
+	}
+
 	function get_authorization_list($type, $id, $officers) {
 		$request = array(
 				'Type' => $type,
