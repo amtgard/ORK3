@@ -1551,6 +1551,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 									<?= htmlspecialchars($displayName) ?>
 									<?php if (trimlen($detail['Name'] ?? '') > 0 && $displayName != $detail['Name']): ?><span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span><?php endif; ?>
+									<?php if (!empty($detail['AliasAwardId']) && trimlen($detail['AliasAwardName'] ?? '') > 0): ?><span class="pn-award-alias-sub">aka <?= htmlspecialchars($detail['AliasAwardName']) ?></span><?php endif; ?>
 								</td>
 								<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= strtotime($detail['Date']) > 0 ? $detail['Date'] : '' ?></td>
@@ -1687,6 +1688,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 										<?php
 											if (trimlen($detail['Name'] ?? '') > 0 && $displayName != $detail['Name']): ?>
 												<span class="pn-award-base">[<?= htmlspecialchars($detail['Name']) ?>]</span>
+										<?php endif; ?>
+										<?php if (!empty($detail['AliasAwardId']) && trimlen($detail['AliasAwardName'] ?? '') > 0): ?>
+											<span class="pn-award-alias-sub">aka <?= htmlspecialchars($detail['AliasAwardName']) ?></span>
 										<?php endif; ?>
 									</td>
 									<td class="pn-col-numeric"><?= valid_id($detail['Rank']) ? $detail['Rank'] : '' ?></td>
