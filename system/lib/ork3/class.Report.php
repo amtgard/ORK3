@@ -2541,16 +2541,17 @@ class Report  extends Ork3 {
 				m.persona AS recipient_persona,
 				ma.given_by_id AS giver_id,
 				giver.persona AS giver_persona,
-				IFNULL(ka.name, a.name) AS title_name,
-				a.peerage,
+				COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS title_name,
+				COALESCE(alias.peerage, a.peerage) AS peerage,
 				ma.date
 			FROM " . DB_PREFIX . "awards ma
 				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 				LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
 				LEFT JOIN " . DB_PREFIX . "mundane giver ON giver.mundane_id = ma.given_by_id
-			WHERE (a.peerage IN ('Squire', 'Man-At-Arms', 'Page', 'Lords-Page')
-					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+			WHERE (COALESCE(alias.peerage, a.peerage) IN ('Squire', 'Man-At-Arms', 'Page', 'Lords-Page')
+					OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)
 			ORDER BY m.persona";
 
@@ -2577,8 +2578,9 @@ class Report  extends Ork3 {
 				m.persona
 			FROM " . DB_PREFIX . "awards ma
 				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
-			WHERE a.peerage = 'Knight'
+			WHERE COALESCE(alias.peerage, a.peerage) = 'Knight'
 				AND m.kingdom_id = $kingdom_id
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)
 			ORDER BY m.persona";
@@ -2596,11 +2598,12 @@ class Report  extends Ork3 {
 		}
 
 		// All knight awards globally — IDs for the crown icon + type names for display.
-		$all_knights_sql = "SELECT ma.mundane_id, IFNULL(ka.name, a.name) AS knight_name
+		$all_knights_sql = "SELECT ma.mundane_id, COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS knight_name
 			FROM " . DB_PREFIX . "awards ma
 				JOIN " . DB_PREFIX . "award a ON a.award_id = ma.award_id
+				LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 				LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-			WHERE a.peerage = 'Knight'
+			WHERE COALESCE(alias.peerage, a.peerage) = 'Knight'
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)";
 
 		$akr = $this->db->query($all_knights_sql);
