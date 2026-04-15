@@ -70,7 +70,10 @@ class Controller_Kingdom extends Controller {
 			echo json_encode($cached);
 			exit();
 		}
-		$weekly  = $this->Report->GetKingdomParkAverages(['KingdomId' => $kingdom_id]);
+		$wkStart  = date('Y-m-d', strtotime('-6 month'));
+		$wkEnd    = date('Y-m-d');
+		$wkCount  = max(1, (int)ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
+		$weekly  = $this->Report->GetKingdomParkAverages(['KingdomId' => $kingdom_id, 'AverageMonths' => 6]);
 		$monthly = $this->Report->GetKingdomParkMonthlyAverages(['KingdomId' => $kingdom_id]);
 		$result  = array();
 		foreach ((array)($weekly['KingdomParkAveragesSummary'] ?? []) as $park) {
@@ -78,9 +81,9 @@ class Controller_Kingdom extends Controller {
 		}
 		foreach ((array)($monthly['KingdomParkMonthlySummary'] ?? []) as $park) {
 			if (isset($result[$park['ParkId']])) {
-				$result[$park['ParkId']]['mo'] = (int)$park['MonthlyCount'];
+				$result[$park['ParkId']]['mo'] = (float)$park['MonthlyAvg'];
 			} else {
-				$result[$park['ParkId']] = ['att' => 0, 'mo' => (int)$park['MonthlyCount'], 'tp' => 0, 'tm' => 0];
+				$result[$park['ParkId']] = ['att' => 0, 'mo' => (float)$park['MonthlyAvg'], 'tp' => 0, 'tm' => 0];
 			}
 		}
 		global $DB;
@@ -110,7 +113,7 @@ class Controller_Kingdom extends Controller {
 		$knSql = "SELECT COUNT(*) AS katt FROM (
 				SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
 				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
-				WHERE a.date > DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
+				WHERE a.date >= '{$wkStart}'
 					AND a.mundane_id > 0
 				GROUP BY a.date_year, a.date_week3, a.mundane_id
 			) t";
@@ -120,26 +123,27 @@ class Controller_Kingdom extends Controller {
 		if ($knResult && $knResult->Size() > 0 && $knResult->Next()) {
 			$katt = (int)$knResult->katt;
 		}
-		// Kingdom-level unique-player-month total: deduplicated by (year, month, player)
-		// across the whole kingdom — avoids double-counting players who attend multiple parks in one month
-		$knMoSql = "SELECT COUNT(*) AS kmo FROM (
-				SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
+		// Kingdom-level AVG(distinct players per month): deduplicated across parks —
+		// a player attending two parks in the same month counts once per month.
+		$knMoSql = "SELECT AVG(monthly_unique) AS kmo FROM (
+				SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique
+				FROM " . DB_PREFIX . "attendance a
 				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
 				WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 					AND a.mundane_id > 0
-				GROUP BY a.date_year, a.date_month, a.mundane_id
-			) t";
+				GROUP BY a.date_year, a.date_month
+			) sub";
 		$DB->Clear();
 		$knMoResult = $DB->DataSet($knMoSql);
 		$kmo = 0;
 		if ($knMoResult && $knMoResult->Size() > 0 && $knMoResult->Next()) {
-			$kmo = (int)$knMoResult->kmo;
+			$kmo = round((float)$knMoResult->kmo, 1);
 		}
-		$result['_kingdom'] = ['att' => $katt, 'mo' => $kmo];
+		$result['_kingdom'] = ['att' => $katt, 'mo' => $kmo, 'wk_count' => $wkCount];
 
 		// Previous-period trend data — only for users with kingdom-level auth
 		if ($isAdmin) {
-			// Previous 26 weeks (weeks 27–52 ago)
+			// Previous 6-month period (6–12 months ago) — matches current window of 6 months
 			$DB->Clear();
 			$prevWkResult = $DB->DataSet(
 				"SELECT COUNT(mw.mundane_id) AS att, p.park_id
@@ -147,9 +151,10 @@ class Controller_Kingdom extends Controller {
 				 LEFT JOIN (
 				     SELECT a.mundane_id, a.park_id
 				     FROM ork_attendance a
-				     WHERE a.date >  DATE_SUB(CURDATE(), INTERVAL 52 WEEK)
-				       AND a.date <= DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
-				       AND a.kingdom_id = {$kid} AND a.mundane_id > 0
+				     INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id = {$kid}
+				     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+				       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+				       AND a.mundane_id > 0
 				     GROUP BY date_year, date_week3, mundane_id, a.park_id
 				 ) mw ON p.park_id = mw.park_id
 				 WHERE p.kingdom_id = {$kid} AND p.active = 'Active'
@@ -161,25 +166,26 @@ class Controller_Kingdom extends Controller {
 					if (isset($result[$pid])) $result[$pid]['prev_att'] = (int)$prevWkResult->att;
 				}
 			}
-			// Previous 12 months (months 13–24 ago)
+			// Previous 12 months (months 13–24 ago) — AVG(distinct players per month) per park
 			$DB->Clear();
 			$prevMoResult = $DB->DataSet(
-				"SELECT COUNT(mm.mundane_id) AS mo, mm.park_id
+				"SELECT AVG(monthly_unique) AS mo, park_id
 				 FROM (
-				     SELECT a.mundane_id, a.date_year, a.date_month, a.park_id
+				     SELECT a.date_year, a.date_month, a.park_id,
+				            COUNT(DISTINCT a.mundane_id) AS monthly_unique
 				     FROM ork_attendance a
 				     INNER JOIN ork_park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
 				     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
 				       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 				       AND a.mundane_id > 0
-				     GROUP BY a.date_year, a.date_month, a.mundane_id, a.park_id
+				     GROUP BY a.date_year, a.date_month, a.park_id
 				 ) mm
-				 GROUP BY mm.park_id"
+				 GROUP BY park_id"
 			);
 			if ($prevMoResult) {
 				while ($prevMoResult->Next()) {
 					$pid = (int)$prevMoResult->park_id;
-					if (isset($result[$pid])) $result[$pid]['prev_mo'] = (int)$prevMoResult->mo;
+					if (isset($result[$pid])) $result[$pid]['prev_mo'] = round((float)$prevMoResult->mo, 2);
 				}
 			}
 		}

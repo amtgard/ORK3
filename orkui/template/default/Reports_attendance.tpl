@@ -63,6 +63,17 @@ if ($_att_records > 0) {
 	$_peak_date  = $chart_dates[$_peak_idx];
 }
 
+/* ── Monthly chart data ── */
+$_monthly_dates  = [];
+$_monthly_counts = [];
+$_month_names = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+foreach ((array)($monthly_chart_data ?? []) as $_m) {
+	$_monthly_dates[]  = $_month_names[(int)$_m['Month']] . ' ' . $_m['Year'];
+	$_monthly_counts[] = (int)$_m['Count'];
+}
+$_has_monthly = count($_monthly_counts) >= 2;
+$_monthly_avg = $_has_monthly ? array_sum($_monthly_counts) / count($_monthly_counts) : 0;
+
 /* ── Unique parks (Kingdom scope only) ── */
 $_unique_parks = 0;
 if ($Type === 'Kingdom' && !empty($_summary_dates)) {
@@ -223,17 +234,28 @@ if ($Type !== 'Event') {
 
 	<!-- Stats row -->
 	<div class="rp-stats-row">
-		<div class="rp-stat-card" title="Number of distinct players who signed in at least once during this period.">
+		<div class="rp-stat-card">
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Count of distinct players who signed in at least once during this period.</div></div>
 			<div class="rp-stat-icon"><i class="fas fa-user-check"></i></div>
 			<div class="rp-stat-number"><?=number_format($_distinct_total)?></div>
 			<div class="rp-stat-label">Unique Players</div>
 		</div>
-		<div class="rp-stat-card" title="Average number of distinct players per week across this period.">
+		<div class="rp-stat-card">
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Average distinct players per week. Each week is counted once regardless of how many days it spans.</div></div>
 			<div class="rp-stat-icon"><i class="fas fa-calendar-week"></i></div>
 			<div class="rp-stat-number"><?=number_format($_distinct_avg_wk, 1)?></div>
-			<div class="rp-stat-label">Avg Players / Week</div>
+			<div class="rp-stat-label">Avg / Week</div>
 		</div>
-		<div class="rp-stat-card" title="<?php if ($_trend_pct !== null): ?>Change in average attendance: recent <?=($_att_records >= 8 ? '4' : (int)floor($_att_records/2))?> weeks vs prior <?=($_att_records >= 8 ? '4' : (int)floor($_att_records/2))?> weeks.<?php else: ?>Not enough data to calculate trend (need at least 4 weeks).<?php endif; ?>">
+<?php if ($_has_monthly): ?>
+		<div class="rp-stat-card">
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Average distinct players per calendar month over this period. A player who attends multiple weeks in a month is counted once for that month.</div></div>
+			<div class="rp-stat-icon"><i class="fas fa-calendar-alt"></i></div>
+			<div class="rp-stat-number"><?=number_format($_monthly_avg, 1)?></div>
+			<div class="rp-stat-label">Avg / Month</div>
+		</div>
+<?php endif; ?>
+		<div class="rp-stat-card">
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text"><?php if ($_trend_pct !== null): ?>Change in avg attendance: most recent <?=($_att_records >= 8 ? '4' : (int)floor($_att_records/2))?> weeks vs the <?=($_att_records >= 8 ? '4' : (int)floor($_att_records/2))?> weeks before that.<?php else: ?>Not enough data to calculate trend (need at least 4 weeks).<?php endif; ?></div></div>
 			<div class="rp-stat-icon"><i class="fas fa-chart-line"></i></div>
 <?php if ($_trend_pct !== null): ?>
 			<div class="rp-stat-number" style="color:<?=$_trend_dir === 'up' ? '#059669' : ($_trend_dir === 'down' ? '#dc2626' : 'var(--rp-accent)')?>;">
@@ -244,7 +266,8 @@ if ($Type !== 'Event') {
 <?php endif; ?>
 			<div class="rp-stat-label">Trend</div>
 		</div>
-		<div class="rp-stat-card" title="Highest single-week attendance in this period.">
+		<div class="rp-stat-card">
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Highest single-week distinct player count during this period.</div></div>
 			<div class="rp-stat-icon"><i class="fas fa-trophy"></i></div>
 			<div class="rp-stat-number"><?=$_peak_count > 0 ? number_format($_peak_count) : '—'?></div>
 			<div class="rp-stat-label">Peak Week</div>
@@ -253,13 +276,15 @@ if ($Type !== 'Event') {
 <?php endif; ?>
 		</div>
 <?php if ($Type === 'Kingdom'): ?>
-		<div class="rp-stat-card" title="Number of distinct parks with at least one attendance record in this period.">
+		<div class="rp-stat-card">
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Number of distinct parks with at least one attendance record during this period.</div></div>
 			<div class="rp-stat-icon"><i class="fas fa-tree"></i></div>
 			<div class="rp-stat-number"><?=number_format($_unique_parks)?></div>
 			<div class="rp-stat-label">Active Parks</div>
 		</div>
 <?php else: ?>
-		<div class="rp-stat-card" title="Number of weeks with recorded attendance in this period.">
+		<div class="rp-stat-card">
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Number of weeks with at least one attendance record during this period.</div></div>
 			<div class="rp-stat-icon"><i class="fas fa-list-ol"></i></div>
 			<div class="rp-stat-number"><?=number_format($_att_records)?></div>
 			<div class="rp-stat-label">Total Weeks</div>
@@ -270,6 +295,12 @@ if ($Type !== 'Event') {
 	<!-- Charts row -->
 <?php if ($_att_records > 0): ?>
 	<div class="rp-charts-row rp-charts-visible" id="rp-charts-row">
+		<?php if ($_has_monthly): ?>
+		<div class="rp-view-toggle">
+			<button class="rp-view-btn rp-view-btn-active" id="att-view-wk" onclick="attSetView('weekly')">Weekly</button>
+			<button class="rp-view-btn" id="att-view-mo" onclick="attSetView('monthly')">Monthly</button>
+		</div>
+		<?php endif; ?>
 		<div id="attendance-chart" style="width:100%;height:370px;"></div>
 	</div>
 <?php endif; ?>
@@ -546,6 +577,9 @@ if ($Type !== 'Event') {
 	var chartCounts  = <?=json_encode($chart_counts)?>;
 	var chartDates   = <?=json_encode($chart_dates)?>;
 	var chartIsEvent = <?=json_encode($chart_is_event)?>;
+	var monthlyDates  = <?=json_encode($_monthly_dates)?>;
+	var monthlyCounts = <?=json_encode($_monthly_counts)?>;
+	var attChart = null;
 
 	/* Split into two column series: regular park days vs event weeks */
 	var regularData = [];
@@ -573,7 +607,8 @@ if ($Type !== 'Event') {
 		}
 	}
 
-	new Highcharts.Chart({
+	function attBuildWeeklyChart() {
+		return new Highcharts.Chart({
 		chart  : { renderTo: 'attendance-chart', style: { fontFamily: 'inherit' } },
 		title  : { text: 'Distinct Players per Week' },
 		xAxis  : {
@@ -648,6 +683,50 @@ if ($Type !== 'Event') {
 		},
 		credits: { enabled: false }
 	});
+	}
+
+	function attBuildMonthlyChart() {
+		var ma3 = monthlyCounts.map(function(_, i) {
+			if (i < 2) return null;
+			return Math.round((monthlyCounts[i] + monthlyCounts[i-1] + monthlyCounts[i-2]) / 3 * 10) / 10;
+		});
+		return new Highcharts.Chart({
+			chart  : { renderTo: 'attendance-chart', style: { fontFamily: 'inherit' } },
+			title  : { text: 'Distinct Players per Month' },
+			xAxis  : { categories: monthlyDates, labels: { style: { fontSize: '11px' } } },
+			yAxis  : { title: { text: 'Distinct Players' }, min: 0 },
+			tooltip: {
+				shared: true,
+				formatter: function() {
+					var s = '<b>' + this.x + '</b>';
+					this.points.forEach(function(pt) {
+						if (pt.series.type === 'column') {
+							s += '<br/><span style="color:' + pt.color + '">\u25A0</span> Players: <b>' + Highcharts.numberFormat(pt.y, 0) + '</b>';
+						} else {
+							s += '<br/><span style="color:' + pt.color + '">\u2014</span> ' + pt.series.name + ': <b>' + Highcharts.numberFormat(pt.y, 1) + '</b>';
+						}
+					});
+					return s;
+				}
+			},
+			plotOptions: { column: { borderRadius: 3, borderWidth: 0, groupPadding: 0, pointPadding: 0.05 } },
+			series: [
+				{ name: 'Monthly Players', type: 'column', data: monthlyCounts, color: '#4338ca' },
+				{ name: '3-Month Avg', type: 'spline', data: ma3, color: '#059669', lineWidth: 2.5, marker: { enabled: false }, dashStyle: 'ShortDash', zIndex: 5, connectNulls: false }
+			],
+			legend : { enabled: true, align: 'center', verticalAlign: 'bottom', itemStyle: { fontSize: '12px', fontWeight: '600', color: '#4a5568' }, symbolRadius: 3 },
+			credits: { enabled: false }
+		});
+	}
+
+	window.attSetView = function attSetView(view) {
+		if (attChart) { attChart.destroy(); attChart = null; }
+		document.getElementById('att-view-wk').classList.toggle('rp-view-btn-active', view === 'weekly');
+		document.getElementById('att-view-mo').classList.toggle('rp-view-btn-active', view === 'monthly');
+		attChart = (view === 'monthly') ? attBuildMonthlyChart() : attBuildWeeklyChart();
+	}
+
+	attChart = attBuildWeeklyChart();
 <?php endif; ?>
 }());
 </script>

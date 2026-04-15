@@ -4,9 +4,12 @@
 	$hmPrinz    = [];
 	$hmTotalParks = 0;
 	$hmTotalAttendance = 0;
+	$hmWkStart  = date('Y-m-d', strtotime('-6 month'));
+	$hmWkEnd    = date('Y-m-d');
+	$hmWkCount  = max(1, (int)ceil((strtotime($hmWkEnd) - strtotime($hmWkStart)) / (7 * 86400)));
 	if (is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'])) {
 		foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $r) {
-			$r['_weekly']   = $r['Attendance'] > 0 ? round($r['Attendance'] / 26.0, 1) : 0;
+			$r['_weekly']   = $r['Attendance'] > 0 ? round($r['Attendance'] / $hmWkCount, 1) : 0;
 			$r['_monthly']  = $r['Monthly']    > 0 ? round($r['Monthly']    / 12.0, 1) : 0;
 			$r['_heraldry'] = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', (int)$r['KingdomId']));
 			if ((int)$r['ParentKingdomId'] === 0) {
@@ -57,7 +60,7 @@
 		}
 	}
 
-	$hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / 26.0) : 0;
+	$hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / $hmWkCount) : 0;
 	$hmEventList = is_array($EventSummary) ? $EventSummary : [];
 ?>
 

@@ -2604,6 +2604,25 @@
 .pk-stat-value { font-size: 26px; font-weight: 700; color: var(--pk-accent, #0891b2); line-height: 1.2; }
 .pk-stat-sub   { font-size: 11px; font-weight: 600; color: #4a5568; margin-top: 1px; }
 .pk-stat-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+.pk-stat-tip { position: relative; display: inline-block; color: #a0aec0; cursor: help; margin-left: 3px; vertical-align: middle; }
+.pk-stat-tip:hover { color: #718096; }
+.pk-stat-tip-text {
+	visibility: hidden; opacity: 0;
+	position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+	background: #1a202c; color: #e2e8f0;
+	font-size: 12px; font-weight: 400; line-height: 1.5;
+	padding: 8px 11px; border-radius: 6px; width: 220px;
+	text-transform: none; letter-spacing: 0; text-align: left;
+	pointer-events: none; transition: opacity 0.15s; z-index: 200;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+.pk-stat-tip-text::after {
+	content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+	border: 5px solid transparent; border-top-color: #1a202c;
+}
+.pk-stat-tip:hover .pk-stat-tip-text { visibility: visible; opacity: 1; }
+html[data-theme="dark"] .pk-stat-tip-text { background: #e2e8f0; color: #1a202c; }
+html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 
 /* ---- Main layout ---- */
 .pk-layout {

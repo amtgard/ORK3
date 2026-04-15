@@ -158,10 +158,8 @@
 		$nextParkDayDate = substr($_starts[0], 0, 10);
 	}
 
-	// Active Players: at least one sign-in in the past 365 days
-	$activePlayersYear = count(array_filter($allPlayers, function($_ap) use ($nowTs) {
-		return ($nowTs - strtotime($_ap['LastSignin'])) <= 365 * 24 * 3600;
-	}));
+	// Active Players: last sign-in within the past 6 months — matches the Players tab subtitle
+	$activePlayersYear = count($playerPeriods[0] ?? []);
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -271,9 +269,14 @@
 		<div class="pk-stat-label">Active Players</div>
 	</div>
 	<div class="pk-stat-card">
+		<div class="pk-stat-icon"><i class="fas fa-chart-bar"></i></div>
+		<div class="pk-stat-value"><?= $WeeklyAvg > 0 ? number_format($WeeklyAvg, 1) : '&mdash;' ?></div>
+		<div class="pk-stat-label">Avg / Week <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per week, averaged over the past 6 months. Each player counts once per week. This matches the Top Parks ranking formula.</span></span></div>
+	</div>
+	<div class="pk-stat-card">
 		<div class="pk-stat-icon"><i class="fas fa-chart-line"></i></div>
 		<div class="pk-stat-value"><?= $MonthlyAvg > 0 ? number_format($MonthlyAvg, 1) : '&mdash;' ?></div>
-		<div class="pk-stat-label">Avg / Month</div>
+		<div class="pk-stat-label">Avg / Month <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per month, averaged over the past 12 months. Higher than Avg/Week because a monthly window captures players who don&rsquo;t attend every week.</span></span></div>
 	</div>
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('events')">
 		<div class="pk-stat-icon"><i class="fas fa-flag"></i></div>

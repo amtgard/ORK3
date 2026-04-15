@@ -270,6 +270,7 @@ class Controller_Reports extends Controller {
 		$this->data['attendance_summary'] = $this->Reports->get_attendance_summary($type, $id, $period, $num_periods, $from_date);
 		$this->data['attendance_periodical'] = $this->Reports->get_periodical_summary($type, $id, $period, $num_periods, 'week', $from_date);
 		$this->data['distinct_stats'] = $this->Reports->get_distinct_player_stats($type, $id, $period, $num_periods, $from_date);
+		$this->data['monthly_chart_data'] = $this->Reports->get_monthly_chart_data($type, $id, $period, $num_periods, $from_date);
 		$this->data['Type'] = $type;
 		$this->data['AttendancePeriod'] = $period;
 		$this->data['AttendanceNumPeriods'] = (int)$num_periods;

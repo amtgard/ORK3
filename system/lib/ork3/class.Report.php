@@ -1112,7 +1112,7 @@ class Report  extends Ork3 {
 									where
 										$native_populace
 										$waivered_peeps
-										date > '$per_period'
+										date >= '$per_period'
 										and a.mundane_id > 0
 									group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
@@ -1146,19 +1146,19 @@ class Report  extends Ork3 {
 		$monthly_period = date("Y-m-d", strtotime("-1 year"));
 		$escaped_kingdom_id = mysql_real_escape_string($request['KingdomId']);
 
-		// Group by date_year AND date_month so the same calendar month in two
-		// different years (e.g. Feb 2025 vs Feb 2026) counts as two distinct months.
-		$sql = "select
-						count(mundanesbymonth.mundane_id) monthly_count, mundanesbymonth.park_id
-					from
-						(select
-								a.mundane_id, a.date_year, a.date_month, a.park_id
-							from " . DB_PREFIX . "attendance a
-							where
-								date > '$monthly_period'
-								and a.mundane_id > 0
-							group by a.date_year, a.date_month, a.mundane_id, a.park_id) mundanesbymonth
-					group by mundanesbymonth.park_id";
+		// AVG(distinct players per month) per park — matches the Park page hero stat formula.
+		// Divides by the number of months with actual attendance, not a fixed 12,
+		// so parks with seasonal gaps report their active-period average.
+		$sql = "SELECT AVG(monthly_unique) AS monthly_avg, park_id
+					FROM (
+						SELECT a.date_year, a.date_month, a.park_id,
+						       COUNT(DISTINCT a.mundane_id) AS monthly_unique
+						FROM " . DB_PREFIX . "attendance a
+						WHERE a.date > '$monthly_period'
+						  AND a.mundane_id > 0
+						GROUP BY a.date_year, a.date_month, a.park_id
+					) sub
+					GROUP BY park_id";
 		logtrace('Report: GetKingdomParkMonthlyAverages', array($request, $sql));
 		$r = $this->db->query($sql);
 		$response = array(
@@ -1170,7 +1170,7 @@ class Report  extends Ork3 {
 		} else {
 			$summary = array();
 			while ($r->next()) {
-				$summary[] = array( 'ParkId' => $r->park_id, 'MonthlyCount' => (int)$r->monthly_count );
+				$summary[] = array( 'ParkId' => $r->park_id, 'MonthlyAvg' => round((float)$r->monthly_avg, 2) );
 			}
 			$response['KingdomParkMonthlySummary'] = $summary;
 		}
@@ -1257,6 +1257,7 @@ class Report  extends Ork3 {
 		if (strlen($request['KingdomAverageWeeks'] ?? '') == 0) $request['KingdomAverageWeeks'] = 26;
 		if (strlen($request['ParkAttendanceWithin'] ?? '') == 0) $request['ParkAttendanceWithin'] = 4;
 		if (strlen($request['ReportFromDate'] ?? '') == 0) $request['ReportFromDate'] = 'curdate()';
+		$wk_start = date("Y-m-d", strtotime("-6 month"));
 		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(activeparks.parkcount,0) active_parks
 					FROM `" . DB_PREFIX . "kingdom` k
 					left join
@@ -1266,9 +1267,10 @@ class Report  extends Ork3 {
 								count(mundanesbyweek.mundane_id) attendance_count, mundanesbyweek.kingdom_id
 							from
 								(select
-										mundane_id, date_year, date_week3 as week, kingdom_id
-									from " . DB_PREFIX . "attendance
-									where date > '" . date("Y-m-d", strtotime("-$request[KingdomAverageWeeks] week")) . "' and mundane_id > 0 group by date_year, date_week3, mundane_id, kingdom_id)
+										a.mundane_id, a.date_year, a.date_week3 as week, p.kingdom_id
+									from " . DB_PREFIX . "attendance a
+									inner join " . DB_PREFIX . "park p on p.park_id = a.park_id
+									where a.date >= '$wk_start' and a.mundane_id > 0 group by a.date_year, a.date_week3, a.mundane_id, p.kingdom_id)
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
@@ -1354,6 +1356,41 @@ class Report  extends Ork3 {
 			'TotalDistinctPlayers' => $total,
 			'AvgDistinctPerWeek' => $avg
 		);
+	}
+
+	public function GetMonthlyChartData($request) {
+		$where = '';
+		if (valid_id($request['KingdomId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		if (valid_id($request['ParkId'])) $where = "AND a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
+		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['PrincipalityId']) . "'";
+
+		$report_to = (!empty($request['ReportFromDate']) && $request['ReportFromDate'] !== date('Y-m-d'))
+			? $request['ReportFromDate'] : date('Y-m-d');
+		if ($request['PerWeeks'] == 1)
+			$per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} week"));
+		elseif ($request['PerMonths'] == 1)
+			$per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} month"));
+		else
+			$per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} day"));
+
+		$sql = "SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique
+			FROM " . DB_PREFIX . "attendance a
+			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where
+			GROUP BY a.date_year, a.date_month
+			ORDER BY a.date_year, a.date_month";
+
+		$r = $this->db->query($sql);
+		$data = [];
+		if ($r) {
+			while ($r->next()) {
+				$data[] = [
+					'Year'  => (int)$r->date_year,
+					'Month' => (int)$r->date_month,
+					'Count' => (int)$r->monthly_unique,
+				];
+			}
+		}
+		return $data;
 	}
 
 	public function GetDistinctActivePlayerCount($weeks = 26) {
