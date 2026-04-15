@@ -2867,6 +2867,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				</div>
 				<div style="border-top:1px solid #e2e8f0;padding-top:16px;margin-top:8px">
 					<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px">Custom Milestones</div>
+					<div style="margin-bottom:12px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5"><i class="fas fa-exclamation-triangle" style="color:#d69e2e;margin-right:8px"></i>Custom milestones are a great way to celebrate meaningful moments in your Amtgard story. Be sure those milestones are accurate, especially as concerns things like awards, titles, and other recognitions.</div>
 					<div class="pn-ms-custom-list" id="pn-ms-custom-list"></div>
 					<div class="pn-ms-add-form" id="pn-ms-add-form">
 						<div class="pn-ms-add-row">
