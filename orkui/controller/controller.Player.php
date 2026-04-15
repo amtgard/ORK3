@@ -127,6 +127,8 @@ class Controller_Player extends Controller {
 								'Token' => $this->session->token,
 								'RecipientId' => $id,
 								'AwardId' => $this->request->Player_index->AwardId,
+								'CustomName' => $this->request->Player_index->CustomName ?? '',
+								'AliasAwardId' => $this->request->Player_index->AliasAwardId ?? 0,
 								'Rank' => $this->request->Player_index->Rank,
 								'Date' => $this->request->Player_index->Date,
 								'GivenById' => $this->request->Player_index->MundaneId,
@@ -149,6 +151,8 @@ class Controller_Player extends Controller {
 								'AwardsId' => $roastbeef,
 								'RecipientId' => $id,
 								'AwardId' => $this->request->Player_index->AwardId,
+								'CustomName' => $this->request->Player_index->CustomName ?? '',
+								'AliasAwardId' => $this->request->Player_index->AliasAwardId ?? 0,
 								'Rank' => $this->request->Player_index->Rank,
 								'Date' => $this->request->Player_index->Date,
 								'GivenById' => $this->request->Player_index->MundaneId,
@@ -508,17 +512,19 @@ class Controller_Player extends Controller {
 		// Beltline: My Peers (who gave this player peerage awards)
 		$DB->Clear();
 		$__peerSql = "SELECT m.mundane_id AS PeerId, m.persona AS Persona,
-			IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date
+			COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+			COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
 			FROM ork_awards ma
 			JOIN ork_award a ON a.award_id = ma.award_id
+			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
 			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 			JOIN ork_mundane m ON m.mundane_id = ma.given_by_id
 			WHERE ma.mundane_id = " . (int)$id . "
-				AND (a.peerage IN ('Squire','Man-At-Arms','Page','Lords-Page')
-					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
+					OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)
 				AND ma.given_by_id > 0
-			ORDER BY CASE a.peerage
+			ORDER BY CASE COALESCE(alias.peerage, a.peerage)
 				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
 				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
 		$__peerResult = $DB->DataSet($__peerSql);
@@ -540,16 +546,18 @@ class Controller_Player extends Controller {
 		// Beltline: My Associates (who this player gave peerage awards to)
 		$DB->Clear();
 		$__blAssocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
-			IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date
+			COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+			COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
 			FROM ork_awards ma
 			JOIN ork_award a ON a.award_id = ma.award_id
+			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
 			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 			JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
 			WHERE ma.given_by_id = " . (int)$id . "
-				AND (a.peerage IN ('Squire','Man-At-Arms','Page','Lords-Page')
-					OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
+					OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)
-			ORDER BY CASE a.peerage
+			ORDER BY CASE COALESCE(alias.peerage, a.peerage)
 				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
 				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
 		$__blAssocResult = $DB->DataSet($__blAssocSql);
@@ -571,16 +579,18 @@ class Controller_Player extends Controller {
 		if ($uid === (int)$id) {
 			$DB->Clear();
 			$__assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
-				IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date
+				COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+				COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
 				FROM ork_awards ma
 				JOIN ork_award a ON a.award_id = ma.award_id
+				LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
 				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 				JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
 				WHERE ma.given_by_id = $uid
-					AND (a.peerage IN ('Squire','Man-At-Arms','Page','Lords-Page')
-						OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+					AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
+						OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
 					AND (ma.revoked = 0 OR ma.revoked IS NULL)
-				ORDER BY CASE a.peerage
+				ORDER BY CASE COALESCE(alias.peerage, a.peerage)
 					WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
 					WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
 			$__assocResult = $DB->DataSet($__assocSql);
@@ -602,15 +612,20 @@ class Controller_Player extends Controller {
 			// Fetch player's titles for name builder prefix/suffix options
 			$DB->Clear();
 			$__titleSql = "SELECT DISTINCT
-				COALESCE(NULLIF(ka.name,''), a.name) AS title_name,
-				a.officer_role, a.peerage, IFNULL(ka.is_title, 0) AS is_title
+				COALESCE(NULLIF(ma.custom_name,''), NULLIF(ka.name,''), a.name) AS title_name,
+				COALESCE(alias.officer_role, a.officer_role) AS officer_role,
+				COALESCE(alias.peerage, a.peerage) AS peerage,
+				GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), a.is_title) AS is_title
 				FROM ork_awards ma
 				JOIN ork_award a ON a.award_id = ma.award_id
+				LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
 				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 				WHERE ma.mundane_id = " . (int)$id . "
 				  AND (ma.revoked = 0 OR ma.revoked IS NULL)
-				  AND (a.officer_role != 'none' OR IFNULL(ka.is_title, 0) = 1 OR a.is_title = 1 OR a.peerage NOT IN ('None',''))
-				ORDER BY a.peerage ASC, title_name ASC";
+				  AND (COALESCE(alias.officer_role, a.officer_role) != 'none'
+				       OR IFNULL(ka.is_title, 0) = 1 OR IFNULL(alias.is_title, 0) = 1 OR a.is_title = 1
+				       OR COALESCE(alias.peerage, a.peerage) NOT IN ('None',''))
+				ORDER BY COALESCE(alias.peerage, a.peerage) ASC, title_name ASC";
 			$__titleResult = $DB->DataSet($__titleSql);
 			$__titles = [];
 			if ($__titleResult) {
