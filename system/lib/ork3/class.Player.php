@@ -13,6 +13,18 @@ class Player extends Ork3 {
 		$this->load_model('Pronoun');
 	}
 
+	private $_customTitleAwardId = null;
+	public function getCustomTitleAwardId() {
+		if ($this->_customTitleAwardId !== null) return $this->_customTitleAwardId;
+		$r = $this->db->query("SELECT award_id FROM " . DB_PREFIX . "award WHERE name = 'Custom Title' AND officer_role='none' LIMIT 1");
+		$this->_customTitleAwardId = 0;
+		if ($r && $r->size() > 0) {
+			$r->next();
+			$this->_customTitleAwardId = (int)$r->award_id;
+		}
+		return $this->_customTitleAwardId;
+	}
+
     public function AddOneShotFaceImage($request) {
       $mundane = $this->player_info($request['MundaneId']);
 		  $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -1382,6 +1394,7 @@ class Player extends Ork3 {
 			$awards->kingdomaward_id = $request['KingdomAwardId'];
     		$awards->award_id = $request['AwardId'];
 			$awards->custom_name = $request['CustomName'] ?? '';
+			$awards->alias_award_id = (!empty($request['AliasAwardId']) && (int)$request['AliasAwardId'] > 0) ? (int)$request['AliasAwardId'] : null;
 			$awards->mundane_id = $request['RecipientId'];
 			$awards->rank = $request['Rank'];
 			$awards->date = $request['Date'];
@@ -1399,6 +1412,21 @@ class Player extends Ork3 {
     			$awards->kingdom_id = valid_id($given_by['Player']['KingdomId'])?$given_by['Player']['KingdomId']:0;
             }
 			// Events are awesome.
+
+			if (!empty($awards->alias_award_id)) {
+				$ctid = $this->getCustomTitleAwardId();
+				$aid = (int)$awards->alias_award_id;
+				$chk = $this->db->query("SELECT award_id, is_title, peerage, officer_role FROM " . DB_PREFIX . "award WHERE award_id = " . $aid . " LIMIT 1");
+				$bad = true;
+				if ($chk && $chk->size() > 0) {
+					$chk->next();
+					if ((int)$chk->award_id !== $ctid && $chk->officer_role === 'none'
+					    && ((int)$chk->is_title === 1 || !in_array($chk->peerage, array('', 'None'), true))) {
+						$bad = false;
+					}
+				}
+				if ($bad) return InvalidParameter();
+			}
 
 			$awards->save();
 
