@@ -192,6 +192,26 @@ if ($Type !== 'Event') {
 }
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<style>
+/* Critical overrides — duplicated inline so stale reports.css can't break layout */
+.rp-stat-card { position: relative; }
+.rp-stat-tip  { position: absolute; top: 7px; right: 7px; }
+.rp-stat-tip-icon {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 15px; height: 15px; border-radius: 50%;
+	background: #e2e8f0; color: #718096;
+	font-size: 9px; font-weight: 700; cursor: default; user-select: none;
+}
+.rp-charts-row.rp-charts-visible { display: flex; flex-direction: column; }
+.rp-view-toggle { display: flex; flex-direction: row; align-items: center; gap: 6px; margin-bottom: 10px; }
+.rp-view-btn {
+	display: inline-block; width: auto; padding: 4px 14px;
+	font-size: 12px; font-weight: 600; border: 1px solid #cbd5e0;
+	border-radius: 20px; background: #fff; color: #4a5568;
+	cursor: pointer; white-space: nowrap;
+}
+.rp-view-btn-active { background: #4338ca; color: #fff; border-color: #4338ca; }
+</style>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
