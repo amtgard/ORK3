@@ -423,12 +423,19 @@ class Player extends Ork3 {
 			$player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
 		}
 		$sql = "select distinct awards.*, a.*,
-						COALESCE(a.is_title, ka.is_title) as is_title,
-						COALESCE(a.title_class, ka.title_class) as title_class,
+						GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)) as is_title,
+						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,
+						COALESCE(alias.peerage, a.peerage) as peerage,
+						COALESCE(alias.officer_role, a.officer_role) as officer_role,
+						COALESCE(alias.is_ladder, a.is_ladder) as is_ladder,
+						alias.award_id as alias_award_id_resolved,
+						alias.name as alias_award_name,
+						alias.peerage as alias_peerage,
 						ka.name as kingdom_awardname, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona, bwm.persona as entered_by_persona, bwm.mundane_id as entered_by_id
 					from " . DB_PREFIX . "awards awards
 						left join " . DB_PREFIX . "kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+						left join " . DB_PREFIX . "award alias on alias.award_id = awards.alias_award_id
 						left join " . DB_PREFIX . "park p on p.park_id = awards.at_park_id
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = awards.at_kingdom_id
 						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id
@@ -436,7 +443,7 @@ class Player extends Ork3 {
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
 					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
 					order by
-						COALESCE(a.is_ladder, 0), COALESCE(a.is_title, ka.is_title, 0), COALESCE(a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
+						COALESCE(alias.is_ladder, a.is_ladder, 0), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
 		$r = $this->db->query($sql);
 		$response = array();
@@ -465,6 +472,9 @@ class Player extends Ork3 {
 						'TitleClass' => $r->title_class,
 						'OfficerRole' => $r->officer_role,
 						'Peerage' => $r->peerage,
+						'AliasAwardId' => (int)($r->alias_award_id_resolved ?? 0),
+						'AliasAwardName' => $r->alias_award_name,
+						'AliasPeerage' => $r->alias_peerage,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name,

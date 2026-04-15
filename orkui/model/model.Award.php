@@ -43,7 +43,7 @@ class Model_Award extends Model {
                 $isPseudoLadder = in_array((int)($award['KingdomAwardId'] ?? 0), $pseudoLadderIds);
                 if ($isPseudoLadder) {
                     $ladder[] = $award;
-                } elseif ($sysName === 'Custom Award') {
+                } elseif ($sysName === 'Custom Award' || $sysName === 'Custom Title') {
                     $custom[] = $award;
                 } elseif (!empty($award['IsLadder'])) {
                     $ladder[] = $award;
@@ -80,7 +80,15 @@ class Model_Award extends Model {
                 $options .= "</optgroup>";
             }
             foreach ($custom as $award) {
-                $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
+                $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
+                $kaName = $award['KingdomAwardName'] ?? $sysName;
+                $dataAttrs = '';
+                if ($sysName === 'Custom Title' && $kaName === 'Custom Title') {
+                    $dataAttrs = " data-custom-title='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
+                } elseif ($sysName === 'Custom Award' && $kaName === 'Custom Award') {
+                    $dataAttrs = " data-custom-award='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
+                }
+                $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'" . $dataAttrs . ">" . htmlspecialchars($kaName, ENT_QUOTES) . "</option>";
             }
             $groups = [
                 'Knighthoods' => $knighthoods,
