@@ -2633,6 +2633,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 
 			<!-- About Panel -->
 			<div class="pn-design-panel" id="pn-design-about">
+				<div style="margin-bottom:16px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5"><i class="fas fa-info-circle" style="color:#d69e2e;margin-right:8px"></i>Don't forget, your about section will be visible to the public. Refrain from including inappropriate content in this section. Kingdom and park officers can take action on your profile if impermissible content is added.</div>
 				<div class="pn-design-field">
 					<label>About <?= htmlspecialchars($Player['Persona']) ?></label>
 					<div class="pn-md-preview-toggle">
