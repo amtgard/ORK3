@@ -4226,6 +4226,7 @@ var PnBannerConfig = {
 <?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script>
 // ---- Markdown rendering for About tab ----
 (function() {
@@ -6039,8 +6040,20 @@ pnRenderSparkline();
 		requestAnimationFrame(step);
 	}
 
+	function fireConfetti() {
+		if (typeof window.confetti !== 'function') return;
+		var end = Date.now() + 2000;
+		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
+		(function frame() {
+			window.confetti({ particleCount: 4, angle: 60,  spread: 55, origin: { x: 0, y: 0.7 }, colors: colors, zIndex: 2000 });
+			window.confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: colors, zIndex: 2000 });
+			if (Date.now() < end) requestAnimationFrame(frame);
+		})();
+	}
+
 	function showResult(j) {
 		if (j.passed) {
+			fireConfetti();
 			resultIcon.innerHTML    = '<i class="fas fa-check-circle pn-quiz-result-pass" style="font-size:inherit;"></i>';
 			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-pass';
 			resultHeading.textContent = 'Congratulations!';

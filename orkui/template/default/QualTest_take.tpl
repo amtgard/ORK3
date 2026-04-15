@@ -860,6 +860,7 @@
 
 </div><!-- /.rp-root -->
 
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script>
 (function() {
 	var BASE_URL    = '<?= UIR ?>';
@@ -1279,6 +1280,31 @@
 		requestAnimationFrame(step);
 	}
 
+	function fireConfetti() {
+		if (typeof window.confetti !== 'function') return;
+		var end = Date.now() + 2000;
+		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
+		(function frame() {
+			window.confetti({
+				particleCount: 4,
+				angle: 60,
+				spread: 55,
+				origin: { x: 0, y: 0.7 },
+				colors: colors,
+				zIndex: 2000
+			});
+			window.confetti({
+				particleCount: 4,
+				angle: 120,
+				spread: 55,
+				origin: { x: 1, y: 0.7 },
+				colors: colors,
+				zIndex: 2000
+			});
+			if (Date.now() < end) requestAnimationFrame(frame);
+		})();
+	}
+
 	function showResult(j) {
 		if (j.passed) {
 			resultIcon.innerHTML    = '<i class="fas fa-check-circle qt-result-pass" style="font-size:inherit;"></i>';
@@ -1297,6 +1323,7 @@
 			retakesTaken++;
 			RETAKE_BLOCKED = (maxRetakes > 0 && retakesTaken >= maxRetakes);
 			if (retakeBtn) retakeBtn.style.display = 'none';
+			fireConfetti();
 		} else {
 			resultIcon.innerHTML    = '<i class="fas fa-times-circle qt-result-fail" style="font-size:inherit;"></i>';
 			resultHeading.className = 'qt-result-heading qt-result-heading-fail';
