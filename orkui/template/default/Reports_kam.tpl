@@ -5,6 +5,7 @@ $total_knights  = 0;
 $total_masters  = 0;
 $unique_parks   = [];
 $unique_kingdoms = [];
+$unique_players = [];
 
 if (is_array($Awards)) {
 	foreach ($Awards as $award) {
@@ -13,8 +14,10 @@ if (is_array($Awards)) {
 		if (($award['Peerage'] ?? '') === 'Master') $total_masters++;
 		if (!empty($award['ParkId']))    $unique_parks[$award['ParkId']] = true;
 		if (!empty($award['KingdomId'])) $unique_kingdoms[$award['KingdomId']] = true;
+		if (!empty($award['MundaneId'])) $unique_players[$award['MundaneId']] = true;
 	}
 }
+$unique_player_count = count($unique_players);
 
 $report_title = $page_title ?? 'Knights & Masters List';
 
@@ -87,17 +90,15 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 	<!-- ── Stats row ──────────────────────────────────────── -->
 	<div class="rp-stats-row">
 		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-user-shield"></i></div>
+			<div class="rp-stat-number"><?=$unique_player_count?></div>
+			<div class="rp-stat-label">Unique Knights</div>
+		</div>
+		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas <?=$report_icon?>"></i></div>
 			<div class="rp-stat-number"><?=$total?></div>
-			<div class="rp-stat-label">Total</div>
+			<div class="rp-stat-label">Total Belts</div>
 		</div>
-<?php if ($total_knights > 0) : ?>
-		<div class="rp-stat-card">
-			<div class="rp-stat-icon"><i class="fas fa-chess-king"></i></div>
-			<div class="rp-stat-number"><?=$total_knights?></div>
-			<div class="rp-stat-label">Knights</div>
-		</div>
-<?php endif; ?>
 <?php if ($total_masters > 0) : ?>
 		<div class="rp-stat-card">
 			<div class="rp-stat-icon"><i class="fas fa-crown"></i></div>
