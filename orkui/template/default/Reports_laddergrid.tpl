@@ -65,7 +65,7 @@ $awardColOffset = $isKingdom ? 2 : 1;
 ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* ── Grid-specific styles (layout handled by rp-* shared CSS) ── */

@@ -24,7 +24,7 @@ $_active_filters = [];
 if (!empty($NativePopulace)) $_active_filters[] = 'Local Players Only';
 if (!empty($Waivered))       $_active_filters[] = 'Waivered Players Only';
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 .rp-param-form { display: flex; flex-direction: column; gap: 10px; }

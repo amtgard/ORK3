@@ -41,7 +41,7 @@ $show_charts = $total > 0;
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* ── Attendance-specific styles ───────────────────── */

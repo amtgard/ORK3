@@ -6,7 +6,7 @@ $_su_ajax_params = '';
 if ($_su_kingdom_id) $_su_ajax_params .= '&KingdomId=' . $_su_kingdom_id;
 if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <style>

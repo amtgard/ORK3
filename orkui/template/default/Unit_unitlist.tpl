@@ -3,7 +3,7 @@ $_ul_scoped  = !empty($ScopeLabel);
 $_scope_kid  = (int)($ScopeKingdomId ?? 0);
 $_scope_pid  = (int)($ScopeParkId    ?? 0);
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <style>

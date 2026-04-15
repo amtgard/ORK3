@@ -26,7 +26,7 @@
 	}
 	ksort($parkAuthsByPark);
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* Green accent override */

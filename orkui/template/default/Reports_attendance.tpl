@@ -191,7 +191,7 @@ if ($Type !== 'Event') {
 	$_parkday_rows = $attendance_summary['Dates'];
 }
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <style>
 /* Critical overrides — duplicated inline so stale reports.css can't break layout */
 .rp-stat-card { position: relative; }

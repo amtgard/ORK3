@@ -3,7 +3,7 @@ $_cp_parks  = is_array($parks ?? null) ? $parks : [];
 $_cp_total  = count($_cp_parks);
 $_cp_origin = htmlspecialchars($origin_park ?? '');
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <div class="rp-root">

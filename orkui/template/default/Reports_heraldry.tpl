@@ -31,7 +31,7 @@ $_hr_label = match($_hr_type) {
 	default   => 'Players',
 };
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* ── Shield Wall Gallery ─────────────────────────────── */

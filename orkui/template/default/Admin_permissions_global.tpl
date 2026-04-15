@@ -3,7 +3,7 @@
 	$kingdoms   = is_array($Kingdoms)   ? $Kingdoms   : [];
 	$ajaxBase   = UIR . 'AdminAjax/global/';
 ?>
-<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 .rp-root { --rp-accent-dark: #1a3d2b; --rp-accent: #276749; --rp-accent-mid: #38a169; }

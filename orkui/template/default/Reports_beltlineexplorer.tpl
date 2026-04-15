@@ -24,7 +24,7 @@ if ($kingdom_id && !empty($knights)) {
 }
 ?>
 
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 /* ── Beltline Explorer specific styles ───────────────────── */

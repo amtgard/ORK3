@@ -3,7 +3,7 @@ $_pdm_parks  = is_array($parks  ?? null) ? $parks  : [];
 $_pdm_matrix = is_array($matrix ?? null) ? $matrix : [];
 $_pdm_count  = count($_pdm_parks);
 ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
 .rp-table-area { width: 100%; box-sizing: border-box; }
