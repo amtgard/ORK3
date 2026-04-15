@@ -74,6 +74,17 @@ foreach ((array)($monthly_chart_data ?? []) as $_m) {
 $_has_monthly = count($_monthly_counts) >= 2;
 $_monthly_avg = $_has_monthly ? array_sum($_monthly_counts) / count($_monthly_counts) : 0;
 
+/* ── Tooltip text (pre-computed so no inline PHP inside data-tip attributes) ── */
+$_tip_unique   = 'Count of distinct players who signed in at least once during this period.';
+$_tip_avg_wk   = 'Average distinct players per week. Each week is counted once regardless of how many days it spans.';
+$_tip_avg_mo   = 'Average distinct players per calendar month over this period. A player who attends multiple weeks in a month is counted once for that month.';
+$_tip_trend    = ($_att_records >= 4)
+	? 'Change in avg attendance: most recent ' . ($_att_records >= 8 ? '4' : (int)floor($_att_records/2)) . ' weeks vs the ' . ($_att_records >= 8 ? '4' : (int)floor($_att_records/2)) . ' weeks before that.'
+	: 'Not enough data to calculate trend (need at least 4 weeks).';
+$_tip_peak     = 'Highest single-week distinct player count during this period.';
+$_tip_parks    = 'Number of distinct parks with at least one attendance record during this period.';
+$_tip_weeks    = 'Number of weeks with at least one attendance record during this period.';
+
 /* ── Unique parks (Kingdom scope only) ── */
 $_unique_parks = 0;
 if ($Type === 'Kingdom' && !empty($_summary_dates)) {
@@ -235,27 +246,27 @@ if ($Type !== 'Event') {
 	<!-- Stats row -->
 	<div class="rp-stats-row">
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Count of distinct players who signed in at least once during this period.</div></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_unique)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-user-check"></i></div>
 			<div class="rp-stat-number"><?=number_format($_distinct_total)?></div>
 			<div class="rp-stat-label">Unique Players</div>
 		</div>
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Average distinct players per week. Each week is counted once regardless of how many days it spans.</div></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_avg_wk)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-calendar-week"></i></div>
 			<div class="rp-stat-number"><?=number_format($_distinct_avg_wk, 1)?></div>
 			<div class="rp-stat-label">Avg / Week</div>
 		</div>
 <?php if ($_has_monthly): ?>
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Average distinct players per calendar month over this period. A player who attends multiple weeks in a month is counted once for that month.</div></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_avg_mo)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-calendar-alt"></i></div>
 			<div class="rp-stat-number"><?=number_format($_monthly_avg, 1)?></div>
 			<div class="rp-stat-label">Avg / Month</div>
 		</div>
 <?php endif; ?>
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text"><?php if ($_trend_pct !== null): ?>Change in avg attendance: most recent <?=($_att_records >= 8 ? '4' : (int)floor($_att_records/2))?> weeks vs the <?=($_att_records >= 8 ? '4' : (int)floor($_att_records/2))?> weeks before that.<?php else: ?>Not enough data to calculate trend (need at least 4 weeks).<?php endif; ?></div></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_trend)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-chart-line"></i></div>
 <?php if ($_trend_pct !== null): ?>
 			<div class="rp-stat-number" style="color:<?=$_trend_dir === 'up' ? '#059669' : ($_trend_dir === 'down' ? '#dc2626' : 'var(--rp-accent)')?>;">
@@ -267,7 +278,7 @@ if ($Type !== 'Event') {
 			<div class="rp-stat-label">Trend</div>
 		</div>
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Highest single-week distinct player count during this period.</div></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_peak)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-trophy"></i></div>
 			<div class="rp-stat-number"><?=$_peak_count > 0 ? number_format($_peak_count) : '—'?></div>
 			<div class="rp-stat-label">Peak Week</div>
@@ -277,14 +288,14 @@ if ($Type !== 'Event') {
 		</div>
 <?php if ($Type === 'Kingdom'): ?>
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Number of distinct parks with at least one attendance record during this period.</div></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_parks)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-tree"></i></div>
 			<div class="rp-stat-number"><?=number_format($_unique_parks)?></div>
 			<div class="rp-stat-label">Active Parks</div>
 		</div>
 <?php else: ?>
 		<div class="rp-stat-card">
-			<div class="rp-stat-tip"><span class="rp-stat-tip-icon">?</span><div class="rp-stat-tip-text">Number of weeks with at least one attendance record during this period.</div></div>
+			<div class="rp-stat-tip"><span class="rp-stat-tip-icon" data-tip="<?=htmlspecialchars($_tip_weeks)?>">?</span></div>
 			<div class="rp-stat-icon"><i class="fas fa-list-ol"></i></div>
 			<div class="rp-stat-number"><?=number_format($_att_records)?></div>
 			<div class="rp-stat-label">Total Weeks</div>
@@ -728,5 +739,23 @@ if ($Type !== 'Event') {
 
 	attChart = attBuildWeeklyChart();
 <?php endif; ?>
+}());
+
+/* ── Stat card info tooltips (JS-driven so no CSS dependency for hiding) ── */
+(function() {
+	var bub = document.createElement('div');
+	bub.className = 'rp-stat-tip-text';
+	bub.style.cssText = 'display:none;position:fixed;z-index:9999;pointer-events:none;';
+	document.body.appendChild(bub);
+	document.querySelectorAll('.rp-stat-tip-icon[data-tip]').forEach(function(el) {
+		el.addEventListener('mouseenter', function() {
+			bub.textContent = el.dataset.tip;
+			var r = el.getBoundingClientRect();
+			bub.style.display = 'block';
+			bub.style.top  = (r.bottom + 6) + 'px';
+			bub.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 214)) + 'px';
+		});
+		el.addEventListener('mouseleave', function() { bub.style.display = 'none'; });
+	});
 }());
 </script>

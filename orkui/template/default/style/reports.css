@@ -192,11 +192,6 @@
 	user-select    : none;
 }
 .rp-stat-tip-text {
-	visibility    : hidden;
-	opacity       : 0;
-	position      : absolute;
-	right         : 0;
-	top           : 20px;
 	width         : 200px;
 	background    : #1a202c;
 	color         : #fff;
@@ -204,14 +199,7 @@
 	line-height   : 1.45;
 	border-radius : 6px;
 	padding       : 8px 10px;
-	z-index       : 100;
-	transition    : opacity 0.15s;
-	pointer-events: none;
 	text-align    : left;
-}
-.rp-stat-tip:hover .rp-stat-tip-text {
-	visibility: visible;
-	opacity   : 1;
 }
 
 .rp-stat-icon {
