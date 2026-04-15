@@ -1702,11 +1702,23 @@ if (PnConfig.recError) {
             var opt      = this.options[this.selectedIndex];
             var isLadder = (opt.getAttribute('data-is-ladder') == '1');
             var awardId  = parseInt(opt.getAttribute('data-award-id')) || 0;
-            var isCustom = (opt.text.indexOf('Custom Award') !== -1);
+            var isCustomAward = opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award';
+            var isCustomTitle = opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title';
+            var needsCustomName = isCustomAward || isCustomTitle;
             var optName  = opt.text.toLowerCase();
             var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
 
-            gid('pn-award-custom-row').style.display  = isCustom ? '' : 'none';
+            gid('pn-award-custom-row').style.display  = needsCustomName ? '' : 'none';
+            var labelEl = gid('pn-award-custom-label');
+            if (labelEl) labelEl.textContent = isCustomTitle ? 'Custom Title Name' : 'Custom Award Name';
+            var nameInput = gid('pn-award-custom-name');
+            if (nameInput) nameInput.placeholder = isCustomTitle ? 'Enter custom title name…' : 'Enter custom award name…';
+            var aliasRow = gid('pn-award-alias-row');
+            if (aliasRow) aliasRow.style.display = isCustomTitle ? '' : 'none';
+            if (!isCustomTitle) {
+                var aliasSel = gid('pn-award-alias');
+                if (aliasSel) aliasSel.value = '0';
+            }
             gid('pn-award-info-line').innerHTML        = showBadge
                 ? '<span class="pn-badge-ladder"><i class="fas fa-chart-line"></i> Ladder Award</span>'
                 : '';
@@ -1900,6 +1912,8 @@ if (PnConfig.recError) {
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             gid('pn-award-custom-name').value     = '';
             gid('pn-award-custom-row').style.display = 'none';
+            if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
+            if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-award-rank-val').value           = '';
             gid('pn-award-info-line').innerHTML      = '';
@@ -1978,6 +1992,8 @@ if (PnConfig.recError) {
             gid('pn-award-info-line').innerHTML      = '';
             gid('pn-award-custom-name').value        = '';
             gid('pn-award-custom-row').style.display = 'none';
+            if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
+            if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
             gid('pn-award-givenat-text').value       = PnConfig.parkName;
             gid('pn-award-park-id').value            = String(PnConfig.parkId);
             gid('pn-award-kingdom-id').value         = String(PnConfig.kingdomId || 0);
@@ -2010,6 +2026,9 @@ if (PnConfig.recError) {
             if (rank) fd.append('Rank', rank);
             var customName = gid('pn-award-custom-name').value.trim();
             if (customName) fd.append('AwardName', customName);
+            var aliasSel = gid('pn-award-alias');
+            var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
+            if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
             var btnSame = gid('pn-award-save-same');
             btnSame.disabled = true;

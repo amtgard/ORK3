@@ -2268,10 +2268,33 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<div class="pn-award-info-line" id="pn-award-info-line"></div>
 			</div>
 
-			<!-- Custom Award Name (only for "Custom Award") -->
+			<!-- Custom Award Name (shown for "Custom Award" and "Custom Title") -->
 			<div class="pn-acct-field" id="pn-award-custom-row" style="display:none">
-				<label for="pn-award-custom-name">Custom Award Name</label>
+				<label for="pn-award-custom-name" id="pn-award-custom-label">Custom Award Name</label>
 				<input type="text" name="AwardName" id="pn-award-custom-name" maxlength="64" placeholder="Enter custom award name…" />
+			</div>
+
+			<!-- Alias dropdown (shown only for "Custom Title") -->
+			<div class="pn-acct-field" id="pn-award-alias-row" style="display:none">
+				<label for="pn-award-alias">Alias of <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<select name="AliasAwardId" id="pn-award-alias">
+					<option value="0">— None —</option>
+					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
+					<optgroup label="Peerage Ladder">
+						<?php foreach ($CustomTitleAliasOptions['Peerage'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?> (<?= htmlspecialchars($_opt['Peerage']) ?>)</option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+					<?php if (!empty($CustomTitleAliasOptions['Titles'])): ?>
+					<optgroup label="Other Titles">
+						<?php foreach ($CustomTitleAliasOptions['Titles'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?></option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+				</select>
+				<div style="font-size:11px;color:#718096;margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<!-- Rank Picker (only for ladder awards) -->
