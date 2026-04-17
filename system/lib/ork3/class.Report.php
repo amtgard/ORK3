@@ -2742,4 +2742,334 @@ class Report  extends Ork3 {
 		return Success();
 	}
 
+	public function GetVotingEligible($request) {
+		$kingdom_id     = (int)($request['KingdomId'] ?? 0);
+		$park_id        = valid_id($request['ParkId'] ?? 0)     ? (int)$request['ParkId']              : 0;
+		$mundane_id     = valid_id($request['MundaneId'] ?? 0)  ? (int)$request['MundaneId']           : 0;
+		$att_req        = isset($request['AttendanceRequired'])  ? (int)$request['AttendanceRequired']  : 6;
+		$months_win     = isset($request['MonthsWindow'])        ? (int)$request['MonthsWindow']        : 6;
+		$min_mem_mo     = isset($request['MinMembershipMonths']) ? (int)$request['MinMembershipMonths'] : 6;
+		$att_mode           = $request['AttendanceMode'] ?? 'weeks';
+		if (!in_array($att_mode, ['count', 'days', 'weeks'])) $att_mode = 'weeks';
+		$week_offset             = isset($request['WeekOffset'])             ? (int)$request['WeekOffset']             : 0;
+		$province_mode           = !empty($request['ProvinceMode']);
+		$kingdom_evt_bonus       = !empty($request['KingdomEventBonus']);
+		$active_knight_threshold  = isset($request['ActiveKnightThreshold'])  ? (int)$request['ActiveKnightThreshold']  : 0;
+		$active_member_threshold  = isset($request['ActiveMemberThreshold'])  ? (int)$request['ActiveMemberThreshold']  : 0;
+		$exclude_online           = !empty($request['ExcludeOnline']);
+		$all_kingdoms             = !empty($request['AllKingdoms']); // count attendance from any kingdom
+		$days_window             = isset($request['DaysWindow'])              ? (int)$request['DaysWindow']              : 0;
+		$min_age                 = isset($request['MinAge'])                  ? (int)$request['MinAge']                  : 0;
+		$max_credits_per_event   = isset($request['MaxCreditsPerEvent'])      ? (int)$request['MaxCreditsPerEvent']      : 0;
+		$max_outside_kingdom_creds = isset($request['MaxOutsideKingdomCredits']) ? (int)$request['MaxOutsideKingdomCredits'] : 0;
+		$week_snap               = !empty($request['WeekSnap']); // snap window start to week boundary even in non-weeks modes
+		$membership_mode         = $request['MembershipMode'] ?? 'park_member_since'; // 'first_attendance' uses MIN(attendance.date) within the kingdom
+
+		// Compute start date.
+		// display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
+		// start_date: used in SQL — always snapped to week start when att_mode=weeks so the full
+		//   starting week is included (e.g. 180d back lands on Sat → SQL starts Mon of that week).
+		if (!empty($request['StartDate'])) {
+			$start_date = $display_start_date = mysql_real_escape_string($request['StartDate']);
+		} else {
+			$_raw_ts         = $days_window > 0 ? strtotime("-{$days_window} days")
+			                                    : strtotime("-{$months_win} months");
+			$display_start_date = date('Y-m-d', $_raw_ts);
+			// Snap SQL start to the first day of the Amtgard week when counting weeks,
+			// or when WeekSnap=true (kingdoms that count sign-ins/days but align their
+			// window to the week boundary for consistency with the Amtgard calendar).
+			if ($att_mode === 'weeks' || $week_snap) {
+				$_week_start_iso = $week_offset + 1;                    // 1=Mon, 2=Tue, 7=Sun …
+				$_dow            = (int)date('N', $_raw_ts);             // 1=Mon … 7=Sun
+				$_days_back      = (($_dow - $_week_start_iso) + 7) % 7;
+				$start_date      = date('Y-m-d', $_raw_ts - $_days_back * 86400);
+				// For MonthsWindow kingdoms, show the snapped week-start in the header so the
+				// "Attendance from" date matches exactly what the SQL counts from.
+				// DaysWindow kingdoms keep display=raw (exact N-day mark) with SQL=snapped.
+				if ($days_window === 0) {
+					$display_start_date = $start_date;
+				}
+			} else {
+				$start_date = $display_start_date;
+			}
+		}
+
+		// If only ParkId given, derive kingdom from the park record
+		if (!$kingdom_id && $park_id) {
+			$pr = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = $park_id LIMIT 1");
+			if ($pr && $pr->size() > 0) { $pr->next(); $kingdom_id = (int)$pr->kingdom_id; }
+		}
+		if (!$kingdom_id) return ['Players' => [], 'AttendanceRequired' => $att_req, 'MonthsWindow' => $months_win, 'MinMembershipMonths' => $min_mem_mo, 'ProvinceMode' => $province_mode];
+
+		$park_clause    = $park_id    ? " AND m.park_id    = $park_id"    : '';
+		$mundane_clause = $mundane_id ? " AND m.mundane_id = $mundane_id" : '';
+
+		// Online exclusion: LEFT JOIN event + park inside attendance subqueries, filter out
+		// rows where the event name or park name contains 'Online' (case-insensitive).
+		$online_join   = '';
+		$online_clause = '';
+		if ($exclude_online) {
+			$online_join   = "LEFT JOIN " . DB_PREFIX . "event   _oe ON _oe.event_id = a.event_id AND a.event_id != 0
+					LEFT JOIN " . DB_PREFIX . "park    _op ON _op.park_id  = a.park_id";
+			// NULL-safe: a.park_id = 0 (kingdom events) yields NULL park name — allow those through.
+			// Only exclude when we can positively confirm 'Online' is in the name.
+			$online_clause = "AND (_oe.name IS NULL OR _oe.name NOT LIKE '%Online%')
+					AND (_op.name IS NULL OR _op.name NOT LIKE '%Online%')";
+		}
+
+		$home_park_only = !empty($request['HomeParkOnly']);
+
+		// HomeParkOnly: attendance subquery counts only sign-ins at the player's home park.
+		// Requires joining ork_mundane inside the subquery to access each player's park_id.
+		// Compatible with KingdomEventBonus (kingdom events count as +1 regardless of home park).
+		$home_park_join = $home_park_only
+			? "JOIN " . DB_PREFIX . "mundane mp ON mp.mundane_id = a.mundane_id"
+			: '';
+
+		// Attendance subquery expression.
+		// KingdomEventBonus: kingdom-sponsored events (ork_event.park_id = 0) count as at most +1.
+		// Extra columns to select alongside att_count in the attendance subquery (comma-prefixed).
+		$att_extra_cols = '';
+
+		if ($home_park_only && $kingdom_evt_bonus) {
+			// Home-park sign-ins + capped kingdom event bonus.
+			// Also emit a separate kingdom_evt_credit column (0 or 1) for display in the report.
+			$att_expr = "COUNT(CASE WHEN a.park_id = mp.park_id THEN 1 END)"
+			          . " + SIGN(SUM(CASE WHEN kve.event_id IS NOT NULL AND kve.park_id = 0 THEN 1 ELSE 0 END))";
+			$att_extra_cols = ", SIGN(SUM(CASE WHEN kve.event_id IS NOT NULL AND kve.park_id = 0 THEN 1 ELSE 0 END)) AS kingdom_evt_credit";
+		} elseif ($home_park_only) {
+			$att_expr = "COUNT(CASE WHEN a.park_id = mp.park_id THEN 1 END)";
+		} elseif ($kingdom_evt_bonus) {
+			// Regular sign-ins (parkday or park-hosted event) + kingdom event bonus (capped at 1).
+			// SIGN() returns 1 if any kingdom events were attended, 0 otherwise.
+			$att_expr = "COUNT(CASE WHEN a.event_id = 0 OR kve.event_id IS NULL OR kve.park_id != 0 THEN 1 END)"
+			          . " + SIGN(SUM(CASE WHEN kve.event_id IS NOT NULL AND kve.park_id = 0 THEN 1 ELSE 0 END))";
+		} elseif ($att_mode === 'count') {
+			$att_expr = "COUNT(*)";
+		} elseif ($att_mode === 'days') {
+			$att_expr = "COUNT(DISTINCT a.date)";
+		} elseif ($week_offset > 0) {
+			// Non-Monday week start: shift date back by offset days so the custom start day
+			// aligns with Monday, then use Monday-start ISO yearweek (mode 3).
+			// e.g. offset=1 → Tuesday-start; YEARWEEK handles year boundaries correctly.
+			$att_expr = "COUNT(DISTINCT YEARWEEK(DATE_SUB(a.date, INTERVAL $week_offset DAY), 3))";
+		} else {
+			// Monday-start: use pre-computed columns (fastest)
+			$att_expr = "COUNT(DISTINCT CONCAT(a.date_year, '-', a.date_week3))";
+		}
+
+		// Pre-build the att LEFT JOIN clause. Two paths:
+		// 1. Outside-credit-cap (e.g. Tal Dagore): nested UNION ALL subquery tracks in/out kingdom
+		//    credits separately, applies per-event cap and outside-kingdom credit ceiling.
+		// 2. Standard path: single-level GROUP BY with att_expr.
+		// Both produce the same att alias with att_count; path 1 also emits outside_credits_raw.
+		$att_select_extra = '';
+		if ($max_outside_kingdom_creds > 0) {
+			$_per_evt = $max_credits_per_event > 0 ? "LEAST(COUNT(*), $max_credits_per_event)" : "COUNT(*)";
+			// Use COALESCE(a.kingdom_id, $kingdom_id) so that attendance rows with NULL kingdom_id
+			// are treated as in-kingdom, preventing NULL propagation in SUM() arithmetic.
+			$att_join_clause = "LEFT JOIN (
+					SELECT mundane_id,
+					       SUM(in_credits) + LEAST(SUM(out_credits), $max_outside_kingdom_creds) AS att_count,
+					       SUM(out_credits) AS outside_credits_raw
+					FROM (
+					    SELECT a.mundane_id,
+					           $_per_evt * (COALESCE(a.kingdom_id, $kingdom_id) = $kingdom_id) AS in_credits,
+					           $_per_evt * (COALESCE(a.kingdom_id, $kingdom_id) != $kingdom_id) AS out_credits
+					    FROM " . DB_PREFIX . "attendance a
+					    WHERE a.event_id IS NOT NULL AND a.event_id != 0
+					      AND a.date >= '$start_date'
+					    GROUP BY a.mundane_id, a.event_id, a.kingdom_id
+					    UNION ALL
+					    SELECT a.mundane_id,
+					           (COALESCE(a.kingdom_id, $kingdom_id) = $kingdom_id) AS in_credits,
+					           (COALESCE(a.kingdom_id, $kingdom_id) != $kingdom_id) AS out_credits
+					    FROM " . DB_PREFIX . "attendance a
+					    WHERE (a.event_id = 0 OR a.event_id IS NULL)
+					      AND a.date >= '$start_date'
+					) att_inner
+					GROUP BY mundane_id
+				) att ON att.mundane_id = m.mundane_id";
+			$att_select_extra = ', COALESCE(att.outside_credits_raw, 0) AS outside_credits_raw';
+		} else {
+			// Standard path — resolve inline PHP expressions into variables first
+			// so the att_join_clause string contains only PHP variable interpolations.
+			$_kve_join_sql  = $kingdom_evt_bonus
+				? "LEFT JOIN " . DB_PREFIX . "event kve ON kve.event_id = a.event_id AND a.event_id != 0"
+				: '';
+			$_att_where_kw  = $all_kingdoms ? "1=1" : "a.kingdom_id = $kingdom_id";
+			$att_join_clause = "LEFT JOIN (
+					SELECT a.mundane_id, $att_expr AS att_count $att_extra_cols
+					FROM " . DB_PREFIX . "attendance a
+					$home_park_join
+					$_kve_join_sql
+					$online_join
+					WHERE $_att_where_kw
+					  AND a.date >= '$start_date'
+					  $online_clause
+					GROUP BY a.mundane_id
+				) att ON att.mundane_id = m.mundane_id";
+		}
+
+		// Park-level attendance subquery (province mode only)
+		$province_join   = '';
+		$province_select = '';
+		if ($province_mode) {
+			$province_join = "
+				LEFT JOIN (
+					SELECT a.mundane_id, COUNT(*) AS park_att_count
+					FROM " . DB_PREFIX . "attendance a
+					JOIN " . DB_PREFIX . "mundane mp ON mp.mundane_id = a.mundane_id AND mp.park_id = a.park_id
+					$online_join
+					WHERE " . ($all_kingdoms ? "1=1" : "a.kingdom_id = $kingdom_id") . "
+					  AND a.date >= '$start_date'
+					  $online_clause
+					GROUP BY a.mundane_id
+				) patt ON patt.mundane_id = m.mundane_id
+			";
+			$province_select = ", COALESCE(patt.park_att_count, 0) AS park_att_count";
+		}
+
+		// Active Knight: secondary raw sign-in count (always COUNT(*)) used for kingdoms
+		// that have a higher-tier eligibility based on total attendances.
+		$knight_join   = '';
+		$knight_select = '';
+		if ($active_knight_threshold > 0) {
+			$knight_join = "
+				LEFT JOIN (
+					SELECT a.mundane_id, COUNT(*) AS raw_att_count
+					FROM " . DB_PREFIX . "attendance a
+					$online_join
+					WHERE " . ($all_kingdoms ? "1=1" : "a.kingdom_id = $kingdom_id") . "
+					  AND a.date >= '$start_date'
+					  $online_clause
+					GROUP BY a.mundane_id
+				) katt ON katt.mundane_id = m.mundane_id
+			";
+			$knight_select = "
+				, COALESCE(katt.raw_att_count, 0) AS raw_att_count
+				, CASE WHEN EXISTS (
+					SELECT 1 FROM " . DB_PREFIX . "awards ma
+					JOIN " . DB_PREFIX . "award aw ON aw.award_id = ma.award_id
+					WHERE ma.mundane_id = m.mundane_id
+					  AND aw.peerage = 'Knight'
+					  AND (ma.revoked = 0 OR ma.revoked IS NULL)
+				) THEN 1 ELSE 0 END AS is_knight
+			";
+		}
+
+		$sql = "
+			SELECT
+				m.mundane_id, m.persona, m.waivered, m.park_member_since,
+				m.suspended, m.suspended_until,
+				p.park_id, p.name AS park_name,
+				k.kingdom_id, k.name AS kingdom_name,
+				COALESCE(att.att_count, 0) AS att_count
+				$att_select_extra
+				" . ($home_park_only && $kingdom_evt_bonus ? ", COALESCE(att.kingdom_evt_credit, 0) AS kingdom_evt_credit" : "") . "
+				" . ($membership_mode === 'first_attendance' ? ", (SELECT MIN(a.date) FROM " . DB_PREFIX . "attendance a WHERE a.mundane_id = m.mundane_id AND a.kingdom_id = $kingdom_id) AS first_att_date" : "") . "
+				$province_select
+				$knight_select,
+				CASE WHEN EXISTS (
+					SELECT 1 FROM " . DB_PREFIX . "dues d
+					WHERE d.mundane_id = m.mundane_id
+					  AND d.kingdom_id = $kingdom_id
+					  AND d.revoked != 1
+					  AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
+				) THEN 1 ELSE 0 END AS dues_paid,
+				(SELECT CASE WHEN MAX(d.dues_for_life) = 1 THEN '9999-12-31'
+				             ELSE MAX(d.dues_until) END
+				 FROM " . DB_PREFIX . "dues d
+				 WHERE d.mundane_id = m.mundane_id
+				   AND d.kingdom_id = $kingdom_id
+				   AND d.revoked != 1
+				   AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
+				) AS dues_until
+			FROM " . DB_PREFIX . "mundane m
+				JOIN " . DB_PREFIX . "park    p ON p.park_id    = m.park_id
+				JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+				$att_join_clause
+				$province_join
+				$knight_join
+			WHERE m.kingdom_id = $kingdom_id
+			  AND m.active = 1
+			  AND p.active = 'Active'
+			  AND att.att_count IS NOT NULL
+			  $park_clause
+			  $mundane_clause
+			ORDER BY p.name, m.persona
+		";
+
+		$r = $this->db->query($sql);
+		$response = ['Players' => [], 'AttendanceRequired' => $att_req, 'MonthsWindow' => $months_win,
+		             'MinMembershipMonths' => $min_mem_mo, 'ProvinceMode' => $province_mode,
+		             'AttendanceMode' => $att_mode, 'WeekOffset' => $week_offset,
+		             'KingdomEventBonus' => $kingdom_evt_bonus,
+		             'ActiveKnightThreshold' => $active_knight_threshold,
+		             'ActiveMemberThreshold' => $active_member_threshold,
+		             'ExcludeOnline' => $exclude_online,
+		             'HomeParkOnly' => $home_park_only,
+		             'DaysWindow' => $days_window,
+		             'MinAge' => $min_age,
+		             'StartDate' => $start_date,
+		             'DisplayStartDate' => $display_start_date,
+		             'AllKingdoms' => $all_kingdoms,
+		             'MaxCreditsPerEvent' => $max_credits_per_event,
+		             'MaxOutsideKingdomCredits' => $max_outside_kingdom_creds,
+		             'MembershipMode' => $membership_mode];
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;
+				$membership_ok   = empty($_member_date) || $_member_date === '0000-00-00'
+					|| strtotime($_member_date) <= strtotime("-{$min_mem_mo} months");
+				$suspended       = (int)$r->suspended === 1;
+				$att_count       = (int)$r->att_count;
+				$base_ok         = !$suspended && $r->waivered == 1 && $r->dues_paid == 1 && $membership_ok;
+				$kingdom_eligible = $base_ok && $att_count >= $att_req;
+
+				$row = [
+					'MundaneId'       => (int)$r->mundane_id,
+					'Persona'         => $r->persona,
+					'ParkId'          => (int)$r->park_id,
+					'ParkName'        => $r->park_name,
+					'KingdomId'       => (int)$r->kingdom_id,
+					'KingdomName'     => $r->kingdom_name,
+					'Waivered'        => (int)$r->waivered,
+					'DuesPaid'        => (int)$r->dues_paid,
+					'DuesUntil'       => $r->dues_until,
+					'AttCount'        => $att_count,
+					'MemberSince'     => $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since,
+					'MembershipOk'    => $membership_ok,
+					'Suspended'       => $suspended,
+					'SuspendedUntil'  => $r->suspended_until,
+					'KingdomEligible'    => $kingdom_eligible,
+					'VotingEligible'     => $kingdom_eligible,
+					'KingdomEventCredit' => $home_park_only && $kingdom_evt_bonus ? (int)$r->kingdom_evt_credit : null,
+					'OutsideCredits'     => $max_outside_kingdom_creds > 0 ? (int)$r->outside_credits_raw : null,
+					'ActiveMember'       => $active_member_threshold > 0 ? ($base_ok && $att_count >= $active_member_threshold) : null,
+					'ActiveKnight'       => false,
+				];
+				if ($active_knight_threshold > 0) {
+					$raw_att_count        = (int)$r->raw_att_count;
+					$is_knight            = (int)$r->is_knight === 1;
+					$row['RawAttCount']   = $raw_att_count;
+					$row['IsKnight']      = $is_knight;
+					$row['ActiveKnight']  = $is_knight && $kingdom_eligible && $raw_att_count >= $active_knight_threshold;
+				}
+
+				if ($province_mode) {
+					$park_att_count      = (int)$r->park_att_count;
+					$province_eligible   = $base_ok && $park_att_count >= $att_req;
+					$row['ParkAttCount']       = $park_att_count;
+					$row['ProvinceEligible']   = $province_eligible;
+					// Province implies kingdom (park attendance is a subset of kingdom attendance),
+					// so VotingEligible stays kingdom_eligible — the broader right.
+				}
+
+				$response['Players'][] = $row;
+			}
+		}
+		return $response;
+	}
+
 }
