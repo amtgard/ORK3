@@ -121,6 +121,7 @@
 .pn-badge-purple { background: #e9d8fd; color: #553c9a; }
 .pn-badge-gold   { background: #fefcbf; color: #744210; }
 .pn-badge-yellow { background: #fef08a; color: #92400e; }
+.pn-badge-sub    { opacity: 0.7; font-weight: 400; margin-left: 4px; text-transform: none; letter-spacing: 0; }
 
 .pn-suspended-detail {
 	color: rgba(255,255,255,0.8);

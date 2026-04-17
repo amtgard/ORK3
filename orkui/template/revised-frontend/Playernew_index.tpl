@@ -330,6 +330,18 @@
 				<?php else: ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> No Dues on File</span>
 				<?php endif; ?>
+				<?php if (!empty($VotingEligible)): ?>
+					<span class="pn-badge pn-badge-blue"><i class="fas fa-vote-yea"></i> Voting Eligible<?php
+						if (!empty($VotingProvinceMode)):
+							?> <span class="pn-badge-sub"><?= !empty($VotingProvinceEligible) ? 'Province &amp; Kingdom' : 'Kingdom' ?></span><?php
+						elseif (!empty($ActiveKnight)):
+							?> <span class="pn-badge-sub">Active Knight</span><?php
+						elseif ($ActiveMember === true):
+							?> <span class="pn-badge-sub">Active Member</span><?php
+						elseif ($ActiveMember === false && isset($ActiveMember)):
+							?> <span class="pn-badge-sub">Contributing</span><?php
+						endif; ?></span>
+				<?php endif; ?>
 				<?php if (!empty($OfficerRoles)): ?>
 					<?php foreach ($OfficerRoles as $office): ?>
 						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>

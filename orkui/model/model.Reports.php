@@ -267,6 +267,144 @@ class Model_Reports extends Model {
 		return false;
 	}
 
+	private function _voting_rules($kingdom_id) {
+		$rules = [
+			14 => [ // Celestial Kingdom — Contributing (7+ credits) or Active (12+ credits)
+				'AttendanceRequired'    => 7,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 0,
+				'AttendanceMode'        => 'count',
+				'ProvinceMode'          => false,
+				'ActiveMemberThreshold' => 12,
+				'AllKingdoms'           => true,
+			],
+			31 => [ // Nine Blades
+				'AttendanceRequired'  => 6,
+				'MonthsWindow'        => 6,
+				'MinMembershipMonths' => 6,
+				'AttendanceMode'      => 'weeks',
+				'ProvinceMode'        => false,
+			],
+			3 => [ // Iron Mountains — Mon–Sun weeks; 6-month membership required
+				'AttendanceRequired'  => 6,
+				'MonthsWindow'        => 6,
+				'MinMembershipMonths' => 6,
+				'AttendanceMode'      => 'weeks',
+				'ProvinceMode'        => false,
+			],
+			17 => [ // Crystal Groves
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 6,
+				'AttendanceMode'        => 'count',
+				'ProvinceMode'          => true,
+				'KingdomEventBonus'     => true,
+			],
+			10 => [ // Rising Winds — membership age checked via first attendance date, not park join date
+				'AttendanceRequired'    => 7,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 6,
+				'AttendanceMode'        => 'days',
+				'ProvinceMode'          => false,
+				'MembershipMode'        => 'first_attendance',
+				'WeekSnap'              => true,
+			],
+			25 => [ // Viridian Outlands
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 0,
+				'AttendanceMode'        => 'days',
+				'ProvinceMode'          => false,
+				'WeekSnap'              => true,
+			],
+			20 => [ // Northern Lights — online attendance excluded
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 0,
+				'AttendanceMode'        => 'days',
+				'ProvinceMode'          => false,
+				'ExcludeOnline'         => true,
+				'WeekSnap'              => true,
+			],
+			36 => [ // Northreach — 180-day window, 12 weeks; age 14+ (not auto-checked, no DOB in DB)
+				'AttendanceRequired'    => 12,
+				'MonthsWindow'          => 0,
+				'DaysWindow'            => 180,
+				'MinMembershipMonths'   => 0,
+				'AttendanceMode'        => 'weeks',
+				'ProvinceMode'          => false,
+				'MinAge'                => 14,
+			],
+			27 => [ // Polaris — Sun–Sat week; 3-month home chapter membership required
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 3,
+				'AttendanceMode'        => 'weeks',
+				'WeekOffset'            => 6,
+				'ProvinceMode'          => false,
+			],
+			38 => [ // 13 Roads
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 0,
+				'AttendanceMode'        => 'days',
+				'ProvinceMode'          => false,
+				'WeekSnap'              => true,
+			],
+			4 => [ // Goldenvale — home park sign-ins; 1 kingdom event counts toward the 6
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 0,
+				'AttendanceMode'        => 'count',
+				'ProvinceMode'          => false,
+				'HomeParkOnly'          => true,
+				'KingdomEventBonus'     => true,
+				'WeekSnap'              => true,
+			],
+			6 => [ // Emerald Hills — Tue–Mon week; Active Knight = voting eligible + 8 raw sign-ins
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 6,
+				'AttendanceMode'        => 'weeks',
+				'WeekOffset'            => 1,
+				'ProvinceMode'          => false,
+				'ActiveKnightThreshold' => 8,
+			],
+			19 => [ // Tal Dagore — 8 credits/6mo; max 2 from outside kingdom; multi-credit events capped at 2
+				'AttendanceRequired'      => 8,
+				'MonthsWindow'            => 6,
+				'MinMembershipMonths'     => 3,
+				'AttendanceMode'          => 'count',
+				'ProvinceMode'            => false,
+				'MaxCreditsPerEvent'      => 2,
+				'MaxOutsideKingdomCredits'=> 2,
+			],
+		];
+		return $rules[$kingdom_id] ?? null;
+	}
+
+	function get_voting_eligible($type, $id) {
+		$kingdom_id = $type === 'Kingdom' ? (int)$id : 0;
+		$park_id    = $type === 'Park'    ? (int)$id : 0;
+		if ($type === 'Park' && $park_id && !$kingdom_id) {
+			$park = new APIModel('Park');
+			$kingdom_id = (int)$park->GetParkKingdomId($park_id);
+		}
+		$rules = $this->_voting_rules($kingdom_id) ?? [];
+		return $this->Report->GetVotingEligible(array_merge($rules, [
+			'KingdomId' => $kingdom_id,
+			'ParkId'    => $park_id,
+		]));
+	}
+
+	function get_voting_eligible_for_player($mundane_id, $kingdom_id) {
+		$rules = $this->_voting_rules((int)$kingdom_id) ?? [];
+		return $this->Report->GetVotingEligible(array_merge($rules, [
+			'KingdomId' => (int)$kingdom_id,
+			'MundaneId' => (int)$mundane_id,
+		]));
+	}
+
 	function get_kingdom_parks($kingdom_id) {
 		$kingdom = new APIModel('Kingdom');
 		$r = $kingdom->GetParks(array('KingdomId' => $kingdom_id));

@@ -512,6 +512,58 @@ class Controller_Reports extends Controller {
 		$this->data['page_title'] ="Suspended Player Roster";
 	}
 
+	public function voting_eligible($type = null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin && (!in_array($type, ['Kingdom', 'Park']) || !valid_id($this->request->id))) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		$this->data['page_title']  = 'Voting Eligible Players';
+		$this->data['report_type'] = $type;
+		$this->data['report_id']   = $this->request->id ?? null;
+		$this->template = 'Reports_voting_eligible.tpl';
+
+		// Resolve kingdom_id for the supported-kingdoms gate
+		$kingdom_config = $this->kingdom_config($type);
+		$kingdom_id = (int)($kingdom_config['KingdomInfo']['KingdomId'] ?? 0);
+
+		$supported = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3];
+		if (!in_array($kingdom_id, $supported)) {
+			$this->data['NotSupported'] = true;
+			return;
+		}
+
+		$result = $this->Reports->get_voting_eligible($type, $this->request->id);
+		$this->data['Players']               = $result['Players'] ?? [];
+		$this->data['AttendanceRequired']    = $result['AttendanceRequired'];
+		$this->data['MonthsWindow']          = $result['MonthsWindow'];
+		$this->data['MinMembershipMonths']   = $result['MinMembershipMonths'] ?? 0;
+		$this->data['ProvinceMode']        = $result['ProvinceMode']        ?? false;
+		$this->data['AttendanceMode']      = $result['AttendanceMode']      ?? 'weeks';
+		$this->data['WeekOffset']             = $result['WeekOffset']             ?? 0;
+		$this->data['KingdomEventBonus']      = $result['KingdomEventBonus']      ?? false;
+		$this->data['ActiveKnightThreshold']  = $result['ActiveKnightThreshold']  ?? 0;
+		$this->data['ActiveMemberThreshold']  = $result['ActiveMemberThreshold']  ?? 0;
+		$this->data['ExcludeOnline']          = $result['ExcludeOnline']          ?? false;
+		$this->data['HomeParkOnly']           = $result['HomeParkOnly']           ?? false;
+		$this->data['DaysWindow']             = $result['DaysWindow']             ?? 0;
+		$this->data['MinAge']                 = $result['MinAge']                 ?? 0;
+		$this->data['StartDate']              = $result['StartDate']              ?? '';
+		$this->data['DisplayStartDate']       = $result['DisplayStartDate']       ?? '';
+		$this->data['AllKingdoms']            = $result['AllKingdoms']            ?? false;
+		$this->data['MaxCreditsPerEvent']     = $result['MaxCreditsPerEvent']     ?? 0;
+		$this->data['MaxOutsideKingdomCredits'] = $result['MaxOutsideKingdomCredits'] ?? 0;
+		$this->data['MembershipMode']         = $result['MembershipMode']         ?? '';
+
+		if ($type === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$this->request->id . '&tab=reports';
+		} elseif ($type === 'Kingdom') {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$this->request->id . '&tab=reports';
+		}
+	}
+
 	/**
 	 * Generate all expected period labels between two rounded dates.
 	 */

@@ -373,6 +373,23 @@ class Controller_Player extends Controller {
 			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
 		}
 
+		// Voting eligibility badge — supported kingdoms only
+		$this->data['VotingEligible']         = false;
+		$this->data['VotingProvinceMode']      = false;
+		$this->data['VotingProvinceEligible']  = false;
+		$this->data['ActiveKnight']            = false;
+		$this->data['ActiveMember']            = false;
+		$_votingKingdoms = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3];
+		$_playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
+		if (in_array($_playerKingdomId, $_votingKingdoms)) {
+			$_vr = $this->Reports->get_voting_eligible_for_player((int)$id, $_playerKingdomId);
+			$this->data['VotingEligible']        = !empty($_vr['Players'][0]['VotingEligible']);
+			$this->data['VotingProvinceMode']     = !empty($_vr['ProvinceMode']);
+			$this->data['VotingProvinceEligible'] = !empty($_vr['Players'][0]['ProvinceEligible']);
+			$this->data['ActiveKnight']           = !empty($_vr['Players'][0]['ActiveKnight']);
+		$this->data['ActiveMember']           = $_vr['Players'][0]['ActiveMember'] ?? false;
+		}
+
 		global $DB;
 		$DB->Clear();
 		$officerSql   = "SELECT o.role, o.park_id,
