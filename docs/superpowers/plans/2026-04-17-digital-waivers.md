@@ -194,8 +194,8 @@ class Model_Waiver extends Model {
 
 Run:
 ```bash
-docker exec ork3-php8-app php -l /var/www/html/system/lib/ork3/class.Waiver.php
-docker exec ork3-php8-app php -l /var/www/html/orkui/model/model.Waiver.php
+docker exec ork3-php8-app php -l /var/www/ork.amtgard.com/system/lib/ork3/class.Waiver.php
+docker exec ork3-php8-app php -l /var/www/ork.amtgard.com/orkui/model/model.Waiver.php
 ```
 
 Expected: `No syntax errors detected` for both.
@@ -282,8 +282,8 @@ class Controller_WaiverAjax extends Controller {
 
 Run:
 ```bash
-docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.Waiver.php
-docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.WaiverAjax.php
+docker exec ork3-php8-app php -l /var/www/ork.amtgard.com/orkui/controller/controller.Waiver.php
+docker exec ork3-php8-app php -l /var/www/ork.amtgard.com/orkui/controller/controller.WaiverAjax.php
 ```
 
 Expected: `No syntax errors detected` for both.
@@ -292,8 +292,8 @@ Expected: `No syntax errors detected` for both.
 
 Run:
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:19080/orkui/Waiver/builder/1"
-curl -s "http://localhost:19080/orkui/WaiverAjax/saveTemplate" | head -c 200
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:19080/orkui/index.php?Route=Waiver/builder/1"
+curl -s "http://localhost:19080/orkui/index.php?Route=WaiverAjax/saveTemplate" | head -c 200
 ```
 
 Expected: builder returns 200 (blank template body is fine — templates written in Phase 3); `WaiverAjax/saveTemplate` returns JSON with `"status":5` (not logged in).
@@ -331,7 +331,7 @@ No formal PHPUnit in the repo; the test is a plain PHP script that runs each `te
 # tests/php/run-waiver-tests.sh — run Waiver domain tests inside docker
 set -e
 cd "$(dirname "$0")/../.."
-docker exec -w /var/www/html/tests/php ork3-php8-app php WaiverTest.php "$@"
+docker exec -w /var/www/ork.amtgard.com/tests/php ork3-php8-app php WaiverTest.php "$@"
 ```
 
 Make executable: `chmod +x tests/php/run-waiver-tests.sh`
@@ -341,9 +341,9 @@ Make executable: `chmod +x tests/php/run-waiver-tests.sh`
 ```php
 <?php
 // Runs inside ork3-php8-app container. Hits the real dev DB.
-// Invocation: docker exec -w /var/www/html/tests/php ork3-php8-app php WaiverTest.php
+// Invocation: docker exec -w /var/www/ork.amtgard.com/tests/php ork3-php8-app php WaiverTest.php
 
-require_once('/var/www/html/system/common.php');
+require_once('/var/www/ork.amtgard.com/system/common.php');
 
 class WaiverTestRunner {
 	public $pass = 0;
@@ -1330,7 +1330,7 @@ class Controller_WaiverAjax extends Controller {
 - [ ] **Step 2: Syntax check**
 
 ```bash
-docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.WaiverAjax.php
+docker exec ork3-php8-app php -l /var/www/ork.amtgard.com/orkui/controller/controller.WaiverAjax.php
 ```
 
 Expected: `No syntax errors detected`.
@@ -1338,7 +1338,7 @@ Expected: `No syntax errors detected`.
 - [ ] **Step 3: Smoke-test endpoints**
 
 ```bash
-curl -s -X POST "http://localhost:19080/orkui/WaiverAjax/previewMarkdown" | head -c 200
+curl -s -X POST "http://localhost:19080/orkui/index.php?Route=WaiverAjax/previewMarkdown" | head -c 200
 ```
 
 Expected: `{"status":5,"error":"Not logged in"}` (no session). That's correct — full round-trip is tested by Phase 3 browser QA.
@@ -1498,8 +1498,8 @@ class Controller_Waiver extends Controller {
 - [ ] **Step 2: Syntax check + smoke test**
 
 ```bash
-docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.Waiver.php
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:19080/orkui/Waiver/queue/kingdom/1"
+docker exec ork3-php8-app php -l /var/www/ork.amtgard.com/orkui/controller/controller.Waiver.php
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:19080/orkui/index.php?Route=Waiver/queue/kingdom/1"
 ```
 
 Expected: parse clean; queue returns 302 (redirect — expected for un-auth CLI curl).
@@ -1828,7 +1828,7 @@ window.WvBuilderConfig = { token: "<?= $token ?>" };
 		const parts = [[headerTA.value, pv.h], [bodyTA.value, pv.b], [minorTA.value, pv.m], [footerTA.value, pv.f]];
 		for (const [md, el] of parts) {
 			const fd = new FormData(); fd.append('Markdown', md);
-			const r = await fetch('/orkui/WaiverAjax/previewMarkdown', { method: 'POST', body: fd, credentials: 'same-origin' });
+			const r = await fetch('<?= UIR ?>WaiverAjax/previewMarkdown', { method: 'POST', body: fd, credentials: 'same-origin' });
 			const j = await r.json();
 			el.innerHTML = j.Html || '';
 		}
@@ -1845,7 +1845,7 @@ window.WvBuilderConfig = { token: "<?= $token ?>" };
 			const status = form.querySelector('.wv-status');
 			status.className = 'wv-status'; status.textContent = 'Saving…';
 			try {
-				const r = await fetch('/orkui/WaiverAjax/saveTemplate', { method: 'POST', body: fd, credentials: 'same-origin' });
+				const r = await fetch('<?= UIR ?>WaiverAjax/saveTemplate', { method: 'POST', body: fd, credentials: 'same-origin' });
 				const j = await r.json();
 				if (j.status === 0) {
 					status.className = 'wv-status wv-status-ok';
@@ -1985,10 +1985,10 @@ require_once(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.inc.php');
 		if (!fd.get('SignatureData')) { status.className = 'wv-status-err'; status.textContent = 'Please sign before submitting.'; return; }
 		status.className = ''; status.textContent = 'Submitting…';
 		try {
-			const r = await fetch('/orkui/WaiverAjax/submitSignature', { method: 'POST', body: fd, credentials: 'same-origin' });
+			const r = await fetch('<?= UIR ?>WaiverAjax/submitSignature', { method: 'POST', body: fd, credentials: 'same-origin' });
 			const j = await r.json();
 			if (j.status === 0) {
-				window.location = '/orkui/Waiver/review/' + j.SignatureId;
+				window.location = '<?= UIR ?>Waiver/review/' + j.SignatureId;
 			} else {
 				status.className = 'wv-status-err';
 				status.textContent = j.error || 'Submit failed';
@@ -2025,7 +2025,7 @@ $total  = $wv['total'];
 $scope  = $wv['scope'];
 $eid    = $wv['entity_id'];
 $pages  = max(1, (int)ceil($total / 10));
-function wv_filter_url($scope, $eid, $filter, $page) { return '/orkui/Waiver/queue/' . $scope . '/' . $eid . '?filter=' . urlencode($filter) . '&page=' . $page; }
+function wv_filter_url($scope, $eid, $filter, $page) { return '<?= UIR ?>Waiver/queue/' . $scope . '/' . $eid . '?filter=' . urlencode($filter) . '&page=' . $page; }
 ?>
 <style>
 .wv-queue { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
@@ -2068,7 +2068,7 @@ function wv_filter_url($scope, $eid, $filter, $page) { return '/orkui/Waiver/que
 				<td><?= htmlspecialchars($s['SignedAt']) ?></td>
 				<td><span class="wv-badge wv-badge-<?= htmlspecialchars($s['VerificationStatus']) ?>"><?= htmlspecialchars($s['VerificationStatus']) ?></span></td>
 				<td>#<?= (int)$s['TemplateId'] ?></td>
-				<td><a href="/orkui/Waiver/review/<?= (int)$s['SignatureId'] ?>">Review &rarr;</a></td>
+				<td><a href="<?= UIR ?>Waiver/review/<?= (int)$s['SignatureId'] ?>">Review &rarr;</a></td>
 			</tr>
 		<?php endforeach; ?>
 		</tbody>
@@ -2134,7 +2134,7 @@ $of = $wv['officer_prefill'];
 </style>
 <div class="wv-review">
 	<h1>Digital Waiver — Signed Record #<?= (int)$sig['SignatureId'] ?></h1>
-	<p><a href="/orkui/Waiver/printable/<?= (int)$sig['SignatureId'] ?>" target="_blank">Open printable version &rarr;</a></p>
+	<p><a href="<?= UIR ?>Waiver/printable/<?= (int)$sig['SignatureId'] ?>" target="_blank">Open printable version &rarr;</a></p>
 
 	<div class="wv-section"><?= $md($tpl['HeaderMarkdown'] ?? '') ?></div>
 
@@ -2234,7 +2234,7 @@ window.WvReviewConfig = {
 		fd.set('SignatureData', form.querySelector('.wv-sig-data').value);
 		if (!fd.get('SignatureData')) { status.textContent = 'Please sign before submitting.'; return; }
 		status.textContent = 'Saving…';
-		const r = await fetch('/orkui/WaiverAjax/verifySignature', { method: 'POST', body: fd, credentials: 'same-origin' });
+		const r = await fetch('<?= UIR ?>WaiverAjax/verifySignature', { method: 'POST', body: fd, credentials: 'same-origin' });
 		const j = await r.json();
 		if (j.status === 0) { window.location.reload(); }
 		else { status.textContent = j.error || 'Failed'; }
@@ -2390,7 +2390,7 @@ assert needle in t, 'existing admin menu entries not found; inspect file and upd
 insert_after = t.rfind(needle)
 # find end-of-statement ';' after that position
 semi = t.index(';', insert_after) + 1
-addition = "\n\t\t\t$this->data['menu']['admin'][] = ['label' => 'Edit Waivers', 'url' => '/orkui/Waiver/builder/' . (int)$id];\n\t\t\t$this->data['menu']['admin'][] = ['label' => 'Waiver Review Queue', 'url' => '/orkui/Waiver/queue/kingdom/' . (int)$id];"
+addition = "\n\t\t\t$this->data['menu']['admin'][] = ['label' => 'Edit Waivers', 'url' => '<?= UIR ?>Waiver/builder/' . (int)$id];\n\t\t\t$this->data['menu']['admin'][] = ['label' => 'Waiver Review Queue', 'url' => '<?= UIR ?>Waiver/queue/kingdom/' . (int)$id];"
 p.write_text(t[:semi] + addition + t[semi:])
 print('ok')
 PY
@@ -2399,7 +2399,7 @@ PY
 - [ ] **Step 3: Verify**
 
 ```bash
-docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.Kingdom.php
+docker exec ork3-php8-app php -l /var/www/ork.amtgard.com/orkui/controller/controller.Kingdom.php
 ```
 
 Expected: no syntax errors. Visit Kingdomnew while kingdom admin and confirm "Edit Waivers" / "Review Queue" appear.
@@ -2428,7 +2428,7 @@ Use Python, append inside the existing constructor immediately before the closin
 		$this->load_model('Waiver');
 		$this->data['park_info']['WaiverActive'] = $this->Waiver->GetActiveTemplate(['KingdomId' => $kingdom_id, 'Scope' => 'park']);
 		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$id, AUTH_EDIT)) {
-			$this->data['menu']['admin'][] = ['label' => 'Waiver Review Queue', 'url' => '/orkui/Waiver/queue/park/' . (int)$id];
+			$this->data['menu']['admin'][] = ['label' => 'Waiver Review Queue', 'url' => '<?= UIR ?>Waiver/queue/park/' . (int)$id];
 		}
 ```
 
@@ -2439,7 +2439,7 @@ Use Python, append inside the existing constructor immediately before the closin
 <div class="pk-card">
 	<h4 style="background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;">Digital Waiver</h4>
 	<p>This park requires a signed digital waiver.</p>
-	<a class="pk-btn" href="/orkui/Waiver/sign/park/<?= (int)$park_info['ParkInfo']['ParkId'] ?>">Sign Park Waiver</a>
+	<a class="pk-btn" href="<?= UIR ?>Waiver/sign/park/<?= (int)$park_info['ParkInfo']['ParkId'] ?>">Sign Park Waiver</a>
 </div>
 <?php endif; ?>
 ```
@@ -2488,7 +2488,7 @@ Use Python, append inside the existing constructor immediately before the closin
 	<?php foreach ($this->data['_wv_sidebar']['items'] as $it): ?>
 		<div class="pn-detail-row">
 			<span class="pn-detail-label"><?= htmlspecialchars(ucfirst($it['scope'])) ?> waiver (v<?= $it['version'] ?>)</span>
-			<span class="pn-detail-value"><a href="/orkui/Waiver/sign/<?= htmlspecialchars($it['scope']) ?>/<?= (int)$it['entity_id'] ?>">Sign / View</a></span>
+			<span class="pn-detail-value"><a href="<?= UIR ?>Waiver/sign/<?= htmlspecialchars($it['scope']) ?>/<?= (int)$it['entity_id'] ?>">Sign / View</a></span>
 		</div>
 	<?php endforeach; ?>
 </div>
