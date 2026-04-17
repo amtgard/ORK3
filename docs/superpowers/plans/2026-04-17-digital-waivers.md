@@ -194,8 +194,8 @@ class Model_Waiver extends Model {
 
 Run:
 ```bash
-docker exec ork3-php8-web php -l /var/www/html/system/lib/ork3/class.Waiver.php
-docker exec ork3-php8-web php -l /var/www/html/orkui/model/model.Waiver.php
+docker exec ork3-php8-app php -l /var/www/html/system/lib/ork3/class.Waiver.php
+docker exec ork3-php8-app php -l /var/www/html/orkui/model/model.Waiver.php
 ```
 
 Expected: `No syntax errors detected` for both.
@@ -282,8 +282,8 @@ class Controller_WaiverAjax extends Controller {
 
 Run:
 ```bash
-docker exec ork3-php8-web php -l /var/www/html/orkui/controller/controller.Waiver.php
-docker exec ork3-php8-web php -l /var/www/html/orkui/controller/controller.WaiverAjax.php
+docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.Waiver.php
+docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.WaiverAjax.php
 ```
 
 Expected: `No syntax errors detected` for both.
@@ -331,7 +331,7 @@ No formal PHPUnit in the repo; the test is a plain PHP script that runs each `te
 # tests/php/run-waiver-tests.sh — run Waiver domain tests inside docker
 set -e
 cd "$(dirname "$0")/../.."
-docker exec -w /var/www/html/tests/php ork3-php8-web php WaiverTest.php "$@"
+docker exec -w /var/www/html/tests/php ork3-php8-app php WaiverTest.php "$@"
 ```
 
 Make executable: `chmod +x tests/php/run-waiver-tests.sh`
@@ -340,8 +340,8 @@ Make executable: `chmod +x tests/php/run-waiver-tests.sh`
 
 ```php
 <?php
-// Runs inside ork3-php8-web container. Hits the real dev DB.
-// Invocation: docker exec -w /var/www/html/tests/php ork3-php8-web php WaiverTest.php
+// Runs inside ork3-php8-app container. Hits the real dev DB.
+// Invocation: docker exec -w /var/www/html/tests/php ork3-php8-app php WaiverTest.php
 
 require_once('/var/www/html/system/common.php');
 
@@ -1330,7 +1330,7 @@ class Controller_WaiverAjax extends Controller {
 - [ ] **Step 2: Syntax check**
 
 ```bash
-docker exec ork3-php8-web php -l /var/www/html/orkui/controller/controller.WaiverAjax.php
+docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.WaiverAjax.php
 ```
 
 Expected: `No syntax errors detected`.
@@ -1498,7 +1498,7 @@ class Controller_Waiver extends Controller {
 - [ ] **Step 2: Syntax check + smoke test**
 
 ```bash
-docker exec ork3-php8-web php -l /var/www/html/orkui/controller/controller.Waiver.php
+docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.Waiver.php
 curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:19080/orkui/Waiver/queue/kingdom/1"
 ```
 
@@ -2399,7 +2399,7 @@ PY
 - [ ] **Step 3: Verify**
 
 ```bash
-docker exec ork3-php8-web php -l /var/www/html/orkui/controller/controller.Kingdom.php
+docker exec ork3-php8-app php -l /var/www/html/orkui/controller/controller.Kingdom.php
 ```
 
 Expected: no syntax errors. Visit Kingdomnew while kingdom admin and confirm "Edit Waivers" / "Review Queue" appear.
