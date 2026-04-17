@@ -1,6 +1,29 @@
 <?php
 $show_avg_columns = isset($form) && in_array($form['Period'], array('Quarterly', 'Annually'));
 $avg_by_uniques   = isset($form) && !empty($form['AvgByUniques']);
+$grid_view        = isset($form) && !empty($form['GridView']);
+
+/* Build grid pivot (all_parks mode only) */
+$grid_periods     = [];
+$grid_parks       = [];
+$grid_kingdom_row = [];
+if ($grid_view && ($mode ?? '') === 'all_parks' && !empty($attendance)) {
+    $period_totals = [];
+    foreach ($attendance as $row) {
+        if (!valid_id($row['ParkId'])) continue;
+        $pid    = $row['ParkId'];
+        $period = $row['PeriodLabel'];
+        if (!isset($grid_parks[$pid])) {
+            $grid_parks[$pid] = ['ParkId' => $pid, 'ParkName' => $row['ParkName'], 'periods' => []];
+        }
+        $val = $avg_by_uniques ? (int)$row['UniquePlayers'] : (int)$row['TotalSignins'];
+        $grid_parks[$pid]['periods'][$period] = $val;
+        $period_totals[$period] = ($period_totals[$period] ?? 0) + $val;
+        if (!in_array($period, $grid_periods)) $grid_periods[] = $period;
+    }
+    uasort($grid_parks, function($a, $b) { return strcmp($a['ParkName'], $b['ParkName']); });
+    $grid_kingdom_row = ['ParkId' => 0, 'ParkName' => isset($kingdom_name) ? $kingdom_name : 'Kingdom', 'periods' => $period_totals];
+}
 $has_results      = isset($mode) && (
 	($mode == 'all_parks'   && is_array($attendance ?? null) && count($attendance) > 0) ||
 	($mode == 'single_park' && isset($players) && count($players) > 0)
@@ -135,7 +158,10 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 						<div class="rp-form-group rp-form-check">
 							<label><input type="checkbox" id="AvgByUniques" name="AvgByUniques" value="1"<?=!empty($form['AvgByUniques']) ? ' checked' : ''?>> Average by Uniques?</label>
 						</div>
-						<div class="rp-form-group rp-form-check" id="local-players-row" style="<?=!empty($form['ParkId']) ? '' : 'display:none;'?>">
+						<div class="rp-form-group rp-form-check">
+							<label><input type="checkbox" id="GridView" name="GridView" value="1"<?=!empty($form['GridView']) ? ' checked' : ''?>> Grid View?</label>
+						</div>
+						<div class="rp-form-group rp-form-check" id="local-players-row" style="<?=(!empty($form['ParkId']) || !empty($form['GridView'])) ? '' : 'display:none;'?>">
 							<label><input type="checkbox" id="LocalPlayersOnly" name="LocalPlayersOnly" value="1"<?=!empty($form['LocalPlayersOnly']) ? ' checked' : ''?>> Local Players Only?</label>
 						</div>
 						<div class="rp-form-group">
@@ -156,6 +182,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 					<p><strong>Minimum Sign-Ins</strong> filters players in the single-park view to only those with at least that many total sign-ins.</p>
 					<p><strong>Local Players Only</strong> (single park) restricts results to players whose home park matches the selected park.</p>
 					<p><strong>Average by Uniques</strong> uses Unique Players as the numerator for Avg Weekly/Monthly instead of Total Sign-Ins.</p>
+					<p><strong>Grid View</strong> pivots the All Parks table so each park is a row and each period is a column, with an average column shown first.</p>
 				</div>
 			</div>
 
@@ -171,6 +198,44 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 			<p class="rp-empty-state">Configure the report parameters and click <strong>Run Report</strong> to view results.</p>
 
 <?php elseif ($mode == 'all_parks' && is_array($attendance ?? null) && count($attendance) > 0) : ?>
+
+<?php if ($grid_view && !empty($grid_parks)) : ?>
+			<?php $grid_metric_label = $avg_by_uniques ? 'Unique Players' : 'Total Sign-Ins'; ?>
+			<h3 class="rp-section-heading">Kingdom Attendance by Park — <?=$grid_metric_label?> Grid</h3>
+			<table id="explorer-grid-table" class="display rp-grid-table" style="width:100%">
+				<thead>
+					<tr>
+						<th>Park</th>
+						<th>Average</th>
+<?php foreach ($grid_periods as $gp) : ?>
+						<th><?=htmlspecialchars($gp)?></th>
+<?php endforeach; ?>
+					</tr>
+				</thead>
+				<tbody>
+<?php foreach ($grid_parks as $gpark) : ?>
+				<tr>
+					<td><a href="<?=UIR.'Park/profile/'.$gpark['ParkId']?>"><?=htmlspecialchars($gpark['ParkName'])?></a></td>
+					<?php $_gvals = array_values($gpark['periods']); $_gcnt = count($_gvals); ?>
+					<td><?=$_gcnt > 0 ? number_format(array_sum($_gvals) / $_gcnt, 1) : '0'?></td>
+<?php foreach ($grid_periods as $gp) : ?>
+					<td><?=(int)($gpark['periods'][$gp] ?? 0)?></td>
+<?php endforeach; ?>
+				</tr>
+<?php endforeach; ?>
+<?php if (!empty($grid_kingdom_row)) : ?>
+				<tr class="rp-row-summary">
+					<td><strong><?=htmlspecialchars($grid_kingdom_row['ParkName'])?></strong></td>
+					<?php $_gkvals = array_values($grid_kingdom_row['periods']); $_gkcnt = count($_gkvals); ?>
+					<td><strong><?=$_gkcnt > 0 ? number_format(array_sum($_gkvals) / $_gkcnt, 1) : '0'?></strong></td>
+<?php foreach ($grid_periods as $gp) : ?>
+					<td><strong><?=(int)($grid_kingdom_row['periods'][$gp] ?? 0)?></strong></td>
+<?php endforeach; ?>
+				</tr>
+<?php endif; ?>
+				</tbody>
+			</table>
+<?php else : ?>
 
 			<h3 class="rp-section-heading">Kingdom Attendance by Park</h3>
 			<table id="explorer-allparks-table" class="display" style="width:100%">
@@ -229,6 +294,8 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 				</tbody>
 			</table>
 
+<?php endif; /* end grid_view else */ ?>
+
 <?php elseif ($mode == 'single_park' && isset($players) && count($players) > 0) : ?>
 
 			<h3 class="rp-section-heading">Player Attendance Detail</h3>
@@ -283,17 +350,47 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 $(function() {
 	$('#StartDate, #EndDate').datepicker({ dateFormat: 'yy-mm-dd' });
 
-	$('#ParkId').on('change', function() {
-		var parkId = parseInt($(this).val(), 10);
-		if (parkId > 0) {
+	function updateLocalPlayersVisibility() {
+		var parkId   = parseInt($('#ParkId').val(), 10);
+		var gridView = $('#GridView').is(':checked');
+		if (parkId > 0 || gridView) {
 			$('#local-players-row').show();
 		} else {
 			$('#local-players-row').hide();
 			$('#LocalPlayersOnly').prop('checked', false);
 		}
-	});
+	}
+	$('#ParkId').on('change', updateLocalPlayersVisibility);
+	$('#GridView').on('change', updateLocalPlayersVisibility);
 
 <?php if (($mode ?? '') == 'all_parks' && !empty($attendance)) : ?>
+<?php if ($grid_view && !empty($grid_parks)) : ?>
+	var gridPeriodCount = <?= count($grid_periods) ?>;
+	var gridNumericCols = [];
+	for (var i = 1; i < 2 + gridPeriodCount; i++) gridNumericCols.push(i);
+
+	var apTable = $('#explorer-grid-table').DataTable({
+		dom: 'lfrtip',
+		buttons: [
+			{ extend: 'csv',   filename: 'Park Attendance Grid', exportOptions: { columns: ':visible' } },
+			{ extend: 'print', exportOptions: { columns: ':visible' } }
+		],
+		columnDefs: [
+			{ targets: gridNumericCols, type: 'num', className: 'dt-right' },
+			{ targets: [0], responsivePriority: 1 }
+		],
+		pageLength: 50,
+		order: [[0, 'asc']],
+		fixedHeader : { headerOffset: 48 },
+		responsive  : true,
+		scrollX     : true,
+		fixedColumns: { left: 1 },
+		drawCallback: function() {
+			var body = $(this.api().table().body());
+			body.find('tr.rp-row-summary').appendTo(body);
+		}
+	});
+<?php else : ?>
 	var numericCols = [];
 	for (var i = 2; i < 2 + <?= 3 + ($show_avg_columns ? 2 : 0) + 3 ?>; i++) numericCols.push(i);
 
@@ -318,6 +415,7 @@ $(function() {
 			body.find('tr.rp-row-summary').appendTo(body);
 		}
 	});
+<?php endif; ?>
 	$('.rp-btn-export').on('click', function() { apTable.button(0).trigger(); });
 	$('.rp-btn-print' ).on('click', function() { apTable.button(1).trigger(); });
 
@@ -366,4 +464,8 @@ $(function() {
 .rp-row-summary td { background-color: #f7fafc !important; font-weight: 600; border-top: 2px solid var(--rp-border) !important; }
 #explorer-singlepark-table th:nth-child(n+4),
 #explorer-singlepark-table td:nth-child(n+4) { text-align: center !important; }
+#explorer-grid-table th:nth-child(n+2),
+#explorer-grid-table td:nth-child(n+2) { text-align: right !important; }
+#explorer-grid-table th:nth-child(2),
+#explorer-grid-table td:nth-child(2) { font-weight: 600; border-right: 2px solid var(--rp-border); }
 </style>

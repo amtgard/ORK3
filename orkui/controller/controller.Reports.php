@@ -693,7 +693,8 @@ class Controller_Reports extends Controller {
 			'MinimumSignIns' => intval($this->request->MinimumSignIns),
 			'ParkId' => $park_id,
 			'AvgByUniques' => isset($this->request->AvgByUniques) ? 1 : 0,
-			'LocalPlayersOnly' => isset($this->request->LocalPlayersOnly) ? 1 : 0
+			'LocalPlayersOnly' => isset($this->request->LocalPlayersOnly) ? 1 : 0,
+			'GridView' => isset($this->request->GridView) ? 1 : 0
 		);
 		$this->data['form'] = $form;
 
@@ -743,7 +744,8 @@ class Controller_Reports extends Controller {
 				'KingdomId' => $kingdom_id,
 				'StartDate' => $rounded_start,
 				'EndDate' => $rounded_end,
-				'Period' => $period
+				'Period' => $period,
+				'LocalPlayersOnly' => $form['LocalPlayersOnly']
 			));
 			$this->data['mode'] = 'all_parks';
 

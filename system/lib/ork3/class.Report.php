@@ -1758,10 +1758,12 @@ class Report  extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false)
 			return $cache;
 
-		$kingdom_id = mysql_real_escape_string($request['KingdomId']);
-		$start_date = mysql_real_escape_string($request['StartDate']);
-		$end_date   = mysql_real_escape_string($request['EndDate']);
+		$kingdom_id  = mysql_real_escape_string($request['KingdomId']);
+		$start_date  = mysql_real_escape_string($request['StartDate']);
+		$end_date    = mysql_real_escape_string($request['EndDate']);
 		$period_expr = $this->_periodExpr($request['Period']);
+		$local_only  = !empty($request['LocalPlayersOnly']);
+		$local_clause = $local_only ? " AND m.park_id = a.park_id" : '';
 
 		// Main query: per-park per-period aggregates
 		$sql = "SELECT
@@ -1781,6 +1783,7 @@ class Report  extends Ork3 {
 					AND a.date <= '$end_date'
 					AND a.park_id > 0
 					AND p.active = 'Active'
+					$local_clause
 				GROUP BY p.park_id, period_label
 				ORDER BY p.name, period_label";
 
@@ -1814,7 +1817,8 @@ class Report  extends Ork3 {
 					AND a2.date >= '$start_date'
 					AND a2.date <= '$end_date'
 					AND a2.park_id > 0
-					AND p2.active = 'Active'";
+					AND p2.active = 'Active'"
+					. ($local_only ? " AND m2.park_id = a2.park_id" : '');
 
 		$r_kw = $this->db->query($sql_kw);
 		if ($r_kw !== false) {
