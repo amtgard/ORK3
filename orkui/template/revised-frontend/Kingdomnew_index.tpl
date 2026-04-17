@@ -520,16 +520,14 @@
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
 										<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
-										<?php
-											$_mRsvp = !empty($event['MonarchRsvp']);
-											$_rRsvp = !empty($event['RegentRsvp']);
-											if ($_mRsvp && $_rRsvp) $_crownTip = 'Monarch &amp; Regent in Attendance';
-											elseif ($_mRsvp)          $_crownTip = 'Monarch in Attendance';
-											elseif ($_rRsvp)          $_crownTip = 'Regent in Attendance';
-											else                      $_crownTip = '';
-										?>
-										<?php if ($_crownTip): ?>
-											<span class="kn-royal-badge" title="<?= $_crownTip ?>"><i class="fas fa-crown"></i></span>
+										<?php if ($event['NextDetailId']): ?>
+											<span class="kn-copy-link" data-url="<?= HTTP_UI ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>" onclick="event.stopPropagation(); knCopyEventLink(this)" data-tip="Copy the event link and share to boost RSVPs!"><i class="fas fa-link"></i></span>
+										<?php endif; ?>
+										<?php if (!empty($event['MonarchRsvp'])): ?>
+											<span class="kn-royal-badge kn-royal-monarch" data-tip="Monarch in Attendance"><i class="fas fa-crown"></i></span>
+										<?php endif; ?>
+										<?php if (!empty($event['RegentRsvp'])): ?>
+											<span class="kn-royal-badge kn-royal-regent" data-tip="Regent in Attendance"><i class="fas fa-crown"></i></span>
 										<?php endif; ?>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
@@ -1814,14 +1812,49 @@ var KnConfig = {
 </div>
 
 <style>
+/* ---- Instant tooltip (data-tip) ---- */
+[data-tip] { position: relative; }
+[data-tip]::before, [data-tip]::after {
+	position: absolute; left: 50%; bottom: 100%; pointer-events: none;
+	opacity: 0; transition: opacity 0.08s;
+}
+[data-tip]::after {
+	content: attr(data-tip); transform: translateX(-50%) translateY(-4px);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 4px 9px; border-radius: 4px; white-space: nowrap; z-index: 900;
+}
+[data-tip]::before {
+	content: ''; transform: translateX(-50%); margin-bottom: -4px;
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+[data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+
+/* ---- Royal Progress crowns ---- */
 .kn-royal-badge {
 	display: inline-flex; align-items: center;
-	color: #b7791f; margin-left: 5px;
-	font-size: 11px; cursor: default;
+	margin-left: 4px; font-size: 11px; cursor: default;
 	position: relative; top: -1px;
 }
-.kn-cal-royal-crown {
-	color: #b7791f; margin-left: 4px; font-size: 10px; cursor: default;
+.kn-royal-monarch { color: #b7791f; }
+.kn-royal-regent  { color: #718096; }
+
+/* ---- Copy-link icon ---- */
+.kn-copy-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 5px; font-size: 11px; color: #a0aec0;
+	cursor: pointer; opacity: 0; transition: opacity 0.15s;
+	position: relative;
+}
+tr:hover .kn-copy-link { opacity: 1; }
+.kn-copy-link:hover { color: #4299e1; }
+.kn-copy-link.kn-copied::after {
+	content: 'Copied!' !important; position: absolute; bottom: 100%; left: 50%;
+	transform: translateX(-50%); background: #2d3748; color: #fff;
+	font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; opacity: 1; animation: knCopiedFade 1.4s forwards;
+}
+@keyframes knCopiedFade {
+	0%,70% { opacity: 1; } 100% { opacity: 0; }
 }
 </style>
 <!-- Move Player Modal -->
@@ -2064,6 +2097,14 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			var totalAtt = 0, totalTp = 0, totalTm = 0;
 			var wkCount = (data._kingdom && data._kingdom.wk_count) ? data._kingdom.wk_count : 26;
 			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
+			function knCopyEventLink(el) {
+				var url = el.getAttribute('data-url');
+				navigator.clipboard.writeText(url).then(function() {
+					el.classList.add('kn-copied');
+					setTimeout(function() { el.classList.remove('kn-copied'); }, 1500);
+				});
+			}
+
 			function knTrend(cur, prev, decimals) {
 				if (prev === undefined) return '';
 				if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';

@@ -434,7 +434,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				<i class="fas fa-pencil-alt"></i> Edit Details
 			</button>
 			<?php endif; ?>
-			<?php if ($loggedIn && $isUpcoming): ?>
+			<?php if ($loggedIn && !$isPastEvent): ?>
 			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0;display:inline-flex;gap:6px">
 				<button type="submit" name="status" value="going"
 					class="ev-btn <?= $userAttending === 'going' ? 'ev-btn-primary' : 'ev-btn-outline' ?>">
@@ -487,8 +487,8 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 	<?php endif; ?>
 	<div class="ev-stat-card">
 		<div class="ev-stat-icon"><i class="fas fa-users"></i></div>
-		<div class="ev-stat-value"><?= $isUpcoming ? $rsvpCount : $attendeeCount ?></div>
-		<div class="ev-stat-label"><?= $isUpcoming ? 'RSVPs' : 'Attendees' ?></div>
+		<div class="ev-stat-value"><?= !$isPastEvent ? $rsvpCount : $attendeeCount ?></div>
+		<div class="ev-stat-label"><?= !$isPastEvent ? 'RSVPs' : 'Attendees' ?></div>
 	</div>
 </div>
 

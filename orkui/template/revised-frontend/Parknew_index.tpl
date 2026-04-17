@@ -628,6 +628,9 @@
 											<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
 										<?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
+										<?php if ($event['NextDetailId']): ?>
+											<span class="pk-copy-link" data-url="<?= HTTP_UI ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>" onclick="event.stopPropagation(); pkCopyEventLink(this)" data-tip="Copy the event link and share to boost RSVPs!"><i class="fas fa-link"></i></span>
+										<?php endif; ?>
 									</div>
 								</td>
 								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
@@ -1658,6 +1661,44 @@ var PkConfig = {
 </div>
 <?php endif; ?>
 
+<style>
+/* ---- Instant tooltip (data-tip) ---- */
+[data-tip] { position: relative; }
+[data-tip]::before, [data-tip]::after {
+	position: absolute; left: 50%; bottom: 100%; pointer-events: none;
+	opacity: 0; transition: opacity 0.08s;
+}
+[data-tip]::after {
+	content: attr(data-tip); transform: translateX(-50%) translateY(-4px);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 4px 9px; border-radius: 4px; white-space: nowrap; z-index: 900;
+}
+[data-tip]::before {
+	content: ''; transform: translateX(-50%); margin-bottom: -4px;
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+[data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+
+/* ---- Copy-link icon ---- */
+.pk-copy-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 5px; font-size: 11px; color: #a0aec0;
+	cursor: pointer; opacity: 0; transition: opacity 0.15s;
+	position: relative;
+}
+tr:hover .pk-copy-link { opacity: 1; }
+.pk-copy-link:hover { color: #4299e1; }
+.pk-copy-link.pk-copied::after {
+	content: 'Copied!' !important; position: absolute; bottom: 100%; left: 50%;
+	transform: translateX(-50%); background: #2d3748; color: #fff;
+	font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; opacity: 1; animation: pkCopiedFade 1.4s forwards;
+}
+@keyframes pkCopiedFade {
+	0%,70% { opacity: 1; } 100% { opacity: 0; }
+}
+</style>
+
 <?php if ($CanAdminPark ?? false): ?>
 <!-- Self-Registration QR Modal -->
 <style>
@@ -2348,6 +2389,13 @@ html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { bac
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+function pkCopyEventLink(el) {
+	var url = el.getAttribute('data-url');
+	navigator.clipboard.writeText(url).then(function() {
+		el.classList.add('pk-copied');
+		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
+	});
+}
 window.pkRecActiveFilter = 'open';
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (settings.nTable.id !== 'pk-rec-table') return true;
