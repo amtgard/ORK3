@@ -299,6 +299,12 @@ class Controller_Event extends Controller {
 		}
 
 		if ( $action === 'rsvp' && $uid > 0 ) {
+			$cdCheck = $this->Attendance->get_eventdetail_info($detail_id);
+			$_refDate = $cdCheck['EventEnd'] ?: ($cdCheck['EventStart'] ?? '');
+			if ($_refDate && strtotime(date('Y-m-d', strtotime($_refDate))) < strtotime(date('Y-m-d'))) {
+				header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
+				return;
+			}
 			$status = isset($_POST['status']) && $_POST['status'] === 'interested' ? 'interested' : 'going';
 			$this->Event->set_rsvp($detail_id, $uid, $status);
 			header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
