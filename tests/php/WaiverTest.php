@@ -648,6 +648,38 @@ class WaiverTestRunner {
 		$this->assertEq('yp_ack', $decoded[0]['id'] ?? null, 'A1 CustomFieldsJson first id preserved');
 	}
 
+	// ============================================================================
+	// Amendment A2: _validate_custom_fields_json rejects malformed input
+	// ============================================================================
+
+	public function test_a2_custom_fields_json_rejections() {
+		$bad = [
+			'not-json'                                   => 'not valid JSON array',
+			'{"not":"array"}'                            => 'not valid JSON array',
+			json_encode([['id' => 'BAD ID', 'type' => 'text', 'label' => 'X']])
+				=> 'invalid id',
+			json_encode([['id' => 'dup', 'type' => 'text', 'label' => 'A'],
+			             ['id' => 'dup', 'type' => 'text', 'label' => 'B']])
+				=> 'duplicate',
+			json_encode([['id' => 'r1', 'type' => 'radio', 'label' => 'R', 'options' => []]])
+				=> 'requires options',
+			json_encode([['id' => 'nolabel', 'type' => 'text', 'label' => '']])
+				=> 'invalid label',
+		];
+		foreach ($bad as $raw => $expectedFragment) {
+			$r = $this->waiver->SaveTemplate([
+				'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+				'CustomFieldsJson' => $raw,
+			]);
+			$code = $r['Status']['Status'] ?? null;
+			$msg  = $r['Status']['Message'] ?? '';
+			$this->assertTrue($code !== 0, "A2 reject: $expectedFragment — not Success");
+			$this->assertTrue(stripos((string)$msg, $expectedFragment) !== false
+				|| stripos(json_encode($r['Status']), $expectedFragment) !== false,
+				"A2 message mentions '$expectedFragment'");
+		}
+	}
+
 }
 
 (new WaiverTestRunner())->run();
