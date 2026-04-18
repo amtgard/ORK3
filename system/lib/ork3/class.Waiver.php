@@ -299,6 +299,51 @@ class Waiver extends Ork3 {
 		];
 	}
 
+	public function VerifySignature($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
+		$sid = (int)($request['SignatureId'] ?? 0);
+		if ($sid <= 0) return ['Status' => InvalidParameter('SignatureId required')];
+		$action = in_array($request['Action'] ?? '', ['verified','rejected','superseded']) ? $request['Action'] : null;
+		if ($action === null) return ['Status' => InvalidParameter('Action invalid')];
+
+		$cur = $this->GetSignature(['Token' => $request['Token'], 'SignatureId' => $sid]);
+		if (($cur['Status']['Status'] ?? 1) !== 0) return $cur;
+
+		$kid = (int)$cur['Signature']['KingdomId'];
+		$pid = (int)$cur['Signature']['ParkId'];
+		$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kid, AUTH_EDIT)
+			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $pid, AUTH_EDIT)
+			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT);
+		if (!$authorized) return ['Status' => NoAuthorization()];
+
+		if ($action === 'rejected' && trim((string)($request['Notes'] ?? '')) === '') {
+			return ['Status' => InvalidParameter('Notes required when rejecting')];
+		}
+		$sigType = in_array($request['SignatureType'] ?? '', ['drawn','typed']) ? $request['SignatureType'] : null;
+		$sigData = (string)($request['SignatureData'] ?? '');
+		if ($action !== 'superseded' && ($sigType === null || $sigData === '')) {
+			return ['Status' => InvalidParameter('Verifier signature required')];
+		}
+
+		$this->signature->clear();
+		$this->signature->waiver_signature_id = $sid;
+		if (!$this->signature->find()) return ['Status' => ProcessingError('Signature not found')];
+
+		$this->signature->verification_status     = $action;
+		$this->signature->verified_by_mundane_id  = $mundane_id;
+		$this->signature->verified_at             = date('Y-m-d H:i:s');
+		$this->signature->verifier_printed_name   = substr(trim((string)($request['PrintedName'] ?? '')), 0, 128);
+		$this->signature->verifier_persona_name   = substr(trim((string)($request['PersonaName'] ?? '')), 0, 128);
+		$this->signature->verifier_office_title   = substr(trim((string)($request['OfficeTitle'] ?? '')), 0, 128);
+		$this->signature->verifier_signature_type = $sigType;
+		$this->signature->verifier_signature_data = $sigData;
+		$this->signature->verifier_notes          = (string)($request['Notes'] ?? '');
+		$this->signature->save();
+
+		return ['Status' => Success()];
+	}
+
 }
 
 ?>
