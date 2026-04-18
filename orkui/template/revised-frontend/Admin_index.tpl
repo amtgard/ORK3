@@ -675,19 +675,19 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 					<div class="cp-field-row" style="margin-top:8px">
 						<div class="cp-field">
 							<label for="cp-crkn-att-weekly-min">Weekly Min</label>
-							<input type="number" id="cp-crkn-att-weekly-min" value="2" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-att-weekly-min" placeholder="none">
 						</div>
 						<div class="cp-field">
 							<label for="cp-crkn-att-daily-min">Daily Min</label>
-							<input type="number" id="cp-crkn-att-daily-min" value="6" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-att-daily-min" placeholder="none">
 						</div>
 						<div class="cp-field">
 							<label for="cp-crkn-att-credit-min">Credit Min</label>
-							<input type="number" id="cp-crkn-att-credit-min" value="9" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-att-credit-min" placeholder="none">
 						</div>
 						<div class="cp-field">
 							<label for="cp-crkn-monthly-credit-max">Monthly Credit Max</label>
-							<input type="number" id="cp-crkn-monthly-credit-max" value="4" min="0">
+							<input type="text" inputmode="numeric" id="cp-crkn-monthly-credit-max" placeholder="none">
 						</div>
 					</div>
 					<div class="cp-field-row" style="margin-top:8px">

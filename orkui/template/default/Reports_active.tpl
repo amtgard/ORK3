@@ -86,12 +86,18 @@ $show_chart = ($report_type ?? null) === 'Kingdom' && count($chart_parks) > 1;
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
 		<span>
-<?php if (isset($activewaivered)) : ?>
-			Players who attended at least once in the last 6 months, meet their kingdom's minimum activity requirements, and have a current waiver and dues payment on record.
+<?php
+$_req_parts = [];
+if (!empty($kingdom_att_weekly))  $_req_parts[] = '<strong>' . (int)$kingdom_att_weekly  . '</strong> weekly sign-ins';
+if (!empty($kingdom_att_daily))   $_req_parts[] = '<strong>' . (int)$kingdom_att_daily   . '</strong> daily sign-ins';
+if (!empty($kingdom_att_credits)) $_req_parts[] = '<strong>' . (int)$kingdom_att_credits . '</strong> credits';
+$_req_str = !empty($_req_parts) ? ' (' . implode(' or ', $_req_parts) . ' in the last 6 months' . (!empty($kingdom_monthly_max) ? ', max <strong>' . (int)$kingdom_monthly_max . '</strong> credits/month' : '') . ')' : ' in the last 6 months';
+if (isset($activewaivered)) : ?>
+			Players who attended at least once in the last 6 months, meet their kingdom's minimum activity requirements<?= $_req_str ?>, and have a current waiver and dues payment on record.
 <?php elseif (isset($activewaivereduespaid)) : ?>
-			Players who attended at least once in the last 6 months, meet their kingdom's minimum activity requirements, and have a current dues payment on record.
+			Players who attended at least once in the last 6 months, meet their kingdom's minimum activity requirements<?= $_req_str ?>, and have a current dues payment on record.
 <?php else : ?>
-			Players who attended at least once in the last 6 months and meet their kingdom's minimum attendance and credit requirements.
+			Players who meet their kingdom's minimum attendance requirements<?= $_req_str ?>.
 <?php endif; ?>
 		</span>
 	</div>
@@ -134,7 +140,7 @@ $show_chart = ($report_type ?? null) === 'Kingdom' && count($chart_parks) > 1;
 	</div>
 
 	<!-- ── Charts row ─────────────────────────────────────── -->
-	<div class="rp-charts-row" id="rp-charts-row">
+	<div class="rp-charts-row<?= $show_chart ? ' rp-charts-visible' : '' ?>" id="rp-charts-row">
 <?php if ($show_chart) : ?>
 		<div id="active-parks-chart" style="width:100%;height:320px;"></div>
 <?php endif; ?>
@@ -313,19 +319,29 @@ $(function() {
 
 <?php if ($show_chart) : ?>
 	/* ── Park breakdown chart ───────────────────────────── */
-	new Highcharts.Chart({
-		chart: { renderTo: 'active-parks-chart', type: 'bar', backgroundColor: 'transparent', style: { fontFamily: 'inherit' }, marginLeft: 150 },
-		title: { text: 'Active Players by Park' },
-		xAxis: {
-			categories: <?= json_encode($chart_parks) ?>,
-			labels: { style: { fontSize: '12px' } }
-		},
-		yAxis: { title: { text: 'Active Players' }, allowDecimals: false, min: 0 },
-		series: [{ name: 'Active Players', data: <?= json_encode($chart_counts) ?>, color: '#4338ca' }],
-		legend: { enabled: false },
-		credits: { enabled: false },
-		plotOptions: { bar: { dataLabels: { enabled: true } } }
-	});
+	function _actIsDark() {
+		var a = document.documentElement.getAttribute('data-theme');
+		return a === 'dark' || (!a && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+	}
+	function _buildActChart() {
+		var dk = _actIsDark();
+		return new Highcharts.Chart({
+			chart: { renderTo: 'active-parks-chart', type: 'bar', backgroundColor: 'transparent', style: { fontFamily: 'inherit' }, marginLeft: 150 },
+			title: { text: 'Active Players by Park', style: { color: dk ? '#e2e8f0' : '#333' } },
+			xAxis: { categories: <?= json_encode($chart_parks) ?>, labels: { style: { fontSize: '12px', color: dk ? '#cbd5e0' : '#333' } }, lineColor: dk ? '#4a5568' : '#ccd6eb', tickColor: dk ? '#4a5568' : '#ccd6eb' },
+			yAxis: { title: { text: 'Active Players', style: { color: dk ? '#a0aec0' : '#666' } }, allowDecimals: false, min: 0, labels: { style: { color: dk ? '#a0aec0' : '#666' } }, gridLineColor: dk ? '#2d3748' : '#e6e6e6' },
+			series: [{ name: 'Active Players', data: <?= json_encode($chart_counts) ?>, color: '#4338ca' }],
+			tooltip: { backgroundColor: dk ? '#1a2035' : '#fff', borderColor: dk ? '#818cf8' : '#ccc', style: { color: dk ? '#f1f5f9' : '#333' } },
+			legend: { enabled: false },
+			credits: { enabled: false },
+			plotOptions: { bar: { dataLabels: { enabled: true, style: { color: dk ? '#cbd5e0' : '#333', textShadow: dk ? 'none' : '0 0 3px #fff' } } } }
+		});
+	}
+	var _actChart = _buildActChart();
+	new MutationObserver(function() {
+		_actChart.destroy();
+		_actChart = _buildActChart();
+	}).observe(document.documentElement, { attributeFilter: ['data-theme'] });
 <?php endif; ?>
 });
 </script>

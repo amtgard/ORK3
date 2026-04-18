@@ -48,8 +48,17 @@
 			<tbody>
 <?php foreach($Kingdom_config as $key => $config) : ?>
 <?php 	if (1 == $config['UserSetting']) : ?>
+<?php
+	$_cfg_hints = [
+		'AttendanceWeeklyMinimum' => 'Minimum distinct weeks with at least one sign-in in the last 6 months. Leave blank to not require this.',
+		'AttendanceDailyMinimum'  => 'Minimum distinct days with at least one sign-in in the last 6 months. Leave blank to not require this.',
+		'AttendanceCreditMinimum' => 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
+		'MonthlyCreditMaximum'    => 'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
+	];
+	$_hint = $_cfg_hints[$config['Key']] ?? null;
+?>
 				<tr>
-					<td><?=$config['Key'] ?></td>
+					<td><?=$config['Key'] ?><?php if ($_hint): ?> <span title="<?=htmlspecialchars($_hint)?>" style="display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;background:#718096;color:#fff;font-size:10px;font-weight:700;cursor:help;margin-left:4px;">?</span><?php endif; ?></td>
 					<td>
 <?php 		if (is_object($config['Value'])) : ?>
 <?php 			foreach (get_object_vars($config['Value']) as $v_key => $v_value) : ?>
@@ -68,7 +77,7 @@
 <?php				endif; ?>
 <?php			endforeach; ?>
 <?php 		elseif ($config['Type'] == 'number'): ?>
-						<input type='text' class='numeric-field remove-float' name='Config[<?=$config['ConfigurationId'] ?>]' value='<?=$config['Value'] ?>' />
+						<input type='text' class='remove-float' name='Config[<?=$config['ConfigurationId'] ?>]' value='<?= $config['Value'] === null || $config['Value'] === 'null' ? '' : $config['Value'] ?>' placeholder='blank = not set' />
 <?php     	else : ?>
 						<input type='text' class='' name='Config[<?=$config['ConfigurationId'] ?>]' value='<?=$config['Value'] ?>' />
 <?php 		endif; ?>

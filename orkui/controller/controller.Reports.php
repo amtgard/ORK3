@@ -310,10 +310,18 @@ class Controller_Reports extends Controller {
                 $this->request->id,
                 null,
                 null,
-                $kingdom_config['KingdomConfiguration']['AttendanceMinimum']['Value'],
-                $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value']);
+                $kingdom_config['KingdomConfiguration']['AttendanceWeeklyMinimum']['Value'],
+                $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value'],
+                false,
+                null,
+                $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value'],
+                $kingdom_config['KingdomConfiguration']['MonthlyCreditMaximum']['Value']);
 		$this->data['report_type'] = $type;
 		$this->data['report_id']   = $this->request->id ?? null;
+		$this->data['kingdom_att_weekly']  = $kingdom_config['KingdomConfiguration']['AttendanceWeeklyMinimum']['Value'] ?? null;
+		$this->data['kingdom_att_daily']   = $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value']  ?? null;
+		$this->data['kingdom_att_credits'] = $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value'] ?? null;
+		$this->data['kingdom_monthly_max'] = $kingdom_config['KingdomConfiguration']['MonthlyCreditMaximum']['Value']    ?? null;
 		if ($type === 'Park') {
 			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$this->request->id . '&tab=reports';
 		} elseif ($type === 'Kingdom') {
@@ -376,6 +384,10 @@ class Controller_Reports extends Controller {
             $peerage);
 		$this->data['report_type'] = $type;
 		$this->data['report_id']   = $this->request->id ?? null;
+		$this->data['kingdom_att_weekly']  = $kingdom_config['KingdomConfiguration']['AttendanceWeeklyMinimum']['Value']  ?? null;
+		$this->data['kingdom_att_daily']   = $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value']   ?? null;
+		$this->data['kingdom_att_credits'] = $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value']  ?? null;
+		$this->data['kingdom_monthly_max'] = $kingdom_config['KingdomConfiguration']['MonthlyCreditMaximum']['Value']     ?? null;
 		if ($type === 'Park') {
 			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$this->request->id . '&tab=reports';
 		} elseif ($type === 'Kingdom') {

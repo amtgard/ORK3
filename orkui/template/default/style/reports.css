@@ -1301,3 +1301,22 @@ html[data-theme="dark"] .rp-view-btn-active:hover {
 	color: #fff;
 	border-color: #4338ca;
 }
+
+/* ── ApexCharts tooltip dark mode ── */
+html[data-theme="dark"] .apexcharts-tooltip {
+	background: var(--ork-card-bg, #2d3748) !important;
+	border-color: var(--ork-border, #4a5568) !important;
+	color: var(--ork-text, #e2e8f0) !important;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+}
+html[data-theme="dark"] .apexcharts-tooltip-title {
+	background: var(--ork-bg-secondary, #374151) !important;
+	border-color: var(--ork-border, #4a5568) !important;
+	color: var(--ork-text, #e2e8f0) !important;
+}
+html[data-theme="dark"] .apexcharts-tooltip-text,
+html[data-theme="dark"] .apexcharts-tooltip-y-group,
+html[data-theme="dark"] .apexcharts-tooltip-text-y-label,
+html[data-theme="dark"] .apexcharts-tooltip-text-y-value {
+	color: var(--ork-text, #e2e8f0) !important;
+}

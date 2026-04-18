@@ -217,16 +217,30 @@ $(function () {
 		a.click();
 	});
 
-	new Highcharts.Chart({
-		chart  : { renderTo: 'tp-chart', type: 'bar', backgroundColor: 'transparent', style: { fontFamily: 'inherit' }, marginLeft: 160 },
-		title  : { text: null },
-		xAxis  : { categories: <?=json_encode($_chart_parks)?>, labels: { style: { fontSize: '11px' } } },
-		yAxis  : { title: { text: 'Weekly Avg Attendance' }, allowDecimals: true, min: 0 },
-		series : [{ name: 'Weekly Avg', data: <?=json_encode($_chart_avgs)?>, color: '#4338ca', showInLegend: false }],
-		tooltip: { valueSuffix: ' players/week', valueDecimals: 2 },
-		credits: { enabled: false },
-		plotOptions: { bar: { dataLabels: { enabled: true, format: '{y:.2f}', style: { fontSize: '10px' } } } }
-	});
+	var _tpChartParks  = <?=json_encode($_chart_parks)?>;
+	var _tpChartAvgs   = <?=json_encode($_chart_avgs)?>;
+	function _tpIsDark() {
+		var a = document.documentElement.getAttribute('data-theme');
+		return a === 'dark' || (!a && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+	}
+	function _buildTpChart() {
+		var dk = _tpIsDark();
+		return new Highcharts.Chart({
+			chart  : { renderTo: 'tp-chart', type: 'bar', backgroundColor: 'transparent', style: { fontFamily: 'inherit' }, marginLeft: 160 },
+			title  : { text: null },
+			xAxis  : { categories: _tpChartParks, labels: { style: { fontSize: '11px', color: dk ? '#cbd5e0' : '#333' } }, lineColor: dk ? '#4a5568' : '#ccd6eb', tickColor: dk ? '#4a5568' : '#ccd6eb' },
+			yAxis  : { title: { text: 'Weekly Avg Attendance', style: { color: dk ? '#a0aec0' : '#666' } }, allowDecimals: true, min: 0, labels: { style: { color: dk ? '#a0aec0' : '#666' } }, gridLineColor: dk ? '#2d3748' : '#e6e6e6' },
+			series : [{ name: 'Weekly Avg', data: _tpChartAvgs, color: '#4338ca', showInLegend: false }],
+			tooltip: { valueSuffix: ' players/week', valueDecimals: 2, backgroundColor: dk ? '#1a2035' : '#fff', borderColor: dk ? '#818cf8' : '#ccc', style: { color: dk ? '#f1f5f9' : '#333', fontWeight: 'normal' } },
+			credits: { enabled: false },
+			plotOptions: { bar: { dataLabels: { enabled: true, format: '{y:.2f}', style: { fontSize: '10px', color: dk ? '#cbd5e0' : '#333', textShadow: dk ? 'none' : '0 0 3px #fff' } } } }
+		});
+	}
+	var _tpChart = _buildTpChart();
+	new MutationObserver(function() {
+		_tpChart.destroy();
+		_tpChart = _buildTpChart();
+	}).observe(document.documentElement, { attributeFilter: ['data-theme'] });
 <?php endif; ?>
 });
 </script>

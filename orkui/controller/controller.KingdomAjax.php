@@ -129,7 +129,7 @@ class Controller_KingdomAjax extends Controller {
 					'Action'          => CFG_EDIT,
 					'ConfigurationId' => (int)$configId,
 					'Key'             => null,
-					'Value'           => $value,
+					'Value'           => (is_string($value) && trim($value) === '') ? null : $value,
 				];
 			}
 

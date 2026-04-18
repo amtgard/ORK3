@@ -603,7 +603,7 @@ class Common
 			$this->config->key = $key;
 		}
 		if ( $this->config->find() ) {
-			if ( $value != null ) {
+			if ( $value !== null ) {
 				$allowed = json_decode( $this->config->allowed_values );
 				if ( is_array( $allowed ) ) {
 					$allow = true;
@@ -620,6 +620,8 @@ class Common
 					}
 				}
 				$this->config->value = json_encode( $value );
+			} else {
+				$this->config->value = json_encode( null );
 			}
 			$this->config->modified = date( "Y-m-d H:i:s", time() );
 			$this->config->save();

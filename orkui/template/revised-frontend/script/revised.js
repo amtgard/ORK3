@@ -4080,6 +4080,19 @@ $(document).ready(function() {
             lbl.className   = 'kn-admin-config-label';
             var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility' };
             lbl.textContent = keyLabels[cfg.Key] || cfg.Key;
+            var keyHints = {
+                'AttendanceWeeklyMinimum': 'Minimum distinct weeks with at least one sign-in in the last 6 months. Leave blank to not require this.',
+                'AttendanceDailyMinimum':  'Minimum distinct days with at least one sign-in in the last 6 months. Leave blank to not require this.',
+                'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
+                'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
+            };
+            if (keyHints[cfg.Key]) {
+                var hint = document.createElement('span');
+                hint.className = 'kn-cfg-hint';
+                hint.setAttribute('data-hint', keyHints[cfg.Key]);
+                hint.textContent = '?';
+                lbl.appendChild(hint);
+            }
             row.appendChild(lbl);
 
             var inputs = document.createElement('div');

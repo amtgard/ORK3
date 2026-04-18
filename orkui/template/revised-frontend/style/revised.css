@@ -5186,6 +5186,9 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .kn-admin-config-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #f0f4f8; }
 .kn-admin-config-row:last-child { border-bottom:none; }
 .kn-admin-config-label { width:200px; flex-shrink:0; font-size:12px; font-weight:600; color:#4a5568; }
+.kn-cfg-hint { display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;background:#718096;color:#fff;font-size:10px;font-weight:700;cursor:help;margin-left:4px;vertical-align:middle;position:relative; }
+.kn-cfg-hint::after { content:attr(data-hint);position:absolute;left:20px;top:-4px;width:220px;background:#1a202c;color:#e2e8f0;font-size:11px;font-weight:400;line-height:1.4;padding:6px 8px;border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.3);pointer-events:none;opacity:0;transition:opacity .15s;z-index:9999;white-space:normal; }
+.kn-cfg-hint:hover::after { opacity:1; }
 .kn-admin-config-inputs { flex:1; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .kn-admin-config-input { padding:5px 8px; border:1.5px solid #e2e8f0; border-radius:5px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; }
 .kn-admin-config-input:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 2px rgba(66,153,225,0.12); }

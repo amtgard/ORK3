@@ -638,6 +638,15 @@ if ($Type !== 'Event') {
 		}
 	}
 
+	function attIsDark() {
+		var a = document.documentElement.getAttribute('data-theme');
+		return a === 'dark' || (!a && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+	}
+	function attTooltipTheme() {
+		var dk = attIsDark();
+		return { backgroundColor: dk ? '#1a2035' : '#fff', borderColor: dk ? '#818cf8' : '#ccc', style: { color: dk ? '#f1f5f9' : '#333' } };
+	}
+
 	function attBuildWeeklyChart() {
 		return new Highcharts.Chart({
 		chart  : { renderTo: 'attendance-chart', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
@@ -651,8 +660,7 @@ if ($Type !== 'Event') {
 			title : { text: 'Distinct Players' },
 			min   : 0
 		},
-		tooltip: {
-			shared: true,
+		tooltip: Object.assign({ shared: true,
 			formatter: function () {
 				var s = '<b>' + this.x + '</b>';
 				this.points.forEach(function (pt) {
@@ -669,7 +677,7 @@ if ($Type !== 'Event') {
 				});
 				return s;
 			}
-		},
+		}, attTooltipTheme()),
 		plotOptions: {
 			column: {
 				borderRadius: 3,
@@ -726,8 +734,7 @@ if ($Type !== 'Event') {
 			title  : { text: 'Distinct Players per Month' },
 			xAxis  : { categories: monthlyDates, labels: { style: { fontSize: '11px' } } },
 			yAxis  : { title: { text: 'Distinct Players' }, min: 0 },
-			tooltip: {
-				shared: true,
+			tooltip: Object.assign({ shared: true,
 				formatter: function() {
 					var s = '<b>' + this.x + '</b>';
 					this.points.forEach(function(pt) {
@@ -739,7 +746,7 @@ if ($Type !== 'Event') {
 					});
 					return s;
 				}
-			},
+			}, attTooltipTheme()),
 			plotOptions: { column: { borderRadius: 3, borderWidth: 0, groupPadding: 0, pointPadding: 0.05 } },
 			series: [
 				{ name: 'Monthly Players', type: 'column', data: monthlyCounts, color: '#4338ca' },
@@ -758,6 +765,13 @@ if ($Type !== 'Event') {
 	}
 
 	attChart = attBuildWeeklyChart();
+	var _attView = 'weekly';
+	var _origAttSetView = window.attSetView;
+	window.attSetView = function(view) { _attView = view; _origAttSetView(view); };
+	new MutationObserver(function() {
+		if (attChart) { attChart.destroy(); }
+		attChart = (_attView === 'monthly') ? attBuildMonthlyChart() : attBuildWeeklyChart();
+	}).observe(document.documentElement, { attributeFilter: ['data-theme'] });
 <?php endif; ?>
 }());
 

@@ -1717,7 +1717,7 @@ class Controller_Admin extends Controller {
 									'Action' => CFG_EDIT,
 									'ConfigurationId' => $config_id,
 									'Key' => null,
-									'Value' => $value
+									'Value' => (is_string($value) && trim($value) === '') ? null : $value
 								);
 						}
 						$r = $this->Kingdom->set_kingdom_details(array(
@@ -2180,10 +2180,10 @@ class Controller_Admin extends Controller {
 				'ParentKingdomId'         => $parentId,
 				'AttendancePeriodType'    => in_array($_POST['AttendancePeriodType'] ?? '', ['week','month']) ? $_POST['AttendancePeriodType'] : 'week',
 				'AttendancePeriod'        => max(1, (int)($_POST['AttendancePeriod']        ?? 26)),
-				'AttendanceWeeklyMinimum' => max(0, (int)($_POST['AttendanceWeeklyMinimum'] ?? 2)),
-				'AttendanceDailyMinimum'  => max(0, (int)($_POST['AttendanceDailyMinimum']  ?? 6)),
-				'AttendanceCreditMinimum' => max(0, (int)($_POST['AttendanceCreditMinimum'] ?? 9)),
-				'MonthlyCreditMaximum'    => max(0, (int)($_POST['MonthlyCreditMaximum']    ?? 4)),
+				'AttendanceWeeklyMinimum' => strlen(trim($_POST['AttendanceWeeklyMinimum'] ?? '')) ? max(0, (int)$_POST['AttendanceWeeklyMinimum']) : null,
+				'AttendanceDailyMinimum'  => strlen(trim($_POST['AttendanceDailyMinimum']  ?? '')) ? max(0, (int)$_POST['AttendanceDailyMinimum'])  : null,
+				'AttendanceCreditMinimum' => strlen(trim($_POST['AttendanceCreditMinimum'] ?? '')) ? max(0, (int)$_POST['AttendanceCreditMinimum']) : null,
+				'MonthlyCreditMaximum'    => strlen(trim($_POST['MonthlyCreditMaximum']    ?? '')) ? max(0, (int)$_POST['MonthlyCreditMaximum'])    : null,
 				'DuesPeriodType'          => in_array($_POST['DuesPeriodType'] ?? '', ['week','month']) ? $_POST['DuesPeriodType'] : 'month',
 				'DuesPeriod'              => max(1, (int)($_POST['DuesPeriod']   ?? 6)),
 				'DuesAmount'              => max(0, (float)($_POST['DuesAmount'] ?? 6)),
