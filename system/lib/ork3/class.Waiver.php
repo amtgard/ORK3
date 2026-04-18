@@ -205,6 +205,52 @@ class Waiver extends Ork3 {
 		$sigData = (string)($request['SignatureData'] ?? '');
 		if ($sigData === '' || strlen($sigData) > 262144) return ['Status' => InvalidParameter('Signature empty or too large')];
 
+		// Enforce template demographic requirements
+		$reqMap = [
+			'RequiresDob' => ['Dob', 'Date of birth'],
+			'RequiresAddress' => ['Address', 'Address'],
+			'RequiresPhone' => ['Phone', 'Phone number'],
+			'RequiresEmail' => ['Email', 'Email'],
+			'RequiresPreferredName' => ['PreferredName', 'Preferred name'],
+			'RequiresGender' => ['Gender', 'Gender'],
+		];
+		foreach ($reqMap as $flag => $pair) {
+			if ((int)($t['Template'][$flag] ?? 0) === 1) {
+				if (trim((string)($request[$pair[0]] ?? '')) === '') {
+					return ['Status' => InvalidParameter($pair[1] . ' is required')];
+				}
+			}
+		}
+		if ((int)($t['Template']['RequiresEmergencyContact'] ?? 0) === 1) {
+			foreach ([['EmergencyContactName', 'Emergency contact name'],
+			          ['EmergencyContactPhone', 'Emergency contact phone'],
+			          ['EmergencyContactRelationship', 'Emergency contact relationship']] as $pair) {
+				if (trim((string)($request[$pair[0]] ?? '')) === '') {
+					return ['Status' => InvalidParameter($pair[1] . ' is required')];
+				}
+			}
+		}
+		if ((int)($t['Template']['RequiresWitness'] ?? 0) === 1) {
+			if (trim((string)($request['WitnessPrintedName'] ?? '')) === '')
+				return ['Status' => InvalidParameter('Witness printed name is required')];
+			if (!in_array($request['WitnessSignatureType'] ?? '', ['drawn','typed'], true))
+				return ['Status' => InvalidParameter('Witness signature type is required')];
+			if (trim((string)($request['WitnessSignatureData'] ?? '')) === '')
+				return ['Status' => InvalidParameter('Witness signature is required')];
+		}
+		$cfTplRaw = (string)($t['Template']['CustomFieldsJson'] ?? '[]');
+		$cfTpl = json_decode($cfTplRaw, true) ?: [];
+		$cfResp = json_decode((string)($request['CustomResponsesJson'] ?? '{}'), true);
+		$cfResp = is_array($cfResp) ? $cfResp : [];
+		foreach ($cfTpl as $f) {
+			if (empty($f['required'])) continue;
+			$id = (string)($f['id'] ?? '');
+			$v  = $cfResp[$id] ?? null;
+			if ($v === null || $v === '' || $v === false) {
+				return ['Status' => InvalidParameter('Custom field "' . ($f['label'] ?? $id) . '" is required')];
+			}
+		}
+
 		$isMinor = ((int)($request['IsMinor'] ?? 0)) ? 1 : 0;
 		if ($isMinor) {
 			if (trim((string)($request['MinorRepFirst']        ?? '')) === '') return ['Status' => InvalidParameter('Minor rep first name required')];
