@@ -8,10 +8,12 @@ $kk = $wv['kingdom_template'];
 $pk = $wv['park_template'];
 ?>
 <link href="https://fonts.googleapis.com/css2?family=Homemade+Apple&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
 <style>
-.wv-builder { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
-.wv-builder h1, .wv-builder h2, .wv-builder h3, .wv-builder h4, .wv-builder h5, .wv-builder h6 { background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important; }
-.wv-builder h1 { font-size: 28px; margin-bottom: 4px; }
+.wv-builder { max-width: 1200px; margin: 0 auto 20px; padding: 0 16px; }
+.wv-builder h2, .wv-builder h3, .wv-builder h4, .wv-builder h5, .wv-builder h6 { background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important; }
+.wv-root { max-width: 1200px; margin: 20px auto 0; padding: 0 16px; }
+.wv-root .rp-root { padding: 0; }
 .wv-builder .wv-tabs { display: flex; gap: 4px; margin: 20px 0 0 0; border-bottom: 2px solid #ccc; }
 .wv-builder .wv-tab { padding: 10px 18px; cursor: pointer; background: #eee; border: 1px solid #ccc; border-bottom: none; border-radius: 6px 6px 0 0; }
 .wv-builder .wv-tab.wv-active { background: #fff; font-weight: bold; border-bottom: 2px solid #fff; margin-bottom: -2px; }
@@ -52,10 +54,29 @@ $pk = $wv['park_template'];
 .wv-builder .wv-md-help::before { content: ''; position: absolute; left: 100%; top: 50%; transform: translateY(-50%); border: 6px solid transparent; border-right-color: #2d3748; pointer-events: none; opacity: 0; transition: opacity 0s; z-index: 500; }
 .wv-builder .wv-md-help:hover::after, .wv-builder .wv-md-help:hover::before { opacity: 1; }
 </style>
+<div class="wv-root">
+	<div class="rp-root">
+		<div class="rp-header">
+			<div class="rp-header-left">
+				<div class="rp-header-icon-title">
+					<i class="fas fa-file-signature rp-header-icon"></i>
+					<h1 class="rp-header-title">Digital Waiver Builder</h1>
+				</div>
+				<div class="rp-header-scope">
+					<a class="rp-scope-chip" href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>">
+						<i class="fas fa-chess-rook"></i>
+						<?= $kingdomName ?>
+					</a>
+				</div>
+			</div>
+		</div>
+		<div class="rp-context">
+			<i class="fas fa-info-circle rp-context-icon"></i>
+			<span>Design waivers used at kingdom events and at park days. Kingdom admins only.</span>
+		</div>
+	</div>
+</div>
 <div class="wv-builder">
-	<h1><?= $kingdomName ?> &mdash; Digital Waiver Builder</h1>
-	<p>Design waivers used at kingdom events and at park days. Kingdom admins only.</p>
-
 	<div class="wv-tabs">
 		<div class="wv-tab wv-active" data-scope="kingdom">Kingdom Waiver</div>
 		<div class="wv-tab" data-scope="park">Park Waiver</div>
