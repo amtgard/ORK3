@@ -1,6 +1,6 @@
 <?php
 require_once(DIR_LIB . 'Parsedown.php');
-$wv = $this->data['_wv'];
+$wv = $_wv;
 $sig = $wv['signature'];
 $tpl = $sig['Template'];
 $md = function($t) { return $t ? (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($t) : ''; };

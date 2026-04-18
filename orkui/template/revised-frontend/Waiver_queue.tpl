@@ -1,5 +1,5 @@
 <?php
-$wv = $this->data['_wv'];
+$wv = $_wv;
 $filter = $wv['filter'];
 $page   = $wv['page'];
 $sigs   = $wv['signatures'];
