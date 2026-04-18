@@ -115,6 +115,29 @@ class Waiver extends Ork3 {
 		return ['Status' => Success(), 'Template' => $this->_shape_template($rs)];
 	}
 
+	public function SetTemplateEnabled($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		$tid = (int)($request['TemplateId'] ?? 0);
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
+		if ($tid <= 0)        return ['Status' => InvalidParameter('TemplateId required')];
+
+		$t = $this->GetTemplate(['TemplateId' => $tid]);
+		if (($t['Status']['Status'] ?? 1) !== 0) return $t;
+		$kingdom_id = (int)$t['Template']['KingdomId'];
+
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
+			&& !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+			return ['Status' => NoAuthorization()];
+		}
+
+		$this->db->Clear();
+		$this->db->is_enabled         = ((int)($request['IsEnabled'] ?? 0)) ? 1 : 0;
+		$this->db->waiver_template_id = $tid;
+		$this->db->Execute("UPDATE " . DB_PREFIX . "waiver_template SET is_enabled = :is_enabled WHERE waiver_template_id = :waiver_template_id");
+
+		return ['Status' => Success()];
+	}
+
 }
 
 ?>
