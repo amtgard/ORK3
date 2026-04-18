@@ -442,6 +442,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php endif; ?>
 				<?php if ($Player['Waivered'] == 1): ?>
 					<span class="pn-badge pn-badge-blue"><i class="fas fa-file-signature"></i> Waivered</span>
+				<?php elseif ($isOwnProfile && valid_id($Player['KingdomId'] ?? 0)): ?>
+					<a href="<?= UIR ?>Waiver/sign/kingdom/<?= (int)$Player['KingdomId'] ?>" class="pn-badge pn-badge-yellow pn-badge-link" style="text-decoration:none;"><i class="fas fa-exclamation-circle"></i> Needs Waiver &rarr;</a>
 				<?php else: ?>
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
