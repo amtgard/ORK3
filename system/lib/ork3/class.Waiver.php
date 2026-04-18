@@ -482,6 +482,15 @@ class Waiver extends Ork3 {
 		$this->signature->verifier_signature_type = $sigType;
 		$this->signature->verifier_signature_data = $sigData;
 		$this->signature->verifier_notes          = (string)($request['Notes'] ?? '');
+		$idNumRaw = preg_replace('/[^0-9]/', '', (string)($request['IdNumber'] ?? ''));
+		$last4    = ($idNumRaw === '') ? (string)($request['IdNumberLast4'] ?? '') : substr($idNumRaw, -4);
+		$last4    = substr(preg_replace('/[^0-9]/', '', $last4), 0, 4);
+		$ageIn    = (string)($request['AgeBracket'] ?? '');
+		$ageOk    = in_array($ageIn, ['', '18+', '14+', 'under14'], true) ? $ageIn : '';
+		$this->signature->verifier_id_type         = substr(trim((string)($request['IdType'] ?? '')), 0, 32);
+		$this->signature->verifier_id_number_last4 = $last4;
+		$this->signature->verifier_age_bracket     = $ageOk;
+		$this->signature->verifier_scanned_paper   = ((int)($request['ScannedPaper'] ?? 0)) ? 1 : 0;
 		$this->signature->save();
 
 		return ['Status' => Success()];
