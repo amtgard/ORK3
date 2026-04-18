@@ -541,6 +541,38 @@ class WaiverTestRunner {
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'verifier signature required');
 	}
 
+	// ============================================================================
+	// Task 1.9: PreviewMarkdown
+	// ============================================================================
+
+	public function test_preview_markdown_renders() {
+		$r = $this->waiver->PreviewMarkdown(['Token' => $this->token, 'Markdown' => '**Hello**']);
+		$this->assertStatus(0, $r, 'rendered');
+		$this->assertTrue(strpos($r['Html'] ?? '', '<strong>') !== false, 'has <strong>');
+	}
+
+	public function test_preview_markdown_too_large() {
+		$r = $this->waiver->PreviewMarkdown(['Token' => $this->token, 'Markdown' => str_repeat('a', 70000)]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected oversize');
+	}
+
+	public function test_preview_markdown_rejects_bad_token() {
+		unset($_SESSION['is_authorized_mundane_id']);
+		$r = $this->waiver->PreviewMarkdown(['Token' => str_repeat('z', 32), 'Markdown' => 'hi']);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected bad token');
+		unset($_SESSION['is_authorized_mundane_id']);
+	}
+
+	public function test_preview_markdown_safe_mode_strips_script() {
+		// Parsedown setSafeMode(true) should neutralise raw HTML/script tags.
+		$r = $this->waiver->PreviewMarkdown([
+			'Token'    => $this->token,
+			'Markdown' => '**yo** <script>alert(1)</script>',
+		]);
+		$this->assertStatus(0, $r, 'rendered safe');
+		$this->assertTrue(strpos($r['Html'] ?? '', '<script>') === false, 'raw <script> neutralised');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
