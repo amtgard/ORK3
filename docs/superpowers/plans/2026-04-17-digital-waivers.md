@@ -8,6 +8,15 @@
 
 **Tech Stack:** PHP 8 / MariaDB 10.x / yapo ORM / vanilla JS + fetch / Parsedown / existing revised-frontend CSS conventions (`wv-` prefix).
 
+> **Phase 1 discovery — required for Phase 2+ implementers:**
+>
+> - `$r['Status']['Code']` was wrong; the correct key is `$r['Status']['Status']`. The plan has been updated.
+> - Status helpers exist as `Success()`, `NoAuthorization()`, `ProcessingError()`, `InvalidParameter()`, `BadToken()`, `Warning()`. There is **no** `Unauthorized()`, `NotFound()`, or `Error()` helper — the plan now uses the real names.
+> - `$DB->DataSet($sql, $params)` and `$DB->Execute($sql, $params)` **do not accept a params array**. Correct pattern: `$DB->Clear(); $DB->field = $val; $rs = $DB->DataSet("… WHERE col = :field"); while ($rs->Next()) { $rs->field }`. Same for `Execute`.
+> - `Yapo::save()` returns `null`, not a bool. Check post-save state (PK populated) instead of `if (!save()) return Error()`.
+> - `IsAuthorized_h` caches mundane_id in `$_SESSION['is_authorized_mundane_id']` — bad-token tests must `unset()` it.
+> - Phase 1 verified: 77 tests passing on `class.Waiver.php`. The domain layer IS correct and matches the spec; only the Phase-2+ AJAX/controller/template snippets in this plan may still reflect the outdated shape. Prefer reading `system/lib/ork3/class.Waiver.php` directly when in doubt about method signatures and response shapes.
+
 **Hard project rules (memorised and enforced throughout this plan):**
 - Edit PHP files ≥2 lines via Python `pathlib` string replace, NEVER the Edit tool (PHP tabs vs. Edit-tool rendering). Single-line PHP edits may use Edit.
 - `$DB->Clear()` before any raw `Execute()` / `DataSet()` (stale PDO bindings).
@@ -378,7 +387,7 @@ class WaiverTestRunner {
 	}
 
 	public function assertTrue($cond, $msg = '') { $this->assertEq(true, (bool)$cond, $msg); }
-	public function assertStatus($expected, $response, $msg = '') { $this->assertEq($expected, $response['Status']['Code'] ?? null, $msg); }
+	public function assertStatus($expected, $response, $msg = '') { $this->assertEq($expected, $response['Status']['Status'] ?? null, $msg); }
 
 	public function run() {
 		foreach (get_class_methods($this) as $m) {
@@ -480,7 +489,7 @@ Append to `tests/php/WaiverTest.php`, immediately before `(new WaiverTestRunner(
 			'HeaderMarkdown' => '', 'BodyMarkdown' => '', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
 			'IsEnabled' => 1,
 		]);
-		$this->assertTrue($r['Status']['Code'] !== 0, 'rejected unauthorized');
+		$this->assertTrue($r['Status']['Status'] !== 0, 'rejected unauthorized');
 	}
 ```
 
@@ -504,12 +513,12 @@ add = r'''
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$kingdom_id = (int)($request['KingdomId'] ?? 0);
 		$scope      = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
-		if ($mundane_id <= 0)      return ['Status' => Unauthorized()];
+		if ($mundane_id <= 0)      return ['Status' => NoAuthorization()];
 		if ($kingdom_id <= 0)      return ['Status' => InvalidParameter(), 'Error' => 'KingdomId required'];
 		if ($scope === null)       return ['Status' => InvalidParameter(), 'Error' => 'Scope required'];
 		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
 			&& !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
-			return ['Status' => Unauthorized()];
+			return ['Status' => NoAuthorization()];
 		}
 
 		$this->db->Clear();
@@ -542,7 +551,7 @@ add = r'''
 		$this->template->created_by_mundane_id = $mundane_id;
 		$this->template->created_at            = date('Y-m-d H:i:s');
 
-		if (!$this->template->save()) return ['Status' => Error(), 'Error' => 'save failed'];
+		if (!$this->template->save()) return ['Status' => ProcessingError(), 'Error' => 'save failed'];
 
 		return [
 			'Status'     => Success(),
@@ -604,7 +613,7 @@ Append to `WaiverTest.php` before the `run()`:
 		$r = $this->waiver->GetActiveTemplate([
 			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'park',
 		]);
-		$this->assertTrue($r['Status']['Code'] !== 0, 'park scope has no active template yet');
+		$this->assertTrue($r['Status']['Status'] !== 0, 'park scope has no active template yet');
 	}
 
 	public function test_get_template_by_id() {
@@ -658,7 +667,7 @@ add = r'''
 			 WHERE kingdom_id = ? AND scope = ? AND is_active = 1 LIMIT 1",
 			[$kingdom_id, $scope]
 		);
-		if (!$rows) return ['Status' => NotFound()];
+		if (!$rows) return ['Status' => ProcessingError()];
 		return ['Status' => Success(), 'Template' => $this->_shape_template($rows[0])];
 	}
 
@@ -670,7 +679,7 @@ add = r'''
 			"SELECT * FROM " . DB_PREFIX . "waiver_template WHERE waiver_template_id = ? LIMIT 1",
 			[$tid]
 		);
-		if (!$rows) return ['Status' => NotFound()];
+		if (!$rows) return ['Status' => ProcessingError()];
 		return ['Status' => Success(), 'Template' => $this->_shape_template($rows[0])];
 	}
 '''
@@ -724,14 +733,14 @@ Toggle `is_enabled` on a template by id. Same kingdom-admin auth as `SaveTemplat
 	public function SetTemplateEnabled($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$tid = (int)($request['TemplateId'] ?? 0);
-		if ($mundane_id <= 0) return ['Status' => Unauthorized()];
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 		if ($tid <= 0) return ['Status' => InvalidParameter()];
 		$t = $this->GetTemplate(['TemplateId' => $tid]);
-		if ($t['Status']['Code'] !== 0) return $t;
+		if ($t['Status']['Status'] !== 0) return $t;
 		$kingdom_id = (int)$t['Template']['KingdomId'];
 		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
 			&& !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
-			return ['Status' => Unauthorized()];
+			return ['Status' => NoAuthorization()];
 		}
 		$this->db->Clear();
 		$this->db->Execute("UPDATE " . DB_PREFIX . "waiver_template SET is_enabled = ? WHERE waiver_template_id = ?",
@@ -786,7 +795,7 @@ Any logged-in mundane can submit against an `is_active=1, is_enabled=1` template
 			'SignatureType'=>'typed', 'SignatureData'=>'', 'IsMinor'=>0,
 			'MinorRepFirst'=>'', 'MinorRepLast'=>'', 'MinorRepRelationship'=>'',
 		]);
-		$this->assertTrue($r['Status']['Code'] !== 0, 'rejected bad token');
+		$this->assertTrue($r['Status']['Status'] !== 0, 'rejected bad token');
 	}
 
 	public function test_submit_signature_rejects_disabled_template() {
@@ -814,11 +823,11 @@ Any logged-in mundane can submit against an `is_active=1, is_enabled=1` template
 ```php
 	public function SubmitSignature($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		if ($mundane_id <= 0) return ['Status' => Unauthorized()];
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 
 		$tid = (int)($request['TemplateId'] ?? 0);
 		$t = $this->GetTemplate(['TemplateId' => $tid]);
-		if ($t['Status']['Code'] !== 0) return $t;
+		if ($t['Status']['Status'] !== 0) return $t;
 		if ((int)$t['Template']['IsActive'] !== 1 || (int)$t['Template']['IsEnabled'] !== 1) {
 			return ['Status' => InvalidParameter(), 'Error' => 'Template not currently accepting signatures'];
 		}
@@ -851,7 +860,7 @@ Any logged-in mundane can submit against an `is_active=1, is_enabled=1` template
 		$this->signature->verification_status    = 'pending';
 		$this->signature->verifier_notes         = '';
 
-		if (!$this->signature->save()) return ['Status' => Error(), 'Error' => 'Save failed'];
+		if (!$this->signature->save()) return ['Status' => ProcessingError(), 'Error' => 'Save failed'];
 
 		return ['Status' => Success(), 'SignatureId' => (int)$this->signature->waiver_signature_id];
 	}
@@ -917,23 +926,23 @@ Return a signature row joined with its template + player display names + verifie
 
 	public function GetSignature($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		if ($mundane_id <= 0) return ['Status' => Unauthorized()];
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 		$sid = (int)($request['SignatureId'] ?? 0);
 		if ($sid <= 0) return ['Status' => InvalidParameter()];
 
 		$this->db->Clear();
 		$rows = $this->db->DataSet("SELECT * FROM " . DB_PREFIX . "waiver_signature WHERE waiver_signature_id = ? LIMIT 1", [$sid]);
-		if (!$rows) return ['Status' => NotFound()];
+		if (!$rows) return ['Status' => ProcessingError()];
 		$sig = $this->_shape_signature($rows[0]);
 
 		$authorized = ($sig['MundaneId'] === $mundane_id)
 			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $sig['KingdomId'], AUTH_EDIT)
 			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $sig['ParkId'], AUTH_EDIT)
 			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT);
-		if (!$authorized) return ['Status' => Unauthorized()];
+		if (!$authorized) return ['Status' => NoAuthorization()];
 
 		$t = $this->GetTemplate(['TemplateId' => $sig['TemplateId']]);
-		$sig['Template'] = $t['Status']['Code'] === 0 ? $t['Template'] : null;
+		$sig['Template'] = $t['Status']['Status'] === 0 ? $t['Template'] : null;
 
 		return ['Status' => Success(), 'Signature' => $sig];
 	}
@@ -969,7 +978,7 @@ Paginated list of signatures for `(scope, entity_id)`. Filter by status: `all` (
 ```php
 	public function GetQueue($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		if ($mundane_id <= 0) return ['Status' => Unauthorized()];
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 		$scope = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
 		$entity_id = (int)($request['EntityId'] ?? 0);
 		if ($scope === null || $entity_id <= 0) return ['Status' => InvalidParameter()];
@@ -977,7 +986,7 @@ Paginated list of signatures for `(scope, entity_id)`. Filter by status: `all` (
 		$authType = ($scope === 'kingdom') ? AUTH_KINGDOM : AUTH_PARK;
 		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, $authType, $entity_id, AUTH_EDIT)
 			&& !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
-			return ['Status' => Unauthorized()];
+			return ['Status' => NoAuthorization()];
 		}
 
 		$filter = in_array($request['Filter'] ?? 'pending', ['pending','verified','rejected','stale','all']) ? $request['Filter'] : 'pending';
@@ -1048,7 +1057,7 @@ Officer marks a signature `verified` or `rejected` (or legitimately `superseded`
 			'Token' => $this->token, 'SignatureId' => $sid, 'Action' => 'rejected',
 			'PrintedName' => 'A', 'PersonaName' => '', 'OfficeTitle' => '', 'SignatureType' => 'typed', 'SignatureData' => 'A', 'Notes' => '',
 		]);
-		$this->assertTrue($r['Status']['Code'] !== 0, 'reject without notes blocked');
+		$this->assertTrue($r['Status']['Status'] !== 0, 'reject without notes blocked');
 	}
 ```
 
@@ -1059,21 +1068,21 @@ Officer marks a signature `verified` or `rejected` (or legitimately `superseded`
 ```php
 	public function VerifySignature($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		if ($mundane_id <= 0) return ['Status' => Unauthorized()];
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 		$sid = (int)($request['SignatureId'] ?? 0);
 		if ($sid <= 0) return ['Status' => InvalidParameter()];
 		$action = in_array($request['Action'] ?? '', ['verified','rejected','superseded']) ? $request['Action'] : null;
 		if ($action === null) return ['Status' => InvalidParameter(), 'Error' => 'Action invalid'];
 
 		$cur = $this->GetSignature(['Token' => $request['Token'], 'SignatureId' => $sid]);
-		if ($cur['Status']['Code'] !== 0) return $cur;
+		if ($cur['Status']['Status'] !== 0) return $cur;
 
 		$kid = (int)$cur['Signature']['KingdomId'];
 		$pid = (int)$cur['Signature']['ParkId'];
 		$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kid, AUTH_EDIT)
 			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $pid, AUTH_EDIT)
 			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT);
-		if (!$authorized) return ['Status' => Unauthorized()];
+		if (!$authorized) return ['Status' => NoAuthorization()];
 
 		if ($action === 'rejected' && trim((string)($request['Notes'] ?? '')) === '') {
 			return ['Status' => InvalidParameter(), 'Error' => 'Notes required when rejecting'];
@@ -1086,7 +1095,7 @@ Officer marks a signature `verified` or `rejected` (or legitimately `superseded`
 
 		$this->signature->clear();
 		$this->signature->waiver_signature_id = $sid;
-		if (!$this->signature->find()) return ['Status' => NotFound()];
+		if (!$this->signature->find()) return ['Status' => ProcessingError()];
 		$this->signature->verification_status    = $action;
 		$this->signature->verified_by_mundane_id = $mundane_id;
 		$this->signature->verified_at            = date('Y-m-d H:i:s');
@@ -1096,7 +1105,7 @@ Officer marks a signature `verified` or `rejected` (or legitimately `superseded`
 		$this->signature->verifier_signature_type = $sigType;
 		$this->signature->verifier_signature_data = $sigData;
 		$this->signature->verifier_notes         = (string)($request['Notes'] ?? '');
-		if (!$this->signature->save()) return ['Status' => Error(), 'Error' => 'Save failed'];
+		if (!$this->signature->save()) return ['Status' => ProcessingError(), 'Error' => 'Save failed'];
 
 		return ['Status' => Success()];
 	}
@@ -1122,7 +1131,7 @@ Server-side Parsedown render used by builder's live preview. Auth-gated (to avoi
 
 	public function test_preview_markdown_too_large() {
 		$r = $this->waiver->PreviewMarkdown(['Token' => $this->token, 'Markdown' => str_repeat('a', 70000)]);
-		$this->assertTrue($r['Status']['Code'] !== 0, 'rejected oversize');
+		$this->assertTrue($r['Status']['Status'] !== 0, 'rejected oversize');
 	}
 ```
 
@@ -1133,7 +1142,7 @@ Server-side Parsedown render used by builder's live preview. Auth-gated (to avoi
 ```php
 	public function PreviewMarkdown($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		if ($mundane_id <= 0) return ['Status' => Unauthorized()];
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 		$md = (string)($request['Markdown'] ?? '');
 		if (strlen($md) > 65536) return ['Status' => InvalidParameter(), 'Error' => 'Too large'];
 		require_once(DIR_LIB . 'Parsedown.php');
@@ -1227,7 +1236,7 @@ class Controller_WaiverAjax extends Controller {
 	}
 
 	private function respond($r, $extra = []) {
-		$code = $r['Status']['Code'] ?? 1;
+		$code = $r['Status']['Status'] ?? 1;
 		$payload = ['status' => (int)$code];
 		if ($code !== 0) $payload['error'] = $r['Error'] ?? ($r['Status']['Message'] ?? 'Error');
 		foreach ($extra as $k => $v) if ($v !== null) $payload[$k] = $v;
@@ -1387,8 +1396,8 @@ class Controller_Waiver extends Controller {
 		$pk = $this->Waiver->GetActiveTemplate(['KingdomId' => $kingdom_id, 'Scope' => 'park']);
 		$this->data['_wv'] = [
 			'kingdom_id'       => $kingdom_id,
-			'kingdom_template' => $kk['Status']['Code'] === 0 ? $kk['Template'] : null,
-			'park_template'    => $pk['Status']['Code'] === 0 ? $pk['Template'] : null,
+			'kingdom_template' => $kk['Status']['Status'] === 0 ? $kk['Template'] : null,
+			'park_template'    => $pk['Status']['Status'] === 0 ? $pk['Template'] : null,
 			'token'            => $this->session->token,
 		];
 		$this->data['kingdom_info'] = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
@@ -1410,7 +1419,7 @@ class Controller_Waiver extends Controller {
 			$kingdom_id = $id;
 		}
 		$active = $this->Waiver->GetActiveTemplate(['KingdomId' => $kingdom_id, 'Scope' => $scope]);
-		$template = ($active['Status']['Code'] === 0 && (int)$active['Template']['IsEnabled'] === 1) ? $active['Template'] : null;
+		$template = ($active['Status']['Status'] === 0 && (int)$active['Template']['IsEnabled'] === 1) ? $active['Template'] : null;
 
 		// Prefill from player profile
 		$player = $this->Player->get_player(['MundaneId' => $_uid]);
@@ -1461,7 +1470,7 @@ class Controller_Waiver extends Controller {
 		$_uid = $this->_currentMundaneId();
 		if ($_uid <= 0) { $this->redirect('Login/index'); return; }
 		$r = $this->Waiver->GetSignature(['Token' => $this->session->token, 'SignatureId' => $signature_id]);
-		if ($r['Status']['Code'] !== 0) { $this->redirect('Player/index/' . $_uid); return; }
+		if ($r['Status']['Status'] !== 0) { $this->redirect('Player/index/' . $_uid); return; }
 		$sig = $r['Signature'];
 		$isOfficer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $sig['KingdomId'], AUTH_EDIT)
 			|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $sig['ParkId'], AUTH_EDIT)
@@ -1486,7 +1495,7 @@ class Controller_Waiver extends Controller {
 		$_uid = $this->_currentMundaneId();
 		if ($_uid <= 0) { $this->redirect('Login/index'); return; }
 		$r = $this->Waiver->GetSignature(['Token' => $this->session->token, 'SignatureId' => $signature_id]);
-		if ($r['Status']['Code'] !== 0) { $this->redirect('Player/index/' . $_uid); return; }
+		if ($r['Status']['Status'] !== 0) { $this->redirect('Player/index/' . $_uid); return; }
 		$this->data['_wv'] = ['signature' => $r['Signature']];
 		$this->template = '../revised-frontend/Waiver_print.tpl';
 	}
@@ -2435,7 +2444,7 @@ Use Python, append inside the existing constructor immediately before the closin
 - [ ] **Step 2: In `Parknew_index.tpl`, find an appropriate sidebar/card insertion point** (look for `pk-card` class) and add:
 
 ```php
-<?php $wvActive = $park_info['WaiverActive'] ?? null; if ($wvActive && ($wvActive['Status']['Code'] ?? 1) === 0 && (int)($wvActive['Template']['IsEnabled'] ?? 0) === 1): ?>
+<?php $wvActive = $park_info['WaiverActive'] ?? null; if ($wvActive && ($wvActive['Status']['Status'] ?? 1) === 0 && (int)($wvActive['Template']['IsEnabled'] ?? 0) === 1): ?>
 <div class="pk-card">
 	<h4 style="background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;">Digital Waiver</h4>
 	<p>This park requires a signed digital waiver.</p>
@@ -2468,7 +2477,7 @@ Use Python, append inside the existing constructor immediately before the closin
 				if ($eid <= 0) continue;
 				$activeKingdom = ($scope === 'kingdom') ? $eid : $kingdomId;
 				$r = $this->Waiver->GetActiveTemplate(['KingdomId' => $activeKingdom, 'Scope' => $scope]);
-				if (($r['Status']['Code'] ?? 1) !== 0) continue;
+				if (($r['Status']['Status'] ?? 1) !== 0) continue;
 				if ((int)($r['Template']['IsEnabled'] ?? 0) !== 1) continue;
 				$this->data['_wv_sidebar']['items'][] = [
 					'scope' => $scope, 'entity_id' => $eid,
