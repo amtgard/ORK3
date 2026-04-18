@@ -680,6 +680,61 @@ class WaiverTestRunner {
 		}
 	}
 
+	// ============================================================================
+	// Amendment A3: SubmitSignature persists demographics, emergency, witness, custom responses, minors
+	// ============================================================================
+
+	public function test_a3_submit_signature_with_amendment_fields() {
+		// Reuse the A1 template (kingdom scope, RequiresDob/RequiresAddress/RequiresEmergencyContact/RequiresWitness/MaxMinors=4)
+		$act = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$this->assertStatus(0, $act, 'A3 active template available');
+		$tid = (int)$act['Template']['TemplateId'];
+
+		$minorsPayload = [
+			['LegalFirst' => 'Alice', 'LegalLast' => 'Smith', 'PreferredName' => 'Ali',  'PersonaName' => 'Ali the Bold', 'Dob' => '2015-06-01'],
+			['LegalFirst' => 'Bob',   'LegalLast' => 'Smith', 'PreferredName' => '',     'PersonaName' => '',             'Dob' => '2017-02-14'],
+		];
+		$customResponses = json_encode(['yp_ack' => true, 'visit_type' => 'Joining']);
+
+		$r = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst' => 'Test', 'MundaneLast' => 'Player', 'PersonaName' => 'Tester',
+			'ParkId' => $this->testParkId, 'KingdomId' => $this->testKingdomId,
+			'SignatureType' => 'typed', 'SignatureData' => 'Test Player',
+			'Dob' => '1990-01-02', 'Address' => '123 Amtgard Way', 'Phone' => '555-1212',
+			'Email' => 'tester@example.com', 'PreferredName' => 'Testy', 'Gender' => 'non-binary',
+			'EmergencyContactName' => 'Jane Doe', 'EmergencyContactPhone' => '555-7777',
+			'EmergencyContactRelationship' => 'spouse',
+			'WitnessPrintedName' => 'Officer Pat', 'WitnessSignatureType' => 'typed', 'WitnessSignatureData' => 'Officer Pat',
+			'CustomResponsesJson' => $customResponses,
+			'IsMinor' => 1,
+			'MinorRepFirst' => 'Test', 'MinorRepLast' => 'Player', 'MinorRepRelationship' => 'father',
+			'Minors' => $minorsPayload,
+		]);
+		$this->assertStatus(0, $r, 'A3 SubmitSignature success');
+		$sid = (int)($r['SignatureId'] ?? 0);
+		$this->assertTrue($sid > 0, 'A3 SignatureId returned');
+
+		$g = $this->waiver->GetSignature(['Token' => $this->token, 'SignatureId' => $sid]);
+		$this->assertStatus(0, $g, 'A3 GetSignature succeeds');
+		$sig = $g['Signature'];
+		$this->assertEq('1990-01-02',       $sig['Dob'] ?? null,                          'A3 Dob snapshot');
+		$this->assertEq('123 Amtgard Way',  $sig['Address'] ?? null,                      'A3 Address snapshot');
+		$this->assertEq('tester@example.com', $sig['Email'] ?? null,                      'A3 Email snapshot');
+		$this->assertEq('Testy',            $sig['PreferredName'] ?? null,                'A3 PreferredName snapshot');
+		$this->assertEq('non-binary',       $sig['Gender'] ?? null,                       'A3 Gender snapshot');
+		$this->assertEq('Jane Doe',         $sig['EmergencyContactName'] ?? null,         'A3 Emergency name snapshot');
+		$this->assertEq('spouse',           $sig['EmergencyContactRelationship'] ?? null, 'A3 Emergency relationship snapshot');
+		$this->assertEq('Officer Pat',      $sig['WitnessPrintedName'] ?? null,           'A3 Witness name');
+		$this->assertEq('typed',            $sig['WitnessSignatureType'] ?? null,         'A3 Witness signature type');
+		$this->assertTrue(is_array($sig['Minors'] ?? null) && count($sig['Minors']) === 2, 'A3 two minors returned');
+		$this->assertEq('Alice', $sig['Minors'][0]['LegalFirst'] ?? null,                 'A3 first minor first name');
+		$this->assertEq('2017-02-14', $sig['Minors'][1]['Dob'] ?? null,                   'A3 second minor DOB');
+		$resp = json_decode($sig['CustomResponsesJson'] ?? '{}', true);
+		$this->assertEq('Joining', $resp['visit_type'] ?? null,                           'A3 visit_type response');
+		$this->assertTrue(!empty($resp['yp_ack']),                                        'A3 yp_ack response');
+	}
+
 }
 
 (new WaiverTestRunner())->run();

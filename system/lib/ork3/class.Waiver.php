@@ -23,6 +23,10 @@ class Waiver extends Ork3 {
 			return ['Status' => NoAuthorization()];
 		}
 
+		$cfRaw = (string)($request['CustomFieldsJson'] ?? '[]');
+		$cfErr = $this->_validate_custom_fields_json($cfRaw);
+		if ($cfErr !== null) return ['Status' => InvalidParameter($cfErr)];
+
 		// Find the currently active template for (kingdom, scope), if any
 		$this->db->Clear();
 		$this->db->kingdom_id = $kingdom_id;
@@ -46,9 +50,6 @@ class Waiver extends Ork3 {
 		}
 
 		$this->template->clear();
-		$cfRaw = (string)($request['CustomFieldsJson'] ?? '[]');
-		$cfErr = $this->_validate_custom_fields_json($cfRaw);
-		if ($cfErr !== null) return ['Status' => InvalidParameter($cfErr)];
 		$maxMinors = max(1, min(6, (int)($request['MaxMinors'] ?? 1)));
 
 		$this->template->kingdom_id                = $kingdom_id;
@@ -226,12 +227,55 @@ class Waiver extends Ork3 {
 		$this->signature->minor_rep_first        = substr(trim((string)($request['MinorRepFirst']        ?? '')), 0, 64);
 		$this->signature->minor_rep_last         = substr(trim((string)($request['MinorRepLast']         ?? '')), 0, 64);
 		$this->signature->minor_rep_relationship = substr(trim((string)($request['MinorRepRelationship'] ?? '')), 0, 64);
-		$this->signature->verification_status    = 'pending';
-		$this->signature->verifier_notes         = '';
+		$this->signature->preferred_name_snapshot       = substr(trim((string)($request['PreferredName'] ?? '')), 0, 64);
+		$dob = (string)($request['Dob'] ?? '');
+		$this->signature->dob_snapshot                  = ($dob !== '' && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $dob)) ? $dob : null;
+		$this->signature->gender_snapshot               = substr(trim((string)($request['Gender']  ?? '')), 0, 32);
+		$this->signature->address_snapshot              = substr(trim((string)($request['Address'] ?? '')), 0, 255);
+		$this->signature->phone_snapshot                = substr(trim((string)($request['Phone']   ?? '')), 0, 32);
+		$this->signature->email_snapshot                = substr(trim((string)($request['Email']   ?? '')), 0, 128);
+		$this->signature->emergency_contact_name        = substr(trim((string)($request['EmergencyContactName']         ?? '')), 0, 128);
+		$this->signature->emergency_contact_phone       = substr(trim((string)($request['EmergencyContactPhone']        ?? '')), 0, 32);
+		$this->signature->emergency_contact_relationship= substr(trim((string)($request['EmergencyContactRelationship'] ?? '')), 0, 64);
+		$witType = in_array($request['WitnessSignatureType'] ?? '', ['drawn','typed']) ? $request['WitnessSignatureType'] : null;
+		$this->signature->witness_printed_name          = substr(trim((string)($request['WitnessPrintedName'] ?? '')), 0, 128);
+		$this->signature->witness_signature_type        = $witType;
+		$this->signature->witness_signature_data        = ($witType === null) ? null : (string)($request['WitnessSignatureData'] ?? '');
+		$crRaw = (string)($request['CustomResponsesJson'] ?? '{}');
+		$crDecoded = json_decode($crRaw, true);
+		$this->signature->custom_responses_json         = is_array($crDecoded) ? json_encode($crDecoded) : '{}';
+		$this->signature->verification_status           = 'pending';
+		$this->signature->verifier_notes                = '';
 		$this->signature->save();
 
 		$newId = (int)$this->signature->waiver_signature_id;
 		if ($newId <= 0) return ['Status' => ProcessingError('Signature save failed')];
+
+		// Minors roster (up to template->max_minors). Additive: prior rows for this signature are replaced.
+		$minors = $request['Minors'] ?? null;
+		if (is_array($minors) && count($minors) > 0) {
+			$tpl = $this->GetTemplate(['TemplateId' => $tid]);
+			$maxMinors = (int)($tpl['Template']['MaxMinors'] ?? 1);
+			$this->db->Clear();
+			$this->db->waiver_signature_id = $newId;
+			$this->db->Execute("DELETE FROM " . DB_PREFIX . "waiver_signature_minor WHERE waiver_signature_id = :waiver_signature_id");
+			$minorOrm = new yapo($this->db, DB_PREFIX . 'waiver_signature_minor');
+			$seq = 0;
+			foreach ($minors as $m) {
+				if ($seq >= $maxMinors) break;
+				$minorOrm->clear();
+				$minorOrm->waiver_signature_id = $newId;
+				$minorOrm->seq                 = $seq;
+				$minorOrm->legal_first         = substr(trim((string)($m['LegalFirst']    ?? '')), 0, 64);
+				$minorOrm->legal_last          = substr(trim((string)($m['LegalLast']     ?? '')), 0, 64);
+				$minorOrm->preferred_name      = substr(trim((string)($m['PreferredName'] ?? '')), 0, 64);
+				$minorOrm->persona_name        = substr(trim((string)($m['PersonaName']   ?? '')), 0, 128);
+				$mdob = (string)($m['Dob'] ?? '');
+				$minorOrm->dob                 = ($mdob !== '' && preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $mdob)) ? $mdob : null;
+				$minorOrm->save();
+				$seq++;
+			}
+		}
 
 		// Supersede any prior pending/verified signature by this same player for this template.
 		$this->db->Clear();
@@ -253,30 +297,47 @@ class Waiver extends Ork3 {
 	private function _shape_signature($rs) {
 		if (!$rs) return null;
 		return [
-			'SignatureId'           => (int)$rs->waiver_signature_id,
-			'TemplateId'            => (int)$rs->waiver_template_id,
-			'MundaneId'             => (int)$rs->mundane_id,
-			'MundaneFirst'          => $rs->mundane_first_snapshot,
-			'MundaneLast'           => $rs->mundane_last_snapshot,
-			'PersonaName'           => $rs->persona_name_snapshot,
-			'ParkId'                => (int)$rs->park_id_snapshot,
-			'KingdomId'             => (int)$rs->kingdom_id_snapshot,
-			'SignatureType'         => $rs->signature_type,
-			'SignatureData'         => $rs->signature_data,
-			'SignedAt'              => $rs->signed_at,
-			'IsMinor'               => (int)$rs->is_minor,
-			'MinorRepFirst'         => $rs->minor_rep_first,
-			'MinorRepLast'          => $rs->minor_rep_last,
-			'MinorRepRelationship'  => $rs->minor_rep_relationship,
-			'VerificationStatus'    => $rs->verification_status,
-			'VerifiedByMundaneId'   => (int)$rs->verified_by_mundane_id,
-			'VerifiedAt'            => $rs->verified_at,
-			'VerifierPrintedName'   => $rs->verifier_printed_name,
-			'VerifierPersonaName'   => $rs->verifier_persona_name,
-			'VerifierOfficeTitle'   => $rs->verifier_office_title,
-			'VerifierSignatureType' => $rs->verifier_signature_type,
-			'VerifierSignatureData' => $rs->verifier_signature_data,
-			'VerifierNotes'         => $rs->verifier_notes,
+			'SignatureId'                 => (int)$rs->waiver_signature_id,
+			'TemplateId'                  => (int)$rs->waiver_template_id,
+			'MundaneId'                   => (int)$rs->mundane_id,
+			'MundaneFirst'                => $rs->mundane_first_snapshot,
+			'MundaneLast'                 => $rs->mundane_last_snapshot,
+			'PersonaName'                 => $rs->persona_name_snapshot,
+			'ParkId'                      => (int)$rs->park_id_snapshot,
+			'KingdomId'                   => (int)$rs->kingdom_id_snapshot,
+			'SignatureType'               => $rs->signature_type,
+			'SignatureData'               => $rs->signature_data,
+			'SignedAt'                    => $rs->signed_at,
+			'IsMinor'                     => (int)$rs->is_minor,
+			'MinorRepFirst'               => $rs->minor_rep_first,
+			'MinorRepLast'                => $rs->minor_rep_last,
+			'MinorRepRelationship'        => $rs->minor_rep_relationship,
+			'PreferredName'               => $rs->preferred_name_snapshot ?? '',
+			'Dob'                         => $rs->dob_snapshot ?? null,
+			'Gender'                      => $rs->gender_snapshot ?? '',
+			'Address'                     => $rs->address_snapshot ?? '',
+			'Phone'                       => $rs->phone_snapshot ?? '',
+			'Email'                       => $rs->email_snapshot ?? '',
+			'EmergencyContactName'        => $rs->emergency_contact_name ?? '',
+			'EmergencyContactPhone'       => $rs->emergency_contact_phone ?? '',
+			'EmergencyContactRelationship'=> $rs->emergency_contact_relationship ?? '',
+			'WitnessPrintedName'          => $rs->witness_printed_name ?? '',
+			'WitnessSignatureType'        => $rs->witness_signature_type ?? null,
+			'WitnessSignatureData'        => $rs->witness_signature_data ?? null,
+			'CustomResponsesJson'         => $rs->custom_responses_json ?? '{}',
+			'VerificationStatus'          => $rs->verification_status,
+			'VerifiedByMundaneId'         => (int)$rs->verified_by_mundane_id,
+			'VerifiedAt'                  => $rs->verified_at,
+			'VerifierPrintedName'         => $rs->verifier_printed_name,
+			'VerifierPersonaName'         => $rs->verifier_persona_name,
+			'VerifierOfficeTitle'         => $rs->verifier_office_title,
+			'VerifierSignatureType'       => $rs->verifier_signature_type,
+			'VerifierSignatureData'       => $rs->verifier_signature_data,
+			'VerifierNotes'               => $rs->verifier_notes,
+			'VerifierIdType'              => $rs->verifier_id_type ?? '',
+			'VerifierIdNumberLast4'       => $rs->verifier_id_number_last4 ?? '',
+			'VerifierAgeBracket'          => $rs->verifier_age_bracket ?? '',
+			'VerifierScannedPaper'        => (int)($rs->verifier_scanned_paper ?? 0),
 		];
 	}
 
@@ -300,6 +361,24 @@ class Waiver extends Ork3 {
 
 		$t = $this->GetTemplate(['TemplateId' => $sig['TemplateId']]);
 		$sig['Template'] = (($t['Status']['Status'] ?? 1) === 0) ? $t['Template'] : null;
+
+		// Minors roster (child table)
+		$this->db->Clear();
+		$this->db->waiver_signature_id = $sid;
+		$mrs = $this->db->DataSet("SELECT * FROM " . DB_PREFIX . "waiver_signature_minor WHERE waiver_signature_id = :waiver_signature_id ORDER BY seq ASC");
+		$minors = [];
+		if ($mrs) {
+			while ($mrs->Next()) {
+				$minors[] = [
+					'LegalFirst'    => $mrs->legal_first,
+					'LegalLast'     => $mrs->legal_last,
+					'PreferredName' => $mrs->preferred_name,
+					'PersonaName'   => $mrs->persona_name,
+					'Dob'           => $mrs->dob,
+				];
+			}
+		}
+		$sig['Minors'] = $minors;
 
 		return ['Status' => Success(), 'Signature' => $sig];
 	}
