@@ -573,6 +573,46 @@ class WaiverTestRunner {
 		$this->assertTrue(strpos($r['Html'] ?? '', '<script>') === false, 'raw <script> neutralised');
 	}
 
+	// ============================================================================
+	// Task 1.10: Supersede prior signatures on re-sign
+	// ============================================================================
+
+	public function test_resign_supersedes_prior() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		$payload = [
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst' => 'Resign', 'MundaneLast' => 'Test', 'PersonaName' => '',
+			'ParkId' => $this->testParkId, 'KingdomId' => $this->testKingdomId,
+			'SignatureType' => 'typed', 'SignatureData' => 'Resign Test', 'IsMinor' => 0,
+			'MinorRepFirst'=>'', 'MinorRepLast'=>'', 'MinorRepRelationship'=>'',
+		];
+		$r1 = $this->waiver->SubmitSignature($payload);
+		$sid1 = (int)($r1['SignatureId'] ?? 0);
+		$this->assertTrue($sid1 > 0, 'first submit id');
+
+		$r2 = $this->waiver->SubmitSignature($payload);
+		$sid2 = (int)($r2['SignatureId'] ?? 0);
+		$this->assertStatus(0, $r2, 'second submit ok');
+		$this->assertTrue($sid2 > 0 && $sid2 !== $sid1, 'second submit is a new row');
+
+		// Earlier record should now be 'superseded'
+		$this->waiver->db->Clear();
+		$this->waiver->db->waiver_signature_id = $sid1;
+		$rs = $this->waiver->db->DataSet("SELECT verification_status FROM " . DB_PREFIX . "waiver_signature WHERE waiver_signature_id = :waiver_signature_id");
+		$status = null;
+		if ($rs) { while ($rs->Next()) { $status = $rs->verification_status; } }
+		$this->assertEq('superseded', $status, 'prior superseded');
+
+		// New record should still be pending
+		$this->waiver->db->Clear();
+		$this->waiver->db->waiver_signature_id = $sid2;
+		$rs2 = $this->waiver->db->DataSet("SELECT verification_status FROM " . DB_PREFIX . "waiver_signature WHERE waiver_signature_id = :waiver_signature_id");
+		$status2 = null;
+		if ($rs2) { while ($rs2->Next()) { $status2 = $rs2->verification_status; } }
+		$this->assertEq('pending', $status2, 'new record still pending');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
