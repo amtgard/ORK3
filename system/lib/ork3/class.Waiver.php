@@ -186,6 +186,60 @@ class Waiver extends Ork3 {
 		return ['Status' => Success(), 'SignatureId' => $newId];
 	}
 
+	private function _shape_signature($rs) {
+		if (!$rs) return null;
+		return [
+			'SignatureId'           => (int)$rs->waiver_signature_id,
+			'TemplateId'            => (int)$rs->waiver_template_id,
+			'MundaneId'             => (int)$rs->mundane_id,
+			'MundaneFirst'          => $rs->mundane_first_snapshot,
+			'MundaneLast'           => $rs->mundane_last_snapshot,
+			'PersonaName'           => $rs->persona_name_snapshot,
+			'ParkId'                => (int)$rs->park_id_snapshot,
+			'KingdomId'             => (int)$rs->kingdom_id_snapshot,
+			'SignatureType'         => $rs->signature_type,
+			'SignatureData'         => $rs->signature_data,
+			'SignedAt'              => $rs->signed_at,
+			'IsMinor'               => (int)$rs->is_minor,
+			'MinorRepFirst'         => $rs->minor_rep_first,
+			'MinorRepLast'          => $rs->minor_rep_last,
+			'MinorRepRelationship'  => $rs->minor_rep_relationship,
+			'VerificationStatus'    => $rs->verification_status,
+			'VerifiedByMundaneId'   => (int)$rs->verified_by_mundane_id,
+			'VerifiedAt'            => $rs->verified_at,
+			'VerifierPrintedName'   => $rs->verifier_printed_name,
+			'VerifierPersonaName'   => $rs->verifier_persona_name,
+			'VerifierOfficeTitle'   => $rs->verifier_office_title,
+			'VerifierSignatureType' => $rs->verifier_signature_type,
+			'VerifierSignatureData' => $rs->verifier_signature_data,
+			'VerifierNotes'         => $rs->verifier_notes,
+		];
+	}
+
+	public function GetSignature($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
+		$sid = (int)($request['SignatureId'] ?? 0);
+		if ($sid <= 0) return ['Status' => InvalidParameter('SignatureId required')];
+
+		$this->db->Clear();
+		$this->db->waiver_signature_id = $sid;
+		$rs = $this->db->DataSet("SELECT * FROM " . DB_PREFIX . "waiver_signature WHERE waiver_signature_id = :waiver_signature_id LIMIT 1");
+		if (!$rs || !$rs->Next()) return ['Status' => ProcessingError('Signature not found')];
+		$sig = $this->_shape_signature($rs);
+
+		$authorized = ($sig['MundaneId'] === $mundane_id)
+			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $sig['KingdomId'], AUTH_EDIT)
+			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK,    $sig['ParkId'],    AUTH_EDIT)
+			|| Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT);
+		if (!$authorized) return ['Status' => NoAuthorization()];
+
+		$t = $this->GetTemplate(['TemplateId' => $sig['TemplateId']]);
+		$sig['Template'] = (($t['Status']['Status'] ?? 1) === 0) ? $t['Template'] : null;
+
+		return ['Status' => Success(), 'Signature' => $sig];
+	}
+
 }
 
 ?>
