@@ -29,6 +29,22 @@ $pk = $wv['park_template'];
 .wv-builder .wv-version-label { font-size: 12px; color: #666; }
 .wv-builder .wv-status-ok   { color: #060; font-weight: bold; }
 .wv-builder .wv-status-err  { color: #a00; font-weight: bold; }
+.wv-builder .wv-fields-pane { background: #fafcff; border: 1px solid #d4e0ee; border-radius: 6px; padding: 14px; margin-bottom: 14px; }
+.wv-builder .wv-fields-pane h3 { margin: 0 0 6px 0; font-size: 16px; }
+.wv-builder .wv-hint { font-size: 12px; color: #666; margin: 0 0 10px 0; }
+.wv-builder .wv-dem-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px 12px; margin-bottom: 10px; }
+.wv-builder .wv-dem-grid label { font-weight: normal; font-size: 13px; }
+.wv-builder .wv-max-minors-field input[type=number] { width: 80px; }
+.wv-builder .wv-cfe { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.wv-builder .wv-cfe-row { display: grid; grid-template-columns: auto 1fr 140px auto auto auto; gap: 6px; align-items: center; padding: 6px; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+.wv-builder .wv-cfe-row .wv-cfe-grab { cursor: grab; color: #888; font-size: 18px; padding: 0 4px; user-select: none; }
+.wv-builder .wv-cfe-row input[type=text] { padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; }
+.wv-builder .wv-cfe-row select { padding: 4px; }
+.wv-builder .wv-cfe-row .wv-cfe-del { color: #a00; cursor: pointer; background: none; border: none; font-size: 18px; }
+.wv-builder .wv-cfe-options { grid-column: 2 / -1; padding-left: 26px; display: none; }
+.wv-builder .wv-cfe-options textarea { width: 100%; min-height: 48px; font-family: monospace; font-size: 12px; border: 1px solid #ddd; border-radius: 3px; padding: 4px; }
+.wv-builder .wv-cfe-row.wv-cfe-has-opts .wv-cfe-options { display: block; }
+.wv-builder .wv-cfe-add { margin-top: 4px; padding: 6px 10px; cursor: pointer; }
 </style>
 <div class="wv-builder">
 	<h1><?= $kingdomName ?> &mdash; Digital Waiver Builder</h1>
@@ -52,6 +68,32 @@ $pk = $wv['park_template'];
 					Enabled (players can sign)
 				</label>
 				<span class="wv-status"></span>
+			</div>
+
+			<div class="wv-fields-pane">
+				<h3>Fields &amp; Demographics</h3>
+				<p class="wv-hint">Toggle the data you want signers to provide. All demographics prefill from the signer's profile where available.</p>
+				<div class="wv-dem-grid">
+					<label><input type="checkbox" name="RequiresDob"               value="1" <?= (!empty($tpl['RequiresDob']))              ? 'checked' : '' ?>> Date of birth</label>
+					<label><input type="checkbox" name="RequiresPreferredName"     value="1" <?= (!empty($tpl['RequiresPreferredName']))    ? 'checked' : '' ?>> Preferred name</label>
+					<label><input type="checkbox" name="RequiresGender"            value="1" <?= (!empty($tpl['RequiresGender']))           ? 'checked' : '' ?>> Gender</label>
+					<label><input type="checkbox" name="RequiresAddress"           value="1" <?= (!empty($tpl['RequiresAddress']))          ? 'checked' : '' ?>> Address</label>
+					<label><input type="checkbox" name="RequiresPhone"             value="1" <?= (!empty($tpl['RequiresPhone']))            ? 'checked' : '' ?>> Phone</label>
+					<label><input type="checkbox" name="RequiresEmail"             value="1" <?= (!empty($tpl['RequiresEmail']))            ? 'checked' : '' ?>> Email</label>
+					<label><input type="checkbox" name="RequiresEmergencyContact" value="1" <?= (!empty($tpl['RequiresEmergencyContact'])) ? 'checked' : '' ?>> Emergency contact</label>
+					<label><input type="checkbox" name="RequiresWitness"           value="1" <?= (!empty($tpl['RequiresWitness']))          ? 'checked' : '' ?>> Witness signature</label>
+				</div>
+				<div class="wv-field wv-max-minors-field">
+					<label>Maximum minors per signing</label>
+					<input type="number" name="MaxMinors" min="1" max="6" value="<?= (int)($tpl['MaxMinors'] ?? 1) ?>">
+					<span class="wv-hint">1 for individual waivers; up to 6 for family waivers.</span>
+				</div>
+				<div class="wv-field">
+					<label>Custom fields</label>
+					<div class="wv-cfe" data-scope="<?= $scope ?>"></div>
+					<button type="button" class="wv-cfe-add">+ Add custom field</button>
+					<input type="hidden" name="CustomFieldsJson" value='<?= htmlspecialchars($tpl['CustomFieldsJson'] ?? '[]', ENT_QUOTES) ?>'>
+				</div>
 			</div>
 
 			<div class="wv-grid">
@@ -133,8 +175,96 @@ window.WvBuilderConfig = { token: "<?= $token ?>" };
 	document.querySelectorAll('.wv-builder .wv-form').forEach(form => {
 		form.addEventListener('input', () => debouncedRender(form));
 		renderPreview(form);
+
+		// --- Custom Fields Editor ---
+		const cfe = form.querySelector('.wv-cfe');
+		const cfeHidden = form.querySelector('input[name="CustomFieldsJson"]');
+		const cfeAddBtn = form.querySelector('.wv-cfe-add');
+		const typeOpts = ['text','textarea','checkbox','initial','radio','select','date'];
+		function slugify(s) {
+			return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || ('f_' + Math.random().toString(36).slice(2, 8));
+		}
+		function uniqueId(existing, proposed) {
+			let id = proposed; let i = 1;
+			while (existing.has(id)) { id = (proposed + '_' + (++i)).slice(0, 32); }
+			return id;
+		}
+		function collectState() {
+			const rows = [...cfe.querySelectorAll('.wv-cfe-row')];
+			return rows.map(r => {
+				const type = r.querySelector('select[name^=cfe_type]').value;
+				const entry = {
+					id:       r.querySelector('input[name^=cfe_id]').value.trim(),
+					label:    r.querySelector('input[name^=cfe_label]').value.trim(),
+					type:     type,
+					required: r.querySelector('input[name^=cfe_req]').checked,
+				};
+				if (type === 'radio' || type === 'select') {
+					const raw = r.querySelector('textarea[name^=cfe_opts]').value;
+					entry.options = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+				}
+				return entry;
+			}).filter(e => e.label);
+		}
+		function syncHidden() {
+			cfeHidden.value = JSON.stringify(collectState());
+		}
+		function makeRow(entry) {
+			const row = document.createElement('div');
+			row.className = 'wv-cfe-row';
+			const hasOpts = (entry.type === 'radio' || entry.type === 'select');
+			if (hasOpts) row.classList.add('wv-cfe-has-opts');
+			row.innerHTML = ''
+				+ '<span class="wv-cfe-grab" title="Drag to reorder">⋮⋮</span>'
+				+ '<input type="text" name="cfe_label" placeholder="Field label" value="' + (entry.label || '').replace(/"/g,'&quot;') + '">'
+				+ '<select name="cfe_type">' + typeOpts.map(tp => '<option value="' + tp + '"' + (tp === entry.type ? ' selected' : '') + '>' + tp + '</option>').join('') + '</select>'
+				+ '<label><input type="checkbox" name="cfe_req"' + (entry.required ? ' checked' : '') + '> req</label>'
+				+ '<input type="text" name="cfe_id" placeholder="id" value="' + (entry.id || '').replace(/"/g,'&quot;') + '" size="10">'
+				+ '<button type="button" class="wv-cfe-del" title="Delete">×</button>'
+				+ '<div class="wv-cfe-options"><textarea name="cfe_opts" placeholder="One option per line or comma-separated">' + ((entry.options || []).join('\n')) + '</textarea></div>';
+			row.querySelector('.wv-cfe-del').addEventListener('click', () => { row.remove(); syncHidden(); });
+			row.querySelector('select[name=cfe_type]').addEventListener('change', (ev) => {
+				const t2 = ev.target.value;
+				row.classList.toggle('wv-cfe-has-opts', (t2 === 'radio' || t2 === 'select'));
+				syncHidden();
+			});
+			row.querySelector('input[name=cfe_label]').addEventListener('blur', (ev) => {
+				const idInput = row.querySelector('input[name=cfe_id]');
+				if (!idInput.value) {
+					const used = new Set([...cfe.querySelectorAll('input[name=cfe_id]')].map(i => i.value).filter(Boolean));
+					idInput.value = uniqueId(used, slugify(ev.target.value));
+					syncHidden();
+				}
+			});
+			row.addEventListener('input', syncHidden);
+			row.addEventListener('change', syncHidden);
+			// Drag to reorder: HTML5 DnD
+			row.setAttribute('draggable', 'true');
+			row.addEventListener('dragstart', (ev) => { row.dataset.dragging = '1'; ev.dataTransfer.effectAllowed = 'move'; });
+			row.addEventListener('dragend',   () => { delete row.dataset.dragging; syncHidden(); });
+			row.addEventListener('dragover',  (ev) => {
+				ev.preventDefault();
+				const dragging = cfe.querySelector('.wv-cfe-row[data-dragging="1"]');
+				if (dragging && dragging !== row) {
+					const rect = row.getBoundingClientRect();
+					cfe.insertBefore(dragging, (ev.clientY - rect.top < rect.height / 2) ? row : row.nextSibling);
+				}
+			});
+			return row;
+		}
+		try {
+			const initial = JSON.parse(cfeHidden.value || '[]');
+			if (Array.isArray(initial)) initial.forEach(entry => cfe.appendChild(makeRow(entry)));
+		} catch (e) { /* bad seed, start empty */ }
+		cfeAddBtn.addEventListener('click', () => {
+			cfe.appendChild(makeRow({ type: 'text', label: '', required: false }));
+			syncHidden();
+		});
+		syncHidden();
+
 		form.addEventListener('submit', async (e) => {
 			e.preventDefault();
+			syncHidden();
 			const fd = new FormData(form);
 			const status = form.querySelector('.wv-status');
 			status.className = 'wv-status'; status.textContent = 'Saving…';
