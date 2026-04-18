@@ -437,6 +437,110 @@ class WaiverTestRunner {
 		unset($_SESSION['is_authorized_mundane_id']);
 	}
 
+	// ============================================================================
+	// Task 1.8: VerifySignature
+	// ============================================================================
+
+	public function test_verify_signature_approved() {
+		$this->waiver->db->Clear();
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature WHERE verification_status='pending' ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		$this->assertTrue($sid > 0, 'precondition: have a pending signature');
+
+		$r = $this->waiver->VerifySignature([
+			'Token' => $this->token, 'SignatureId' => $sid, 'Action' => 'verified',
+			'PrintedName' => 'Admin Person', 'PersonaName' => 'Sir Admin', 'OfficeTitle' => 'Prime Minister',
+			'SignatureType' => 'typed', 'SignatureData' => 'Admin Person', 'Notes' => '',
+		]);
+		$this->assertStatus(0, $r, 'verified');
+
+		$r2 = $this->waiver->GetSignature(['Token' => $this->token, 'SignatureId' => $sid]);
+		$this->assertEq('verified', $r2['Signature']['VerificationStatus'] ?? null, 'status updated');
+		$this->assertEq('Admin Person', $r2['Signature']['VerifierPrintedName'] ?? null, 'printed name stored');
+	}
+
+	public function test_verify_signature_reject_requires_notes() {
+		$this->waiver->db->Clear();
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature WHERE verification_status='pending' ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		if ($sid === 0) { $this->assertTrue(true, 'no pending to reject — skip'); return; }
+
+		$r = $this->waiver->VerifySignature([
+			'Token' => $this->token, 'SignatureId' => $sid, 'Action' => 'rejected',
+			'PrintedName' => 'A', 'PersonaName' => '', 'OfficeTitle' => '',
+			'SignatureType' => 'typed', 'SignatureData' => 'A', 'Notes' => '',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'reject without notes blocked');
+	}
+
+	public function test_verify_signature_rejects_bad_action() {
+		$this->waiver->db->Clear();
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		$r = $this->waiver->VerifySignature([
+			'Token' => $this->token, 'SignatureId' => $sid, 'Action' => 'explode',
+			'PrintedName' => 'A', 'PersonaName' => '', 'OfficeTitle' => '',
+			'SignatureType' => 'typed', 'SignatureData' => 'A', 'Notes' => '',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'bad action rejected');
+	}
+
+	public function test_verify_signature_rejects_missing_id() {
+		$r = $this->waiver->VerifySignature([
+			'Token' => $this->token, 'SignatureId' => 0, 'Action' => 'verified',
+			'PrintedName' => 'A', 'PersonaName' => '', 'OfficeTitle' => '',
+			'SignatureType' => 'typed', 'SignatureData' => 'A', 'Notes' => '',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'missing id rejected');
+	}
+
+	public function test_verify_signature_rejects_bad_token() {
+		$this->waiver->db->Clear();
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		unset($_SESSION['is_authorized_mundane_id']);
+		$r = $this->waiver->VerifySignature([
+			'Token' => str_repeat('z', 32), 'SignatureId' => $sid, 'Action' => 'verified',
+			'PrintedName' => 'A', 'PersonaName' => '', 'OfficeTitle' => '',
+			'SignatureType' => 'typed', 'SignatureData' => 'A', 'Notes' => '',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'bad token rejected');
+		unset($_SESSION['is_authorized_mundane_id']);
+	}
+
+	public function test_verify_signature_requires_verifier_signature_on_verify() {
+		// Find or create a pending signature first
+		$this->waiver->db->Clear();
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature WHERE verification_status='pending' ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		if ($sid === 0) {
+			// Create a fresh pending signature
+			$at = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+			$tid = (int)($at['Template']['TemplateId'] ?? 0);
+			$sub = $this->waiver->SubmitSignature([
+				'Token' => $this->token, 'TemplateId' => $tid,
+				'MundaneFirst' => 'Verify', 'MundaneLast' => 'Test', 'PersonaName' => '',
+				'ParkId' => $this->testParkId, 'KingdomId' => $this->testKingdomId,
+				'SignatureType' => 'typed', 'SignatureData' => 'V T', 'IsMinor' => 0,
+				'MinorRepFirst'=>'', 'MinorRepLast'=>'', 'MinorRepRelationship'=>'',
+			]);
+			$sid = (int)($sub['SignatureId'] ?? 0);
+		}
+		$this->assertTrue($sid > 0, 'precondition: have a pending signature');
+
+		$r = $this->waiver->VerifySignature([
+			'Token' => $this->token, 'SignatureId' => $sid, 'Action' => 'verified',
+			'PrintedName' => 'Admin', 'PersonaName' => '', 'OfficeTitle' => '',
+			'SignatureType' => '', 'SignatureData' => '', 'Notes' => '',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'verifier signature required');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
