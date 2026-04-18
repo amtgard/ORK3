@@ -1,6 +1,6 @@
 <?php
-$wv = $this->data['_wv'];
-$ki = $this->data['kingdom_info']['KingdomInfo'] ?? [];
+$wv = $_wv;
+$ki = $kingdom_info['KingdomInfo'] ?? [];
 $kingdomName = htmlspecialchars($ki['KingdomName'] ?? 'Kingdom');
 $token       = htmlspecialchars($wv['token']);
 $kingdomId   = (int)$wv['kingdom_id'];
