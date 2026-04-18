@@ -46,17 +46,32 @@ class Waiver extends Ork3 {
 		}
 
 		$this->template->clear();
-		$this->template->kingdom_id            = $kingdom_id;
-		$this->template->scope                 = $scope;
-		$this->template->version               = $nextVersion;
-		$this->template->is_active             = 1;
-		$this->template->is_enabled            = ((int)($request['IsEnabled'] ?? 0)) ? 1 : 0;
-		$this->template->header_markdown       = (string)($request['HeaderMarkdown'] ?? '');
-		$this->template->body_markdown         = (string)($request['BodyMarkdown']   ?? '');
-		$this->template->footer_markdown       = (string)($request['FooterMarkdown'] ?? '');
-		$this->template->minor_markdown        = (string)($request['MinorMarkdown']  ?? '');
-		$this->template->created_by_mundane_id = $mundane_id;
-		$this->template->created_at            = date('Y-m-d H:i:s');
+		$cfRaw = (string)($request['CustomFieldsJson'] ?? '[]');
+		$cfErr = $this->_validate_custom_fields_json($cfRaw);
+		if ($cfErr !== null) return ['Status' => InvalidParameter($cfErr)];
+		$maxMinors = max(1, min(6, (int)($request['MaxMinors'] ?? 1)));
+
+		$this->template->kingdom_id                = $kingdom_id;
+		$this->template->scope                     = $scope;
+		$this->template->version                   = $nextVersion;
+		$this->template->is_active                 = 1;
+		$this->template->is_enabled                = ((int)($request['IsEnabled'] ?? 0)) ? 1 : 0;
+		$this->template->header_markdown           = (string)($request['HeaderMarkdown'] ?? '');
+		$this->template->body_markdown             = (string)($request['BodyMarkdown']   ?? '');
+		$this->template->footer_markdown           = (string)($request['FooterMarkdown'] ?? '');
+		$this->template->minor_markdown            = (string)($request['MinorMarkdown']  ?? '');
+		$this->template->requires_dob              = ((int)($request['RequiresDob']              ?? 0)) ? 1 : 0;
+		$this->template->requires_address          = ((int)($request['RequiresAddress']          ?? 0)) ? 1 : 0;
+		$this->template->requires_phone            = ((int)($request['RequiresPhone']            ?? 0)) ? 1 : 0;
+		$this->template->requires_email            = ((int)($request['RequiresEmail']            ?? 0)) ? 1 : 0;
+		$this->template->requires_preferred_name   = ((int)($request['RequiresPreferredName']    ?? 0)) ? 1 : 0;
+		$this->template->requires_gender           = ((int)($request['RequiresGender']           ?? 0)) ? 1 : 0;
+		$this->template->requires_emergency_contact= ((int)($request['RequiresEmergencyContact'] ?? 0)) ? 1 : 0;
+		$this->template->requires_witness          = ((int)($request['RequiresWitness']          ?? 0)) ? 1 : 0;
+		$this->template->max_minors                = $maxMinors;
+		$this->template->custom_fields_json        = $cfRaw;
+		$this->template->created_by_mundane_id     = $mundane_id;
+		$this->template->created_at                = date('Y-m-d H:i:s');
 		$this->template->save();
 
 		$newId = (int)$this->template->waiver_template_id;
@@ -69,20 +84,55 @@ class Waiver extends Ork3 {
 		];
 	}
 
+	private function _validate_custom_fields_json($raw) {
+		if ($raw === '' || $raw === null) return null;
+		$arr = json_decode($raw, true);
+		if (!is_array($arr))   return 'CustomFieldsJson not valid JSON array';
+		if (count($arr) > 50)  return 'CustomFieldsJson exceeds 50 fields';
+		$seen = [];
+		$allowed = ['text','textarea','checkbox','initial','radio','select','date'];
+		foreach ($arr as $i => $f) {
+			if (!is_array($f)) return "CustomFieldsJson entry $i not an object";
+			$id = (string)($f['id'] ?? '');
+			if (!preg_match('/^[a-z0-9_]{1,32}$/', $id)) return "CustomFieldsJson entry $i has invalid id";
+			if (isset($seen[$id])) return "CustomFieldsJson entry $i has duplicate id '$id'";
+			$seen[$id] = 1;
+			$type = (string)($f['type'] ?? '');
+			if (!in_array($type, $allowed, true)) return "CustomFieldsJson entry $i type '$type' not allowed";
+			if (($type === 'radio' || $type === 'select')) {
+				$opts = $f['options'] ?? null;
+				if (!is_array($opts) || count($opts) < 1) return "CustomFieldsJson entry $i requires options";
+			}
+			$label = (string)($f['label'] ?? '');
+			if ($label === '' || strlen($label) > 512) return "CustomFieldsJson entry $i has invalid label";
+		}
+		return null;
+	}
+
 	private function _shape_template($rs) {
 		if (!$rs) return null;
 		return [
-			'TemplateId'      => (int)$rs->waiver_template_id,
-			'KingdomId'       => (int)$rs->kingdom_id,
-			'Scope'           => $rs->scope,
-			'Version'         => (int)$rs->version,
-			'IsActive'        => (int)$rs->is_active,
-			'IsEnabled'       => (int)$rs->is_enabled,
-			'HeaderMarkdown'  => $rs->header_markdown,
-			'BodyMarkdown'    => $rs->body_markdown,
-			'FooterMarkdown'  => $rs->footer_markdown,
-			'MinorMarkdown'   => $rs->minor_markdown,
-			'CreatedAt'       => $rs->created_at,
+			'TemplateId'                => (int)$rs->waiver_template_id,
+			'KingdomId'                 => (int)$rs->kingdom_id,
+			'Scope'                     => $rs->scope,
+			'Version'                   => (int)$rs->version,
+			'IsActive'                  => (int)$rs->is_active,
+			'IsEnabled'                 => (int)$rs->is_enabled,
+			'HeaderMarkdown'            => $rs->header_markdown,
+			'BodyMarkdown'              => $rs->body_markdown,
+			'FooterMarkdown'            => $rs->footer_markdown,
+			'MinorMarkdown'             => $rs->minor_markdown,
+			'RequiresDob'               => (int)($rs->requires_dob ?? 0),
+			'RequiresAddress'           => (int)($rs->requires_address ?? 0),
+			'RequiresPhone'             => (int)($rs->requires_phone ?? 0),
+			'RequiresEmail'             => (int)($rs->requires_email ?? 0),
+			'RequiresPreferredName'     => (int)($rs->requires_preferred_name ?? 0),
+			'RequiresGender'            => (int)($rs->requires_gender ?? 0),
+			'RequiresEmergencyContact'  => (int)($rs->requires_emergency_contact ?? 0),
+			'RequiresWitness'           => (int)($rs->requires_witness ?? 0),
+			'MaxMinors'                 => (int)($rs->max_minors ?? 1),
+			'CustomFieldsJson'          => (string)($rs->custom_fields_json ?? '[]'),
+			'CreatedAt'                 => $rs->created_at,
 		];
 	}
 
