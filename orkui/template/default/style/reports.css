@@ -298,7 +298,7 @@
 }
 
 .rp-filter-card {
-	background   : #fff;
+	background   : var(--rp-card-bg, #fff);
 	border       : 1px solid var(--rp-border);
 	border-radius: 8px;
 	overflow     : hidden;
@@ -391,7 +391,7 @@
 .rp-table-area {
 	flex        : 1;
 	min-width   : 0;
-	background  : #fff;
+	background  : var(--rp-bg-table, #fff);
 	border      : 1px solid var(--rp-border);
 	border-radius: 8px;
 	padding     : 14px 16px;
@@ -510,7 +510,7 @@
 	font-weight  : 600;
 	color        : var(--rp-text-body) !important;
 	border       : 1px solid var(--rp-border) !important;
-	background   : #fff !important;
+	background   : var(--rp-paginate-bg, #fff) !important;
 	margin       : 0 2px;
 	transition   : background 0.1s, border-color 0.1s;
 }
@@ -532,7 +532,7 @@
 .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover {
 	opacity     : 0.4;
 	cursor      : default;
-	background  : #fff !important;
+	background  : var(--rp-paginate-bg, #fff) !important;
 	border-color: var(--rp-border) !important;
 	color       : var(--rp-text-muted) !important;
 }
@@ -548,12 +548,12 @@
 
 /* Suspended row highlight */
 .rp-table-area table.dataTable tbody tr.rp-row-suspended > td {
-	background-color: #fff5f5;
-	color           : #742a2a;
+	background-color: var(--rp-row-suspended-bg, #fff5f5);
+	color           : var(--rp-row-suspended-text, #742a2a);
 }
 
 .rp-table-area table.dataTable tbody tr.rp-row-suspended:hover > td {
-	background-color: #fed7d7;
+	background-color: var(--rp-row-suspended-hover, #fed7d7);
 }
 
 /* Fix fixedColumns clone background for suspended rows */
@@ -568,22 +568,22 @@
 
 /* Dues for Life row highlight */
 .rp-table-area table.dataTable tbody tr.rp-row-duesforlife > td {
-	background-color: #f0fff4;
-	color           : #276749;
+	background-color: var(--rp-row-dues-bg, #f0fff4);
+	color           : var(--rp-row-dues-text, #276749);
 }
 
 .rp-table-area table.dataTable tbody tr.rp-row-duesforlife:hover > td {
-	background-color: #c6f6d5;
+	background-color: var(--rp-row-dues-hover, #c6f6d5);
 }
 
 /* Unwaivered row highlight */
 .rp-table-area table.dataTable tbody tr.rp-row-unwaivered > td {
-	background-color: #fffbeb;
-	color           : #744210;
+	background-color: var(--rp-row-unwv-bg, #fffbeb);
+	color           : var(--rp-row-unwv-text, #744210);
 }
 
 .rp-table-area table.dataTable tbody tr.rp-row-unwaivered:hover > td {
-	background-color: #fef3c7;
+	background-color: var(--rp-row-unwv-hover, #fef3c7);
 }
 
 /* FixedColumns: keep fixed-column cells visually aligned */
@@ -957,6 +957,7 @@ html[data-theme="dark"] .rp-rank-badge.rp-rank-3 {
 html[data-theme="dark"] .rp-check { color: #68d391; }
 html[data-theme="dark"] .rp-cross { color: #fc8181; }
 html[data-theme="dark"] .rp-warn  { color: #f6ad55; }
+
 
 html[data-theme="dark"] .rp-filter-pill-active {
   background: rgba(139,92,246,0.2);

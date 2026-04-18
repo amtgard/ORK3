@@ -1247,8 +1247,19 @@ class Controller_Reports extends Controller {
 			echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
 			exit;
 		}
+		$scope_type = $_POST['ScopeType'] ?? '';
+		$scope_id   = (int)($_POST['ScopeId'] ?? 0);
 		$r = $this->Reports->set_player_active_status($this->session->token, $mundane_id, $active);
 		if ($r['Status'] == 0) {
+			$bustKey = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+			Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $bustKey);
+			if ($scope_type === 'Park' && valid_id($scope_id)) {
+				$reportKey = Ork3::$Lib->ghettocache->key(['ParkId' => $scope_id]);
+				Ork3::$Lib->ghettocache->bust('Report.GetPlayerStatusReconciliation', $reportKey);
+			} elseif ($scope_type === 'Kingdom' && valid_id($scope_id)) {
+				$reportKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $scope_id]);
+				Ork3::$Lib->ghettocache->bust('Report.GetPlayerStatusReconciliation', $reportKey);
+			}
 			echo json_encode(['status' => 0]);
 		} else {
 			echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);

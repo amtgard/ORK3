@@ -232,6 +232,38 @@
 .att-edit-btn-save { padding:7px 16px; background:#4338ca; color:#fff; border:none; border-radius:6px; font-size:.85rem; font-weight:600; cursor:pointer; }
 .att-edit-btn-save:hover:not(:disabled) { background:#3730a3; }
 .att-edit-btn-save:disabled { opacity:.5; cursor:not-allowed; }
+/* =====================================================
+   DARK MODE — Eventnew components
+   ===================================================== */
+html[data-theme="dark"] .ev-checkin-locked { background: #744210; border-color: #975a16; color: #fbd38d; }
+html[data-theme="dark"] .ev-checkin-locked i { color: #f6ad55; }
+html[data-theme="dark"] .ev-icon-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-icon-btn:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-modal-btn-delete { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .ev-modal-btn-delete:hover:not(:disabled) { background: #9b2c2c; }
+html[data-theme="dark"] .ev-img-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .ev-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ev-img-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .ev-img-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-upload-area { border-color: var(--ork-border); color: var(--ork-text-secondary); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .ev-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ev-upload-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .ev-fp-title { background: #1a365d; color: #90cdf4; }
+html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+/* RSVP table: sign-in credits input + waivered tooltip (PR #454) */
+html[data-theme="dark"] #ev-rsvp-credits {
+	background: var(--ork-input-bg) !important;
+	border-color: var(--ork-input-border) !important;
+	color: var(--ork-text) !important;
+}
+html[data-theme="dark"] #ev-rsvp-table thead th label { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); color: var(--ork-bg, #1a202c); }
 </style>
 
 <?php // ---- HERO ---- ?>
@@ -333,7 +365,7 @@
 			<?php if ($price > 0): ?>
 				$<?= number_format($price, 2) ?>
 			<?php else: ?>
-				<span style="color:#276749;font-size:16px">Free</span>
+				<span style="color:var(--ork-badge-green-text,#276749);font-size:16px">Free</span>
 			<?php endif; ?>
 		</div>
 		<div class="ev-stat-label">Price</div>
@@ -462,7 +494,6 @@
 			<?php endif; ?>
 		</div>
 		<?php endif; ?>
-
 
 	</div><!-- /.ev-sidebar -->
 
@@ -639,11 +670,11 @@
 				<div class="ev-checkin-locked"><i class="fas fa-clock"></i> Sign-ins for this event can be processed starting on <?= htmlspecialchars($checkinOpenLabel) ?>.</div>
 				<?php endif; ?>
 				<div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 12px">
-					<p style="font-size:.95em;color:#4a5568;margin:0">
-						<i class="fas fa-check-circle" style="margin-right:4px;color:#276749"></i>
+					<p class="ev-rsvp-summary" style="font-size:.95em;color:#4a5568;margin:0">
+						<i class="fas fa-check-circle ev-rsvp-going-icon" style="margin-right:4px;color:#276749"></i>
 						<strong><?= $rsvpCounts['going'] ?></strong> Going
 						&nbsp;&nbsp;
-						<i class="fas fa-star" style="margin-right:4px;color:#b7791f"></i>
+						<i class="fas fa-star ev-rsvp-interested-icon" style="margin-right:4px;color:#b7791f"></i>
 						<strong><?= $rsvpCounts['interested'] ?></strong> Interested
 					</p>
 					<div style="display:flex;gap:6px">
@@ -687,9 +718,9 @@
 								<td style="white-space:nowrap"><?= htmlspecialchars($attendee['ParkAbbr'] ?? '') ?></td>
 								<td style="white-space:nowrap">
 									<?php if ($attendee['Status'] === 'going'): ?>
-										<i class="fas fa-check-circle" style="color:#276749;margin-right:4px"></i>Going
+										<i class="fas fa-check-circle ev-rsvp-going-icon" style="color:#276749;margin-right:4px"></i>Going
 									<?php else: ?>
-										<i class="fas fa-star" style="color:#b7791f;margin-right:4px"></i>Interested
+										<i class="fas fa-star ev-rsvp-interested-icon" style="color:#b7791f;margin-right:4px"></i>Interested
 									<?php endif; ?>
 								</td>
 								<td style="text-align:center;white-space:nowrap">
@@ -777,7 +808,7 @@
 				<?php endif; ?>
 				<ul style="margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px">
 					<li>
-						<a href="<?= UIR ?>Admin/permissions/Event/<?= $eventId ?>/<?= $detailId ?>" style="display:inline-flex;align-items:center;gap:7px;padding:7px 14px;background:#f0faf4;border:1px solid #c6e8d4;border-radius:6px;font-size:13px;font-weight:600;color:#276749;text-decoration:none">
+						<a href="<?= UIR ?>Admin/permissions/Event/<?= $eventId ?>/<?= $detailId ?>" class="ev-admin-link-btn">
 							<i class="fas fa-key"></i> Roles &amp; Permissions
 						</a>
 					</li>
@@ -1119,6 +1150,18 @@ var EvConfig = {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<style>
+html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button,
+html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button:hover {
+  background-color: #2d3748 !important; background-image: none !important;
+  color: #cbd5e0 !important; border-color: #4a5568 !important;
+}
+html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background-color: #2b6cb0 !important; background-image: none !important;
+  color: #fff !important; border-color: #2b6cb0 !important;
+}
+</style>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
@@ -1405,7 +1448,8 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		sel.value = tr.dataset.attClass || '';
 		sel.style.borderColor = '';
 		var cred = document.getElementById('ev-att-edit-credits');
-		cred.value = lastCredits;
+		var credCell = tr.querySelector('.ev-credits-cell');
+		cred.value = credCell ? credCell.textContent.trim() : lastCredits;
 		cred.style.borderColor = '';
 		document.getElementById('ev-att-edit-feedback').style.display = 'none';
 		document.getElementById('ev-att-edit-save').disabled = false;

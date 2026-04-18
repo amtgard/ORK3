@@ -95,9 +95,27 @@
 
 .kn-ac-results { position:absolute; top:100%; left:0; right:0; z-index:9999; margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
 .kn-ac-results.kn-ac-open { display:block; }
-.kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
+.kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; outline:none; }
 .kn-ac-item:last-child { border-bottom:none; }
-.kn-ac-item:hover, .kn-ac-item.kn-ac-focused { background:#ebf4ff; color:#2c7a7b; }
+.kn-ac-item:hover, .kn-ac-item:focus, .kn-ac-item.kn-ac-focused { background:#ebf4ff; color:#2c7a7b; outline:none; }
+
+html[data-theme="dark"] .kn-ac-results { background:var(--ork-card-bg); border-color:var(--ork-border); box-shadow:0 4px 12px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .kn-ac-item { color:var(--ork-text); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .kn-ac-item:hover,
+html[data-theme="dark"] .kn-ac-item:focus,
+html[data-theme="dark"] .kn-ac-item.kn-ac-focused { background:var(--ork-bg-tertiary); color:var(--ork-link-bright); outline:none; }
+
+html[data-theme="dark"] .ap-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .ap-field input,
+html[data-theme="dark"] .ap-field select { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
+html[data-theme="dark"] .ap-table td { color:var(--ork-text-secondary); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .ap-table tr:hover td { background:var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ap-role-block { background:var(--ork-bg-secondary); border-color:var(--ork-border); }
+html[data-theme="dark"] .ap-explainer { background:rgba(56,161,105,0.1); border-color:rgba(56,161,105,0.3); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .ap-del { border-color:rgba(197,48,48,0.4); color:#fc8181; }
+html[data-theme="dark"] .ap-del:hover { background:rgba(197,48,48,0.15); }
+html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-color:#c53030; color:#fff; }
+
 </style>
 
 <div class="rp-root">

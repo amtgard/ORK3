@@ -13963,6 +13963,66 @@ function expandUrl() {
 		return document.URL;
 }
 
+/**
+ * Crop fully-transparent rows/columns from the edges of a PNG file.
+ * Pixel-exact — uses canvas drawImage with a source rectangle, no resampling,
+ * so aspect ratio and pixel values are preserved verbatim. Non-PNG files (JPG,
+ * GIF, etc.) are returned unchanged. Callback receives a new File (or the
+ * original File if nothing could be trimmed).
+ */
+function trimTransparentEdges(file, onDone, onError) {
+	if (!file || file.type !== 'image/png') { onDone(file); return; }
+	var ALPHA_THRESHOLD = 10; // pixel counts as "content" if alpha > 10
+	var img = new Image();
+	var url = URL.createObjectURL(file);
+	img.onload = function() {
+		URL.revokeObjectURL(url);
+		try {
+			var w = img.naturalWidth, h = img.naturalHeight;
+			if (w < 2 || h < 2) { onDone(file); return; }
+			var c = document.createElement('canvas');
+			c.width = w; c.height = h;
+			var ctx = c.getContext('2d');
+			ctx.drawImage(img, 0, 0);
+			var data;
+			try { data = ctx.getImageData(0, 0, w, h).data; }
+			catch (e) { onDone(file); return; } // tainted canvas, skip
+			var top = -1, bottom = -1, left = w, right = -1;
+			for (var y = 0; y < h; y++) {
+				for (var x = 0; x < w; x++) {
+					if (data[(y * w + x) * 4 + 3] > ALPHA_THRESHOLD) {
+						if (top === -1) top = y;
+						bottom = y;
+						if (x < left)  left  = x;
+						if (x > right) right = x;
+					}
+				}
+			}
+			if (top === -1 || right === -1) { onDone(file); return; } // fully transparent
+			if (top === 0 && left === 0 && bottom === h - 1 && right === w - 1) {
+				onDone(file); return; // already tight
+			}
+			var cw = right - left + 1, ch = bottom - top + 1;
+			var out = document.createElement('canvas');
+			out.width = cw; out.height = ch;
+			var octx = out.getContext('2d');
+			octx.drawImage(c, left, top, cw, ch, 0, 0, cw, ch);
+			out.toBlob(function(blob) {
+				if (!blob) { onDone(file); return; }
+				var outName = file.name || 'heraldry.png';
+				onDone(new File([blob], outName, { type: 'image/png' }));
+			}, 'image/png');
+		} catch (err) {
+			onDone(file);
+		}
+	};
+	img.onerror = function() {
+		URL.revokeObjectURL(url);
+		onDone(file);
+	};
+	img.src = url;
+}
+
 function resizeImageToLimit(file, maxBytes, onSuccess, onError, preservePng) {
 	var MAX_ITERATIONS = 5;
 	var targetBytes = maxBytes - 100;

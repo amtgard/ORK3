@@ -38,6 +38,119 @@ var AWARD_DESCRIPTIONS = {
 };
 
 /* ===========================
+   Dark Mode Theme Toggle
+   =========================== */
+function orkInitTheme() {
+    if (orkInitTheme._done) return;
+    orkInitTheme._done = true;
+    var stored = localStorage.getItem('ork_theme');
+    if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+
+    // Wire up the toggle button
+    var btn = document.getElementById('ork-theme-toggle');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            var stored = localStorage.getItem('ork_theme');
+            // Cycle: auto → dark → light → auto (keyed off stored pref, not data-theme)
+            if (!stored) {
+                // auto → dark
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('ork_theme', 'dark');
+            } else if (stored === 'dark') {
+                // dark → light
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('ork_theme', 'light');
+            } else {
+                // light → auto: remove pref, re-apply OS preference live
+                localStorage.removeItem('ork_theme');
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                }
+            }
+            // Update icon
+            orkUpdateThemeIcon();
+            // Reapply hero color with new lightness
+            var heroImg = document.querySelector('.kn-heraldry-frame img, .pk-heraldry-frame img');
+            if (heroImg && heroImg.complete) {
+                if (typeof knApplyHeroColor === 'function') knApplyHeroColor(heroImg);
+                if (typeof pkApplyHeroColor === 'function') pkApplyHeroColor(heroImg);
+                if (typeof evApplyHeroColor === 'function') evApplyHeroColor();
+                if (typeof enApplyHeroColor === 'function') enApplyHeroColor();
+                if (typeof ecApplyBannerColor === 'function') ecApplyBannerColor();
+            }
+        });
+        orkUpdateThemeIcon();
+    }
+
+    // Live OS preference listener — only fires when user is in auto mode (no stored pref)
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            if (localStorage.getItem('ork_theme')) return; // user has a manual pref, ignore
+            if (e.matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+            var heroImg = document.querySelector('.kn-heraldry-frame img, .pk-heraldry-frame img');
+            if (heroImg && heroImg.complete) {
+                if (typeof knApplyHeroColor === 'function') knApplyHeroColor(heroImg);
+                if (typeof pkApplyHeroColor === 'function') pkApplyHeroColor(heroImg);
+                if (typeof evApplyHeroColor === 'function') evApplyHeroColor();
+                if (typeof enApplyHeroColor === 'function') enApplyHeroColor();
+                if (typeof ecApplyBannerColor === 'function') ecApplyBannerColor();
+            }
+        });
+    }
+}
+
+function orkUpdateThemeIcon() {
+    var btn = document.getElementById('ork-theme-toggle');
+    if (!btn) return;
+    var stored = localStorage.getItem('ork_theme');
+    // Sun icon (light mode)
+    var sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>';
+    // Moon icon (dark mode)
+    var moonSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11.807A9.002 9.002 0 0 1 10.049 2a9.942 9.942 0 0 0-5.12 2.735c-3.905 3.905-3.905 10.237 0 14.142 3.906 3.906 10.237 3.905 14.143 0a9.946 9.946 0 0 0 2.735-5.119A9.003 9.003 0 0 1 12 11.807z"/></svg>';
+    // Auto icon (half-filled circle — left half dark, right half outline)
+    var autoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2a10 10 0 0 1 0 20V2z" fill="currentColor"/></svg>';
+    if (stored === 'dark') {
+        btn.setAttribute('title', 'Dark mode (click for light)');
+        btn.innerHTML = moonSvg;
+    } else if (stored === 'light') {
+        btn.setAttribute('title', 'Light mode (click for auto)');
+        btn.innerHTML = sunSvg;
+    } else {
+        btn.setAttribute('title', 'Auto mode (follows OS setting, click for dark)');
+        btn.innerHTML = autoSvg;
+    }
+}
+
+// Run theme init on DOMContentLoaded to ensure button is in DOM
+// Theme attr is applied immediately via stored value in case it was already set server-side
+(function() {
+    var stored = localStorage.getItem('ork_theme');
+    if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', orkInitTheme);
+    } else {
+        orkInitTheme();
+    }
+})();
+
+
+/* ===========================
    Autocomplete keyboard nav
    =========================== */
 /**
@@ -322,7 +435,7 @@ function pnPageRange(current, total) {
                     '<h3 class="pn-modal-title" id="pn-confirm-title"></h3>' +
                     '<button class="pn-modal-close-btn" id="pn-confirm-close-btn" aria-label="Close">&times;</button>' +
                 '</div>' +
-                '<div class="pn-modal-body"><p id="pn-confirm-message" style="margin:0;font-size:14px;color:#4a5568"></p></div>' +
+                '<div class="pn-modal-body"><p id="pn-confirm-message" class="pn-confirm-message"></p></div>' +
                 '<div class="pn-modal-footer">' +
                     '<button class="pn-btn pn-btn-secondary" id="pn-confirm-cancel">Cancel</button>' +
                     '<button class="pn-btn" id="pn-confirm-ok">Confirm</button>' +
@@ -1885,6 +1998,13 @@ var knCalendar  = null;
 var knFilters   = { 'kingdom-event': true, 'park-event': true, 'park-day': false };
 var knCalCache  = {}; // raw events keyed by "startISO|endISO" — avoids re-fetching on filter toggle
 
+function orkIsDarkMode() {
+    var attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark') return true;
+    if (attr === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 function knIsMobile() { return window.innerWidth <= 768; }
 
 function knSetEventsView(view) {
@@ -2204,16 +2324,18 @@ function knApplyHeroColor(img) {
             h /= 6;
         }
 
-        // Clamp: keep hue, boost saturation if washed out, fix lightness for dark bg
-        var finalS = Math.max(s, 0.28);
+        // Clamp: keep hue, boost saturation proportionately for dark mode
+        var _kn_dark = orkIsDarkMode();
+        var finalS = _kn_dark ? Math.min(Math.max(s * 1.15, 0.35), 0.90) : Math.max(s, 0.28);
         var hDeg   = Math.round(h * 360);
         var sPct   = Math.round(finalS * 100);
         document.documentElement.style.setProperty('--kn-hue', hDeg);
         document.documentElement.style.setProperty('--kn-sat', sPct + '%');
         var heroEl = document.querySelector('.kn-hero');
         if (heroEl) {
+            var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_kn_dark ? '22%' : '18%');
             heroEl.style.backgroundColor =
-                'hsl(' + hDeg + ',' + sPct + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,' + heroL + ')';
         }
     } catch(e) { /* CORS or tainted canvas — keep default green */ }
 }
@@ -4967,16 +5089,19 @@ $(document).ready(function() {
                         });
                 }
 
-                if (file.size > 348836) {
-                    var isPng = (file.type === 'image/png');
-                    resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
-                        if (upl) upl.style.display = 'none';
-                        if (sel) sel.style.display = '';
-                        alert(errMsg || 'Could not resize image. Please choose a smaller file.');
-                    }, isPng);
-                } else {
-                    doUpload(file);
-                }
+                trimTransparentEdges(file, function(trimmed) {
+                    file = trimmed;
+                    if (file.size > 348836) {
+                        var isPng = (file.type === 'image/png');
+                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                        }, isPng);
+                    } else {
+                        doUpload(file);
+                    }
+                });
             });
         }
 
@@ -5212,15 +5337,17 @@ function pkApplyHeroColor(img) {
             else                 h = (rf-gf)/d + 4;
             h /= 6;
         }
-        var finalS = Math.max(s, 0.28);
+        var _pk_dark = orkIsDarkMode();
+        var finalS = _pk_dark ? Math.min(Math.max(s * 1.15, 0.35), 0.90) : Math.max(s, 0.28);
         var hDeg   = Math.round(h * 360);
         var sPct   = Math.round(finalS * 100);
         document.documentElement.style.setProperty('--pk-hue', hDeg);
         document.documentElement.style.setProperty('--pk-sat', sPct + '%');
         var heroEl = document.querySelector('.pk-hero');
         if (heroEl) {
+            var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_pk_dark ? '22%' : '18%');
             heroEl.style.backgroundColor =
-                'hsl(' + hDeg + ',' + sPct + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,' + heroL + ')';
         }
         document.documentElement.style.setProperty(
             '--pk-page-tint', 'rgba(' + dr + ',' + dg + ',' + db + ',0.05)'
@@ -6404,7 +6531,12 @@ $(document).ready(function() {
                     h*=60;
                 }
                 var hero = document.getElementById('ev-hero');
-                if (hero) hero.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (hero) {
+                    var _ev_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_ev_dark ? '22%' : '18%');
+                    var evSPct = _ev_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    hero.style.backgroundColor = 'hsl('+Math.round(h)+','+evSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -6542,11 +6674,16 @@ $(document).ready(function() {
         var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
         var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
         var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
+        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
             '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
-            '<td>' + kingCell + '</td><td>' + parkCell + '</td>' +
-            '<td>' + escHtml(att.ClassName || '') + '</td><td>' + escHtml(att.Credits || '') + '</td>' +
-            '<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a></td>' +
+            '<td>' + kingCell + '</td>' +
+            '<td>' + parkCell + '</td>' +
+            '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
+            '<td class="ev-credits-cell">' + escHtml(att.Credits || '') + '</td>' +
+            '<td class="ev-del-cell">' +
+                '<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
+                '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
+            '</td>' +
             '</tr>';
         var tableBody = document.querySelector('#ev-attendance-table tbody');
         if (tableBody) {
@@ -6659,13 +6796,14 @@ $(document).ready(function() {
                 var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
                 var kingCell  = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
                 var parkCell  = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-                var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
+                var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
                     '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
                     '<td>' + kingCell + '</td>' +
                     '<td>' + parkCell + '</td>' +
-                    '<td>' + escHtml(att.ClassName || '') + '</td>' +
-                    '<td>' + escHtml(att.Credits || '') + '</td>' +
+                    '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
+                    '<td class="ev-credits-cell">' + escHtml(att.Credits || '') + '</td>' +
                     '<td class="ev-del-cell">' +
+                        '<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
                         '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
                     '</td>' +
                 '</tr>';
@@ -6806,7 +6944,12 @@ if (typeof EnConfig !== 'undefined') (function() {
                     h*=60;
                 }
                 var hero = document.getElementById('en-hero');
-                if (hero) hero.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (hero) {
+                    var _en_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_en_dark ? '22%' : '18%');
+                    var enSPct = _en_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    hero.style.backgroundColor = 'hsl('+Math.round(h)+','+enSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -6871,7 +7014,12 @@ if (typeof EcConfig !== 'undefined') (function() {
                     h*=60;
                 }
                 var banner = document.getElementById('ec-banner');
-                if (banner) banner.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (banner) {
+                    var _ec_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_ec_dark ? '22%' : '18%');
+                    var ecSPct = _ec_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    banner.style.backgroundColor = 'hsl('+Math.round(h)+','+ecSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -10272,7 +10420,7 @@ window.pnCloseUnitCreateModal = function() {
                                 : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
                             var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
                             return '<div class="kn-ac-item' + (same ? ' kn-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '"')
+                                + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
                                 + '>' + escHtml(pl.Persona) + sub + '</div>';
@@ -10315,6 +10463,8 @@ window.pnCloseUnitCreateModal = function() {
 
         makePlayerSearch('kn-merge-keep-name',   'kn-merge-keep-id',   'kn-merge-keep-results',   'kn-merge-remove-id');
         makePlayerSearch('kn-merge-remove-name', 'kn-merge-remove-id', 'kn-merge-remove-results', 'kn-merge-keep-id');
+        acKeyNav(gid('kn-merge-keep-name'),   gid('kn-merge-keep-results'),   'kn-ac-open', '.kn-ac-item[data-id]');
+        acKeyNav(gid('kn-merge-remove-name'), gid('kn-merge-remove-results'), 'kn-ac-open', '.kn-ac-item[data-id]');
 
         gid('kn-mergeplayer-submit').addEventListener('click', function() {
             var btn        = gid('kn-mergeplayer-submit');
@@ -10434,16 +10584,19 @@ window.pnCloseUnitCreateModal = function() {
                         });
                 }
 
-                if (file.size > 348836) {
-                    var isPng = (file.type === 'image/png');
-                    resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
-                        if (upl) upl.style.display = 'none';
-                        if (sel) sel.style.display = '';
-                        alert(errMsg || 'Could not resize image. Please choose a smaller file.');
-                    }, isPng);
-                } else {
-                    doUpload(file);
-                }
+                trimTransparentEdges(file, function(trimmed) {
+                    file = trimmed;
+                    if (file.size > 348836) {
+                        var isPng = (file.type === 'image/png');
+                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                        }, isPng);
+                    } else {
+                        doUpload(file);
+                    }
+                });
             });
         }
 
@@ -10809,7 +10962,7 @@ window.pnCloseUnitCreateModal = function() {
                                 : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
                             var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
                             return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '"')
+                                + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
                                 + '>' + escHtml(pl.Persona) + sub + '</div>';
@@ -10852,6 +11005,8 @@ window.pnCloseUnitCreateModal = function() {
 
         makePlayerSearch('pk-merge-keep-name',   'pk-merge-keep-id',   'pk-merge-keep-results',   'pk-merge-remove-id');
         makePlayerSearch('pk-merge-remove-name', 'pk-merge-remove-id', 'pk-merge-remove-results', 'pk-merge-keep-id');
+        acKeyNav(gid('pk-merge-keep-name'),   gid('pk-merge-keep-results'),   'pk-ac-open', '.pk-ac-item[data-id]');
+        acKeyNav(gid('pk-merge-remove-name'), gid('pk-merge-remove-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
 
         gid('pk-mergeplayer-submit').addEventListener('click', function() {
             var keepId     = gid('pk-merge-keep-id').value;

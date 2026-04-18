@@ -459,9 +459,10 @@ $(function() {
 .rp-btn-run:hover { background: var(--rp-accent-mid); }
 .rp-about-body    { font-size: 0.82rem; color: var(--rp-text-body); line-height: 1.5; }
 .rp-about-body p  { margin: 0 0 8px; }
-.rp-section-heading { font-size: 1rem; font-weight: 700; color: var(--rp-text); margin: 0 0 12px; padding: 0; background: none; border: none; }
+.rp-section-heading { font-size: 1rem; font-weight: 700; color: var(--rp-text); margin: 0 0 12px; padding: 0 !important; background: none !important; border: none !important; text-shadow: none !important; }
 .rp-empty-state   { color: var(--rp-text-muted); font-style: italic; padding: 24px 0; text-align: center; }
 .rp-row-summary td { background-color: #f7fafc !important; font-weight: 600; border-top: 2px solid var(--rp-border) !important; }
+html[data-theme="dark"] .rp-row-summary td { background-color: var(--ork-bg-tertiary) !important; color: var(--ork-text-secondary) !important; }
 #explorer-singlepark-table th:nth-child(n+4),
 #explorer-singlepark-table td:nth-child(n+4) { text-align: center !important; }
 #explorer-grid-table th:nth-child(n+2),

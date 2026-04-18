@@ -198,6 +198,22 @@ $show_charts = $total > 0;
 }
 .att-edit-btn-save:hover:not(:disabled) { background: #3730a3; }
 .att-edit-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+/* =====================================================
+   DARK MODE — Attendance form + edit modal (.att-*)
+   ===================================================== */
+html[data-theme="dark"] .att-form-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-card-header { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-form-input, html[data-theme="dark"] .att-form-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-chart-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
 </style>
 
 <div class="rp-root">
@@ -522,7 +538,7 @@ $(function() {
 
 	/* ── Charts ──────────────────────────────────────── */
 	new Highcharts.Chart({
-		chart: { renderTo: 'att-park-chart', type: 'column',
+		chart: { renderTo: 'att-park-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
 		title: { text: null },
 		xAxis: {
@@ -538,7 +554,7 @@ $(function() {
 	});
 
 	new Highcharts.Chart({
-		chart: { renderTo: 'att-class-chart', type: 'column',
+		chart: { renderTo: 'att-class-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
 		title: { text: null },
 		xAxis: {

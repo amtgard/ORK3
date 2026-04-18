@@ -296,7 +296,7 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;">
+			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if (!empty($CanAdminPark)): ?>
 				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" title="Edit officers">
@@ -341,7 +341,7 @@
 
 		<!-- Quick Links -->
 		<div class="pk-card">
-			<h4><i class="fas fa-link"></i> Quick Links</h4>
+			<h4 class="kn-bare-heading"><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="pk-link-list">
 				<li>
 					<span class="pk-link-icon"><i class="fas fa-search"></i></span>
@@ -581,7 +581,7 @@
 			<!-- Events Tab -->
 			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
@@ -958,8 +958,8 @@
 			<!-- Reports Tab -->
 			<div class="pk-tab-panel" id="pk-tab-reports" style="display:none">
 				<?php if (!$IsLoggedIn): ?>
-				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
-					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
+				<div style="background:var(--ork-alert-info-bg,#eaf4fb);border:1px solid var(--ork-alert-info-border,#b0d4ea);border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:var(--ork-alert-info-text,#1a5276);">
+					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:var(--ork-alert-info-text,#1a5276);font-weight:600;">Log in</a> to see the full list of available reports.
 				</div>
 				<?php endif; ?>
 				<div class="pk-reports-mobile-notice">
@@ -1069,7 +1069,7 @@
 					<span class="kn-rec-filter-info">
 						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 						<div class="kn-rec-filter-popover">
-							<h4>About These Filters</h4>
+							<h4 class="kn-bare-heading">About These Filters</h4>
 							<dl>
 								<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
 								<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
@@ -1470,7 +1470,7 @@ var PkConfig = {
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
 		<div class="pk-emod-header">
-			<h3><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
+			<h3 class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
 		</div>
 		<div class="pk-emod-body">
@@ -1478,7 +1478,7 @@ var PkConfig = {
 				<label class="pk-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
 			</div>
-			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:#2b6cb0;margin-top:8px;padding:5px 8px;background:#ebf8ff;border-radius:5px;border-left:3px solid #90cdf4">
+			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
 			</div>
 			<p class="pk-emod-hint" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
@@ -1766,7 +1766,7 @@ var PkConfig = {
 				<button type="button" id="pk-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
 					<i class="fas fa-trash"></i> Remove Heraldry
 				</button>
-				<div id="pk-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+				<div id="pk-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:var(--ork-alert-danger-bg,#fff5f5);border:1px solid var(--ork-alert-danger-border,#fed7d7);border-radius:6px;font-size:13px;color:var(--ork-alert-danger-text,#c53030);text-align:left">
 					Remove this park's heraldry image?
 					<div style="margin-top:8px;display:flex;gap:8px">
 						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('pk-heraldry-remove-confirm').style.display='none'">Cancel</button>
@@ -1797,7 +1797,66 @@ var PkConfig = {
 	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s;
 }
 .pk-mp-toggle-btn.pk-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
-</style>
+
+/* ===================================================================
+   DARK MODE OVERRIDES — Parknew profile
+   Activated by: html[data-theme="dark"]
+   =================================================================== */
+html[data-theme="dark"] .pk-stat-number { color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .pk-stat-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-stat-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pk-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
+html[data-theme="dark"] .pk-sidebar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-tab-nav li { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-tab-nav li.pk-tab-active { background: var(--ork-card-bg); color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .pk-tab-nav li:hover:not(.pk-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pk-tab-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
+html[data-theme="dark"] .pk-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-day-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-day-time { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-day-name { color: var(--ork-text); }
+html[data-theme="dark"] .pk-day-addr { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pk-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+html[data-theme="dark"] .pk-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-modal-close-btn:hover { color: var(--ork-text); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-acct-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-acct-field input[type="text"],
+html[data-theme="dark"] .pk-acct-field input[type="date"],
+html[data-theme="dark"] .pk-acct-field input[type="number"],
+html[data-theme="dark"] .pk-acct-field select,
+html[data-theme="dark"] .pk-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pk-mp-toggle { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pk-mp-toggle-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-mp-toggle-btn.pk-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] .pk-officer-item { border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-officer-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-officer-name { color: var(--ork-text); }
+html[data-theme="dark"] #theme_container .pk-officer-name a { color: hsl(calc(var(--pk-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+html[data-theme="dark"] .pk-empty { color: var(--ork-text-muted); }
+/* FullCalendar dark overrides */
+html[data-theme="dark"] .fc-toolbar { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .fc-toolbar-title { color: var(--ork-text); }
+html[data-theme="dark"] .fc-col-header { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .fc-col-header-cell { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .fc-daygrid-day { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .fc-daygrid-day-number { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .fc-day-today { background: var(--ork-bg-tertiary) !important; }
+html[data-theme="dark"] .fc-button { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .fc-button:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
+html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+
+/* ============================================================
+   </style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
@@ -1890,7 +1949,7 @@ var PkConfig = {
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:#2d3748;line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>

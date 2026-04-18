@@ -143,13 +143,33 @@ foreach ($_od_rows as $row):
 (function () {
 	if (!$('#od-table').length) return;
 
+	var odSkipWords = /^(the|kingdom|empire|freehold|principality|of)\s+/i;
+	function odSortKey(name) {
+		var s = name.trim(), prev;
+		do { prev = s; s = s.replace(odSkipWords, ''); } while (s !== prev);
+		return s.toLowerCase();
+	}
+
 	var table = $('#od-table').DataTable({
 		dom        : 'lfrtip',
 		pageLength : 50,
 		scrollX    : true,
 		order      : [[0, 'asc']],
 		fixedHeader: { headerOffset: 48 },
-		columnDefs : [{ targets: [1, 2, 3, 4, 5], orderable: false }]
+		columnDefs : [
+			{
+				targets: 0,
+				render: function (data, type) {
+					if (type === 'sort' || type === 'filter') {
+						var tmp = document.createElement('div');
+						tmp.innerHTML = data;
+						return odSortKey(tmp.textContent || tmp.innerText || '');
+					}
+					return data;
+				}
+			},
+			{ targets: [1, 2, 3, 4, 5], orderable: false }
+		]
 	});
 
 	/* CSV export — strips HTML from cells */

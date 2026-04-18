@@ -174,7 +174,7 @@
 		<!-- Officers -->
 		<?php if (count($officerList) > 0 || ($CanManageKingdom ?? false)): ?>
 		<div class="kn-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;background:transparent;border:none;padding:0;border-radius:0;">
+			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if ($CanManageKingdom ?? false): ?>
 				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" title="Edit officers">
@@ -207,7 +207,7 @@
 		?>
 		<?php if (!empty($_knDescription)): ?>
 		<div class="kn-card kn-description-card">
-			<h4 style="background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-info-circle"></i> About</h4>
+			<h4 class="kn-bare-heading"><i class="fas fa-info-circle"></i> About</h4>
 			<div class="kn-description-body"><?= preg_replace('/<img[^>]*>/i', '', (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($_knDescription)) ?></div>
 			<?php if (!empty($kingdom_info['Info']['KingdomInfo']['Url'] ?? '')): ?>
 			<a class="kn-description-url" href="<?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?>" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:4px;font-size:11px"></i><?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?></a>
@@ -217,7 +217,7 @@
 
 		<!-- Quick Links -->
 		<div class="kn-card">
-			<h4 style="background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-link"></i> Quick Links</h4>
+			<h4 class="kn-bare-heading"><i class="fas fa-link"></i> Quick Links</h4>
 			<ul class="kn-link-list">
 				<li>
 					<span class="kn-link-icon"><i class="fas fa-search"></i></span>
@@ -431,11 +431,17 @@
 			.kn-sub-gcal-btn:hover{background:#3367d6;color:#fff}
 			.kn-sub-webcal-btn{display:block;margin-top:6px;font-size:11px;color:#718096;text-align:center;text-decoration:none}
 			.kn-sub-webcal-btn:hover{color:#4a5568}
+			html[data-theme="dark"] .kn-sub-pop-title{color:var(--ork-text)}
+			html[data-theme="dark"] .kn-sub-url-input{background:var(--ork-input-bg);border-color:var(--ork-input-border);color:var(--ork-text)}
+			html[data-theme="dark"] .kn-sub-copy-btn{background:var(--ork-bg-tertiary);border-color:var(--ork-border);color:var(--ork-text-secondary)}
+			html[data-theme="dark"] .kn-sub-copy-btn:hover{background:var(--ork-bg-secondary)}
+			html[data-theme="dark"] .kn-sub-webcal-btn{color:var(--ork-text-muted)}
+			html[data-theme="dark"] .kn-sub-webcal-btn:hover{color:var(--ork-text)}
 			</style>
 			<!-- Events Tab -->
 			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-					<h4 style="margin:0;font-size:14px;font-weight:700;color:#4a5568;background:transparent;border:none;padding:0;border-radius:0;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
+					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
@@ -450,7 +456,7 @@
 								onclick="(function(btn){var p=document.getElementById('kn-sub-pop');var r=btn.getBoundingClientRect();p.style.top=(r.bottom+6)+'px';p.style.right=(window.innerWidth-r.right)+'px';var show=p.style.display==='none';p.style.setProperty('display',show?'block':'none','important');event.stopPropagation();})(this)">
 								<i class="fas fa-rss"></i>
 							</button>
-							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px">
+							<div class="kn-sub-pop" id="kn-sub-pop" style="display:none;position:fixed;z-index:9000;background:var(--ork-card-bg,#fff);border:1px solid var(--ork-border,#e2e8f0);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 14px;width:280px;font-size:13px;color:var(--ork-text,#2d3748)">
 								<div class="kn-sub-pop-title"><i class="fas fa-calendar-check" style="margin-right:5px"></i>Subscribe to Events</div>
 								<div class="kn-sub-pop-row">
 									<input class="kn-sub-url-input" id="kn-sub-url-input" type="text"
@@ -479,7 +485,7 @@
 				</div>
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="kn-events-cal-wrap" style="position:relative;display:none">
-					<div id="kn-cal-loading" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,0.88);z-index:10;align-items:center;justify-content:center;min-height:120px;">
+					<div id="kn-cal-loading" style="display:none;position:absolute;inset:0;background:var(--ork-overlay-light,rgba(255,255,255,0.88));z-index:10;align-items:center;justify-content:center;min-height:120px;">
 						<i class="fas fa-spinner fa-spin" style="font-size:28px;color:#a0aec0"></i>
 					</div>
 					<div id="kn-events-cal"></div>
@@ -594,8 +600,8 @@
 			<!-- Reports Tab -->
 			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
 				<?php if (!$IsLoggedIn): ?>
-				<div style="background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:#1a5276;">
-					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:#1a5276;font-weight:600;">Log in</a> to see the full list of available reports.
+				<div style="background:var(--ork-alert-info-bg,#eaf4fb);border:1px solid var(--ork-alert-info-border,#b0d4ea);border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:var(--ork-alert-info-text,#1a5276);">
+					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:var(--ork-alert-info-text,#1a5276);font-weight:600;">Log in</a> to see the full list of available reports.
 				</div>
 				<?php endif; ?>
 				<div class="pk-reports-mobile-notice">
@@ -1080,7 +1086,7 @@ var KnConfig = {
 				<label class="kn-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="kn-emod-input" id="kn-event-name" autocomplete="off" placeholder="e.g. Summer Midreign">
 			</div>
-			<div id="kn-emod-date-row" style="display:none;font-size:12px;color:#2b6cb0;margin-top:8px;padding:5px 8px;background:#ebf8ff;border-radius:5px;border-left:3px solid #90cdf4">
+			<div id="kn-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="kn-emod-date-text"></span>
 			</div>
 			<div class="kn-emod-field" style="margin-top:12px">
@@ -1199,11 +1205,11 @@ var KnConfig = {
 				<button type="button" id="kn-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">
 					<i class="fas fa-trash"></i> Remove Heraldry
 				</button>
-				<div id="kn-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;font-size:13px;color:#c53030;text-align:left">
+				<div id="kn-heraldry-remove-confirm" style="display:none;margin-top:10px;padding:10px;background:var(--ork-alert-danger-bg,#fff5f5);border:1px solid var(--ork-alert-danger-border,#fed7d7);border-radius:6px;font-size:13px;color:var(--ork-alert-danger-text,#c53030);text-align:left">
 					Remove this kingdom's heraldry image?
 					<div style="margin-top:8px;display:flex;gap:8px">
 						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" onclick="document.getElementById('kn-heraldry-remove-confirm').style.display='none'">Cancel</button>
-						<button type="button" class="pn-btn pn-btn-sm" style="background:#e53e3e;color:#fff" onclick="knDoRemoveHeraldry()">Yes, Remove</button>
+						<button type="button" class="pn-btn pn-btn-sm kn-btn-danger" onclick="knDoRemoveHeraldry()">Yes, Remove</button>
 					</div>
 				</div>
 			</div>
@@ -1332,12 +1338,12 @@ var KnConfig = {
 				</button>
 				<div class="kn-admin-panel-body" id="kn-admin-body-config" style="display:none">
 					<div id="kn-admin-config-feedback" class="kn-admin-feedback" style="display:none"></div>
-					<div class="kn-admin-field kn-admin-recs-visibility-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e2e8f0;margin-bottom:12px">
+					<div class="kn-admin-field kn-admin-recs-visibility-row" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--ork-border,#e2e8f0);margin-bottom:12px">
 						<div>
-							<div style="font-size:13px;font-weight:600;color:#2d3748">Recommendation Visibility</div>
-							<div style="font-size:12px;color:#718096;margin-top:3px">When Private, besides the monarchy, only the submitter can see their own recommendations.</div>
+							<div style="font-size:13px;font-weight:600;color:var(--ork-text,#2d3748)">Recommendation Visibility</div>
+							<div style="font-size:12px;color:var(--ork-text-muted,#718096);margin-top:3px">When Private, besides the monarchy, only the submitter can see their own recommendations.</div>
 						</div>
-						<select id="kn-admin-recs-public" style="font-size:13px;border:1.5px solid #e2e8f0;border-radius:6px;padding:5px 8px;flex-shrink:0">
+						<select id="kn-admin-recs-public" style="font-size:13px;border:1.5px solid var(--ork-border,#e2e8f0);border-radius:6px;padding:5px 8px;flex-shrink:0">
 							<option value="1" <?= !empty($AwardRecsPublic) ? 'selected' : '' ?>>Public</option>
 							<option value="0" <?= empty($AwardRecsPublic) ? 'selected' : '' ?>>Private (monarchy and submitters only)</option>
 						</select>
@@ -1626,7 +1632,7 @@ var KnConfig = {
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:#2d3748;line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>
@@ -1738,7 +1744,7 @@ var KnConfig = {
 .kn-sub-wrap { position:relative; }
 .kn-sub-pop {
 	display:none !important; position:fixed; z-index:9000;
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid #e2e8f0; border-radius:8px;
 	box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:12px 14px; width:280px; font-size:13px;
 }
 .kn-sub-pop.kn-sub-open { display:block !important; }
@@ -1765,7 +1771,65 @@ var KnConfig = {
 	display:block; margin-top:6px; font-size:11px; color:#718096; text-align:center; text-decoration:none;
 }
 .kn-sub-webcal-btn:hover { color:#4a5568; }
-</style>
+
+/* ===================================================================
+   DARK MODE OVERRIDES — Kingdomnew profile
+   Activated by: html[data-theme="dark"]
+   =================================================================== */
+html[data-theme="dark"] .kn-stat-number { color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .kn-stat-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-stat-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-card { background: var(--ork-card-bg, #2d3748) !important; border-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .kn-card-header { color: var(--ork-text); border-color: var(--ork-border); background: transparent; text-shadow: none; }
+html[data-theme="dark"] .kn-officer-item { border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-officer-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-officer-name { color: var(--ork-text); }
+html[data-theme="dark"] #theme_container .kn-officer-name a { color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+html[data-theme="dark"] #theme_container .kn-link-list a { color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%)); }
+html[data-theme="dark"] .kn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-tab-nav li { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-tab-nav li.kn-tab-active { background: var(--ork-card-bg); color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); border-color: var(--ork-border); border-bottom-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%)); }
+html[data-theme="dark"] .kn-tab-nav li:hover:not(.kn-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .kn-tab-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-table th { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); text-shadow: none; }
+html[data-theme="dark"] .kn-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-row-link:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-sub-pop { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-sub-pop-title { color: var(--ork-text); }
+html[data-theme="dark"] .kn-sub-url-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-sub-copy-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-sub-copy-btn:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-sub-webcal-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-sub-webcal-btn:hover { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-modal-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .kn-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .kn-modal-body { background: var(--ork-card-bg); color: var(--ork-text); }
+html[data-theme="dark"] .kn-modal-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-modal-close-btn:hover { color: var(--ork-text); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-acct-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-acct-field input[type="text"],
+html[data-theme="dark"] .kn-acct-field input[type="date"],
+html[data-theme="dark"] .kn-acct-field input[type="number"],
+html[data-theme="dark"] .kn-acct-field select,
+html[data-theme="dark"] .kn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-mp-toggle { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .kn-mp-toggle-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-mp-toggle-btn.kn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] #theme_container .kn-reports-grid a { color: var(--ork-link); }
+html[data-theme="dark"] #theme_container .kn-reports-grid a:hover { color: var(--ork-link-bright); }
+html[data-theme="dark"] .kn-map-sidebar-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .kn-filter-toggle { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-filter-toggle.kn-filter-off { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-sidebar { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+/* Inline danger buttons */
+.kn-btn-danger { background: #c53030; color: #fff; border-color: #c53030; }
+html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
+
+/* ============================================================
+   </style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
@@ -1848,7 +1912,7 @@ var KnConfig = {
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-mergeplayer-cancel">Cancel</button>
-			<button class="kn-btn" id="kn-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="kn-btn kn-btn-danger" id="kn-mergeplayer-submit" disabled><i class="fas fa-compress-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>
@@ -1861,11 +1925,11 @@ var KnConfig = {
 			<button class="kn-modal-close-btn" id="kn-claimpark-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body" style="padding:20px">
-			<p style="font-size:14px;color:#2d3748;margin:0 0 10px">To claim a park, please submit documentation, including Althing results if possible, authorizing the move to:</p>
+			<p style="font-size:14px;color:var(--ork-text);margin:0 0 10px">To claim a park, please submit documentation, including Althing results if possible, authorizing the move to:</p>
 			<p style="font-size:15px;font-weight:600;margin:0 0 14px">
 				<a href="mailto:Contracts@amtgard.com?subject=<?= rawurlencode('Park Claim Request — ' . ($kingdom_name ?? '')) ?>&body=<?= rawurlencode("Kingdom: " . ($kingdom_name ?? '') . "\nPark Name: \nAlthing Results: \nReason for Claim: ") ?>">Contracts@amtgard.com</a>
 			</p>
-			<p style="font-size:12px;color:#718096;margin:0">Include the park name, your kingdom, and any supporting documentation.</p>
+			<p style="font-size:12px;color:var(--ork-text-muted);margin:0">Include the park name, your kingdom, and any supporting documentation.</p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end">
 			<button class="kn-btn-ghost" id="kn-claimpark-cancel">Close</button>

@@ -18,6 +18,10 @@
 	font-size:22px; font-weight:700; color:#2d3748; margin:0;
 	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
 }
+html[data-theme="dark"] .se-header-title,
+html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
+	background:transparent; border:none; color:#e2e8f0; text-shadow:none;
+}
 .se-header-sub { font-size:13px; color:#718096; margin-top:1px; }
 
 /* ── Search bar ── */

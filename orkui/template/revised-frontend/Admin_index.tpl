@@ -236,7 +236,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 						foreach ($allRows as $row):
 							$isPrinz  = (bool)$row['IsPrincipality'];
 					?>
-					<tr data-name="<?= htmlspecialchars(strtolower($row['KingdomName'])) ?>">
+					<tr data-name="<?= htmlspecialchars(strtolower($row['KingdomName'])) ?>" data-kingdom-id="<?= (int)$row['KingdomId'] ?>" <?= $isPrinz ? 'data-parent-id="' . (int)$row['ParentKingdomId'] . '"' : '' ?>>
 						<td>
 							<a href="<?= UIR ?>Kingdom/profile/<?= (int)$row['KingdomId'] ?>" style="color:#3182ce;text-decoration:none;font-weight:<?= $isPrinz ? '400' : '600' ?>">
 								<?= $isPrinz ? '&ensp;↳ ' : '' ?><?= htmlspecialchars($row['KingdomName']) ?>
@@ -343,6 +343,24 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-radio-group { display: flex; gap: 16px; }
 .cp-radio-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 /* inline autocomplete dropdown (kn-ac-results already in revised.css) */
+/* =====================================================
+   DARK MODE — Admin award modals (.cp-*)
+   ===================================================== */
+html[data-theme="dark"] .cp-modal-box { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .cp-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .cp-modal-close:hover { color: var(--ork-text); }
+html[data-theme="dark"] .cp-modal-footer { background: var(--ork-bg-secondary); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .cp-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .cp-field input[type=text], html[data-theme="dark"] .cp-field input[type=email],
+html[data-theme="dark"] .cp-field input[type=password], html[data-theme="dark"] .cp-field input[type=date],
+html[data-theme="dark"] .cp-field select, html[data-theme="dark"] .cp-field textarea {
+  background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .cp-feedback-ok  { background: #1c4532; color: #9ae6b4; border-color: #276749; }
+html[data-theme="dark"] .cp-feedback-err { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16; color: #fbd38d; }
 </style>
 
 <!-- ---- Create Player ---- -->
@@ -1201,7 +1219,14 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	/* --------------------------------------------------
 	   Kingdom overview table — sort + filter
 	   -------------------------------------------------- */
-	var sortCol = 0, sortAsc = true;
+	var sortCol = -1, sortAsc = true;
+	var cpSkipWords = /^(the|kingdom|empire|freehold|principality|of)\s+/i;
+	function cpSortKey(name) {
+		var s = name.trim();
+		var prev;
+		do { prev = s; s = s.replace(cpSkipWords, ''); } while (s !== prev);
+		return s.toLowerCase();
+	}
 	function cpSort(col) {
 		if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = col === 0; }
 		document.querySelectorAll('.cp-kd-table thead th').forEach(function(th, i) {
@@ -1209,15 +1234,32 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			if (i === sortCol) th.classList.add(sortAsc ? 'cp-sort-asc' : 'cp-sort-desc');
 		});
 		var tbody = document.getElementById('cp-kd-tbody');
-		var rows  = Array.from(tbody.querySelectorAll('tr'));
-		rows.sort(function(a, b) {
+		var allRows = Array.from(tbody.querySelectorAll('tr'));
+
+		// Separate kingdoms from principalities
+		var kingdoms = allRows.filter(function(r) { return !r.dataset.parentId; });
+		var prinzMap  = {};
+		allRows.filter(function(r) { return !!r.dataset.parentId; }).forEach(function(r) {
+			var pid = r.dataset.parentId;
+			if (!prinzMap[pid]) prinzMap[pid] = [];
+			prinzMap[pid].push(r);
+		});
+
+		// Sort kingdoms only
+		kingdoms.sort(function(a, b) {
 			var av = a.children[sortCol].innerText.trim().replace(/,/g,'');
 			var bv = b.children[sortCol].innerText.trim().replace(/,/g,'');
 			var ai = parseFloat(av), bi = parseFloat(bv);
-			var cmp = isNaN(ai) || isNaN(bi) ? av.localeCompare(bv) : ai - bi;
+			var cmp = isNaN(ai) || isNaN(bi) ? cpSortKey(av).localeCompare(cpSortKey(bv)) : ai - bi;
 			return sortAsc ? cmp : -cmp;
 		});
-		rows.forEach(function(r) { tbody.appendChild(r); });
+
+		// Re-insert: kingdom row followed immediately by its principalities
+		kingdoms.forEach(function(r) {
+			tbody.appendChild(r);
+			var kid = r.dataset.kingdomId;
+			if (prinzMap[kid]) prinzMap[kid].forEach(function(p) { tbody.appendChild(p); });
+		});
 	}
 	function cpFilterTable(q) {
 		q = q.toLowerCase().trim();
@@ -1408,5 +1450,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 
 	window.cpSort        = cpSort;
 	window.cpFilterTable = cpFilterTable;
+	cpSort(0); // apply prefix-stripped alphabetical sort on load
 })();
 </script>

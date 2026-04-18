@@ -112,6 +112,8 @@ class Controller_EventAjax extends Controller {
 					'PAbbr'        => $row->PAbbr,
 					'ClassName'    => $row->ClassName,
 					'Credits'      => $row->Credits,
+					'ClassId'      => (int)($_POST['ClassId'] ?? 0),
+					'Date'         => $_POST['AttendanceDate'] ?? date('Y-m-d'),
 				]]);
 			} else {
 				echo json_encode(['status' => 0, 'attendance' => null]);

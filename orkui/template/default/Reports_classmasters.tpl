@@ -53,6 +53,16 @@ if (($report_type ?? null) === 'Park' && !empty($Awards)) {
 }
 .rp-guild-pill:hover { background: #eef2ff; }
 .rp-guild-pill.rp-guild-pill-active { background: #4338ca; color: #fff; border-color: #4338ca; }
+
+html[data-theme="dark"] .rp-guild-pill {
+	background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border);
+}
+html[data-theme="dark"] .rp-guild-pill:hover {
+	background: var(--ork-bg-tertiary); color: var(--ork-text); border-color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .rp-guild-pill.rp-guild-pill-active {
+	background: #44337a; color: #d6bcfa; border-color: #6b46c1;
+}
 </style>
 
 <div class="rp-root">

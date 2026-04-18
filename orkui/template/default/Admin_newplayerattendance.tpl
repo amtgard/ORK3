@@ -248,7 +248,7 @@ details > summary::-webkit-details-marker { display: none; }
 	});
 
 	new Highcharts.Chart({
-		chart  : { renderTo: 'npa-chart', type: 'column', style: { fontFamily: 'inherit' } },
+		chart  : { renderTo: 'npa-chart', type: 'column', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
 		title  : { text: 'New vs Returning Players by Kingdom' },
 		xAxis  : {
 			categories: <?=json_encode($chart_kingdoms)?>,

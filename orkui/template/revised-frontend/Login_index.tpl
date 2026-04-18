@@ -341,6 +341,29 @@
 		padding: 28px 24px;
 	}
 }
+/* =====================================================
+   DARK MODE — Login page (.lg-*)
+   Left panel (form) goes dark; right panel already dark.
+   ===================================================== */
+html[data-theme="dark"] .lg-form-panel { background: var(--ork-card-bg); }
+html[data-theme="dark"] .lg-logo-sword { color: #90cdf4; }
+html[data-theme="dark"] .lg-logo-text { color: var(--ork-text); }
+html[data-theme="dark"] .lg-logo-text span { color: #90cdf4; }
+html[data-theme="dark"] .lg-heading { color: var(--ork-text) !important; }
+html[data-theme="dark"] .lg-subheading { color: var(--ork-text-muted); }
+html[data-theme="dark"] .lg-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .lg-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .lg-input:focus { background: var(--ork-input-bg); border-color: var(--ork-link); }
+html[data-theme="dark"] .lg-divider { color: var(--ork-text-muted); }
+html[data-theme="dark"] .lg-divider::before,
+html[data-theme="dark"] .lg-divider::after { background: var(--ork-border); }
+html[data-theme="dark"] .lg-btn-oauth { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .lg-btn-oauth:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .lg-links { color: var(--ork-text-muted); }
+html[data-theme="dark"] .lg-links a { color: var(--ork-link); }
+html[data-theme="dark"] .lg-no-account { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
+html[data-theme="dark"] .lg-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
 </style>
 
 <div class="lg-wrap">

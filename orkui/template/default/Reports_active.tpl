@@ -314,7 +314,7 @@ $(function() {
 <?php if ($show_chart) : ?>
 	/* ── Park breakdown chart ───────────────────────────── */
 	new Highcharts.Chart({
-		chart: { renderTo: 'active-parks-chart', type: 'bar', style: { fontFamily: 'inherit' }, marginLeft: 150 },
+		chart: { renderTo: 'active-parks-chart', type: 'bar', backgroundColor: 'transparent', style: { fontFamily: 'inherit' }, marginLeft: 150 },
 		title: { text: 'Active Players by Park' },
 		xAxis: {
 			categories: <?= json_encode($chart_parks) ?>,
