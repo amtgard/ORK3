@@ -264,3 +264,212 @@ Note: if the repo has no PHP test harness today (likely), a minimal `tests/` tre
 | No PDF server-side generation | Browser print-to-PDF covers 90% of use; saves a dep and implementation time. |
 | Officer verification itself requires a signature | User's explicit requirement — same widget reused. |
 | New controller + AJAX split | Matches existing `controller.Player.php` + `controller.PlayerAjax.php` pattern. |
+
+---
+
+# Amendment 1 — 2026-04-18 — Real-World Waiver Coverage
+
+## A1.1 Motivation
+
+Survey of six real kingdom waivers (Amtgard general CA/HI/NV, Winter's Edge TN, Capitol Games MD, Blackspire OR, Emerald Hills TX, Northern Empire ON) showed the v1 builder cannot express common structure:
+
+- Demographic capture beyond First/Last/Persona: DOB, preferred name, address, phone, email, gender
+- Emergency-contact trio (name, relationship, phone) on four of six waivers
+- Multiple minors in one signing event (up to four on Blackspire; two extras on Amtgard general)
+- Standalone witness signature separate from officer verification (Winter's Edge, Northern Empire, Blackspire guardian-witness)
+- Custom checkboxes / radios / initials / acknowledgements (Youth Policy, "not on sex-offender registry", Joining/Transferring/Updating)
+- Admin intake metadata overlaid onto the existing officer verification row (ID type + number, Age bracket 18+/14+/<14, Scanned-paper flag)
+
+## A1.2 Design mechanism — hybrid, not pure JSON
+
+**First-class columns** for data kingdoms want to search, export, or report on (DOB, emergency contact, address/phone/email snapshots, minor roster, witness signature).
+**JSON custom-fields block** for per-kingdom boilerplate (checkboxes, radios, initials, free-text overlays) that varies too much across waivers to model discretely.
+
+Rationale: a pure-JSON answer kills reporting value. Pure first-class columns ossify one-off fields like "Joining/Transferring/Updating" into the schema forever. Hybrid keeps the common-important fields queryable while still letting a kingdom admin add a novel checkbox without another migration.
+
+## A1.3 Schema additions (additive-only migration `db-migrations/2026-04-18-digital-waivers-amendment.sql`)
+
+### A1.3.1 `ork_waiver_template` — 10 new columns
+
+```sql
+ALTER TABLE `ork_waiver_template`
+  ADD COLUMN `requires_dob`               TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `requires_address`           TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `requires_phone`             TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `requires_email`             TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `requires_preferred_name`    TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `requires_gender`            TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `requires_emergency_contact` TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `requires_witness`           TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `max_minors`                 TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  ADD COLUMN `custom_fields_json`         MEDIUMTEXT NOT NULL;
+```
+
+Default 0 keeps existing behaviour identical — any waiver saved before this migration renders exactly as before. `max_minors` defaults to 1 to match current one-rep-one-minor UX; range 1–6.
+
+### A1.3.2 `ork_waiver_signature` — 10 new columns
+
+```sql
+ALTER TABLE `ork_waiver_signature`
+  ADD COLUMN `preferred_name_snapshot`      VARCHAR(64)  NOT NULL DEFAULT '',
+  ADD COLUMN `dob_snapshot`                 DATE NULL DEFAULT NULL,
+  ADD COLUMN `gender_snapshot`              VARCHAR(32)  NOT NULL DEFAULT '',
+  ADD COLUMN `address_snapshot`             VARCHAR(255) NOT NULL DEFAULT '',
+  ADD COLUMN `phone_snapshot`               VARCHAR(32)  NOT NULL DEFAULT '',
+  ADD COLUMN `email_snapshot`               VARCHAR(128) NOT NULL DEFAULT '',
+  ADD COLUMN `emergency_contact_name`       VARCHAR(128) NOT NULL DEFAULT '',
+  ADD COLUMN `emergency_contact_phone`      VARCHAR(32)  NOT NULL DEFAULT '',
+  ADD COLUMN `emergency_contact_relationship` VARCHAR(64) NOT NULL DEFAULT '',
+  ADD COLUMN `witness_printed_name`         VARCHAR(128) NOT NULL DEFAULT '',
+  ADD COLUMN `witness_signature_type`       ENUM('drawn','typed') NULL DEFAULT NULL,
+  ADD COLUMN `witness_signature_data`       MEDIUMTEXT NULL DEFAULT NULL,
+  ADD COLUMN `custom_responses_json`        MEDIUMTEXT NOT NULL;
+```
+
+Also: extend officer-verifier intake:
+
+```sql
+ALTER TABLE `ork_waiver_signature`
+  ADD COLUMN `verifier_id_type`             VARCHAR(32)  NOT NULL DEFAULT '',
+  ADD COLUMN `verifier_id_number_last4`     VARCHAR(8)   NOT NULL DEFAULT '',
+  ADD COLUMN `verifier_age_bracket`         ENUM('', '18+', '14+', 'under14') NOT NULL DEFAULT '',
+  ADD COLUMN `verifier_scanned_paper`       TINYINT(1) NOT NULL DEFAULT 0;
+```
+
+We store only ID **type** (Driver's License, Passport, State ID, Other) and the **last 4 digits** of the ID number — never the full number. Matches what officers actually need to cross-reference without turning the table into a PII honeypot.
+
+### A1.3.3 New child table `ork_waiver_signature_minor`
+
+```sql
+CREATE TABLE IF NOT EXISTS `ork_waiver_signature_minor` (
+  `waiver_signature_minor_id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `waiver_signature_id`       INT UNSIGNED NOT NULL,
+  `seq`                       TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `legal_first`               VARCHAR(64)  NOT NULL DEFAULT '',
+  `legal_last`                VARCHAR(64)  NOT NULL DEFAULT '',
+  `preferred_name`            VARCHAR(64)  NOT NULL DEFAULT '',
+  `persona_name`              VARCHAR(128) NOT NULL DEFAULT '',
+  `dob`                       DATE NULL DEFAULT NULL,
+  PRIMARY KEY (`waiver_signature_minor_id`),
+  KEY `idx_signature` (`waiver_signature_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+Replaces the single `minor_rep_*` fields as the representation of the minor(s) **covered by** the signing adult. The existing `minor_rep_first/last/relationship` columns retain their role as the **guardian/representative** signing on behalf of those minors. Distinct entities, distinct columns.
+
+## A1.4 `custom_fields_json` schema
+
+Array of field definitions, validated on save:
+
+```json
+[
+  {
+    "id": "yp_ack",
+    "type": "checkbox",
+    "label": "I have read the Amtgard Youth Policy",
+    "required": true
+  },
+  {
+    "id": "sex_offender_initial",
+    "type": "initial",
+    "label": "I certify that I am not on a sex offender registry",
+    "required": true
+  },
+  {
+    "id": "visit_type",
+    "type": "radio",
+    "label": "Reason for completing this waiver",
+    "options": ["Joining", "Transferring from another park", "Updating waiver"],
+    "required": true
+  },
+  {
+    "id": "additional_notes",
+    "type": "text",
+    "label": "Additional notes",
+    "required": false
+  }
+]
+```
+
+**Supported field types:** `text`, `textarea`, `checkbox`, `initial` (3-char uppercase input), `radio`, `select`, `date`.
+
+**`id`** — auto-generated slug (`[a-z0-9_]{1,32}`); unique within the template. Never renames once assigned (responses would orphan).
+**Server-side validation on save:** reject if duplicate ids, if `options` missing for radio/select, if >50 fields.
+**Server-side validation on submit:** every `required:true` field must have a non-empty value in `custom_responses_json`; extra keys are dropped.
+
+`custom_responses_json`: `{ "yp_ack": true, "visit_type": "Joining", "sex_offender_initial": "JDS" }`.
+
+## A1.5 Builder UX additions
+
+Builder gains a new **"Fields & Demographics"** pane under each scope's tab, **above** the current side-by-side markdown/preview grid:
+
+- **Demographics toggles** — eight checkboxes (one per `requires_*` flag). Each toggle shows a short one-line description of what it means for the signer ("Signer will be required to enter a phone number").
+- **Max minors** — numeric input (1–6), default 1. Hint text: "How many minor children can be listed on a single signing. Set to 1 for single-child waivers, 4 for family waivers."
+- **Custom fields editor** — list view with add / reorder (drag handles) / delete. Each row is label + type dropdown + required toggle + options (shown only for radio/select). Options entered as comma-separated or one-per-line textarea. Client-side slug generator from label on blur.
+
+Save-and-publish button behaviour unchanged (still inserts a new version row). All new fields persist on the same row.
+
+**Live preview panel updates** — when a demographic toggle is on, the preview shows a stub block labelled "[Demographics: DOB, Address, …]" so the admin sees placement. Same idea for custom fields — preview shows each label + type tag in the order they'll render.
+
+## A1.6 Sign-page UX additions
+
+Render order inside the form, conditional on template flags:
+
+1. Header markdown
+2. **Player Information** block (existing First/Last/Persona), extended with `Preferred Name` when `requires_preferred_name`, `Gender` text input when `requires_gender`, `DOB` date picker when `requires_dob`, `Address` single line when `requires_address`, `Phone` + `Email` when toggled. All demographic fields prefilled from `ork_mundane` where available (address, phone, email) or left blank; editable.
+3. **Emergency Contact** block (name / relationship / phone), appears when `requires_emergency_contact`.
+4. Body markdown.
+5. **Custom Fields** block — renders each `custom_fields_json` entry with its type. Checkboxes and initial rows get inline markdown label rendering (so admins can format "I certify…" with emphasis).
+6. **Minor Block** — existing minor-rep fields, plus a **Minors Covered** repeater showing up to `max_minors` rows, each with Legal First / Legal Last / Preferred / Persona / DOB. Only visible when `is_minor` checkbox is ticked and `max_minors > 1`; if `max_minors = 1` the single-row block reuses the current look.
+7. Signer signature widget.
+8. **Witness** block when `requires_witness = 1` — printed name + signature widget. Separate from officer verification.
+9. Footer markdown.
+
+Client-side validation: block submit if any required field empty; surface a single inline red error strip identifying the first missing field.
+
+## A1.7 Review / Print UX additions
+
+- `Waiver_review.tpl` — adds a "Signer Demographics" section between the header and the rendered body. Emergency contact shown in a labelled card. Minors table rendered as a simple 2-column grid. Custom responses listed below the body in the order defined by the template. Witness block renders as a second signature card beside the signer's.
+- Officer verification form gains four new fields: ID Type dropdown, ID Last 4 (numeric only, 4 chars), Age Bracket radios, "Paper copy scanned & filed" checkbox. Submits with the existing `verifySignature` action.
+- `Waiver_print.tpl` mirrors the review-page render (minus officer form). Page-break-inside: avoid on section cards.
+
+## A1.8 Data flow deltas
+
+**saveTemplate** — client posts new keys `RequiresDob`, `RequiresAddress`, `RequiresPhone`, `RequiresEmail`, `RequiresPreferredName`, `RequiresGender`, `RequiresEmergencyContact`, `RequiresWitness`, `MaxMinors`, `CustomFieldsJson`. `class.Waiver.php::SaveTemplate` validates the JSON shape and clamps `MaxMinors` to [1,6].
+
+**submitSignature** — accepts `PreferredName`, `Dob`, `Gender`, `Address`, `Phone`, `Email`, `EmergencyContactName`, `EmergencyContactPhone`, `EmergencyContactRelationship`, `WitnessPrintedName`, `WitnessSignatureType`, `WitnessSignatureData`, `CustomResponsesJson`, `Minors` (array of `{LegalFirst, LegalLast, PreferredName, PersonaName, Dob}`). Server loads the template, validates each provided field against the template's `requires_*` flags and custom-field `required` rules; ignores fields the template doesn't ask for; snapshots everything it does. Minors persisted as child rows in `ork_waiver_signature_minor`, replacing prior rows for that signature on resubmit.
+
+**verifySignature** — adds `IdType`, `IdLast4` (4 digits), `AgeBracket` (`''`, `18+`, `14+`, `under14`), `ScannedPaper` (0/1). Blank still permitted — these fields are informational.
+
+**GetSignature** — returned payload gains `Demographics`, `EmergencyContact`, `Witness`, `Minors` (array), `CustomResponses` (decoded map), and verifier intake fields.
+
+## A1.9 Security notes
+
+- Custom-field `id` values are slugified on server save — rejecting anything outside `[a-z0-9_]{1,32}` prevents prototype-pollution / key-collision shenanigans in the JSON map.
+- Labels and radio/select options are rendered with `htmlspecialchars` on review/print. Never injected into script context.
+- ID number stored as last-4 only. Officer inputs full number in the UI; client-side JS trims to last 4 before POST. Server also trims.
+- DOB stored as DATE; no time component. Client-side browsers' `<input type="date">` handles locale.
+
+## A1.10 Coverage check (each row = one of the six waivers; columns match A1.3/A1.4)
+
+| Requirement | Where it lives post-amendment |
+|---|---|
+| CA/HI/NV preferred name | `requires_preferred_name` → `preferred_name_snapshot` |
+| CA/HI/NV additional child rows (up to 2 extra) | `max_minors = 3`; child rows in `ork_waiver_signature_minor` |
+| CA/HI/NV Joining/Transferring/Updating radio | custom radio field |
+| CA/HI/NV "not sex offender" initial | custom initial field |
+| CA/HI/NV age bracket + ID + Scanned | `verifier_age_bracket`, `verifier_id_type`, `verifier_id_number_last4`, `verifier_scanned_paper` |
+| Winter's Edge DOB, Form of ID, Phone, Witness | `requires_dob` + `requires_phone` + `verifier_id_type` + `requires_witness` |
+| Capitol Games Legal/Game/Kingdom + officer verifier | already in v1 (persona + kingdom/park snapshots + verifier block) |
+| Blackspire Persona/Legal/Address/Phone/Email/Emergency/4 minors/Youth Policy ack | full set of demographic flags + `requires_emergency_contact` + `max_minors = 4` + custom checkbox |
+| Emerald Hills Mundane name, address, phones, email, emergency | demographic flags + emergency contact |
+| Northern Empire birth date, gender, address, phone, email, emergency, witness | all demographic flags + witness |
+
+Every row is covered without further schema changes.
+
+## A1.11 Out of scope for this amendment (deferred)
+
+- Per-field conditional visibility ("show this checkbox only if ticked") — engineering cost exceeds the one-kingdom use case we'd be serving.
+- Import of legacy scanned PDFs into the new system — still handled as a paper attachment; `verifier_scanned_paper` flag is the bridge.
+- Signer photograph / ID upload — privacy review required; out of scope until we have a secure blob store solution.
+- Two-witness workflow (Winter's Edge) — second witness handled as a custom signature-text field until demand is clearer.
