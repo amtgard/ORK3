@@ -613,6 +613,41 @@ class WaiverTestRunner {
 		$this->assertEq('pending', $status2, 'new record still pending');
 	}
 
+	// ============================================================================
+	// Amendment A1: SaveTemplate persists new feature flags + custom_fields_json
+	// ============================================================================
+
+	public function test_a1_save_template_persists_new_fields() {
+		$customFields = json_encode([
+			['id' => 'yp_ack', 'type' => 'checkbox', 'label' => 'Read Youth Policy', 'required' => true],
+			['id' => 'visit_type', 'type' => 'radio', 'label' => 'Visit type',
+			 'options' => ['Joining', 'Transferring', 'Updating'], 'required' => true],
+		]);
+		$r = $this->waiver->SaveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+			'IsEnabled' => 1,
+			'HeaderMarkdown' => '# H', 'BodyMarkdown' => 'B', 'FooterMarkdown' => 'F', 'MinorMarkdown' => 'M',
+			'RequiresDob' => 1, 'RequiresAddress' => 1, 'RequiresEmergencyContact' => 1,
+			'RequiresWitness' => 1, 'MaxMinors' => 4,
+			'CustomFieldsJson' => $customFields,
+		]);
+		$this->assertStatus(0, $r, 'A1 SaveTemplate with new flags succeeds');
+		$tid = (int)($r['TemplateId'] ?? 0);
+		$this->assertTrue($tid > 0, 'A1 TemplateId returned');
+
+		$t = $this->waiver->GetTemplate(['TemplateId' => $tid]);
+		$this->assertStatus(0, $t, 'A1 GetTemplate succeeds');
+		$tpl = $t['Template'];
+		$this->assertEq(1, (int)$tpl['RequiresDob'],               'A1 RequiresDob persisted');
+		$this->assertEq(1, (int)$tpl['RequiresAddress'],           'A1 RequiresAddress persisted');
+		$this->assertEq(1, (int)$tpl['RequiresEmergencyContact'],  'A1 RequiresEmergencyContact persisted');
+		$this->assertEq(1, (int)$tpl['RequiresWitness'],           'A1 RequiresWitness persisted');
+		$this->assertEq(4, (int)$tpl['MaxMinors'],                 'A1 MaxMinors persisted');
+		$decoded = json_decode($tpl['CustomFieldsJson'] ?? '[]', true);
+		$this->assertTrue(is_array($decoded) && count($decoded) === 2, 'A1 CustomFieldsJson decodes to 2 entries');
+		$this->assertEq('yp_ack', $decoded[0]['id'] ?? null, 'A1 CustomFieldsJson first id preserved');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
