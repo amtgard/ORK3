@@ -199,6 +199,45 @@ class WaiverTestRunner {
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'nonexistent template returns non-success');
 	}
 
+	// ============================================================================
+	// Task 1.4: SetTemplateEnabled
+	// ============================================================================
+
+	public function test_set_enabled_toggles() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		$this->assertTrue($tid > 0, 'precondition: active template exists');
+
+		$r2 = $this->waiver->SetTemplateEnabled(['Token' => $this->token, 'TemplateId' => $tid, 'IsEnabled' => 0]);
+		$this->assertStatus(0, $r2, 'disabled');
+		$r3 = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$this->assertEq(0, (int)($r3['Template']['IsEnabled'] ?? -1), 'now disabled');
+
+		$r4 = $this->waiver->SetTemplateEnabled(['Token' => $this->token, 'TemplateId' => $tid, 'IsEnabled' => 1]);
+		$this->assertStatus(0, $r4, 're-enabled');
+		$r5 = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$this->assertEq(1, (int)($r5['Template']['IsEnabled'] ?? -1), 'now enabled');
+	}
+
+	public function test_set_enabled_rejects_bad_token() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		unset($_SESSION['is_authorized_mundane_id']);
+		$r2 = $this->waiver->SetTemplateEnabled(['Token' => str_repeat('z', 32), 'TemplateId' => $tid, 'IsEnabled' => 0]);
+		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'rejected bad token');
+		unset($_SESSION['is_authorized_mundane_id']);
+	}
+
+	public function test_set_enabled_rejects_missing_id() {
+		$r = $this->waiver->SetTemplateEnabled(['Token' => $this->token, 'TemplateId' => 0, 'IsEnabled' => 1]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected missing id');
+	}
+
+	public function test_set_enabled_nonexistent_template() {
+		$r = $this->waiver->SetTemplateEnabled(['Token' => $this->token, 'TemplateId' => 999999999, 'IsEnabled' => 1]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected missing row');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
