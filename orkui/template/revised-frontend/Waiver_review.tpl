@@ -29,6 +29,12 @@ $of = $wv['officer_prefill'];
 .wv-review .wv-reject  { background: #c33; color: #fff; padding: 10px 18px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
 .wv-review .wv-verified-box { padding: 12px; background: #eef9ee; border: 1px solid #cdeac0; border-radius: 4px; font-size: 14px; }
 .wv-review .wv-rejected-box { padding: 12px; background: #fdeeee; border: 1px solid #eac0c0; border-radius: 4px; font-size: 14px; }
+.wv-review .wv-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; }
+.wv-review .wv-dl dt { font-weight: bold; color: #555; }
+.wv-review .wv-dl dd { margin: 0; }
+.wv-review .wv-minors-tbl { width: 100%; border-collapse: collapse; }
+.wv-review .wv-minors-tbl th, .wv-review .wv-minors-tbl td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
+.wv-review .wv-minors-tbl thead { background: #f4f4f4; }
 @media print {
 	.wv-verify-form, .wv-actions, .wv-minor-toggle, body > header, body > nav, body > footer { display: none !important; }
 	.wv-review { max-width: 100%; margin: 0; }
@@ -51,6 +57,89 @@ $of = $wv['officer_prefill'];
 			<div class="wv-fact"><strong>Template:</strong> v<?= (int)$tpl['Version'] ?> (<?= htmlspecialchars($tpl['Scope']) ?>)</div>
 		</div>
 	</div>
+
+	<?php $_sig = $sig; $_tpl = $tpl; ?>
+
+	<?php if (!empty($_tpl['RequiresPreferredName']) || !empty($_tpl['RequiresDob']) || !empty($_tpl['RequiresGender']) || !empty($_tpl['RequiresAddress']) || !empty($_tpl['RequiresPhone']) || !empty($_tpl['RequiresEmail'])): ?>
+	<div class="wv-section">
+		<h2>Signer Demographics</h2>
+		<dl class="wv-dl">
+			<?php if (!empty($_tpl['RequiresPreferredName'])): ?><dt>Preferred name</dt><dd><?= htmlspecialchars($_sig['PreferredName'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresDob'])):           ?><dt>Date of birth</dt><dd><?= htmlspecialchars($_sig['Dob'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresGender'])):        ?><dt>Gender</dt><dd><?= htmlspecialchars($_sig['Gender'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresAddress'])):       ?><dt>Address</dt><dd><?= htmlspecialchars($_sig['Address'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresPhone'])):         ?><dt>Phone</dt><dd><?= htmlspecialchars($_sig['Phone'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresEmail'])):         ?><dt>Email</dt><dd><?= htmlspecialchars($_sig['Email'] ?? '') ?></dd><?php endif; ?>
+		</dl>
+	</div>
+	<?php endif; ?>
+
+	<?php if (!empty($_tpl['RequiresEmergencyContact'])): ?>
+	<div class="wv-section">
+		<h2>Emergency Contact</h2>
+		<dl class="wv-dl">
+			<dt>Name</dt><dd><?= htmlspecialchars($_sig['EmergencyContactName'] ?? '') ?></dd>
+			<dt>Relationship</dt><dd><?= htmlspecialchars($_sig['EmergencyContactRelationship'] ?? '') ?></dd>
+			<dt>Phone</dt><dd><?= htmlspecialchars($_sig['EmergencyContactPhone'] ?? '') ?></dd>
+		</dl>
+	</div>
+	<?php endif; ?>
+
+	<?php
+	$cfTpl = json_decode($_tpl['CustomFieldsJson'] ?? '[]', true) ?: [];
+	$cfResp = json_decode($_sig['CustomResponsesJson'] ?? '{}', true) ?: [];
+	if (count($cfTpl) > 0): ?>
+	<div class="wv-section">
+		<h2>Acknowledgements &amp; Additional Information</h2>
+		<dl class="wv-dl">
+			<?php foreach ($cfTpl as $f):
+				$id = (string)($f['id'] ?? ''); $type = (string)($f['type'] ?? ''); $val = $cfResp[$id] ?? '';
+				if ($type === 'checkbox') $val = !empty($val) ? 'Yes' : 'No';
+				if (is_array($val)) $val = implode(', ', $val);
+			?>
+			<dt><?= htmlspecialchars((string)($f['label'] ?? $id)) ?></dt>
+			<dd><?= htmlspecialchars((string)$val) ?></dd>
+			<?php endforeach; ?>
+		</dl>
+	</div>
+	<?php endif; ?>
+
+	<?php if (!empty($_sig['IsMinor']) && !empty($_sig['Minors'])): ?>
+	<div class="wv-section">
+		<h2>Minors Covered</h2>
+		<table class="wv-minors-tbl">
+			<thead><tr><th>Legal first</th><th>Legal last</th><th>Preferred</th><th>Persona</th><th>DOB</th></tr></thead>
+			<tbody>
+			<?php foreach ($_sig['Minors'] as $m): ?>
+				<tr>
+					<td><?= htmlspecialchars($m['LegalFirst'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['LegalLast'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['PreferredName'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['PersonaName'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['Dob'] ?? '') ?></td>
+				</tr>
+			<?php endforeach; ?>
+			</tbody>
+		</table>
+	</div>
+	<?php endif; ?>
+
+	<?php if (!empty($_tpl['RequiresWitness'])): ?>
+	<div class="wv-section">
+		<h2>Witness</h2>
+		<dl class="wv-dl">
+			<dt>Name</dt><dd><?= htmlspecialchars($_sig['WitnessPrintedName'] ?? '') ?></dd>
+			<dt>Signature</dt>
+			<dd>
+				<?php if (($_sig['WitnessSignatureType'] ?? '') === 'typed'): ?>
+					<span style="font-family:'Homemade Apple', cursive; font-size: 22px;"><?= htmlspecialchars($_sig['WitnessSignatureData'] ?? '') ?></span>
+				<?php elseif (($_sig['WitnessSignatureType'] ?? '') === 'drawn'): ?>
+					<em>(drawn signature &mdash; see print view for canvas render)</em>
+				<?php endif; ?>
+			</dd>
+		</dl>
+	</div>
+	<?php endif; ?>
 
 	<div class="wv-section"><?= $md($tpl['BodyMarkdown'] ?? '') ?></div>
 
@@ -89,6 +178,38 @@ $of = $wv['officer_prefill'];
 			<?php wv_render_signature_widget('wvVerifierSig', 'verifier', 'Type your full legal name'); ?>
 			<label>Notes (required if rejecting)</label>
 			<textarea name="Notes" rows="2"></textarea>
+			<div class="wv-section wv-officer-intake">
+				<h3>ID Check &amp; Intake (optional)</h3>
+				<div class="wv-playerhdr">
+					<div>
+						<label>ID type</label>
+						<select name="IdType">
+							<option value="">&mdash;</option>
+							<option>Driver License</option>
+							<option>Passport</option>
+							<option>State ID</option>
+							<option>Military ID</option>
+							<option>Other</option>
+						</select>
+					</div>
+					<div>
+						<label>ID number (last 4 stored)</label>
+						<input type="text" name="IdNumber" inputmode="numeric" maxlength="32">
+					</div>
+					<div>
+						<label>Age bracket</label>
+						<select name="AgeBracket">
+							<option value="">&mdash;</option>
+							<option value="18+">18+</option>
+							<option value="14+">14+</option>
+							<option value="under14">Under 14</option>
+						</select>
+					</div>
+					<div>
+						<label><input type="checkbox" name="ScannedPaper" value="1"> Paper copy scanned &amp; filed</label>
+					</div>
+				</div>
+			</div>
 			<div class="wv-actions">
 				<button type="button" class="wv-approve" data-action="verified">Verify</button>
 				<button type="button" class="wv-reject"  data-action="rejected">Reject</button>
