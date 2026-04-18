@@ -183,6 +183,20 @@ class Waiver extends Ork3 {
 		$newId = (int)$this->signature->waiver_signature_id;
 		if ($newId <= 0) return ['Status' => ProcessingError('Signature save failed')];
 
+		// Supersede any prior pending/verified signature by this same player for this template.
+		$this->db->Clear();
+		$this->db->mundane_id            = $mundane_id;
+		$this->db->waiver_template_id    = $tid;
+		$this->db->waiver_signature_id   = $newId;
+		$this->db->Execute(
+			"UPDATE " . DB_PREFIX . "waiver_signature
+			 SET verification_status = 'superseded'
+			 WHERE mundane_id = :mundane_id
+			   AND waiver_template_id = :waiver_template_id
+			   AND waiver_signature_id <> :waiver_signature_id
+			   AND verification_status IN ('pending','verified')"
+		);
+
 		return ['Status' => Success(), 'SignatureId' => $newId];
 	}
 
