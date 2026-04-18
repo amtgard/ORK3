@@ -45,6 +45,12 @@ $pk = $wv['park_template'];
 .wv-builder .wv-cfe-options textarea { width: 100%; min-height: 48px; font-family: monospace; font-size: 12px; border: 1px solid #ddd; border-radius: 3px; padding: 4px; }
 .wv-builder .wv-cfe-row.wv-cfe-has-opts .wv-cfe-options { display: block; }
 .wv-builder .wv-cfe-add { margin-top: 4px; padding: 6px 10px; cursor: pointer; }
+.wv-builder .wv-field-md { position: relative; padding-left: 26px; }
+.wv-builder .wv-md-help { position: absolute; left: 0; top: 22px; width: 20px; height: 20px; border-radius: 50%; background: #5078a8; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: help; opacity: 0; pointer-events: none; transition: opacity 0.1s; user-select: none; text-decoration: none; line-height: 1; }
+.wv-builder .wv-field-md:focus-within .wv-md-help, .wv-builder .wv-md-help:hover { opacity: 1; pointer-events: auto; }
+.wv-builder .wv-md-help::after { content: attr(data-tip); position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); background: #2d3748; color: #fff; font-size: 12px; font-family: monospace; white-space: pre-line; padding: 8px 12px; border-radius: 4px; pointer-events: none; opacity: 0; transition: opacity 0s; z-index: 500; width: 240px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.wv-builder .wv-md-help::before { content: ''; position: absolute; left: 100%; top: 50%; transform: translateY(-50%); border: 6px solid transparent; border-right-color: #2d3748; pointer-events: none; opacity: 0; transition: opacity 0s; z-index: 500; }
+.wv-builder .wv-md-help:hover::after, .wv-builder .wv-md-help:hover::before { opacity: 1; }
 </style>
 <div class="wv-builder">
 	<h1><?= $kingdomName ?> &mdash; Digital Waiver Builder</h1>
@@ -98,28 +104,32 @@ $pk = $wv['park_template'];
 
 			<div class="wv-grid">
 				<div>
-					<div class="wv-field">
+					<div class="wv-field wv-field-md">
 						<label>Header (shown on every page &mdash; markdown)</label>
+						<span class="wv-md-help" data-tip="Markdown cheatsheet:&#10;**bold**   *italic*&#10;# H1   ## H2   ### H3&#10;- bullet item&#10;1. numbered item&#10;[link text](https://url)&#10;&#10;blank line = new paragraph">&#9998;</span>
 						<textarea name="HeaderMarkdown" rows="3"><?= htmlspecialchars($tpl['HeaderMarkdown'] ?? '') ?></textarea>
 					</div>
 					<div class="wv-field">
 						<label>Player Header (fixed &mdash; not editable)</label>
 						<div class="wv-locked">Fields: First Name, Last Name, Persona Name, Home Park, Home Kingdom. Auto-filled from the signing player's profile.</div>
 					</div>
-					<div class="wv-field">
+					<div class="wv-field wv-field-md">
 						<label>Waiver Details (body &mdash; markdown)</label>
+						<span class="wv-md-help" data-tip="Markdown cheatsheet:&#10;**bold**   *italic*&#10;# H1   ## H2   ### H3&#10;- bullet item&#10;1. numbered item&#10;[link text](https://url)&#10;&#10;blank line = new paragraph">&#9998;</span>
 						<textarea name="BodyMarkdown" rows="14"><?= htmlspecialchars($tpl['BodyMarkdown'] ?? '') ?></textarea>
 					</div>
 					<div class="wv-field">
 						<label>Signature Block (fixed &mdash; not editable)</label>
 						<div class="wv-locked">Players choose drawn (finger/mouse) or typed signature. Date auto-recorded at submission.</div>
 					</div>
-					<div class="wv-field">
+					<div class="wv-field wv-field-md">
 						<label>Minor Representative Text (markdown &mdash; shown when signer marks as minor)</label>
+						<span class="wv-md-help" data-tip="Markdown cheatsheet:&#10;**bold**   *italic*&#10;# H1   ## H2   ### H3&#10;- bullet item&#10;1. numbered item&#10;[link text](https://url)&#10;&#10;blank line = new paragraph">&#9998;</span>
 						<textarea name="MinorMarkdown" rows="4"><?= htmlspecialchars($tpl['MinorMarkdown'] ?? '') ?></textarea>
 					</div>
-					<div class="wv-field">
+					<div class="wv-field wv-field-md">
 						<label>Footer (shown on every page &mdash; markdown)</label>
+						<span class="wv-md-help" data-tip="Markdown cheatsheet:&#10;**bold**   *italic*&#10;# H1   ## H2   ### H3&#10;- bullet item&#10;1. numbered item&#10;[link text](https://url)&#10;&#10;blank line = new paragraph">&#9998;</span>
 						<textarea name="FooterMarkdown" rows="3"><?= htmlspecialchars($tpl['FooterMarkdown'] ?? '') ?></textarea>
 					</div>
 				</div>
