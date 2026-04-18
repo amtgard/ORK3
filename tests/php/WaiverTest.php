@@ -67,6 +67,82 @@ class WaiverTestRunner {
 		$this->assertTrue(!empty($this->token), 'issued token');
 		$this->assertTrue($this->waiver instanceof Waiver, 'Waiver instantiates');
 	}
+
+	// ============================================================================
+	// Task 1.2: SaveTemplate — create / version / publish
+	// ============================================================================
+
+	public function test_save_template_kingdom_creates_v1() {
+		// Clean prior test rows for this kingdom so we get a deterministic v1.
+		$this->waiver->db->Clear();
+		$this->waiver->db->kingdom_id = $this->testKingdomId;
+		$this->waiver->db->Execute("DELETE FROM " . DB_PREFIX . "waiver_template WHERE kingdom_id = :kingdom_id");
+
+		$r = $this->waiver->SaveTemplate([
+			'Token'          => $this->token,
+			'KingdomId'      => $this->testKingdomId,
+			'Scope'          => 'kingdom',
+			'HeaderMarkdown' => '# Hdr',
+			'BodyMarkdown'   => 'body',
+			'FooterMarkdown' => 'ftr',
+			'MinorMarkdown'  => 'minor',
+			'IsEnabled'      => 1,
+		]);
+		$this->assertStatus(0, $r, 'v1 saved');
+		$this->assertEq(1, (int)($r['Version'] ?? 0), 'version is 1');
+		$this->assertTrue(($r['TemplateId'] ?? 0) > 0, 'TemplateId returned');
+	}
+
+	public function test_save_template_kingdom_bumps_to_v2() {
+		$r1 = $this->waiver->SaveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+			'HeaderMarkdown' => 'v2 hdr', 'BodyMarkdown' => 'v2', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'IsEnabled' => 1,
+		]);
+		$this->assertStatus(0, $r1, 'v2 saved');
+		$this->assertEq(2, (int)($r1['Version'] ?? 0), 'version bumped');
+
+		// Only one active row per (kingdom, scope)
+		$this->waiver->db->Clear();
+		$this->waiver->db->kingdom_id = $this->testKingdomId;
+		$rs = $this->waiver->db->DataSet("SELECT COUNT(*) AS c FROM " . DB_PREFIX . "waiver_template WHERE kingdom_id = :kingdom_id AND scope='kingdom' AND is_active=1");
+		$c = 0;
+		if ($rs) { while ($rs->Next()) { $c = (int)$rs->c; } }
+		$this->assertEq(1, $c, 'exactly one active row');
+	}
+
+	public function test_save_template_rejects_bad_token() {
+		// IsAuthorized_h caches mundane_id in $_SESSION; wipe it so a bogus token is actually re-checked.
+		unset($_SESSION['is_authorized_mundane_id']);
+		$r = $this->waiver->SaveTemplate([
+			'Token' => str_repeat('z', 32),  // 32 chars but no mundane owns this token
+			'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+			'HeaderMarkdown' => '', 'BodyMarkdown' => '', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'IsEnabled' => 1,
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected unauth token');
+		// Re-prime the session so later tests still look up mundane 1 (we changed its token).
+		unset($_SESSION['is_authorized_mundane_id']);
+	}
+
+	public function test_save_template_rejects_missing_kingdom_id() {
+		$r = $this->waiver->SaveTemplate([
+			'Token' => $this->token, 'KingdomId' => 0, 'Scope' => 'kingdom',
+			'HeaderMarkdown' => '', 'BodyMarkdown' => '', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'IsEnabled' => 1,
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected missing KingdomId');
+	}
+
+	public function test_save_template_rejects_bad_scope() {
+		$r = $this->waiver->SaveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'galaxy',
+			'HeaderMarkdown' => '', 'BodyMarkdown' => '', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'IsEnabled' => 1,
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected bad scope');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
