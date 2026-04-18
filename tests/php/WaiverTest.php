@@ -348,6 +348,46 @@ class WaiverTestRunner {
 		$this->waiver->SetTemplateEnabled(['Token' => $this->token, 'TemplateId' => $tid, 'IsEnabled' => 1]);
 	}
 
+	// ============================================================================
+	// Task 1.6: GetSignature
+	// ============================================================================
+
+	public function test_get_signature_by_owner() {
+		$this->waiver->db->Clear();
+		$this->waiver->db->mundane_id = $this->testMundaneId;
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature WHERE mundane_id = :mundane_id ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		$this->assertTrue($sid > 0, 'precondition: have signature');
+
+		$r = $this->waiver->GetSignature(['Token' => $this->token, 'SignatureId' => $sid]);
+		$this->assertStatus(0, $r, 'owner can read');
+		$this->assertEq($sid, (int)($r['Signature']['SignatureId'] ?? 0), 'id round-trips');
+		$this->assertTrue(isset($r['Signature']['Template']), 'template attached');
+	}
+
+	public function test_get_signature_rejects_missing_id() {
+		$r = $this->waiver->GetSignature(['Token' => $this->token, 'SignatureId' => 0]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'missing id rejected');
+	}
+
+	public function test_get_signature_rejects_bad_token() {
+		$this->waiver->db->Clear();
+		$this->waiver->db->mundane_id = $this->testMundaneId;
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature WHERE mundane_id = :mundane_id ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		unset($_SESSION['is_authorized_mundane_id']);
+		$r = $this->waiver->GetSignature(['Token' => str_repeat('z', 32), 'SignatureId' => $sid]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'bad token rejected');
+		unset($_SESSION['is_authorized_mundane_id']);
+	}
+
+	public function test_get_signature_nonexistent() {
+		$r = $this->waiver->GetSignature(['Token' => $this->token, 'SignatureId' => 999999999]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'nonexistent signature rejected');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
