@@ -765,6 +765,39 @@ class WaiverTestRunner {
 		$this->assertEq(1,      (int)($sig['VerifierScannedPaper'] ?? 0),'A4 scanned paper flag');
 	}
 
+	// ============================================================================
+	// Amendment A5: SubmitSignature rejects when required template fields missing
+	// ============================================================================
+
+	public function test_a5_submit_signature_enforces_required_fields() {
+		$act = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$this->assertStatus(0, $act, 'A5 active template available');
+		$tid = (int)$act['Template']['TemplateId'];
+
+		$r = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,  // A1 template requires DOB/address/emergency/witness
+			'MundaneFirst' => 'Test', 'MundaneLast' => 'Player', 'PersonaName' => 'Tester',
+			'ParkId' => $this->testParkId, 'KingdomId' => $this->testKingdomId,
+			'SignatureType' => 'typed', 'SignatureData' => 'Test Player',
+			// deliberately omit Dob, Address, EmergencyContactName, Witness*
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'A5 missing required fields -> non-Success');
+
+		// Also fail when a custom-field required response is missing.
+		$r2 = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst' => 'Test', 'MundaneLast' => 'Player', 'PersonaName' => 'Tester',
+			'ParkId' => $this->testParkId, 'KingdomId' => $this->testKingdomId,
+			'SignatureType' => 'typed', 'SignatureData' => 'Test Player',
+			'Dob' => '1990-01-02', 'Address' => 'x', 'Phone' => 'x', 'Email' => 'x@y.z',
+			'EmergencyContactName' => 'x', 'EmergencyContactPhone' => 'x', 'EmergencyContactRelationship' => 'x',
+			'WitnessPrintedName' => 'x', 'WitnessSignatureType' => 'typed', 'WitnessSignatureData' => 'x',
+			// custom required yp_ack + visit_type deliberately omitted
+			'CustomResponsesJson' => '{}',
+		]);
+		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'A5 missing required custom response -> non-Success');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
