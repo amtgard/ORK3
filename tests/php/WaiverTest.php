@@ -238,6 +238,116 @@ class WaiverTestRunner {
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected missing row');
 	}
 
+	// ============================================================================
+	// Task 1.5: SubmitSignature
+	// ============================================================================
+
+	public function test_submit_signature_drawn() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		$this->assertTrue($tid > 0, 'precondition: active template');
+
+		$r2 = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst' => 'Test', 'MundaneLast' => 'User', 'PersonaName' => 'Testicus',
+			'ParkId' => $this->testParkId, 'KingdomId' => $this->testKingdomId,
+			'SignatureType' => 'drawn',
+			'SignatureData' => json_encode([[['x'=>0.1,'y'=>0.2],['x'=>0.3,'y'=>0.4]]]),
+			'IsMinor' => 0, 'MinorRepFirst'=>'', 'MinorRepLast'=>'', 'MinorRepRelationship'=>'',
+		]);
+		$this->assertStatus(0, $r2, 'signed');
+		$this->assertTrue(($r2['SignatureId'] ?? 0) > 0, 'id returned');
+	}
+
+	public function test_submit_signature_typed_minor() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+
+		$r2 = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst' => 'Junior', 'MundaneLast' => 'Smith', 'PersonaName' => 'Jr',
+			'ParkId' => $this->testParkId, 'KingdomId' => $this->testKingdomId,
+			'SignatureType' => 'typed', 'SignatureData' => 'Junior Smith',
+			'IsMinor' => 1, 'MinorRepFirst' => 'Parent', 'MinorRepLast' => 'Smith', 'MinorRepRelationship' => 'Mother',
+		]);
+		$this->assertStatus(0, $r2, 'minor signed');
+	}
+
+	public function test_submit_signature_rejects_unauthenticated() {
+		unset($_SESSION['is_authorized_mundane_id']);
+		$r = $this->waiver->SubmitSignature([
+			'Token' => str_repeat('z', 32), 'TemplateId' => 1,
+			'MundaneFirst'=>'T','MundaneLast'=>'U','PersonaName'=>'','ParkId'=>1,'KingdomId'=>1,
+			'SignatureType'=>'typed','SignatureData'=>'T U','IsMinor'=>0,
+			'MinorRepFirst'=>'','MinorRepLast'=>'','MinorRepRelationship'=>'',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected bad token');
+		unset($_SESSION['is_authorized_mundane_id']);
+	}
+
+	public function test_submit_signature_rejects_bad_template() {
+		$r = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => 999999999,
+			'MundaneFirst'=>'T','MundaneLast'=>'U','PersonaName'=>'','ParkId'=>1,'KingdomId'=>1,
+			'SignatureType'=>'typed','SignatureData'=>'T U','IsMinor'=>0,
+			'MinorRepFirst'=>'','MinorRepLast'=>'','MinorRepRelationship'=>'',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected nonexistent template');
+	}
+
+	public function test_submit_signature_rejects_bad_sigtype() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		$r2 = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst'=>'T','MundaneLast'=>'U','PersonaName'=>'','ParkId'=>1,'KingdomId'=>1,
+			'SignatureType'=>'tattoo','SignatureData'=>'T U','IsMinor'=>0,
+			'MinorRepFirst'=>'','MinorRepLast'=>'','MinorRepRelationship'=>'',
+		]);
+		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'rejected bad SignatureType');
+	}
+
+	public function test_submit_signature_rejects_empty_sigdata() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		$r2 = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst'=>'T','MundaneLast'=>'U','PersonaName'=>'','ParkId'=>1,'KingdomId'=>1,
+			'SignatureType'=>'typed','SignatureData'=>'','IsMinor'=>0,
+			'MinorRepFirst'=>'','MinorRepLast'=>'','MinorRepRelationship'=>'',
+		]);
+		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'rejected empty SignatureData');
+	}
+
+	public function test_submit_signature_minor_requires_rep_fields() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		$r2 = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst'=>'T','MundaneLast'=>'U','PersonaName'=>'','ParkId'=>1,'KingdomId'=>1,
+			'SignatureType'=>'typed','SignatureData'=>'T U','IsMinor'=>1,
+			'MinorRepFirst'=>'','MinorRepLast'=>'','MinorRepRelationship'=>'',
+		]);
+		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'minor with no rep rejected');
+	}
+
+	public function test_submit_signature_rejects_disabled_template() {
+		$r = $this->waiver->GetActiveTemplate(['KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$tid = (int)($r['Template']['TemplateId'] ?? 0);
+		$this->waiver->SetTemplateEnabled(['Token' => $this->token, 'TemplateId' => $tid, 'IsEnabled' => 0]);
+
+		$r2 = $this->waiver->SubmitSignature([
+			'Token' => $this->token, 'TemplateId' => $tid,
+			'MundaneFirst'=>'T','MundaneLast'=>'U','PersonaName'=>'','ParkId'=>1,'KingdomId'=>1,
+			'SignatureType'=>'typed','SignatureData'=>'T U','IsMinor'=>0,
+			'MinorRepFirst'=>'','MinorRepLast'=>'','MinorRepRelationship'=>'',
+		]);
+		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'rejected disabled');
+
+		// re-enable for later tests
+		$this->waiver->SetTemplateEnabled(['Token' => $this->token, 'TemplateId' => $tid, 'IsEnabled' => 1]);
+	}
+
 }
 
 (new WaiverTestRunner())->run();
