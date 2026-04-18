@@ -344,6 +344,16 @@ class Waiver extends Ork3 {
 		return ['Status' => Success()];
 	}
 
+	public function PreviewMarkdown($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
+		$md = (string)($request['Markdown'] ?? '');
+		if (strlen($md) > 65536) return ['Status' => InvalidParameter('Too large')];
+		require_once(DIR_LIB . 'Parsedown.php');
+		$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($md);
+		return ['Status' => Success(), 'Html' => $html];
+	}
+
 }
 
 ?>
