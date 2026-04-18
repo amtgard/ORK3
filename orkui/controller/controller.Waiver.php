@@ -83,6 +83,10 @@ class Controller_Waiver extends Controller {
 				'PersonaName'  => $player['Persona']     ?? '',
 				'ParkId'       => (int)($player['ParkId']    ?? 0),
 				'KingdomId'    => (int)($player['KingdomId'] ?? 0),
+				'Address'      => trim(($player['Address']     ?? '') . ' ' . ($player['Address2'] ?? '')),
+				'Phone'        => $player['Phone']       ?? '',
+				'Email'        => $player['Email']       ?? '',
+				'Dob'          => $player['DateOfBirth'] ?? '',
 			],
 			'token'      => $this->session->token,
 		];
