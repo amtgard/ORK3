@@ -69,6 +69,52 @@ class Waiver extends Ork3 {
 		];
 	}
 
+	private function _shape_template($rs) {
+		if (!$rs) return null;
+		return [
+			'TemplateId'      => (int)$rs->waiver_template_id,
+			'KingdomId'       => (int)$rs->kingdom_id,
+			'Scope'           => $rs->scope,
+			'Version'         => (int)$rs->version,
+			'IsActive'        => (int)$rs->is_active,
+			'IsEnabled'       => (int)$rs->is_enabled,
+			'HeaderMarkdown'  => $rs->header_markdown,
+			'BodyMarkdown'    => $rs->body_markdown,
+			'FooterMarkdown'  => $rs->footer_markdown,
+			'MinorMarkdown'   => $rs->minor_markdown,
+			'CreatedAt'       => $rs->created_at,
+		];
+	}
+
+	public function GetActiveTemplate($request) {
+		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+		$scope      = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
+		if ($kingdom_id <= 0 || $scope === null) return ['Status' => InvalidParameter()];
+
+		$this->db->Clear();
+		$this->db->kingdom_id = $kingdom_id;
+		$this->db->scope      = $scope;
+		$rs = $this->db->DataSet(
+			"SELECT * FROM " . DB_PREFIX . "waiver_template
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND is_active = 1 LIMIT 1"
+		);
+		if (!$rs || !$rs->Next()) return ['Status' => ProcessingError('Template not found')];
+		return ['Status' => Success(), 'Template' => $this->_shape_template($rs)];
+	}
+
+	public function GetTemplate($request) {
+		$tid = (int)($request['TemplateId'] ?? 0);
+		if ($tid <= 0) return ['Status' => InvalidParameter('TemplateId required')];
+
+		$this->db->Clear();
+		$this->db->waiver_template_id = $tid;
+		$rs = $this->db->DataSet(
+			"SELECT * FROM " . DB_PREFIX . "waiver_template WHERE waiver_template_id = :waiver_template_id LIMIT 1"
+		);
+		if (!$rs || !$rs->Next()) return ['Status' => ProcessingError('Template not found')];
+		return ['Status' => Success(), 'Template' => $this->_shape_template($rs)];
+	}
+
 }
 
 ?>

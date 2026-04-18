@@ -143,6 +143,62 @@ class WaiverTestRunner {
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected bad scope');
 	}
 
+	// ============================================================================
+	// Task 1.3: GetActiveTemplate / GetTemplate
+	// ============================================================================
+
+	public function test_get_active_template_returns_latest() {
+		$r = $this->waiver->GetActiveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+		]);
+		$this->assertStatus(0, $r, 'found active');
+		$this->assertEq('v2 hdr', $r['Template']['HeaderMarkdown'] ?? null, 'latest header');
+		$this->assertEq(2, (int)($r['Template']['Version'] ?? 0), 'latest version');
+	}
+
+	public function test_get_active_template_missing_scope_returns_notfound() {
+		$r = $this->waiver->GetActiveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'park',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'park scope has no active template yet');
+	}
+
+	public function test_get_active_template_rejects_bad_params() {
+		$r = $this->waiver->GetActiveTemplate([
+			'Token' => $this->token, 'KingdomId' => 0, 'Scope' => 'kingdom',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'missing KingdomId rejected');
+
+		$r2 = $this->waiver->GetActiveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'x',
+		]);
+		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'bad scope rejected');
+	}
+
+	public function test_get_template_by_id() {
+		// Find latest kingdom-scope template for our test kingdom
+		$this->waiver->db->Clear();
+		$this->waiver->db->kingdom_id = $this->testKingdomId;
+		$rs = $this->waiver->db->DataSet("SELECT waiver_template_id FROM " . DB_PREFIX . "waiver_template WHERE kingdom_id = :kingdom_id AND scope='kingdom' ORDER BY version DESC LIMIT 1");
+		$tid = 0;
+		if ($rs) { while ($rs->Next()) { $tid = (int)$rs->waiver_template_id; } }
+		$this->assertTrue($tid > 0, 'precondition: have a template id');
+
+		$r = $this->waiver->GetTemplate(['Token' => $this->token, 'TemplateId' => $tid]);
+		$this->assertStatus(0, $r, 'get by id');
+		$this->assertEq($tid, (int)($r['Template']['TemplateId'] ?? 0), 'id round-trips');
+	}
+
+	public function test_get_template_missing_id_rejected() {
+		$r = $this->waiver->GetTemplate(['Token' => $this->token, 'TemplateId' => 0]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'missing TemplateId rejected');
+	}
+
+	public function test_get_template_nonexistent_returns_notfound() {
+		$r = $this->waiver->GetTemplate(['Token' => $this->token, 'TemplateId' => 999999999]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'nonexistent template returns non-success');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
