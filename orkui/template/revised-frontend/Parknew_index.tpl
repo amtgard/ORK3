@@ -378,6 +378,15 @@
 			</ul>
 		</div>
 
+		<!-- Digital Waivers CTA -->
+		<?php $wvActive = $park_info['WaiverActive'] ?? null; if ($wvActive && ($wvActive['Status']['Status'] ?? 1) === 0 && (int)($wvActive['Template']['IsEnabled'] ?? 0) === 1): ?>
+		<div class="pk-card">
+			<h4 style="background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important;"><i class="fas fa-file-signature"></i> Digital Waiver</h4>
+			<p style="margin:0 0 10px 0;color:#4a5568;font-size:13px;">This park has a digital waiver available for players to sign online.</p>
+			<a class="pk-btn" href="<?= UIR ?>Waiver/sign/park/<?= (int)$park_info['ParkInfo']['ParkId'] ?>" style="display:inline-block;padding:6px 14px;background:#2b6cb0;color:#fff;border-radius:4px;text-decoration:none;font-size:13px;">Sign Park Waiver</a>
+		</div>
+		<?php endif; ?>
+
 	</aside>
 
 	<!-- ---- Tabbed Main ---- -->

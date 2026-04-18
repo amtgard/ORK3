@@ -80,6 +80,25 @@ class Controller_Park extends Controller
 		$this->data['park_officers']    = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
 		$this->data['park_tournaments'] = $this->Reports->get_tournaments( null, null, $park_id );
 
+		// Digital Waivers: expose active park-scope template for the sign CTA,
+		// and add a review-queue link to the admin dropdown for park editors.
+		$this->load_model('Waiver');
+		$_wvKingdomId = (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? $this->session->kingdom_id);
+		$this->data['park_info']['WaiverActive'] = $this->Waiver->GetActiveTemplate([
+			'KingdomId' => $_wvKingdomId,
+			'Scope'     => 'park',
+		]);
+		$_wvUid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if ($_wvUid > 0 && Ork3::$Lib->authorization->HasAuthority($_wvUid, AUTH_PARK, (int)$park_id, AUTH_EDIT)) {
+			if (!isset($this->data['menulist']['admin']) || !is_array($this->data['menulist']['admin'])) {
+				$this->data['menulist']['admin'] = [];
+			}
+			$this->data['menulist']['admin'][] = [
+				'url'     => UIR . 'Waiver/queue/park/' . (int)$park_id,
+				'display' => 'Waiver Review Queue',
+			];
+		}
+
 		$this->data['AwardOptions']   = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$preloadOfficers = [];
