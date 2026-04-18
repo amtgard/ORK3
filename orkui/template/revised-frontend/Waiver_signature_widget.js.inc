@@ -17,6 +17,16 @@
 		let strokes = [];
 		let current = null;
 
+		// High-DPI canvas — do this FIRST so redraw() uses correct dimensions.
+		// After ctx.scale(dpr, dpr), all drawing ops must use CSS-unit (logical)
+		// coordinates, NOT canvas.width/height (which are physical px).
+		const dpr = window.devicePixelRatio || 1;
+		const cssW = canvas.clientWidth;
+		const cssH = canvas.clientHeight;
+		canvas.width  = cssW * dpr;
+		canvas.height = cssH * dpr;
+		ctx.scale(dpr, dpr);
+
 		function setMode(mode) {
 			typeInput.value = mode;
 			if (mode === 'draw') { tabDraw.classList.add('wv-sig-tab-active'); tabType.classList.remove('wv-sig-tab-active'); paneDraw.style.display = ''; paneType.style.display = 'none'; }
@@ -38,13 +48,13 @@
 			return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
 		}
 		function redraw() {
-			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.clearRect(0, 0, cssW, cssH);
 			ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#111';
 			strokes.forEach(s => {
 				if (!s.length) return;
 				ctx.beginPath();
-				ctx.moveTo(s[0].x * canvas.width, s[0].y * canvas.height);
-				for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x * canvas.width, s[i].y * canvas.height);
+				ctx.moveTo(s[0].x * cssW, s[0].y * cssH);
+				for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x * cssW, s[i].y * cssH);
 				ctx.stroke();
 			});
 		}
@@ -60,13 +70,6 @@
 		root.querySelector('.wv-sig-undo').addEventListener('click',  () => { strokes.pop(); redraw(); syncData(); });
 
 		typed.addEventListener('input', () => { preview.textContent = typed.value; syncData(); });
-
-		// High-DPI canvas
-		const dpr = window.devicePixelRatio || 1;
-		const w = canvas.clientWidth, h = canvas.clientHeight;
-		canvas.width  = w * dpr;
-		canvas.height = h * dpr;
-		ctx.scale(dpr, dpr);
 
 		setMode('draw');
 	}
@@ -92,16 +95,21 @@
 			return;
 		}
 		let strokes; try { strokes = JSON.parse(data); } catch (_) { strokes = []; }
+		const cssW = w || 600;
+		const cssH = h || 180;
+		const dpr = window.devicePixelRatio || 1;
 		const canvas = document.createElement('canvas');
-		canvas.width = w || 600; canvas.height = h || 180;
-		canvas.style.cssText = 'width: 100%; max-width: ' + (w||600) + 'px; height: auto;';
+		canvas.width  = cssW * dpr;
+		canvas.height = cssH * dpr;
+		canvas.style.cssText = 'width: 100%; max-width: ' + cssW + 'px; height: ' + cssH + 'px;';
 		const ctx = canvas.getContext('2d');
+		ctx.scale(dpr, dpr);
 		ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#111';
 		strokes.forEach(s => {
 			if (!s.length) return;
 			ctx.beginPath();
-			ctx.moveTo(s[0].x * canvas.width, s[0].y * canvas.height);
-			for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x * canvas.width, s[i].y * canvas.height);
+			ctx.moveTo(s[0].x * cssW, s[0].y * cssH);
+			for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x * cssW, s[i].y * cssH);
 			ctx.stroke();
 		});
 		containerEl.innerHTML = '';
