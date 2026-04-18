@@ -138,6 +138,54 @@ class Waiver extends Ork3 {
 		return ['Status' => Success()];
 	}
 
+	public function SubmitSignature($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
+
+		$tid = (int)($request['TemplateId'] ?? 0);
+		$t = $this->GetTemplate(['TemplateId' => $tid]);
+		if (($t['Status']['Status'] ?? 1) !== 0) return $t;
+		if ((int)$t['Template']['IsActive'] !== 1 || (int)$t['Template']['IsEnabled'] !== 1) {
+			return ['Status' => InvalidParameter('Template not currently accepting signatures')];
+		}
+
+		$sigType = in_array($request['SignatureType'] ?? '', ['drawn','typed']) ? $request['SignatureType'] : null;
+		if ($sigType === null) return ['Status' => InvalidParameter('SignatureType invalid')];
+		$sigData = (string)($request['SignatureData'] ?? '');
+		if ($sigData === '' || strlen($sigData) > 262144) return ['Status' => InvalidParameter('Signature empty or too large')];
+
+		$isMinor = ((int)($request['IsMinor'] ?? 0)) ? 1 : 0;
+		if ($isMinor) {
+			if (trim((string)($request['MinorRepFirst']        ?? '')) === '') return ['Status' => InvalidParameter('Minor rep first name required')];
+			if (trim((string)($request['MinorRepLast']         ?? '')) === '') return ['Status' => InvalidParameter('Minor rep last name required')];
+			if (trim((string)($request['MinorRepRelationship'] ?? '')) === '') return ['Status' => InvalidParameter('Relationship required')];
+		}
+
+		$this->signature->clear();
+		$this->signature->waiver_template_id     = $tid;
+		$this->signature->mundane_id             = $mundane_id;
+		$this->signature->mundane_first_snapshot = substr(trim((string)($request['MundaneFirst'] ?? '')), 0, 64);
+		$this->signature->mundane_last_snapshot  = substr(trim((string)($request['MundaneLast']  ?? '')), 0, 64);
+		$this->signature->persona_name_snapshot  = substr(trim((string)($request['PersonaName']  ?? '')), 0, 128);
+		$this->signature->park_id_snapshot       = (int)($request['ParkId']    ?? 0);
+		$this->signature->kingdom_id_snapshot    = (int)($request['KingdomId'] ?? 0);
+		$this->signature->signature_type         = $sigType;
+		$this->signature->signature_data         = $sigData;
+		$this->signature->signed_at              = date('Y-m-d H:i:s');
+		$this->signature->is_minor               = $isMinor;
+		$this->signature->minor_rep_first        = substr(trim((string)($request['MinorRepFirst']        ?? '')), 0, 64);
+		$this->signature->minor_rep_last         = substr(trim((string)($request['MinorRepLast']         ?? '')), 0, 64);
+		$this->signature->minor_rep_relationship = substr(trim((string)($request['MinorRepRelationship'] ?? '')), 0, 64);
+		$this->signature->verification_status    = 'pending';
+		$this->signature->verifier_notes         = '';
+		$this->signature->save();
+
+		$newId = (int)$this->signature->waiver_signature_id;
+		if ($newId <= 0) return ['Status' => ProcessingError('Signature save failed')];
+
+		return ['Status' => Success(), 'SignatureId' => $newId];
+	}
+
 }
 
 ?>
