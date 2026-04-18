@@ -14,6 +14,9 @@ $pk = $wv['park_template'];
 .wv-builder h2, .wv-builder h3, .wv-builder h4, .wv-builder h5, .wv-builder h6 { background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important; }
 .wv-root { max-width: 1200px; margin: 20px auto 0; padding: 0 16px; }
 .wv-root .rp-root { padding: 0; }
+.wv-disclaimer { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0 0 0; padding: 12px 16px; background: #fff8e1; border: 1px solid #f0c36d; border-left: 4px solid #d69e2e; border-radius: 4px; color: #5c4400; font-size: 13px; line-height: 1.5; }
+.wv-disclaimer i { color: #b7791f; font-size: 18px; margin-top: 1px; flex-shrink: 0; }
+.wv-disclaimer strong { color: #744210; }
 .wv-builder .wv-tabs { display: flex; gap: 4px; margin: 20px 0 0 0; border-bottom: 2px solid #ccc; }
 .wv-builder .wv-tab { padding: 10px 18px; cursor: pointer; background: #eee; border: 1px solid #ccc; border-bottom: none; border-radius: 6px 6px 0 0; }
 .wv-builder .wv-tab.wv-active { background: #fff; font-weight: bold; border-bottom: 2px solid #fff; margin-bottom: -2px; }
@@ -73,6 +76,10 @@ $pk = $wv['park_template'];
 		<div class="rp-context">
 			<i class="fas fa-info-circle rp-context-icon"></i>
 			<span>Design waivers used at kingdom events and at park days. Kingdom admins only.</span>
+		</div>
+		<div class="wv-disclaimer" role="alert">
+			<i class="fas fa-exclamation-triangle"></i>
+			<div><strong>Notice:</strong> The Digital Waiver Service is provided as an optional module of the Amtgard Online Record Keeper. By enabling this module, you declare that you have performed all necessary due diligence related to the use and deployment of this module and online waivers in general. You declare that you have confirmed with your Board of Directors or other relevant entity that this online waiver may be used in your kingdom. You declare that the Amtgard Online Record Keeper is permitted to store all details you have designated as required.</div>
 		</div>
 	</div>
 </div>
