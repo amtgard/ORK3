@@ -388,6 +388,55 @@ class WaiverTestRunner {
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'nonexistent signature rejected');
 	}
 
+	// ============================================================================
+	// Task 1.7: GetQueue
+	// ============================================================================
+
+	public function test_get_queue_pending() {
+		$r = $this->waiver->GetQueue([
+			'Token' => $this->token, 'Scope' => 'kingdom', 'EntityId' => $this->testKingdomId,
+			'Filter' => 'pending', 'Page' => 1, 'PageSize' => 10,
+		]);
+		$this->assertStatus(0, $r, 'queue fetched');
+		$this->assertTrue(is_array($r['Signatures'] ?? null), 'signatures array');
+		$this->assertTrue(($r['Total'] ?? 0) >= 1, 'at least one signature exists');
+	}
+
+	public function test_get_queue_pagination_clamps() {
+		$r = $this->waiver->GetQueue([
+			'Token' => $this->token, 'Scope' => 'kingdom', 'EntityId' => $this->testKingdomId,
+			'Filter' => 'all', 'Page' => 0, 'PageSize' => 9999,
+		]);
+		$this->assertStatus(0, $r, 'queue fetched');
+		$this->assertEq(1, (int)($r['Page'] ?? 0), 'page clamped to 1');
+		$this->assertEq(100, (int)($r['PageSize'] ?? 0), 'pageSize clamped to 100');
+	}
+
+	public function test_get_queue_rejects_bad_scope() {
+		$r = $this->waiver->GetQueue([
+			'Token' => $this->token, 'Scope' => 'galaxy', 'EntityId' => $this->testKingdomId,
+			'Filter' => 'pending',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'bad scope rejected');
+	}
+
+	public function test_get_queue_rejects_missing_entity() {
+		$r = $this->waiver->GetQueue([
+			'Token' => $this->token, 'Scope' => 'kingdom', 'EntityId' => 0,
+			'Filter' => 'pending',
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'missing entity rejected');
+	}
+
+	public function test_get_queue_rejects_bad_token() {
+		unset($_SESSION['is_authorized_mundane_id']);
+		$r = $this->waiver->GetQueue([
+			'Token' => str_repeat('z', 32), 'Scope' => 'kingdom', 'EntityId' => $this->testKingdomId,
+		]);
+		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'bad token rejected');
+		unset($_SESSION['is_authorized_mundane_id']);
+	}
+
 }
 
 (new WaiverTestRunner())->run();

@@ -240,6 +240,65 @@ class Waiver extends Ork3 {
 		return ['Status' => Success(), 'Signature' => $sig];
 	}
 
+	public function GetQueue($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
+		$scope     = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
+		$entity_id = (int)($request['EntityId'] ?? 0);
+		if ($scope === null || $entity_id <= 0) return ['Status' => InvalidParameter()];
+
+		$authType = ($scope === 'kingdom') ? AUTH_KINGDOM : AUTH_PARK;
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, $authType, $entity_id, AUTH_EDIT)
+			&& !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+			return ['Status' => NoAuthorization()];
+		}
+
+		$filterIn = $request['Filter'] ?? 'pending';
+		$filter   = in_array($filterIn, ['pending','verified','rejected','stale','all']) ? $filterIn : 'pending';
+
+		// Clamp pagination (Page >= 1, PageSize in [1, 100])
+		$page     = max(1, (int)($request['Page'] ?? 1));
+		$pageSize = max(1, min(100, (int)($request['PageSize'] ?? 10)));
+		$offset   = ($page - 1) * $pageSize;
+
+		$scopeCol  = ($scope === 'kingdom') ? 's.kingdom_id_snapshot' : 's.park_id_snapshot';
+		$scopeName = ($scope === 'kingdom') ? 'kingdom' : 'park';
+
+		switch ($filter) {
+			case 'pending':   $statusClause = "AND s.verification_status = 'pending' AND t.is_active = 1"; break;
+			case 'verified':  $statusClause = "AND s.verification_status = 'verified'"; break;
+			case 'rejected':  $statusClause = "AND s.verification_status IN ('rejected','superseded')"; break;
+			case 'stale':     $statusClause = "AND s.verification_status = 'pending' AND t.is_active = 0"; break;
+			case 'all':       $statusClause = ''; break;
+			default:          $statusClause = '';
+		}
+
+		$fromWhere = "FROM " . DB_PREFIX . "waiver_signature s
+		              JOIN " . DB_PREFIX . "waiver_template t ON t.waiver_template_id = s.waiver_template_id
+		              WHERE $scopeCol = :entity_id AND t.scope = '$scopeName' $statusClause";
+
+		$this->db->Clear();
+		$this->db->entity_id = $entity_id;
+		$rsc = $this->db->DataSet("SELECT COUNT(*) AS c $fromWhere");
+		$total = 0;
+		if ($rsc && $rsc->Next()) $total = (int)$rsc->c;
+
+		// LIMIT / OFFSET are integer-cast values we built ourselves, safe to interpolate
+		$this->db->Clear();
+		$this->db->entity_id = $entity_id;
+		$rs = $this->db->DataSet("SELECT s.* $fromWhere ORDER BY s.signed_at DESC LIMIT $pageSize OFFSET $offset");
+		$out = [];
+		if ($rs) { while ($rs->Next()) { $out[] = $this->_shape_signature($rs); } }
+
+		return [
+			'Status'     => Success(),
+			'Signatures' => $out,
+			'Total'      => $total,
+			'Page'       => $page,
+			'PageSize'   => $pageSize,
+		];
+	}
+
 }
 
 ?>
