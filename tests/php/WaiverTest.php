@@ -735,6 +735,36 @@ class WaiverTestRunner {
 		$this->assertTrue(!empty($resp['yp_ack']),                                        'A3 yp_ack response');
 	}
 
+	// ============================================================================
+	// Amendment A4: VerifySignature writes ID-intake fields
+	// ============================================================================
+
+	public function test_a4_verify_signature_id_intake() {
+		// Find the most recent pending signature for our test mundane (A3 created one)
+		$this->waiver->db->Clear();
+		$this->waiver->db->mundane_id = $this->testMundaneId;
+		$rs = $this->waiver->db->DataSet("SELECT waiver_signature_id FROM " . DB_PREFIX . "waiver_signature WHERE mundane_id = :mundane_id AND verification_status = 'pending' ORDER BY waiver_signature_id DESC LIMIT 1");
+		$sid = 0;
+		if ($rs) { while ($rs->Next()) { $sid = (int)$rs->waiver_signature_id; } }
+		$this->assertTrue($sid > 0, 'A4 precondition: have a pending signature');
+
+		$vr = $this->waiver->VerifySignature([
+			'Token' => $this->token, 'SignatureId' => $sid, 'Action' => 'verified',
+			'PrintedName' => 'Officer Smith', 'PersonaName' => 'Osmith',
+			'OfficeTitle' => 'GMR', 'Notes' => '',
+			'SignatureType' => 'typed', 'SignatureData' => 'Officer Smith',
+			'IdType' => 'Driver License', 'IdNumber' => '1234567890',  // server keeps last4 only
+			'AgeBracket' => '18+', 'ScannedPaper' => 1,
+		]);
+		$this->assertStatus(0, $vr, 'A4 verify with id intake');
+		$g = $this->waiver->GetSignature(['Token' => $this->token, 'SignatureId' => $sid]);
+		$sig = $g['Signature'];
+		$this->assertEq('Driver License', $sig['VerifierIdType'] ?? null, 'A4 id type persisted');
+		$this->assertEq('7890', $sig['VerifierIdNumberLast4'] ?? null,   'A4 id number last4 only');
+		$this->assertEq('18+',  $sig['VerifierAgeBracket'] ?? null,      'A4 age bracket persisted');
+		$this->assertEq(1,      (int)($sig['VerifierScannedPaper'] ?? 0),'A4 scanned paper flag');
+	}
+
 }
 
 (new WaiverTestRunner())->run();
