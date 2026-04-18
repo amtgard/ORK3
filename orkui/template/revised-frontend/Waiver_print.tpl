@@ -20,6 +20,15 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 .wv-p .wv-p-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; font-size: 13px; }
 .wv-p .wv-p-sig { min-height: 160px; border-bottom: 1px solid #333; padding-bottom: 4px; }
 .wv-p .wv-p-typed-sig { font-family: 'Homemade Apple', 'Caveat', cursive; font-size: 28px; }
+.wv-p .wv-section { border: 1px solid #ddd; border-radius: 4px; padding: 12px; margin: 10px 0; page-break-inside: avoid; }
+.wv-p .wv-section h2, .wv-p .wv-section h3 { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0 0 6px 0; font-size: 14px; }
+.wv-p .wv-dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font-size: 12px; }
+.wv-p .wv-dl dt { font-weight: bold; color: #555; }
+.wv-p .wv-dl dd { margin: 0; }
+.wv-p .wv-minors-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.wv-p .wv-minors-tbl th, .wv-p .wv-minors-tbl td { border: 1px solid #ccc; padding: 3px 6px; text-align: left; }
+.wv-p .wv-minors-tbl thead { background: #f4f4f4; }
+@media print { .wv-p .wv-section { page-break-inside: avoid; } }
 @page { margin: 1cm; }
 </style>
 </head>
@@ -35,6 +44,89 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 		<div><strong>Signed:</strong> <?= htmlspecialchars($sig['SignedAt']) ?></div>
 		<div><strong>Template:</strong> v<?= (int)$tpl['Version'] ?> (<?= htmlspecialchars($tpl['Scope']) ?>)</div>
 	</div>
+	<?php $_sig = $sig; $_tpl = $tpl; ?>
+
+	<?php if (!empty($_tpl['RequiresPreferredName']) || !empty($_tpl['RequiresDob']) || !empty($_tpl['RequiresGender']) || !empty($_tpl['RequiresAddress']) || !empty($_tpl['RequiresPhone']) || !empty($_tpl['RequiresEmail'])): ?>
+	<div class="wv-section">
+		<h2>Signer Demographics</h2>
+		<dl class="wv-dl">
+			<?php if (!empty($_tpl['RequiresPreferredName'])): ?><dt>Preferred name</dt><dd><?= htmlspecialchars($_sig['PreferredName'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresDob'])):           ?><dt>Date of birth</dt><dd><?= htmlspecialchars($_sig['Dob'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresGender'])):        ?><dt>Gender</dt><dd><?= htmlspecialchars($_sig['Gender'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresAddress'])):       ?><dt>Address</dt><dd><?= htmlspecialchars($_sig['Address'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresPhone'])):         ?><dt>Phone</dt><dd><?= htmlspecialchars($_sig['Phone'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresEmail'])):         ?><dt>Email</dt><dd><?= htmlspecialchars($_sig['Email'] ?? '') ?></dd><?php endif; ?>
+		</dl>
+	</div>
+	<?php endif; ?>
+
+	<?php if (!empty($_tpl['RequiresEmergencyContact'])): ?>
+	<div class="wv-section">
+		<h2>Emergency Contact</h2>
+		<dl class="wv-dl">
+			<dt>Name</dt><dd><?= htmlspecialchars($_sig['EmergencyContactName'] ?? '') ?></dd>
+			<dt>Relationship</dt><dd><?= htmlspecialchars($_sig['EmergencyContactRelationship'] ?? '') ?></dd>
+			<dt>Phone</dt><dd><?= htmlspecialchars($_sig['EmergencyContactPhone'] ?? '') ?></dd>
+		</dl>
+	</div>
+	<?php endif; ?>
+
+	<?php
+	$cfTpl = json_decode($_tpl['CustomFieldsJson'] ?? '[]', true) ?: [];
+	$cfResp = json_decode($_sig['CustomResponsesJson'] ?? '{}', true) ?: [];
+	if (count($cfTpl) > 0): ?>
+	<div class="wv-section">
+		<h2>Acknowledgements &amp; Additional Information</h2>
+		<dl class="wv-dl">
+			<?php foreach ($cfTpl as $f):
+				$id = (string)($f['id'] ?? ''); $type = (string)($f['type'] ?? ''); $val = $cfResp[$id] ?? '';
+				if ($type === 'checkbox') $val = !empty($val) ? 'Yes' : 'No';
+				if (is_array($val)) $val = implode(', ', $val);
+			?>
+			<dt><?= htmlspecialchars((string)($f['label'] ?? $id)) ?></dt>
+			<dd><?= htmlspecialchars((string)$val) ?></dd>
+			<?php endforeach; ?>
+		</dl>
+	</div>
+	<?php endif; ?>
+
+	<?php if (!empty($_sig['IsMinor']) && !empty($_sig['Minors'])): ?>
+	<div class="wv-section">
+		<h2>Minors Covered</h2>
+		<table class="wv-minors-tbl">
+			<thead><tr><th>Legal first</th><th>Legal last</th><th>Preferred</th><th>Persona</th><th>DOB</th></tr></thead>
+			<tbody>
+			<?php foreach ($_sig['Minors'] as $m): ?>
+				<tr>
+					<td><?= htmlspecialchars($m['LegalFirst'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['LegalLast'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['PreferredName'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['PersonaName'] ?? '') ?></td>
+					<td><?= htmlspecialchars($m['Dob'] ?? '') ?></td>
+				</tr>
+			<?php endforeach; ?>
+			</tbody>
+		</table>
+	</div>
+	<?php endif; ?>
+
+	<?php if (!empty($_tpl['RequiresWitness'])): ?>
+	<div class="wv-section">
+		<h2>Witness</h2>
+		<dl class="wv-dl">
+			<dt>Name</dt><dd><?= htmlspecialchars($_sig['WitnessPrintedName'] ?? '') ?></dd>
+			<dt>Signature</dt>
+			<dd>
+				<?php if (($_sig['WitnessSignatureType'] ?? '') === 'typed'): ?>
+					<span style="font-family:'Homemade Apple', cursive; font-size: 22px;"><?= htmlspecialchars($_sig['WitnessSignatureData'] ?? '') ?></span>
+				<?php elseif (($_sig['WitnessSignatureType'] ?? '') === 'drawn'): ?>
+					<canvas id="wvPrintWitnessCanvas" width="600" height="140" style="width:100%; max-width:600px; height:140px;"></canvas>
+				<?php endif; ?>
+			</dd>
+		</dl>
+	</div>
+	<?php endif; ?>
+
 	<div class="wv-p-section"><?= $md($tpl['BodyMarkdown'] ?? '') ?></div>
 	<?php if ($sig['IsMinor']): ?>
 	<div class="wv-p-section">
@@ -87,6 +179,9 @@ drawSig('wvPrintCanvas', <?= json_encode($sig['SignatureData']) ?>);
 <?php endif; ?>
 <?php if ($sig['VerificationStatus'] === 'verified' && $sig['VerifierSignatureType'] === 'drawn' && $sig['VerifierSignatureData']): ?>
 drawSig('wvPrintOfficerCanvas', <?= json_encode($sig['VerifierSignatureData']) ?>);
+<?php endif; ?>
+<?php if (!empty($tpl['RequiresWitness']) && ($sig['WitnessSignatureType'] ?? '') === 'drawn' && !empty($sig['WitnessSignatureData'])): ?>
+drawSig('wvPrintWitnessCanvas', <?= json_encode($sig['WitnessSignatureData']) ?>);
 <?php endif; ?>
 window.addEventListener('load', () => setTimeout(() => window.print(), 300));
 </script>
