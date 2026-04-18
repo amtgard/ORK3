@@ -647,3 +647,656 @@
         font-size: 16px;
     }
 }
+
+/* =====================================================
+   DARK MODE — Reports & Attendance (rp-* / att-* classes)
+   ===================================================== */
+html[data-theme="dark"] .rp-root {
+  --rp-accent-dark : #312e81;
+  --rp-accent      : #818cf8;
+  --rp-accent-mid  : #a5b4fc;
+  --rp-border      : #4a5568;
+  --rp-bg-light    : #2d3748;
+  --rp-text        : #e2e8f0;
+  --rp-text-body   : #cbd5e0;
+  --rp-text-muted  : #a0aec0;
+  --rp-text-hint   : #718096;
+  --rp-bg-table    : #1e2433;
+  --rp-paginate-bg : #374151;
+  --rp-row-suspended-bg   : #3b1515;
+  --rp-row-suspended-text : #feb2b2;
+  --rp-row-suspended-hover: #4a1e1e;
+  --rp-row-dues-bg        : #1a2e23;
+  --rp-row-dues-text      : #68d391;
+  --rp-row-dues-hover     : #22402f;
+  --rp-row-unwv-bg        : #2e2810;
+  --rp-row-unwv-text      : #fbd38d;
+  --rp-row-unwv-hover     : #3d3515;
+}
+
+/* Stat cards */
+html[data-theme="dark"] .rp-stat-card {
+  background: #2d3748;
+  border-color: #4a5568;
+}
+
+/* Content areas */
+html[data-theme="dark"] .rp-stats-row + *,
+html[data-theme="dark"] .rp-body,
+html[data-theme="dark"] .rp-layout,
+html[data-theme="dark"] .rp-main,
+html[data-theme="dark"] .rp-content {
+  background: var(--ork-bg, #1a202c);
+}
+
+/* rp-header title heading reset (fight orkui.css h1-h6 dark override) */
+html[data-theme="dark"] .rp-header-title {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: #fff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.25) !important;
+}
+
+/* Attendance form card */
+html[data-theme="dark"] .att-form-card {
+  background: #2d3748;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .att-form-card-header {
+  background: #374151;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .att-form-label {
+  color: #a0aec0;
+}
+html[data-theme="dark"] .att-form-input,
+html[data-theme="dark"] .att-form-select {
+  background: #374151;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .att-form-input:focus,
+html[data-theme="dark"] .att-form-select:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(129,140,248,0.2);
+}
+
+/* Attendance main panel / no-records state */
+html[data-theme="dark"] .att-main-panel,
+html[data-theme="dark"] .att-no-records,
+html[data-theme="dark"] .att-records-area {
+  background: #2d3748;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+
+/* Report table area */
+html[data-theme="dark"] .rp-table-area table.dataTable thead th {
+  background: #374151;
+  color: #e2e8f0;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .rp-table-area table.dataTable tbody td {
+  border-color: #4a5568;
+  color: #cbd5e0;
+}
+html[data-theme="dark"] .rp-table-area table.dataTable tbody tr:hover > td {
+  background: #4a5568;
+}
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_filter input,
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_length select {
+  background: #374151;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+
+/* Sidebar */
+html[data-theme="dark"] .rp-sidebar {
+  background: transparent;
+}
+html[data-theme="dark"] .rp-filter-card {
+  background: #2d3748;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .rp-filter-card-header {
+  background: #374151;
+  border-color: #4a5568;
+  color: #a0aec0;
+}
+html[data-theme="dark"] .rp-col-guide-name {
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .rp-col-guide-desc {
+  color: #a0aec0;
+}
+html[data-theme="dark"] .rp-no-filters {
+  color: #718096;
+}
+
+/* rp-table-area container + DataTables even/odd row striping */
+html[data-theme="dark"] .rp-table-area {
+  background: var(--rp-bg-table);
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper {
+  background: var(--rp-bg-table);
+}
+html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.odd > td,
+html[data-theme="dark"] .rp-table-area table.dataTable tbody tr.even > td {
+  background: var(--rp-bg-table);
+}
+html[data-theme="dark"] .rp-table-area table.dataTable {
+  border-color: #4a5568;
+}
+/* DataTables filter/length label text */
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_filter label,
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_length label {
+  color: #a0aec0;
+}
+/* DataTables info text */
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_info {
+  color: #718096;
+}
+/* Pagination buttons */
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button {
+  background: #374151 !important;
+  border-color: #4a5568 !important;
+  color: #cbd5e0 !important;
+}
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #4a5568 !important;
+  border-color: #718096 !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background: #2b6cb0 !important;
+  border-color: #2b6cb0 !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+html[data-theme="dark"] .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover {
+  background: #2d3748 !important;
+  border-color: #4a5568 !important;
+  color: #718096 !important;
+}
+/* jQuery UI Datepicker dark mode — uses ID for max specificity, loads after orkui.css */
+html[data-theme="dark"] #ui-datepicker-div {
+  background-color: #2d3748 !important;
+  background-image: none !important;
+  border-color: #4a5568 !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] #ui-datepicker-div .ui-datepicker-header {
+  background-color: #374151 !important;
+  background-image: none !important;
+  border-color: #4a5568 !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] #ui-datepicker-div td a,
+html[data-theme="dark"] #ui-datepicker-div td span {
+  background-color: #2d3748 !important;
+  background-image: none !important;
+  border-color: #4a5568 !important;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] #ui-datepicker-div td .ui-state-hover,
+html[data-theme="dark"] #ui-datepicker-div td .ui-state-focus {
+  background-color: #4a5568 !important;
+  background-image: none !important;
+  border-color: #718096 !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] #ui-datepicker-div td .ui-state-highlight {
+  background-color: #2d4a22 !important;
+  background-image: none !important;
+  border-color: #48bb78 !important;
+  color: #9ae6b4 !important;
+}
+html[data-theme="dark"] #ui-datepicker-div td .ui-state-active {
+  background-color: #2b6cb0 !important;
+  background-image: none !important;
+  border-color: #4299e1 !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] #ui-datepicker-div td .ui-state-highlight.ui-state-active {
+  background-color: #2b6cb0 !important;
+  background-image: none !important;
+  border-color: #4299e1 !important;
+  color: #fff !important;
+}
+
+/* FixedColumns dark */
+html[data-theme="dark"] .rp-table-area .DTFC_LeftBodyWrapper table.dataTable tbody td,
+html[data-theme="dark"] .rp-table-area .DTFC_LeftHeadWrapper table.dataTable thead th {
+  background: var(--rp-bg-table);
+  border-right-color: #4a5568;
+}
+html[data-theme="dark"] .dtfc-fixed-start tbody tr.rp-row-suspended td {
+  background-color: var(--rp-row-suspended-bg) !important;
+  color: var(--rp-row-suspended-text) !important;
+}
+html[data-theme="dark"] .dtfc-fixed-start tbody tr.rp-row-suspended:hover td {
+  background-color: var(--rp-row-suspended-hover) !important;
+}
+
+/* Filter pills */
+html[data-theme="dark"] .rp-filter-pill {
+  background: transparent;
+  border-color: var(--ork-border, #4a5568);
+  color: var(--ork-text-secondary, #94a3b8);
+}
+html[data-theme="dark"] .rp-filter-pill:hover:not(.active) {
+  background: var(--ork-bg-secondary, #2d3748);
+  border-color: #718096;
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .rp-filter-pill.active {
+  background: var(--ork-accent, #4f86c6);
+  border-color: var(--ork-accent, #4f86c6);
+  color: #fff;
+}
+
+/* Chart cards */
+html[data-theme="dark"] .rp-chart-card {
+  background: #2d3748;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .rp-chart-card-title {
+  color: #a0aec0;
+}
+
+/* Table header hover */
+html[data-theme="dark"] .rp-table-area table.dataTable thead th:hover {
+  background: #4a5568;
+}
+
+/* prefers-color-scheme fallback */
+
+/* =====================================================
+   DARK MODE — Top Parks report (rp-form-*, rp-rank-*)
+   ===================================================== */
+html[data-theme="dark"] .rp-form-input {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .rp-form-input:focus {
+  border-color: #818cf8;
+}
+html[data-theme="dark"] .rp-form-group label {
+  color: var(--rp-text-muted);
+}
+html[data-theme="dark"] .rp-form-check {
+  color: var(--rp-text-body);
+}
+html[data-theme="dark"] .rp-btn-run {
+  background: #6366f1;
+}
+html[data-theme="dark"] .rp-btn-run:hover {
+  background: #818cf8;
+}
+html[data-theme="dark"] .rp-rank-badge {
+  background: #374151;
+  color: #a0aec0;
+}
+html[data-theme="dark"] .rp-rank-badge.rp-rank-1 {
+  background: #78350f;
+  color: #fcd34d;
+}
+html[data-theme="dark"] .rp-rank-badge.rp-rank-2 {
+  background: #374151;
+  color: #cbd5e0;
+}
+html[data-theme="dark"] .rp-rank-badge.rp-rank-3 {
+  background: #7c2d12;
+  color: #fdba74;
+}
+html[data-theme="dark"] .rp-check { color: #68d391; }
+html[data-theme="dark"] .rp-cross { color: #fc8181; }
+html[data-theme="dark"] .rp-warn  { color: #f6ad55; }
+
+html[data-theme="dark"] .rp-filter-pill-active {
+  background: rgba(139,92,246,0.2);
+  color: #c4b5fd;
+}
+html[data-theme="dark"] .rp-context {
+  background: #2d3748;
+  border-color: #4a5568;
+  color: #cbd5e0;
+}
+html[data-theme="dark"] .rp-context-icon {
+  color: #63b3ed;
+}
+html[data-theme="dark"] .rp-btn-ghost {
+  color: rgba(255,255,255,0.7);
+  border-color: rgba(255,255,255,0.2);
+}
+html[data-theme="dark"] .rp-btn-ghost:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+html[data-theme="dark"] .rp-scope-chip {
+  color: rgba(255,255,255,0.7);
+}
+
+/* =====================================================
+   DARK MODE — Beltline Explorer (be-*)
+   ===================================================== */
+html[data-theme="dark"] .be-selector-bar {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .be-selector-bar label {
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .be-selector-bar select {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .be-selector-bar select:focus {
+  border-color: #818cf8;
+}
+html[data-theme="dark"] .be-view-btn {
+  background: #374151;
+  border-color: #4a5568;
+  color: #a0aec0;
+}
+html[data-theme="dark"] .be-view-btn.active,
+html[data-theme="dark"] .be-view-btn:hover {
+  background: #6366f1;
+  color: #fff;
+  border-color: #6366f1;
+}
+html[data-theme="dark"] .be-empty-state {
+  color: #718096;
+}
+html[data-theme="dark"] .be-empty-state i {
+  color: #4a5568;
+}
+html[data-theme="dark"] .be-empty-state h3 {
+  color: #a0aec0 !important;
+}
+html[data-theme="dark"] .be-tree-wrap {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .be-tree-title {
+  color: #718096;
+}
+html[data-theme="dark"] .be-tree ul::before {
+  border-left-color: #4a5568;
+}
+html[data-theme="dark"] .be-tree li::before {
+  border-top-color: #4a5568;
+}
+html[data-theme="dark"] .be-node {
+  background: #374151;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .be-node:hover {
+  background: #3d4a5e;
+}
+html[data-theme="dark"] .be-node.be-node-root {
+  background: #44381a;
+  border-color: #b8860b;
+}
+html[data-theme="dark"] .be-node.be-node-selected {
+  background: #2d3a5e;
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(129,140,248,0.3);
+}
+html[data-theme="dark"] .be-persona {
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .be-persona:hover {
+  color: #a5b4fc;
+}
+html[data-theme="dark"] .be-knight-types {
+  color: #fcd34d;
+}
+html[data-theme="dark"] .be-date {
+  color: #718096;
+}
+html[data-theme="dark"] .be-badge-squire {
+  background: #78350f;
+  color: #fcd34d;
+  border-color: #b45309;
+}
+html[data-theme="dark"] .be-badge-manatarms {
+  background: #1e3a5f;
+  color: #93c5fd;
+  border-color: #3b82f6;
+}
+html[data-theme="dark"] .be-badge-page {
+  background: #14532d;
+  color: #86efac;
+  border-color: #22c55e;
+}
+html[data-theme="dark"] .be-badge-lordspage {
+  background: #164e63;
+  color: #67e8f9;
+  border-color: #22d3ee;
+}
+html[data-theme="dark"] .be-badge-womanatarms {
+  background: #3b0764;
+  color: #d8b4fe;
+  border-color: #a855f7;
+}
+html[data-theme="dark"] .be-table-wrap {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .be-no-lineage {
+  color: #718096;
+}
+
+/* =====================================================
+   DARK MODE — Heraldry gallery (hw-*)
+   ===================================================== */
+html[data-theme="dark"] .hw-card {
+  background: #2d3748;
+}
+html[data-theme="dark"] #hw-search {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] #hw-search:focus {
+  border-color: #818cf8;
+}
+
+/* =====================================================
+   DARK MODE — Park Distance Matrix (pdm-*)
+   ===================================================== */
+html[data-theme="dark"] .pdm-table th,
+html[data-theme="dark"] .pdm-table td {
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .pdm-table td.pdm-rowhead {
+  background: #2d3748;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .pdm-table td.pdm-rowhead a {
+  color: var(--rp-accent);
+}
+html[data-theme="dark"] .pdm-table td.pdm-location {
+  background: #2d3748;
+  color: #a0aec0;
+}
+html[data-theme="dark"] .pdm-table th.pdm-colhead {
+  background: #2d3748;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .pdm-table td.pdm-self {
+  background: #374151;
+  color: #718096;
+}
+html[data-theme="dark"] .pdm-table th.pdm-corner {
+  background: #2d3748;
+}
+
+/* =====================================================
+   
+/* =====================================================
+   DARK MODE — Chart container background
+   ===================================================== */
+html[data-theme="dark"] .rp-charts-row {
+  background: transparent;
+}
+html[data-theme="dark"] .rp-charts-row > div[id] {
+  background: var(--ork-card-bg, #2d3748) !important;
+  border: 1px solid var(--ork-border, #4a5568);
+  border-radius: 8px;
+}
+html[data-theme="dark"] .highcharts-container {
+  background: transparent !important;
+}
+
+/* =====================================================
+   DARK MODE — Beltline DataTable
+   ===================================================== */
+html[data-theme="dark"] .be-table-wrap table.dataTable thead th {
+  background: #2d3748;
+  color: #a0aec0;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .be-table-wrap table.dataTable tbody td {
+  border-color: #4a5568;
+  color: #cbd5e0;
+}
+html[data-theme="dark"] .be-table-wrap table.dataTable tbody tr:hover > td {
+  background: #374151;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_filter input,
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_length select {
+  background: #374151;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_filter label,
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_length label {
+  color: #a0aec0;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_info {
+  color: #718096;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: #a0aec0 !important;
+  border-color: #4a5568;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #374151;
+  color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .be-table-wrap .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: #6366f1;
+  color: #fff !important;
+  border-color: #6366f1;
+}
+
+/* =====================================================
+   DARK MODE — Attendance chart cards (att-chart-*)
+   ===================================================== */
+html[data-theme="dark"] .att-chart-card {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .att-chart-title {
+  background: var(--ork-bg-tertiary, #374151);
+  border-color: var(--ork-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .att-chart-title:hover {
+  background: var(--ork-bg-secondary, #2d3748);
+}
+html[data-theme="dark"] .att-chart-chevron {
+  color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .att-del-link {
+  color: #fc8181;
+}
+
+
+/* =====================================================
+   DARK MODE — Ladder Award Grid (lg-*)
+   ===================================================== */
+html[data-theme="dark"] .lg-table th.lg-col-player,
+html[data-theme="dark"] .lg-table td.lg-col-player {
+  background: var(--ork-card-bg, #2d3748);
+}
+html[data-theme="dark"] .lg-table th.lg-col-player {
+  background: var(--ork-bg-tertiary, #374151);
+}
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td {
+  background: var(--ork-bg-secondary, #2d3748);
+}
+html[data-theme="dark"] .lg-table tbody tr:nth-child(even) td.lg-col-player {
+  background: var(--ork-bg-tertiary, #374151);
+}
+html[data-theme="dark"] .lg-table tbody tr:hover td {
+  background: rgba(99,179,237,0.12) !important;
+}
+html[data-theme="dark"] .lg-table td.lg-col-award {
+  border-left-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .lg-cell-master {
+  color: #b794f4;
+}
+html[data-theme="dark"] .lg-cell-rank {
+  color: var(--ork-text-secondary, #cbd5e0);
+}
+html[data-theme="dark"] .lg-cell-empty {
+  color: var(--ork-text-muted, #718096);
+}
+html[data-theme="dark"] .lg-pill {
+  background: var(--ork-card-bg, #2d3748);
+  border-color: var(--ork-border, #4a5568);
+  color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .lg-pill:hover {
+  border-color: var(--rp-accent, #48bb78);
+  color: var(--rp-accent, #48bb78);
+}
+html[data-theme="dark"] .lg-pill.lg-pill-active {
+  background: var(--rp-accent, #48bb78);
+  border-color: var(--rp-accent, #48bb78);
+  color: #fff;
+}
+html[data-theme="dark"] .lg-search-bar input {
+  background: var(--ork-input-bg, #374151);
+  border-color: var(--ork-input-border, #4a5568);
+  color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .lg-search-bar label {
+  color: var(--ork-text-muted, #a0aec0);
+}
+
+/* ── Stat card info tooltip + view toggle (PR #454) ── */
+html[data-theme="dark"] .rp-stat-tip-icon {
+	background: var(--ork-bg-tertiary, #374151);
+	color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .rp-stat-tip-text {
+	background: var(--ork-text, #e2e8f0);
+	color: var(--ork-bg, #1a202c);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .rp-view-btn {
+	background: var(--ork-card-bg, #2d3748);
+	color: var(--ork-text-secondary, #cbd5e0);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .rp-view-btn:hover {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border-dark, #718096);
+}
+html[data-theme="dark"] .rp-view-btn-active,
+html[data-theme="dark"] .rp-view-btn-active:hover {
+	background: #4338ca;
+	color: #fff;
+	border-color: #4338ca;
+}

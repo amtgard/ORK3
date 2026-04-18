@@ -336,8 +336,6 @@
 							?> <span class="pn-badge-sub"><?= !empty($VotingProvinceEligible) ? 'Province &amp; Kingdom' : 'Kingdom' ?></span><?php
 						elseif (!empty($ActiveKnight)):
 							?> <span class="pn-badge-sub">Active Knight</span><?php
-						elseif ($ActiveMember === true):
-							?> <span class="pn-badge-sub">Active Member</span><?php
 						elseif ($ActiveMember === false && isset($ActiveMember)):
 							?> <span class="pn-badge-sub">Contributing</span><?php
 						endif; ?></span>

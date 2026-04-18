@@ -2787,12 +2787,9 @@ class Report  extends Ork3 {
 				$_dow            = (int)date('N', $_raw_ts);             // 1=Mon … 7=Sun
 				$_days_back      = (($_dow - $_week_start_iso) + 7) % 7;
 				$start_date      = date('Y-m-d', $_raw_ts - $_days_back * 86400);
-				// For MonthsWindow kingdoms, show the snapped week-start in the header so the
-				// "Attendance from" date matches exactly what the SQL counts from.
-				// DaysWindow kingdoms keep display=raw (exact N-day mark) with SQL=snapped.
-				if ($days_window === 0) {
-					$display_start_date = $start_date;
-				}
+				// Always show the snapped week-start so the "Attendance from" date
+				// matches exactly what the SQL counts from.
+				$display_start_date = $start_date;
 			} else {
 				$start_date = $display_start_date;
 			}
@@ -2998,7 +2995,6 @@ class Report  extends Ork3 {
 			WHERE m.kingdom_id = $kingdom_id
 			  AND m.active = 1
 			  AND p.active = 'Active'
-			  AND att.att_count IS NOT NULL
 			  $park_clause
 			  $mundane_clause
 			ORDER BY p.name, m.persona

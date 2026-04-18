@@ -159,8 +159,7 @@ if (!empty($Players)) {
 			<?php elseif ($MaxOutsideKingdomCredits > 0): ?>
 			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ attendance credits in the last <?=$WindowPhrase?> (at most <?=$MaxOutsideKingdomCredits?> credits from outside the Kingdom<?=$MaxCreditsPerEvent > 0 ? '; multi-credit events capped at ' . $MaxCreditsPerEvent . ' credits per event' : ''?>)<?=$MinMembershipMonths > 0 ? ' &bull; province membership for at least ' . $MinMembershipMonths . ' months' : ''?>.
 			<?php else: ?>
-			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ distinct <?=$AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks')?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?><?php if ($MinAge > 0): ?> <strong>Note:</strong> Players must also be <?=$MinAge?>+ years of age — this cannot be checked automatically and must be verified separately.<?php endif; ?>
-			<?php endif; ?>
+			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ distinct <?=$AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks')?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?>			<?php endif; ?>
 			<?php endif; ?>
 		</span>
 	</div>
@@ -306,7 +305,7 @@ if (!empty($Players)) {
 <?php if ($MaxOutsideKingdomCredits > 0) : ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Outside Credits</span>
-						<span class="rp-col-guide-desc">Attendance credits earned outside the Kingdom. At most <?=$MaxOutsideKingdomCredits?> of these count toward the <?=$AttendanceRequired?> required<?=$MaxCreditsPerEvent > 0 ? '. Events (multi-session) are capped at ' . $MaxCreditsPerEvent . ' credits each' : ''?>. Shown in amber when the cap is reached.</span>
+						<span class="rp-col-guide-desc">Attendance credits earned outside the Kingdom. At most <?=$MaxOutsideKingdomCredits?> of these count toward the <?=$AttendanceRequired?> required<?=$MaxCreditsPerEvent > 0 ? '. Events (multi-session) are capped at ' . $MaxCreditsPerEvent . ' credits each' : ''?>. </span>
 					</div>
 <?php endif; ?>
 					<div class="rp-col-guide-item">
@@ -484,7 +483,7 @@ if (!empty($Players)) {
 <?php endif; ?>
 <?php if ($MaxOutsideKingdomCredits > 0) : ?>
 					<?php $_outCr = (int)($p['OutsideCredits'] ?? 0); ?>
-					<td<?= $_outCr >= $MaxOutsideKingdomCredits ? ' style="color:#b7791f;font-weight:600;"' : '' ?>><?= $_outCr ?> / <?=$MaxOutsideKingdomCredits?></td>
+					<td><?= $_outCr ?> / <?=$MaxOutsideKingdomCredits?></td>
 <?php endif; ?>
 					<td><?=$memberHtml?></td>
 				</tr>
