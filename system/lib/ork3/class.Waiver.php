@@ -87,7 +87,7 @@ class Waiver extends Ork3 {
 	private function _validate_custom_fields_json($raw) {
 		if ($raw === '' || $raw === null) return null;
 		$arr = json_decode($raw, true);
-		if (!is_array($arr))   return 'CustomFieldsJson not valid JSON array';
+		if (!is_array($arr) || (count($arr) > 0 && !array_is_list($arr))) return 'CustomFieldsJson not valid JSON array';
 		if (count($arr) > 50)  return 'CustomFieldsJson exceeds 50 fields';
 		$seen = [];
 		$allowed = ['text','textarea','checkbox','initial','radio','select','date'];
