@@ -694,6 +694,11 @@ html[data-theme="dark"] .pk-btn-white {
 	flex-shrink: 0;
 }
 .pn-ladder-rank strong { color: #2d3748; }
+html[data-theme="dark"] .pn-ladder-item { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-ladder-name { color: var(--ork-text); }
+html[data-theme="dark"] .pn-ladder-rank { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ladder-rank strong { color: var(--ork-text); }
+html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary); }
 .pn-ladder-bar-track {
 	height: 6px;
 	background: #e2e8f0;
@@ -6396,7 +6401,8 @@ html[data-theme="dark"] .pk-card h4,
 html[data-theme="dark"] .pk-card h5 {
   background: transparent;
   border: none;
-  padding: 0;
+  border-bottom: 1px solid var(--ork-border);
+  padding: 0 0 8px 0;
   border-radius: 0;
   text-shadow: none;
   color: var(--ork-text);
