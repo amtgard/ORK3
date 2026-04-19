@@ -361,13 +361,14 @@ class Model_Reports extends Model {
 				'KingdomEventBonus'     => true,
 				'WeekSnap'              => true,
 			],
-			6 => [ // Emerald Hills — Tue–Mon week; 6-month kingdom residency required
-				'AttendanceRequired'  => 6,
-				'MonthsWindow'        => 6,
-				'MinMembershipMonths' => 6,
-				'AttendanceMode'      => 'weeks',
-				'WeekOffset'          => 1,
-				'ProvinceMode'        => false,
+			6 => [ // Emerald Hills — Tue–Mon week; 6-month kingdom residency required; Active Knight = voting eligible + 8 raw sign-ins
+				'AttendanceRequired'    => 6,
+				'MonthsWindow'          => 6,
+				'MinMembershipMonths'   => 6,
+				'AttendanceMode'        => 'weeks',
+				'WeekOffset'            => 1,
+				'ProvinceMode'          => false,
+				'ActiveKnightThreshold' => 8,
 			],
 			19 => [ // Tal Dagore — 8 credits/6mo; max 2 from outside kingdom; multi-credit events capped at 2
 				'AttendanceRequired'      => 8,
