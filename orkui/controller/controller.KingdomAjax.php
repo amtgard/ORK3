@@ -294,7 +294,7 @@ class Controller_KingdomAjax extends Controller {
 				'KingdomId' => $kingdom_id,
 			]);
 			if ($r['Status'] == 5) {
-				echo json_encode(['status' => 5, 'error' => 'Session expired.']);
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
 			} elseif ($r['Status'] != 0) {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			} else {

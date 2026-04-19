@@ -1251,7 +1251,10 @@ class Player extends Ork3 {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
 			return NoAuthorization();
 
-		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN))
+		$isGlobalAdmin  = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$isParkOfficer  = valid_id($request['ParkId']    ?? 0) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK,    (int)$request['ParkId'],    AUTH_EDIT);
+		$isKingdomOfficer = valid_id($request['KingdomId'] ?? 0) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, (int)$request['KingdomId'], AUTH_EDIT);
+		if (!$isGlobalAdmin && !$isParkOfficer && !$isKingdomOfficer)
 			return NoAuthorization();
 
 		if (valid_id($request['KingdomId'])) {
