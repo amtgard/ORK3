@@ -272,6 +272,7 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-ev-cols{display:flex;gap:10px}
 .pna-ev-col{flex:1;min-width:0}
 .pna-ev-col-hdr{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+.pna-ev-park{color:#718096;font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
 .pna-spark-month-lbl{flex:1;font-size:9px;color:#a0aec0;text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
 @media(max-width:700px){
@@ -371,6 +372,7 @@ html[data-theme="dark"] .pna-feed-label { color: var(--ork-text); }
 html[data-theme="dark"] .pna-feed-label a { color: var(--ork-link); }
 html[data-theme="dark"] .pna-feed-sub { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-ev-col-hdr { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pna-ev-park { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pna-assoc-group { color: var(--ork-text-muted); border-color: var(--ork-border); }
 html[data-theme="dark"] .pna-alert-warning { background: var(--ork-alert-warning-bg, #744210); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
 html[data-theme="dark"] .pna-alert-danger { background: var(--ork-alert-danger-bg, #742a2a); border-color: var(--ork-alert-danger-border, #9b2c2c); color: var(--ork-alert-danger-text, #feb2b2); }
@@ -1362,7 +1364,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 									<?php foreach (array_slice($KingdomEvents, 0, 4) as $_ke): ?>
 									<div class="pna-feed-row">
 										<span class="pna-feed-date"><?= date('M j', strtotime($_ke['EventStart'])) ?></span>
-										<span class="pna-feed-label"><a href="<?= UIR ?>Event/detail/<?= $_ke['EventId'] ?>/<?= $_ke['EventCalendarDetailId'] ?>"><?= htmlspecialchars($_ke['EventName']) ?></a></span>
+										<span class="pna-feed-label"><a href="<?= UIR ?>Event/detail/<?= $_ke['EventId'] ?>/<?= $_ke['EventCalendarDetailId'] ?>"><?= htmlspecialchars($_ke['EventName']) ?></a><?php if (!empty($_ke['ParkAbbreviation'])): ?> <span class="pna-ev-park">(<?= htmlspecialchars($_ke['ParkAbbreviation']) ?>)</span><?php endif; ?></span>
 									</div>
 									<?php endforeach; ?>
 									<?php else: ?>
