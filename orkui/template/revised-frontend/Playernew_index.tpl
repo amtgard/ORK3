@@ -619,11 +619,165 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-font-card.pn-active{border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 2px rgba(66,153,225,0.2);background:#ebf8ff}
 .pn-font-card-sample{font-size:16px;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
 .pn-font-card-label{font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
+/* Shared yellow warning banner (about visibility, milestones accuracy, name entitlement, reconcile) */
+.pn-about-visibility-warn,
+.pn-warn-banner{margin-bottom:16px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5}
+.pn-about-visibility-warn i,
+.pn-warn-banner i{color:#d69e2e;margin-right:8px}
+.pn-name-custom-warn{margin-top:6px;padding:8px 10px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:11.5px;color:#744210;line-height:1.4}
+.pn-name-custom-warn i{color:#d69e2e;margin-right:6px}
+.pn-reconcile-banner{margin-bottom:16px;padding:12px 14px;background:#fffbeb;border:1px solid #f6e05e;border-radius:6px}
+.pn-reconcile-banner > label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;font-weight:600;color:#744210}
+.pn-reconcile-banner > label input[type="checkbox"]{margin-top:3px;flex-shrink:0}
+.pn-reconcile-fields{margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px}
+.pn-ms-custom-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-ms-custom-wrap{border-top:1px solid #e2e8f0;padding-top:16px;margin-top:8px}
+/* Design modal title icon + About → Show Beltline toggle (theme-aware) */
+.pn-modal-title-icon{margin-right:8px;color:var(--pn-accent,#2c5282)}
+.pn-about-beltline-toggle{margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0}
+.pn-about-beltline-toggle > label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
+.pn-about-beltline-toggle input[type="checkbox"]{width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)}
+/* Dark-mode heads-up banner (info tone, used inside Design tabs) */
+.pn-dm-hint{display:flex;gap:10px;align-items:flex-start;background:#ebf8ff;border:1px solid #bee3f8;border-left:4px solid #4299e1;border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.5;color:#2c5282;margin-bottom:14px}
+.pn-dm-hint i{color:#3182ce;margin-top:2px;flex-shrink:0}
+.pn-dm-hint strong{color:#1a365d}
 @media(max-width:600px){
 .pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .pn-name-parts{flex-direction:column;gap:8px}
 .pn-color-row{flex-direction:column;gap:8px}
 }
+
+/* ============================================================
+   DARK MODE — About tab, Timeline, Design Modal (Welcome, Name,
+   Hero, Colors, Font, Milestones), and related previews.
+   ============================================================ */
+/* About tab */
+html[data-theme="dark"] .pn-about-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-about-content { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-about-content h1,
+html[data-theme="dark"] .pn-about-content h2,
+html[data-theme="dark"] .pn-about-content h3,
+html[data-theme="dark"] .pn-about-content h4,
+html[data-theme="dark"] .pn-about-content h5,
+html[data-theme="dark"] .pn-about-content h6 { color: var(--ork-text); }
+html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-secondary); color: var(--ork-text-muted); border-left-color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-about-content code { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+html[data-theme="dark"] .pn-about-content pre { background: #1a202c; color: #e2e8f0; }
+html[data-theme="dark"] .pn-about-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-belt-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-belt-card-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-belt-group { color: var(--ork-text-muted); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pn-belt-title { color: var(--ork-text-muted); }
+
+/* Award-alias subtitle */
+html[data-theme="dark"] .pn-award-alias-sub { color: var(--ork-text-muted); }
+
+/* Timeline (My Milestones) */
+html[data-theme="dark"] .pn-timeline-section { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pn-timeline-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-timeline::before { background: var(--ork-border); }
+html[data-theme="dark"] .pn-tl-node { background: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-tl-desc { color: var(--ork-text); }
+html[data-theme="dark"] .pn-tl-empty { color: var(--ork-text-muted); }
+
+/* Design My Profile — tabs */
+html[data-theme="dark"] .pn-design-tabs { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .pn-design-tab { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-design-tab:hover { color: var(--ork-text); }
+
+/* Design My Profile — field chrome */
+html[data-theme="dark"] .pn-design-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-design-field textarea,
+html[data-theme="dark"] .pn-design-field input[type="text"],
+html[data-theme="dark"] .pn-design-field select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pn-design-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-design-preview-label { color: var(--ork-text-muted); }
+
+/* Colors tab — swatch selection indicator (flip #fff/#2d3748 contrast) */
+html[data-theme="dark"] .pn-color-swatch.pn-selected { border-color: var(--ork-text); box-shadow: 0 0 0 2px var(--ork-card-bg), 0 0 0 4px var(--ork-text); }
+html[data-theme="dark"] .pn-color-input-wrap input[type="color"] { background: var(--ork-input-bg); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .pn-color-input-wrap input[type="text"] { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+
+/* Overlay-strength buttons (heraldry + gradient) */
+html[data-theme="dark"] .pn-overlay-btn { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-overlay-btn:hover { border-color: var(--ork-text-muted); }
+
+/* Name builder — comma toggle + constructed preview */
+html[data-theme="dark"] .pn-comma-toggle { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-comma-toggle:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-name-constructed { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text); }
+
+/* Markdown preview (About tab split-pane preview) */
+html[data-theme="dark"] .pn-md-toggle-btn { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-md-preview { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+
+/* Welcome tab */
+html[data-theme="dark"] .pn-welcome-hero { background: linear-gradient(135deg, #2a4365, #44337a); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-welcome-hero-text h4 { color: var(--ork-text); }
+html[data-theme="dark"] .pn-welcome-hero-text p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-welcome-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-welcome-card-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-welcome-card-body { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-welcome-mock { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-wm-name-core { color: var(--ork-text); }
+html[data-theme="dark"] .pn-wm-pill { background: var(--ork-badge-blue-bg); color: var(--ork-badge-blue-text); }
+html[data-theme="dark"] .pn-wm-colors span { border-color: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-welcome-tips { background: #3d3300; border-color: #744210; border-left-color: #d69e2e; }
+html[data-theme="dark"] .pn-welcome-tips-title { color: #fbd38d; }
+html[data-theme="dark"] .pn-welcome-tips ul { color: #f6d8a6; }
+
+/* Font picker cards */
+html[data-theme="dark"] .pn-font-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-font-card:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-font-card.pn-active { background: var(--ork-bg-tertiary); border-color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-font-card-sample { color: var(--ork-text); }
+html[data-theme="dark"] .pn-font-card-label { color: var(--ork-text-muted); }
+
+/* Milestones — toggle list, custom list, add form, icon picker */
+html[data-theme="dark"] .pn-ms-toggle { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-ms-toggle i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-custom-row { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-ms-custom-desc { color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-custom-date { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-custom-actions button { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-custom-actions button:hover { background: var(--ork-bg-secondary); color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-add-form { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-ms-add-row .pn-ms-field label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-add-row .pn-ms-field input,
+html[data-theme="dark"] .pn-ms-add-row .pn-ms-field select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-icon-opt { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-ms-icon-opt:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-ms-icon-opt.pn-ms-icon-active { background: var(--ork-bg-tertiary); border-color: var(--ork-link-bright); color: var(--ork-link-bright); }
+
+/* Yellow warning banners share an alert-warning palette in dark mode */
+html[data-theme="dark"] .pn-about-visibility-warn,
+html[data-theme="dark"] .pn-warn-banner,
+html[data-theme="dark"] .pn-name-custom-warn,
+html[data-theme="dark"] .pn-reconcile-banner { background: var(--ork-alert-warning-bg, #3d3300); border-color: var(--ork-alert-warning-border, #975a16); color: var(--ork-alert-warning-text, #fbd38d); }
+html[data-theme="dark"] .pn-about-visibility-warn i,
+html[data-theme="dark"] .pn-warn-banner i,
+html[data-theme="dark"] .pn-name-custom-warn i { color: #f6ad55; }
+html[data-theme="dark"] .pn-reconcile-banner > label { color: var(--ork-alert-warning-text, #fbd38d); }
+html[data-theme="dark"] .pn-reconcile-fields { border-top-color: var(--ork-alert-warning-border, #975a16); }
+html[data-theme="dark"] .pn-ms-custom-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-ms-custom-wrap { border-top-color: var(--ork-border); }
+
+/* Design modal title icon + About→Beltline toggle */
+html[data-theme="dark"] .pn-modal-title-icon { color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-about-beltline-toggle { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pn-about-beltline-toggle > label { color: var(--ork-text-secondary); }
+
+/* Dark-mode heads-up hint banner */
+html[data-theme="dark"] .pn-dm-hint { background: var(--ork-alert-info-bg, #1a365d); border-color: var(--ork-alert-info-border, #2a4365); border-left-color: var(--ork-link-bright); color: var(--ork-alert-info-text, #90cdf4); }
+html[data-theme="dark"] .pn-dm-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-dm-hint strong { color: var(--ork-text); }
+
+/* Currently-active milestones summary card */
+html[data-theme="dark"] .pn-cms-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -2389,12 +2543,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<div id="pn-edit-award-feedback" style="display:none"></div>
 
 			<!-- ── Historical award reconcile banner (shown only for legacy records) ── -->
-			<div id="pn-edit-reconcile-banner" style="display:none;margin-bottom:16px;padding:12px 14px;background:#fffbeb;border:1px solid #f6e05e;border-radius:6px;">
-				<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;font-weight:600;color:#744210;">
-					<input type="checkbox" id="pn-edit-reconcile-check" style="margin-top:3px;flex-shrink:0;">
+			<div id="pn-edit-reconcile-banner" class="pn-reconcile-banner" style="display:none">
+				<label>
+					<input type="checkbox" id="pn-edit-reconcile-check">
 					<span id="pn-edit-reconcile-label">Convert legacy record to current award system</span>
 				</label>
-				<div id="pn-edit-reconcile-fields" style="display:none;margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px;">
+				<div id="pn-edit-reconcile-fields" class="pn-reconcile-fields" style="display:none">
 					<div class="pn-acct-field">
 						<label>Target Award <span class="required-indicator">*</span></label>
 						<select id="pn-edit-reconcile-award">
@@ -2515,7 +2669,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-overlay" id="pn-design-overlay">
 	<div class="pn-modal-box" style="width:720px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-palette" style="margin-right:8px;color:#2c5282"></i>Design My Profile</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-palette pn-modal-title-icon"></i>Design My Profile</h3>
 			<button class="pn-modal-close-btn" id="pn-design-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-design-tabs">
@@ -2531,6 +2685,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 
 			<!-- Welcome Panel -->
 			<div class="pn-design-panel pn-active" id="pn-design-welcome">
+				<div class="pn-dm-hint">
+					<i class="fas fa-moon"></i>
+					<div>
+						<strong>Heads up &mdash; dark mode viewers.</strong> Some viewers use the ORK in dark mode. Your hero background is automatically darkened for them, but <em>accent colors, inline images, and rich formatting</em> in your About section may look different. Preview both themes (toggle with the moon icon in the site header) before you finalize your design.
+					</div>
+				</div>
 				<div class="pn-welcome-hero">
 					<div class="pn-welcome-icon"><i class="fas fa-palette"></i></div>
 					<div class="pn-welcome-hero-text">
@@ -2633,7 +2793,13 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 
 			<!-- About Panel -->
 			<div class="pn-design-panel" id="pn-design-about">
-				<div style="margin-bottom:16px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5"><i class="fas fa-exclamation-triangle" style="color:#d69e2e;margin-right:8px"></i>Don't forget, your about section will be visible to the public. Refrain from including inappropriate content in this section. Kingdom and park officers can take action on your profile if impermissible content is added.</div>
+				<div class="pn-about-visibility-warn"><i class="fas fa-exclamation-triangle"></i>Don't forget, your about section will be visible to the public. Refrain from including inappropriate content in this section. Kingdom and park officers can take action on your profile if impermissible content is added.</div>
+				<div class="pn-dm-hint">
+					<i class="fas fa-moon"></i>
+					<div>
+						<strong>Dark mode rendering.</strong> Text, headings, quotes, and code blocks you write here will automatically re-color for dark-mode viewers. However, any <em>hex-coded colors you embed in Markdown (via inline HTML), images with fixed backgrounds, or custom tables</em> will render as-is and may not be readable on a dark background. If you embed these, preview your About tab with the site's theme toggle before publishing.
+					</div>
+				</div>
 				<div class="pn-design-field">
 					<label>About <?= htmlspecialchars($Player['Persona']) ?></label>
 					<div class="pn-md-preview-toggle">
@@ -2654,9 +2820,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<div class="pn-md-preview" id="pn-design-about-story-preview" style="display:none"></div>
 					<div class="pn-design-hint">Supports <strong>Markdown</strong>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
 				</div>
-				<div class="pn-design-field" style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0">
-					<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
-						<input type="checkbox" id="pn-design-show-beltline" <?= ((int)($Player['ShowBeltline'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+				<div class="pn-design-field pn-about-beltline-toggle">
+					<label>
+						<input type="checkbox" id="pn-design-show-beltline" <?= ((int)($Player['ShowBeltline'] ?? 1)) ? 'checked' : '' ?> />
 						Show My Beltline
 					</label>
 					<div class="pn-design-hint" style="margin-top:4px">Display your peerage relationships (peers and associates) on your About tab. Others can see who you're belted to and who you've belted.</div>
@@ -2665,6 +2831,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 
 			<!-- Colors Panel -->
 			<div class="pn-design-panel" id="pn-design-colors">
+				<div class="pn-dm-hint">
+					<i class="fas fa-moon"></i>
+					<div>
+						<strong>Dark mode &amp; your palette.</strong> Your hero background is automatically shifted to a darker tint for dark-mode viewers, so it will read correctly either way. However, your <em>accent color</em> (used for links, tab indicators, and icons) renders as-is. Very pale or pastel accents may have low contrast against a dark card background &mdash; pick a medium or saturated hue for best readability in both themes.
+					</div>
+				</div>
 				<div class="pn-design-preview-label">Preview</div>
 				<div class="pn-hero-preview" id="pn-color-hero-preview">
 					<div class="pn-hero-preview-name"><?= htmlspecialchars($Player['Persona']) ?></div>
@@ -2751,7 +2923,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<option value="__custom__"<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
 							</select>
 							<input type="text" id="pn-name-prefix-custom" placeholder="Syr, Lady, Archon, Captain, etc..." style="margin-top:6px;<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NamePrefix'] : '') ?>" />
-							<div class="pn-name-custom-warn" id="pn-name-prefix-warn" style="display:<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>;margin-top:6px;padding:8px 10px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:11.5px;color:#744210;line-height:1.4"><i class="fas fa-exclamation-triangle" style="color:#d69e2e;margin-right:6px"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not been granted is not allowed.</div>
+							<div class="pn-name-custom-warn" id="pn-name-prefix-warn" style="display:<?= (!empty($Player['NamePrefix']) && !in_array($Player['NamePrefix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>"><i class="fas fa-exclamation-triangle"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not been granted is not allowed.</div>
 						</div>
 					</div>
 					<div class="pn-name-core">
@@ -2774,7 +2946,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<option value="__custom__"<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? ' selected' : '' ?>>Other...</option>
 							</select>
 							<input type="text" id="pn-name-suffix-custom" placeholder="the Overpowered, the Realmstrider, Esquire" style="margin-top:6px;<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'display:none;' ?>" value="<?= htmlspecialchars((!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? $Player['NameSuffix'] : '') ?>" />
-							<div class="pn-name-custom-warn" id="pn-name-suffix-warn" style="display:<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>;margin-top:6px;padding:8px 10px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:11.5px;color:#744210;line-height:1.4"><i class="fas fa-exclamation-triangle" style="color:#d69e2e;margin-right:6px"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not been granted is not allowed.</div>
+							<div class="pn-name-custom-warn" id="pn-name-suffix-warn" style="display:<?= (!empty($Player['NameSuffix']) && !in_array($Player['NameSuffix'], array_column($PlayerTitles ?? [], 'TitleName'))) ? '' : 'none' ?>"><i class="fas fa-exclamation-triangle"></i>Be sure you are only including name elements that you are entitled to use. Claiming a title you have not been granted is not allowed.</div>
 						</div>
 					</div>
 				</div>
@@ -2865,9 +3037,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="officer" checked /><i class="fas fa-landmark"></i> Served as Officer</label>
 					<label class="pn-ms-toggle"><input type="checkbox" data-ms-type="custom" checked /><i class="fas fa-pen"></i> Custom Milestones</label>
 				</div>
-				<div style="border-top:1px solid #e2e8f0;padding-top:16px;margin-top:8px">
-					<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px">Custom Milestones</div>
-					<div style="margin-bottom:12px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5"><i class="fas fa-exclamation-triangle" style="color:#d69e2e;margin-right:8px"></i>Custom milestones are a great way to celebrate meaningful moments in your Amtgard story. Be sure those milestones are accurate, especially as concerns things like awards, titles, and other recognitions.</div>
+				<div class="pn-ms-custom-wrap">
+					<div class="pn-ms-custom-heading">Custom Milestones</div>
+					<div class="pn-warn-banner"><i class="fas fa-exclamation-triangle"></i>Custom milestones are a great way to celebrate meaningful moments in your Amtgard story. Be sure those milestones are accurate, especially as concerns things like awards, titles, and other recognitions.</div>
 					<div class="pn-ms-custom-list" id="pn-ms-custom-list"></div>
 					<div class="pn-ms-add-form" id="pn-ms-add-form">
 						<div class="pn-ms-add-row">
