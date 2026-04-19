@@ -310,7 +310,7 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
    ============================================================ */
 html[data-theme="dark"] .pn-hero { background-color: var(--ork-bg-secondary); }
 html[data-theme="dark"] .pn-avatar { border-color: rgba(255,255,255,0.2); }
-html[data-theme="dark"] .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-stat-card { background: var(--ork-card-bg); border-left-color: var(--ork-border); border-right-color: var(--ork-border); border-bottom-color: var(--ork-border); /* border-top intentionally preserved so --pn-accent shows through */ }
 html[data-theme="dark"] .pn-stat-number { color: #90cdf4; }
 html[data-theme="dark"] .pn-stat-icon { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-stat-label { color: var(--ork-text-secondary); }
@@ -321,7 +321,7 @@ html[data-theme="dark"] .pn-detail-value { color: var(--ork-text); }
 html[data-theme="dark"] .pn-detail-row { border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-tab-nav { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-tab-nav li { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-tab-nav li.pn-tab-active { background: var(--ork-card-bg); color: var(--pn-accent, var(--ork-link-bright)); /* keep accent color on active tab + let light rule supply --pn-accent bottom border */ }
 html[data-theme="dark"] .pn-tab-nav li:hover:not(.pn-tab-active) { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-tab-count { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-mini-table { background: var(--ork-card-bg); border-color: var(--ork-border); }
@@ -668,7 +668,7 @@ html[data-theme="dark"] .pn-about-content h3,
 html[data-theme="dark"] .pn-about-content h4,
 html[data-theme="dark"] .pn-about-content h5,
 html[data-theme="dark"] .pn-about-content h6 { color: var(--ork-text); }
-html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-secondary); color: var(--ork-text-muted); border-left-color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-about-content blockquote { background: var(--ork-bg-secondary); color: var(--ork-text-muted); /* --pn-accent flows through from light rule */ }
 html[data-theme="dark"] .pn-about-content code { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-about-content pre { background: #1a202c; color: #e2e8f0; }
 html[data-theme="dark"] .pn-about-empty { color: var(--ork-text-muted); }
@@ -737,7 +737,7 @@ html[data-theme="dark"] .pn-welcome-tips ul { color: #f6d8a6; }
 /* Font picker cards */
 html[data-theme="dark"] .pn-font-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-font-card:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); }
-html[data-theme="dark"] .pn-font-card.pn-active { background: var(--ork-bg-tertiary); border-color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-font-card.pn-active { background: var(--ork-bg-tertiary); /* --pn-accent border + ring flow through from light rule */ }
 html[data-theme="dark"] .pn-font-card-sample { color: var(--ork-text); }
 html[data-theme="dark"] .pn-font-card-label { color: var(--ork-text-muted); }
 
@@ -755,7 +755,7 @@ html[data-theme="dark"] .pn-ms-add-row .pn-ms-field input,
 html[data-theme="dark"] .pn-ms-add-row .pn-ms-field select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .pn-ms-icon-opt { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-ms-icon-opt:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-ms-icon-opt.pn-ms-icon-active { background: var(--ork-bg-tertiary); border-color: var(--ork-link-bright); color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-ms-icon-opt.pn-ms-icon-active { background: var(--ork-bg-tertiary); /* --pn-accent border + color flow through from light rule */ }
 
 /* Yellow warning banners share an alert-warning palette in dark mode */
 html[data-theme="dark"] .pn-about-visibility-warn,
@@ -777,7 +777,7 @@ html[data-theme="dark"] .pn-section-heading { color: var(--ork-text); }
 html[data-theme="dark"] .pn-section-toggle-label { color: var(--ork-text-secondary); }
 
 /* Design modal title icon + About→Beltline toggle */
-html[data-theme="dark"] .pn-modal-title-icon { color: var(--ork-link-bright); }
+/* .pn-modal-title-icon already uses --pn-accent via the light rule; no dark override needed */
 html[data-theme="dark"] .pn-about-beltline-toggle { border-top-color: var(--ork-border); }
 html[data-theme="dark"] .pn-about-beltline-toggle > label { color: var(--ork-text-secondary); }
 
