@@ -632,6 +632,14 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-reconcile-fields{margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px}
 .pn-ms-custom-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
 .pn-ms-custom-wrap{border-top:1px solid #e2e8f0;padding-top:16px;margin-top:8px}
+/* Colors-tab custom-color field labels + gradient toggle */
+.pn-color-field-label{font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block}
+.pn-gradient-toggle-col{display:flex;flex-direction:column;justify-content:flex-end}
+.pn-gradient-toggle-label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#4a5568}
+.pn-gradient-toggle-label input[type="checkbox"]{width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)}
+/* Shared section heading + checkbox toggle label inside Design panels */
+.pn-section-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:12px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
+.pn-section-toggle-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
 /* Design modal title icon + About → Show Beltline toggle (theme-aware) */
 .pn-modal-title-icon{margin-right:8px;color:var(--pn-accent,#2c5282)}
 .pn-about-beltline-toggle{margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0}
@@ -761,6 +769,12 @@ html[data-theme="dark"] .pn-reconcile-banner > label { color: var(--ork-alert-wa
 html[data-theme="dark"] .pn-reconcile-fields { border-top-color: var(--ork-alert-warning-border, #975a16); }
 html[data-theme="dark"] .pn-ms-custom-heading { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ms-custom-wrap { border-top-color: var(--ork-border); }
+
+/* Colors-tab field labels — promote to secondary text so they stay legible */
+html[data-theme="dark"] .pn-color-field-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-gradient-toggle-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-section-heading { color: var(--ork-text); }
+html[data-theme="dark"] .pn-section-toggle-label { color: var(--ork-text-secondary); }
 
 /* Design modal title icon + About→Beltline toggle */
 html[data-theme="dark"] .pn-modal-title-icon { color: var(--ork-link-bright); }
@@ -2047,7 +2061,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-img-overlay">
 	<div class="pn-modal-box pn-img-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title" id="pn-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Image</h3>
+			<h3 class="pn-modal-title" id="pn-img-modal-title"><i class="fas fa-image pn-modal-title-icon"></i>Update Image</h3>
 			<button class="pn-modal-close-btn" id="pn-img-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -2107,7 +2121,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-acct-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-user-edit" style="margin-right:8px;color:#2c5282"></i>Update Account</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-user-edit pn-modal-title-icon"></i>Update Account</h3>
 			<button class="pn-modal-close-btn" id="pn-acct-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -2258,7 +2272,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-dues-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-receipt" style="margin-right:8px;color:#2c5282"></i>Add Dues Entry</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i>Add Dues Entry</h3>
 			<button class="pn-modal-close-btn" id="pn-dues-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -2311,7 +2325,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-dues-history-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-receipt" style="margin-right:8px;color:#2c5282"></i>Dues History</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i>Dues History</h3>
 			<button class="pn-modal-close-btn" id="pn-dues-history-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-acct-modal-body">
@@ -2331,7 +2345,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-qual-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-certificate" style="margin-right:8px;color:#2c5282"></i>Edit Qualifications</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-certificate pn-modal-title-icon"></i>Edit Qualifications</h3>
 			<button class="pn-modal-close-btn" id="pn-qual-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -2399,7 +2413,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-award-overlay">
 	<div class="pn-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title" id="pn-award-modal-title"><i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award</h3>
+			<h3 class="pn-modal-title" id="pn-award-modal-title"><i class="fas fa-trophy pn-modal-title-icon"></i>Add Award</h3>
 			<button class="pn-modal-close-btn" id="pn-award-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-acct-modal-body">
@@ -2536,7 +2550,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-award-edit-overlay">
 	<div class="pn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2c5282"></i>Edit Award</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt pn-modal-title-icon"></i>Edit Award</h3>
 			<button class="pn-modal-close-btn" id="pn-edit-award-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -2867,14 +2881,14 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<div class="pn-design-preview-label" style="margin-top:14px">Custom Colors</div>
 				<div class="pn-color-row">
 					<div class="pn-color-col">
-						<label style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block">Primary (Hero Background)</label>
+						<label class="pn-color-field-label">Primary (Hero Background)</label>
 						<div class="pn-color-input-wrap">
 							<input type="color" id="pn-color-primary" value="<?= htmlspecialchars($Player['ColorPrimary'] ?? '#2c5282') ?>" />
 							<input type="text" id="pn-color-primary-hex" value="<?= htmlspecialchars($Player['ColorPrimary'] ?? '#2c5282') ?>" maxlength="7" />
 						</div>
 					</div>
 					<div class="pn-color-col">
-						<label style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block">Accent (Tabs, Links, Stat Cards)</label>
+						<label class="pn-color-field-label">Accent (Tabs, Links, Stat Cards)</label>
 						<div class="pn-color-input-wrap">
 							<input type="color" id="pn-color-accent" value="<?= htmlspecialchars($Player['ColorAccent'] ?? '#4299e1') ?>" />
 							<input type="text" id="pn-color-accent-hex" value="<?= htmlspecialchars($Player['ColorAccent'] ?? '#4299e1') ?>" maxlength="7" />
@@ -2884,15 +2898,15 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<div class="pn-design-preview-label" style="margin-top:14px">Gradient (Optional)</div>
 				<div class="pn-color-row">
 					<div class="pn-color-col">
-						<label style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block">Secondary Color</label>
+						<label class="pn-color-field-label">Secondary Color</label>
 						<div class="pn-color-input-wrap">
 							<input type="color" id="pn-color-secondary" value="<?= htmlspecialchars($Player['ColorSecondary'] ?? '#2c5282') ?>" />
 							<input type="text" id="pn-color-secondary-hex" value="<?= htmlspecialchars($Player['ColorSecondary'] ?? '') ?>" maxlength="7" placeholder="None" />
 						</div>
 					</div>
-					<div class="pn-color-col" style="display:flex;flex-direction:column;justify-content:flex-end">
-						<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#4a5568">
-							<input type="checkbox" id="pn-gradient-enabled" <?= !empty($Player['ColorSecondary']) ? 'checked' : '' ?> style="width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)" />
+					<div class="pn-color-col pn-gradient-toggle-col">
+						<label class="pn-gradient-toggle-label">
+							<input type="checkbox" id="pn-gradient-enabled" <?= !empty($Player['ColorSecondary']) ? 'checked' : '' ?> />
 							Enable gradient
 						</label>
 					</div>
@@ -2972,23 +2986,23 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<div class="pn-font-picker" id="pn-font-picker"></div>
 				</div>
 				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
-					<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:12px">Persona Display Controls</div>
+					<div class="pn-section-heading">Persona Display Controls</div>
 					<div class="pn-design-field" style="margin-bottom:10px">
-						<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+						<label class="pn-section-toggle-label">
 							<input type="checkbox" id="pn-design-show-first" <?= ((int)($Player['ShowMundaneFirst'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 							Show Mundane First Name
 							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
 						</label>
 					</div>
 					<div class="pn-design-field" style="margin-bottom:10px">
-						<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+						<label class="pn-section-toggle-label">
 							<input type="checkbox" id="pn-design-show-last" <?= ((int)($Player['ShowMundaneLast'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 							Show Mundane Last Name
 							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
 						</label>
 					</div>
 					<div class="pn-design-field">
-						<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+						<label class="pn-section-toggle-label">
 							<input type="checkbox" id="pn-design-show-email" <?= ((int)($Player['ShowEmail'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 							Show Email Address
 							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your email address. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
@@ -3018,7 +3032,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<!-- Milestones Panel -->
 			<div class="pn-design-panel" id="pn-design-milestones">
 				<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e2e8f0">
-					<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568">
+					<label class="pn-section-toggle-label">
 						<input type="checkbox" id="pn-ms-compact" style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 						Compact Milestones
 					</label>
@@ -3097,7 +3111,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <div class="pn-overlay" id="pn-rec-overlay">
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-award" style="margin-right:8px;color:#2c5282"></i>Recommend an Award</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-award pn-modal-title-icon"></i>Recommend an Award</h3>
 			<button class="pn-modal-close-btn" id="pn-modal-close-btn" type="button">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -3959,7 +3973,7 @@ pnRenderSparkline();
 <div class="pn-overlay" id="pn-addnote-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-sticky-note" style="margin-right:8px;color:#2c5282"></i><span id="pn-addnote-modal-title">Add Note</span></h3>
+			<h3 class="pn-modal-title"><i class="fas fa-sticky-note pn-modal-title-icon"></i><span id="pn-addnote-modal-title">Add Note</span></h3>
 			<button class="pn-modal-close-btn" id="pn-addnote-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -4061,7 +4075,7 @@ pnRenderSparkline();
 <div class="pn-overlay" id="pn-att-edit-overlay">
 	<div class="pn-modal-box" style="max-width:400px">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2c5282"></i>Edit Attendance</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-pencil-alt pn-modal-title-icon"></i>Edit Attendance</h3>
 			<button class="pn-modal-close-btn" id="pn-att-edit-close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -4104,7 +4118,7 @@ pnRenderSparkline();
 <div class="pn-overlay" id="pn-moveplayer-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-arrows-alt" style="margin-right:8px;color:#2c5282"></i>Move Player</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-arrows-alt pn-modal-title-icon"></i>Move Player</h3>
 			<button class="pn-modal-close-btn" id="pn-moveplayer-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -4173,7 +4187,7 @@ pnRenderSparkline();
 <div class="pn-overlay" id="pn-reconcile-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-sliders-h" style="margin-right:8px;color:#2c5282"></i>Edit Class Reconciliation</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-sliders-h pn-modal-title-icon"></i>Edit Class Reconciliation</h3>
 			<button class="pn-modal-close-btn" id="pn-reconcile-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body" style="padding:0">
@@ -4205,7 +4219,7 @@ pnRenderSparkline();
 <div class="pn-overlay" id="pn-unit-create-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Create Company or Household</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-shield-alt pn-modal-title-icon"></i>Create Company or Household</h3>
 			<button class="pn-modal-close-btn" id="pn-unit-create-close-btn" aria-label="Close" onclick="pnCloseUnitCreateModal()">&times;</button>
 		</div>
 		<div style="background:var(--ork-bg-secondary,#ebf8ff);border-bottom:1px solid var(--ork-border,#bee3f8);padding:10px 16px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ork-text-secondary,#2c5282);line-height:1.5;">
@@ -4243,7 +4257,7 @@ pnRenderSparkline();
 <div class="pn-overlay" id="pn-unit-confirm-overlay">
 	<div class="pn-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#2c5282"></i>Confirm Creation</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-shield-alt pn-modal-title-icon"></i>Confirm Creation</h3>
 		</div>
 		<div class="pn-modal-body" style="padding:20px;">
 			<p style="margin:0 0 8px;font-size:14px;color:var(--ork-text,#2d3748);">
