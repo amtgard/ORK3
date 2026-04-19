@@ -34,10 +34,16 @@ class Model_Award extends Model {
         if ($awards['Status']['Status'] == 0) {
             uasort($awards['Awards'], array('Model_Award','compareAwardsByName'));
 
+            $pseudoLadderIds = [7067,7249,6628,5813,6045,6050,6430,6283,7055,
+                            6403,6297,7273,7070,6311,6310,7277,6411,6771,
+                            6577,94,7084,6171,6574,7254];
             $custom = $ladder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
             foreach ($awards['Awards'] as $award) {
                 $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
-                if ($sysName === 'Custom Award') {
+                $isPseudoLadder = in_array((int)($award['KingdomAwardId'] ?? 0), $pseudoLadderIds);
+                if ($isPseudoLadder) {
+                    $ladder[] = $award;
+                } elseif ($sysName === 'Custom Award') {
                     $custom[] = $award;
                 } elseif (!empty($award['IsLadder'])) {
                     $ladder[] = $award;
@@ -67,7 +73,9 @@ class Model_Award extends Model {
             if (!empty($ladder)) {
                 $options .= "<optgroup label='Ladder Awards'>";
                 foreach ($ladder as $award) {
-                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "' data-is-ladder='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
+                    $isPseudo = in_array((int)($award['KingdomAwardId'] ?? 0), $pseudoLadderIds);
+                    $awardId = $isPseudo ? 0 : ($award['AwardId'] ?? 0);
+                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "' data-is-ladder='1' data-award-id='" . htmlspecialchars($awardId, ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
                 }
                 $options .= "</optgroup>";
             }

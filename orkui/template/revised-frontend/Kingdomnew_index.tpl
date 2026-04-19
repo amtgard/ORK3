@@ -961,7 +961,7 @@ var KnConfig = {
 
 			<!-- Rank Picker -->
 			<div class="kn-acct-field" id="kn-award-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
+				<label>Rank <span id="kn-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
 				<div class="kn-rank-pills-wrap" id="kn-rank-pills"></div>
 				<input type="hidden" id="kn-award-rank-val" value="" />
 			</div>
@@ -1053,7 +1053,7 @@ var KnConfig = {
 				<div id="kn-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 			</div>
 			<div class="pk-acct-field" id="kn-rec-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<label>Rank <span id="kn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
 				<div class="pk-rank-pills-wrap" id="kn-rec-rank-pills"></div>
 				<input type="hidden" id="kn-rec-rank-val" value="" />
 			</div>

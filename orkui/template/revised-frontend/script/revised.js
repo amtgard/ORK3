@@ -744,6 +744,10 @@ if (PnConfig.recError) {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = document.getElementById('pn-rec-rank-hint');
+        if (hint) hint.textContent = baseAwardId === 0
+            ? '— click to select; green border = suggested next; dark blue = selected'
+            : '— click to select; light blue = already held, green border = suggested; dark blue = selected';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pnAwardRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -1654,6 +1658,10 @@ if (PnConfig.recError) {
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
             var held      = playerRanks[awardId] || 0;
             var suggested = Math.min(held + 1, maxRank);
+            var hint = gid('pn-rank-hint');
+            if (hint) hint.textContent = awardId === 0
+                ? '— click to select; green border = suggested next; dark blue = selected'
+                : '— click to select; light blue = already held, green border = suggested; dark blue = selected';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
                 var cls = 'pn-rank-pill';
@@ -2706,6 +2714,10 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('kn-rank-hint');
+        if (hint) hint.textContent = baseAwardId === 0
+            ? '— click to select; green border = suggested next; dark blue = selected'
+            : '— click to select; blue = already held, green border = suggested next';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -3155,6 +3167,10 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('kn-rec-rank-hint');
+        if (hint) hint.textContent = baseAwardId === 0
+            ? '— click to select; green border = suggested next; dark blue = selected'
+            : '(optional) — blue = already held, green border = suggested next';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -5729,6 +5745,10 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('pk-rank-hint');
+        if (hint) hint.textContent = baseAwardId === 0
+            ? '— click to select; green border = suggested next; dark blue = selected'
+            : '— click to select; blue = already held, green border = suggested next';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pkPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -6192,6 +6212,10 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('pk-rec-rank-hint');
+        if (hint) hint.textContent = baseAwardId === 0
+            ? '— click to select; green border = suggested next; dark blue = selected'
+            : '(optional) — blue = already held, green border = suggested next';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held     = pkRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);

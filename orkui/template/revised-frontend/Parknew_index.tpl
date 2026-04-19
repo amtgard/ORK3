@@ -1234,7 +1234,7 @@ var PkConfig = {
 
 			<!-- Rank Picker -->
 			<div class="pk-acct-field" id="pk-award-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
+				<label>Rank <span id="pk-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
 				<div class="pk-rank-pills-wrap" id="pk-rank-pills"></div>
 				<input type="hidden" id="pk-award-rank-val" value="" />
 			</div>
@@ -1444,7 +1444,7 @@ var PkConfig = {
 				<div id="pk-rec-award-desc" class="pn-rec-award-desc" style="display:none"></div>
 			</div>
 			<div class="pk-acct-field" id="pk-rec-rank-row" style="display:none">
-				<label>Rank <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<label>Rank <span id="pk-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
 				<div class="pk-rank-pills-wrap" id="pk-rec-rank-pills"></div>
 				<input type="hidden" id="pk-rec-rank-val" value="" />
 			</div>
