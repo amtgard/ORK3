@@ -541,6 +541,7 @@ html[data-theme="dark"] .pk-btn-white {
 	background: #f7fafc;
 	flex-wrap: nowrap;
 	overflow-x: auto;
+	overflow-y: hidden;
 }
 .pn-tab-nav li {
 	padding: 12px 18px;
@@ -1812,6 +1813,7 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 	background: var(--ork-bg-secondary);
 	flex-wrap: nowrap;
 	overflow-x: auto;
+	overflow-y: hidden;
 }
 .kn-tab-nav li {
 	padding: 12px 18px;
@@ -2913,6 +2915,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	background: var(--ork-bg-secondary);
 	flex-wrap: nowrap;
 	overflow-x: auto;
+	overflow-y: hidden;
 	overflow-y: hidden;
 }
 .pk-tab-nav li {
