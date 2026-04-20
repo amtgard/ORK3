@@ -114,11 +114,6 @@
 		</div>
 
 		<div class="kn-hero-actions">
-			<?php if ($CanEditKingdom ?? false): ?>
-				<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Attendance/kingdom/<?= (int)($kingdom_id ?? 0) ?>">
-					<i class="fas fa-clipboard-list"></i> Enter Attendance
-				</a>
-			<?php endif; ?>
 			<?php if ($CanManageKingdom ?? false): ?>
 				<button class="kn-btn kn-btn-outline" onclick="knOpenAwardModal()">
 					<i class="fas fa-medal"></i> Enter Awards
