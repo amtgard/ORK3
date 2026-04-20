@@ -26,6 +26,17 @@
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
 
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous" referrerpolicy="no-referrer">
+		<?php if (!empty($ViewerDyslexiaFonts)) : ?>
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap">
+		<style>
+		body.ork-dyslexia-font,
+		body.ork-dyslexia-font *:not(i):not([class*="fa-"]):not([class*="fas"]):not([class*="far"]):not([class*="fab"]) {
+			font-family: 'Lexend', sans-serif !important;
+		}
+		</style>
+		<?php endif; ?>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
 		<!-- Google tag (gtag.js) -->
 		<script async src="https://www.googletagmanager.com/gtag/js?id=G-PVQCKENY0M"></script>
@@ -98,7 +109,7 @@
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
 		</style>
 </head>
-	<body>
+	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
 <?php
 // -----------------------------------------------------------------------
 // SCHEDULED MAINTENANCE NOTICE

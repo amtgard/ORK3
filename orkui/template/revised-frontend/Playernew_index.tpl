@@ -192,7 +192,7 @@
 ?>
 <style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; }</style>
 <?php
-$_pnNameFont = !empty($Player['NameFont']) ? $Player['NameFont'] : '';
+$_pnNameFont = (!empty($Player['NameFont']) && empty($ViewerBasicFonts) && empty($ViewerDyslexiaFonts)) ? $Player['NameFont'] : '';
 $_pnFontAllowed = ['Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'];
 if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 ?>
@@ -2230,6 +2230,25 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<small style="display:block;color:var(--ork-text-muted);margin-top:4px;padding-left:22px">Hides your real name from searches and public displays.</small>
 			</div>
 
+			<!-- Preferences (own + admin) -->
+			<div class="pn-acct-section-title"><i class="fas fa-sliders-h" style="margin-right:5px"></i>Preferences</div>
+
+			<div class="pn-acct-field">
+				<label style="display:inline-flex;align-items:center;cursor:pointer;">
+					<input type="checkbox" name="BasicFonts" value="BasicFonts" <?= !empty($Player['BasicFonts']) ? 'checked' : '' ?> style="margin-right:6px" />
+					Basic Fonts
+					<span class="pn-acct-help-tip" data-tip="Some parts of the ORK may allow for custom or stylistic fonts. Select this toggle if you want to enforce basic fonts instead to help with legibility or visual accommodation." aria-label="Help">?</span>
+				</label>
+			</div>
+
+			<div class="pn-acct-field">
+				<label style="display:inline-flex;align-items:center;cursor:pointer;">
+					<input type="checkbox" name="DyslexiaFonts" value="DyslexiaFonts" <?= !empty($Player['DyslexiaFonts']) ? 'checked' : '' ?> style="margin-right:6px" />
+					Use Dyslexia-friendly Fonts
+					<span class="pn-acct-help-tip" data-tip="When enabled, the ORK uses Lexend &mdash; a typeface designed to improve reading proficiency for people with reading difficulties such as Dyslexia &mdash; site-wide for your account." aria-label="Help">?</span>
+				</label>
+			</div>
+
 			<?php if ($canEditAdmin): ?>
 			<!-- Admin-only fields -->
 			<div class="pn-acct-section-title"><i class="fas fa-shield-alt" style="margin-right:5px"></i>Administrative</div>
@@ -3248,6 +3267,8 @@ var PnConfig = {
 	milestoneConfig: <?= json_encode(json_decode($Player['MilestoneConfig'] ?? '{}', true) ?: new stdClass()) ?>,
 	customMilestones: <?= json_encode($CustomMilestones ?? []) ?>,
 	nameFont:        <?= json_encode($Player['NameFont'] ?? '') ?>,
+	viewerBasicFonts: <?= !empty($ViewerBasicFonts) ? 'true' : 'false' ?>,
+	viewerDyslexiaFonts: <?= !empty($ViewerDyslexiaFonts) ? 'true' : 'false' ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -3536,7 +3557,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var f = null;
 		for (var _i = 0; _i < PN_FONTS.length; _i++) { if (PN_FONTS[_i].key === key) { f = PN_FONTS[_i]; break; } }
 		if (!f) f = PN_FONTS[0];
-		var fam = f.family;
+		// Viewer has Basic Fonts or Dyslexia Fonts enabled: keep everything in the inherited (site/Lexend) font.
+		var fam = (PnConfig.viewerBasicFonts || PnConfig.viewerDyslexiaFonts) ? 'inherit' : f.family;
 		var preview = gid('pn-name-preview');
 		var heroPreview = document.querySelector('.pn-hero-preview-name');
 		var heroName = gid('pn-hero-persona');

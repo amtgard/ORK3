@@ -337,6 +337,8 @@ class Player extends Ork3 {
 						'ShowEmail' => (int)$this->mundane->show_email,
 						'MilestoneConfig' => $this->mundane->milestone_config,
 						'NameFont' => $this->mundane->name_font,
+						'BasicFonts' => (int)$this->mundane->basic_fonts,
+						'DyslexiaFonts' => (int)$this->mundane->dyslexia_fonts,
 				);
 			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
@@ -1058,6 +1060,8 @@ class Player extends Ork3 {
 				}
 				logtrace("Mundane DB 2", $this->mundane);
 				$this->mundane->restricted = is_null($request['Restricted']) ? $this->mundane->restricted : ($request['Restricted'] ? 1 : 0);
+				$this->mundane->basic_fonts = is_null($request['BasicFonts']) ? $this->mundane->basic_fonts : ($request['BasicFonts'] ? 1 : 0);
+				$this->mundane->dyslexia_fonts = is_null($request['DyslexiaFonts']) ? $this->mundane->dyslexia_fonts : ($request['DyslexiaFonts'] ? 1 : 0);
 
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
     				$this->mundane->active = is_null($request['Active']) ? $this->mundane->restricted : ($request['Active']?1:0);

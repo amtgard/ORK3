@@ -1358,6 +1358,31 @@ if (PnConfig.recError) {
             posspId: 'pn-p-possessivepronoun', reflexId: 'pn-p-reflexive',
             existingJson: (function() { var el = document.getElementById('pn-pronoun-custom-val'); return el ? el.value : ''; })(),
         });
+
+        // Help-tip bubbles inside the modal (position:fixed so modal overflow doesn't clip them)
+        var helpBubble = null;
+        function ensureBubble() {
+            if (!helpBubble) {
+                helpBubble = document.createElement('div');
+                helpBubble.className = 'pn-acct-help-bubble';
+                helpBubble.style.display = 'none';
+                document.body.appendChild(helpBubble);
+            }
+            return helpBubble;
+        }
+        gid('pn-acct-overlay').querySelectorAll('.pn-acct-help-tip[data-tip]').forEach(function(el) {
+            el.addEventListener('mouseenter', function() {
+                var b = ensureBubble();
+                b.textContent = el.getAttribute('data-tip');
+                var r = el.getBoundingClientRect();
+                b.style.display = 'block';
+                b.style.top  = (r.bottom + 6) + 'px';
+                b.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 286)) + 'px';
+            });
+            el.addEventListener('mouseleave', function() {
+                if (helpBubble) helpBubble.style.display = 'none';
+            });
+        });
     })();
 
     // ---- Add Dues Modal ----

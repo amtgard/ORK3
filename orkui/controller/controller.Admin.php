@@ -1197,6 +1197,8 @@ class Controller_Admin extends Controller {
 									'Password' =>  $this->request->Admin_player->Password==$this->request->Admin_player->PasswordAgain?$this->request->Admin_player->Password:null,
 									'Email' =>  html_decode($this->request->Admin_player->Email),
 									'Restricted' =>  $this->request->Admin_player->Restricted=='Restricted'?1:0,
+									'BasicFonts' =>  $this->request->Admin_player->BasicFonts=='BasicFonts'?1:0,
+									'DyslexiaFonts' =>  $this->request->Admin_player->DyslexiaFonts=='DyslexiaFonts'?1:0,
 									'Active' =>  $this->request->Admin_player->Active=='Active'?1:0,
 									'ParkMemberSince' => $this->request->Admin_player->ParkMemberSince,
 									'HasImage' => strlen($pi_imdata),

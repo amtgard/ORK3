@@ -1122,6 +1122,42 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 	border-top: 1px solid #edf2f7;
 	margin-top: 4px;
 }
+.pn-acct-help-tip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #e2e8f0;
+	color: #4a5568;
+	font-size: 11px;
+	font-weight: 700;
+	margin-left: 6px;
+	cursor: help;
+	user-select: none;
+	line-height: 1;
+}
+.pn-acct-help-tip:hover {
+	background: #cbd5e0;
+	color: #2d3748;
+}
+.pn-acct-help-bubble {
+	position: fixed;
+	max-width: 280px;
+	background: #2d3748;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.5;
+	padding: 8px 10px;
+	border-radius: 6px;
+	pointer-events: none;
+	z-index: 9999;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+html[data-theme="dark"] .pn-acct-help-tip { background: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); color: var(--ork-text); }
 .pn-acct-two-col {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
