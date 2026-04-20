@@ -413,6 +413,38 @@ class Controller_PlayerAjax extends Controller {
 		exit;
 	}
 
+	public function attendance($p = null) {
+		header('Content-Type: application/json');
+		$mundane_id = (int)($p ?? 0);
+		if (!valid_id($mundane_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid player ID']);
+			exit;
+		}
+		$this->load_model('Player');
+		$attendance = $this->Player->fetch_player_attendance($mundane_id);
+		$parkEditAuth = [];
+		if (isset($this->session->user_id)) {
+			$uid = (int)$this->session->user_id;
+			$uniqueParkIds = array_unique(array_filter(array_column(
+				array_filter($attendance, fn($a) => (int)($a['EventId'] ?? 0) === 0),
+				'ParkId'
+			)));
+			foreach ($uniqueParkIds as $pid) {
+				if (valid_id($pid))
+					$parkEditAuth[(int)$pid] = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$pid, AUTH_EDIT);
+			}
+		}
+		echo json_encode([
+			'status'               => 0,
+			'attendance'           => $attendance,
+			'parkEditAuth'         => $parkEditAuth,
+			'canEditAnyAttendance' => !empty(array_filter($parkEditAuth)),
+			'total'                => count($attendance),
+			'lastClass'            => !empty($attendance[0]['ClassName']) ? $attendance[0]['ClassName'] : '',
+		]);
+		exit;
+	}
+
 	public function all_dues($p = null) {
 		header('Content-Type: application/json');
 		if (!isset($this->session->user_id)) {

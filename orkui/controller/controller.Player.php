@@ -446,13 +446,13 @@ class Controller_Player extends Controller {
 		);
 		$this->data['IsOrkAdmin'] = ($adminCheck && $adminCheck->Size() > 0);
 
-		$_att = is_array($this->data['Details']['Attendance']) ? $this->data['Details']['Attendance'] : [];
+		// Attendance loaded async — counts start at 0 and are updated via AJAX
 		$this->data['Stats'] = [
-			'TotalAttendance'   => count($_att),
+			'TotalAttendance'   => 0,
 			'TotalAwards'       => 0,
 			'TotalTitles'       => 0,
 			'HighestClassLevel' => 0,
-			'LastPlayedClass'   => !empty($_att[0]['ClassName']) ? $_att[0]['ClassName'] : '',
+			'LastPlayedClass'   => '',
 		];
 		if (is_array($this->data['Details']['Awards'])) {
 			foreach ($this->data['Details']['Awards'] as $a) {

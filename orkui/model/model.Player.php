@@ -37,12 +37,19 @@ class Model_Player extends Model {
 			return $cache;
 		$awards = $this->Player->AwardsForPlayer(array( 'MundaneId' => $mundane_id ));
 		if ($awards['Status']['Status'] != 0) return $awards;
-		$attendance = $this->Player->AttendanceForPlayer(array( 'MundaneId' => $mundane_id ));
-		if ($attendance['Status']['Status'] != 0) return $attendance;
 		$classes = $this->Player->GetPlayerClasses(array( 'MundaneId' => $mundane_id ));
 		if ($classes['Status']['Status'] != 0) return $classes;
-		$details = array( 'Awards' => $awards['Awards'], 'Attendance' => $attendance['Attendance'], 'Classes' => $classes['Classes'] );
+		$details = array( 'Awards' => $awards['Awards'], 'Attendance' => [], 'Classes' => $classes['Classes'] );
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $details);
+	}
+
+	function fetch_player_attendance($mundane_id) {
+		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
+			return $cache;
+		$attendance = $this->Player->AttendanceForPlayer(array( 'MundaneId' => $mundane_id ));
+		if ($attendance['Status']['Status'] != 0) return [];
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $attendance['Attendance'] ?? []);
 	}
 
 	private function bust_player_details_cache($request) {

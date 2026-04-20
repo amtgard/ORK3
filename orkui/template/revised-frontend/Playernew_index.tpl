@@ -497,7 +497,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <div class="pn-stats-row">
 	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('attendance')">
 		<div class="pn-stat-icon"><i class="fas fa-calendar-check"></i></div>
-		<div class="pn-stat-number"><?= $Stats['TotalAttendance'] ?></div>
+		<div class="pn-stat-number" id="pn-att-stat-count">…</div>
 		<div class="pn-stat-label">Attendance</div>
 	</div>
 	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('awards')">
@@ -512,7 +512,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 	</div>
 	<div class="pn-stat-card pn-stat-card-link" onclick="pnActivateTab('classes')">
 		<div class="pn-stat-icon"><i class="fas fa-shield-alt"></i></div>
-		<div class="pn-stat-number pn-stat-text"><?= htmlspecialchars($Stats['LastPlayedClass'] ?: '—') ?></div>
+		<div class="pn-stat-number pn-stat-text" id="pn-att-last-class">…</div>
 		<div class="pn-stat-label">Last Played</div>
 	</div>
 </div>
@@ -744,7 +744,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<i class="fas fa-crown"></i><span class="pn-tab-label"> Titles</span> <span class="pn-tab-count">(<?= $Stats['TotalTitles'] ?>)</span>
 				</li>
 				<li data-tab="attendance">
-					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
+					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count" id="pn-att-tab-count"></span>
 				</li>
 				<?php $_showRecs = $ShowRecsTab || !empty($ShowRecsTabLoggedIn); ?>
 			<?php if ($_showRecs): ?><li data-tab="recommendations">
@@ -798,6 +798,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<div class="pna-sidebar">
 
 						<!-- Tenure -->
+						<?php $_maFirstDate = (!empty($Player['PlayerSinceDate']) && $Player['PlayerSinceDate'] !== '0000-00-00' && $Player['PlayerSinceDate'] !== '1970-01-01') ? $Player['PlayerSinceDate'] : null; ?>
 						<?php if ($_maFirstDate): ?>
 						<?php
 							$_maYears = (int)floor((time() - strtotime($_maFirstDate)) / (365.25 * 86400));
@@ -824,31 +825,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						</div>
 						<?php endif; ?>
 
-						<!-- Class Progress -->
-						<?php if (!empty($_maClasses)): ?>
-						<div class="pna-card">
-							<div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab('classes');return false;">All &rarr;</a></div>
-							<div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>
-							<?php foreach ($_maClasses as $_mc):
-								$_mcTotal = (int)($_mc['Credits'] ?? 0) + (int)($_mc['Reconciled'] ?? 0);
-								$_mcLvl   = _ma_level($_mcTotal);
-								$_mcPct   = _ma_progress($_mcTotal);
-								$_mcMax   = $_mcTotal >= 53;
-								$_mcNext  = [0,5,12,21,34,53][$_mcLvl] ?? 53;
-								$_mcPar   = $pnClassToParagon[$_mc['ClassId']] ?? null;
-								$_mcHasPar = $_mcPar && isset($pnHeldAwardIds[$_mcPar]);
-							?>
-							<div class="pna-class-row">
-								<div class="pna-class-header">
-									<span class="pna-class-name"><?= htmlspecialchars($_mc['ClassName']) ?><?= $_mcHasPar ? ' <span class="pna-paragon-dot" title="Paragon"><i class="fas fa-crown"></i></span>' : '' ?></span>
-									<span class="pna-class-level">L<?= $_mcLvl ?><?= $_mcMax ? ' <i class="fas fa-star" style="color:#dd6b20" title="Max level"></i>' : '' ?></span>
-								</div>
-								<div class="pna-bar-wrap"><div class="pna-bar<?= $_mcMax ? ' pna-bar-max' : '' ?>" style="width:<?= $_mcPct ?>%"></div></div>
-								<div class="pna-class-credits"><?= $_mcTotal ?> cr<?= !$_mcMax ? ' &middot; ' . $_mcNext . ' for L' . ($_mcLvl+1) : '' ?></div>
-							</div>
-							<?php endforeach; ?>
-						</div>
-						<?php endif; ?>
+						<!-- Class Progress (populated by attendance AJAX) -->
+						<div id="pna-class-progress-body"></div>
 
 						<!-- Officer Roles -->
 						<?php if (!empty($OfficerRoles)): ?>
@@ -879,30 +857,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 							</div>
 						</div>
 
-						<!-- Recent Sign-ins (60 days) -->
-						<?php
-						$_ma60 = date('Y-m-d', strtotime('-60 days'));
-						$_maRecAtt = array_slice(array_values(array_filter($_maDash_att, function($a) use ($_ma60) {
-							return !empty($a['Date']) && $a['Date'] >= $_ma60;
-						})), 0, 5);
-						?>
-						<div class="pna-card">
-							<div class="pna-card-title"><i class="fas fa-calendar-check"></i> Recent Sign-ins <a class="pna-card-more" href="#" onclick="pnActivateTab('attendance');return false;">All <?= $Stats['TotalAttendance'] ?> &rarr;</a></div>
-							<?php if (!empty($_maRecAtt)): ?>
-							<?php foreach ($_maRecAtt as $_ra): ?>
-							<div class="pna-feed-row">
-								<span class="pna-feed-date"><?= date('M j', strtotime($_ra['Date'])) ?></span>
-								<span class="pna-feed-label"><?= htmlspecialchars($_ra['ClassName'] ?? '—') ?></span>
-								<?php if (!empty($_ra['ParkName'])): ?><span class="pna-feed-sub"><?= htmlspecialchars($_ra['ParkName']) ?></span><?php endif; ?>
-							</div>
-							<?php endforeach; ?>
-							<?php else: ?>
-							<div style="font-size:12px;color:#718096;line-height:1.5;">
-								No recent sign-ins. Check out the next events and park days in your
-								<a href="<?= UIR ?>Kingdom/profile/<?= (int)($KingdomId ?? $this->__session->kingdom_id) ?>" style="color:#4299e1;">kingdom</a>.
-							</div>
-							<?php endif; ?>
-						</div>
+						<!-- Recent Sign-ins (populated by attendance AJAX) -->
+						<div id="pna-recent-att-body"></div>
 
 						<!-- Recent Awards (100 days) -->
 						<?php
@@ -1430,94 +1386,16 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php endif; ?>
 			</div>
 
-			<!-- Attendance Tab -->
+			<!-- Attendance Tab (populated by attendance AJAX) -->
 			<div class="pn-tab-panel" id="pn-tab-attendance" style="display:none">
-				<?php $attendanceList = is_array($Details['Attendance']) ? $Details['Attendance'] : array(); ?>
-				<?php
-				// Build per-park edit authority lookup — one HasAuthority call per unique park
-				$parkEditAuth = [];
-				if (isset($this->__session->user_id)) {
-					$uniqueParkIds = array_unique(array_filter(array_column(
-						array_filter($attendanceList, fn($a) => (int)($a['EventId'] ?? 0) === 0),
-						'ParkId'
-					)));
-					foreach ($uniqueParkIds as $pid) {
-						$parkEditAuth[(int)$pid] = Ork3::$Lib->authorization->HasAuthority(
-							$this->__session->user_id, AUTH_PARK, (int)$pid, AUTH_EDIT
-						);
-					}
-				}
-				$canEditAnyAttendance = !empty(array_filter($parkEditAuth));
-				?>
 				<?php if ($canEditAdmin): ?>
 				<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
 					<button class="pn-btn pn-btn-primary" onclick="pnOpenPlayerAttModal()"><i class="fas fa-plus"></i> Add Attendance</button>
 				</div>
 				<?php endif; ?>
-				<?php if (count($attendanceList) > 0): ?>
-					<div class="pn-pagesize-bar">
-						<label for="pn-attendance-pagesize">Show</label>
-						<select id="pn-attendance-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-attendance-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<table class="pn-table pn-sortable" id="pn-attendance-table">
-						<thead>
-							<tr>
-								<th data-sorttype="date">Date</th>
-								<th data-sorttype="text">Kingdom</th>
-								<th data-sorttype="text">Park</th>
-								<th data-sorttype="text">Event</th>
-								<th data-sorttype="text">Class</th>
-								<th data-sorttype="numeric">Credits</th>
-								<?php if ($canEditAnyAttendance): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($attendanceList as $detail): ?>
-								<?php $canEditThisAtt = $parkEditAuth[(int)($detail['ParkId'] ?? 0)] ?? false; ?>
-								<tr>
-									<td class="pn-col-nowrap">
-										<?php if ($detail['ParkId'] > 0): ?>
-											<a href="<?= UIR ?>Attendance/park/<?= $detail['ParkId'] ?>&AttendanceDate=<?= $detail['Date'] ?>"><?= $detail['Date'] ?></a>
-										<?php else: ?>
-											<a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= $detail['Date'] ?></a>
-										<?php endif; ?>
-									</td>
-									<td><a href="<?= UIR ?>Kingdom/profile/<?= $detail['KingdomId'] ?>"><?= htmlspecialchars($detail['KingdomName']) ?></a></td>
-									<td><a href="<?= UIR ?>Park/profile/<?= $detail['ParkId'] ?>"><?= htmlspecialchars($detail['ParkName']) ?></a></td>
-									<td><a href="<?= UIR ?>Event/detail/<?= $detail['EventId'] ?>/<?= $detail['EventCalendarDetailId'] ?>"><?= htmlspecialchars($detail['EventName']) ?></a></td>
-									<td><?= trimlen($detail['Flavor']) > 0 ? htmlspecialchars($detail['Flavor']) : htmlspecialchars($detail['ClassName']) ?></td>
-									<td class="pn-col-numeric"><?= $detail['Credits'] ?></td>
-									<?php if ($canEditAnyAttendance): ?>
-									<td class="pn-award-actions-cell">
-										<?php if ($canEditThisAtt && (int)$detail['EventId'] === 0): ?>
-										<button class="pn-award-action-btn pn-award-edit-btn pn-att-edit-btn"
-										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
-										        data-date="<?= htmlspecialchars($detail['Date']) ?>"
-										        data-credits="<?= (float)$detail['Credits'] ?>"
-										        data-class-id="<?= (int)$detail['ClassId'] ?>"
-										        data-mundane-id="<?= (int)$detail['MundaneId'] ?>"
-										        title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>
-										<button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"
-										        data-att-id="<?= (int)$detail['AttendanceId'] ?>"
-										        data-mundane-id="<?= (int)$detail['MundaneId'] ?>"
-										        title="Delete attendance"><i class="fas fa-trash"></i></button>
-										<?php endif; ?>
-									</td>
-									<?php endif; ?>
-								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php else: ?>
-					<div class="pn-empty">No attendance records</div>
-				<?php endif; ?>
+				<div id="pn-attendance-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
+			<?php $canEditAnyAttendance = $canEditAdmin; ?>
 
 			<!-- Recommendations Tab -->
 			<?php if ($_showRecs): ?><div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
@@ -2258,8 +2136,12 @@ var PnConfig = {
 	duesPeriod:       <?= (int)$_duesPeriod ?>,
 	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
 	lastClassId:      <?= $_lastClassId ?>,
-	attendanceDates:  <?= json_encode(array_values(array_unique(array_filter(array_map(function($a) { return $a['Date'] ?? ''; }, is_array($Details['Attendance']) ? $Details['Attendance'] : []))))) ?>,
-	canEditAnyAttendance: <?= !empty($canEditAnyAttendance) ? 'true' : 'false' ?>,
+	attendanceDates:  [],  // populated async by PlayerAjax/attendance
+	canEditAnyAttendance: <?= !empty($canEditAdmin) ? 'true' : 'false' ?>,
+	isOwnProfile:     <?= !empty($isOwnProfile) ? 'true' : 'false' ?>,
+	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
+	classToParagon:   <?= json_encode($pnClassToParagon) ?>,
+	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
 	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
@@ -2272,10 +2154,9 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 <script>
 pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
 pnSortDesc($('#pn-titles-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-titles-table'), 1);
-pnSortDesc($('#pn-attendance-table'), 0, 'date'); pnPaginate($('#pn-attendance-table'), 1);
 pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
-// 26-week sparkline
-(function() {
+// 26-week sparkline (called on load and again after attendance AJAX)
+function pnRenderSparkline() {
 	var el = document.getElementById('pna-sparkline');
 	if (!el) return;
 	var dates = (typeof PnConfig !== 'undefined' && PnConfig.attendanceDates) ? PnConfig.attendanceDates : [];
@@ -2304,7 +2185,8 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 	el.innerHTML = html;
 	var mel = document.getElementById('pna-spark-months');
 	if (mel) mel.innerHTML = mhtml;
-})();
+}
+pnRenderSparkline();
 </script>
 
 <?php if ($canManageAwards): ?>
@@ -2418,7 +2300,7 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 </div>
 
 <!-- Edit Attendance Modal -->
-<?php if ($canEditAnyAttendance): ?>
+<?php if ($canEditAdmin): ?>
 <div class="pn-overlay" id="pn-att-edit-overlay">
 	<div class="pn-modal-box" style="max-width:400px">
 		<div class="pn-modal-header">
@@ -2639,6 +2521,161 @@ $(function() {
 			}
 		});
 	}
+
+	// ---- Attendance lazy loading (fires immediately on page load) ----
+	(function() {
+		if (!PnConfig.playerId) return;
+		$.getJSON(PnConfig.uir + 'PlayerAjax/attendance/' + PnConfig.playerId, function(r) {
+			if (r.status !== 0) return;
+			var att = r.attendance || [];
+			var total = r.total || 0;
+
+			// Update PnConfig for use by other modals/JS
+			PnConfig.attendanceDates = att.map(function(a) { return a.Date || ''; }).filter(Boolean);
+			PnConfig.canEditAnyAttendance = !!r.canEditAnyAttendance;
+			PnConfig.lastClassId = att.length && att[0].ClassId ? parseInt(att[0].ClassId) : 0;
+
+			// Update stat card and tab count
+			var statEl = document.getElementById('pn-att-stat-count');
+			if (statEl) statEl.textContent = total;
+			var tabEl = document.getElementById('pn-att-tab-count');
+			if (tabEl) tabEl.textContent = '(' + total + ')';
+			var lastEl = document.getElementById('pn-att-last-class');
+			if (lastEl) lastEl.textContent = r.lastClass || '—';
+
+			// Re-render sparkline now that dates are populated
+			if (typeof pnRenderSparkline === 'function') pnRenderSparkline();
+
+			// ---- Attendance tab ----
+			var body = document.getElementById('pn-attendance-body');
+			if (body) {
+				var canEditAny = !!r.canEditAnyAttendance;
+				var parkAuth   = r.parkEditAuth || {};
+				var esc = function(s) { return $('<div>').text(s || '').html(); };
+				var uir = PnConfig.uir;
+				if (!att.length) {
+					body.innerHTML = '<div class="pn-empty">No attendance records</div>';
+				} else {
+					var html = '<div class="pn-pagesize-bar"><label for="pn-attendance-pagesize">Show</label>'
+						+ '<select id="pn-attendance-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize(\'pn-attendance-table\', this.value)">'
+						+ '<option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>'
+						+ '</select><span>per page</span></div>'
+						+ '<table class="pn-table pn-sortable" id="pn-attendance-table"><thead><tr>'
+						+ '<th data-sorttype="date">Date</th><th data-sorttype="text">Kingdom</th>'
+						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
+						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
+						+ (canEditAny ? '<th style="width:52px;min-width:52px"></th>' : '')
+						+ '</tr></thead><tbody>';
+					att.forEach(function(d) {
+						var pid = parseInt(d.ParkId) || 0;
+						var eid = parseInt(d.EventId) || 0;
+						var ecid = parseInt(d.EventCalendarDetailId) || 0;
+						var dateLink = pid > 0
+							? '<a href="' + uir + 'Attendance/park/' + pid + '&AttendanceDate=' + esc(d.Date) + '">' + esc(d.Date) + '</a>'
+							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
+						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
+						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						html += '<tr>'
+							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
+							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
+							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
+							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
+							+ '<td>' + classLabel + '</td>'
+							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>';
+						if (canEditAny) {
+							html += '<td class="pn-award-actions-cell">';
+							if (canEditThis) {
+								html += '<button class="pn-award-action-btn pn-award-edit-btn pn-att-edit-btn"'
+									+ ' data-att-id="' + parseInt(d.AttendanceId) + '"'
+									+ ' data-date="' + esc(d.Date) + '"'
+									+ ' data-credits="' + parseFloat(d.Credits) + '"'
+									+ ' data-class-id="' + parseInt(d.ClassId) + '"'
+									+ ' data-mundane-id="' + parseInt(d.MundaneId) + '"'
+									+ ' title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>'
+									+ ' <button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"'
+									+ ' data-att-id="' + parseInt(d.AttendanceId) + '"'
+									+ ' data-mundane-id="' + parseInt(d.MundaneId) + '"'
+									+ ' title="Delete attendance"><i class="fas fa-trash"></i></button>';
+							}
+							html += '</td>';
+						}
+						html += '</tr>';
+					});
+					body.innerHTML = html + '</tbody></table>';
+					pnSortDesc($('#pn-attendance-table'), 0, 'date');
+					pnPaginate($('#pn-attendance-table'), 1);
+				}
+			}
+
+			// ---- My Amtgard sections (own profile only) ----
+			if (!PnConfig.isOwnProfile) return;
+
+			// Class Progress
+			var cpBody = document.getElementById('pna-class-progress-body');
+			if (cpBody) {
+				var recentClassIds = [], seen = {};
+				att.forEach(function(a) {
+					var cid = parseInt(a.ClassId) || 0;
+					if (cid > 0 && !seen[cid]) { seen[cid] = true; recentClassIds.push(cid); }
+				});
+				recentClassIds = recentClassIds.slice(0, 3);
+				var classList = PnConfig.classList || [];
+				var classMap = {};
+				classList.forEach(function(c) { classMap[parseInt(c.ClassId)] = c; });
+				var classToParagon = PnConfig.classToParagon || {};
+				var heldAwardIds = {};
+				(PnConfig.heldAwardIds || []).forEach(function(id) { heldAwardIds[parseInt(id)] = true; });
+				var maClasses = recentClassIds.map(function(cid) { return classMap[cid]; }).filter(function(c) {
+					return c && ((parseInt(c.Credits||0) + parseInt(c.Reconciled||0)) > 0);
+				});
+				if (!maClasses.length) { cpBody.innerHTML = ''; return; }
+				var maHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab(\'classes\');return false;">All &rarr;</a></div><div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>';
+				var thresholds = [0,5,12,21,34,53];
+				maClasses.forEach(function(mc) {
+					var total = parseInt(mc.Credits||0) + parseInt(mc.Reconciled||0);
+					var lvl = total>=53?6:total>=34?5:total>=21?4:total>=12?3:total>=5?2:1;
+					var pct = total>=53?100:Math.round((total/thresholds[lvl])*100);
+					var isMax = total >= 53;
+					var next = thresholds[lvl] || 53;
+					var parId = classToParagon[parseInt(mc.ClassId)] || 0;
+					var hasPar = parId > 0 && !!heldAwardIds[parId];
+					maHtml += '<div class="pna-class-row">'
+						+ '<div class="pna-class-header">'
+						+ '<span class="pna-class-name">' + $('<div>').text(mc.ClassName||'').html() + (hasPar ? ' <span class="pna-paragon-dot" title="Paragon"><i class="fas fa-crown"></i></span>' : '') + '</span>'
+						+ '<span class="pna-class-level">L' + lvl + (isMax ? ' <i class="fas fa-star" style="color:#dd6b20" title="Max level"></i>' : '') + '</span>'
+						+ '</div>'
+						+ '<div class="pna-bar-wrap"><div class="pna-bar' + (isMax?' pna-bar-max':'') + '" style="width:' + pct + '%"></div></div>'
+						+ '<div class="pna-class-credits">' + total + ' cr' + (!isMax ? ' &middot; ' + next + ' for L' + (lvl+1) : '') + '</div>'
+						+ '</div>';
+				});
+				cpBody.innerHTML = maHtml + '</div>';
+			}
+
+			// Recent Sign-ins
+			var raBody = document.getElementById('pna-recent-att-body');
+			if (raBody) {
+				var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
+				var cutStr = cutoff.getFullYear() + '-' + String(cutoff.getMonth()+1).padStart(2,'0') + '-' + String(cutoff.getDate()).padStart(2,'0');
+				var recAtt = att.filter(function(a) { return a.Date && a.Date >= cutStr; }).slice(0, 5);
+				var months2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+				var raHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-calendar-check"></i> Recent Sign-ins <a class="pna-card-more" href="#" onclick="pnActivateTab(\'attendance\');return false;">All ' + total + ' &rarr;</a></div>';
+				if (recAtt.length) {
+					recAtt.forEach(function(ra) {
+						var d2 = new Date(ra.Date + 'T00:00:00');
+						var lbl = months2[d2.getMonth()] + ' ' + d2.getDate();
+						raHtml += '<div class="pna-feed-row">'
+							+ '<span class="pna-feed-date">' + lbl + '</span>'
+							+ '<span class="pna-feed-label">' + $('<div>').text(ra.ClassName||'—').html() + '</span>'
+							+ (ra.ParkName ? '<span class="pna-feed-sub">' + $('<div>').text(ra.ParkName).html() + '</span>' : '')
+							+ '</div>';
+					});
+				} else {
+					raHtml += '<div style="font-size:12px;color:#718096;line-height:1.5;">No recent sign-ins. Check out the next events and park days in your <a href="' + PnConfig.kingdomUrl + '" style="color:#4299e1;">kingdom</a>.</div>';
+				}
+				raBody.innerHTML = raHtml + '</div>';
+			}
+		});
+	})();
 
 	// ---- Dues history lazy loading ----
 	function pnRenderDuesHtml(dues, isAdmin) {
