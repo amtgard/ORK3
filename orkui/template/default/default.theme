@@ -181,6 +181,9 @@
 				<div class='nav-dropdown-menu' style='min-width:200px'>
 					<a href='https://www.amtgard.com/' target='_blank'><i class='fas fa-globe'></i> Amtgard Website</a>
 					<a href='https://wiki.amtgard.com/Main_Page' target='_blank'><i class='fas fa-book-open'></i> Amtgard Wiki</a>
+					<?php if ($this->__session->token != null) : ?>
+					<a href='https://discord.gg/YTS82nxnsh' target='_blank'><i class='fab fa-discord'></i> Amtgard ORK Discord</a>
+					<?php endif; ?>
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
 					<div class='nav-dropdown-divider'></div>
 					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
