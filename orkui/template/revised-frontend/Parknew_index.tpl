@@ -699,7 +699,7 @@
 									<button class="plr-gear-btn" id="pk-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 									<div class="plr-gear-menu" id="pk-plr-gear-menu">
 										<button class="plr-gear-item" onclick="pkOpenMovePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-people-arrows"></i> Move Player</button>
-										<button class="plr-gear-item" onclick="pkOpenMergePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button>
+										<?php if (!empty($CanMergePlayers)): ?><button class="plr-gear-item" onclick="pkOpenMergePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button><?php endif; ?>
 									</div>
 								</div>
 							</div>
@@ -1032,7 +1032,7 @@
 						<ul>
 							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Create Player</a></li>
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
-							<li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li>
+							<?php if (!empty($CanMergePlayers)): ?><li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li><?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
 						</ul>
 					</div>

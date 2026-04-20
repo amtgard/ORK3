@@ -248,6 +248,8 @@ class Controller_Park extends Controller
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_EDIT);
 		$this->data['CanAdminPark']  = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
+		$this->data['CanMergePlayers'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_CREATE);
 
 		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
