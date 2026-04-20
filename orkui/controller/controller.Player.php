@@ -373,22 +373,7 @@ class Controller_Player extends Controller {
 			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
 		}
 
-		// Voting eligibility badge — supported kingdoms only
-		$this->data['VotingEligible']         = false;
-		$this->data['VotingProvinceMode']      = false;
-		$this->data['VotingProvinceEligible']  = false;
-		$this->data['ActiveKnight']            = false;
-		$this->data['ActiveMember']            = null;
-		$_votingKingdoms = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3, 24, 12];
-		$_playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
-		if (in_array($_playerKingdomId, $_votingKingdoms)) {
-			$_vr = $this->Reports->get_voting_eligible_for_player((int)$id, $_playerKingdomId);
-			$this->data['VotingEligible']        = !empty($_vr['Players'][0]['VotingEligible']);
-			$this->data['VotingProvinceMode']     = !empty($_vr['ProvinceMode']);
-			$this->data['VotingProvinceEligible'] = !empty($_vr['Players'][0]['ProvinceEligible']);
-			$this->data['ActiveKnight']           = !empty($_vr['Players'][0]['ActiveKnight']);
-			$this->data['ActiveMember']           = $_vr['Players'][0]['ActiveMember'] ?? null;
-		}
+		// Voting eligibility badge loaded via AJAX after page render (PlayerAjax/voting_eligible)
 
 		global $DB;
 		$DB->Clear();

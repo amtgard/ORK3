@@ -378,6 +378,41 @@ class Controller_PlayerAjax extends Controller {
 			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 		exit;
 	}
+	public function voting_eligible($p = null) {
+		header('Content-Type: application/json');
+		$mundane_id = (int)($p ?? 0);
+		if (!valid_id($mundane_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid player ID']);
+			exit;
+		}
+		$this->load_model('Reports');
+		global $DB;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $mundane_id LIMIT 1");
+		if (!$rs || !$rs->Next()) {
+			echo json_encode(['status' => 1, 'error' => 'Player not found']);
+			exit;
+		}
+		$kingdom_id = (int)$rs->kingdom_id;
+		$DB->Clear();
+		$supported = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3, 24, 12];
+		if (!in_array($kingdom_id, $supported)) {
+			echo json_encode(['status' => 0, 'eligible' => false]);
+			exit;
+		}
+		$vr     = $this->Reports->get_voting_eligible_for_player($mundane_id, $kingdom_id);
+		$player = $vr['Players'][0] ?? [];
+		echo json_encode([
+			'status'           => 0,
+			'eligible'         => !empty($player['VotingEligible']),
+			'province_mode'    => !empty($vr['ProvinceMode']),
+			'province_eligible'=> !empty($player['ProvinceEligible']),
+			'active_knight'    => !empty($player['ActiveKnight']),
+			'active_member'    => $player['ActiveMember'] ?? null,
+		]);
+		exit;
+	}
+
 	public function save_my_email() {
 		header('Content-Type: application/json');
 		if (!isset($this->session->user_id)) {

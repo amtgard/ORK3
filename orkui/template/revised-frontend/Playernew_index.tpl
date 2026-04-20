@@ -455,16 +455,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php else: ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> No Dues on File</span>
 				<?php endif; ?>
-				<?php if (!empty($VotingEligible)): ?>
-					<span class="pn-badge pn-badge-blue"><i class="fas fa-vote-yea"></i> Voting Eligible<?php
-						if (!empty($VotingProvinceMode)):
-							?> <span class="pn-badge-sub"><?= !empty($VotingProvinceEligible) ? 'Province &amp; Kingdom' : 'Kingdom' ?></span><?php
-						elseif (!empty($ActiveKnight)):
-							?> <span class="pn-badge-sub">Active Knight</span><?php
-						elseif ($ActiveMember === false && isset($ActiveMember)):
-							?> <span class="pn-badge-sub">Contributing</span><?php
-						endif; ?></span>
-				<?php endif; ?>
+				<span id="pn-voting-badge" style="display:none;" class="pn-badge pn-badge-blue"><i class="fas fa-vote-yea"></i> Voting Eligible<span id="pn-voting-badge-sub" class="pn-badge-sub" style="display:none;"></span></span>
 				<?php if (!empty($OfficerRoles)): ?>
 					<?php foreach ($OfficerRoles as $office): ?>
 						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>
@@ -2768,6 +2759,21 @@ pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-tabl
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
 $(function() {
+	// Voting eligibility badge — loaded async so it doesn't block page render
+	if (PnConfig.playerId) {
+		$.getJSON(PnConfig.uir + 'PlayerAjax/voting_eligible/' + PnConfig.playerId, function(r) {
+			if (r.status === 0 && r.eligible) {
+				var sub = '';
+				if (r.province_mode)     sub = r.province_eligible ? 'Province &amp; Kingdom' : 'Kingdom';
+				else if (r.active_knight) sub = 'Active Knight';
+				else if (r.active_member === false) sub = 'Contributing';
+				var $sub = $('#pn-voting-badge-sub');
+				if (sub) { $sub.html(sub).show(); }
+				$('#pn-voting-badge').show();
+			}
+		});
+	}
+
 	if ($('#pn-rec-table').length) {
 		$('#pn-rec-table').DataTable({
 			order: [[2, 'desc']],
