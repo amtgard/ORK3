@@ -308,6 +308,207 @@ html[data-theme="dark"] #ev-rsvp-credits {
 html[data-theme="dark"] #ev-rsvp-table thead th label { color: var(--ork-text-muted) !important; }
 html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); color: var(--ork-bg, #1a202c); }
 
+/* =====================================================
+   DARK MODE — Schedule tab (list + grid)
+   Category palette: darkened, hue-tinted bgs w/ lighter text
+   ===================================================== */
+html[data-theme="dark"] .ev-sched-day-header {
+	color: var(--ork-text); border-bottom-color: var(--ork-border);
+	background: transparent; border-top: none; border-left: none; border-right: none;
+	padding: 3px 0 5px; border-radius: 0; text-shadow: none;
+}
+html[data-theme="dark"] .ev-grid-day { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-grid-day-header { background: var(--ork-bg-secondary); color: var(--ork-text); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ev-grid-header-row { background: var(--ork-card-bg); }
+html[data-theme="dark"] .ev-grid-time-col-head { background: var(--ork-card-bg); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ev-grid-time-col { background: var(--ork-bg-secondary); border-right-color: var(--ork-border); }
+html[data-theme="dark"] .ev-grid-time-hour { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .ev-grid-time-half { border-top-color: rgba(255,255,255,0.05); }
+html[data-theme="dark"] .ev-grid-time-lbl { background: var(--ork-bg-secondary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-grid-col { border-left-color: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .ev-grid-block { color: var(--ork-text); border-color: rgba(0,0,0,0.4); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .ev-grid-block:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.55); }
+html[data-theme="dark"] .ev-grid-block-title { color: var(--ork-text); }
+html[data-theme="dark"] .ev-grid-block-time { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-grid-block-loc { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-grid-block-loc i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-grid-lead-chip { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-grid-cat-count { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.14); color: var(--ork-text); }
+html[data-theme="dark"] .ev-grid-now-dot { box-shadow: 0 0 0 2px var(--ork-bg-secondary); }
+html[data-theme="dark"] .ev-grid-popover { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); box-shadow: 0 8px 24px rgba(0,0,0,0.55); }
+html[data-theme="dark"] .ev-grid-popover h5 { color: var(--ork-text); }
+html[data-theme="dark"] .ev-grid-popover .ev-gp-row { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-grid-popover .ev-gp-row i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-grid-popover-flip:before { border-top-color: var(--ork-card-bg); }
+/* Inactive filter pill */
+html[data-theme="dark"] .ev-sched-pill-inactive { background: var(--ork-bg-secondary) !important; border-color: var(--ork-border) !important; color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] .ev-sched-pill-inactive i { color: var(--ork-text-muted) !important; }
+
+/* Per-category dark palettes — row bg (list), cat-head bg (grid), block bg (grid), col hour-line tint */
+/* Administrative */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Administrative"] { background: #2a3136 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] { background: #2a3136 !important; border-bottom-color: #90a4ae !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] .ev-grid-cat-label { color: #cfd8dc !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] > i { color: #90a4ae !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Administrative"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(144,164,174,0.12) 55px, rgba(144,164,174,0.12) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Administrative"] { background: #2a3136 !important; border-left-color: #90a4ae !important; }
+
+/* Tournament */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Tournament"] { background: #3a2f15 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] { background: #3a2f15 !important; border-bottom-color: #ffd54f !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] .ev-grid-cat-label { color: #ffe082 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] > i { color: #ffd54f !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Tournament"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(255,213,79,0.10) 55px, rgba(255,213,79,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Tournament"] { background: #3a2f15 !important; border-left-color: #ffd54f !important; }
+
+/* Battlegame */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Battlegame"] { background: #3d1e1a !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] { background: #3d1e1a !important; border-bottom-color: #ff9a93 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] .ev-grid-cat-label { color: #ffb4ae !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] > i { color: #ff9a93 !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Battlegame"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(255,154,147,0.10) 55px, rgba(255,154,147,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Battlegame"] { background: #3d1e1a !important; border-left-color: #ff9a93 !important; }
+
+/* Arts and Sciences */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Arts and Sciences"] { background: #2d1935 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] { background: #2d1935 !important; border-bottom-color: #ce93d8 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] .ev-grid-cat-label { color: #e1bee7 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] > i { color: #ce93d8 !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Arts and Sciences"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(206,147,216,0.10) 55px, rgba(206,147,216,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Arts and Sciences"] { background: #2d1935 !important; border-left-color: #ce93d8 !important; }
+
+/* Class */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Class"] { background: #0f2540 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] { background: #0f2540 !important; border-bottom-color: #90caf9 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] .ev-grid-cat-label { color: #bbdefb !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] > i { color: #90caf9 !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Class"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(144,202,249,0.10) 55px, rgba(144,202,249,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Class"] { background: #0f2540 !important; border-left-color: #90caf9 !important; }
+
+/* Feast and Food */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Feast and Food"] { background: #3a2410 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] { background: #3a2410 !important; border-bottom-color: #ffb74d !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] .ev-grid-cat-label { color: #ffcc80 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] > i { color: #ffb74d !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Feast and Food"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(255,183,77,0.10) 55px, rgba(255,183,77,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Feast and Food"] { background: #3a2410 !important; border-left-color: #ffb74d !important; }
+
+/* Court */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Court"] { background: #2a201d !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] { background: #2a201d !important; border-bottom-color: #bcaaa4 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] .ev-grid-cat-label { color: #d7ccc8 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] > i { color: #bcaaa4 !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Court"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(188,170,164,0.10) 55px, rgba(188,170,164,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Court"] { background: #2a201d !important; border-left-color: #bcaaa4 !important; }
+
+/* Meeting */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Meeting"] { background: #143024 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] { background: #143024 !important; border-bottom-color: #81c784 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] .ev-grid-cat-label { color: #a5d6a7 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] > i { color: #81c784 !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Meeting"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(129,199,132,0.10) 55px, rgba(129,199,132,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Meeting"] { background: #143024 !important; border-left-color: #81c784 !important; }
+
+/* Other */
+html[data-theme="dark"] .ev-sched-table tr[data-category="Other"] { background: #2a2a2a !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] { background: #2a2a2a !important; border-bottom-color: #bdbdbd !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] .ev-grid-cat-label { color: #e0e0e0 !important; }
+html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] > i { color: #bdbdbd !important; }
+html[data-theme="dark"] .ev-grid-col[data-category="Other"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(189,189,189,0.10) 55px, rgba(189,189,189,0.10) 56px) !important; }
+html[data-theme="dark"] .ev-grid-block[data-category="Other"] { background: #2a2a2a !important; border-left-color: #bdbdbd !important; }
+
+/* =====================================================
+   Flatpickr time picker — obvious up/down carat buttons
+   stacked above and below hour & minute inputs using a
+   flex column so they don't overlap the input.
+   Hour step = 1, minute step = 5 (set via JS opts).
+   ===================================================== */
+.flatpickr-time { overflow: visible !important; height: auto !important; max-height: none !important; align-items: center !important; min-height: 80px !important; padding: 4px 0 !important; }
+.flatpickr-time .numInputWrapper {
+	position: relative !important;
+	overflow: visible !important;
+	display: inline-flex !important;
+	flex-direction: column !important;
+	align-items: stretch !important;
+	justify-content: center !important;
+	padding: 0 !important;
+	margin: 0 2px !important;
+	height: auto !important;
+	width: 72px !important;
+	gap: 3px !important;
+}
+.flatpickr-time input.flatpickr-hour,
+.flatpickr-time input.flatpickr-minute {
+	order: 2 !important;
+	font-size: 15px !important;
+	font-weight: 700 !important;
+	height: 28px !important;
+	line-height: 28px !important;
+	width: 100% !important;
+	text-align: center !important;
+	margin: 0 !important;
+}
+.flatpickr-time .numInputWrapper span.arrowUp,
+.flatpickr-time .numInputWrapper span.arrowDown {
+	position: static !important;
+	display: block !important;
+	width: 100% !important;
+	height: 18px !important;
+	opacity: 1 !important;
+	background: #ebf8ff !important;
+	border: 1px solid #90cdf4 !important;
+	border-radius: 3px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	cursor: pointer !important;
+	transition: background .12s, border-color .12s !important;
+	flex-shrink: 0 !important;
+}
+.flatpickr-time .numInputWrapper span.arrowUp   { order: 1 !important; }
+.flatpickr-time .numInputWrapper span.arrowDown { order: 3 !important; }
+.flatpickr-time .numInputWrapper span.arrowUp:hover,
+.flatpickr-time .numInputWrapper span.arrowDown:hover { background: #bee3f8 !important; border-color: #4299e1 !important; }
+.flatpickr-time .numInputWrapper span.arrowUp:after,
+.flatpickr-time .numInputWrapper span.arrowDown:after {
+	content: '' !important;
+	position: absolute !important;
+	left: 50% !important;
+	transform: translateX(-50%) !important;
+	width: 0 !important;
+	height: 0 !important;
+	border-style: solid !important;
+	margin: 0 !important;
+	opacity: 1 !important;
+	top: auto !important;
+	bottom: auto !important;
+}
+.flatpickr-time .numInputWrapper span.arrowUp:after {
+	top: 4px !important;
+	border-width: 0 6px 8px 6px !important;
+	border-color: transparent transparent #2b6cb0 transparent !important;
+}
+.flatpickr-time .numInputWrapper span.arrowDown:after {
+	bottom: 4px !important;
+	border-width: 8px 6px 0 6px !important;
+	border-color: #2b6cb0 transparent transparent transparent !important;
+}
+.flatpickr-time .flatpickr-am-pm { align-self: center !important; }
+.flatpickr-time .flatpickr-time-separator { align-self: center !important; line-height: 1 !important; }
+/* Dark mode */
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowUp,
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowDown {
+	background: #1a365d !important;
+	border-color: #2c5282 !important;
+}
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowUp:hover,
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowDown:hover {
+	background: #2c5282 !important;
+	border-color: #4299e1 !important;
+}
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowUp:after { border-bottom-color: #90cdf4 !important; }
+html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowDown:after { border-top-color: #90cdf4 !important; }
+
+
 .ev-sched-pill {
 	display: inline-flex; align-items: center; padding: 4px 11px;
 	border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer;
@@ -688,14 +889,6 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 			<?php // ---- Schedule Tab ---- ?>
 			<div class="ev-tab-panel" id="ev-tab-schedule">
 
-				<?php if ($canManageSchedule): ?>
-				<div style="margin-bottom:14px">
-					<button type="button" class="ev-submit-btn" style="float:right" onclick="evOpenScheduleModal()">
-						<i class="fas fa-plus"></i> Add Schedule Item
-					</button>
-				</div>
-				<?php endif; ?>
-
 				<?php
 			$evSchedCategories = [
 				'Administrative'    => ['icon' => 'fa-clipboard-list', 'color' => '#546e7a', 'bg' => '#eceff1'],
@@ -715,6 +908,11 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 					<button type="button" class="ev-grid-view-btn" data-ev-view="list" aria-pressed="true"><i class="fas fa-list-ul"></i> List</button>
 					<button type="button" class="ev-grid-view-btn" data-ev-view="grid" aria-pressed="false"><i class="fas fa-th"></i> Grid</button>
 				</div>
+				<?php if ($canManageSchedule): ?>
+				<button type="button" class="ev-submit-btn" onclick="evOpenScheduleModal()">
+					<i class="fas fa-plus"></i> Add Schedule Item
+				</button>
+				<?php endif; ?>
 			</div>
 			<div id="ev-sched-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
 			<div id="ev-schedule-container">
@@ -862,7 +1060,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 									$cCfg = $evSchedCategories[$cName];
 									$cCount = count($catBuckets[$cName]);
 								?>
-								<div class="ev-grid-cat-head" style="background:<?= $cCfg['bg'] ?>;border-bottom-color:<?= $cCfg['color'] ?>">
+								<div class="ev-grid-cat-head" data-category="<?= htmlspecialchars($cName, ENT_QUOTES) ?>" style="background:<?= $cCfg['bg'] ?>;border-bottom-color:<?= $cCfg['color'] ?>">
 									<i class="fas fa-fw <?= $cCfg['icon'] ?>" style="color:<?= $cCfg['color'] ?>"></i>
 									<span class="ev-grid-cat-label" style="color:<?= $cCfg['color'] ?>"><?= htmlspecialchars($cName) ?></span>
 									<span class="ev-grid-cat-count"><?= (int)$cCount ?></span>
@@ -884,7 +1082,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 								<?php foreach ($activeCats as $cName):
 									$cCfg = $evSchedCategories[$cName];
 								?>
-								<div class="ev-grid-col" style="background:repeating-linear-gradient(to bottom, transparent 0, transparent 55px, #f4f6f8 55px, #f4f6f8 56px)">
+								<div class="ev-grid-col" data-category="<?= htmlspecialchars($cName, ENT_QUOTES) ?>" style="background:repeating-linear-gradient(to bottom, transparent 0, transparent 55px, #f4f6f8 55px, #f4f6f8 56px)">
 									<?php foreach ($catBuckets[$cName] as $entry):
 										$it  = $entry['item'];
 										$sid = (int)$it['EventScheduleId'];
@@ -904,6 +1102,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 									?>
 									<div class="ev-grid-block<?= $compact ? ' ev-grid-block-compact' : '' ?>"
 										data-schedule-id="<?= $sid ?>"
+										data-category="<?= htmlspecialchars($cName, ENT_QUOTES) ?>"
 										tabindex="0" role="button" aria-label="<?= htmlspecialchars($blockLabel, ENT_QUOTES) ?>"
 										style="top:<?= (int)round($topPx) ?>px;height:<?= (int)round($hPx) ?>px;left:calc(<?= $leftPct ?>% + 2px);width:calc(<?= $widthPct ?>% - 4px);background:<?= $cCfg['bg'] ?>;border-left-color:<?= $cCfg['color'] ?>;<?= $secCfg ? 'box-shadow: inset -4px 0 0 '. $secCfg['color'] .', 0 1px 2px rgba(0,0,0,0.08);' : '' ?>"
 										onclick="evGridBlockClick(<?= $sid ?>, event)">
@@ -1902,11 +2101,11 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<div class="ev-modal-row">
 				<div class="ev-modal-field">
 					<label>Start Time <span style="color:#e53e3e">*</span></label>
-					<input type="datetime-local" id="ev-sched-start" style="width:100%">
+					<input type="text" id="ev-sched-start" autocomplete="off" style="width:100%">
 				</div>
 				<div class="ev-modal-field">
 					<label>End Time <span style="color:#e53e3e">*</span></label>
-					<input type="datetime-local" id="ev-sched-end" style="width:100%">
+					<input type="text" id="ev-sched-end" autocomplete="off" style="width:100%">
 				</div>
 			</div>
 			<div class="ev-modal-row">
@@ -1986,11 +2185,17 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<div class="ev-modal-error" id="ev-sched-error" style="display:none"></div>
 		</div>
 		<div class="ev-modal-footer">
-			<button class="ev-btn ev-btn-outline" type="button" onclick="evCloseScheduleModal()">Cancel</button>
+			<button class="ev-btn ev-btn-outline" type="button" onclick="evCloseScheduleModal()" style="margin-right:auto">Close</button>
 			<input type="hidden" id="ev-sched-mode" value="add">
 			<input type="hidden" id="ev-sched-id" value="">
-			<button class="ev-submit-btn" type="button" id="ev-sched-save-btn" onclick="evSubmitSchedule()">
-				<i class="fas fa-save"></i> <span id="ev-sched-save-label">Save</span>
+			<button class="ev-submit-btn ev-sched-save-any ev-sched-save-secondary" type="button" id="ev-sched-save-similar-btn" onclick="evSubmitSchedule('similar')">
+				<i class="fas fa-copy"></i> <span>Save and Create Similar</span>
+			</button>
+			<button class="ev-submit-btn ev-sched-save-any ev-sched-save-secondary" type="button" id="ev-sched-save-new-btn" onclick="evSubmitSchedule('new')">
+				<i class="fas fa-plus"></i> <span>Save and Create New</span>
+			</button>
+			<button class="ev-submit-btn ev-sched-save-any" type="button" id="ev-sched-save-btn" onclick="evSubmitSchedule('close')">
+				<i class="fas fa-save"></i> <span id="ev-sched-save-label">Save and Close</span>
 			</button>
 		</div>
 	</div>
@@ -2348,7 +2553,6 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	});
 })();
 <?php endif; ?>
-}
 
 
 // ── Feast / Schedule integration helpers ─────────────────────────────────────
@@ -2471,7 +2675,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	// Allergens right after. Restored in a finally block so we never leave the
 	// prototype mutated even if the inner function throws.
 	var _origEvSubmitSchedule = window.evSubmitSchedule;
-	window.evSubmitSchedule = function() {
+	window.evSubmitSchedule = function(postAction) {
 		var panel = document.getElementById('ev-sched-meal-panel');
 		var hasMealPanel = panel && panel.style.display !== 'none';
 		var _origAppend = FormData.prototype.append;
@@ -2499,7 +2703,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			};
 		}
 		try {
-			_origEvSubmitSchedule();
+			_origEvSubmitSchedule(postAction);
 		} finally {
 			FormData.prototype.append = _origAppend;
 		}
@@ -2570,29 +2774,110 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			evSchedToggleMealPanel();
 		}
 	};
+
+	// Flatpickr on schedule modal start/end — 5-minute increments, visible up/down carats.
+	// Wrappers sync the picker display with values the base open-modal code assigns to .value.
+	if (EvConfig.canManageSchedule && typeof flatpickr === 'function' && document.getElementById('ev-sched-start')) {
+		var _schedFpOpts = {
+			enableTime:      true,
+			dateFormat:      'Y-m-d\\TH:i',
+			altInput:        true,
+			altFormat:       'F j, Y  h:i K',
+			minuteIncrement: 5,
+			time_24hr:       false,
+			allowInput:      false,
+			onReady: function(sel, str, fp) { fp.calendarContainer.classList.add('ev-sched-fp'); }
+		};
+		if (EvConfig.eventStart) _schedFpOpts.minDate = EvConfig.eventStart;
+		if (EvConfig.eventEnd)   _schedFpOpts.maxDate = EvConfig.eventEnd;
+
+		var _schedFpEnd = flatpickr('#ev-sched-end', _schedFpOpts);
+		var _schedFpStart = flatpickr('#ev-sched-start', Object.assign({}, _schedFpOpts, {
+			onChange: function(selectedDates, dateStr, fp) {
+				if (!selectedDates[0] || !_schedFpEnd) return;
+				// Auto-set end = start + 1hr (matches the sibling DOM change listener in revised.js).
+				var t = new Date(selectedDates[0].getTime() + 60 * 60 * 1000);
+				_schedFpEnd.setDate(t, false);
+			}
+		}));
+
+		// Snap a Date up to the next 5-minute mark (e.g. 06:32 → 06:35).
+		// Ceiling (not rounding) so the snapped date stays at-or-after minDate.
+		function _snap5(d) {
+			if (!d) return d;
+			var ms = 5 * 60 * 1000;
+			return new Date(Math.ceil(d.getTime() / ms) * ms);
+		}
+
+		// Sync picker display after the base open-modal functions assign .value directly,
+		// and round any initial value to a 5-minute increment so the displayed time stays
+		// aligned with the ±5 minute carat stepping.
+		function _schedFpSyncFromValue() {
+			var s = document.getElementById('ev-sched-start');
+			var e = document.getElementById('ev-sched-end');
+			if (s && s._flatpickr) {
+				s._flatpickr.setDate(s.value || null, false);
+				var sd = s._flatpickr.selectedDates[0];
+				if (sd) s._flatpickr.setDate(_snap5(sd), false);
+			}
+			if (e && e._flatpickr) {
+				e._flatpickr.setDate(e.value || null, false);
+				var ed = e._flatpickr.selectedDates[0];
+				if (ed) e._flatpickr.setDate(_snap5(ed), false);
+			}
+		}
+		var _origOpenForFp     = window.evOpenScheduleModal;
+		var _origEditOpenForFp = window.evOpenScheduleEditModal;
+		window.evOpenScheduleModal = function() {
+			if (_origOpenForFp) _origOpenForFp();
+			_schedFpSyncFromValue();
+		};
+		window.evOpenScheduleEditModal = function(id, btn) {
+			if (_origEditOpenForFp) _origEditOpenForFp(id, btn);
+			_schedFpSyncFromValue();
+		};
+	}
 })();
 </script>
 <style>
 /* ==================================================
    Schedule Grid View (ev-grid-*)
    ================================================== */
-.ev-grid-view-toolbar { display:flex; justify-content:flex-end; margin-bottom:10px; }
+.ev-grid-view-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 14px;
+}
 .ev-grid-view-toggle {
-	display:inline-flex; background:#fff; border:1px solid #e2e8f0;
-	border-radius:999px; padding:3px; gap:2px;
-	box-shadow:0 1px 2px rgba(0,0,0,0.04);
+	display: inline-flex; background: #fff; border: 1px solid #e2e8f0;
+	border-radius: 999px; padding: 3px; gap: 2px;
+	box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .ev-grid-view-btn {
-	background:transparent; border:none; padding:6px 14px;
-	font-size:12px; font-weight:600; color:#718096; cursor:pointer;
-	border-radius:999px; display:inline-flex; align-items:center; gap:6px;
+	background: transparent; border: none; padding: 6px 14px;
+	font-size: 12px; font-weight: 600; color: #718096; cursor: pointer;
+	border-radius: 999px; display: inline-flex; align-items: center; gap: 6px;
 	transition: background .15s, color .15s;
 }
-.ev-grid-view-btn:hover { color:#2d3748; }
+.ev-grid-view-btn:hover { color: #2d3748; }
 .ev-grid-view-btn.ev-grid-view-active {
-	background:#2d3748; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.15);
+	background: #2d3748; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
-.ev-grid-view-btn i { font-size:11px; }
+.ev-grid-view-btn i { font-size: 11px; }
+
+/* Dark mode toggle */
+html[data-theme="dark"] .ev-grid-view-toggle {
+	background: var(--ork-bg-secondary);
+	border-color: var(--ork-border);
+	box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .ev-grid-view-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-grid-view-btn:hover { color: var(--ork-text); }
+html[data-theme="dark"] .ev-grid-view-btn.ev-grid-view-active {
+	background: #4299e1; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+}
 
 .ev-grid-day { margin-bottom:24px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
 .ev-grid-day-header {

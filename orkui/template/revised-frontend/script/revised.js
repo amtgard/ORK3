@@ -6677,7 +6677,11 @@ $(document).ready(function() {
         document.getElementById('ev-checkin-mundane-id').value = mundaneId;
         document.getElementById('ev-checkin-name').textContent = personaName;
         var creditsInput = document.querySelector('#ev-checkin-form [name="Credits"]');
-        if (creditsInput) creditsInput.value = evGetSavedCredits();
+        if (creditsInput) {
+            var rsvpCr = document.getElementById('ev-rsvp-credits');
+            var rsvpVal = rsvpCr ? parseFloat(rsvpCr.value) : NaN;
+            creditsInput.value = (rsvpVal > 0) ? rsvpVal : evGetSavedCredits();
+        }
         if (classId) {
             var classSelect = document.querySelector('#ev-checkin-form [name="ClassId"]');
             if (classSelect) classSelect.value = classId;
@@ -7120,9 +7124,24 @@ $(document).ready(function() {
                 errEl.style.display = 'block';
             })
             .finally(function() {
-                saveBtn.disabled = false;
+                allSaveBtns.forEach(function(b) { b.disabled = false; });
                 saveBtn.innerHTML = orig;
+                if (errEl.style.display === 'block') return; // save failed — don't reset form
+                if (postAction === 'similar') {
+                    gid('ev-sched-mode').value = 'add';
+                    gid('ev-sched-id').value   = '';
+                    gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
+                    if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
+                    var tEl = gid('ev-sched-title'); if (tEl) { tEl.focus(); tEl.select(); }
+                } else if (postAction === 'new') {
+                    if (typeof evOpenScheduleModal === 'function') evOpenScheduleModal();
+                }
             });
+        };
+
+        window.evShowScheduleSaveButtons = function(mode) {
+            var secondaries = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-secondary');
+            secondaries.forEach(function(b) { b.style.display = (mode === 'add') ? '' : 'none'; });
         };
 
         window.evRemoveStaff = function(btn, staffId) {
@@ -7336,7 +7355,8 @@ $(document).ready(function() {
             gid('ev-sched-mode').value         = 'add';
             gid('ev-sched-id').value           = '';
             gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
-            gid('ev-sched-save-label').textContent  = 'Save';
+            gid('ev-sched-save-label').textContent  = 'Save and Close';
+            if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
             gid('ev-sched-category').value           = 'Other';
             gid('ev-sched-secondary-category').value = '';
             gid('ev-sched-title').value       = '';
@@ -7430,6 +7450,7 @@ $(document).ready(function() {
             gid('ev-sched-id').value           = scheduleId;
             gid('ev-sched-modal-title').textContent = 'Edit Schedule Item';
             gid('ev-sched-save-label').textContent  = 'Save Changes';
+            if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('edit');
             gid('ev-sched-category').value           = row.getAttribute('data-category') || 'Other';
             gid('ev-sched-secondary-category').value = row.getAttribute('data-secondary-category') || '';
             gid('ev-sched-title').value       = row.getAttribute('data-title') || '';
@@ -7455,14 +7476,19 @@ $(document).ready(function() {
             setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
         };
 
-        window.evSubmitSchedule = function() {
+        window.evSubmitSchedule = function(postAction) {
+            postAction = postAction || 'close';
             var title   = gid('ev-sched-title').value.trim();
             var start   = gid('ev-sched-start').value;
             var end     = gid('ev-sched-end').value;
             var loc     = gid('ev-sched-location').value.trim();
             var desc    = gid('ev-sched-description').value.trim();
             var errEl   = gid('ev-sched-error');
-            var saveBtn = gid('ev-sched-save-btn');
+            var activeBtnId = postAction === 'similar' ? 'ev-sched-save-similar-btn'
+                            : postAction === 'new'     ? 'ev-sched-save-new-btn'
+                            : 'ev-sched-save-btn';
+            var saveBtn = gid(activeBtnId) || gid('ev-sched-save-btn');
+            var allSaveBtns = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-any');
 
             errEl.style.display = 'none';
             if (!title) { errEl.textContent = 'Please enter a title.'; errEl.style.display = 'block'; return; }
@@ -7473,7 +7499,7 @@ $(document).ready(function() {
             }
 
             var orig = saveBtn.innerHTML;
-            saveBtn.disabled = true;
+            allSaveBtns.forEach(function(b) { b.disabled = true; });
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
 
             var cat    = gid('ev-sched-category').value || 'Other';
@@ -7502,7 +7528,7 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0 && data.schedule) {
-                    evCloseScheduleModal();
+                    if (postAction === 'close') evCloseScheduleModal();
                     var s = data.schedule;
                     var startCell = escHtmlSch(evFmtTime(s.StartTime));
                     var endCell   = escHtmlSch(evFmtTime(s.EndTime));
