@@ -27,6 +27,7 @@ if (!empty($NotSupported)) {
 	$MaxCreditsPerEvent      = $MaxCreditsPerEvent      ?? 0;
 	$MaxOutsideKingdomCredits= $MaxOutsideKingdomCredits?? 0;
 	$MembershipMode          = $MembershipMode          ?? '';
+	$ShowEventCount          = $ShowEventCount          ?? false;
 	$MemberSinceLabel        = $MembershipMode === 'first_attendance' ? 'First Attendance' : 'Member Since';
 	// Window label for column headers (e.g. "6mo" or "180d") and phrase for descriptions.
 	$WindowLabel  = $DaysWindow > 0 ? $DaysWindow . 'd'      : $MonthsWindow . 'mo';
@@ -159,7 +160,7 @@ if (!empty($Players)) {
 			<?php elseif ($MaxOutsideKingdomCredits > 0): ?>
 			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ attendance credits in the last <?=$WindowPhrase?> (at most <?=$MaxOutsideKingdomCredits?> credits from outside the Kingdom<?=$MaxCreditsPerEvent > 0 ? '; multi-credit events capped at ' . $MaxCreditsPerEvent . ' credits per event' : ''?>)<?=$MinMembershipMonths > 0 ? ' &bull; province membership for at least ' . $MinMembershipMonths . ' months' : ''?>.
 			<?php else: ?>
-			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ distinct <?=$AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks')?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?>			<?php endif; ?>
+			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ distinct <?=$AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks')?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ShowEventCount): ?> The <strong>Event Sign-ins</strong> column shows how many of a player&rsquo;s sign-ins were at events (rather than regular park days) &mdash; for reference only, as physical vs. online attendance cannot currently be distinguished automatically.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?>			<?php endif; ?>
 			<?php endif; ?>
 		</span>
 	</div>
@@ -301,6 +302,12 @@ if (!empty($Players)) {
 						<span class="rp-col-guide-desc">Sign-ins at events or parks with "Online" in the name. These were found but not counted toward eligibility.</span>
 					</div>
 <?php endif; ?>
+<?php if ($ShowEventCount) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Event Sign-ins</span>
+						<span class="rp-col-guide-desc">Number of sign-ins tied to a scheduled event (rather than a regular park day) in the last <?=$WindowPhrase?>. Shown for reference — physical vs. online attendance cannot currently be determined automatically. All event sign-ins are still counted toward the <?=$AttendanceRequired?> required weeks.</span>
+					</div>
+<?php endif; ?>
 <?php endif; ?>
 <?php if ($HomeParkOnly && $KingdomEventBonus) : ?>
 					<div class="rp-col-guide-item">
@@ -356,6 +363,9 @@ if (!empty($Players)) {
 						<th><?=$AttendanceLabel?> (<?=$WindowLabel?>)</th>
 <?php if ($ExcludeOnline) : ?>
 						<th>Online Excluded</th>
+<?php endif; ?>
+<?php if ($ShowEventCount) : ?>
+						<th>Event Sign-ins</th>
 <?php endif; ?>
 <?php endif; ?>
 <?php if ($HomeParkOnly && $KingdomEventBonus) : ?>
@@ -489,6 +499,10 @@ if (!empty($Players)) {
 <?php if ($ExcludeOnline) : ?>
 					<?php $_onEx = (int)($p['OnlineExcluded'] ?? 0); ?>
 					<td><?= $_onEx > 0 ? '<span class="rp-warn">' . $_onEx . '</span>' : '<span style="opacity:0.4">—</span>' ?></td>
+<?php endif; ?>
+<?php if ($ShowEventCount) : ?>
+					<?php $_evCt = (int)($p['EventCount'] ?? 0); ?>
+					<td><?= $_evCt > 0 ? $_evCt : '<span style="opacity:0.4">—</span>' ?></td>
 <?php endif; ?>
 <?php endif; ?>
 <?php if ($HomeParkOnly && $KingdomEventBonus) : ?>

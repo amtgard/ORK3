@@ -379,7 +379,7 @@ class Controller_Player extends Controller {
 		$this->data['VotingProvinceEligible']  = false;
 		$this->data['ActiveKnight']            = false;
 		$this->data['ActiveMember']            = null;
-		$_votingKingdoms = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3];
+		$_votingKingdoms = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3, 24];
 		$_playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
 		if (in_array($_playerKingdomId, $_votingKingdoms)) {
 			$_vr = $this->Reports->get_voting_eligible_for_player((int)$id, $_playerKingdomId);

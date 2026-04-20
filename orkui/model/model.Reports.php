@@ -379,6 +379,15 @@ class Model_Reports extends Model {
 				'MaxCreditsPerEvent'      => 2,
 				'MaxOutsideKingdomCredits'=> 2,
 			],
+			24 => [ // Winter's Edge — 6 distinct weeks/6mo; citizenship requires 3mo membership
+			        // Physical vs. online can't be determined; event sign-ins shown informally.
+				'AttendanceRequired'  => 6,
+				'MonthsWindow'        => 6,
+				'MinMembershipMonths' => 3,
+				'AttendanceMode'      => 'weeks',
+				'ProvinceMode'        => false,
+				'ShowEventCount'      => true,
+			],
 		];
 		return $rules[$kingdom_id] ?? null;
 	}

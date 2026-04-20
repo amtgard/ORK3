@@ -2768,6 +2768,7 @@ class Report  extends Ork3 {
 		$max_outside_kingdom_creds = isset($request['MaxOutsideKingdomCredits']) ? (int)$request['MaxOutsideKingdomCredits'] : 0;
 		$week_snap               = !empty($request['WeekSnap']); // snap window start to week boundary even in non-weeks modes
 		$membership_mode         = $request['MembershipMode'] ?? 'park_member_since'; // 'first_attendance' uses MIN(attendance.date) within the kingdom
+		$show_event_count        = !empty($request['ShowEventCount']); // emit a separate count of event-based sign-ins (informational only, not excluded)
 
 		// Compute start date.
 		// display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
@@ -2951,6 +2952,24 @@ class Report  extends Ork3 {
 			$online_count_select = ', COALESCE(oatt.online_excluded_count, 0) AS online_excluded_count';
 		}
 
+		// Event count: count sign-ins tied to an ork_event (event_id != 0) within the window.
+		// Informational only — does not affect eligibility or the main att_count.
+		$event_count_join   = '';
+		$event_count_select = '';
+		if ($show_event_count) {
+			$event_count_join = "
+				LEFT JOIN (
+					SELECT a.mundane_id, COUNT(*) AS event_att_count
+					FROM " . DB_PREFIX . "attendance a
+					WHERE a.kingdom_id = $kingdom_id
+					  AND a.date >= '$start_date'
+					  AND a.event_id IS NOT NULL AND a.event_id != 0
+					GROUP BY a.mundane_id
+				) evatt ON evatt.mundane_id = m.mundane_id
+			";
+			$event_count_select = ', COALESCE(evatt.event_att_count, 0) AS event_att_count';
+		}
+
 		// Active Knight: secondary raw sign-in count (always COUNT(*)) used for kingdoms
 		// that have a higher-tier eligibility based on total attendances.
 		$knight_join   = '';
@@ -2988,6 +3007,7 @@ class Report  extends Ork3 {
 				COALESCE(att.att_count, 0) AS att_count
 				$att_select_extra
 				$online_count_select
+				$event_count_select
 				" . ($home_park_only && $kingdom_evt_bonus ? ", COALESCE(att.kingdom_evt_credit, 0) AS kingdom_evt_credit" : "") . "
 				" . ($membership_mode === 'first_attendance' ? ", (SELECT MIN(a.date) FROM " . DB_PREFIX . "attendance a WHERE a.mundane_id = m.mundane_id AND a.kingdom_id = $kingdom_id) AS first_att_date" : "") . "
 				$province_select
@@ -3014,6 +3034,7 @@ class Report  extends Ork3 {
 				$province_join
 				$knight_join
 				$online_count_join
+				$event_count_join
 			WHERE m.kingdom_id = $kingdom_id
 			  AND m.active = 1
 			  AND p.active = 'Active'
@@ -3038,7 +3059,8 @@ class Report  extends Ork3 {
 		             'AllKingdoms' => $all_kingdoms,
 		             'MaxCreditsPerEvent' => $max_credits_per_event,
 		             'MaxOutsideKingdomCredits' => $max_outside_kingdom_creds,
-		             'MembershipMode' => $membership_mode];
+		             'MembershipMode' => $membership_mode,
+		             'ShowEventCount' => $show_event_count];
 		if ($r !== false && $r->size() > 0) {
 			while ($r->next()) {
 				$_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;
@@ -3071,6 +3093,7 @@ class Report  extends Ork3 {
 					'ActiveMember'       => $active_member_threshold > 0 ? ($base_ok && $att_count >= $active_member_threshold) : null,
 					'ActiveKnight'       => false,
 					'OnlineExcluded'     => $exclude_online ? (int)$r->online_excluded_count : null,
+					'EventCount'         => $show_event_count ? (int)$r->event_att_count : null,
 				];
 				if ($active_knight_threshold > 0) {
 					$raw_att_count        = (int)$r->raw_att_count;
