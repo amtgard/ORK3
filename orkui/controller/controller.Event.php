@@ -247,6 +247,23 @@ class Controller_Event extends Controller {
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
+		// Check if current user is event staff with elevated permissions for this occurrence
+		$uid_staff_can_manage     = false;
+		$uid_staff_can_attendance = false;
+		$uid_staff_can_schedule   = false;
+		$uid_staff_can_feast      = false;
+		if ($uid > 0 && valid_id($detail_id)) {
+			global $DB;
+			$DB->Clear();
+			$selfStaff = $DB->DataSet('SELECT can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' LIMIT 1');
+			if ($selfStaff && $selfStaff->Next()) {
+				$uid_staff_can_manage     = (bool)(int)$selfStaff->can_manage;
+				$uid_staff_can_attendance = (bool)(int)$selfStaff->can_attendance;
+				$uid_staff_can_schedule   = (bool)(int)$selfStaff->can_schedule;
+				$uid_staff_can_feast      = (bool)(int)$selfStaff->can_feast;
+			}
+		}
+
 		$this->data['DefaultAttendanceCredits'] = 1;
 		$this->data['DefaultParkName']    = $this->session->park_name    ?? '';
 		$this->data['DefaultParkId']      = $this->session->park_id      ?? 0;
@@ -282,6 +299,12 @@ class Controller_Event extends Controller {
 		}
 
 		if ( $action === 'rsvp' && $uid > 0 ) {
+			$cdCheck = $this->Attendance->get_eventdetail_info($detail_id);
+			$_refDate = $cdCheck['EventEnd'] ?: ($cdCheck['EventStart'] ?? '');
+			if ($_refDate && strtotime(date('Y-m-d', strtotime($_refDate))) < strtotime(date('Y-m-d'))) {
+				header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
+				return;
+			}
 			$status = isset($_POST['status']) && $_POST['status'] === 'interested' ? 'interested' : 'going';
 			$this->Event->set_rsvp($detail_id, $uid, $status);
 			header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
@@ -293,7 +316,7 @@ class Controller_Event extends Controller {
 		if ( strlen($action) > 0 && $uid > 0 ) {
 
 			if ( $action === 'edit' ) {
-				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage ) {
 					$this->request->save('Eventnew_edit', true);
 					$newName = trim($this->request->Eventnew_edit->EventName ?? '');
 					if ( $newName ) {
@@ -319,13 +342,55 @@ class Controller_Event extends Controller {
 						'Country'               => $this->request->Eventnew_edit->Country,
 						'MapUrl'                => $this->request->Eventnew_edit->MapUrl,
 						'MapUrlName'            => $this->request->Eventnew_edit->MapUrlName,
+						'EventType'             => $this->request->Eventnew_edit->EventType,
 					]);
+					// event_type is always saved directly — SetEventDetails blocks all saves when attendance exists,
+					// but event_type is metadata that should be editable at any time.
+					$_evType = trim($this->request->Eventnew_edit->EventType ?? '');
+					$_etAllowed = ['Coronation','Midreign','Endreign','Crown Qualifications','Meeting','Althing','Interkingdom Event','Weaponmaster','Warmaster','Dragonmaster','Other'];
+					if ($_evType === '' || in_array($_evType, $_etAllowed, true)) {
+						global $DB;
+						$DB->Clear();
+						$_evTypeSql = ($_evType === '') ? 'NULL' : "'" . str_replace(["'", '\\'], ["''", '\\\\'], $_evType) . "'";
+						$DB->Execute('UPDATE ' . DB_PREFIX . 'event_calendardetail SET event_type = ' . $_evTypeSql . ' WHERE event_calendardetail_id = ' . $detail_id);
+						$_cdBustKey = Ork3::$Lib->ghettocache->key([$detail_id]);
+						Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $_cdBustKey);
+					}
 					if ( $r['Status'] == 0 ) {
 						$this->request->clear('Eventnew_edit');
 						$cdKey = Ork3::$Lib->ghettocache->key([$detail_id]);
 						Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $cdKey);
 						$evKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
 						Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
+						// Sync admission fees
+						global $DB;
+						$DB->Clear();
+						$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $detail_id);
+						$_feesJson = trim($_POST['Fees'] ?? '');
+						$_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
+						if (is_array($_feesIn)) {
+							foreach ($_feesIn as $_fi => $_fee) {
+								$_at = trim($_fee['AdmissionType'] ?? '');
+								$_atSafe = str_replace(["'", '\\'], ["''", '\\\\'], $_at);
+								$_cost = round((float)($_fee['Cost'] ?? 0), 2);
+								$DB->Clear();
+								$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $detail_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')');
+							}
+						}
+						// Sync external links
+						$_linksJson = trim($_POST['ExternalLinks'] ?? '');
+						$_linksIn = ($_linksJson !== '') ? json_decode($_linksJson, true) : [];
+						$DB->Clear();
+						$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $detail_id);
+						if (is_array($_linksIn)) {
+							foreach ($_linksIn as $_li => $_link) {
+								$_lt  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Title'] ?? ''));
+								$_lu  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Url'] ?? ''));
+								$_lic = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Icon'] ?? 'fas fa-link'));
+								$DB->Clear();
+								$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $detail_id . ', \'' . $_lt . '\', \'' . $_lu . '\', \'' . $_lic . '\', ' . $_li . ')');
+							}
+						}
 						header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
 						exit;
 					} elseif ( $r['Status'] != 5 ) {
@@ -487,17 +552,151 @@ class Controller_Event extends Controller {
 		$this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
 		$this->data['CanManageEvent'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage);
 		$this->data['CanManageAttendance'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT);
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) || $uid_staff_can_attendance);
+		$this->data['CanManageSchedule'] = $uid > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_schedule);
+		$this->data['CanManageFeast'] = $uid > 0
+			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_feast);
 
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
-		$this->data['RsvpList']      = $uid > 0 ? $this->Event->get_rsvp_list($detail_id) : [];
+		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];
 
 		global $DB;
 		$cdCountRow = $DB->DataSet('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $event_id . ' LIMIT 1');
 		$this->data['CalendarDetailCount'] = ($cdCountRow && $cdCountRow->Size() > 0 && $cdCountRow->Next()) ? (int)$cdCountRow->cnt : 1;
+		$DB->Clear();
+		$staffRows = $DB->DataSet(
+			'SELECT s.event_staff_id AS EventStaffId, s.mundane_id AS MundaneId, m.persona AS Persona,
+			        s.role_name AS RoleName, s.can_manage AS CanManage, s.can_attendance AS CanAttendance, s.can_schedule AS CanSchedule, s.can_feast AS CanFeast
+			FROM ' . DB_PREFIX . 'event_staff s
+			LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
+			WHERE s.event_calendardetail_id = ' . $detail_id . '
+			ORDER BY s.role_name, m.persona'
+		);
+		$staffList = [];
+		if ($staffRows) {
+			while ($staffRows->Next()) {
+				$staffList[] = [
+					'EventStaffId'  => (int)$staffRows->EventStaffId,
+					'MundaneId'     => (int)$staffRows->MundaneId,
+					'Persona'       => $staffRows->Persona,
+					'RoleName'      => $staffRows->RoleName,
+					'CanManage'     => (int)$staffRows->CanManage,
+					'CanAttendance' => (int)$staffRows->CanAttendance,
+					'CanSchedule'   => (int)$staffRows->CanSchedule,
+					'CanFeast'      => (int)$staffRows->CanFeast,
+				];
+			}
+		}
+		$this->data['StaffList'] = $staffList;
+
+		// Schedule items for this occurrence
+		$DB->Clear();
+		$scheduleRows = $DB->DataSet(
+			'SELECT event_schedule_id AS EventScheduleId, title AS Title,
+			        start_time AS StartTime, end_time AS EndTime,
+			        location AS Location, description AS Description, category AS Category,
+			        secondary_category AS SecondaryCategory,
+			        menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
+			FROM ' . DB_PREFIX . 'event_schedule
+			WHERE event_calendardetail_id = ' . $detail_id . '
+			ORDER BY start_time'
+		);
+		$scheduleList = [];
+		if ($scheduleRows) {
+			while ($scheduleRows->Next()) {
+				$scheduleList[] = [
+					'EventScheduleId'   => (int)$scheduleRows->EventScheduleId,
+					'Title'             => $scheduleRows->Title,
+					'StartTime'         => $scheduleRows->StartTime,
+					'EndTime'           => $scheduleRows->EndTime,
+					'Location'          => $scheduleRows->Location,
+					'Description'       => $scheduleRows->Description,
+					'Category'          => $scheduleRows->Category,
+					'SecondaryCategory' => $scheduleRows->SecondaryCategory ?? '',
+					'Menu'              => $scheduleRows->Menu,
+					'Cost'              => $scheduleRows->Cost !== null ? (float)$scheduleRows->Cost : null,
+					'Dietary'           => $scheduleRows->Dietary,
+					'Allergens'         => $scheduleRows->Allergens,
+				];
+			}
+		}
+		// Batch-load leads for all schedule items
+	if (!empty($scheduleList)) {
+		$slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
+		$DB->Clear();
+		$leadRows = $DB->DataSet(
+			'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
+			FROM ' . DB_PREFIX . 'event_schedule_lead sl
+			JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
+			WHERE sl.event_schedule_id IN (' . $slIds . ')
+			ORDER BY m.persona'
+		);
+		$leadsMap = [];
+		if ($leadRows) {
+			while ($leadRows->Next()) {
+				$leadsMap[(int)$leadRows->EventScheduleId][] = [
+					'MundaneId' => (int)$leadRows->MundaneId,
+					'Persona'   => $leadRows->Persona,
+				];
+			}
+		}
+		foreach ($scheduleList as &$schItem) {
+			$schItem['Leads'] = $leadsMap[(int)$schItem['EventScheduleId']] ?? [];
+		}
+		unset($schItem);
+	}
+	$this->data['ScheduleList'] = $scheduleList;
+
+		// Load admission fees for this occurrence
+		$DB->Clear();
+		$feeRows = $DB->DataSet(
+			'SELECT event_fees_id AS EventFeesId, admission_type AS AdmissionType, cost AS Cost, sort_order AS SortOrder
+			FROM ' . DB_PREFIX . 'event_fees
+			WHERE event_calendardetail_id = ' . $detail_id . '
+			ORDER BY sort_order, event_fees_id'
+		);
+		$feeList = [];
+		if ($feeRows) {
+			while ($feeRows->Next()) {
+				$feeList[] = [
+					'EventFeesId'   => (int)$feeRows->EventFeesId,
+					'AdmissionType' => $feeRows->AdmissionType,
+					'Cost'          => (float)$feeRows->Cost,
+					'SortOrder'     => (int)$feeRows->SortOrder,
+				];
+			}
+		}
+		$this->data['EventFees'] = $feeList;
+
+		// Load external links for this occurrence
+		$DB->Clear();
+		$linkRows = $DB->DataSet(
+			'SELECT event_link_id AS EventLinkId, title AS Title, url AS Url, icon AS Icon, sort_order AS SortOrder
+			FROM ' . DB_PREFIX . 'event_links
+			WHERE event_calendardetail_id = ' . $detail_id . '
+			ORDER BY sort_order, event_link_id'
+		);
+		$linkList = [];
+		if ($linkRows) {
+			while ($linkRows->Next()) {
+				$linkList[] = [
+					'EventLinkId' => (int)$linkRows->EventLinkId,
+					'Title'       => $linkRows->Title,
+					'Url'         => $linkRows->Url,
+					'Icon'        => $linkRows->Icon,
+					'SortOrder'   => (int)$linkRows->SortOrder,
+				];
+			}
+		}
+		$this->data['ExternalLinks'] = $linkList;
+
+		// MealList is derived from ScheduleList — rows with category or secondary_category 'Feast and Food'
+		// (ork_event_meal table removed; meal fields are now columns on ork_event_schedule)
+		$this->data['MealList'] = array_values(array_filter($this->data['ScheduleList'], fn($s) => ($s['Category'] ?? '') === 'Feast and Food' || ($s['SecondaryCategory'] ?? '') === 'Feast and Food'));
 	}
 
 	public function create( $p = null ) {
@@ -576,6 +775,7 @@ class Controller_Event extends Controller {
 				'Country'     => $this->request->Eventcreate->Country,
 				'MapUrl'      => $this->request->Eventcreate->MapUrl,
 				'MapUrlName'  => $this->request->Eventcreate->MapUrlName,
+				'EventType'   => $this->request->Eventcreate->EventType,
 			]);
 			if ( $r['Status'] == 0 ) {
 				// Some SOAP implementations return new ID in Detail; fallback to newest detail
@@ -587,6 +787,35 @@ class Controller_Event extends Controller {
 				}
 				$bustKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
 				Ork3::$Lib->ghettocache->bust('SearchService.Event', $bustKey);
+				// Sync admission fees for the new occurrence
+				$_feesJson = trim($_POST['Fees'] ?? '');
+				$_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
+				if (is_array($_feesIn) && !empty($_feesIn) && $new_id > 0) {
+					global $DB;
+					$DB->Clear();
+					$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $new_id);
+					foreach ($_feesIn as $_fi => $_fee) {
+						$_at = trim($_fee['AdmissionType'] ?? '');
+						$_atSafe = str_replace(["'", '\\'], ["''", '\\\\'], $_at);
+						$_cost = round((float)($_fee['Cost'] ?? 0), 2);
+						$DB->Clear();
+						$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $new_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')');
+					}
+				}
+				// Sync external links
+				$_linksJson2 = trim($_POST['ExternalLinks'] ?? '');
+				$_linksIn2 = ($_linksJson2 !== '') ? json_decode($_linksJson2, true) : [];
+				if (is_array($_linksIn2) && !empty($_linksIn2) && $new_id > 0) {
+					$DB->Clear();
+					$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $new_id);
+					foreach ($_linksIn2 as $_li2 => $_link2) {
+						$_lt2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Title'] ?? ''));
+						$_lu2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Url'] ?? ''));
+						$_lic2 = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Icon'] ?? 'fas fa-link'));
+						$DB->Clear();
+						$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $new_id . ', \'' . $_lt2 . '\', \'' . $_lu2 . '\', \'' . $_lic2 . '\', ' . $_li2 . ')');
+					}
+				}
 				header('Location: ' . UIR . "Event/detail/{$event_id}/{$new_id}");
 				return;
 			} elseif ( $r['Status'] != 5 ) {

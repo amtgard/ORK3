@@ -628,6 +628,9 @@
 											<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
 										<?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
+										<?php if ($event['NextDetailId']): ?>
+											<span class="pk-copy-link" data-url="<?= HTTP_UI ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>" onclick="event.stopPropagation(); pkCopyEventLink(this)" data-tip="Copy the event link and share to boost RSVPs!"><i class="fas fa-link"></i></span>
+										<?php endif; ?>
 									</div>
 								</td>
 								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
@@ -1346,6 +1349,11 @@ var PkConfig = {
 				<button class="pk-att-tab" id="pk-att-tab-recent" data-panel="pk-att-panel-recent">
 					<i class="fas fa-users"></i> Recent Park Attendees
 				</button>
+			<?php if (!empty($CanManagePark)): ?>
+				<button class="pk-att-tab" id="pk-att-tab-link" data-panel="pk-att-panel-link">
+					<i class="fas fa-link"></i> Sign-in Link
+				</button>
+			<?php endif; ?>
 			</div>
 
 			<!-- Search panel -->
@@ -1393,6 +1401,65 @@ var PkConfig = {
 				</div>
 			</div>
 
+			<?php if (!empty($CanManagePark)): ?>
+			<!-- Sign-in Link panel -->
+			<div class="pk-att-tab-panel" id="pk-att-panel-link" style="display:none">
+				<div class="pk-att-search-section-inner">
+					<div class="pk-att-search-row">
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Duration (hrs)</label>
+							<input type="number" id="pk-att-link-hours" min="1" max="96" step="1" value="3">
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="pk-att-link-credits" min="0.5" max="10" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="pk-btn pk-btn-primary" id="pk-att-link-gen-btn">
+								<i class="fas fa-link"></i> Generate
+							</button>
+						</div>
+					</div>
+					<div id="pk-att-link-result" style="display:none;margin-top:12px">
+						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
+							<input type="text" id="pk-att-link-url" readonly
+								style="flex:1;min-width:0;font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-copy-btn" style="white-space:nowrap">
+								<i class="fas fa-copy"></i> Copy
+							</button>
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-qr-btn" style="white-space:nowrap">
+								<i class="fas fa-qrcode"></i> QR
+							</button>
+						</div>
+						<div id="pk-att-link-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
+					</div>
+					<div style="margin-top:10px;font-size:11px;color:#718096">
+						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
+					</div>
+					<!-- Active links collapsible -->
+					<div id="pk-att-links-wrap" style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px">
+						<button type="button" id="pk-att-links-toggle" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px">
+							<i class="fas fa-chevron-right" id="pk-att-links-chevron" style="font-size:10px;transition:transform 0.15s"></i>
+							<span>Active Links</span> <span id="pk-att-links-count" style="color:#a0aec0"></span>
+						</button>
+						<div id="pk-att-links-body" style="display:none;margin-top:8px">
+							<div id="pk-att-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
+							<div id="pk-att-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
+							<table id="pk-att-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+								<thead><tr style="color:#718096;text-align:left">
+									<th style="padding:4px 6px;font-weight:600">Expires</th>
+									<th style="padding:4px 6px;font-weight:600">Cr.</th>
+									<th style="padding:4px 6px"></th>
+								</tr></thead>
+								<tbody id="pk-att-links-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<!-- Entered today (always visible, shared by both tabs) -->
 			<div class="pk-att-entered-section">
 				<div class="pk-att-section-label">
@@ -1414,6 +1481,21 @@ var PkConfig = {
 			<button class="pk-btn pk-btn-ghost" id="pk-att-done-btn">Done</button>
 		</div>
 
+	</div>
+</div>
+
+<!-- QR Code Modal -->
+<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100;align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
+	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<button onclick="pkCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="pk-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="pk-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="pk-qr-download" href="" download="signin-qr.png" class="pk-btn pk-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
 	</div>
 </div>
 
@@ -1566,11 +1648,225 @@ var PkConfig = {
 				</div>
 			</div>
 		</div>
-		<div class="pk-modal-footer">
+		<div class="pk-modal-footer" style="justify-content:flex-end;gap:8px;">
+			<button class="pk-btn pk-btn-secondary pk-selfreg-trigger" id="pk-selfreg-btn" onclick="pkOpenSelfRegModal()" style="margin-right:auto;">
+				<i class="fas fa-qrcode"></i> Self Registration
+			</button>
 			<button class="pk-btn pk-btn-ghost" id="pk-addplayer-cancel">Cancel</button>
 			<button class="pk-btn pk-btn-primary" id="pk-addplayer-submit">
 				<i class="fas fa-user-plus"></i> Create Player
 			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<style>
+/* ---- Instant tooltip (data-tip) ---- */
+[data-tip] { position: relative; }
+[data-tip]::before, [data-tip]::after {
+	position: absolute; left: 50%; bottom: 100%; pointer-events: none;
+	opacity: 0; transition: opacity 0.08s;
+}
+[data-tip]::after {
+	content: attr(data-tip); transform: translateX(-50%) translateY(-4px);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 4px 9px; border-radius: 4px; white-space: nowrap; z-index: 900;
+}
+[data-tip]::before {
+	content: ''; transform: translateX(-50%); margin-bottom: -4px;
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+[data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+
+/* ---- Copy-link icon ---- */
+.pk-copy-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 5px; font-size: 11px; color: #a0aec0;
+	cursor: pointer; opacity: 0; transition: opacity 0.15s;
+	position: relative;
+}
+tr:hover .pk-copy-link { opacity: 1; }
+.pk-copy-link:hover { color: #4299e1; }
+.pk-copy-link.pk-copied::after {
+	content: 'Copied!' !important; position: absolute; bottom: 100%; left: 50%;
+	transform: translateX(-50%); background: #2d3748; color: #fff;
+	font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; opacity: 1; animation: pkCopiedFade 1.4s forwards;
+}
+@keyframes pkCopiedFade {
+	0%,70% { opacity: 1; } 100% { opacity: 0; }
+}
+</style>
+
+<?php if ($CanAdminPark ?? false): ?>
+<!-- Self-Registration QR Modal -->
+<style>
+/* ---- Self-Registration QR Modal ---- */
+#pk-selfreg-overlay {
+	position: fixed; inset: 0;
+	background: rgba(0,0,0,0.5);
+	display: flex; align-items: center; justify-content: center;
+	z-index: var(--z-modal, 1100);
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+#pk-selfreg-overlay.pk-selfreg-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+#pk-selfreg-overlay .pk-modal-box {
+	background: #fff; border-radius: 12px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+	max-height: 90vh; display: flex; flex-direction: column;
+}
+#pk-selfreg-overlay .pk-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+}
+#pk-selfreg-overlay .pk-modal-title {
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+#pk-selfreg-overlay .pk-modal-close-btn {
+	background: none; border: none; font-size: 22px; color: #a0aec0;
+	cursor: pointer; line-height: 1; padding: 0 4px;
+}
+#pk-selfreg-overlay .pk-modal-close-btn:hover { color: #4a5568; }
+#pk-selfreg-overlay .pk-modal-body {
+	padding: 20px; overflow-y: auto; flex: 1;
+}
+#pk-selfreg-overlay .pk-modal-footer {
+	padding: 14px 20px; border-top: 1px solid #e2e8f0;
+	display: flex; align-items: center; flex-shrink: 0;
+}
+
+/* Warning banner */
+.pk-selfreg-warning {
+	background: #fffbeb;
+	border: 1px solid #f6e05e;
+	color: #744210;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-warning i {
+	color: #d69e2e;
+	margin-right: 6px;
+}
+.pk-selfreg-note {
+	background: #ebf8ff;
+	border: 1px solid #90cdf4;
+	color: #2a4365;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-note i {
+	color: #3182ce;
+	margin-right: 6px;
+}
+
+/* QR container + anti-copy shield */
+#pk-selfreg-qr-wrap {
+	position: relative;
+	display: inline-block;
+	margin: 0 auto 16px;
+}
+.pk-selfreg-qr-container {
+	user-select: none;
+	pointer-events: none;
+	-webkit-user-select: none;
+}
+.pk-selfreg-qr-container canvas,
+.pk-selfreg-qr-container img {
+	display: block;
+	margin: 0 auto;
+}
+.pk-selfreg-qr-shield {
+	position: absolute; inset: 0;
+	z-index: 2;
+	background: transparent;
+	cursor: default;
+}
+
+/* A18: Expired badge overlay */
+.pk-selfreg-expired-badge {
+	position: absolute;
+	top: 50%; left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(255,255,255,0.85);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	color: #c53030;
+	font-size: 20px;
+	font-weight: 700;
+	padding: 12px 28px;
+	border-radius: 8px;
+	z-index: 3;
+	display: none;
+}
+
+/* Timer */
+.pk-selfreg-timer-row {
+	font-size: 18px;
+	font-weight: 600;
+	color: #2d3748;
+	margin: 12px 0 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+.pk-selfreg-timer-row i {
+	color: #a0aec0;
+	font-size: 14px;
+}
+.pk-selfreg-timer-expired {
+	color: #c53030;
+}
+
+/* Regenerate button */
+#pk-selfreg-regen-btn {
+	margin-top: 8px;
+}
+</style>
+<div id="pk-selfreg-overlay">
+	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-qrcode" style="margin-right:8px;color:#2c5282"></i>Self Registration</h3>
+			<button class="pk-modal-close-btn" id="pk-selfreg-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body" style="text-align:center;">
+			<div id="pk-selfreg-feedback" class="plr-feedback" style="display:none" aria-live="polite" role="status"></div>
+			<div class="pk-selfreg-warning">
+				<i class="fas fa-exclamation-triangle"></i>
+				Do not distribute this self-registration QR code. This is designed to be used for in-person registration only.
+			</div>
+			<div class="pk-selfreg-note">
+				<i class="fas fa-info-circle"></i>
+				The new player will be assigned a Color credit for today to ensure they show in Active Player lists, but you can change this to any other class at a later time.
+			</div>
+			<div id="pk-selfreg-qr-wrap">
+				<div id="pk-selfreg-qr" class="pk-selfreg-qr-container"></div>
+				<div class="pk-selfreg-qr-shield" id="pk-selfreg-shield"></div>
+				<div class="pk-selfreg-expired-badge" id="pk-selfreg-expired-badge">Expired</div>
+			</div>
+			<div class="pk-selfreg-timer-row" aria-live="polite">
+				<i class="fas fa-clock"></i>
+				<span id="pk-selfreg-timer">--:--</span>
+			</div>
+			<button class="pk-btn pk-btn-primary" id="pk-selfreg-regen-btn" style="display:none;">
+				<i class="fas fa-sync-alt"></i> Regenerate
+			</button>
+		</div>
+		<div class="pk-modal-footer" style="justify-content:center;">
+			<button class="pk-btn pk-btn-ghost" id="pk-selfreg-cancel">Close</button>
 		</div>
 	</div>
 </div>
@@ -2086,10 +2382,20 @@ html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { bac
 <?php endif; ?>
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<?php if ($CanAdminPark ?? false): ?>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+function pkCopyEventLink(el) {
+	var url = el.getAttribute('data-url');
+	navigator.clipboard.writeText(url).then(function() {
+		el.classList.add('pk-copied');
+		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
+	});
+}
 window.pkRecActiveFilter = 'open';
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (settings.nTable.id !== 'pk-rec-table') return true;

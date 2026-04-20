@@ -2114,6 +2114,19 @@ function knRenderCalendar() {
             info.jsEvent.preventDefault();
             if (info.event.url) window.location.href = info.event.url;
         },
+        eventDidMount: function(info) {
+            var rp = info.event.extendedProps && info.event.extendedProps.royalPresence;
+            if (!rp) return;
+            var tip = rp === 'both'    ? 'Monarch & Regent in Attendance'
+                    : rp === 'monarch' ? 'Monarch in Attendance'
+                    :                    'Regent in Attendance';
+            var crown = document.createElement('span');
+            crown.className = 'kn-cal-royal-crown';
+            crown.title = tip;
+            crown.innerHTML = ' <i class="fas fa-crown"></i>';
+            var titleEl = info.el.querySelector('.fc-event-title');
+            if (titleEl) titleEl.appendChild(crown);
+        },
         dayCellDidMount: function(info) {
             if (typeof KnConfig === 'undefined' || !KnConfig.loggedIn) return;
             var top = info.el.querySelector('.fc-daygrid-day-top');
@@ -4971,8 +4984,9 @@ $(document).ready(function() {
         wireToggle('kn-admin-hdr-config',  'kn-admin-body-config',  'kn-admin-chev-config');
         wireToggle('kn-admin-hdr-titles',  'kn-admin-body-titles',  'kn-admin-chev-titles');
         wireToggle('kn-admin-hdr-awards',  'kn-admin-body-awards',  'kn-admin-chev-awards');
-        wireToggle('kn-admin-hdr-parks',   'kn-admin-body-parks',   'kn-admin-chev-parks');
-        wireToggle('kn-admin-hdr-ops',     'kn-admin-body-ops',     'kn-admin-chev-ops');
+        wireToggle('kn-admin-hdr-parks',      'kn-admin-body-parks',      'kn-admin-chev-parks');
+        wireToggle('kn-admin-hdr-signinlink', 'kn-admin-body-signinlink', 'kn-admin-chev-signinlink');
+        wireToggle('kn-admin-hdr-ops',        'kn-admin-body-ops',        'kn-admin-chev-ops');
 
         wireDetails();
         wirePrinz();
@@ -6449,6 +6463,7 @@ $(document).ready(function() {
    Event Detail (EvConfig)
    =========================== */
 (function() {
+    if (typeof EvConfig === 'undefined') return;
     // ---- Tab switching ----
     window.evShowTab = function(li, tabId) {
         var nav    = document.getElementById('ev-tab-nav');
@@ -6628,6 +6643,8 @@ $(document).ready(function() {
         var overlay = document.getElementById('ev-edit-modal');
         if (overlay) overlay.classList.add('ev-modal-open');
         document.body.style.overflow = 'hidden';
+        if (typeof evFeesReset === 'function') evFeesReset(EvConfig.fees || []);
+        if (typeof evLinksReset === 'function') evLinksReset(EvConfig.links || []);
     };
     window.evCloseEditModal = function() {
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
@@ -6660,7 +6677,11 @@ $(document).ready(function() {
         document.getElementById('ev-checkin-mundane-id').value = mundaneId;
         document.getElementById('ev-checkin-name').textContent = personaName;
         var creditsInput = document.querySelector('#ev-checkin-form [name="Credits"]');
-        if (creditsInput) creditsInput.value = evGetSavedCredits();
+        if (creditsInput) {
+            var rsvpCr = document.getElementById('ev-rsvp-credits');
+            var rsvpVal = rsvpCr ? parseFloat(rsvpCr.value) : NaN;
+            creditsInput.value = (rsvpVal > 0) ? rsvpVal : evGetSavedCredits();
+        }
         if (classId) {
             var classSelect = document.querySelector('#ev-checkin-form [name="ClassId"]');
             if (classSelect) classSelect.value = classId;
@@ -6887,6 +6908,848 @@ $(document).ready(function() {
             submitBtn.disabled = !(pid && parseInt(pid.value, 10) > 0 && cls && cls.value && cred && parseFloat(cred.value) > 0);
         });
     };
+
+    // ---- Staff Modal ----
+    if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
+        var gid = function(id) { return document.getElementById(id); };
+        var evStaffAcTimer = null;
+
+        window.evOpenStaffModal = function() {
+            var modal = gid('ev-staff-modal');
+            if (!modal) return;
+            gid('ev-staff-role').value = '';
+            gid('ev-staff-player-name').value = '';
+            gid('ev-staff-player-id').value = '';
+            gid('ev-staff-can-manage').checked = false;
+            gid('ev-staff-can-attendance').checked = false;
+            if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = false;
+            if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = false;
+            gid('ev-staff-error').style.display = 'none';
+            gid('ev-staff-ac').classList.remove('kn-ac-open');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-staff-role').focus(); }, 50);
+        };
+
+        window.evCloseStaffModal = function() {
+            var modal = gid('ev-staff-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'ev-staff-modal') evCloseStaffModal();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && gid('ev-staff-modal') && gid('ev-staff-modal').style.display === 'flex') {
+                evCloseStaffModal();
+            }
+        });
+
+        // Player autocomplete in staff modal
+        var staffAcEl  = gid('ev-staff-ac');
+        var staffNameEl = gid('ev-staff-player-name');
+        var staffIdEl   = gid('ev-staff-player-id');
+        var OPEN_CLASS  = 'kn-ac-open';
+        var ITEM_SEL    = '.kn-ac-item[data-id]';
+
+        function escHtmlSt(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function evStaffPositionAc() {
+            if (!staffNameEl || !staffAcEl) return;
+            var r = staffNameEl.getBoundingClientRect();
+            staffAcEl.style.top   = (r.bottom + 2) + 'px';
+            staffAcEl.style.left  = r.left + 'px';
+            staffAcEl.style.width = r.width + 'px';
+        }
+
+        function evStaffRenderAc(results) {
+            if (!staffAcEl) return;
+            if (!results || !results.length) {
+                staffAcEl.classList.remove(OPEN_CLASS);
+                return;
+            }
+            staffAcEl.innerHTML = results.map(function(pl) {
+                var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
+                return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">'
+                    + escHtmlSt(pl.Persona) + abbr + '</div>';
+            }).join('');
+            evStaffPositionAc();
+            staffAcEl.classList.add(OPEN_CLASS);
+        }
+
+        if (staffNameEl && staffAcEl) {
+            // Override CSS positioning so the dropdown escapes the modal's overflow-y:auto
+            staffAcEl.style.position = 'fixed';
+            staffAcEl.style.zIndex   = '9999';
+            staffAcEl.style.width    = '300px';
+            // Apply kn-ac-results styling class
+            staffAcEl.className = 'kn-ac-results';
+            staffAcEl.style.display = ''; // clear inline display:none so CSS class controls visibility
+
+            staffNameEl.addEventListener('input', function() {
+                var term = this.value.trim();
+                staffIdEl.value = '';
+                if (term.length < 2) { staffAcEl.classList.remove(OPEN_CLASS); return; }
+                clearTimeout(evStaffAcTimer);
+                evStaffAcTimer = setTimeout(function() {
+                    var kid = EvConfig.kingdomId || 0;
+                    if (!kid) {
+                        // No kingdom on this event — search all players via SearchService
+                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                var res = (d || []).map(function(pl) {
+                                    return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' };
+                                });
+                                evStaffRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
+                                var ph = staffAcEl.querySelector('[data-id="-1"]');
+                                if (ph) ph.removeAttribute('data-id');
+                            });
+                        return;
+                    }
+                    // Kingdom-scoped first
+                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
+                        .then(function(r) { return r.json(); })
+                        .then(function(own) {
+                            own = own || [];
+                            if (own.length >= 5) {
+                                evStaffRenderAc(own);
+                            } else {
+                                // Fewer than 5 kingdom results — also fetch outside kingdom and append
+                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
+                                    .then(function(r2) { return r2.json(); })
+                                    .then(function(other) {
+                                        other = (other || []).slice(0, 10 - own.length);
+                                        var combined = own.concat(other);
+                                        evStaffRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found', KAbbr: '', PAbbr: '' }]);
+                                        // Remove no-results placeholder from being selectable
+                                        if (!combined.length) staffAcEl.querySelector('[data-id="0"]') && (staffAcEl.querySelector('[data-id="0"]').removeAttribute('data-id'));
+                                    });
+                            }
+                        });
+                }, 220);
+            });
+
+            staffAcEl.addEventListener('click', function(e) {
+                var item = e.target.closest(ITEM_SEL);
+                if (!item) return;
+                staffNameEl.value = decodeURIComponent(item.dataset.name);
+                staffIdEl.value   = item.dataset.id;
+                staffAcEl.classList.remove(OPEN_CLASS);
+            });
+
+            staffNameEl.addEventListener('blur', function() {
+                setTimeout(function() { staffAcEl.classList.remove(OPEN_CLASS); }, 160);
+            });
+
+            acKeyNav(staffNameEl, staffAcEl, OPEN_CLASS, ITEM_SEL);
+        }
+
+        window.evSubmitStaff = function() {
+            var role       = gid('ev-staff-role').value.trim();
+            var mundaneId  = gid('ev-staff-player-id').value;
+            var canManage  = gid('ev-staff-can-manage').checked ? 1 : 0;
+            var canAtt     = gid('ev-staff-can-attendance').checked ? 1 : 0;
+            var canSched   = gid('ev-staff-can-schedule') && gid('ev-staff-can-schedule').checked ? 1 : 0;
+            var canFeast   = gid('ev-staff-can-feast')    && gid('ev-staff-can-feast').checked    ? 1 : 0;
+            var errEl      = gid('ev-staff-error');
+            var saveBtn    = gid('ev-staff-save-btn');
+
+            errEl.style.display = 'none';
+            if (!role)       { errEl.textContent = 'Please enter a role.'; errEl.style.display = 'block'; return; }
+            if (!mundaneId)  { errEl.textContent = 'Please select a player.'; errEl.style.display = 'block'; return; }
+
+            var orig = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+            var fd = new FormData();
+            fd.append('MundaneId',     mundaneId);
+            fd.append('Persona',       gid('ev-staff-player-name').value.trim());
+            fd.append('RoleName',      role);
+            fd.append('CanManage',     canManage);
+            fd.append('CanAttendance', canAtt);
+            fd.append('CanSchedule',   canSched);
+            fd.append('CanFeast',      canFeast);
+
+            fetch(EvConfig.uir + 'EventAjax/add_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0 && data.staff) {
+                    evCloseStaffModal();
+                    var s = data.staff;
+                    var chk = '<i class="fas fa-check" style="color:#276749"></i>';
+                    var x   = '<i class="fas fa-times" style="color:#a0aec0"></i>';
+                    var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '">' +
+                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + s.Persona + '</a></td>' +
+                        '<td>' + s.RoleName + '</td>' +
+                        '<td>' + (s.CanManage ? chk : x) + '</td>' +
+                        '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
+                        '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
+                        '<td>' + (s.CanFeast ? chk : x) + '</td>' +
+                        '<td class="ev-del-cell"><button class="ev-del-link" title="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button></td>' +
+                        '</tr>';
+                    var tbody = gid('ev-staff-tbody');
+                    if (tbody) {
+                        tbody.insertAdjacentHTML('beforeend', newRow);
+                    } else {
+                        // First staff member: table doesn't exist yet, reload to render it properly
+                        location.reload();
+                        return;
+                    }
+                    var empty = gid('ev-staff-empty');
+                    if (empty) empty.style.display = 'none';
+                    // Update tab count badge
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                        }
+                    });
+                } else {
+                    errEl.textContent = data.error || 'An error occurred.';
+                    errEl.style.display = 'block';
+                }
+            })
+            .catch(function(err) {
+                errEl.textContent = 'Request failed: ' + err.message;
+                errEl.style.display = 'block';
+            })
+            .finally(function() {
+                allSaveBtns.forEach(function(b) { b.disabled = false; });
+                saveBtn.innerHTML = orig;
+                if (errEl.style.display === 'block') return; // save failed — don't reset form
+                if (postAction === 'similar') {
+                    gid('ev-sched-mode').value = 'add';
+                    gid('ev-sched-id').value   = '';
+                    gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
+                    if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
+                    var tEl = gid('ev-sched-title'); if (tEl) { tEl.focus(); tEl.select(); }
+                } else if (postAction === 'new') {
+                    if (typeof evOpenScheduleModal === 'function') evOpenScheduleModal();
+                }
+            });
+        };
+
+        window.evShowScheduleSaveButtons = function(mode) {
+            var secondaries = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-secondary');
+            secondaries.forEach(function(b) { b.style.display = (mode === 'add') ? '' : 'none'; });
+        };
+
+        window.evRemoveStaff = function(btn, staffId) {
+            if (!confirm('Remove this staff member?')) return;
+            var fd = new FormData();
+            fd.append('StaffId', staffId);
+            fetch(EvConfig.uir + 'EventAjax/remove_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    var row = gid('ev-staff-row-' + staffId);
+                    if (row) row.remove();
+                    var tbody = gid('ev-staff-tbody');
+                    if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                        var table = gid('ev-staff-table');
+                        if (table) {
+                            table.style.display = 'none';
+                            var empty = gid('ev-staff-empty');
+                            if (empty) empty.style.display = '';
+                        }
+                    }
+                    // Update tab count badge
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) {
+                                var n = parseInt(badge.textContent || '1') - 1;
+                                badge.textContent = Math.max(0, n);
+                            }
+                        }
+                    });
+                } else {
+                    alert(data.error || 'Could not remove staff member.');
+                }
+            })
+            .catch(function(err) { alert('Request failed: ' + err.message); });
+        };
+
+        // ---- Schedule modal ----
+
+        // --- Schedule leads state & helpers ---
+        var evSchedLeads = [];
+        var evSchedLeadAcTimer = null;
+
+        function evSchedLeadsCell(leads) {
+            if (!leads || !leads.length) return '';
+            return leads.map(function(l) {
+                return '<a href="' + EvConfig.uir + 'Playernew/index/' + l.MundaneId + '">' + escHtmlSt(l.Persona) + '</a>';
+            }).join(', ');
+        }
+
+        function evRenderSchedLeads() {
+            var list = gid('ev-sched-leads-list');
+            if (!list) return;
+            if (!evSchedLeads.length) {
+                list.innerHTML = '<span style="color:#a0aec0;font-size:12px;line-height:26px">None assigned</span>';
+                return;
+            }
+            list.innerHTML = evSchedLeads.map(function(l) {
+                return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;border-radius:4px;padding:3px 8px;font-size:12px">' +
+                    escHtmlSt(l.Persona) +
+                    '<button type="button" onclick="evRemoveSchedLead(' + l.MundaneId + ')" style="background:none;border:none;cursor:pointer;color:#718096;font-size:13px;padding:0;margin-left:2px;line-height:1">&times;</button>' +
+                    '</span>';
+            }).join('');
+        }
+
+        window.evRemoveSchedLead = function(mundaneId) {
+            evSchedLeads = evSchedLeads.filter(function(l) { return l.MundaneId !== mundaneId; });
+            evRenderSchedLeads();
+            evRefreshStaffQuickAdd();
+        };
+
+        function evRefreshStaffQuickAdd() {
+            var qaRow  = gid('ev-sched-staff-quickadd-row');
+            var qaList = gid('ev-sched-staff-qa-list');
+            if (!qaRow || !qaList) return;
+            var staff = (EvConfig.staffList || []).filter(function(s) {
+                return !evSchedLeads.some(function(l) { return l.MundaneId === s.MundaneId; });
+            });
+            if (!staff.length) { qaRow.style.display = 'none'; return; }
+            qaRow.style.display = '';
+            qaList.innerHTML = staff.map(function(s) {
+                return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:13px">' +
+                    '<span>' + escHtmlSt(s.Persona) + '</span>' +
+                    '<button type="button" onclick="evStaffQuickAddLead(' + s.MundaneId + ',\'' + encodeURIComponent(s.Persona) + '\')" ' +
+                    'style="background:#276749;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px">+ Add</button>' +
+                    '</div>';
+            }).join('');
+        }
+
+        window.evToggleStaffQuickAdd = function() {
+            var list    = gid('ev-sched-staff-qa-list');
+            var chevron = gid('ev-sched-staff-qa-chevron');
+            if (!list) return;
+            var open = list.style.display !== 'none';
+            list.style.display = open ? 'none' : '';
+            if (chevron) chevron.style.transform = open ? '' : 'rotate(90deg)';
+        };
+
+        window.evStaffQuickAddLead = function(mundaneId, encodedName) {
+            var name = decodeURIComponent(encodedName);
+            if (!evSchedLeads.some(function(l) { return l.MundaneId === mundaneId; })) {
+                evSchedLeads.push({ MundaneId: mundaneId, Persona: name });
+                evRenderSchedLeads();
+                evRefreshStaffQuickAdd();
+            }
+        };
+
+        // Lead player autocomplete
+        var leadAcEl    = gid('ev-sched-lead-ac');
+        var leadInputEl = gid('ev-sched-lead-input');
+        if (leadInputEl && leadAcEl) {
+            leadAcEl.style.position = 'fixed';
+            leadAcEl.style.zIndex   = '9999';
+            leadAcEl.style.display  = '';
+            leadAcEl.className      = 'kn-ac-results';
+
+            function evLeadPositionAc() {
+                var r = leadInputEl.getBoundingClientRect();
+                leadAcEl.style.top   = (r.bottom + 2) + 'px';
+                leadAcEl.style.left  = r.left + 'px';
+                leadAcEl.style.width = r.width + 'px';
+            }
+
+            function evLeadRenderAc(results) {
+                if (!results || !results.length) { leadAcEl.classList.remove(OPEN_CLASS); return; }
+                leadAcEl.innerHTML = results.map(function(pl) {
+                    var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
+                    return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">' + escHtmlSt(pl.Persona) + abbr + '</div>';
+                }).join('');
+                evLeadPositionAc();
+                leadAcEl.classList.add(OPEN_CLASS);
+            }
+
+            leadInputEl.addEventListener('input', function() {
+                var term = this.value.trim();
+                if (term.length < 2) { leadAcEl.classList.remove(OPEN_CLASS); return; }
+                clearTimeout(evSchedLeadAcTimer);
+                evSchedLeadAcTimer = setTimeout(function() {
+                    var kid = EvConfig.kingdomId || 0;
+                    if (!kid) {
+                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                var res = (d || []).map(function(pl) { return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' }; });
+                                evLeadRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
+                                var ph = leadAcEl.querySelector('[data-id="-1"]');
+                                if (ph) ph.removeAttribute('data-id');
+                            });
+                        return;
+                    }
+                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
+                        .then(function(r) { return r.json(); })
+                        .then(function(own) {
+                            own = own || [];
+                            if (own.length >= 5) {
+                                evLeadRenderAc(own);
+                            } else {
+                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
+                                    .then(function(r2) { return r2.json(); })
+                                    .then(function(other) {
+                                        other = (other || []).slice(0, 10 - own.length);
+                                        var combined = own.concat(other);
+                                        evLeadRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found' }]);
+                                        if (!combined.length && leadAcEl.querySelector('[data-id="0"]')) leadAcEl.querySelector('[data-id="0"]').removeAttribute('data-id');
+                                    });
+                            }
+                        });
+                }, 220);
+            });
+
+            leadAcEl.addEventListener('click', function(e) {
+                var item = e.target.closest(ITEM_SEL);
+                if (!item) return;
+                var mid  = parseInt(item.dataset.id);
+                var name = decodeURIComponent(item.dataset.name);
+                leadAcEl.classList.remove(OPEN_CLASS);
+                leadInputEl.value = '';
+                if (!mid || evSchedLeads.some(function(l) { return l.MundaneId === mid; })) return;
+                evSchedLeads.push({ MundaneId: mid, Persona: name });
+                evRenderSchedLeads();
+            });
+
+            leadInputEl.addEventListener('blur', function() {
+                setTimeout(function() { leadAcEl.classList.remove(OPEN_CLASS); }, 160);
+            });
+
+            acKeyNav(leadInputEl, leadAcEl, OPEN_CLASS, ITEM_SEL);
+        }
+
+
+        var EV_CATEGORIES = {
+            'Administrative':    { icon: 'fa-clipboard-list', color: '#546e7a', bg: '#eceff1' },
+            'Tournament':        { icon: 'fa-trophy',          color: '#b8860b', bg: '#fffde7' },
+            'Battlegame':        { icon: 'fa-shield-alt',      color: '#c0392b', bg: '#fdecea' },
+            'Arts and Sciences': { icon: 'fa-palette',         color: '#7b1fa2', bg: '#f3e5f5' },
+            'Class':             { icon: 'fa-graduation-cap',  color: '#1565c0', bg: '#e3f2fd' },
+            'Feast and Food':    { icon: 'fa-utensils',        color: '#e65100', bg: '#fff3e0' },
+            'Court':             { icon: 'fa-crown',           color: '#4e342e', bg: '#efebe9' },
+            'Meeting':           { icon: 'fa-users',           color: '#276749', bg: '#f0fff4' },
+            'Other':             { icon: 'fa-star',            color: '#757575', bg: '#fafafa' }
+        };
+
+        window.evOpenScheduleModal = function() {
+            var modal = gid('ev-schedule-modal');
+            if (!modal) return;
+            gid('ev-sched-mode').value         = 'add';
+            gid('ev-sched-id').value           = '';
+            gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
+            gid('ev-sched-save-label').textContent  = 'Save and Close';
+            if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
+            gid('ev-sched-category').value           = 'Other';
+            gid('ev-sched-secondary-category').value = '';
+            gid('ev-sched-title').value       = '';
+            gid('ev-sched-location').value     = '';
+            gid('ev-sched-description').value  = '';
+            gid('ev-sched-error').style.display = 'none';
+            evSchedLeads = [];
+            evRenderSchedLeads();
+            // Collapse staff quick-add and refresh
+            var qaList = gid('ev-sched-staff-qa-list');
+            var qaChevron = gid('ev-sched-staff-qa-chevron');
+            if (qaList) { qaList.style.display = 'none'; }
+            if (qaChevron) { qaChevron.style.transform = ''; }
+            evRefreshStaffQuickAdd();
+            // Apply event bounds as min/max and default start to event start
+            var startEl = gid('ev-sched-start');
+            var endEl   = gid('ev-sched-end');
+            if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
+            if (EvConfig.eventEnd)   { startEl.max = EvConfig.eventEnd;   endEl.max = EvConfig.eventEnd; }
+            // Default start to event start, end to start + 1hr
+            startEl.value = EvConfig.eventStart || '';
+            if (EvConfig.eventStart) {
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                var ts = new Date(EvConfig.eventStart);
+                ts.setHours(ts.getHours() + 1);
+                endEl.value = ts.getFullYear() + '-' + pad(ts.getMonth()+1) + '-' + pad(ts.getDate()) +
+                              'T' + pad(ts.getHours()) + ':' + pad(ts.getMinutes());
+            } else {
+                endEl.value = '';
+            }
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
+        };
+
+        window.evCloseScheduleModal = function() {
+            var modal = gid('ev-schedule-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'ev-schedule-modal') evCloseScheduleModal();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && gid('ev-schedule-modal') && gid('ev-schedule-modal').style.display === 'flex') {
+                evCloseScheduleModal();
+            }
+        });
+
+        // Auto-set end = start + 1hr whenever start changes
+        var schedStartEl = gid('ev-sched-start');
+        if (schedStartEl) {
+            schedStartEl.addEventListener('change', function() {
+                var endEl = gid('ev-sched-end');
+                if (!endEl) return;
+                var ts = new Date(this.value);
+                if (isNaN(ts)) return;
+                ts.setHours(ts.getHours() + 1);
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                endEl.value = ts.getFullYear() + '-' + pad(ts.getMonth()+1) + '-' + pad(ts.getDate()) +
+                              'T' + pad(ts.getHours()) + ':' + pad(ts.getMinutes());
+            });
+        }
+
+        function evFmtDayHeader(dateStr) {
+            var d = new Date(dateStr + 'T12:00:00');
+            var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+        }
+
+        function evFmtTime(dtStr) {
+            var d = new Date(dtStr.replace(' ', 'T'));
+            if (isNaN(d)) return dtStr;
+            var h = d.getHours(), m = d.getMinutes(), ampm = h >= 12 ? 'pm' : 'am';
+            h = h % 12 || 12;
+            return h + ':' + String(m).padStart(2,'0') + ampm;
+        }
+
+        function escHtmlSch(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        window.evOpenScheduleEditModal = function(scheduleId, btn) {
+            var modal = gid('ev-schedule-modal');
+            if (!modal) return;
+            var row = btn.closest('tr');
+            gid('ev-sched-mode').value         = 'edit';
+            gid('ev-sched-id').value           = scheduleId;
+            gid('ev-sched-modal-title').textContent = 'Edit Schedule Item';
+            gid('ev-sched-save-label').textContent  = 'Save Changes';
+            if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('edit');
+            gid('ev-sched-category').value           = row.getAttribute('data-category') || 'Other';
+            gid('ev-sched-secondary-category').value = row.getAttribute('data-secondary-category') || '';
+            gid('ev-sched-title').value       = row.getAttribute('data-title') || '';
+            gid('ev-sched-location').value     = row.getAttribute('data-location') || '';
+            gid('ev-sched-description').value  = row.getAttribute('data-description') || '';
+            gid('ev-sched-error').style.display = 'none';
+            try { evSchedLeads = JSON.parse(row.getAttribute('data-leads') || '[]'); } catch(e) { evSchedLeads = []; }
+            evRenderSchedLeads();
+            // Collapse staff quick-add and refresh
+            var qaList = gid('ev-sched-staff-qa-list');
+            var qaChevron = gid('ev-sched-staff-qa-chevron');
+            if (qaList) { qaList.style.display = 'none'; }
+            if (qaChevron) { qaChevron.style.transform = ''; }
+            evRefreshStaffQuickAdd();
+            var startEl = gid('ev-sched-start');
+            var endEl   = gid('ev-sched-end');
+            if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
+            if (EvConfig.eventEnd)   { startEl.max = EvConfig.eventEnd;   endEl.max = EvConfig.eventEnd; }
+            startEl.value = row.getAttribute('data-start') || '';
+            endEl.value   = row.getAttribute('data-end')   || '';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
+        };
+
+        window.evSubmitSchedule = function(postAction) {
+            postAction = postAction || 'close';
+            var title   = gid('ev-sched-title').value.trim();
+            var start   = gid('ev-sched-start').value;
+            var end     = gid('ev-sched-end').value;
+            var loc     = gid('ev-sched-location').value.trim();
+            var desc    = gid('ev-sched-description').value.trim();
+            var errEl   = gid('ev-sched-error');
+            var activeBtnId = postAction === 'similar' ? 'ev-sched-save-similar-btn'
+                            : postAction === 'new'     ? 'ev-sched-save-new-btn'
+                            : 'ev-sched-save-btn';
+            var saveBtn = gid(activeBtnId) || gid('ev-sched-save-btn');
+            var allSaveBtns = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-any');
+
+            errEl.style.display = 'none';
+            if (!title) { errEl.textContent = 'Please enter a title.'; errEl.style.display = 'block'; return; }
+            if (!start) { errEl.textContent = 'Please enter a start time.'; errEl.style.display = 'block'; return; }
+            if (!end)   { errEl.textContent = 'Please enter an end time.'; errEl.style.display = 'block'; return; }
+            if (new Date(end) < new Date(start)) {
+                errEl.textContent = 'End time cannot be before start time.'; errEl.style.display = 'block'; return;
+            }
+
+            var orig = saveBtn.innerHTML;
+            allSaveBtns.forEach(function(b) { b.disabled = true; });
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+            var cat    = gid('ev-sched-category').value || 'Other';
+            var secCat = gid('ev-sched-secondary-category').value || '';
+            var fd = new FormData();
+            fd.append('Category',          cat);
+            fd.append('SecondaryCategory', secCat);
+            fd.append('Title',       title);
+            fd.append('StartTime',   start.replace('T', ' '));
+            fd.append('EndTime',     end.replace('T', ' '));
+            fd.append('Location',    loc);
+            fd.append('Description', desc);
+            fd.append('Leads',       JSON.stringify(evSchedLeads));
+
+            var isEdit = gid('ev-sched-mode').value === 'edit';
+            var schedId = gid('ev-sched-id').value;
+            var url = isEdit
+                ? EvConfig.uir + 'EventAjax/update_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId
+                : EvConfig.uir + 'EventAjax/add_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId;
+            if (isEdit) fd.append('ScheduleId', schedId);
+
+            fetch(url, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0 && data.schedule) {
+                    if (postAction === 'close') evCloseScheduleModal();
+                    var s = data.schedule;
+                    var startCell = escHtmlSch(evFmtTime(s.StartTime));
+                    var endCell   = escHtmlSch(evFmtTime(s.EndTime));
+                    var catCfg = EV_CATEGORIES[s.Category] || EV_CATEGORIES['Other'];
+                    var glyphHtml = (function(cat, secCat) {
+                        var cfg    = EV_CATEGORIES[cat]    || EV_CATEGORIES['Other'];
+                        var secCfg = secCat ? (EV_CATEGORIES[secCat] || EV_CATEGORIES['Other']) : null;
+                        var p = '<i class="fas fa-fw ' + cfg.icon + '" style="color:' + cfg.color + '" title="' + escHtmlSch(cat) + '"></i>';
+                        var s2 = secCfg
+                            ? '<i class="fas fa-fw ' + secCfg.icon + '" style="color:' + secCfg.color + ';margin-right:4px" title="' + escHtmlSch(secCat) + '"></i>'
+                            : '<span style="display:inline-block;width:1.25em;margin-right:4px"></span>';
+                        return p + s2;
+                    })(s.Category, s.SecondaryCategory || '');
+                    var actionCells = '<td class="ev-del-cell">' +
+                        '<button class="ev-edit-link" title="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
+                        '<button class="ev-del-link" title="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
+                        '</td>';
+                    if (isEdit) {
+                        var row = gid('ev-schedule-row-' + s.EventScheduleId);
+                        if (row) {
+                            row.setAttribute('data-title',       s.Title);
+                            row.setAttribute('data-start',       s.StartTime.replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-end',         s.EndTime.replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-location',    s.Location);
+                            row.setAttribute('data-description', s.Description);
+                            row.setAttribute('data-category',           s.Category);
+                            row.setAttribute('data-secondary-category', s.SecondaryCategory || '');
+                            row.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
+                            row.style.background = catCfg.bg;
+                            row.cells[0].innerHTML = startCell;
+                            row.cells[1].innerHTML = endCell;
+                            row.cells[2].innerHTML = glyphHtml + escHtmlSch(s.Title);
+                            row.cells[3].textContent = s.Location;
+                            row.cells[4].innerHTML = evSchedLeadsCell(s.Leads || []);
+                            row.cells[5].textContent = s.Description;
+                            if (row.cells[6]) row.cells[6].innerHTML = actionCells.replace(/^<td[^>]*>/, '').replace(/<\/td>$/, '');
+                        }
+                    } else {
+                        var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
+                            ' data-title="' + s.Title.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-start="' + s.StartTime.replace(' ','T').substring(0,16) + '"' +
+                            ' data-end="'   + s.EndTime.replace(' ','T').substring(0,16) + '"' +
+                            ' data-location="' + s.Location.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-description="' + s.Description.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-category="' + escHtmlSch(s.Category) + '"' +
+                            ' data-secondary-category="' + escHtmlSch(s.SecondaryCategory || '') + '"' +
+                            ' data-leads="' + JSON.stringify(s.Leads || []).replace(/"/g,'&quot;') + '"' +
+                            ' style="background:' + catCfg.bg + '">' +
+                            '<td style="white-space:nowrap">' + startCell + '</td>' +
+                            '<td style="white-space:nowrap">' + endCell + '</td>' +
+                            '<td>' + glyphHtml + escHtmlSch(s.Title) + '</td>' +
+                            '<td>' + escHtmlSch(s.Location) + '</td>' +
+                            '<td>' + evSchedLeadsCell(s.Leads || []) + '</td>' +
+                            '<td>' + escHtmlSch(s.Description) + '</td>' +
+                            actionCells +
+                            '</tr>';
+                        var dateKey = s.StartTime.substring(0, 10).replace(/-/g, '');
+                        var tbody = gid('ev-schedule-tbody-' + dateKey);
+                        if (!tbody) {
+                            // Build a new day section and insert in chronological order
+                            var dateStr = s.StartTime.substring(0, 10);
+                            var dayLabel = evFmtDayHeader(dateStr);
+                            var delTh = EvConfig.canManageSchedule ? '<th class="ev-del-cell"></th>' : '';
+                            var delCol = EvConfig.canManageSchedule ? '<col style="width:56px">' : '';
+                            var newSection = '<div class="ev-sched-day-section" data-date="' + dateStr + '">' +
+                                '<div class="ev-sched-day-header">' + dayLabel + '</div>' +
+                                '<table class="ev-table ev-sched-table" id="ev-schedule-table-' + dateKey + '">' +
+                                '<colgroup><col style="width:90px"><col style="width:90px"><col style="width:22%"><col style="width:15%"><col style="width:18%"><col>' + delCol + '</colgroup>' +
+                                '<thead><tr><th>Start</th><th>End</th><th>Title</th><th>Location</th><th>Lead(s)</th><th>Description</th>' + delTh + '</tr></thead>' +
+                                '<tbody id="ev-schedule-tbody-' + dateKey + '"></tbody>' +
+                                '</table></div>';
+                            var container = gid('ev-schedule-container');
+                            if (!container) { location.reload(); return; }
+                            var sections = container.querySelectorAll('.ev-sched-day-section');
+                            var inserted = false;
+                            sections.forEach(function(sec) {
+                                if (!inserted && sec.getAttribute('data-date') > dateStr) {
+                                    sec.insertAdjacentHTML('beforebegin', newSection);
+                                    inserted = true;
+                                }
+                            });
+                            if (!inserted) container.insertAdjacentHTML('beforeend', newSection);
+                            tbody = gid('ev-schedule-tbody-' + dateKey);
+                        }
+                        if (tbody) {
+                            tbody.insertAdjacentHTML('beforeend', newRow);
+                        } else {
+                            location.reload(); return;
+                        }
+                        var empty = gid('ev-schedule-empty');
+                        if (empty) empty.style.display = 'none';
+                        var navItems = document.querySelectorAll('#ev-tab-nav li');
+                        navItems.forEach(function(li) {
+                            if (li.getAttribute('data-tab') === 'ev-tab-schedule') {
+                                var badge = li.querySelector('.ev-tab-count');
+                                if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                            }
+                        });
+                        evBuildScheduleFilters();
+                    }
+                } else {
+                    errEl.textContent = data.error || 'An error occurred.';
+                    errEl.style.display = 'block';
+                }
+            })
+            .catch(function(err) {
+                errEl.textContent = 'Request failed: ' + err.message;
+                errEl.style.display = 'block';
+            })
+            .finally(function() {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = orig;
+            });
+        };
+
+        window.evBuildScheduleFilters = function() {
+            var container = gid('ev-sched-filters');
+            if (!container) return;
+            var rows = document.querySelectorAll('[id^="ev-schedule-tbody-"] tr');
+            var present = {};
+            rows.forEach(function(row) {
+                var cat = row.getAttribute('data-category') || 'Other';
+                present[cat] = true;
+                var sec = row.getAttribute('data-secondary-category') || '';
+                if (sec) present[sec] = true;
+            });
+            var order = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Meeting','Other'];
+            container.innerHTML = '';
+            var count = 0;
+            order.forEach(function(cat) {
+                if (!present[cat]) return;
+                count++;
+                var cfg = EV_CATEGORIES[cat] || EV_CATEGORIES['Other'];
+                var pill = document.createElement('button');
+                pill.className = 'ev-sched-pill ev-sched-pill-active';
+                pill.setAttribute('data-cat', cat);
+                pill.style.background = cfg.bg;
+                pill.style.borderColor = cfg.color;
+                pill.style.color = '#333';
+                pill.innerHTML = '<i class="fas ' + cfg.icon + '" style="color:' + cfg.color + ';margin-right:5px"></i>' + escHtmlSch(cat);
+                pill.addEventListener('click', function() { evToggleScheduleFilter(cat); });
+                container.appendChild(pill);
+            });
+            container.style.display = count >= 2 ? 'flex' : 'none';
+        };
+
+        window.evToggleScheduleFilter = function(cat) {
+            var pill = document.querySelector('#ev-sched-filters [data-cat="' + cat + '"]');
+            if (!pill) return;
+            var isActive = pill.classList.contains('ev-sched-pill-active');
+            var cfg = EV_CATEGORIES[cat] || EV_CATEGORIES['Other'];
+            if (isActive) {
+                pill.classList.remove('ev-sched-pill-active');
+                pill.classList.add('ev-sched-pill-inactive');
+            } else {
+                pill.classList.remove('ev-sched-pill-inactive');
+                pill.classList.add('ev-sched-pill-active');
+                pill.style.background = cfg.bg;
+                pill.style.borderColor = cfg.color;
+                pill.style.color = '#333';
+                var icon = pill.querySelector('i');
+                if (icon) icon.style.color = cfg.color;
+            }
+            document.querySelectorAll('[id^="ev-schedule-tbody-"] tr').forEach(function(row) {
+                var primary = row.getAttribute('data-category') || 'Other';
+                var secondary = row.getAttribute('data-secondary-category') || '';
+                if (primary !== cat && secondary !== cat) return;
+                // Re-evaluate visibility: show if any of the row's categories has an active pill
+                var primPill = document.querySelector('#ev-sched-filters [data-cat="' + primary + '"]');
+                var secPill  = secondary ? document.querySelector('#ev-sched-filters [data-cat="' + secondary + '"]') : null;
+                var primActive = primPill ? primPill.classList.contains('ev-sched-pill-active') : true;
+                var secActive  = secPill  ? secPill.classList.contains('ev-sched-pill-active')  : false;
+                row.style.display = (primActive || secActive) ? '' : 'none';
+            });
+        };
+
+        window.evRemoveSchedule = function(btn, scheduleId) {
+            if (!confirm('Remove this schedule item?')) return;
+            var fd = new FormData();
+            fd.append('ScheduleId', scheduleId);
+            fetch(EvConfig.uir + 'EventAjax/remove_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    var row = gid('ev-schedule-row-' + scheduleId);
+                    if (row) row.remove();
+                    var daySection = row ? row.closest('.ev-sched-day-section') : null;
+                    if (daySection) {
+                        var tbody = daySection.querySelector('tbody');
+                        if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                            daySection.remove();
+                        }
+                    }
+                    var container = gid('ev-schedule-container');
+                    if (container && container.querySelectorAll('.ev-sched-day-section').length === 0) {
+                        var empty = gid('ev-schedule-empty');
+                        if (empty) empty.style.display = '';
+                    }
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-schedule') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) {
+                                var n = parseInt(badge.textContent || '1') - 1;
+                                badge.textContent = Math.max(0, n);
+                            }
+                        }
+                    });
+                    evBuildScheduleFilters();
+                } else {
+                    alert(data.error || 'Could not remove schedule item.');
+                }
+            })
+            .catch(function(err) { alert('Request failed: ' + err.message); });
+        };
+        // Initialize schedule filters on page load
+        evBuildScheduleFilters();
+    }
 })();
 
 /* ===========================
@@ -7952,6 +8815,588 @@ $(document).ready(function() {
     }());
 });
 
+
+// ============================================================
+// Shared QR modal helper
+function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresText, uir) {
+    var imgEl  = document.getElementById(imgId);
+    var dlEl   = document.getElementById(downloadId);
+    var overlay = document.getElementById(overlayId);
+    if (expiresId) document.getElementById(expiresId).textContent = expiresText || '';
+    imgEl.src = '';
+    dlEl.href = '#';
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    $.get(uir + 'QR/link/' + token, function(r) {
+        if (!r || r.status !== 0) { console.error('QR error', r); return; }
+        var dataUri = 'data:image/png;base64,' + r.data;
+        imgEl.src = dataUri;
+        // Build a blob URL for the download link
+        try {
+            var bytes = atob(r.data);
+            var arr = new Uint8Array(bytes.length);
+            for (var i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+            var blob = new Blob([arr], {type: 'image/png'});
+            dlEl.href = URL.createObjectURL(blob);
+        } catch(e) {
+            dlEl.href = dataUri;
+        }
+    }, 'json').fail(function(xhr) { console.error('QR request failed', xhr.status, xhr.responseText); });
+}
+function orkCloseQrModal(overlayId) {
+    var overlay = document.getElementById(overlayId);
+    overlay.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// ============================================================
+// Shared clipboard helper
+function orkCopyToClipboard(text, successEl, successHtml, resetHtml) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() {
+            successEl.innerHTML = successHtml;
+            setTimeout(function() { successEl.innerHTML = resetHtml; }, 2000);
+        }).catch(function() { orkCopyFallback(text, successEl, successHtml, resetHtml); });
+    } else {
+        orkCopyFallback(text, successEl, successHtml, resetHtml);
+    }
+}
+function orkCopyFallback(text, successEl, successHtml, resetHtml) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); successEl.innerHTML = successHtml; setTimeout(function() { successEl.innerHTML = resetHtml; }, 2000); } catch(e) {}
+    document.body.removeChild(ta);
+}
+
+// ============================================================
+// Parknew — Sign-in Link tab (pk-att-panel-link)
+$(document).ready(function() {
+    if (typeof PkConfig === 'undefined') return;
+    var genBtn  = document.getElementById('pk-att-link-gen-btn');
+    var copyBtn = document.getElementById('pk-att-link-copy-btn');
+    if (!genBtn) return;   // only managers see the tab
+
+    // Active links panel state
+    var pkLinksLoaded = false;
+    var pkLinksOpen   = false;
+    var pkCurrentToken = '';
+    var pkCurrentExpires = '';
+
+    window.pkCloseQrModal = function() { orkCloseQrModal('pk-qr-overlay'); };
+
+    genBtn.addEventListener('click', function() {
+        var hours   = Math.max(1, Math.min(96, parseInt(document.getElementById('pk-att-link-hours').value, 10) || 3));
+        var credits = Math.max(0.5, Math.min(10, parseFloat(document.getElementById('pk-att-link-credits').value) || 1));
+        genBtn.disabled = true;
+        genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
+        document.getElementById('pk-att-link-result').style.display = 'none';
+        $.post(PkConfig.uir + 'AttendanceAjax/link/park/' + PkConfig.parkId + '/create',
+            { Hours: hours, Credits: credits },
+            function(r) {
+                genBtn.disabled = false;
+                genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
+                if (r && r.status === 0) {
+                    pkCurrentToken   = r.token;
+                    pkCurrentExpires = r.expires || '';
+                    document.getElementById('pk-att-link-url').value = r.url;
+                    document.getElementById('pk-att-link-expires').textContent = r.expires;
+                    document.getElementById('pk-att-link-result').style.display = '';
+                    // Auto-copy and reset the copy button
+                    orkCopyToClipboard(r.url, copyBtn,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                    // Reload active links list if it was open
+                    pkLinksLoaded = false;
+                    if (pkLinksOpen) pkLoadActiveLinks();
+                } else {
+                    pkAttShowFeedback((r && r.error) ? r.error : 'Could not generate link.', false);
+                }
+            }, 'json'
+        ).fail(function() {
+            genBtn.disabled = false;
+            genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
+            pkAttShowFeedback('Request failed.', false);
+        });
+    });
+
+    copyBtn.addEventListener('click', function() {
+        var url = document.getElementById('pk-att-link-url').value;
+        if (!url) return;
+        orkCopyToClipboard(url, copyBtn,
+            '<i class="fas fa-check"></i> Copied!',
+            '<i class="fas fa-copy"></i> Copy');
+    });
+
+    var qrBtn = document.getElementById('pk-att-link-qr-btn');
+    if (qrBtn) {
+        qrBtn.addEventListener('click', function() {
+            if (!pkCurrentToken) return;
+            orkOpenQrModal('pk-qr-overlay', 'pk-qr-img', 'pk-qr-download', 'pk-qr-expires',
+                pkCurrentToken, pkCurrentExpires, PkConfig.uir);
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { var o = document.getElementById('pk-qr-overlay'); if (o && o.style.display !== 'none') pkCloseQrModal(); }
+    });
+
+    // Active links collapsible
+    var toggleBtn = document.getElementById('pk-att-links-toggle');
+    var chevron   = document.getElementById('pk-att-links-chevron');
+    var body      = document.getElementById('pk-att-links-body');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            pkLinksOpen = !pkLinksOpen;
+            body.style.display = pkLinksOpen ? '' : 'none';
+            chevron.style.transform = pkLinksOpen ? 'rotate(90deg)' : '';
+            if (pkLinksOpen && !pkLinksLoaded) pkLoadActiveLinks();
+        });
+    }
+
+    function pkLoadActiveLinks() {
+        pkLinksLoaded = true;
+        document.getElementById('pk-att-links-loading').style.display = '';
+        document.getElementById('pk-att-links-empty').style.display   = 'none';
+        document.getElementById('pk-att-links-table').style.display   = 'none';
+        $.get(PkConfig.uir + 'AttendanceAjax/link/park/' + PkConfig.parkId + '/list', function(r) {
+            document.getElementById('pk-att-links-loading').style.display = 'none';
+            if (!r || r.status !== 0 || !r.links.length) {
+                document.getElementById('pk-att-links-empty').style.display = '';
+                document.getElementById('pk-att-links-count').textContent = '';
+                return;
+            }
+            document.getElementById('pk-att-links-count').textContent = '(' + r.links.length + ')';
+            var tbody = document.getElementById('pk-att-links-tbody');
+            tbody.innerHTML = '';
+            r.links.forEach(function(lnk) {
+                var exp = new Date(lnk.ExpiresAt.replace(' ', 'T'));
+                var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+                var tr = document.createElement('tr');
+                tr.dataset.linkId = lnk.LinkId;
+                tr.innerHTML =
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
+                        '<button class="pk-btn pk-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button class="pk-btn pk-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('pk-att-links-table').style.display = '';
+            // Copy buttons
+            tbody.querySelectorAll('.pk-links-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    orkCopyToClipboard(this.dataset.url, this,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            // Revoke buttons
+            tbody.querySelectorAll('.pk-links-revoke').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lid = this.dataset.id;
+                    var row = this.closest('tr');
+                    this.disabled = true;
+                    $.post(PkConfig.uir + 'AttendanceAjax/link/delete/' + lid, function(r) {
+                        if (r && r.status === 0) {
+                            row.remove();
+                            var remaining = tbody.querySelectorAll('tr').length;
+                            if (!remaining) {
+                                document.getElementById('pk-att-links-table').style.display = 'none';
+                                document.getElementById('pk-att-links-empty').style.display = '';
+                                document.getElementById('pk-att-links-count').textContent = '';
+                            } else {
+                                document.getElementById('pk-att-links-count').textContent = '(' + remaining + ')';
+                            }
+                        }
+                    }, 'json');
+                });
+            });
+        }, 'json').fail(function() {
+            document.getElementById('pk-att-links-loading').style.display = 'none';
+            document.getElementById('pk-att-links-empty').style.display = '';
+        });
+    }
+});
+
+
+// ============================================================
+// Eventnew — Sign-in Link & QR (event-scoped)
+window.evOpenSigninLinkModal = function() {
+    var ov = document.getElementById('ev-signin-link-overlay');
+    if (!ov) return;
+    ov.classList.add('ev-open');
+    document.body.style.overflow = 'hidden';
+};
+window.evCloseSigninLinkModal = function() {
+    var ov = document.getElementById('ev-signin-link-overlay');
+    if (!ov) return;
+    ov.classList.remove('ev-open');
+    document.body.style.overflow = '';
+};
+$(document).ready(function() {
+    if (typeof EvConfig === 'undefined') return;
+    if (!EvConfig.canManageAttendance || !EvConfig.checkinOpen) return;
+    var genBtn  = document.getElementById('ev-signin-gen-btn');
+    var copyBtn = document.getElementById('ev-signin-copy-btn');
+    var creditsEl = document.getElementById('ev-signin-credits');
+    if (!genBtn || !creditsEl) return;
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var ov = document.getElementById('ev-signin-link-overlay');
+            if (ov && ov.classList.contains('ev-open')) evCloseSigninLinkModal();
+        }
+    });
+
+    var evCurrentToken   = '';
+    var evCurrentExpires = '';
+    var evLinksLoaded    = false;
+    var evLinksOpen      = false;
+
+    function evSyncGenBtn() {
+        var v = parseFloat(creditsEl.value);
+        genBtn.disabled = !(v > 0);
+    }
+    creditsEl.addEventListener('input', evSyncGenBtn);
+    evSyncGenBtn();
+
+    genBtn.addEventListener('click', function() {
+        var credits = parseFloat(creditsEl.value);
+        if (!(credits > 0)) { creditsEl.focus(); return; }
+        genBtn.disabled = true;
+        var origHtml = '<i class="fas fa-link"></i> Generate';
+        genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
+        document.getElementById('ev-signin-link-result').style.display = 'none';
+        $.post(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/create',
+            { Credits: credits, EventCalendarDetailId: EvConfig.detailId },
+            function(r) {
+                genBtn.innerHTML = origHtml;
+                evSyncGenBtn();
+                if (r && r.status === 0) {
+                    evCurrentToken   = r.token;
+                    evCurrentExpires = r.expires || '';
+                    document.getElementById('ev-signin-link-url').value = r.url;
+                    document.getElementById('ev-signin-link-expires').textContent = r.expires;
+                    document.getElementById('ev-signin-link-result').style.display = '';
+                    orkCopyToClipboard(r.url, copyBtn,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                    evLinksLoaded = false;
+                    if (evLinksOpen) evLoadActiveLinks();
+                } else {
+                    alert((r && r.error) ? r.error : 'Could not generate link.');
+                }
+            }, 'json'
+        ).fail(function() {
+            genBtn.innerHTML = origHtml;
+            evSyncGenBtn();
+            alert('Request failed.');
+        });
+    });
+
+    copyBtn.addEventListener('click', function() {
+        var url = document.getElementById('ev-signin-link-url').value;
+        if (!url) return;
+        orkCopyToClipboard(url, copyBtn,
+            '<i class="fas fa-check"></i> Copied!',
+            '<i class="fas fa-copy"></i> Copy');
+    });
+
+    var qrBtn = document.getElementById('ev-signin-qr-btn');
+    if (qrBtn) {
+        qrBtn.addEventListener('click', function() {
+            if (!evCurrentToken) return;
+            orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
+                evCurrentToken, evCurrentExpires, EvConfig.uir);
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var o = document.getElementById('ev-qr-overlay');
+            if (o && o.style.display !== 'none') { if (typeof evCloseQrModal === 'function') evCloseQrModal(); }
+        }
+    });
+
+    var toggleBtn = document.getElementById('ev-signin-links-toggle');
+    var chevron   = document.getElementById('ev-signin-links-chevron');
+    var body      = document.getElementById('ev-signin-links-body');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            evLinksOpen = !evLinksOpen;
+            body.style.display = evLinksOpen ? '' : 'none';
+            chevron.style.transform = evLinksOpen ? 'rotate(90deg)' : '';
+            if (evLinksOpen && !evLinksLoaded) evLoadActiveLinks();
+        });
+    }
+
+    function evLoadActiveLinks() {
+        evLinksLoaded = true;
+        document.getElementById('ev-signin-links-loading').style.display = '';
+        document.getElementById('ev-signin-links-empty').style.display   = 'none';
+        document.getElementById('ev-signin-links-table').style.display   = 'none';
+        $.get(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/list',
+            { EventCalendarDetailId: EvConfig.detailId }, function(r) {
+            document.getElementById('ev-signin-links-loading').style.display = 'none';
+            if (!r || r.status !== 0 || !r.links.length) {
+                document.getElementById('ev-signin-links-empty').style.display = '';
+                document.getElementById('ev-signin-links-count').textContent = '';
+                return;
+            }
+            document.getElementById('ev-signin-links-count').textContent = '(' + r.links.length + ')';
+            var tbody = document.getElementById('ev-signin-links-tbody');
+            tbody.innerHTML = '';
+            r.links.forEach(function(lnk) {
+                var exp = new Date(lnk.ExpiresAt.replace(' ', 'T'));
+                var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+                var tr = document.createElement('tr');
+                tr.dataset.linkId = lnk.LinkId;
+                tr.innerHTML =
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('ev-signin-links-table').style.display = '';
+            tbody.querySelectorAll('.ev-signin-links-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    orkCopyToClipboard(this.dataset.url, this,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            tbody.querySelectorAll('.ev-signin-links-revoke').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lid = this.dataset.id;
+                    var row = this.closest('tr');
+                    this.disabled = true;
+                    $.post(EvConfig.uir + 'AttendanceAjax/link/delete/' + lid, function(r) {
+                        if (r && r.status === 0) {
+                            row.remove();
+                            var remaining = tbody.querySelectorAll('tr').length;
+                            if (!remaining) {
+                                document.getElementById('ev-signin-links-table').style.display = 'none';
+                                document.getElementById('ev-signin-links-empty').style.display = '';
+                                document.getElementById('ev-signin-links-count').textContent = '';
+                            } else {
+                                document.getElementById('ev-signin-links-count').textContent = '(' + remaining + ')';
+                            }
+                        }
+                    }, 'json');
+                });
+            });
+        }, 'json').fail(function() {
+            document.getElementById('ev-signin-links-loading').style.display = 'none';
+            document.getElementById('ev-signin-links-empty').style.display = '';
+        });
+    }
+});
+
+
+// ============================================================
+// Kingdomnew — Sign-in Link (inline in Admin Tasks panel)
+$(document).ready(function() {
+    if (typeof KnConfig === 'undefined') return;
+    var genBtn = document.getElementById('kn-signinlink-gen-btn');
+    if (!genBtn) return;
+
+    var knLinksLoaded  = false;
+    var knLinksOpen    = false;
+    var knCurrentToken   = '';
+    var knCurrentExpires = '';
+
+    window.knCloseQrModal = function() { orkCloseQrModal('kn-qr-overlay'); };
+
+    var copyBtn = document.getElementById('kn-signinlink-copy-btn');
+
+    // Park autocomplete
+    var parkNameEl = document.getElementById('kn-signinlink-park-name');
+    var parkIdEl   = document.getElementById('kn-signinlink-park-id');
+    var parkAcEl   = document.getElementById('kn-signinlink-park-results');
+    var parkTimer;
+    if (parkNameEl) {
+        parkNameEl.addEventListener('input', function() {
+            parkIdEl.value = '';
+            clearTimeout(parkTimer);
+            var term = this.value.trim();
+            if (term.length < 2) { parkAcEl.classList.remove('kn-ac-open'); return; }
+            parkTimer = setTimeout(function() {
+                $.getJSON(KnConfig.uir + 'SearchAjax/search', { Action: 'Search/Park', name: term, kingdom_id: KnConfig.kingdomId, limit: 10 }, function(data) {
+                    parkAcEl.innerHTML = (data && data.length)
+                        ? data.map(function(pk) {
+                            return '<div class="kn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">' + escHtml(pk.Name) + '</div>';
+                        }).join('')
+                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
+                    // Position fixed so dropdown escapes the scrolling admin panel body
+                    var rect = parkNameEl.getBoundingClientRect();
+                    parkAcEl.style.position = 'fixed';
+                    parkAcEl.style.top  = (rect.bottom) + 'px';
+                    parkAcEl.style.left = rect.left + 'px';
+                    parkAcEl.style.width = rect.width + 'px';
+                    parkAcEl.style.zIndex = '9999';
+                    parkAcEl.classList.add('kn-ac-open');
+                });
+            }, AUTOCOMPLETE_DEBOUNCE_MS || 220);
+        });
+        parkAcEl.addEventListener('click', function(e) {
+            var item = e.target.closest('.kn-ac-item[data-id]');
+            if (!item) return;
+            parkNameEl.value = decodeURIComponent(item.dataset.name);
+            parkIdEl.value   = item.dataset.id;
+            parkAcEl.classList.remove('kn-ac-open');
+            // Reset result when park changes
+            document.getElementById('kn-signinlink-result').style.display = 'none';
+            knLinksLoaded = false;
+        });
+        parkNameEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { parkAcEl.classList.remove('kn-ac-open'); }
+        });
+        // Clear hidden id if text is cleared
+        parkNameEl.addEventListener('change', function() {
+            if (!this.value.trim()) parkIdEl.value = '';
+        });
+        setupAcKeyNav(parkNameEl, parkAcEl, '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
+    }
+
+    genBtn.addEventListener('click', function() {
+        var btn     = this;
+        var errEl   = document.getElementById('kn-signinlink-error');
+        var hours   = Math.max(1, Math.min(96, parseInt(document.getElementById('kn-signinlink-hours').value, 10) || 3));
+        var credits = Math.max(0.5, Math.min(10, parseFloat(document.getElementById('kn-signinlink-credits').value) || 1));
+
+        // Scope: use park if one is selected, otherwise kingdom
+        var selectedParkId = parkIdEl ? parkIdEl.value.trim() : '';
+        var postUrl = selectedParkId
+            ? KnConfig.uir + 'AttendanceAjax/link/park/' + selectedParkId + '/create'
+            : KnConfig.uir + 'AttendanceAjax/link/kingdom/' + KnConfig.kingdomId + '/create';
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
+        errEl.style.display = 'none';
+        document.getElementById('kn-signinlink-result').style.display = 'none';
+        $.post(postUrl, { Hours: hours, Credits: credits }, function(r) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link"></i> Generate';
+            if (r && r.status === 0) {
+                knCurrentToken   = r.token;
+                knCurrentExpires = r.expires || '';
+                document.getElementById('kn-signinlink-url').value = r.url;
+                document.getElementById('kn-signinlink-expires').textContent = r.expires;
+                document.getElementById('kn-signinlink-result').style.display = '';
+                orkCopyToClipboard(r.url, copyBtn,
+                    '<i class="fas fa-check"></i> Copied!',
+                    '<i class="fas fa-copy"></i> Copy');
+                knLinksLoaded = false;
+                if (knLinksOpen) knLoadActiveLinks();
+            } else {
+                errEl.textContent = (r && r.error) ? r.error : 'Could not generate link.';
+                errEl.style.display = '';
+            }
+        }, 'json').fail(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link"></i> Generate';
+            errEl.textContent = 'Request failed.';
+            errEl.style.display = '';
+        });
+    });
+
+    copyBtn.addEventListener('click', function() {
+        var url = document.getElementById('kn-signinlink-url').value;
+        if (!url) return;
+        orkCopyToClipboard(url, copyBtn,
+            '<i class="fas fa-check"></i> Copied!',
+            '<i class="fas fa-copy"></i> Copy');
+    });
+
+    var knQrBtn = document.getElementById('kn-signinlink-qr-btn');
+    if (knQrBtn) {
+        knQrBtn.addEventListener('click', function() {
+            if (!knCurrentToken) return;
+            orkOpenQrModal('kn-qr-overlay', 'kn-qr-img', 'kn-qr-download', 'kn-qr-expires',
+                knCurrentToken, knCurrentExpires, KnConfig.uir);
+        });
+    }
+
+    // Active links collapsible — lists all kingdom links (park and kingdom-wide)
+    var knToggleBtn = document.getElementById('kn-signinlink-links-toggle');
+    var knChevron   = document.getElementById('kn-signinlink-links-chevron');
+    var knBody      = document.getElementById('kn-signinlink-links-body');
+    if (knToggleBtn) {
+        knToggleBtn.addEventListener('click', function() {
+            knLinksOpen = !knLinksOpen;
+            knBody.style.display = knLinksOpen ? '' : 'none';
+            knChevron.style.transform = knLinksOpen ? 'rotate(90deg)' : '';
+            if (knLinksOpen && !knLinksLoaded) knLoadActiveLinks();
+        });
+    }
+
+    function knLoadActiveLinks() {
+        knLinksLoaded = true;
+        document.getElementById('kn-signinlink-links-loading').style.display = '';
+        document.getElementById('kn-signinlink-links-empty').style.display   = 'none';
+        document.getElementById('kn-signinlink-links-table').style.display   = 'none';
+        $.get(KnConfig.uir + 'AttendanceAjax/link/kingdom/' + KnConfig.kingdomId + '/list', function(r) {
+            document.getElementById('kn-signinlink-links-loading').style.display = 'none';
+            if (!r || r.status !== 0 || !r.links.length) {
+                document.getElementById('kn-signinlink-links-empty').style.display = '';
+                document.getElementById('kn-signinlink-links-count').textContent = '';
+                return;
+            }
+            document.getElementById('kn-signinlink-links-count').textContent = '(' + r.links.length + ')';
+            var tbody = document.getElementById('kn-signinlink-links-tbody');
+            tbody.innerHTML = '';
+            r.links.forEach(function(lnk) {
+                var exp = new Date(lnk.ExpiresAt.replace(' ', 'T'));
+                var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+                var scope = lnk.ParkId > 0 ? (escHtml(lnk.ParkName || 'Park')) : 'Kingdom';
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td style="padding:4px 6px;color:#4a5568;font-size:11px">' + scope + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
+                        '<button class="kn-btn kn-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button class="kn-btn kn-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('kn-signinlink-links-table').style.display = '';
+            tbody.querySelectorAll('.kn-links-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    orkCopyToClipboard(this.dataset.url, this,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            tbody.querySelectorAll('.kn-links-revoke').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lid = this.dataset.id;
+                    var row = this.closest('tr');
+                    this.disabled = true;
+                    $.post(KnConfig.uir + 'AttendanceAjax/link/delete/' + lid, function(r) {
+                        if (r && r.status === 0) {
+                            row.remove();
+                            var remaining = tbody.querySelectorAll('tr').length;
+                            if (!remaining) {
+                                document.getElementById('kn-signinlink-links-table').style.display = 'none';
+                                document.getElementById('kn-signinlink-links-empty').style.display = '';
+                                document.getElementById('kn-signinlink-links-count').textContent = '';
+                            } else {
+                                document.getElementById('kn-signinlink-links-count').textContent = '(' + remaining + ')';
+                            }
+                        }
+                    }, 'json');
+                });
+            });
+        }, 'json').fail(function() {
+            document.getElementById('kn-signinlink-links-loading').style.display = 'none';
+            document.getElementById('kn-signinlink-links-empty').style.display = '';
+        });
+    }
+});
+
 // ---- Shared: pronoun picker helper ----
 function setupPronounPicker(cfg) {
     // cfg: { toggleId, panelId, previewId, applyId, clearId, hiddenId, standardSelId,
@@ -8260,6 +9705,165 @@ function setupPronounPicker(cfg) {
                     showFeedback(feedback, 'Request failed. Please try again.', false);
                 }
             });
+        });
+    });
+
+})();
+
+// ---- Self-Registration QR Modal (Parknew) ----
+(function() {
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
+
+    var SELFREG_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/selfreg_link';
+    var selfregTimer = null;
+    var selfregExpiresAt = null;
+    var selfregUrl = '';
+
+    function gid(id) { return document.getElementById(id); }
+
+    function showSelfRegFeedback(msg, ok) {
+        var el = gid('pk-selfreg-feedback');
+        if (!el) return;
+        el.textContent = msg;
+        el.className = 'plr-feedback ' + (ok ? 'plr-ok' : 'plr-err');
+        el.style.display = '';
+    }
+    function hideSelfRegFeedback() {
+        var el = gid('pk-selfreg-feedback');
+        if (el) el.style.display = 'none';
+    }
+
+    function fetchAndRenderQR() {
+        var qrEl = gid('pk-selfreg-qr');
+        if (!qrEl) return;
+        qrEl.innerHTML = '<div style="padding:40px;color:#a0aec0;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+        hideSelfRegFeedback();
+        gid('pk-selfreg-regen-btn').style.display = 'none';
+        var badge = gid('pk-selfreg-expired-badge');
+        if (badge) badge.style.display = 'none';
+        $.ajax({
+            url: SELFREG_URL,
+            type: 'POST',
+            dataType: 'json',
+            success: function(r) {
+                if (r && r.status === 0 && r.token) {
+                    selfregUrl = PkConfig.uir + 'SelfReg/form/' + r.token;
+                    qrEl.innerHTML = '';
+                    new QRCode(qrEl, {
+                        text: selfregUrl,
+                        width: 220,
+                        height: 220,
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    // A3: Use seconds_remaining instead of absolute timestamp
+                    selfregExpiresAt = Date.now() + (r.seconds_remaining * 1000);
+                    startTimer();
+                } else {
+                    qrEl.innerHTML = '';
+                    showSelfRegFeedback((r && r.error) ? r.error : 'Could not generate QR code.', false);
+                }
+            },
+            error: function() {
+                qrEl.innerHTML = '';
+                showSelfRegFeedback('Request failed. Please try again.', false);
+            }
+        });
+    }
+
+    function startTimer() {
+        stopTimer();
+        updateTimer();
+        selfregTimer = setInterval(updateTimer, 1000);
+    }
+
+    function stopTimer() {
+        if (selfregTimer) { clearInterval(selfregTimer); selfregTimer = null; }
+    }
+
+    function updateTimer() {
+        var timerEl = gid('pk-selfreg-timer');
+        if (!timerEl || !selfregExpiresAt) return;
+
+        var remaining = Math.max(0, Math.floor((selfregExpiresAt - Date.now()) / 1000));
+        if (remaining <= 0) {
+            timerEl.textContent = 'Expired';
+            timerEl.parentElement.classList.add('pk-selfreg-timer-expired');
+            gid('pk-selfreg-regen-btn').style.display = '';
+            stopTimer();
+            // A18: Gray out QR and show expired badge
+            var qrEl = gid('pk-selfreg-qr');
+            if (qrEl) qrEl.style.opacity = '0.3';
+            var badge = gid('pk-selfreg-expired-badge');
+            if (badge) badge.style.display = '';
+        } else {
+            var min = Math.floor(remaining / 60);
+            var sec = remaining % 60;
+            timerEl.textContent = min + ':' + (sec < 10 ? '0' : '') + sec;
+            timerEl.parentElement.classList.remove('pk-selfreg-timer-expired');
+        }
+    }
+
+    // A7: Focus management
+    window.pkOpenSelfRegModal = function() {
+        // Close Add Player modal first
+        if (typeof pkCloseAddPlayerModal === 'function') pkCloseAddPlayerModal();
+
+        var ov = gid('pk-selfreg-overlay');
+        if (!ov) return;
+        hideSelfRegFeedback();
+        ov.classList.add('pk-selfreg-open');
+        document.body.style.overflow = 'hidden';
+        fetchAndRenderQR();
+        // A7: Focus close button on open
+        setTimeout(function() { var cb = gid('pk-selfreg-close-btn'); if (cb) cb.focus(); }, 50);
+    };
+
+    window.pkCloseSelfRegModal = function() {
+        var ov = gid('pk-selfreg-overlay');
+        if (ov) ov.classList.remove('pk-selfreg-open');
+        document.body.style.overflow = '';
+        stopTimer();
+        // A7: Return focus to Add Player button
+        var addBtn = document.querySelector('[onclick*="pkOpenAddPlayerModal"]');
+        if (addBtn) addBtn.focus();
+    };
+
+    // Anti-copy protections + event listeners
+    $(document).ready(function() {
+        var wrap = gid('pk-selfreg-qr-wrap');
+        if (wrap) {
+            wrap.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+            wrap.addEventListener('dragstart', function(e) { e.preventDefault(); });
+        }
+
+        var shield = gid('pk-selfreg-shield');
+        if (shield) {
+            shield.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        }
+
+        if (gid('pk-selfreg-close-btn'))
+            gid('pk-selfreg-close-btn').addEventListener('click', pkCloseSelfRegModal);
+        if (gid('pk-selfreg-cancel'))
+            gid('pk-selfreg-cancel').addEventListener('click', pkCloseSelfRegModal);
+
+        var overlay = gid('pk-selfreg-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) pkCloseSelfRegModal();
+            });
+        }
+
+        if (gid('pk-selfreg-regen-btn')) {
+            gid('pk-selfreg-regen-btn').addEventListener('click', function() {
+                var qrEl = gid('pk-selfreg-qr');
+                if (qrEl) qrEl.style.opacity = '1';
+                fetchAndRenderQR();
+            });
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay && overlay.classList.contains('pk-selfreg-open'))
+                pkCloseSelfRegModal();
         });
     });
 
@@ -11621,7 +13225,6 @@ window.pnCloseUnitCreateModal = function() {
     }
 })();
 
-/* [TOURNAMENTS HIDDEN] KN delete tournament buttons */
 // ---- Recs table export helpers (shared by Kingdom + Park) ----
 function recsCellText(td) {
     // Clone so we don't mutate the live DOM; strip expand/collapse buttons and
@@ -11764,3 +13367,242 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
         box.classList.remove('esc-visible');
     });
 };
+// ---- Admission & Fees management (event detail + create) ----
+(function() {
+    var cfg = (typeof EvConfig !== 'undefined' && EvConfig.hasFees) ? EvConfig
+            : (typeof EcConfig !== 'undefined' && EcConfig.hasFees) ? EcConfig : null;
+    if (!cfg) return;
+
+    var evFees = (cfg.fees || []).map(function(f) {
+        return { AdmissionType: f.AdmissionType || '', Cost: parseFloat(f.Cost) || 0 };
+    });
+
+    var listId = cfg.feesListId || 'ev-fees-list';
+
+    function render() {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        if (evFees.length === 0) {
+            list.innerHTML = '<div style="color:#718096;font-size:13px;padding:4px 0">No fees added — event is free.</div>';
+            serialize();
+            return;
+        }
+        evFees.forEach(function(fee, idx) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+            var typeVal = (fee.AdmissionType || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+            var costVal = (typeof fee.Cost === 'number' ? fee.Cost : 0).toFixed(2);
+            row.innerHTML =
+                '<input type="text" placeholder="Admission type (e.g. Full Weekend)" value="' + typeVal + '" ' +
+                'data-fees-idx="' + idx + '" data-fees-field="AdmissionType" ' +
+                'style="flex:1;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<span style="color:#718096;font-size:13px;flex-shrink:0">$</span>' +
+                '<input type="number" min="0" step="0.01" value="' + costVal + '" ' +
+                'data-fees-idx="' + idx + '" data-fees-field="Cost" ' +
+                'style="width:80px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<button type="button" data-fees-remove="' + idx + '" title="Remove" ' +
+                'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1">&times;</button>';
+            list.appendChild(row);
+        });
+        list.querySelectorAll('input[data-fees-idx]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                var i = parseInt(this.getAttribute('data-fees-idx'));
+                var f = this.getAttribute('data-fees-field');
+                if (!evFees[i]) return;
+                evFees[i][f] = (f === 'Cost') ? (parseFloat(this.value) || 0) : this.value;
+                serialize();
+            });
+        });
+        list.querySelectorAll('button[data-fees-remove]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var i = parseInt(this.getAttribute('data-fees-remove'));
+                evFees.splice(i, 1);
+                render();
+            });
+        });
+        serialize();
+    }
+
+    function serialize() {
+        var el = document.getElementById('ev-fees-json');
+        if (el) el.value = JSON.stringify(evFees);
+    }
+
+    window.evFeesAdd = function() {
+        evFees.push({ AdmissionType: '', Cost: 0 });
+        render();
+        var inputs = document.querySelectorAll('#' + listId + ' input[type="text"]');
+        if (inputs.length) inputs[inputs.length - 1].focus();
+    };
+
+    // Re-init fees from server data when edit modal opens
+    window.evFeesReset = function(fees) {
+        evFees = (fees || []).map(function(f) {
+            return { AdmissionType: f.AdmissionType || '', Cost: parseFloat(f.Cost) || 0 };
+        });
+        render();
+    };
+
+    // Hook form submit to serialize
+    var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+    if (form) {
+        form.addEventListener('submit', function() { serialize(); });
+    }
+
+    render();
+})();
+// ---- External Links management (event detail + create) ----
+(function() {
+    var LINK_ICONS = [
+        { icon: 'fas fa-ticket-alt', label: 'Ticket'    },
+        { icon: 'fab fa-facebook',  label: 'Facebook'  },
+        { icon: 'fab fa-discord',   label: 'Discord'   },
+        { icon: 'fas fa-globe',     label: 'Globe'     },
+        { icon: 'far fa-clipboard', label: 'Clipboard' },
+        { icon: 'fas fa-link',      label: 'Link'      },
+    ];
+
+    var cfg = (typeof EvConfig !== 'undefined' && EvConfig.hasLinks) ? EvConfig
+            : (typeof EcConfig !== 'undefined' && EcConfig.hasLinks) ? EcConfig : null;
+    if (!cfg) return;
+
+    var evLinks = (cfg.links || []).map(function(l) {
+        return { Title: l.Title || '', Url: l.Url || '', Icon: l.Icon || '' };
+    });
+
+    var listId = cfg.linksListId || 'ev-links-list';
+
+    // Close all icon menus on outside click
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('[data-links-icon-btn],[data-links-icon-menu],[data-links-icon-pick]')) {
+            var list = document.getElementById(listId);
+            if (list) list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+        }
+    });
+
+    function render() {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        if (evLinks.length === 0) {
+            list.innerHTML = '<div style="color:#718096;font-size:13px;padding:4px 0">No links added.</div>';
+            serialize();
+            return;
+        }
+        evLinks.forEach(function(link, idx) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+
+            var menuHtml = '<div data-links-icon-menu="' + idx + '" ' +
+                'style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;' +
+                'border:1px solid #cbd5e0;border-radius:6px;padding:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);' +
+                'flex-wrap:wrap;gap:4px;width:160px">' +
+                LINK_ICONS.map(function(li) {
+                    var active = link.Icon === li.icon;
+                    return '<button type="button" title="' + li.label + '" data-links-icon-pick="' + idx + '" data-links-icon-val="' + li.icon + '" ' +
+                        'style="width:34px;height:34px;border:1px solid ' + (active ? '#4299e1' : '#e2e8f0') + ';' +
+                        'border-radius:4px;background:' + (active ? '#ebf8ff' : '#fff') + ';cursor:pointer;' +
+                        'font-size:14px;display:flex;align-items:center;justify-content:center">' +
+                        '<i class="' + li.icon + '"></i></button>';
+                }).join('') +
+                '</div>';
+
+            var titleVal = (link.Title || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+            var urlVal   = (link.Url   || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+            var noIcon = !link.Icon;
+            row.innerHTML =
+                '<div style="position:relative;flex-shrink:0">' +
+                    '<button type="button" data-links-icon-btn="' + idx + '" title="Choose icon" ' +
+                    'style="width:36px;height:34px;border:1px solid ' + (noIcon ? '#fc8181' : '#cbd5e0') + ';' +
+                    'border-radius:4px;background:' + (noIcon ? '#fff5f5' : '#fff') + ';' +
+                    'cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;' +
+                    (noIcon ? 'box-shadow:0 0 0 2px #fed7d7;' : '') + '">' +
+                    (noIcon ? '<i class="fas fa-question" style="color:#fc8181;font-size:13px"></i>' : '<i class="' + link.Icon + '"></i>') +
+                    '</button>' +
+                    menuHtml +
+                '</div>' +
+                '<input type="text" placeholder="Title (e.g. Register Here)" value="' + titleVal + '" ' +
+                'data-links-idx="' + idx + '" data-links-field="Title" ' +
+                'style="flex:1;min-width:0;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<input type="text" placeholder="https://\u2026" value="' + urlVal + '" ' +
+                'data-links-idx="' + idx + '" data-links-field="Url" ' +
+                'style="flex:2;min-width:0;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<button type="button" data-links-remove="' + idx + '" title="Remove" ' +
+                'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1;flex-shrink:0">\xd7</button>';
+
+            list.appendChild(row);
+        });
+
+        list.querySelectorAll('button[data-links-icon-btn]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var i    = parseInt(this.getAttribute('data-links-icon-btn'));
+                var menu = list.querySelector('[data-links-icon-menu="' + i + '"]');
+                if (!menu) return;
+                var showing = menu.style.display === 'flex';
+                list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+                if (!showing) menu.style.display = 'flex';
+            });
+        });
+
+        list.querySelectorAll('button[data-links-icon-pick]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var i   = parseInt(this.getAttribute('data-links-icon-pick'));
+                var val = this.getAttribute('data-links-icon-val');
+                if (!evLinks[i]) return;
+                evLinks[i].Icon = val;
+                list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+                render();
+            });
+        });
+
+        list.querySelectorAll('input[data-links-idx]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                var i = parseInt(this.getAttribute('data-links-idx'));
+                var f = this.getAttribute('data-links-field');
+                if (!evLinks[i]) return;
+                evLinks[i][f] = this.value;
+                serialize();
+            });
+        });
+
+        list.querySelectorAll('button[data-links-remove]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var i = parseInt(this.getAttribute('data-links-remove'));
+                evLinks.splice(i, 1);
+                render();
+            });
+        });
+
+        serialize();
+    }
+
+    function serialize() {
+        var el = document.getElementById('ev-links-json');
+        if (el) el.value = JSON.stringify(evLinks);
+    }
+
+    window.evLinksAdd = function() {
+        evLinks.push({ Title: '', Url: '', Icon: '' });
+        render();
+        var inputs = document.querySelectorAll('#' + listId + ' input[data-links-field="Title"]');
+        if (inputs.length) inputs[inputs.length - 1].focus();
+    };
+
+    window.evLinksReset = function(links) {
+        evLinks = (links || []).map(function(l) {
+            return { Title: l.Title || '', Url: l.Url || '', Icon: l.Icon || '' };
+        });
+        render();
+    };
+
+    var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+    if (form) {
+        form.addEventListener('submit', function() { serialize(); });
+    }
+
+    render();
+})();

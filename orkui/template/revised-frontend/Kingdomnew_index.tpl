@@ -515,6 +515,15 @@
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
 										<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+										<?php if ($event['NextDetailId']): ?>
+											<span class="kn-copy-link" data-url="<?= HTTP_UI ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>" onclick="event.stopPropagation(); knCopyEventLink(this)" data-tip="Copy the event link and share to boost RSVPs!"><i class="fas fa-link"></i></span>
+										<?php endif; ?>
+										<?php if (!empty($event['MonarchRsvp'])): ?>
+											<span class="kn-royal-badge kn-royal-monarch" data-tip="Monarch in Attendance"><i class="fas fa-crown"></i></span>
+										<?php endif; ?>
+										<?php if (!empty($event['RegentRsvp'])): ?>
+											<span class="kn-royal-badge kn-royal-regent" data-tip="Regent in Attendance"><i class="fas fa-crown"></i></span>
+										<?php endif; ?>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
 									<td style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
@@ -1542,6 +1551,79 @@ var KnConfig = {
 
 			<?php if (!empty($CanAddPark)): ?>
 			<!-- ── Panel: Operations ── -->
+			<?php if ($CanEditKingdom ?? false): ?>
+			<div class="kn-admin-panel" id="kn-admin-panel-signinlink">
+				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-signinlink" aria-expanded="false">
+					<span><i class="fas fa-link" style="margin-right:6px;color:#a0aec0"></i>Sign-in Link</span>
+					<i class="fas fa-chevron-down kn-admin-chevron" id="kn-admin-chev-signinlink"></i>
+				</button>
+				<div class="kn-admin-panel-body" id="kn-admin-body-signinlink" style="display:none">
+					<div class="kn-form-error" id="kn-signinlink-error" style="display:none"></div>
+					<!-- Park selector (optional) -->
+					<div class="kn-admin-field" style="margin-bottom:12px;position:relative">
+						<label>Park <span style="font-weight:400;color:#a0aec0">(optional — leave blank for kingdom-wide)</span></label>
+						<input type="text" id="kn-signinlink-park-name" autocomplete="off"
+							placeholder="Search parks in this kingdom&hellip;"
+							style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;color:#2d3748">
+						<input type="hidden" id="kn-signinlink-park-id" value="">
+						<div class="kn-ac-results" id="kn-signinlink-park-results"></div>
+					</div>
+					<div class="pk-att-search-row" style="margin-bottom:12px">
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Duration (hrs)</label>
+							<input type="number" id="kn-signinlink-hours" min="1" max="96" step="1" value="3">
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="kn-signinlink-credits" min="0.5" max="10" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="kn-btn kn-btn-primary" id="kn-signinlink-gen-btn">
+								<i class="fas fa-link"></i> Generate
+							</button>
+						</div>
+					</div>
+					<div id="kn-signinlink-result" style="display:none;margin-bottom:12px">
+						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
+							<input type="text" id="kn-signinlink-url" readonly
+								style="flex:1;min-width:0;font-size:12px;padding:7px 10px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-copy-btn" style="white-space:nowrap">
+								<i class="fas fa-copy"></i> Copy
+							</button>
+							<button class="kn-btn kn-btn-secondary" id="kn-signinlink-qr-btn" style="white-space:nowrap">
+								<i class="fas fa-qrcode"></i> QR
+							</button>
+						</div>
+						<div id="kn-signinlink-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
+					</div>
+					<p style="margin:0 0 12px;font-size:12px;color:#718096">
+						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
+					</p>
+					<!-- Active links collapsible -->
+					<div id="kn-signinlink-links-wrap" style="border-top:1px solid #e2e8f0;padding-top:10px">
+						<button type="button" id="kn-signinlink-links-toggle" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px">
+							<i class="fas fa-chevron-right" id="kn-signinlink-links-chevron" style="font-size:10px;transition:transform 0.15s"></i>
+							<span>Active Links</span> <span id="kn-signinlink-links-count" style="color:#a0aec0"></span>
+						</button>
+						<div id="kn-signinlink-links-body" style="display:none;margin-top:8px">
+							<div id="kn-signinlink-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
+							<div id="kn-signinlink-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
+							<table id="kn-signinlink-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+								<thead><tr style="color:#718096;text-align:left">
+									<th style="padding:4px 6px;font-weight:600">Scope</th>
+									<th style="padding:4px 6px;font-weight:600">Expires</th>
+									<th style="padding:4px 6px;font-weight:600">Cr.</th>
+									<th style="padding:4px 6px"></th>
+								</tr></thead>
+								<tbody id="kn-signinlink-links-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<div class="kn-admin-panel">
 				<button class="kn-admin-panel-hdr" id="kn-admin-hdr-ops" aria-expanded="false">
 					<span><i class="fas fa-tools" style="margin-right:6px;color:#a0aec0"></i>Operations</span>
@@ -1724,6 +1806,52 @@ var KnConfig = {
 	</div>
 </div>
 
+<style>
+/* ---- Instant tooltip (data-tip) ---- */
+[data-tip] { position: relative; }
+[data-tip]::before, [data-tip]::after {
+	position: absolute; left: 50%; bottom: 100%; pointer-events: none;
+	opacity: 0; transition: opacity 0.08s;
+}
+[data-tip]::after {
+	content: attr(data-tip); transform: translateX(-50%) translateY(-4px);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 4px 9px; border-radius: 4px; white-space: nowrap; z-index: 900;
+}
+[data-tip]::before {
+	content: ''; transform: translateX(-50%); margin-bottom: -4px;
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+[data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+
+/* ---- Royal Progress crowns ---- */
+.kn-royal-badge {
+	display: inline-flex; align-items: center;
+	margin-left: 4px; font-size: 11px; cursor: default;
+	position: relative; top: -1px;
+}
+.kn-royal-monarch { color: #b7791f; }
+.kn-royal-regent  { color: #718096; }
+
+/* ---- Copy-link icon ---- */
+.kn-copy-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 5px; font-size: 11px; color: #a0aec0;
+	cursor: pointer; opacity: 0; transition: opacity 0.15s;
+	position: relative;
+}
+tr:hover .kn-copy-link { opacity: 1; }
+.kn-copy-link:hover { color: #4299e1; }
+.kn-copy-link.kn-copied::after {
+	content: 'Copied!' !important; position: absolute; bottom: 100%; left: 50%;
+	transform: translateX(-50%); background: #2d3748; color: #fff;
+	font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; opacity: 1; animation: knCopiedFade 1.4s forwards;
+}
+@keyframes knCopiedFade {
+	0%,70% { opacity: 1; } 100% { opacity: 0; }
+}
+</style>
 <!-- Move Player Modal -->
 <style>
 .kn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
@@ -1934,7 +2062,24 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 
 
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
+
+<!-- QR Code Modal -->
+<div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100" onclick="if(event.target===this)knCloseQrModal()">
+	<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<button onclick="knCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="kn-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="kn-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="kn-qr-download" href="" download="signin-qr.png" class="kn-btn kn-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
+	</div>
+</div>
+
 <?php endif; ?>
+
 <script>
 (function() {
 	var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
@@ -1947,6 +2092,14 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			var totalAtt = 0, totalTp = 0, totalTm = 0;
 			var wkCount = (data._kingdom && data._kingdom.wk_count) ? data._kingdom.wk_count : 26;
 			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
+			function knCopyEventLink(el) {
+				var url = el.getAttribute('data-url');
+				navigator.clipboard.writeText(url).then(function() {
+					el.classList.add('kn-copied');
+					setTimeout(function() { el.classList.remove('kn-copied'); }, 1500);
+				});
+			}
+
 			function knTrend(cur, prev, decimals) {
 				if (prev === undefined) return '';
 				if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';

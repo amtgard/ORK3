@@ -3753,6 +3753,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .ev-badge-green  { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .ev-badge-gray   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
 .ev-badge-blue   { background: #bee3f8; color: #2a69ac; }
+.ev-badge-purple { background: #e9d8fd; color: #553c9a; }
 
 .ev-owner-inline {
 	color: rgba(255,255,255,0.85);
@@ -5069,8 +5070,24 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
   #pk-att-overlay .pk-modal-body { padding:10px 16px; }
   .pk-att-date-display { font-size:15px; padding:5px 12px; }
   .pk-att-date-row { margin-bottom:8px; }
-  /* Credits column visible on mobile — remove if too cramped */
   .pk-att-del-btn { min-width:unset; min-height:unset; padding:2px 4px; }
+
+  /* Tab bar: scroll horizontally so no tab gets clipped */
+  .pk-att-tabs { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; flex-wrap:nowrap; }
+  .pk-att-tabs::-webkit-scrollbar { display:none; }
+  .pk-att-tab { white-space:nowrap; padding:8px 10px; font-size:12px; }
+
+  /* Sign-in Link panel: URL field full-width, buttons below */
+  .pk-att-link-url-row { flex-wrap:wrap; }
+  .pk-att-link-url-row input[type=text] { width:100%; flex:unset; }
+  .pk-att-link-url-row .pk-btn { flex:1; justify-content:center; }
+
+  /* Active links table: bigger touch targets on buttons */
+  .pk-links-copy, .pk-links-revoke { padding:6px 10px !important; font-size:12px !important; min-height:34px; }
+
+  /* QR modal: scale image to fit narrow screens */
+  #pk-qr-overlay > div, #kn-qr-overlay > div { padding:20px 16px 16px; }
+  #pk-qr-img, #kn-qr-img { width:min(200px, calc(100vw - 72px)); height:min(200px, calc(100vw - 72px)); }
 }
 
 /* ---- Add Park Modal (kn-addpark-) ---- */

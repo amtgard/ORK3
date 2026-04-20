@@ -8,6 +8,7 @@ class Player extends Ork3 {
 		$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
 		$this->dues = new yapo($this->db, DB_PREFIX . 'dues');
 		$this->pronoun = new yapo($this->db, DB_PREFIX . 'pronoun');
+		$this->selfreg_link = new yapo($this->db, DB_PREFIX . 'selfreg_link');
 		$this->load_model('Kingdom');
 		$this->load_model('Park');
 		$this->load_model('Pronoun');
@@ -634,6 +635,225 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
+
+	public function CreateSelfRegLink($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id))
+			return NoAuthorization();
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE))
+			return NoAuthorization();
+
+		// A13: Reuse unexpired unused token for same park
+		global $DB;
+		$DB->Clear();
+		$park_id = (int)$request['ParkId'];
+		$existing = $DB->DataSet("SELECT token, expires_at FROM " . DB_PREFIX . "selfreg_link WHERE park_id = {$park_id} AND used_by IS NULL AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1");
+		if ($existing && $existing->Next()) {
+			$seconds_remaining = max(0, strtotime($existing->expires_at) - time());
+			return Success([
+				'token'             => $existing->token,
+				'expires_at'        => $existing->expires_at,
+				'seconds_remaining' => $seconds_remaining,
+			]);
+		}
+
+		$token      = bin2hex(random_bytes(24));
+		$expires_at = date('Y-m-d H:i:s', time() + 15 * 60);
+
+		$this->selfreg_link->clear();
+		$this->selfreg_link->token      = $token;
+		$this->selfreg_link->park_id    = $park_id;
+		$this->selfreg_link->created_by = $mundane_id;
+		$this->selfreg_link->created_at = date('Y-m-d H:i:s');
+		$this->selfreg_link->expires_at = $expires_at;
+		$this->selfreg_link->save();
+
+		// A12: Verify selfreg_id after save
+		if (!$this->selfreg_link->selfreg_id)
+			return InvalidParameter('Could not create self-registration link.');
+
+		return Success([
+			'token'             => $token,
+			'expires_at'        => $expires_at,
+			'seconds_remaining' => 15 * 60,
+		]);
+	}
+
+	public function ValidateSelfRegLink($request) {
+		$token = preg_replace('/[^a-f0-9]/', '', (string)($request['SelfRegToken'] ?? ''));
+		if (strlen($token) !== 48)
+			return InvalidParameter('Invalid registration link.');
+
+		$this->selfreg_link->clear();
+		$this->selfreg_link->token = $token;
+		if (!$this->selfreg_link->find())
+			return InvalidParameter('Link not found.');
+
+		// A11: Loose NULL check for used_by (yapo may return '' for DB NULL)
+		if (!empty($this->selfreg_link->used_by) && (int)$this->selfreg_link->used_by > 0)
+			return InvalidParameter('This registration link has already been used.');
+
+		if (strtotime($this->selfreg_link->expires_at) <= time())
+			return InvalidParameter('This registration link has expired.');
+
+		return Success([
+			'selfreg_id' => (int)$this->selfreg_link->selfreg_id,
+			'park_id'    => (int)$this->selfreg_link->park_id,
+			'expires_at' => $this->selfreg_link->expires_at,
+		]);
+	}
+
+	public function SelfRegister($request) {
+		// A8: Transactional locking — do NOT delegate to ValidateSelfRegLink
+		$token = preg_replace('/[^a-f0-9]/', '', (string)($request['SelfRegToken'] ?? ''));
+		if (strlen($token) !== 48)
+			return InvalidParameter('Invalid registration link.');
+
+		if (strlen(trim($request['Persona'] ?? '')) < 1)
+			return InvalidParameter('Persona is required.');
+		if (strlen(trim($request['Email'] ?? '')) < 1)
+			return InvalidParameter('Email is required.');
+		if (!filter_var(trim($request['Email']), FILTER_VALIDATE_EMAIL))
+			return InvalidParameter('Please enter a valid email address.');
+		if (strlen(trim($request['UserName'] ?? '')) < 4)
+			return InvalidParameter('Username must be at least 4 characters.');
+		if (strlen($request['Password'] ?? '') < 1)
+			return InvalidParameter('Password is required.');
+
+		global $DB;
+
+		// A8: START TRANSACTION with FOR UPDATE locking
+		$DB->Clear();
+		$DB->Execute('START TRANSACTION');
+
+		$DB->Clear();
+		$DB->token = $token;
+		$row = $DB->DataSet("SELECT selfreg_id, park_id, used_by, expires_at FROM " . DB_PREFIX . "selfreg_link WHERE token = :token FOR UPDATE");
+		if (!$row || !$row->Next()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return InvalidParameter('Link not found.');
+		}
+
+		$selfreg_id = (int)$row->selfreg_id;
+		$park_id    = (int)$row->park_id;
+
+		// A11: Loose NULL check
+		if (!empty($row->used_by) && (int)$row->used_by > 0) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return InvalidParameter('This registration link has already been used.');
+		}
+		if (strtotime($row->expires_at) <= time()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return InvalidParameter('This registration link has expired.');
+		}
+
+		// A14: Duplicate email check
+		$email = trim($request['Email']);
+		$DB->Clear();
+		$DB->email = $email;
+		$emailCheck = $DB->DataSet("SELECT mundane_id, persona FROM " . DB_PREFIX . "mundane WHERE email = :email LIMIT 1");
+		if ($emailCheck && $emailCheck->Next()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return InvalidParameter('An account with this email already exists. Please sign in instead, or use a different email address.');
+		}
+
+		// Look up park for kingdom_id
+		$park = new yapo($this->db, DB_PREFIX . 'park');
+		$park->clear();
+		$park->park_id = $park_id;
+		if (!$park->find()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return InvalidParameter('Park not found.');
+		}
+		$kingdom_id = (int)$park->kingdom_id;
+		$park_name  = $park->name;
+
+		// Username uniqueness
+		$username = $this->unique_username(trim($request['UserName']), 4);
+		if ($username === false) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return InvalidParameter('No username could be generated. Please try again.');
+		}
+
+		// Create mundane record (mirrors CreatePlayer lines 536-560)
+		$this->mundane->clear();
+		$this->mundane->given_name        = trim($request['GivenName'] ?? '');
+		$this->mundane->surname           = trim($request['Surname'] ?? '');
+		$this->mundane->other_name        = '';
+		$this->mundane->username          = $username;
+		$this->mundane->persona           = trim($request['Persona']);
+		$this->mundane->email             = $email;
+		$this->mundane->park_id           = $park_id;
+		$this->mundane->kingdom_id        = $kingdom_id;
+		$this->mundane->modified          = date('Y-m-d H:i:s', time());
+		$this->mundane->restricted        = 0;
+		$this->mundane->waivered          = 0;
+		$this->mundane->has_image         = 0;
+		$this->mundane->penalty_box       = 0;
+		$this->mundane->active            = 1;
+		$this->mundane->password_expires  = date('Y-m-d H:i:s', time() + 60 * 60 * 24 * 365);
+		$this->mundane->password_salt     = md5(rand() . microtime());
+		$this->mundane->park_member_since = date('Y-m-d');
+		$this->mundane->token             = md5(uniqid(rand(), true));
+		$this->mundane->xtoken            = md5(uniqid(rand(), true));
+		$this->mundane->waiver_ext        = '';
+		$this->mundane->reeve_qualified_until = '0000-00-00';
+		$this->mundane->save();
+
+		$new_mundane_id = (int)$this->mundane->mundane_id;
+		if (!$new_mundane_id) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return InvalidParameter('Could not create account. Please try again.');
+		}
+
+		// Hash password
+		Authorization::SaltPassword($this->mundane->password_salt, strtoupper($username) . trim($request['Password']), $this->mundane->password_expires);
+
+		// Mark token as used (A8: with AND used_by IS NULL for safety)
+		$now = date('Y-m-d H:i:s');
+		$DB->Clear();
+		$DB->Execute("UPDATE " . DB_PREFIX . "selfreg_link SET used_by = {$new_mundane_id}, used_at = '{$now}' WHERE selfreg_id = {$selfreg_id} AND used_by IS NULL");
+
+		// Add Color attendance credit for date of registration
+		$today = date('Y-m-d');
+		$DB->Clear();
+		$DB->Execute("INSERT INTO " . DB_PREFIX . "attendance (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6, park_id, kingdom_id, event_id, event_calendardetail_id, credits, persona, flavor, note, by_whom_id, entered_at) VALUES (" . $new_mundane_id . ", 6, '" . $today . "', YEAR('" . $today . "'), MONTH('" . $today . "'), WEEK('" . $today . "', 3), WEEK('" . $today . "', 6), " . $park_id . ", " . $kingdom_id . ", 0, 0, 1.00, '" . addslashes(trim($request['Persona'])) . "', '', 'Self-registration', " . $new_mundane_id . ", '" . $now . "')");
+
+		// COMMIT transaction
+		$DB->Clear();
+		$DB->Execute('COMMIT');
+
+		// Auto-login: generate session token
+		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
+		$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
+		$this->mundane->save();
+
+		// A9: Look up kingdom name for session context
+		$kingdom_name = '';
+		$DB->Clear();
+		$knRow = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = {$kingdom_id} LIMIT 1");
+		if ($knRow && $knRow->Next()) {
+			$kingdom_name = $knRow->name;
+		}
+
+		return Success([
+			'mundane_id'   => $new_mundane_id,
+			'token'        => $this->mundane->token,
+			'username'     => $this->mundane->username,
+			'park_id'      => $park_id,
+			'park_name'    => $park_name,
+			'kingdom_id'   => $kingdom_id,
+			'kingdom_name' => $kingdom_name,
+		]);
+	}
+
 
   public function hydrated_players($ids) {
     $sql = "select k.name as kingdom, k.kingdom_id, p.name as park, p.park_id, m.mundane_id, m.persona 

@@ -325,11 +325,26 @@ class Controller_Kingdom extends Controller {
 		global $DB;
 		$kid = (int)$kingdom_id;
 
+		// Extract Monarch/Regent mundane IDs for royal-attendance detection
+		$monarchId = 0; $regentId = 0;
+		foreach ($this->data['kingdom_officers']['Officers'] ?? [] as $o) {
+			if ($o['OfficerRole'] === 'Monarch') $monarchId = (int)$o['MundaneId'];
+			if ($o['OfficerRole'] === 'Regent')  $regentId  = (int)$o['MundaneId'];
+		}
+		$monarchSubq = $monarchId > 0
+			? "(SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$monarchId})"
+			: "0";
+		$regentSubq = $regentId > 0
+			? "(SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$regentId})"
+			: "0";
+
 		$evtSql = "
 			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
 			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
 			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'going') AS rsvp_going,
-		       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested
+			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested,
+			       {$monarchSubq} AS monarch_rsvp,
+			       {$regentSubq} AS regent_rsvp
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
@@ -352,7 +367,9 @@ class Controller_Kingdom extends Controller {
 					'HasHeraldry'  => (int)$evtResult->has_heraldry,
 					'ParkAbbr'     => $evtResult->park_abbr,
 					'RsvpGoing'      => (int)$evtResult->rsvp_going,
-				'RsvpInterested' => (int)$evtResult->rsvp_interested,
+					'RsvpInterested' => (int)$evtResult->rsvp_interested,
+					'MonarchRsvp'    => (int)$evtResult->monarch_rsvp,
+					'RegentRsvp'     => (int)$evtResult->regent_rsvp,
 					'_IsParkEvent' => (int)$evtResult->park_id > 0,
 				];
 			}

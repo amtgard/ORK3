@@ -225,6 +225,7 @@ class Event  extends Ork3 {
 			$newDetail->country        = $request['Country'];
 			$newDetail->map_url        = $request['MapUrl'];
 			$newDetail->map_url_name   = $request['MapUrlName'];
+			if (!empty($request['EventType'])) $newDetail->event_type = $request['EventType'];
 			$newDetail->modified       = date('Y-m-d H:i:s');
 			$newDetail->google_geocode = $details ? $details['Geocode']  : null;
 			$newDetail->location       = $details ? $details['Location'] : null;
@@ -389,7 +390,13 @@ class Event  extends Ork3 {
 
 		logtrace("SetEventDetails()",$request);
 		
-		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+		$isStaffManager = false;
+		if (valid_id($mundane_id) && valid_id($request['EventCalendarDetailId'] ?? '')) {
+			$this->db->Clear();
+			$staffCheck = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$request['EventCalendarDetailId'] . ' AND mundane_id = ' . (int)$mundane_id . ' AND can_manage = 1 LIMIT 1');
+			$isStaffManager = $staffCheck && $staffCheck->Next();
+		}
+		if (valid_id($mundane_id) && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT) || $isStaffManager)) {
 		
 			$this->detail->clear();
 			$this->detail->event_id = $request['EventId'];
@@ -423,6 +430,7 @@ class Event  extends Ork3 {
 				}
 				$this->detail->map_url = $request['MapUrl'];
 				$this->detail->map_url_name = $request['MapUrlName'];
+				$this->detail->event_type = $request['EventType'] ?? null;
 				$this->detail->modified = date('Y-m-d H:i:s');
 				$this->detail->google_geocode = $details ? $details['Geocode'] : null;
 				$this->detail->location = $details ? $details['Location'] : null;
