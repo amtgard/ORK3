@@ -28,11 +28,13 @@ if (!empty($NotSupported)) {
 	$MaxOutsideKingdomCredits= $MaxOutsideKingdomCredits?? 0;
 	$MembershipMode          = $MembershipMode          ?? '';
 	$ShowEventCount          = $ShowEventCount          ?? false;
+	$ExcludeEvents           = $ExcludeEvents           ?? false;
+	$WaiverAgeMonths         = $WaiverAgeMonths         ?? 0;
 	$MemberSinceLabel        = $MembershipMode === 'first_attendance' ? 'First Attendance' : 'Member Since';
 	// Window label for column headers (e.g. "6mo" or "180d") and phrase for descriptions.
 	$WindowLabel  = $DaysWindow > 0 ? $DaysWindow . 'd'      : $MonthsWindow . 'mo';
 	$WindowPhrase = $DaysWindow > 0 ? $DaysWindow . ' days'  : $MonthsWindow . ' months';
-	$AttendanceLabel     = $HomeParkOnly ? 'Park Sign-ins' : ($AttendanceMode === 'count' ? 'Sign-ins' : ($AttendanceMode === 'days' ? 'Days' : 'Weeks'));
+	$AttendanceLabel     = $HomeParkOnly ? 'Park Sign-ins' : ($ExcludeEvents ? 'Chapter Sign-ins' : ($AttendanceMode === 'count' ? 'Sign-ins' : ($AttendanceMode === 'days' ? 'Days' : 'Weeks')));
 	// Human-readable week period label (e.g. "Mon–Sun" or "Tue–Mon")
 	$_days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 	$_startDay = $_days[$WeekOffset % 7];
@@ -160,7 +162,7 @@ if (!empty($Players)) {
 			<?php elseif ($MaxOutsideKingdomCredits > 0): ?>
 			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ attendance credits in the last <?=$WindowPhrase?> (at most <?=$MaxOutsideKingdomCredits?> credits from outside the Kingdom<?=$MaxCreditsPerEvent > 0 ? '; multi-credit events capped at ' . $MaxCreditsPerEvent . ' credits per event' : ''?>)<?=$MinMembershipMonths > 0 ? ' &bull; province membership for at least ' . $MinMembershipMonths . ' months' : ''?>.
 			<?php else: ?>
-			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ distinct <?=$AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks')?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ShowEventCount): ?> The <strong>Event Sign-ins</strong> column shows how many of a player&rsquo;s sign-ins were at events (rather than regular park days) &mdash; for reference only, as physical vs. online attendance cannot currently be distinguished automatically.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?>			<?php endif; ?>
+			Eligibility requires: signed waiver<?php if ($WaiverAgeMonths > 0): ?> <em style="color:#c05621;">(must be on file for <?=$WaiverAgeMonths?>+ months — age cannot be verified automatically)</em><?php endif; ?> &bull; current dues &bull; <?=$AttendanceRequired?>+ distinct <?=$ExcludeEvents ? 'chapter (non-event) sign-ins' : ($AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks'))?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ExcludeEvents): ?> Regular event sign-ins are not counted — only park-day sign-ins count toward the requirement.<?php endif; ?><?php if ($ShowEventCount): ?> The <strong>Event Sign-ins</strong> column shows how many of a player&rsquo;s sign-ins were at events (rather than regular park days) &mdash; for reference only, as physical vs. online attendance cannot currently be distinguished automatically.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?>			<?php endif; ?>
 			<?php endif; ?>
 		</span>
 	</div>
@@ -271,7 +273,7 @@ if (!empty($Players)) {
 <?php endif; ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Waiver</span>
-						<span class="rp-col-guide-desc">Whether a signed waiver is on file.</span>
+						<span class="rp-col-guide-desc">Whether a signed waiver is on file.<?php if ($WaiverAgeMonths > 0): ?> <strong>Note:</strong> this kingdom requires the waiver to have been on file for at least <?=$WaiverAgeMonths?> months, but the date the waiver was signed is not stored — this column only confirms a waiver is present.<?php endif; ?></span>
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Dues</span>
@@ -294,7 +296,7 @@ if (!empty($Players)) {
 <?php else : ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name"><?=$AttendanceLabel?> (<?=$WindowLabel?>)</span>
-						<span class="rp-col-guide-desc"><?=$AttendanceMode === 'count' ? 'Total sign-ins' : ($AttendanceMode === 'days' ? 'Distinct calendar days attended' : 'Distinct ' . $WeekPeriodLabel . ' weeks attended')?> <?=$AllKingdoms ? 'at any Amtgard event' : 'anywhere in the Kingdom'?> in the last <?=$WindowPhrase?>. Needs <?=$AttendanceRequired?>+.</span>
+						<span class="rp-col-guide-desc"><?php if ($ExcludeEvents): ?>Park-day sign-ins only (event attendance excluded)<?php else: ?><?=$AttendanceMode === 'count' ? 'Total sign-ins' : ($AttendanceMode === 'days' ? 'Distinct calendar days attended' : 'Distinct ' . $WeekPeriodLabel . ' weeks attended')?> <?=$AllKingdoms ? 'at any Amtgard event' : 'anywhere in the Kingdom'?><?php endif; ?> in the last <?=$WindowPhrase?>. Needs <?=$AttendanceRequired?>+.</span>
 					</div>
 <?php if ($ExcludeOnline) : ?>
 					<div class="rp-col-guide-item">

@@ -379,6 +379,15 @@ class Model_Reports extends Model {
 				'MaxCreditsPerEvent'      => 2,
 				'MaxOutsideKingdomCredits'=> 2,
 			],
+			12 => [ // Dragonspine — 12 chapter (non-event) sign-ins/6mo; waiver must be on file (6mo age unverifiable)
+				'AttendanceRequired'  => 12,
+				'MonthsWindow'        => 6,
+				'MinMembershipMonths' => 0,
+				'AttendanceMode'      => 'count',
+				'ProvinceMode'        => false,
+				'ExcludeEvents'       => true,
+				'WaiverAgeMonths'     => 6,
+			],
 			24 => [ // Winter's Edge — 6 distinct weeks/6mo; citizenship requires 3mo membership
 			        // Physical vs. online can't be determined; event sign-ins shown informally.
 				'AttendanceRequired'  => 6,

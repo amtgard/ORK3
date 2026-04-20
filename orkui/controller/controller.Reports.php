@@ -541,7 +541,7 @@ class Controller_Reports extends Controller {
 		$kingdom_config = $this->kingdom_config($type);
 		$kingdom_id = (int)($kingdom_config['KingdomInfo']['KingdomId'] ?? 0);
 
-		$supported = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3, 24];
+		$supported = [31, 17, 10, 20, 25, 6, 38, 4, 27, 36, 14, 19, 3, 24, 12];
 		if (!in_array($kingdom_id, $supported)) {
 			$this->data['NotSupported'] = true;
 			return;
@@ -569,6 +569,8 @@ class Controller_Reports extends Controller {
 		$this->data['MaxOutsideKingdomCredits'] = $result['MaxOutsideKingdomCredits'] ?? 0;
 		$this->data['MembershipMode']         = $result['MembershipMode']         ?? '';
 		$this->data['ShowEventCount']         = $result['ShowEventCount']         ?? false;
+		$this->data['ExcludeEvents']          = $result['ExcludeEvents']          ?? false;
+		$this->data['WaiverAgeMonths']        = $result['WaiverAgeMonths']        ?? 0;
 
 		if ($type === 'Park') {
 			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$this->request->id . '&tab=reports';

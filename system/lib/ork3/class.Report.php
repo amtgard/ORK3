@@ -2769,6 +2769,8 @@ class Report  extends Ork3 {
 		$week_snap               = !empty($request['WeekSnap']); // snap window start to week boundary even in non-weeks modes
 		$membership_mode         = $request['MembershipMode'] ?? 'park_member_since'; // 'first_attendance' uses MIN(attendance.date) within the kingdom
 		$show_event_count        = !empty($request['ShowEventCount']); // emit a separate count of event-based sign-ins (informational only, not excluded)
+		$exclude_events          = !empty($request['ExcludeEvents']);  // count only non-event (park-day) sign-ins
+		$waiver_age_months       = isset($request['WaiverAgeMonths']) ? (int)$request['WaiverAgeMonths'] : 0; // months waiver must be on file — cannot auto-verify, shown as caveat only
 
 		// Compute start date.
 		// display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
@@ -2808,6 +2810,9 @@ class Report  extends Ork3 {
 
 		// Online exclusion: LEFT JOIN event + park inside attendance subqueries, filter out
 		// rows where the event name or park name contains 'Online' (case-insensitive).
+		// ExcludeEvents: restrict attendance to park-day sign-ins only (event_id = 0 or NULL).
+		$events_clause = $exclude_events ? "AND (a.event_id = 0 OR a.event_id IS NULL)" : '';
+
 		$online_join   = '';
 		$online_clause = '';
 		if ($exclude_online) {
@@ -2909,6 +2914,7 @@ class Report  extends Ork3 {
 					WHERE $_att_where_kw
 					  AND a.date >= '$start_date'
 					  $online_clause
+					  $events_clause
 					GROUP BY a.mundane_id
 				) att ON att.mundane_id = m.mundane_id";
 		}
@@ -3060,7 +3066,9 @@ class Report  extends Ork3 {
 		             'MaxCreditsPerEvent' => $max_credits_per_event,
 		             'MaxOutsideKingdomCredits' => $max_outside_kingdom_creds,
 		             'MembershipMode' => $membership_mode,
-		             'ShowEventCount' => $show_event_count];
+		             'ShowEventCount' => $show_event_count,
+		             'ExcludeEvents' => $exclude_events,
+		             'WaiverAgeMonths' => $waiver_age_months];
 		if ($r !== false && $r->size() > 0) {
 			while ($r->next()) {
 				$_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;
