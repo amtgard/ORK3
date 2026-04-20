@@ -534,6 +534,13 @@ if ($kingdom_id && !empty($knights)) {
 			}
 		});
 
+		// Destroy DataTables before touching the DOM so it doesn't
+		// restore its cached snapshot over the new rows.
+		if (dtTable) {
+			dtTable.destroy();
+			dtTable = null;
+		}
+
 		var tbody = document.getElementById('be-table-body');
 		tbody.innerHTML = '';
 		rows.forEach(function(rel) {
@@ -545,11 +552,6 @@ if ($kingdom_id && !empty($knights)) {
 				'<td>' + esc(rel.Date) + '</td>';
 			tbody.appendChild(tr);
 		});
-
-		if (dtTable) {
-			dtTable.destroy();
-			dtTable = null;
-		}
 
 		document.getElementById('be-table-empty').style.display = 'none';
 		document.getElementById('be-table-container').style.display = 'block';
