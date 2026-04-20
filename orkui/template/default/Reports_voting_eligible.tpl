@@ -295,6 +295,12 @@ if (!empty($Players)) {
 						<span class="rp-col-guide-name"><?=$AttendanceLabel?> (<?=$WindowLabel?>)</span>
 						<span class="rp-col-guide-desc"><?=$AttendanceMode === 'count' ? 'Total sign-ins' : ($AttendanceMode === 'days' ? 'Distinct calendar days attended' : 'Distinct ' . $WeekPeriodLabel . ' weeks attended')?> <?=$AllKingdoms ? 'at any Amtgard event' : 'anywhere in the Kingdom'?> in the last <?=$WindowPhrase?>. Needs <?=$AttendanceRequired?>+.</span>
 					</div>
+<?php if ($ExcludeOnline) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Online Excluded</span>
+						<span class="rp-col-guide-desc">Sign-ins at events or parks with "Online" in the name. These were found but not counted toward eligibility.</span>
+					</div>
+<?php endif; ?>
 <?php endif; ?>
 <?php if ($HomeParkOnly && $KingdomEventBonus) : ?>
 					<div class="rp-col-guide-item">
@@ -348,6 +354,9 @@ if (!empty($Players)) {
 						<th>Home Park Sign-ins (<?=$WindowLabel?>)</th>
 <?php else : ?>
 						<th><?=$AttendanceLabel?> (<?=$WindowLabel?>)</th>
+<?php if ($ExcludeOnline) : ?>
+						<th>Online Excluded</th>
+<?php endif; ?>
 <?php endif; ?>
 <?php if ($HomeParkOnly && $KingdomEventBonus) : ?>
 						<th>KE Credit</th>
@@ -477,6 +486,10 @@ if (!empty($Players)) {
 					<td><?=$parkAttHtml?></td>
 <?php else : ?>
 					<td><?=$attHtml?></td>
+<?php if ($ExcludeOnline) : ?>
+					<?php $_onEx = (int)($p['OnlineExcluded'] ?? 0); ?>
+					<td><?= $_onEx > 0 ? '<span class="rp-warn">' . $_onEx . '</span>' : '<span style="opacity:0.4">—</span>' ?></td>
+<?php endif; ?>
 <?php endif; ?>
 <?php if ($HomeParkOnly && $KingdomEventBonus) : ?>
 					<td><?= !empty($p['KingdomEventCredit']) ? '<span class="rp-check"><i class="fas fa-check"></i> Yes</span>' : '<span style="opacity:0.4">—</span>' ?></td>

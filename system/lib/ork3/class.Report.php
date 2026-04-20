@@ -2931,6 +2931,26 @@ class Report  extends Ork3 {
 			$province_select = ", COALESCE(patt.park_att_count, 0) AS park_att_count";
 		}
 
+		// Online-excluded count: separate subquery counting sign-ins that were filtered out
+		// due to ExcludeOnline, so the report can show how many were excluded per player.
+		$online_count_join   = '';
+		$online_count_select = '';
+		if ($exclude_online) {
+			$online_count_join = "
+				LEFT JOIN (
+					SELECT a.mundane_id, COUNT(*) AS online_excluded_count
+					FROM " . DB_PREFIX . "attendance a
+					LEFT JOIN " . DB_PREFIX . "event _oe ON _oe.event_id = a.event_id AND a.event_id != 0
+					LEFT JOIN " . DB_PREFIX . "park  _op ON _op.park_id  = a.park_id
+					WHERE a.kingdom_id = $kingdom_id
+					  AND a.date >= '$start_date'
+					  AND (_oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
+					GROUP BY a.mundane_id
+				) oatt ON oatt.mundane_id = m.mundane_id
+			";
+			$online_count_select = ', COALESCE(oatt.online_excluded_count, 0) AS online_excluded_count';
+		}
+
 		// Active Knight: secondary raw sign-in count (always COUNT(*)) used for kingdoms
 		// that have a higher-tier eligibility based on total attendances.
 		$knight_join   = '';
@@ -2967,6 +2987,7 @@ class Report  extends Ork3 {
 				k.kingdom_id, k.name AS kingdom_name,
 				COALESCE(att.att_count, 0) AS att_count
 				$att_select_extra
+				$online_count_select
 				" . ($home_park_only && $kingdom_evt_bonus ? ", COALESCE(att.kingdom_evt_credit, 0) AS kingdom_evt_credit" : "") . "
 				" . ($membership_mode === 'first_attendance' ? ", (SELECT MIN(a.date) FROM " . DB_PREFIX . "attendance a WHERE a.mundane_id = m.mundane_id AND a.kingdom_id = $kingdom_id) AS first_att_date" : "") . "
 				$province_select
@@ -2992,6 +3013,7 @@ class Report  extends Ork3 {
 				$att_join_clause
 				$province_join
 				$knight_join
+				$online_count_join
 			WHERE m.kingdom_id = $kingdom_id
 			  AND m.active = 1
 			  AND p.active = 'Active'
@@ -3048,6 +3070,7 @@ class Report  extends Ork3 {
 					'OutsideCredits'     => $max_outside_kingdom_creds > 0 ? (int)$r->outside_credits_raw : null,
 					'ActiveMember'       => $active_member_threshold > 0 ? ($base_ok && $att_count >= $active_member_threshold) : null,
 					'ActiveKnight'       => false,
+					'OnlineExcluded'     => $exclude_online ? (int)$r->online_excluded_count : null,
 				];
 				if ($active_knight_threshold > 0) {
 					$raw_att_count        = (int)$r->raw_att_count;
