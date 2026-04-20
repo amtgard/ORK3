@@ -746,17 +746,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<li data-tab="attendance">
 					<i class="fas fa-calendar-check"></i><span class="pn-tab-label"> Attendance</span> <span class="pn-tab-count">(<?= $Stats['TotalAttendance'] ?>)</span>
 				</li>
-				<?php
-				$_allRecs  = array_values(array_filter(is_array($AwardRecommendations) ? $AwardRecommendations : [], function($r) { return empty($r['AlreadyHas']); }));
-				$_myRecs   = array_values(array_filter($_allRecs, function($r) { return (int)$this->__session->user_id === (int)$r['RecommendedById']; }));
-				$_recList  = $ShowRecsTab ? $_allRecs : $_myRecs;
-				$_showRecs = $ShowRecsTab || count($_myRecs) > 0;
-			?>
+				<?php $_showRecs = $ShowRecsTab || !empty($ShowRecsTabLoggedIn); ?>
 			<?php if ($_showRecs): ?><li data-tab="recommendations">
-					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count">(<?= count($_recList) ?>)</span>
+					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count" id="pn-recs-tab-count"></span>
 				</li><?php endif; ?>
 				<li data-tab="history">
-					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count">(<?= is_array($Notes) ? count($Notes) : 0 ?>)</span>
+					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count" id="pn-notes-tab-count"></span>
 				</li>
 				<li data-tab="classes">
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
@@ -1531,96 +1526,17 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> Recommend an Award</button>
 				</div>
 				<?php endif; ?>
-				<?php if (count($_recList) > 0): ?>
-					<table class="pn-table display" id="pn-rec-table">
-						<thead>
-							<tr>
-								<th>Award</th>
-								<th>Rank</th>
-								<th>Date</th>
-								<th>Sent By</th>
-								<th>Reason</th>
-								<?php if ($this->__session->user_id): ?>
-									<th style="white-space:nowrap;width:1%">Actions</th>
-								<?php endif; ?>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($_recList as $rec): ?>
-								<tr>
-									<td><?= htmlspecialchars($rec['AwardName']) ?></td>
-									<td class="pn-col-numeric"><?= valid_id($rec['Rank']) ? (int)$rec['Rank'] : '' ?></td>
-									<td class="pn-col-nowrap"><?= htmlspecialchars($rec['DateRecommended']) ?></td>
-									<td><a href="<?= UIR ?>Player/profile/<?= $rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a></td>
-									<td><?= htmlspecialchars($rec['Reason']) ?></td>
-									<?php if ($this->__session->user_id): ?>
-										<td class="pk-rec-actions">
-											<?php if ($canManageAwards && valid_id($rec['KingdomAwardId'] ?? 0)): ?>
-												<button class="pk-btn pk-btn-primary pn-rec-grant-btn"
-													data-rec="<?= htmlspecialchars(json_encode(['KingdomAwardId' => (int)($rec['KingdomAwardId'] ?? 0), 'Rank' => (int)($rec['Rank'] ?? 0), 'Reason' => $rec['Reason'] ?? '', 'AwardName' => $rec['AwardName'] ?? '']), ENT_QUOTES) ?>">
-													<i class="fas fa-medal"></i> Grant
-												</button>
-											<?php endif; ?>
-											<?php if ($can_delete_recommendation || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']): ?>
-												<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn"
-													data-href="<?= UIR ?>Player/profile/<?= $rec['MundaneId'] ?>/deleterecommendation/<?= $rec['RecommendationsId'] ?>">
-													<i class="fas fa-times"></i> Delete
-												</button>
-											<?php endif; ?>
-										</td>
-									<?php endif; ?>
-								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php else: ?>
-					<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player["Persona"]) ?>.</div>
-				<?php endif; ?>
+				<div id="pn-recs-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div><?php endif; ?>
 
 			<!-- Notes Tab -->
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
-				<?php $notesList = is_array($Notes) ? $Notes : array(); ?>
 				<?php if ($canEditAdmin): ?>
 				<div class="pn-notes-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenAddNoteModal()"><i class="fas fa-plus"></i> Add Note</button>
 				</div>
 				<?php endif; ?>
-				<?php if (count($notesList) > 0): ?>
-					<table class="pn-table" id="pn-history-table">
-						<thead>
-							<tr>
-								<th>Note</th>
-								<th>Description</th>
-								<th>Date</th>
-								<?php if ($canEditAdmin): ?><th style="width:60px"></th><?php endif; ?>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($notesList as $note): ?>
-								<tr data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>">
-									<td><?= htmlspecialchars($note['Note'] ?? '') ?></td>
-									<td><?= htmlspecialchars($note['Description'] ?? '') ?></td>
-									<td class="pn-col-nowrap"><?= htmlspecialchars($note['Date'] ?? '') . (strtotime($note['DateComplete'] ?? '') > 0 ? (' - ' . htmlspecialchars($note['DateComplete'])) : '') ?></td>
-									<?php if ($canEditAdmin): ?>
-									<td class="pn-award-actions-cell">
-										<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"
-											data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>"
-											data-note="<?= htmlspecialchars($note['Note'] ?? '', ENT_QUOTES) ?>"
-											data-desc="<?= htmlspecialchars($note['Description'] ?? '', ENT_QUOTES) ?>"
-											data-date="<?= htmlspecialchars($note['Date'] ?? '', ENT_QUOTES) ?>"
-											data-date-complete="<?= htmlspecialchars($note['DateComplete'] ?? '', ENT_QUOTES) ?>"
-											title="Edit note"><i class="fas fa-pencil-alt"></i></button>
-										<button class="pn-award-action-btn pn-award-del-btn pn-note-del-btn" data-notes-id="<?= (int)($note['NoteId'] ?? 0) ?>" title="Delete note"><i class="fas fa-trash"></i></button>
-									</td>
-									<?php endif; ?>
-								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php else: ?>
-					<div class="pn-empty" id="pn-history-empty">No notes</div>
-				<?php endif; ?>
+				<div id="pn-notes-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
 
 			<!-- Class Levels Tab -->
@@ -1901,34 +1817,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<!-- All dues history -->
 			<div class="pn-dues-modal-current">
 				<div class="pn-dues-modal-current-title"><i class="fas fa-history" style="margin-right:5px"></i>Dues History</div>
-				<?php if (is_array($AllDues) && count($AllDues) > 0): ?>
-				<table class="pn-dues-modal-table">
-					<thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th><?php if ($canEditAdmin): ?><th></th><?php endif; ?></tr></thead>
-					<tbody>
-					<?php foreach ($AllDues as $d):
-						if ($d['DuesForLife'] == 1) {
-							$status = '<span class="pn-dues-life">Lifetime</span>';
-						} elseif (!empty($d['Revoked'])) {
-							$status = '<span style="color:#e53e3e">Revoked</span>';
-						} elseif (!empty($d['DuesUntil']) && strtotime($d['DuesUntil']) < time()) {
-							$status = '<span style="color:#999">Expired</span>';
-						} else {
-							$status = '<span style="color:#38a169">Active</span>';
-						}
-					?>
-						<tr>
-							<td><?= htmlspecialchars($d['ParkName']) ?></td>
-							<td><?= htmlspecialchars($d['DuesFrom'] ?? '—') ?></td>
-							<td><?= $d['DuesForLife'] == 1 ? '—' : htmlspecialchars($d['DuesUntil']) ?></td>
-							<td><?= $status ?></td>
-							<?php if ($canEditAdmin): ?><td><?php if (empty($d['Revoked'])): ?><button class="pn-dues-revoke-btn" data-dues-id="<?= (int)$d['DuesId'] ?>">Revoke</button><?php endif; ?></td><?php endif; ?>
-						</tr>
-					<?php endforeach; ?>
-					</tbody>
-				</table>
-				<?php else: ?>
-				<div class="pn-dues-modal-empty">No dues records on file</div>
-				<?php endif; ?>
+				<div id="pn-dues-history-body"><div class="pn-dues-modal-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
 
 			<div class="pn-acct-field">
@@ -1975,33 +1864,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<button class="pn-modal-close-btn" id="pn-dues-history-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-acct-modal-body">
-			<?php if (is_array($AllDues) && count($AllDues) > 0): ?>
-			<table class="pn-dues-modal-table">
-				<thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th></tr></thead>
-				<tbody>
-				<?php foreach ($AllDues as $d):
-					if ($d['DuesForLife'] == 1) {
-						$status = '<span class="pn-dues-life">Lifetime</span>';
-					} elseif (!empty($d['Revoked'])) {
-						$status = '<span style="color:#e53e3e">Revoked</span>';
-					} elseif (!empty($d['DuesUntil']) && strtotime($d['DuesUntil']) < time()) {
-						$status = '<span style="color:#999">Expired</span>';
-					} else {
-						$status = '<span style="color:#38a169">Active</span>';
-					}
-				?>
-					<tr>
-						<td><?= htmlspecialchars($d['ParkName']) ?></td>
-						<td><?= htmlspecialchars($d['DuesFrom'] ?? '—') ?></td>
-						<td><?= $d['DuesForLife'] == 1 ? '—' : htmlspecialchars($d['DuesUntil']) ?></td>
-						<td><?= $status ?></td>
-					</tr>
-				<?php endforeach; ?>
-				</tbody>
-			</table>
-			<?php else: ?>
-			<div class="pn-dues-modal-empty">No dues records on file</div>
-			<?php endif; ?>
+			<div id="pn-dues-history-modal-body"><div class="pn-dues-modal-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-dues-history-cancel">Close</button>
@@ -2397,6 +2260,9 @@ var PnConfig = {
 	lastClassId:      <?= $_lastClassId ?>,
 	attendanceDates:  <?= json_encode(array_values(array_unique(array_filter(array_map(function($a) { return $a['Date'] ?? ''; }, is_array($Details['Attendance']) ? $Details['Attendance'] : []))))) ?>,
 	canEditAnyAttendance: <?= !empty($canEditAnyAttendance) ? 'true' : 'false' ?>,
+	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
+	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
+	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
 };
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
@@ -2774,18 +2640,149 @@ $(function() {
 		});
 	}
 
-	if ($('#pn-rec-table').length) {
-		$('#pn-rec-table').DataTable({
-			order: [[2, 'desc']],
-			columnDefs: [
-				{ targets: [2], type: 'date' },
-				<?php if ($this->__session->user_id): ?>
-				{ targets: [-1], orderable: false, searchable: false },
-				<?php endif; ?>
-			],
-			pageLength: 25
+	// ---- Dues history lazy loading ----
+	function pnRenderDuesHtml(dues, isAdmin) {
+		if (!dues || !dues.length) return '<div class="pn-dues-modal-empty">No dues records on file</div>';
+		var html = '<table class="pn-dues-modal-table"><thead><tr><th>Park</th><th>From</th><th>Paid Through</th><th>Status</th>'
+			+ (isAdmin ? '<th></th>' : '') + '</tr></thead><tbody>';
+		dues.forEach(function(d) {
+			var status;
+			if (d.DuesForLife == 1) status = '<span class="pn-dues-life">Lifetime</span>';
+			else if (d.Revoked) status = '<span style="color:#e53e3e">Revoked</span>';
+			else if (d.DuesUntil && new Date(d.DuesUntil) < new Date()) status = '<span style="color:#999">Expired</span>';
+			else status = '<span style="color:#38a169">Active</span>';
+			var esc = function(s) { return $('<div>').text(s || '').html(); };
+			html += '<tr>'
+				+ '<td>' + esc(d.ParkName) + '</td>'
+				+ '<td>' + esc(d.DuesFrom || '—') + '</td>'
+				+ '<td>' + (d.DuesForLife == 1 ? '—' : esc(d.DuesUntil)) + '</td>'
+				+ '<td>' + status + '</td>'
+				+ (isAdmin ? '<td>' + (!d.Revoked ? '<button class="pn-dues-revoke-btn" data-dues-id="' + parseInt(d.DuesId) + '">Revoke</button>' : '') + '</td>' : '')
+				+ '</tr>';
 		});
+		return html + '</tbody></table>';
 	}
+	var pnDuesCache = null;
+	function pnLoadDuesInto(elId, isAdmin) {
+		var el = document.getElementById(elId);
+		if (!el) return;
+		if (pnDuesCache !== null) { el.innerHTML = pnRenderDuesHtml(pnDuesCache, isAdmin); return; }
+		$.getJSON(PnConfig.uir + 'PlayerAjax/all_dues/' + PnConfig.playerId, function(r) {
+			pnDuesCache = (r.status === 0) ? (r.dues || []) : [];
+			el.innerHTML = pnRenderDuesHtml(pnDuesCache, isAdmin);
+		}).fail(function() { el.innerHTML = '<div class="pn-dues-modal-empty">Unable to load dues history.</div>'; });
+	}
+	if (typeof pnOpenDuesModal === 'function') {
+		var _origDues = pnOpenDuesModal;
+		pnOpenDuesModal = function() { _origDues(); pnLoadDuesInto('pn-dues-history-body', true); };
+	}
+	if (typeof pnOpenDuesHistoryModal === 'function') {
+		var _origDuesH = pnOpenDuesHistoryModal;
+		pnOpenDuesHistoryModal = function() { _origDuesH(); pnLoadDuesInto('pn-dues-history-modal-body', false); };
+	}
+
+	// ---- Notes lazy loading ----
+	var pnNotesLoaded = false;
+	function pnLoadNotes() {
+		if (pnNotesLoaded) return;
+		pnNotesLoaded = true;
+		var body = document.getElementById('pn-notes-body');
+		if (!body) return;
+		$.getJSON(PnConfig.uir + 'PlayerAjax/notes/' + PnConfig.playerId, function(r) {
+			var notes = (r.status === 0) ? (r.notes || []) : [];
+			var countEl = document.getElementById('pn-notes-tab-count');
+			if (countEl) countEl.textContent = '(' + notes.length + ')';
+			if (!notes.length) { body.innerHTML = '<div class="pn-empty" id="pn-history-empty">No notes</div>'; return; }
+			var esc = function(s) { return $('<div>').text(s || '').html(); };
+			var html = '<table class="pn-table" id="pn-history-table"><thead><tr><th>Note</th><th>Description</th><th>Date</th>'
+				+ (PnConfig.canEditAdmin ? '<th style="width:60px"></th>' : '') + '</tr></thead><tbody>';
+			notes.forEach(function(n) {
+				var nid = parseInt(n.NoteId) || 0;
+				var dt = esc(n.Date || '');
+				var dc = (n.DateComplete && n.DateComplete !== '0000-00-00') ? (' - ' + esc(n.DateComplete)) : '';
+				html += '<tr data-notes-id="' + nid + '">'
+					+ '<td>' + esc(n.Note) + '</td>'
+					+ '<td>' + esc(n.Description) + '</td>'
+					+ '<td class="pn-col-nowrap">' + dt + dc + '</td>';
+				if (PnConfig.canEditAdmin) {
+					html += '<td class="pn-award-actions-cell">'
+						+ '<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"'
+						+ ' data-notes-id="' + nid + '"'
+						+ ' data-note="' + esc(n.Note).replace(/"/g, '&quot;') + '"'
+						+ ' data-desc="' + esc(n.Description).replace(/"/g, '&quot;') + '"'
+						+ ' data-date="' + esc(n.Date) + '"'
+						+ ' data-date-complete="' + esc(n.DateComplete) + '"'
+						+ ' title="Edit note"><i class="fas fa-pencil-alt"></i></button> '
+						+ '<button class="pn-award-action-btn pn-award-del-btn pn-note-del-btn" data-notes-id="' + nid + '" title="Delete note"><i class="fas fa-trash"></i></button>'
+						+ '</td>';
+				}
+				html += '</tr>';
+			});
+			body.innerHTML = html + '</tbody></table>';
+		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load notes.</div>'; });
+	}
+
+	// ---- Recommendations lazy loading ----
+	var pnRecsLoaded = false;
+	function pnLoadRecs() {
+		if (pnRecsLoaded) return;
+		pnRecsLoaded = true;
+		var body = document.getElementById('pn-recs-body');
+		if (!body) return;
+		$.getJSON(PnConfig.uir + 'PlayerAjax/recommendations/' + PnConfig.playerId, function(r) {
+			if (r.status === 5) { body.innerHTML = '<div class="pn-empty">Log in to see recommendations.</div>'; return; }
+			var allRecs = (r.status === 0 && r.recs) ? r.recs.filter(function(x) { return !x.AlreadyHas; }) : [];
+			var myRecs  = allRecs.filter(function(x) { return x.RecommendedById == PnConfig.loggedInUserId; });
+			var recList = PnConfig.showRecsTab ? allRecs : myRecs;
+			var countEl = document.getElementById('pn-recs-tab-count');
+			if (countEl) countEl.textContent = '(' + recList.length + ')';
+			if (!recList.length) { body.innerHTML = '<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.</div>'; return; }
+			var hasActions = PnConfig.loggedInUserId > 0;
+			var esc = function(s) { return $('<div>').text(s || '').html(); };
+			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
+				+ '<th>Award</th><th>Rank</th><th>Date</th><th>Sent By</th><th>Reason</th>'
+				+ (hasActions ? '<th style="white-space:nowrap;width:1%">Actions</th>' : '')
+				+ '</tr></thead><tbody>';
+			recList.forEach(function(rec) {
+				var kaid  = parseInt(rec.KingdomAwardId) || 0;
+				var recId = parseInt(rec.RecommendationsId) || 0;
+				var mid   = parseInt(rec.MundaneId) || 0;
+				var rank  = rec.Rank && parseInt(rec.Rank) > 0 ? parseInt(rec.Rank) : '';
+				html += '<tr>'
+					+ '<td>' + esc(rec.AwardName) + '</td>'
+					+ '<td class="pn-col-numeric">' + rank + '</td>'
+					+ '<td class="pn-col-nowrap">' + esc(rec.DateRecommended) + '</td>'
+					+ '<td><a href="' + PnConfig.uir + 'Player/profile/' + parseInt(rec.RecommendedById) + '">' + esc(rec.RecommendedByName) + '</a></td>'
+					+ '<td>' + esc(rec.Reason) + '</td>';
+				if (hasActions) {
+					var actions = '';
+					if (PnConfig.canManageAwards && kaid > 0) {
+						var rd = JSON.stringify({KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||''});
+						actions += '<button class="pk-btn pk-btn-primary pn-rec-grant-btn" data-rec="' + rd.replace(/"/g, '&quot;') + '"><i class="fas fa-medal"></i> Grant</button> ';
+					}
+					var canDel = PnConfig.canDeleteRec || rec.RecommendedById == PnConfig.loggedInUserId || mid == PnConfig.loggedInUserId;
+					if (canDel) actions += '<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn" data-href="' + PnConfig.uir + 'Player/profile/' + mid + '/deleterecommendation/' + recId + '"><i class="fas fa-times"></i> Delete</button>';
+					html += '<td class="pk-rec-actions">' + actions + '</td>';
+				}
+				html += '</tr>';
+			});
+			body.innerHTML = html + '</tbody></table>';
+			if ($.fn.DataTable) {
+				$('#pn-rec-table').DataTable({
+					order: [[2, 'desc']],
+					columnDefs: [{ targets: [2], type: 'date' }].concat(hasActions ? [{ targets: [-1], orderable: false, searchable: false }] : []),
+					pageLength: 25
+				});
+			}
+		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load recommendations.</div>'; });
+	}
+
+	// Hook tab clicks to trigger lazy loading
+	$(document).on('click', '.pn-tab-nav li', function() {
+		var tab = $(this).data('tab');
+		if (tab === 'history')         pnLoadNotes();
+		if (tab === 'recommendations') pnLoadRecs();
+	});
 });
 initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
 </script>

@@ -359,19 +359,16 @@ class Controller_Player extends Controller {
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details']       = $this->Player->fetch_player_details($id);
-		$this->data['Notes']         = $this->Player->get_notes($id);
+		$this->data['Notes']         = [];  // loaded via AJAX on Notes tab click
 		$this->data['Dues']          = $this->Player->get_dues($id, 1, true);
-		$this->data['AllDues']       = $this->Player->get_dues($id, 0, false);
+		$this->data['AllDues']       = [];  // loaded via AJAX when dues modal opens
 		$this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1]);
 		$canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
 		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
 		$this->data['ShowRecsTab']          = $recsPublic || $canEdit;
-		$this->data['AwardRecommendations'] = [];
-		if ($this->data['ShowRecsTab'] || $uid > 0) {
-			$recs = $this->Reports->recommended_awards(['PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0]);
-			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
-		}
+		$this->data['ShowRecsTabLoggedIn']  = $uid > 0;
+		$this->data['AwardRecommendations'] = [];  // loaded via AJAX on Recommendations tab click
 
 		// Voting eligibility badge loaded via AJAX after page render (PlayerAjax/voting_eligible)
 

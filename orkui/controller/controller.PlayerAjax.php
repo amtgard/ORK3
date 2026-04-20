@@ -413,6 +413,56 @@ class Controller_PlayerAjax extends Controller {
 		exit;
 	}
 
+	public function all_dues($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$mundane_id = (int)($p ?? 0);
+		if (!valid_id($mundane_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid player ID']);
+			exit;
+		}
+		$this->load_model('Player');
+		$dues = $this->Player->get_dues($mundane_id, 0, false);
+		echo json_encode(['status' => 0, 'dues' => is_array($dues) ? $dues : []]);
+		exit;
+	}
+
+	public function notes($p = null) {
+		header('Content-Type: application/json');
+		$mundane_id = (int)($p ?? 0);
+		if (!valid_id($mundane_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid player ID']);
+			exit;
+		}
+		$this->load_model('Player');
+		$notes = $this->Player->get_notes($mundane_id);
+		echo json_encode(['status' => 0, 'notes' => is_array($notes) ? $notes : []]);
+		exit;
+	}
+
+	public function recommendations($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$mundane_id = (int)($p ?? 0);
+		if (!valid_id($mundane_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid player ID']);
+			exit;
+		}
+		$this->load_model('Reports');
+		$recs = $this->Reports->recommended_awards([
+			'PlayerId' => $mundane_id, 'KingdomId' => 0, 'ParkId' => 0,
+			'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0,
+		]);
+		echo json_encode(['status' => 0, 'recs' => is_array($recs) ? $recs : []]);
+		exit;
+	}
+
 	public function save_my_email() {
 		header('Content-Type: application/json');
 		if (!isset($this->session->user_id)) {
