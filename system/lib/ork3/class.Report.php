@@ -437,15 +437,17 @@ class Report  extends Ork3 {
 		}
 
 		$sql = "select
-			a.peerage, ifnull(ka.name, a.name) as award_name, 
-			m.persona, 
-			recs.date_recommended, 
+			a.peerage, ifnull(ka.name, a.name) as award_name,
+			a.is_ladder as a_is_ladder,
+			a.is_title  as a_is_title,
+			m.persona,
+			recs.date_recommended,
 			m.mundane_id,
 			m.park_id,
 			m.kingdom_id,
 			p.name as park_name,
 			k.name as kingdom_name,
-			recs.rank, 
+			recs.rank,
 			rbi.mundane_id as recommended_by_id, rbi.persona as recommended_by_persona,
 			recs.recommendations_id,
 			recs.award_id,
@@ -493,7 +495,11 @@ class Report  extends Ork3 {
 						'KingdomId' => $r->kingdom_id,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
-						'AlreadyHas' => ($r->kacount > 0 || $r->awcount > 0),
+						// Custom awards (base Award with is_ladder=0 AND is_title=0) can legitimately
+						// be held many times, so they must never be filtered out as "already has".
+						'AlreadyHas' => ((int)$r->a_is_ladder === 0 && (int)$r->a_is_title === 0)
+							? false
+							: ($r->kacount > 0 || $r->awcount > 0),
 						'CurrentRank' => ($r->kacount > 0 || $r->awcount > 0) ? (int)$r->player_ka_rank : null,
 						'CurrentRankDate' => ($r->kacount > 0 || $r->awcount > 0) ? $r->player_ka_date : null,
 					);

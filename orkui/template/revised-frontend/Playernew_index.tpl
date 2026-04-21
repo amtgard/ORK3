@@ -2323,6 +2323,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 					<div class="pn-rank-pills-wrap" id="pn-rec-rank-pills"></div>
 					<input type="hidden" name="Rank" id="pn-rec-rank-val" value="" />
 				</div>
+				<div class="pn-form-error" id="pn-rec-warn" style="margin-top:4px"></div>
 				<div class="pn-rec-field">
 					<label for="pn-rec-reason">Reason <span class="required-indicator">*</span></label>
 					<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
@@ -2340,7 +2341,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 
 <?php
 // Build KingdomAwardId => max rank held by this player (for ladder award pre-fill)
-$playerAwardRanks = array();
+// and the set of KingdomAwardIds the player already holds (for title duplicate detection)
+$playerAwardRanks        = array();
+$playerHeldKingdomAwardIds = array();
 if (is_array($Details['Awards'])) {
 	foreach ($Details['Awards'] as $a) {
 		$aid  = (int)$a['AwardId'];
@@ -2350,8 +2353,13 @@ if (is_array($Details['Awards'])) {
 				$playerAwardRanks[$aid] = $rank;
 			}
 		}
+		$kaid = (int)($a['KingdomAwardId'] ?? 0);
+		if ($kaid > 0) {
+			$playerHeldKingdomAwardIds[$kaid] = true;
+		}
 	}
 }
+$playerHeldKingdomAwardIds = array_keys($playerHeldKingdomAwardIds);
 ?>
 
 <!-- =============================================
@@ -2395,6 +2403,7 @@ var PnConfig = {
 	canManageAwards:<?= !empty($canManageAwards) ? 'true' : 'false' ?>,
 	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
+	heldKingdomAwardIds: <?= json_encode($playerHeldKingdomAwardIds) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,

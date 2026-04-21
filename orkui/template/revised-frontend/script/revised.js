@@ -708,6 +708,60 @@ if (PnConfig.recError) {
         }
     });
 
+    // Classify a rec-form award <option>: 'ladder' | 'custom' | 'title' | 'none'
+    function pnRecAwardCategory(opt) {
+        if (!opt || !opt.value) return 'none';
+        if (opt.getAttribute('data-is-ladder') === '1') return 'ladder';
+        var parent = opt.parentElement;
+        if (!parent || parent.tagName !== 'OPTGROUP') return 'custom';
+        return 'title';
+    }
+    function pnRecSelectedOpt() {
+        var sel = document.getElementById('pn-rec-award');
+        if (!sel) return null;
+        return sel.options[sel.selectedIndex] || null;
+    }
+    function pnRecHeldRankForSelected() {
+        var opt = pnRecSelectedOpt();
+        if (!opt) return 0;
+        var baseAwardId = parseInt(opt.getAttribute('data-award-id'), 10) || 0;
+        return (PnConfig.awardRanks && PnConfig.awardRanks[baseAwardId]) || 0;
+    }
+    function pnRecWarnEl() { return document.getElementById('pn-rec-warn'); }
+    function pnRecShowWarn(msg) {
+        var w = pnRecWarnEl(); if (!w) return;
+        w.textContent = msg;
+        w.style.display = 'block';
+    }
+    function pnRecHideWarn() {
+        var w = pnRecWarnEl(); if (!w) return;
+        w.textContent = '';
+        w.style.display = 'none';
+    }
+    function pnRecRefreshWarn() {
+        var opt = pnRecSelectedOpt();
+        var cat = pnRecAwardCategory(opt);
+        if (cat === 'ladder') {
+            var held = pnRecHeldRankForSelected();
+            var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
+            if (held > 0 && chosen > 0 && chosen <= held) {
+                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+            } else {
+                pnRecHideWarn();
+            }
+        } else if (cat === 'title') {
+            var kaid = parseInt(opt.value, 10) || 0;
+            var held = (PnConfig.heldKingdomAwardIds || []).indexOf(kaid) !== -1;
+            if (held) {
+                pnRecShowWarn('The player already has this title. Are you sure you wish to continue?');
+            } else {
+                pnRecHideWarn();
+            }
+        } else {
+            pnRecHideWarn();
+        }
+    }
+
     // Submit with validation
     $('#pn-rec-submit').on('click', function() {
         var award  = $('#pn-rec-award').val();
@@ -717,6 +771,19 @@ if (PnConfig.recError) {
             return;
         }
         $('#pn-rec-error').hide();
+
+        // Block ladder submissions where rank is at or below current rank held.
+        var opt = pnRecSelectedOpt();
+        if (pnRecAwardCategory(opt) === 'ladder') {
+            var held = pnRecHeldRankForSelected();
+            var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
+            if (held > 0 && chosen > 0 && chosen <= held) {
+                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+                return;
+            }
+        }
+        // Title duplicates: warning is informational, submission proceeds.
+
         $('#pn-rec-submit').prop('disabled', true).text('Submitting…');
         $('#pn-recommend-form').submit();
     });
@@ -771,6 +838,7 @@ if (PnConfig.recError) {
         this.querySelectorAll('.pn-rank-pill').forEach(function(x) { x.classList.remove('pn-rank-selected'); });
         p.classList.add('pn-rank-selected');
         input.value = p.dataset.rank;
+        pnRecRefreshWarn();
     });
     var _recAwardEl = document.getElementById('pn-rec-award');
     if (_recAwardEl) {
@@ -783,6 +851,7 @@ if (PnConfig.recError) {
         var desc = AWARD_DESCRIPTIONS[aid] || '';
         var el = document.getElementById('pn-rec-award-desc');
         if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
+        pnRecRefreshWarn();
     });
 
     // ---- Rec dismiss button (player page) ----
@@ -6499,44 +6568,123 @@ $(document).ready(function() {
             return ids;
         }
 
-        $('#ev-PlayerName').autocomplete({
-            source: function(req, res) {
-                var attended = evAttendedIds();
-                $.getJSON(EvConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Player', type: 'all', search: req.term, limit: 15 },
-                    function(data) {
-                        res($.map(data, function(v) {
-                            if (attended[parseInt(v.MundaneId, 10)]) return null;
-                            var abbr = evAttAbbr(v);
-                            return { label: v.Persona + (abbr ? ' — ' + abbr : ''), name: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox, suspended: !!(v.PenaltyBox || v.Suspended) };
-                        }));
-                    });
-            },
-            focus:  function(e,ui) { if (ui.item) $('#ev-PlayerName').val(ui.item.name); return false; },
-            delay: 250, minLength: 2,
-            select: function(e,ui) {
-                $('#ev-PlayerName').val(ui.item.name);
-                $('#ev-MundaneId').val(ui.item.value.split('|')[0]);
-                evUpdateAddBtn();
-                return false;
-            },
-            change: function(e,ui) { if(!ui.item) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); } return false; }
-        });
-        $('#ev-PlayerName').on('input', function() {
-            if (!$(this).val()) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); }
-        });
-        var _evAcWidget = $('#ev-PlayerName').data('autocomplete');
-        if (_evAcWidget) _evAcWidget._renderItem = function(ul, item) {
-            var a = $('<a>');
-            if (item.suspended) {
-                a.addClass('pk-att-ac-suspended').html(
-                    '<i class="fas fa-ban" style="margin-right:5px;font-size:11px"></i>' + $('<span>').text(item.label).html()
-                );
-            } else {
-                a.text(item.label);
+        // Scoped player-search autocomplete (park members > kingdom members > everyone else)
+        var evPnInput   = document.getElementById('ev-PlayerName');
+        var evPnHidden  = document.getElementById('ev-MundaneId');
+        var evPnResults = document.getElementById('ev-PlayerName-results');
+        var evPnTimer   = null;
+        var evPnSeq     = 0;
+
+        function evPnRenderItem(p, attended, seen) {
+            if (attended[p.MundaneId] || seen[p.MundaneId]) return '';
+            seen[p.MundaneId] = true;
+            var abbr = (p.KAbbr || '') + ':' + (p.PAbbr || '');
+            var tags = '';
+            if (p.Suspended) tags += ' <span style="color:#c53030;font-size:10px;font-weight:600;margin-left:4px">(Banned)</span>';
+            if (p.Active === 0) tags += ' <span style="color:#c53030;font-size:10px;font-weight:600;margin-left:4px">(Inactive)</span>';
+            return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona || '') + '">'
+                + escHtml(p.Persona || '') + ' <span style="color:#a0aec0;font-size:11px">— ' + escHtml(abbr) + '</span>' + tags + '</div>';
+        }
+
+        function evPnRenderSection(label, items, attended, seen) {
+            var itemHtml = '';
+            (items || []).forEach(function(p) { itemHtml += evPnRenderItem(p, attended, seen); });
+            if (!itemHtml) return '';
+            return '<div class="ev-ac-section">' + escHtml(label) + '</div>' + itemHtml;
+        }
+
+        function evPnBuildGroups(term) {
+            var kid = parseInt(EvConfig.kingdomId, 10) || 0;
+            var pid = parseInt(EvConfig.parkId, 10) || 0;
+            var base = EvConfig.uir + 'KingdomAjax/playersearch/' + kid;
+            var q = '&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            if (pid > 0 && kid > 0) {
+                return [
+                    { label: 'Park Members',     url: base + '&scope=own&park_id=' + pid + q },
+                    { label: 'Kingdom Members',  url: base + '&scope=own' + q },
+                    { label: 'Everyone Else',    url: base + '&scope=exclude' + q }
+                ];
             }
-            return $('<li></li>').data('item.autocomplete', item).append(a).appendTo(ul);
-        };
+            if (kid > 0) {
+                return [
+                    { label: 'Kingdom Members',  url: base + '&scope=own' + q },
+                    { label: 'Everyone Else',    url: base + '&scope=exclude' + q }
+                ];
+            }
+            return [ { label: 'All Players', url: base + '&scope=all' + q } ];
+        }
+
+        function evPnPosition() {
+            if (!evPnInput || !evPnResults) return;
+            var r = evPnInput.getBoundingClientRect();
+            evPnResults.style.top  = (r.bottom + 2) + 'px';
+            evPnResults.style.left = r.left + 'px';
+        }
+
+        function evPnOpen() {
+            evPnPosition();
+            evPnResults.classList.add('kn-ac-open');
+        }
+
+        function evPnSearch(term) {
+            var groups = evPnBuildGroups(term);
+            if (!groups.length) return;
+            var seq = ++evPnSeq;
+            Promise.all(groups.map(function(g) {
+                return fetch(g.url).then(function(r) { return r.json(); }).catch(function() { return []; });
+            })).then(function(resultsArr) {
+                if (seq !== evPnSeq) return;
+                var attended = evAttendedIds();
+                var seen = {};
+                var html = '';
+                groups.forEach(function(g, i) {
+                    html += evPnRenderSection(g.label, resultsArr[i], attended, seen);
+                });
+                if (!html) html = '<div class="ev-ac-empty">No players found</div>';
+                evPnResults.innerHTML = html;
+                evPnOpen();
+            });
+        }
+
+        if (evPnInput && evPnResults) {
+            evPnInput.addEventListener('input', function() {
+                evPnHidden.value = '';
+                evUpdateAddBtn();
+                var term = this.value.trim();
+                if (term.length < 2) {
+                    evPnResults.classList.remove('kn-ac-open');
+                    return;
+                }
+                clearTimeout(evPnTimer);
+                evPnTimer = setTimeout(function() { evPnSearch(term); }, AUTOCOMPLETE_DEBOUNCE_MS);
+            });
+
+            evPnResults.addEventListener('click', function(e) {
+                var item = e.target.closest('.kn-ac-item[data-id]');
+                if (!item) return;
+                evPnInput.value  = decodeURIComponent(item.dataset.name);
+                evPnHidden.value = item.dataset.id;
+                evPnResults.classList.remove('kn-ac-open');
+                evUpdateAddBtn();
+            });
+
+            document.addEventListener('click', function(e) {
+                if (e.target !== evPnInput && !evPnResults.contains(e.target)) {
+                    evPnResults.classList.remove('kn-ac-open');
+                }
+            });
+
+            if (typeof acKeyNav === 'function') {
+                acKeyNav(evPnInput, evPnResults, 'kn-ac-open', '.kn-ac-item');
+            }
+
+            window.addEventListener('scroll', function() {
+                if (evPnResults.classList.contains('kn-ac-open')) evPnPosition();
+            }, true);
+            window.addEventListener('resize', function() {
+                if (evPnResults.classList.contains('kn-ac-open')) evPnPosition();
+            });
+        }
     });
 
     // ---- Hero dominant-color tint ----
