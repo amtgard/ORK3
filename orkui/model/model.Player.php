@@ -64,6 +64,12 @@ class Model_Player extends Model {
 		return $r;
 	}
 
+	function reactivate_player_award($request) {
+		$r = $this->Player->ReactivateAward($request);
+		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
+		return $r;
+	}
+
 	function add_note($request) {
 		return $this->Player->AddNote($request);
 	}

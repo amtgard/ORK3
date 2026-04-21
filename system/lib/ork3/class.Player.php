@@ -1404,6 +1404,37 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function ReactivateAward($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$awards = new yapo($this->db, DB_PREFIX . 'awards');
+		$awards->clear();
+		$awards->awards_id = $request['AwardsId'];
+		if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
+			// Must be a currently revoked award with a valid original recipient on file.
+			if ((int)$awards->revoked !== 1 || !valid_id($awards->stripped_from)) {
+				return InvalidParameter('That award is not currently revoked.');
+			}
+			$recipient = $this->player_info($awards->stripped_from);
+			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
+				return NoAuthorization();
+			}
+
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->stripped_from, $this->get_award($awards));
+
+			$awards->mundane_id    = $awards->stripped_from;
+			$awards->stripped_from = 0;
+			$awards->revoked       = 0;
+			$awards->revoked_at    = null;
+			$awards->revocation    = null;
+			$awards->revoked_by_id = 0;
+			$awards->save();
+
+			return Success($awards->awards_id);
+		} else {
+			return InvalidParameter();
+		}
+	}
+
 	public function UpdateAward($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$awards = new yapo($this->db, DB_PREFIX . 'awards');
