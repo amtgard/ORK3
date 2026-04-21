@@ -392,6 +392,13 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 		<div class="ev-stat-value"><?= $isUpcoming ? $rsvpCount : $attendeeCount ?></div>
 		<div class="ev-stat-label"><?= $isUpcoming ? 'RSVPs' : 'Attendees' ?></div>
 	</div>
+	<?php if ($websiteUrl): ?>
+	<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank" rel="noopener" class="ev-stat-card ev-stat-card-link" style="cursor:pointer;text-decoration:none;color:inherit">
+		<div class="ev-stat-icon"><i class="fas fa-external-link-alt"></i></div>
+		<div class="ev-stat-value" style="font-size:14px;padding-top:3px;color:#4a90d9"><?= htmlspecialchars($websiteName ?: 'Event Website') ?></div>
+		<div class="ev-stat-label">Website</div>
+	</a>
+	<?php endif; ?>
 </div>
 
 <?php // ---- LAYOUT ---- ?>
@@ -492,6 +499,15 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 				<i class="fas fa-map-signs"></i> <?= htmlspecialchars($mapUrlName) ?>
 			</a>
 			<?php endif; ?>
+		</div>
+		<?php endif; ?>
+
+		<?php if ($websiteUrl): ?>
+		<div class="ev-card">
+			<h4><i class="fas fa-external-link-alt" style="margin-right:5px"></i>Website</h4>
+			<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank" rel="noopener" class="ev-map-btn">
+				<?= htmlspecialchars($websiteName ?: $websiteUrl) ?>
+			</a>
 		</div>
 		<?php endif; ?>
 
