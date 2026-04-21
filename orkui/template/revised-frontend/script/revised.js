@@ -9486,6 +9486,49 @@ function setupPronounPicker(cfg) {
                 btn.textContent = 'Revoke Award';
             });
         });
+
+        // Reactivate a revoked award/title — two-click confirm, no modal.
+        $(document).on('click', '.pn-reactivate-btn', function(e) {
+            e.preventDefault();
+            var btn = this;
+            var awardsId = parseInt(btn.getAttribute('data-awards-id'), 10) || 0;
+            if (!awardsId) return;
+            if (!btn.dataset.confirm) {
+                btn.dataset.confirm = '1';
+                btn._origHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Confirm Reactivate?';
+                btn._confirmTimer = setTimeout(function() {
+                    btn.dataset.confirm = '';
+                    if (btn._origHtml) btn.innerHTML = btn._origHtml;
+                }, 3000);
+                return;
+            }
+            clearTimeout(btn._confirmTimer);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reactivating...';
+            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/reactivateaward', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'AwardsId=' + encodeURIComponent(awardsId),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Error reactivating award.');
+                    btn.disabled = false;
+                    btn.dataset.confirm = '';
+                    if (btn._origHtml) btn.innerHTML = btn._origHtml;
+                }
+            })
+            .catch(function() {
+                alert('Request failed. Please try again.');
+                btn.disabled = false;
+                btn.dataset.confirm = '';
+                if (btn._origHtml) btn.innerHTML = btn._origHtml;
+            });
+        });
     });
 })();
 

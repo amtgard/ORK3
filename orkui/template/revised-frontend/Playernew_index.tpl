@@ -1214,6 +1214,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
+								<th class="pn-nosort"></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1225,6 +1226,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<td class="pn-col-nowrap">
+									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this award"><i class="fas fa-undo"></i> Reactivate</button>
+								</td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -1367,6 +1371,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
+								<th class="pn-nosort"></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1378,6 +1383,9 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<td class="pn-col-nowrap">
+									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this title"><i class="fas fa-undo"></i> Reactivate</button>
+								</td>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>

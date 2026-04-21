@@ -123,6 +123,21 @@ class Controller_PlayerAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'reactivateaward') {
+			$awards_id = (int)($_POST['AwardsId'] ?? 0);
+			if (!valid_id($awards_id)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid award ID.']);
+				exit;
+			}
+			$r = $this->Player->reactivate_player_award([
+				'Token'       => $this->session->token,
+				'AwardsId'    => $awards_id,
+				'RecipientId' => $player_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'addnote') {
 			$note     = trim($_POST['Note']         ?? '');
 			$desc     = trim($_POST['Description']  ?? '');
