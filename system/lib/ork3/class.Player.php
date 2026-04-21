@@ -1675,37 +1675,51 @@ class Player extends Ork3 {
             return InvalidParameter();
         }
 
-		// Check for existing award rank
+		// Custom awards (is_ladder = 0 AND is_title = 0) allow unlimited duplicates
+		// and unlimited recommendations — skip both dedup checks entirely.
+		$isCustomAward = false;
+		$this->db->clear();
+		$awardMeta = $this->db->query("SELECT is_ladder, is_title FROM " . DB_PREFIX . "award WHERE award_id = " . (int)$request['AwardId'] . " LIMIT 1");
+		if ($awardMeta && $awardMeta->next()) {
+			$isCustomAward = ((int)$awardMeta->is_ladder === 0 && (int)$awardMeta->is_title === 0);
+		}
+
+		// Check for existing award rank (ladder awards only — custom awards and
+		// titles have rank = 0 and may legitimately be held multiple times).
 		$check_rank = 0;
 		if (trimlen($request['Rank']) > 0) {
 			$check_rank = $request['Rank'];
 		}
-		$existingAward = new yapo($this->db, DB_PREFIX . 'awards');
-		$existingAward->clear();
-		$existingAward->kingdomaward_id = $request['KingdomAwardId'];
-		$existingAward->mundane_id = $request['MundaneId'];
-		$existingAward->rank = $check_rank;
-		$existingAward->find();
-		if ($existingAward->awards_id) {
-			return InvalidParameter('They already have that award.');
+		if ($check_rank > 0) {
+			$existingAward = new yapo($this->db, DB_PREFIX . 'awards');
+			$existingAward->clear();
+			$existingAward->kingdomaward_id = $request['KingdomAwardId'];
+			$existingAward->mundane_id = $request['MundaneId'];
+			$existingAward->rank = $check_rank;
+			$existingAward->find();
+			if ($existingAward->awards_id) {
+				return InvalidParameter('They already have that award.');
+			}
 		}
 
-		// Check for duplicates
-		$dupeRec = new yapo($this->db, DB_PREFIX . 'recommendations');
-		$dupeRec->clear();
-		$dupeRec->kingdomaward_id = $request['KingdomAwardId'];
-		$dupeRec->mundane_id = $request['MundaneId'];
-		$dupeRec->recommended_by_id = $mundane_id;
-		if (trimlen($request['Rank']) > 0) {
-			$dupeRec->rank = $request['Rank'];
-		} else {
-			$dupeRec->rank = 0;
-		}
-		if ($dupeRec->find()) do {
-			if (!$dupeRec->deleted_at) {
-				return InvalidParameter('You already recommended that award and level.');
+		// Check for duplicate recommendations from the same user (skipped for custom awards).
+		if (!$isCustomAward) {
+			$dupeRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+			$dupeRec->clear();
+			$dupeRec->kingdomaward_id = $request['KingdomAwardId'];
+			$dupeRec->mundane_id = $request['MundaneId'];
+			$dupeRec->recommended_by_id = $mundane_id;
+			if (trimlen($request['Rank']) > 0) {
+				$dupeRec->rank = $request['Rank'];
+			} else {
+				$dupeRec->rank = 0;
 			}
-		} while ($dupeRec->next());
+			if ($dupeRec->find()) do {
+				if (!$dupeRec->deleted_at) {
+					return InvalidParameter('You already recommended that award and level.');
+				}
+			} while ($dupeRec->next());
+		}
 
 		if (valid_id($mundane_id)) {
 			$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
@@ -1718,6 +1732,9 @@ class Player extends Ork3 {
 			$awardRec->recommended_by_id = $mundane_id;
 			$awardRec->reason = $request['Reason'];
 			$awardRec->save();
+			if (isset(Ork3::$Lib->ghettocache->memcache)) {
+				Ork3::$Lib->ghettocache->memcache->flush();
+			}
 			return Success('Recommendation Added!');
 		} else {
 			return NoAuthorization();
@@ -1743,6 +1760,9 @@ class Player extends Ork3 {
 					$awardRec->deleted_by = $request['RequestedBy'];
 					$awardRec->deleted_at = date('Y-m-d H:i:s');
 					$awardRec->save();
+					if (isset(Ork3::$Lib->ghettocache->memcache)) {
+						Ork3::$Lib->ghettocache->memcache->flush();
+					}
 					return Success('Recommendation Removed!');
 				} else {
 					return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');

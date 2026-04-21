@@ -194,7 +194,7 @@
 				<!-- SVG injected by JS -->
 			</button>
 <?php if ($this->__session->token == null) : ?>
-			<a href='<?=UIR;?>Login' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
+			<a href='<?=UIR;?>Login&return=<?=urlencode($_REQUEST['Route'] ?? '')?>' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
 <?php else : ?>
 <?php
 	$__navUid      = (int)$this->__session->user_id;

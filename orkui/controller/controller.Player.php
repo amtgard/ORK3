@@ -314,7 +314,7 @@ class Controller_Player extends Controller {
 							header('Location: ' . UIR . "Login/login/Player/profile/$id");
 						} else {
 							$msg = urlencode($r['Error'] . ': ' . $r['Detail']);
-							header('Location: ' . UIR . "Player/profile/{$id}?rec_error={$msg}");
+							header('Location: ' . UIR . "Player/profile/{$id}&rec_error={$msg}");
 						}
 						exit;
 					case 'deleterecommendation':
