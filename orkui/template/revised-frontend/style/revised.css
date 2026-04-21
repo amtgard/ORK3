@@ -7445,12 +7445,10 @@ html[data-theme="dark"] .ev-card {
   color: var(--ork-text);
 }
 html[data-theme="dark"] .ev-card h4 {
-  background: transparent;
-  border: none;
-  padding: 0;
-  border-radius: 0;
+  background-color: #374151;
+  border-color: #4a5568;
+  color: #e2e8f0;
   text-shadow: none;
-  color: var(--ork-text);
 }
 html[data-theme="dark"] .ev-card a { color: var(--ork-link-bright); }
 html[data-theme="dark"] .ev-detail-label { color: var(--ork-text-muted); }
@@ -7637,6 +7635,17 @@ html[data-theme="dark"] .ev-error {
 /* Description body */
 html[data-theme="dark"] .ev-description { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .ev-description a { color: var(--ork-link-bright); }
+html[data-theme="dark"] .ev-description h1,
+html[data-theme="dark"] .ev-description h2,
+html[data-theme="dark"] .ev-description h3,
+html[data-theme="dark"] .ev-description h4,
+html[data-theme="dark"] .ev-description h5,
+html[data-theme="dark"] .ev-description h6 {
+  background-color: #374151 !important;
+  border-color: #4a5568 !important;
+  color: #e2e8f0 !important;
+  text-shadow: none !important;
+}
 
 /* Hero heading reset */
 html[data-theme="dark"] .ev-event-name {
