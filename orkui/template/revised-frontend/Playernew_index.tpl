@@ -446,7 +446,12 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-tooltip-trigger{position:relative;display:inline-flex}
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
-.pn-about-main{flex:1;min-width:0}
+.pn-about-main{flex:1;min-width:0;position:relative}
+.pn-about-edit-btn{position:absolute;top:0;right:0;width:30px;height:30px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;color:#4299e1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;opacity:0;transition:opacity 0.15s,background 0.15s,color 0.15s;z-index:5}
+.pn-about-main:has(.pn-about-section:hover) .pn-about-edit-btn,.pn-about-edit-btn:hover,.pn-about-edit-btn:focus{opacity:1}
+.pn-about-edit-btn:hover,.pn-about-edit-btn:focus{background:#4299e1;color:#fff;border-color:#4299e1;outline:none}
+html[data-theme="dark"] .pn-about-edit-btn{background:var(--ork-card-bg);border-color:var(--ork-border);color:var(--pn-accent,#63b3ed)}
+html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-about-edit-btn:focus{background:var(--pn-accent,#63b3ed);color:var(--ork-card-bg);border-color:var(--pn-accent,#63b3ed)}
 .pn-about-sidebar{flex:0 0 240px}
 .pn-belt-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px}
 .pn-belt-card-title{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;display:flex;align-items:center;gap:6px}
@@ -565,11 +570,16 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-name-constructed{margin-top:12px;padding:10px 14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:15px;font-weight:600;color:#2d3748}
 .pn-focus-canvas-wrap{position:relative;display:inline-block;max-width:100%;margin:10px auto;text-align:center}
 .pn-focus-canvas-wrap canvas{display:block;max-width:100%;cursor:move;border-radius:6px}
-.pn-md-preview-toggle{display:flex;gap:0;margin-bottom:8px}
+.pn-md-preview-toggle{display:flex;gap:10px;margin-bottom:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.pn-md-toggle-group{display:flex;gap:0}
 .pn-md-toggle-btn{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#718096}
-.pn-md-toggle-btn:first-child{border-radius:4px 0 0 4px}
-.pn-md-toggle-btn:last-child{border-radius:0 4px 4px 0;border-left:0}
+.pn-md-toggle-group .pn-md-toggle-btn:first-child{border-radius:4px 0 0 4px}
+.pn-md-toggle-group .pn-md-toggle-btn:last-child{border-radius:0 4px 4px 0;border-left:0}
 .pn-md-toggle-btn.pn-active{background:var(--pn-accent,#4299e1);color:#fff;border-color:var(--pn-accent,#4299e1)}
+.pn-md-quick-add{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pn-md-quick-add-label{font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em}
+.pn-md-quick-btn{padding:5px 10px;font-size:11px;font-weight:600;border:1px solid var(--pn-accent,#4299e1);background:#fff;color:var(--pn-accent,#4299e1);border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.pn-md-quick-btn:hover{background:var(--pn-accent,#4299e1);color:#fff}
 .pn-md-preview{min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;line-height:1.7;color:#4a5568;background:#fafafa}
 .pn-md-preview h1,.pn-md-preview h2,.pn-md-preview h3,.pn-md-preview h4,.pn-md-preview h5,.pn-md-preview h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
 /* ===== Welcome Panel ===== */
@@ -720,6 +730,9 @@ html[data-theme="dark"] .pn-name-constructed { background: var(--ork-bg-tertiary
 /* Markdown preview (About tab split-pane preview) */
 html[data-theme="dark"] .pn-md-toggle-btn { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-md-preview { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-md-quick-add-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-md-quick-btn { background: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-md-quick-btn:hover { color: var(--ork-text); }
 
 /* Welcome tab */
 html[data-theme="dark"] .pn-welcome-hero { background: linear-gradient(135deg, #2a4365, #44337a); border-color: var(--ork-border); }
@@ -1406,6 +1419,9 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<div class="pn-tab-panel" id="pn-tab-about" style="display:none">
 					<div class="pn-about-layout">
 						<div class="pn-about-main">
+							<?php if ($isOwnProfile && ($_hasAboutPersona || $_hasAboutStory)): ?>
+							<button type="button" class="pn-about-edit-btn" id="pn-about-edit-btn" aria-label="Edit About section"><i class="fas fa-pencil-alt"></i></button>
+							<?php endif; ?>
 							<?php if ($_hasAboutPersona): ?>
 							<div class="pn-about-section">
 								<h3 class="pn-about-heading">About <?= htmlspecialchars($Player['Persona']) ?></h3>
@@ -2838,8 +2854,14 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<div class="pn-design-field">
 					<label>About <?= htmlspecialchars($Player['Persona']) ?></label>
 					<div class="pn-md-preview-toggle">
-						<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="persona">Write</button>
-						<button class="pn-md-toggle-btn" data-target="preview" data-field="persona">Preview</button>
+						<div class="pn-md-toggle-group">
+							<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="persona">Write</button>
+							<button class="pn-md-toggle-btn" data-target="preview" data-field="persona">Preview</button>
+						</div>
+						<div class="pn-md-quick-add">
+							<span class="pn-md-quick-add-label">Quick Add:</span>
+							<button type="button" class="pn-md-quick-btn" data-quickadd="findmelinks" data-target-field="persona"><i class="fas fa-share-alt"></i> Find Me Links</button>
+						</div>
 					</div>
 					<textarea id="pn-design-about-persona" placeholder="Ex. Hi there! I'm an archer in the Northern Kingdom who loves brewing mead and singing bardic songs. You can find me in the Barony of..."><?= htmlspecialchars($Player['AboutPersona'] ?? '') ?></textarea>
 					<div class="pn-md-preview" id="pn-design-about-persona-preview" style="display:none"></div>
@@ -2848,8 +2870,14 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<div class="pn-design-field">
 					<label>My Story</label>
 					<div class="pn-md-preview-toggle">
-						<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="story">Write</button>
-						<button class="pn-md-toggle-btn" data-target="preview" data-field="story">Preview</button>
+						<div class="pn-md-toggle-group">
+							<button class="pn-md-toggle-btn pn-active" data-target="edit" data-field="story">Write</button>
+							<button class="pn-md-toggle-btn" data-target="preview" data-field="story">Preview</button>
+						</div>
+						<div class="pn-md-quick-add">
+							<span class="pn-md-quick-add-label">Quick Add:</span>
+							<button type="button" class="pn-md-quick-btn" data-quickadd="signaturequote" data-target-field="story"><i class="fas fa-quote-left"></i> Signature Quote</button>
+						</div>
 					</div>
 					<textarea id="pn-design-about-story" placeholder="Ex. Feywild the Brewer has been traveling the realms looking for the Amulet of Fireballs. After his village was destroyed in a rock giant stampede..."><?= htmlspecialchars($Player['AboutStory'] ?? '') ?></textarea>
 					<div class="pn-md-preview" id="pn-design-about-story-preview" style="display:none"></div>
@@ -3363,6 +3391,15 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	document.querySelectorAll('.pn-design-tab').forEach(function(tab) {
 		tab.addEventListener('click', function() { pnSwitchDesignPanel(tab.dataset.panel); });
 	});
+
+	// About-tab edit pencil — open Design modal focused on the About panel
+	var aboutEditBtn = gid('pn-about-edit-btn');
+	if (aboutEditBtn) {
+		aboutEditBtn.addEventListener('click', function() {
+			window.pnOpenDesignModal();
+			pnSwitchDesignPanel('about');
+		});
+	}
 	// Welcome card jump links
 	document.querySelectorAll('.pn-welcome-card').forEach(function(card) {
 		card.addEventListener('click', function() {
@@ -3395,6 +3432,51 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 				textarea.style.display = '';
 				preview.style.display = 'none';
 			}
+		});
+	});
+
+	// Quick Add snippets
+	var PN_QUICK_SNIPPETS = {
+		findmelinks: {
+			position: 'bottom',
+			text: [
+				'Find me on... (edit the following, add or remove links using the same format, then remove this instruction!)',
+				'- [Facebook](https://www.facebook.com/YOURFBHANDLE)',
+				'- [Instagram](https://www.instagram.com/YOURIGHANDLE)',
+				'- [Amtwiki](https://wiki.amtgard.com/YOURPROFILENAME)',
+				'- [Threads](https://www.threads.net/@YOURTHREADSHANDLE)',
+				'- [Bluesky](https://bsky.app/profile/YOURBSKYHANDLE)'
+			].join('\n')
+		},
+		signaturequote: {
+			position: 'top',
+			text: '> "This is my signature quote which I am going to update before saving."\n> -- ' + (PnConfig.playerPersona || 'Your Persona')
+		}
+	};
+	document.querySelectorAll('.pn-md-quick-btn[data-quickadd]').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var key = btn.dataset.quickadd;
+			var field = btn.dataset.targetField;
+			var snippet = PN_QUICK_SNIPPETS[key];
+			var ta = gid('pn-design-about-' + field);
+			if (!ta || !snippet) return;
+			// Make sure we're on the Write tab so the user sees the insertion.
+			var writeBtn = document.querySelector('.pn-md-toggle-btn[data-field="' + field + '"][data-target="edit"]');
+			if (writeBtn && !writeBtn.classList.contains('pn-active')) writeBtn.click();
+			var existing = ta.value;
+			var cursor;
+			if (snippet.position === 'top') {
+				var suffix = existing.length === 0 ? '' : (existing.startsWith('\n\n') ? '' : (existing.startsWith('\n') ? '\n' : '\n\n'));
+				ta.value = snippet.text + suffix + existing;
+				cursor = snippet.text.length;
+			} else {
+				var separator = existing.length === 0 ? '' : (existing.endsWith('\n\n') ? '' : (existing.endsWith('\n') ? '\n' : '\n\n'));
+				ta.value = existing + separator + snippet.text;
+				cursor = ta.value.length;
+			}
+			ta.focus();
+			ta.setSelectionRange(cursor, cursor);
+			ta.dispatchEvent(new Event('input', { bubbles: true }));
 		});
 	});
 
