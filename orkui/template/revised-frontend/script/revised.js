@@ -9574,6 +9574,10 @@ function setupPronounPicker(cfg) {
         }
         var overlay = gid('pn-addnote-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
+        // Re-evaluate save button state after fields are populated
+        var title = (gid('pn-note-title') || {}).value || '';
+        var date  = (gid('pn-note-date')  || {}).value || '';
+        var sb = gid('pn-addnote-save'); if (sb) sb.disabled = !title.trim() || !date;
     };
 
     function pnCloseAddNoteModal() {
@@ -9587,6 +9591,14 @@ function setupPronounPicker(cfg) {
         $(document).on('click', '#pn-addnote-overlay', function(e) {
             if ($(e.target).is('#pn-addnote-overlay')) pnCloseAddNoteModal();
         });
+
+        // Enable save only when Title and Date are filled
+        function pnValidateNoteForm() {
+            var title = $.trim($('#pn-note-title').val());
+            var date  = $.trim($('#pn-note-date').val());
+            $('#pn-addnote-save').prop('disabled', !title || !date);
+        }
+        $(document).on('input change', '#pn-note-title, #pn-note-date', pnValidateNoteForm);
 
         // Open edit modal from edit button
         $(document).on('click', '.pn-note-edit-btn', function() {

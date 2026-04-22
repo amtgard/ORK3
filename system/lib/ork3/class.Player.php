@@ -847,13 +847,21 @@ class Player extends Ork3 {
 		$this->_ClearSuspensions();
 
 		if ($request['MundaneId'] == 1) {
-			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], null);
 			return InvalidParameter('No thanks. This has been logged.');
 		}
 
 		if (!isset($request['Suspended'])) {
 			return InvalidParameter('You must choose a suspension state: ' . print_r($request, 1));
 		}
+
+		$prior_suspension = [
+			'Suspended'            => (int)$this->mundane->suspended,
+			'SuspendedById'        => $this->mundane->suspended_by_id,
+			'SuspendedUntil'       => $this->mundane->suspended_until,
+			'Suspension'           => $this->mundane->suspension,
+			'SuspensionPropagates' => (int)$this->mundane->suspension_propagates,
+		];
 
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT)
@@ -862,7 +870,7 @@ class Player extends Ork3 {
 			if (!$request['Suspended']) {
 				$mid_safe = (int)$this->mundane->mundane_id;
 				$this->db->query("UPDATE " . DB_PREFIX . "mundane SET suspended = 0, suspended_by_id = NULL, suspended_at = NULL, suspended_until = NULL, suspension = NULL, suspension_propagates = 1 WHERE mundane_id = {$mid_safe}");
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], null);
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $prior_suspension);
 				return;
 			} else {
 				$this->mundane->suspended_by_id = $request['SuspendedById'];
@@ -872,7 +880,7 @@ class Player extends Ork3 {
 				$this->mundane->suspension_propagates = isset($request['SuspensionPropagates']) ? (int)(bool)$request['SuspensionPropagates'] : 1;
 			}
 			$this->mundane->save();
-			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $prior_suspension);
 		} else {
 			return NoAuthorization();
 		}
@@ -1675,10 +1683,20 @@ class Player extends Ork3 {
 			$mundane = $this->player_info($dues->mundane_id);
 			if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+				$prior_state = [
+					'dues_id'       => (int)$dues->dues_id,
+					'mundane_id'    => (int)$dues->mundane_id,
+					'kingdom_id'    => (int)$dues->kingdom_id,
+					'park_id'       => (int)$dues->park_id,
+					'dues_from'     => $dues->dues_from,
+					'dues_until'    => $dues->dues_until,
+					'dues_for_life' => (int)$dues->dues_for_life,
+				];
 				$dues->revoked = 1;
 				$dues->revoked_on = date('Y-m-d');
 				$dues->revoked_by = $mundane_id;
 				$dues->save();
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$dues->mundane_id, $prior_state);
 				return Success($dues->dues_id);
 			} else {
 				return NoAuthorization();

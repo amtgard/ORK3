@@ -19,6 +19,15 @@ class Dangeraudit extends Ork3 {
 		$this->audit->by_whom_id = $mundane_id;
 		$this->audit->modified_at = date('Y-m-d H:i:s');
 		$this->audit->save();
+		// Yapo does not reliably persist entity_id (int column with DEFAULT 0).
+		// Patch it directly after insert using the last-inserted PK.
+		$eid = (int)$entity_id;
+		if ($eid > 0) {
+			$pk = (int)$this->audit->{$this->audit->primarykey()};
+			if ($pk > 0) {
+				$this->db->Execute("UPDATE " . DB_PREFIX . "danger_audit SET entity_id = $eid WHERE danger_audit_id = $pk");
+			}
+		}
 	}
 	
 }

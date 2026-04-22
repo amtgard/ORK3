@@ -343,6 +343,17 @@ class Controller_PlayerAjax extends Controller {
 			}
 			echo json_encode($ranks);
 
+		} elseif ($action === 'info') {
+			global $DB;
+			$DB->Clear();
+			$rs = $DB->DataSet("SELECT mundane_id, persona FROM ork_mundane WHERE mundane_id = {$player_id} LIMIT 1");
+			if ($rs && $rs->Next()) {
+				echo json_encode(['status' => 0, 'MundaneId' => $player_id, 'Persona' => $rs->persona]);
+			} else {
+				echo json_encode(['status' => 1, 'error' => 'Player not found']);
+			}
+			exit;
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

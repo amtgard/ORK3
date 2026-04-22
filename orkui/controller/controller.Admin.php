@@ -2019,6 +2019,7 @@ class Controller_Admin extends Controller {
 		$rows = [];
 		if ($rs && $rs->Size() > 0) {
 			do {
+				if (empty($rs->method_call)) continue;
 				$rows[] = [
 					'Id'            => (int)$rs->danger_audit_id,
 					'MethodCall'    => $rs->method_call,

@@ -203,7 +203,17 @@ class Kingdom  extends Ork3 {
 			$this->kingdomaward->kingdom_id = $request['KingdomId'];
 			$this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
 			if ($this->kingdomaward->find()) {
+				$prior_state = [
+					'kingdomaward_id' => (int)$this->kingdomaward->kingdomaward_id,
+					'kingdom_id'      => (int)$this->kingdomaward->kingdom_id,
+					'name'            => $this->kingdomaward->name,
+					'award_id'        => (int)$this->kingdomaward->award_id,
+					'is_title'        => (int)$this->kingdomaward->is_title,
+					'reign_limit'     => (int)$this->kingdomaward->reign_limit,
+					'month_limit'     => (int)$this->kingdomaward->month_limit,
+				];
 				$this->kingdomaward->delete();
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Kingdom', (int)$request['KingdomId'], $prior_state);
 			}
 			return Success();
 		}

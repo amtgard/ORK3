@@ -41,6 +41,7 @@
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
 	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
 	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
+	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
@@ -2234,7 +2235,9 @@ pnRenderSparkline();
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
+<?php if ($canEditNotes): ?>
 <!-- Add Note Modal -->
 <div class="pn-overlay" id="pn-addnote-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
@@ -2265,7 +2268,7 @@ pnRenderSparkline();
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-addnote-cancel">Cancel</button>
-			<button class="pn-btn pn-btn-primary" id="pn-addnote-save"><i class="fas fa-save"></i> Add Note</button>
+			<button class="pn-btn pn-btn-primary" id="pn-addnote-save" disabled><i class="fas fa-save"></i> Add Note</button>
 		</div>
 	</div>
 </div>
