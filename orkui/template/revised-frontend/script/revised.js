@@ -6988,34 +6988,7 @@ $(document).ready(function() {
             if (data.status === 0 && data.attendance) {
                 evSaveCredits(form.querySelector('[name="Credits"]').value);
                 var att = data.attendance;
-                var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
-                var kingCell  = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
-                var parkCell  = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-                var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
-                    '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
-                    '<td>' + kingCell + '</td>' +
-                    '<td>' + parkCell + '</td>' +
-                    '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
-                    '<td class="ev-credits-cell">' + escHtml(att.Credits || '') + '</td>' +
-                    '<td class="ev-del-cell">' +
-                        '<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
-                        '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
-                    '</td>' +
-                '</tr>';
-
-                var tableBody = document.querySelector('#ev-attendance-table tbody');
-                if (tableBody) {
-                    tableBody.insertAdjacentHTML('beforeend', newRow);
-                } else {
-                    // Table doesn't exist yet — create it
-                    var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
-                    var tableHtml = '<table class="display" id="ev-attendance-table" style="width:100%">' +
-                        '<thead><tr><th>Player</th><th>Kingdom</th><th>Park</th><th>Class</th><th>Credits</th><th class="ev-del-cell"></th></tr></thead>' +
-                        '<tbody>' + newRow + '</tbody></table>';
-                    if (emptyMsg) { emptyMsg.outerHTML = tableHtml; }
-                }
-
-                // Mark RSVP check-in buttons as done, remove quick-checkin button
+                evAppendAttendanceRow(att);
                 evMarkCheckedIn(att.MundaneId);
 
                 form.reset();
