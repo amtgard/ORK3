@@ -84,6 +84,13 @@ class Park extends Ork3
 			$this->db->query( $sql );
       */
 			logtrace( "Parks Merged", null );
+			$from_kingdom_id = $this->GetParkKingdomId( $request[ 'FromParkId' ] );
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Park', (int)$request['FromParkId'], [
+				'from_park_id'    => (int)$request['FromParkId'],
+				'from_kingdom_id' => (int)$from_kingdom_id,
+				'to_park_id'      => (int)$request['ToParkId'],
+				'to_kingdom_id'   => (int)$to_kingdom_id,
+			]);
 			return Success();
 		}
 		logtrace( "Parks NOT Merged", null );
@@ -123,6 +130,11 @@ class Park extends Ork3
 						Ork3::$Lib->ghettocache->bust('Controller_Kingdom.park_averages_json', $_bust_key2);
 					}
 				}
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Park', (int)$request['ParkId'], [
+					'park_id'        => (int)$request['ParkId'],
+					'old_kingdom_id' => $old_kingdom_id,
+					'new_kingdom_id' => $new_kingdom_id,
+				]);
 				return Success();
 			} else {
 				return InvalidParameter( NULL, 'There was an issue accessing the park.' );
