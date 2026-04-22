@@ -1552,6 +1552,7 @@ var PkConfig = {
 						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="0" checked> No</label>
 						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="1"> Yes</label>
 					</div>
+					<small style="display:block;color:var(--ork-text-muted);margin-top:4px">Hides the player's real name from searches and public displays. Use for members who prefer their mundane identity kept private.</small>
 				</div>
 				<div class="plr-field">
 					<label>Waivered</label>

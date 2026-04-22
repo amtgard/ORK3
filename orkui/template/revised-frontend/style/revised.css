@@ -5319,6 +5319,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .plr-merge-summary ul { margin:6px 0 0; padding-left:18px; }
 .plr-merge-summary li { margin-bottom:4px; color:#4a5568; }
 
+html[data-theme="dark"] .plr-radio { color:var(--ork-text); }
 html[data-theme="dark"] .plr-gear-menu { background:var(--ork-card-bg); border-color:var(--ork-border); box-shadow:0 4px 12px rgba(0,0,0,0.4); }
 html[data-theme="dark"] .plr-gear-item { color:var(--ork-text); }
 html[data-theme="dark"] .plr-gear-item:hover { background:var(--ork-bg-tertiary); color:var(--ork-link-bright); }

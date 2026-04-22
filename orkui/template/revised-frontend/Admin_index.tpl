@@ -353,6 +353,7 @@ html[data-theme="dark"] .cp-modal-close { color: var(--ork-text-muted); }
 html[data-theme="dark"] .cp-modal-close:hover { color: var(--ork-text); }
 html[data-theme="dark"] .cp-modal-footer { background: var(--ork-bg-secondary); border-top-color: var(--ork-border); }
 html[data-theme="dark"] .cp-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .cp-radio-group label { color: var(--ork-text); }
 html[data-theme="dark"] .cp-field input[type=text], html[data-theme="dark"] .cp-field input[type=email],
 html[data-theme="dark"] .cp-field input[type=password], html[data-theme="dark"] .cp-field input[type=date],
 html[data-theme="dark"] .cp-field select, html[data-theme="dark"] .cp-field textarea {
@@ -415,6 +416,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 						<label><input type="radio" name="cp-cp-restricted" value="0" checked> No</label>
 						<label><input type="radio" name="cp-cp-restricted" value="1"> Yes</label>
 					</div>
+					<small style="display:block;color:var(--ork-text-muted);margin-top:4px">Hides the player's real name from searches and public displays. Use for members who prefer their mundane identity kept private.</small>
 				</div>
 				<div class="cp-field">
 					<label>Waivered</label>
