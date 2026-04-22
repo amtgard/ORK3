@@ -405,6 +405,7 @@ class Player extends Ork3 {
 				$response['Awards'][] = array(
 						'AwardsId' => $r->awards_id,
 						'AwardId' => $r->award_id,
+						'KingdomAwardId' => $r->kingdomaward_id,
 						'MundaneId' => $r->mundane_id,
 						'Rank' => $r->rank,
 						'Date' => $r->date,
