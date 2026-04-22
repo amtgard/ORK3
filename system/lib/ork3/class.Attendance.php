@@ -124,14 +124,20 @@ class Attendance  extends Ork3 {
 		$this->attendance->date_month = $_parts['date_month'];
 		$this->attendance->date_week3 = $_parts['date_week3'];
 		$this->attendance->date_week6 = $_parts['date_week6'];
+		logtrace("AddAttendance: pre-save", array('date' => $this->attendance->date, 'parts' => $_parts));
 
 		$attendance_id = $this->attendance->save();
 
-		logtrace("Attendance->AddAttendance()", array($this->attendance->lastSql(), $request, $detail));
+		logtrace("Attendance->AddAttendance() post-save", array(
+			'save_return'  => $attendance_id,
+			'att_id_prop'  => $this->attendance->attendance_id,
+			'last_sql'     => $this->attendance->lastSql(),
+		));
 
         if ($this->attendance->attendance_id) {
     		  return Success($this->attendance->attendance_id);
         }
+		logtrace("AddAttendance: falling through to InvalidParameter", array('att_id' => $this->attendance->attendance_id));
         return InvalidParameter();
 	}
 	
