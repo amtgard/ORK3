@@ -64,9 +64,14 @@ function _auditSummary($method, $params, $prior, $post) {
 		case 'Player::RemoveNote':
 			return 'Deleted note';
 		case 'Attendance::SetAttendance':
-			return 'Attendance record updated';
 		case 'Attendance::RemoveAttendance':
-			return 'Attendance record deleted';
+			$att = $b ?: $p;
+			$classNames = [1=>'Peasant',2=>'Warrior',3=>'Wizard',4=>'Archer',5=>'Bard',6=>'Healer',7=>'Monster',8=>'Druid',9=>'Assassin',10=>'Anti-Paladin'];
+			$cls  = $classNames[(int)($att['class_id'] ?? 0)] ?? '';
+			$date = $att['date'] ?? '';
+			$detail = array_filter([$date, $cls]);
+			$verb = ($method === 'Attendance::RemoveAttendance') ? 'Deleted' : 'Updated';
+			return $verb . ' attendance' . ($detail ? ': ' . implode(', ', $detail) : '');
 		default:
 			return '';
 	}
@@ -154,6 +159,25 @@ function _auditDetail($method, $params, $prior, $post) {
 		case 'Player::RemoveNote':
 			if (!empty($b['Note'])) return '<div class="al-note-text">' . nl2br(htmlspecialchars($b['Note'])) . '</div>';
 			return '<em style="color:#a0aec0">Note content not available.</em>';
+
+		case 'Attendance::RemoveAttendance':
+		case 'Attendance::SetAttendance':
+			$att = $b ?: $a ?: $p;
+			if (empty($att)) return '<em style="color:#a0aec0">No detail available.</em>';
+			$classNames = [1=>'Peasant',2=>'Warrior',3=>'Wizard',4=>'Archer',5=>'Bard',6=>'Healer',7=>'Monster',8=>'Druid',9=>'Assassin',10=>'Anti-Paladin'];
+			$className  = $classNames[(int)($att['class_id'] ?? 0)] ?? ('Class #' . (int)($att['class_id'] ?? 0));
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Attendance ID</td><td colspan="2">' . (int)($att['attendance_id'] ?? 0) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2"><a href="' . UIR . 'Player/profile/' . (int)($att['mundane_id'] ?? 0) . '" style="color:var(--rp-accent)">#' . (int)($att['mundane_id'] ?? 0) . ($att['persona'] ? ' — ' . htmlspecialchars($att['persona']) : '') . '</a></td></tr>';
+			$html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($att['date'] ?? '') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Class</td><td colspan="2">' . htmlspecialchars($className) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Credits</td><td colspan="2">' . htmlspecialchars($att['credits'] ?? '') . '</td></tr>';
+			if (!empty($att['park_id']))    $html .= '<tr><td class="al-diff-field">Park ID</td><td colspan="2">' . (int)$att['park_id'] . '</td></tr>';
+			if (!empty($att['event_id']))   $html .= '<tr><td class="al-diff-field">Event ID</td><td colspan="2">' . (int)$att['event_id'] . '</td></tr>';
+			if (!empty($att['note']))       $html .= '<tr><td class="al-diff-field">Note</td><td colspan="2">' . htmlspecialchars($att['note']) . '</td></tr>';
+			if (!empty($att['flavor']))     $html .= '<tr><td class="al-diff-field">Flavor</td><td colspan="2">' . htmlspecialchars($att['flavor']) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
 
 		default:
 			$out = [];
