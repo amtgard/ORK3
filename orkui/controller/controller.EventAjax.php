@@ -98,6 +98,7 @@ class Controller_EventAjax extends Controller {
 		if ($r['Status'] == 0) {
 			global $DB;
 			$aid = (int)$r['Detail'];
+			$DB->Clear();
 			$row = $DB->DataSet("SELECT a.attendance_id AS AttendanceId, a.mundane_id AS MundaneId, m.persona AS Persona, m.kingdom_id AS KingdomId, k.name AS KingdomName, k.abbreviation AS KAbbr, m.park_id AS ParkId, p.name AS ParkName, p.abbreviation AS PAbbr, c.name AS ClassName, a.credits AS Credits FROM ork_attendance a LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id LEFT JOIN ork_park p ON p.park_id = m.park_id LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id LEFT JOIN ork_class c ON c.class_id = a.class_id WHERE a.attendance_id = $aid");
 			if ($row && $row->Size() > 0 && $row->Next()) {
 				echo json_encode(['status' => 0, 'attendance' => [

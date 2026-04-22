@@ -6985,9 +6985,18 @@ $(document).ready(function() {
         })
         .then(function(response) { return response.json(); })
         .then(function(data) {
-            if (data.status === 0 && data.attendance) {
+            if (data.status === 0) {
                 evSaveCredits(form.querySelector('[name="Credits"]').value);
                 var att = data.attendance;
+                if (!att) {
+                    var _mid = form.querySelector('[name="MundaneId"]').value;
+                    evMarkCheckedIn(_mid);
+                    form.reset();
+                    var _cf = form.querySelector('[name="Credits"]');
+                    if (_cf) _cf.value = evGetSavedCredits();
+                    $('#ev-PlayerName').val(''); $('#ev-MundaneId').val('');
+                    return;
+                }
                 evAppendAttendanceRow(att);
                 evMarkCheckedIn(att.MundaneId);
 
