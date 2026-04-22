@@ -172,6 +172,7 @@ $_pages    = (int)$AuditPages;
 // Preserve filters in pagination links
 function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity) {
 	$q = http_build_query(array_filter([
+		'Route'      => 'Admin/auditlog',
 		'StartDate'  => $start,
 		'EndDate'    => $end,
 		'MethodCall' => $method,
@@ -179,7 +180,7 @@ function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity) {
 		'EntityId'   => $entity ?: '',
 		'Page'       => $page,
 	], function($v) { return $v !== '' && $v !== null; }));
-	return UIR . 'Admin/auditlog&' . $q;
+	return HTTP_UI_REMOTE . 'index.php?' . $q;
 }
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
@@ -308,7 +309,8 @@ html[data-theme="dark"] .al-table         { color:var(--ork-text); }
 		<div class="al-sidebar">
 			<div class="al-filter-card">
 				<h3><i class="fas fa-filter" style="margin-right:5px"></i>Filters</h3>
-				<form method="get" action="<?=UIR?>Admin/auditlog">
+				<form method="get" action="<?=HTTP_UI_REMOTE?>index.php">
+				<input type="hidden" name="Route" value="Admin/auditlog">
 					<div class="al-form-group">
 						<label>Start Date</label>
 						<input class="al-form-input" type="date" name="StartDate" value="<?=htmlspecialchars($StartDate)?>">
@@ -337,7 +339,7 @@ html[data-theme="dark"] .al-table         { color:var(--ork-text); }
 						<input class="al-form-input" type="number" name="EntityId" value="<?=(int)$EntityFilter ?: ''?>" placeholder="Mundane ID">
 					</div>
 					<button type="submit" class="al-btn-run">Run</button>
-					<a href="<?=UIR?>Admin/auditlog" class="al-btn-clear" style="display:block;text-align:center;text-decoration:none;margin-top:6px;padding:6px 0;border:1px solid var(--rp-border);border-radius:6px;font-size:12px;color:var(--rp-text-muted)">Clear Filters</a>
+					<a href="<?=UIR?>Admin/auditlog" class="al-btn-clear" style="display:block;text-align:center;text-decoration:none;margin-top:6px;padding:6px 0;border:1px solid var(--rp-border);border-radius:6px;font-size:12px;color:var(--rp-text-muted);box-sizing:border-box">Clear Filters</a>
 				</form>
 			</div>
 		</div>
