@@ -31,7 +31,8 @@ function _auditSummary($method, $params, $prior, $post) {
 				if (isset($p[$key]) && isset($b[$key]) && (string)$p[$key] !== (string)$b[$key])
 					$changed[] = $label;
 			}
-			return $changed ? 'Changed: ' . implode(', ', $changed) : 'Account updated';
+			if ($changed) return 'Changed: ' . implode(', ', $changed);
+			return empty($b) ? 'Account updated (prior state unavailable)' : 'Account updated';
 		case 'Player::AddAward':
 		case 'Player::GiveAward':
 			$name = $a['KingdomAwardName'] ?? $a['AwardName'] ?? ($p['KingdomAwardId'] ? 'award #' . $p['KingdomAwardId'] : '');
@@ -87,20 +88,29 @@ function _auditDetail($method, $params, $prior, $post) {
 				'CorporaQualified' => 'Corpora Qualified', 'ParkMemberSince' => 'Member Since',
 				'PronounId' => 'Pronoun',
 			];
+			$hasPrior = !empty($b);
 			$rows = '';
 			foreach ($watchFields as $key => $label) {
 				$old_val = isset($b[$key]) ? (string)$b[$key] : null;
 				$new_val = isset($p[$key]) ? (string)$p[$key] : null;
 				if ($new_val === null) continue;
-				$changed = $old_val !== null && $old_val !== $new_val;
+				// If we have prior state, only show fields that actually changed
+				if ($hasPrior && $old_val !== null && $old_val === $new_val) continue;
+				$changed = $hasPrior && $old_val !== null && $old_val !== $new_val;
 				$rows .= '<tr' . ($changed ? ' class="al-diff-changed"' : '') . '>'
 				       . '<td class="al-diff-field">' . htmlspecialchars($label) . '</td>'
 				       . '<td class="al-diff-old">'   . htmlspecialchars($old_val ?? '—') . '</td>'
 				       . '<td class="al-diff-new">'   . htmlspecialchars($new_val) . '</td>'
 				       . '</tr>';
 			}
-			if (!$rows) return '<em style="color:#a0aec0">No tracked fields changed, or prior state was truncated.</em>';
-			return '<table class="al-diff-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>' . $rows . '</tbody></table>';
+			$truncatedNotice = !$hasPrior
+				? '<tr><td colspan="3" style="padding:8px;font-size:11px;color:#c05621;background:#fffaf0;border-radius:4px">'
+				  . '<i class="fas fa-exclamation-triangle" style="margin-right:4px"></i>'
+				  . 'Prior state unavailable — this record predates the audit schema fix (2026-04-21). '
+				  . 'New values are shown but "Before" cannot be determined.</td></tr>'
+				: '';
+			if (!$rows && !$truncatedNotice) return '<em style="color:#a0aec0">No tracked fields changed.</em>';
+			return '<table class="al-diff-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>' . $truncatedNotice . $rows . '</tbody></table>';
 
 		case 'Player::AddAward':
 		case 'Player::GiveAward':
