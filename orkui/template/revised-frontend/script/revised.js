@@ -6598,6 +6598,12 @@ $(document).ready(function() {
             var pid = parseInt(EvConfig.parkId, 10) || 0;
             var base = EvConfig.uir + 'KingdomAjax/playersearch/' + kid;
             var q = '&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            // When an abbreviation prefix (e.g. "kcg: miller") is present, the server
+            // ignores scope/park_id and filters by abbreviation instead — use a single
+            // group so results aren't falsely labelled as "Park Members".
+            if (/^[a-z0-9]{2,3}:[a-z0-9*]{0,3}\s+\S/i.test(term)) {
+                return [ { label: 'Players', url: base + '&scope=all' + q } ];
+            }
             if (pid > 0 && kid > 0) {
                 return [
                     { label: 'Park Members',     url: base + '&scope=own&park_id=' + pid + q },
@@ -6652,6 +6658,8 @@ $(document).ready(function() {
                 evUpdateAddBtn();
                 var term = this.value.trim();
                 if (term.length < 2) {
+                    clearTimeout(evPnTimer);
+                    ++evPnSeq;
                     evPnResults.classList.remove('kn-ac-open');
                     return;
                 }
