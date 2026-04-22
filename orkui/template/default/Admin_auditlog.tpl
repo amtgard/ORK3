@@ -15,6 +15,59 @@ $_actionLabels = [
 	'Attendance::RemoveAttendance' => 'Attendance Removed',
 ];
 
+// ── Batch ID → Name lookups ──────────────────────────────────
+// Collect all IDs from the 50 rendered rows upfront, then resolve
+// in three IN queries so the page never issues per-row DB calls.
+global $DB;
+$_parkIds = []; $_kingdomIds = []; $_mundaneIds = []; $_eventIds = [];
+foreach ($AuditRows as $_lr) {
+	foreach ([$_lr['Parameters'], $_lr['PriorState'], $_lr['PostState']] as $_js) {
+		$_d = @json_decode($_js, true) ?: [];
+		foreach (['park_id','at_park_id','ParkId'] as $_k) if (!empty($_d[$_k])) $_parkIds[(int)$_d[$_k]] = true;
+		foreach (['kingdom_id','at_kingdom_id','KingdomId'] as $_k) if (!empty($_d[$_k])) $_kingdomIds[(int)$_d[$_k]] = true;
+		foreach (['mundane_id','given_by_id','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId'] as $_k) if (!empty($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
+		foreach (['event_id','at_event_id','EventId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_eventIds[(int)$_d[$_k]] = true;
+	}
+}
+$_parkMap = []; $_kingdomMap = []; $_mundaneMap = []; $_eventMap = [];
+if ($_parkIds) {
+	$_ids = implode(',', array_keys($_parkIds));
+	$DB->Clear(); $_r = $DB->DataSet("SELECT park_id, name FROM ork_park WHERE park_id IN ($_ids)");
+	if ($_r && $_r->Size() > 0) do { $_parkMap[(int)$_r->park_id] = $_r->name; } while ($_r->Next());
+}
+if ($_kingdomIds) {
+	$_ids = implode(',', array_keys($_kingdomIds));
+	$DB->Clear(); $_r = $DB->DataSet("SELECT kingdom_id, name FROM ork_kingdom WHERE kingdom_id IN ($_ids)");
+	if ($_r && $_r->Size() > 0) do { $_kingdomMap[(int)$_r->kingdom_id] = $_r->name; } while ($_r->Next());
+}
+if ($_mundaneIds) {
+	$_ids = implode(',', array_keys($_mundaneIds));
+	$DB->Clear(); $_r = $DB->DataSet("SELECT mundane_id, persona FROM ork_mundane WHERE mundane_id IN ($_ids)");
+	if ($_r && $_r->Size() > 0) do { $_mundaneMap[(int)$_r->mundane_id] = $_r->persona; } while ($_r->Next());
+}
+if ($_eventIds) {
+	$_ids = implode(',', array_keys($_eventIds));
+	$DB->Clear(); $_r = $DB->DataSet("SELECT event_id, name FROM ork_event WHERE event_id IN ($_ids)");
+	if ($_r && $_r->Size() > 0) do { $_eventMap[(int)$_r->event_id] = $_r->name; } while ($_r->Next());
+}
+$DB->Clear();
+
+// Helper: render an ID cell as "Name (link)" or plain "#id" fallback
+function _auditIdLink($type, $id, $nameMap) {
+	$id = (int)$id;
+	if (!$id) return '—';
+	$name = $nameMap[$id] ?? null;
+	switch ($type) {
+		case 'park':    $url = UIR . 'Park/profile/'    . $id; break;
+		case 'kingdom': $url = UIR . 'Kingdom/profile/' . $id; break;
+		case 'player':  $url = UIR . 'Player/profile/'  . $id; break;
+		case 'event':   $url = UIR . 'Event/view/'      . $id; break;
+		default:        return $name ? htmlspecialchars($name) . ' (#' . $id . ')' : '#' . $id;
+	}
+	$label = $name ? htmlspecialchars($name) . ' <span style="color:#a0aec0;font-size:11px">#' . $id . '</span>' : '#' . $id;
+	return '<a href="' . $url . '" style="color:var(--rp-accent)">' . $label . '</a>';
+}
+
 // Build a one-line summary from the action and stored JSON
 function _auditSummary($method, $params, $prior, $post) {
 	$p = @json_decode($params, true) ?: [];
@@ -78,7 +131,7 @@ function _auditSummary($method, $params, $prior, $post) {
 }
 
 // Build detailed diff / detail HTML for the expand panel
-function _auditDetail($method, $params, $prior, $post) {
+function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $mundaneMap, $eventMap) {
 	$p = @json_decode($params, true) ?: [];
 	$b = @json_decode($prior,  true) ?: [];
 	$a = @json_decode($post,   true) ?: [];
@@ -126,33 +179,50 @@ function _auditDetail($method, $params, $prior, $post) {
 			$state = $a ?: $b ?: $p;
 			$html  = '<table class="al-diff-table"><tbody>';
 			foreach (['KingdomAwardName' => 'Award', 'AwardName' => 'Canonical', 'Rank' => 'Rank',
-			          'Date' => 'Date', 'GivenByPersona' => 'Given By', 'Note' => 'Note',
-			          'CustomName' => 'Custom Name'] as $k => $lbl) {
-				if (!empty($state[$k]))
+			          'Date' => 'Date', 'Note' => 'Note', 'CustomName' => 'Custom Name'] as $k => $lbl) {
+				if (isset($state[$k]) && $state[$k] !== '' && $state[$k] !== null)
 					$html .= '<tr><td class="al-diff-field">' . $lbl . '</td><td colspan="2">' . htmlspecialchars($state[$k]) . '</td></tr>';
 			}
+			if (!empty($state['mundane_id']))
+				$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $state['mundane_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($state['given_by_id']))
+				$html .= '<tr><td class="al-diff-field">Given By</td><td colspan="2">' . _auditIdLink('player', $state['given_by_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($state['at_park_id']))
+				$html .= '<tr><td class="al-diff-field">At Park</td><td colspan="2">' . _auditIdLink('park', $state['at_park_id'], $parkMap) . '</td></tr>';
+			if (!empty($state['at_kingdom_id']))
+				$html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $state['at_kingdom_id'], $kingdomMap) . '</td></tr>';
+			if (!empty($state['at_event_id']))
+				$html .= '<tr><td class="al-diff-field">At Event</td><td colspan="2">' . _auditIdLink('event', $state['at_event_id'], $eventMap) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
 		case 'Player::MovePlayer':
 			$html = '<table class="al-diff-table"><tbody>';
-			if (!empty($b['ParkName'])) $html .= '<tr><td class="al-diff-field">From Park</td><td colspan="2">' . htmlspecialchars($b['ParkName']) . '</td></tr>';
-			if (!empty($p['ParkId']))   $html .= '<tr><td class="al-diff-field">To Park ID</td><td colspan="2">' . (int)$p['ParkId'] . '</td></tr>';
+			$fromPark = !empty($b['ParkId']) ? _auditIdLink('park', $b['ParkId'], $parkMap) : (!empty($b['ParkName']) ? htmlspecialchars($b['ParkName']) : '—');
+			$toPark   = !empty($p['ParkId']) ? _auditIdLink('park', $p['ParkId'], $parkMap) : '—';
+			$html .= '<tr><td class="al-diff-field">From Park</td><td colspan="2">' . $fromPark . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">To Park</td><td colspan="2">' . $toPark . '</td></tr>';
+			if (!empty($p['MundaneId']))
+				$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $p['MundaneId'], $mundaneMap) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
 		case 'Player::MergePlayer':
 			$html = '<table class="al-diff-table"><tbody>';
-			if (!empty($b['Persona'])) $html .= '<tr><td class="al-diff-field">Merged From</td><td colspan="2">' . htmlspecialchars($b['Persona']) . ' (#' . (int)($p['FromMundaneId'] ?? 0) . ')</td></tr>';
-			if (!empty($a['Persona'])) $html .= '<tr><td class="al-diff-field">Merged Into</td><td colspan="2">' . htmlspecialchars($a['Persona']) . ' (#' . (int)($p['ToMundaneId'] ?? 0) . ')</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Merged From</td><td colspan="2">' . _auditIdLink('player', $p['FromMundaneId'] ?? 0, $mundaneMap) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Merged Into</td><td colspan="2">' . _auditIdLink('player', $p['ToMundaneId'] ?? 0, $mundaneMap) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
 		case 'Player::SetPlayerSuspension':
 			$html = '<table class="al-diff-table"><tbody>';
+			if (!empty($p['MundaneId']))
+				$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $p['MundaneId'], $mundaneMap) . '</td></tr>';
 			foreach (['SuspendedUntil' => 'Until', 'Suspension' => 'Reason', 'SuspensionPropagates' => 'Propagates'] as $k => $lbl) {
-				if (isset($p[$k])) $html .= '<tr><td class="al-diff-field">' . $lbl . '</td><td colspan="2">' . htmlspecialchars($p[$k]) . '</td></tr>';
+				if (isset($p[$k]) && $p[$k] !== '') $html .= '<tr><td class="al-diff-field">' . $lbl . '</td><td colspan="2">' . htmlspecialchars($p[$k]) . '</td></tr>';
 			}
+			if (!empty($p['SuspendedById']))
+				$html .= '<tr><td class="al-diff-field">Suspended By</td><td colspan="2">' . _auditIdLink('player', $p['SuspendedById'], $mundaneMap) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
@@ -168,14 +238,15 @@ function _auditDetail($method, $params, $prior, $post) {
 			$className  = $classNames[(int)($att['class_id'] ?? 0)] ?? ('Class #' . (int)($att['class_id'] ?? 0));
 			$html = '<table class="al-diff-table"><tbody>';
 			$html .= '<tr><td class="al-diff-field">Attendance ID</td><td colspan="2">' . (int)($att['attendance_id'] ?? 0) . '</td></tr>';
-			$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2"><a href="' . UIR . 'Player/profile/' . (int)($att['mundane_id'] ?? 0) . '" style="color:var(--rp-accent)">#' . (int)($att['mundane_id'] ?? 0) . ($att['persona'] ? ' — ' . htmlspecialchars($att['persona']) : '') . '</a></td></tr>';
+			$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $att['mundane_id'] ?? 0, $mundaneMap) . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($att['date'] ?? '') . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">Class</td><td colspan="2">' . htmlspecialchars($className) . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">Credits</td><td colspan="2">' . htmlspecialchars($att['credits'] ?? '') . '</td></tr>';
-			if (!empty($att['park_id']))    $html .= '<tr><td class="al-diff-field">Park ID</td><td colspan="2">' . (int)$att['park_id'] . '</td></tr>';
-			if (!empty($att['event_id']))   $html .= '<tr><td class="al-diff-field">Event ID</td><td colspan="2">' . (int)$att['event_id'] . '</td></tr>';
-			if (!empty($att['note']))       $html .= '<tr><td class="al-diff-field">Note</td><td colspan="2">' . htmlspecialchars($att['note']) . '</td></tr>';
-			if (!empty($att['flavor']))     $html .= '<tr><td class="al-diff-field">Flavor</td><td colspan="2">' . htmlspecialchars($att['flavor']) . '</td></tr>';
+			if (!empty($att['park_id']))  $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $att['park_id'], $parkMap) . '</td></tr>';
+			if (!empty($att['kingdom_id'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $att['kingdom_id'], $kingdomMap) . '</td></tr>';
+			if (!empty($att['event_id'])) $html .= '<tr><td class="al-diff-field">Event</td><td colspan="2">' . _auditIdLink('event', $att['event_id'], $eventMap) . '</td></tr>';
+			if (!empty($att['note']))     $html .= '<tr><td class="al-diff-field">Note</td><td colspan="2">' . htmlspecialchars($att['note']) . '</td></tr>';
+			if (!empty($att['flavor']))   $html .= '<tr><td class="al-diff-field">Flavor</td><td colspan="2">' . htmlspecialchars($att['flavor']) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
@@ -446,7 +517,7 @@ html[data-theme="dark"] .al-table         { color:var(--ork-text); }
 					</tr>
 					<tr id="<?=$_detailId?>" style="display:none">
 						<td colspan="6">
-							<?=_auditDetail($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'])?>
+							<?=_auditDetail($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_parkMap, $_kingdomMap, $_mundaneMap, $_eventMap)?>
 						</td>
 					</tr>
 					<?php endforeach; ?>
