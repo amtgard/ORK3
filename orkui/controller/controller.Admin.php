@@ -1974,6 +1974,85 @@ class Controller_Admin extends Controller {
 		$this->data['Waivered'] = $waivered;
 	}
 
+	public function auditlog() {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			header('Location: ' . UIR . 'Admin'); exit;
+		}
+
+		$page     = max(1, (int)($this->request->Page ?? 1));
+		$per_page = 50;
+		$offset   = ($page - 1) * $per_page;
+
+		$start = isset($this->request->StartDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->StartDate)
+			? $this->request->StartDate : date('Y-m-d', strtotime('-7 days'));
+		$end   = isset($this->request->EndDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->EndDate)
+			? $this->request->EndDate : date('Y-m-d');
+
+		$method_filter = trim($this->request->MethodCall ?? '');
+		$bywhom_filter = (int)($this->request->ByWhomId ?? 0);
+		$entity_filter = (int)($this->request->EntityId ?? 0);
+
+		global $DB;
+		$where = "da.modified_at >= '" . mysql_real_escape_string($start) . " 00:00:00'"
+		       . " AND da.modified_at <= '" . mysql_real_escape_string($end) . " 23:59:59'";
+		if ($method_filter) $where .= " AND da.method_call = '" . mysql_real_escape_string($method_filter) . "'";
+		if ($bywhom_filter) $where .= " AND da.by_whom_id = {$bywhom_filter}";
+		if ($entity_filter) $where .= " AND da.entity_id  = {$entity_filter}";
+
+		$DB->Clear();
+		$cr = $DB->DataSet("SELECT COUNT(*) AS cnt FROM ork_danger_audit da WHERE {$where}");
+		$total = 0;
+		if ($cr && $cr->Next()) $total = (int)$cr->cnt;
+
+		$DB->Clear();
+		$rs = $DB->DataSet("
+			SELECT da.danger_audit_id, da.method_call, da.parameters,
+			       da.prior_state, da.post_state, da.entity, da.entity_id,
+			       da.by_whom_id, da.modified_at,
+			       m.persona AS by_whom_persona
+			FROM ork_danger_audit da
+			LEFT JOIN ork_mundane m ON m.mundane_id = da.by_whom_id
+			WHERE {$where}
+			ORDER BY da.modified_at DESC
+			LIMIT {$per_page} OFFSET {$offset}");
+		$rows = [];
+		if ($rs && $rs->Size() > 0) {
+			do {
+				$rows[] = [
+					'Id'            => (int)$rs->danger_audit_id,
+					'MethodCall'    => $rs->method_call,
+					'Parameters'    => $rs->parameters,
+					'PriorState'    => $rs->prior_state,
+					'PostState'     => $rs->post_state,
+					'Entity'        => $rs->entity,
+					'EntityId'      => (int)$rs->entity_id,
+					'ByWhomId'      => (int)$rs->by_whom_id,
+					'ByWhomPersona' => $rs->by_whom_persona,
+					'ModifiedAt'    => $rs->modified_at,
+				];
+			} while ($rs->Next());
+		}
+
+		$DB->Clear();
+		$mr = $DB->DataSet("SELECT DISTINCT method_call FROM ork_danger_audit ORDER BY method_call");
+		$methods = [];
+		if ($mr && $mr->Size() > 0) { do { $methods[] = $mr->method_call; } while ($mr->Next()); }
+
+		$this->data['AuditRows']    = $rows;
+		$this->data['AuditTotal']   = $total;
+		$this->data['AuditPage']    = $page;
+		$this->data['AuditPages']   = max(1, (int)ceil($total / $per_page));
+		$this->data['AuditPerPage'] = $per_page;
+		$this->data['AuditMethods'] = $methods;
+		$this->data['StartDate']    = $start;
+		$this->data['EndDate']      = $end;
+		$this->data['MethodFilter'] = $method_filter;
+		$this->data['ByWhomFilter'] = $bywhom_filter;
+		$this->data['EntityFilter'] = $entity_filter;
+		$this->data['page_title']   = 'Audit Log';
+	}
+
 	public function resetwaivers($params = null) {
 		$this->load_model('Player');
 		$params = explode('/', $params);
