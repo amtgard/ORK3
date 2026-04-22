@@ -2021,7 +2021,8 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			return '<span class="kn-officer-pill">' + knHtmlEsc(r.trim()) + '</span>';
 		}).join('');
 		var classSpan = p.lastClass ? '<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> ' + knHtmlEsc(p.lastClass) + '</span>' : '';
-		return '<a class="kn-player-card' + hbgClass + '"' + hbgAttr + ' href="' + uir + 'Player/profile/' + p.id + '">'
+		var mnAttr = p.mundaneName ? ' data-mundane-name="' + knHtmlEsc(p.mundaneName.toLowerCase()) + '"' : '';
+		return '<a class="kn-player-card' + hbgClass + '"' + hbgAttr + mnAttr + ' href="' + uir + 'Player/profile/' + p.id + '">'
 			+ '<div class="kn-player-card-top"><div class="kn-player-avatar">' + avatarHtml + '</div>'
 			+ '<div><div class="kn-player-name">' + knHtmlEsc(p.persona) + '</div>' + pills + '</div></div>'
 			+ '<div class="kn-player-stats">'
@@ -2034,7 +2035,8 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 		var pills = (p.officerRoles || '').split(', ').filter(Boolean).map(function(r) {
 			return '<span class="kn-officer-pill">' + knHtmlEsc(r.trim()) + '</span>';
 		}).join('');
-		return '<tr onclick=\'window.location.href="' + uir + 'Player/profile/' + p.id + '"\'>'
+		var mnAttr = p.mundaneName ? ' data-mundane-name="' + knHtmlEsc(p.mundaneName.toLowerCase()) + '"' : '';
+		return '<tr' + mnAttr + ' onclick=\'window.location.href="' + uir + 'Player/profile/' + p.id + '"\'>'
 			+ '<td>' + knHtmlEsc(p.persona) + pills + '</td>'
 			+ '<td>' + knHtmlEsc(p.parkName || '') + '</td>'
 			+ '<td data-sortval="' + p.signinCount + '">' + p.signinCount + '</td>'
@@ -2135,11 +2137,22 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			searchInput.addEventListener('input', function() {
 				var q = this.value.trim().toLowerCase();
 				var tbody = document.getElementById('kn-players-tbody');
-				if (!tbody) return;
-				tbody.querySelectorAll('tr').forEach(function(row) {
-					var name = row.cells[0] ? row.cells[0].textContent.toLowerCase() : '';
-					row.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
-				});
+				if (tbody) {
+					tbody.querySelectorAll('tr').forEach(function(row) {
+						var persona = row.cells[0] ? row.cells[0].textContent.toLowerCase() : '';
+						var mundane = (row.dataset.mundaneName || '').toLowerCase();
+						row.style.display = (!q || persona.indexOf(q) !== -1 || mundane.indexOf(q) !== -1) ? '' : 'none';
+					});
+				}
+				var cards = document.getElementById('kn-players-cards');
+				if (cards) {
+					cards.querySelectorAll('.kn-player-card').forEach(function(card) {
+						var persona = card.querySelector('.kn-player-name');
+						var pName = persona ? persona.textContent.toLowerCase() : '';
+						var mundane = (card.dataset.mundaneName || '').toLowerCase();
+						card.style.display = (!q || pName.indexOf(q) !== -1 || mundane.indexOf(q) !== -1) ? '' : 'none';
+					});
+				}
 			});
 		}
 	});

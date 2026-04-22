@@ -205,7 +205,9 @@ class Controller_Kingdom extends Controller {
 			exit();
 		}
 		global $DB;
-		$kpSql = "SELECT m.mundane_id, m.persona, m.has_image, m.has_heraldry,
+		$kpSql = "SELECT m.mundane_id, m.persona, m.has_image, m.has_heraldry, m.restricted,
+				COALESCE(m.given_name, '')               AS given_name,
+				COALESCE(m.surname, '')                  AS surname,
 				COALESCE(sub.last_signin, '1970-01-01') AS last_signin,
 				COALESCE(sub.signin_count, 0)           AS signin_count,
 				c.name                                  AS last_class,
@@ -238,9 +240,11 @@ class Controller_Kingdom extends Controller {
 				$hasHer  = (int)$r->has_heraldry > 0;
 				$herUrl  = $hasHer ? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, $midPad) : null;
 				$imgUrl  = $hasImg ? HTTP_PLAYER_IMAGE    . Common::resolve_image_ext(DIR_PLAYER_IMAGE,    $midPad) : ($hasHer ? $herUrl : null);
+				$mn = ((int)$r->restricted === 0) ? trim($r->given_name . ' ' . $r->surname) : '';
 				$players[] = [
 					'id'          => $mid,
 					'persona'     => $r->persona,
+					'mundaneName' => $mn,
 					'parkName'    => $r->park_name,
 					'signinCount' => (int)$r->signin_count,
 					'lastSignin'  => $r->last_signin,

@@ -104,9 +104,8 @@ class Controller_SearchAjax extends Controller {
 		$suspendedClause = $includeInactive ? '1' : 'm.suspended = 0';
 		$playerWhere = "{$suspendedClause} AND {$activeClause} AND LENGTH(m.persona) > 0
 			  AND (m.persona LIKE '%{$term}%'
-			    OR m.given_name LIKE '%{$term}%'
-			    OR m.surname LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%')";
+			    OR m.username LIKE '%{$term}%'
+			    OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%')))";
 		if ($filterPid > 0)           { $playerWhere .= " AND m.park_id = {$filterPid}"; }
 		elseif ($filterKid > 0)       { $playerWhere .= " AND m.kingdom_id = {$filterKid}"; }
 		$playerOrder = valid_id($pid)

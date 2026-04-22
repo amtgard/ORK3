@@ -153,6 +153,9 @@ class Controller_Park extends Controller
 				m.persona,
 				m.has_image,
 				m.has_heraldry,
+				m.restricted,
+				COALESCE(m.given_name, '') AS given_name,
+				COALESCE(m.surname, '')    AS surname,
 				sub.last_signin,
 				COUNT(DISTINCT a6.date) AS signin_count,
 				c.name AS last_class,
@@ -181,9 +184,11 @@ class Controller_Park extends Controller
 			$rosterResult = $DB->DataSet($rosterSql);
 			if ($rosterResult && $rosterResult->Size() > 0) {
 				do {
+					$mn = ((int)$rosterResult->restricted === 0) ? trim($rosterResult->given_name . ' ' . $rosterResult->surname) : '';
 					$parkPlayers[] = [
 						'MundaneId'    => (int)$rosterResult->mundane_id,
 						'Persona'      => $rosterResult->persona,
+						'MundaneName'  => $mn,
 						'HasImage'     => (int)$rosterResult->has_image > 0,
 						'HasHeraldry'  => (int)$rosterResult->has_heraldry > 0,
 						'SigninCount'  => (int)$rosterResult->signin_count,

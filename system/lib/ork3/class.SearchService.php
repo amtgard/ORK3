@@ -317,7 +317,7 @@ class SearchService extends Ork3 {
 				break;
 			case 'MUNDANE':
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) { return "(m.restricted = 0 AND (`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'))"; }, $searchtokens));
 				    $order = "order by m.active DESC, surname,given_name";
                     $opt[] = "(length(`surname`) > 0 or length(`given_name`) > 0)";
 				break;
@@ -330,8 +330,9 @@ class SearchService extends Ork3 {
 			default:
 				$zztop = $searchtokens[0] . '*';
 				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)
-				and (`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or `username` like '%" . mysql_real_escape_string($search) . "%'
-				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%')";
+				and (`username` like '%" . mysql_real_escape_string($search) . "%'
+				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%'
+				or (m.restricted = 0 AND (`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%')))";
 			break;
 		}
         if ($persona_required === true) {

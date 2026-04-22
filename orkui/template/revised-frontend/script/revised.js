@@ -5650,7 +5650,8 @@ $(document).ready(function() {
             $('.pk-period-block').show();
             $('.pk-player-card').each(function() {
                 var name = $(this).find('.pk-player-name').text().toLowerCase();
-                $(this).toggle(name.indexOf(q) !== -1);
+                var mundane = ($(this).data('mundane-name') || '').toLowerCase();
+                $(this).toggle(name.indexOf(q) !== -1 || mundane.indexOf(q) !== -1);
             });
             // Hide period blocks with no visible cards
             $('.pk-period-block').each(function() {
@@ -5661,7 +5662,8 @@ $(document).ready(function() {
         // Also filter list view rows
         $('#pk-players-table tbody tr').each(function() {
             var name = $(this).find('td:first').text().toLowerCase();
-            $(this).toggle(!q || name.indexOf(q) !== -1);
+            var mundane = ($(this).data('mundane-name') || '').toLowerCase();
+            $(this).toggle(!q || name.indexOf(q) !== -1 || mundane.indexOf(q) !== -1);
         });
     });
 

@@ -727,6 +727,7 @@
 							?>
 							<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
 							   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
+							   <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?>
 							   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
 								<div class="pk-player-card-top">
 									<div class="pk-player-avatar">
@@ -780,6 +781,7 @@
 								?>
 								<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
 								   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
+								   <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?>
 								   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
 									<div class="pk-player-card-top">
 										<div class="pk-player-avatar">
@@ -838,7 +840,7 @@
 							</thead>
 							<tbody>
 								<?php foreach ($playerPeriods[0] ?? [] as $p): ?>
-								<tr onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
+								<tr <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?> onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
 									<td>
 										<?= htmlspecialchars($p['Persona']) ?>
 										<?php if (!empty($p['OfficerRoles'])): ?>
