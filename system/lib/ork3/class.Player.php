@@ -929,8 +929,6 @@ class Player extends Ork3 {
 			if ($this->mundane->find()) {
 				error_log('ORK_DEBUG Updating player: ' . json_encode($request));
 
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
-
 				$this->mundane->modified = date('Y-m-d H:i:s', time());
 				$this->mundane->given_name = is_null($request['GivenName'])?$this->mundane->given_name:$request['GivenName'];
 				$this->mundane->surname = is_null($request['Surname'])?$this->mundane->surname:$request['Surname'];
@@ -996,6 +994,8 @@ class Player extends Ork3 {
 				}
 				logtrace("Player Updated", array($request, $this->mundane->lastSql()));
    				$this->mundane->save();
+				$post_player = $this->GetPlayer(['MundaneId' => $request['MundaneId']]);
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player'], $post_player['Player']);
 				return Success($notices);
 			} else {
 				error_log('ORK_DEBUG No Player found.: ' . json_encode(null));
@@ -1329,7 +1329,7 @@ class Player extends Ork3 {
 
 			$awards->save();
 
-			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['AwardsId'], $this->get_award($awards));
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['RecipientId'], $this->get_award($awards));
 
 			return Success('');
 		} else {
