@@ -55,10 +55,14 @@ class Controller
 			$_tok_check = $this->session->token;
 			$_rs = $DB->DataSet("SELECT token FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_uid_check} LIMIT 1");
 			if (!$_rs || !$_rs->Next() || $_rs->token !== $_tok_check) {
+				$_returnRoute = trim($_GET['Route'] ?? '');
 				unset($_SESSION['is_authorized_mundane_id']);
 				session_unset();
 				session_destroy();
-				header('Location: ' . UIR . 'Login/login&msg=session_replaced');
+				$_returnParam = (strlen($_returnRoute) > 0 && strncasecmp($_returnRoute, 'Login', 5) !== 0)
+					? '&return=' . urlencode($_returnRoute)
+					: '';
+				header('Location: ' . UIR . 'Login/login&msg=session_replaced' . $_returnParam);
 				exit;
 			}
 			$DB->Clear();

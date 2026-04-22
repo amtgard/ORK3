@@ -32,6 +32,12 @@ class Controller_Login extends Controller {
 		if (($_GET['msg'] ?? '') === 'session_replaced') {
 			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
 		}
+		if (!empty($_GET['return'])) {
+			$_ret = trim($_GET['return']);
+			if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
+				$this->session->location = $_ret;
+			}
+		}
 		if (strlen(trim($this->session->location)) == 0) {
 			$this->session->location = $location;
 		}
