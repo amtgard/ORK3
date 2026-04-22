@@ -26,6 +26,8 @@ foreach ($AuditRows as $_lr) {
 		foreach (['park_id','at_park_id','ParkId'] as $_k) if (!empty($_d[$_k])) $_parkIds[(int)$_d[$_k]] = true;
 		foreach (['kingdom_id','at_kingdom_id','KingdomId'] as $_k) if (!empty($_d[$_k])) $_kingdomIds[(int)$_d[$_k]] = true;
 		foreach (['mundane_id','given_by_id','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId'] as $_k) if (!empty($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
+	// entity_id is usually a mundane_id — collect it too
+	if (!empty($_lr['EntityId'])) $_mundaneIds[(int)$_lr['EntityId']] = true;
 		foreach (['event_id','at_event_id','EventId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_eventIds[(int)$_d[$_k]] = true;
 	}
 }
@@ -495,9 +497,10 @@ html[data-theme="dark"] .al-table         { color:var(--ork-text); }
 							<span class="al-action-badge <?=$_bc?>"><?=htmlspecialchars($_label)?></span>
 						</td>
 						<td>
-							<?php if ($_r['EntityId'] > 0): ?>
+							<?php if ($_r['EntityId'] > 0):
+								$_eName = $_mundaneMap[$_r['EntityId']] ?? null; ?>
 							<a href="<?=UIR?>Player/profile/<?=(int)$_r['EntityId']?>" style="color:var(--rp-accent)">
-								#<?=(int)$_r['EntityId']?>
+								<?= $_eName ? htmlspecialchars($_eName) : '#' . (int)$_r['EntityId'] ?>
 							</a>
 							<?php if (in_array($_mc, ['Player::AddAward', 'Player::GiveAward'])): ?>
 							<span class="al-entity-note">award ID (pre-fix)</span>
