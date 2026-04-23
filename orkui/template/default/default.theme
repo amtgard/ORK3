@@ -32,7 +32,7 @@
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap">
 		<style>
 		body.ork-dyslexia-font,
-		body.ork-dyslexia-font *:not(i):not([class*="fa-"]):not([class*="fas"]):not([class*="far"]):not([class*="fab"]) {
+		body.ork-dyslexia-font *:not(i):not([class*="fa-"]):not([class*="fas"]):not([class*="far"]):not([class*="fab"]):not(.ork-font-sample) {
 			font-family: 'Lexend', sans-serif !important;
 		}
 		</style>

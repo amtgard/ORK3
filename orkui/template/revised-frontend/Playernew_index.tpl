@@ -2904,7 +2904,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				</div>
 				<div class="pn-design-preview-label">Preview</div>
 				<div class="pn-hero-preview" id="pn-color-hero-preview">
-					<div class="pn-hero-preview-name"><?= htmlspecialchars($Player['Persona']) ?></div>
+					<div class="pn-hero-preview-name ork-font-sample"><?= htmlspecialchars($Player['Persona']) ?></div>
 					<div class="pn-hero-preview-sub">Your profile will look like this</div>
 				</div>
 				<div class="pn-design-preview-label" style="margin-top:14px">Presets</div>
@@ -3015,7 +3015,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						</div>
 					</div>
 				</div>
-				<div class="pn-name-constructed" id="pn-name-preview">
+				<div class="pn-name-constructed ork-font-sample" id="pn-name-preview">
 					<?php
 						$_npv = '';
 						if (!empty($Player['NamePrefix'])) $_npv .= htmlspecialchars($Player['NamePrefix']) . ' ';
@@ -3652,14 +3652,16 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var f = null;
 		for (var _i = 0; _i < PN_FONTS.length; _i++) { if (PN_FONTS[_i].key === key) { f = PN_FONTS[_i]; break; } }
 		if (!f) f = PN_FONTS[0];
-		// Viewer has Basic Fonts or Dyslexia Fonts enabled: keep everything in the inherited (site/Lexend) font.
-		var fam = (PnConfig.viewerBasicFonts || PnConfig.viewerDyslexiaFonts) ? 'inherit' : f.family;
+		// In-modal previews (.ork-font-sample) always show the chosen font so the
+		// designer can see what *other* viewers will experience. The actual hero
+		// honors the viewer's own basic/dyslexia accessibility preferences.
+		var heroFam = (PnConfig.viewerBasicFonts || PnConfig.viewerDyslexiaFonts) ? 'inherit' : f.family;
 		var preview = gid('pn-name-preview');
 		var heroPreview = document.querySelector('.pn-hero-preview-name');
 		var heroName = gid('pn-hero-persona');
-		if (preview) preview.style.fontFamily = fam;
-		if (heroPreview) heroPreview.style.fontFamily = fam;
-		if (heroName) heroName.style.fontFamily = fam;
+		if (preview) preview.style.fontFamily = f.family;
+		if (heroPreview) heroPreview.style.fontFamily = f.family;
+		if (heroName) heroName.style.fontFamily = heroFam;
 	}
 	function pnRenderFontPicker() {
 		var container = gid('pn-font-picker');
@@ -3670,7 +3672,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 			var _f = PN_FONTS[_j];
 			var _active = _f.key === pnSelectedFont;
 			html += '<div class="pn-font-card' + (_active ? ' pn-active' : '') + '" data-font-key="' + escHtml(_f.key) + '">';
-			html += '<div class="pn-font-card-sample" style="font-family:' + _f.family + '">' + escHtml(sample) + '</div>';
+			html += '<div class="pn-font-card-sample ork-font-sample" style="font-family:' + _f.family + '">' + escHtml(sample) + '</div>';
 			html += '<div class="pn-font-card-label">' + escHtml(_f.label) + '</div>';
 			html += '</div>';
 		}
