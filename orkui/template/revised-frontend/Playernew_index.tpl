@@ -667,33 +667,6 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-color-row{flex-direction:column;gap:8px}
 }
 
-/* Recommendation Seconds */
-.pn-rec-actions-cell{white-space:nowrap}
-.pn-rec-second-btn,.pn-rec-edit-reason-btn,.pn-rec-second-edit,.pn-rec-second-withdraw{position:relative;display:inline-flex;align-items:center;justify-content:center;height:24px;min-width:24px;padding:0 6px;border:1px solid #cbd5e0;border-radius:4px;background:#fff;color:#4a5568;font-size:11px;cursor:pointer;transition:all .12s;margin:0 2px}
-.pn-rec-second-btn:hover{border-color:#48bb78;color:#2f855a;background:#f0fff4}
-.pn-rec-edit-reason-btn:hover,.pn-rec-second-edit:hover{border-color:#4299e1;color:#2c5282;background:#ebf8ff}
-.pn-rec-second-withdraw:hover{border-color:#fc8181;color:#c53030;background:#fff5f5}
-.pn-rec-seconds-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;background:#c6f6d5;color:#22543d;font-size:11px;font-weight:700;margin-right:6px}
-.pn-rec-edit-reason-btn{height:20px;min-width:20px;padding:0 4px;font-size:10px;margin-left:6px;vertical-align:1px}
-.pn-rec-seconds{margin-top:8px;padding-top:8px;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:4px}
-.pn-rec-second{font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.pn-rec-second .pn-rec-second-supporter{font-weight:600;color:#2d3748}
-.pn-rec-second .pn-rec-second-notes{color:#718096;font-style:italic}
-.pn-rec-second .pn-rec-second-notes-empty{color:#a0aec0;font-style:italic;font-size:11px}
-/* Instant CSS-only tooltip for the seconds buttons */
-.pn-rec-actions-cell [data-tip]:hover::after,
-.pn-rec-second [data-tip]:hover::after,
-.pn-rec-edit-reason-btn[data-tip]:hover::after{
-  content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
-  background:#1a202c;color:#fff;padding:5px 9px;border-radius:4px;font-size:11px;font-weight:500;white-space:nowrap;
-  z-index:10000;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.25);max-width:260px;white-space:normal;text-align:center;width:max-content;
-}
-.pn-rec-actions-cell [data-tip]:hover::before,
-.pn-rec-second [data-tip]:hover::before,
-.pn-rec-edit-reason-btn[data-tip]:hover::before{
-  content:'';position:absolute;bottom:calc(100% + 1px);left:50%;transform:translateX(-50%);
-  border:5px solid transparent;border-top-color:#1a202c;z-index:10000;pointer-events:none;
-}
 
 /* ============================================================
    DARK MODE — About tab, Timeline, Design Modal (Welcome, Name,
@@ -810,20 +783,6 @@ html[data-theme="dark"] .pn-warn-banner i,
 html[data-theme="dark"] .pn-name-custom-warn i { color: #f6ad55; }
 html[data-theme="dark"] .pn-reconcile-banner > label { color: var(--ork-alert-warning-text, #fbd38d); }
 html[data-theme="dark"] .pn-reconcile-fields { border-top-color: var(--ork-alert-warning-border, #975a16); }
-/* Dark mode — Recommendation Seconds */
-html[data-theme="dark"] .pn-rec-second-btn,
-html[data-theme="dark"] .pn-rec-edit-reason-btn,
-html[data-theme="dark"] .pn-rec-second-edit,
-html[data-theme="dark"] .pn-rec-second-withdraw { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-rec-second-btn:hover { background: rgba(72,187,120,.15); border-color: #48bb78; color: #9ae6b4; }
-html[data-theme="dark"] .pn-rec-edit-reason-btn:hover,
-html[data-theme="dark"] .pn-rec-second-edit:hover { background: rgba(66,153,225,.15); border-color: #4299e1; color: #90cdf4; }
-html[data-theme="dark"] .pn-rec-second-withdraw:hover { background: rgba(252,129,129,.15); border-color: #fc8181; color: #feb2b2; }
-html[data-theme="dark"] .pn-rec-seconds-badge { background: rgba(72,187,120,.2); color: #9ae6b4; }
-html[data-theme="dark"] .pn-rec-seconds { border-top-color: var(--ork-border); }
-html[data-theme="dark"] .pn-rec-second { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-rec-second .pn-rec-second-supporter { color: var(--ork-text); }
-html[data-theme="dark"] .pn-rec-second .pn-rec-second-notes { color: var(--ork-text-muted); }
 
 html[data-theme="dark"] .pn-ms-custom-heading { color: var(--ork-text); }
 html[data-theme="dark"] .pn-ms-custom-wrap { border-top-color: var(--ork-border); }
@@ -3239,55 +3198,14 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <?php endif; ?>
 
 <?php if ($LoggedIn): ?>
-<!-- =============================================
-     Second Recommendation Modal (also used for Edit Notes)
-     ============================================= -->
-<div class="pn-overlay" id="pn-second-overlay">
-	<div class="pn-modal-box">
-		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-thumbs-up pn-modal-title-icon"></i><span id="pn-second-title">Second this Recommendation</span></h3>
-			<button class="pn-modal-close-btn" id="pn-second-close-btn" type="button">&times;</button>
-		</div>
-		<div class="pn-modal-body">
-			<div class="pn-form-error" id="pn-second-error" style="display:none"></div>
-			<p id="pn-second-context" style="margin:0 0 12px 0;color:#4a5568;font-size:13px"></p>
-			<div class="pn-rec-field">
-				<label for="pn-second-notes">Supporting Notes <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
-				<textarea id="pn-second-notes" maxlength="400" rows="4" placeholder="Add anything you'd like the awarding officer to know about why you support this recommendation." style="width:100%;resize:vertical;font-family:inherit;font-size:13px;padding:8px;border:1px solid #cbd5e0;border-radius:4px"></textarea>
-				<span class="pn-char-count" id="pn-second-char-count">400 characters remaining</span>
-			</div>
-		</div>
-		<div class="pn-modal-footer">
-			<button class="pn-btn pn-btn-secondary" id="pn-second-cancel" type="button">Cancel</button>
-			<button class="pn-btn pn-btn-primary" id="pn-second-submit" type="button"><i class="fas fa-paper-plane"></i> <span id="pn-second-submit-label">Add Second</span></button>
-		</div>
-	</div>
-</div>
-
-<!-- =============================================
-     Edit Recommendation Reason Modal (originator only)
-     ============================================= -->
-<div class="pn-overlay" id="pn-edit-reason-overlay">
-	<div class="pn-modal-box">
-		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-pen pn-modal-title-icon"></i>Edit Your Recommendation Reason</h3>
-			<button class="pn-modal-close-btn" id="pn-edit-reason-close-btn" type="button">&times;</button>
-		</div>
-		<div class="pn-modal-body">
-			<div class="pn-form-error" id="pn-edit-reason-error" style="display:none"></div>
-			<p id="pn-edit-reason-context" style="margin:0 0 12px 0;color:#4a5568;font-size:13px"></p>
-			<div class="pn-rec-field">
-				<label for="pn-edit-reason-text">Reason <span class="required-indicator">*</span></label>
-				<textarea id="pn-edit-reason-text" maxlength="400" rows="4" placeholder="Why should this player receive this award?" style="width:100%;resize:vertical;font-family:inherit;font-size:13px;padding:8px;border:1px solid #cbd5e0;border-radius:4px"></textarea>
-				<span class="pn-char-count" id="pn-edit-reason-char-count">400 characters remaining</span>
-			</div>
-		</div>
-		<div class="pn-modal-footer">
-			<button class="pn-btn pn-btn-secondary" id="pn-edit-reason-cancel" type="button">Cancel</button>
-			<button class="pn-btn pn-btn-primary" id="pn-edit-reason-submit" type="button"><i class="fas fa-save"></i> Save Changes</button>
-		</div>
-	</div>
-</div>
+<script>
+window.OrkRsCfg = {
+	uir:    '<?= UIR ?>',
+	userId: <?= (int)$this->__session->user_id ?>,
+	reload: function() { if (typeof window.pnReloadRecs === 'function') window.pnReloadRecs(); else location.reload(); }
+};
+</script>
+<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
 <?php endif; ?>
 
 <?php
@@ -4765,21 +4683,21 @@ $(function() {
 				// Reason cell — text + (optional) edit-pencil + seconds list
 				var reasonCell = esc(rec.Reason);
 				if (canEditReason) {
-					reasonCell += ' <button class="pn-rec-edit-reason-btn" data-rec="' + recId + '" data-reason="' + attr(rec.Reason) + '" data-award="' + attr(rec.AwardName) + '" data-tip="Edit your reason"><i class="fas fa-pen"></i></button>';
+					reasonCell += ' <button class="rs-edit-reason-btn" data-rec="' + recId + '" data-reason="' + attr(rec.Reason) + '" data-award="' + attr(rec.AwardName) + '" data-rstip="Edit your reason"><i class="fas fa-pen"></i></button>';
 				}
 				if (secCount > 0 && Array.isArray(rec.Seconds)) {
-					reasonCell += '<div class="pn-rec-seconds">';
+					reasonCell += '<div class="rs-seconds">';
 					rec.Seconds.forEach(function(s) {
-						var supLink = '<a class="pn-rec-second-supporter" href="' + PnConfig.uir + 'Player/profile/' + parseInt(s.SupporterMundaneId) + '">' + esc(s.SupporterName) + '</a>';
+						var supLink = '<a class="rs-supporter" href="' + PnConfig.uir + 'Player/profile/' + parseInt(s.SupporterMundaneId) + '">' + esc(s.SupporterName) + '</a>';
 						var notesPart = (s.Notes && s.Notes.length > 0)
-							? '<span class="pn-rec-second-notes">&mdash; "' + esc(s.Notes) + '"</span>'
-							: '<span class="pn-rec-second-notes-empty">&mdash; (no comment)</span>';
+							? '<span class="rs-notes">&mdash; "' + esc(s.Notes) + '"</span>'
+							: '<span class="rs-notes-empty">&mdash; (no comment)</span>';
 						var mineButtons = '';
 						if (s.IsMine) {
-							mineButtons = ' <button class="pn-rec-second-edit" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-notes="' + attr(s.Notes) + '" data-tip="Edit your notes"><i class="fas fa-pen"></i></button>'
-								+ '<button class="pn-rec-second-withdraw" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-tip="Withdraw your second"><i class="fas fa-times"></i></button>';
+							mineButtons = ' <button class="rs-second-edit" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-notes="' + attr(s.Notes) + '" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button>'
+								+ '<button class="rs-second-withdraw" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-rstip="Withdraw your second"><i class="fas fa-times"></i></button>';
 						}
-						reasonCell += '<div class="pn-rec-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i>' + supLink + notesPart + mineButtons + '</div>';
+						reasonCell += '<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i>' + supLink + notesPart + mineButtons + '</div>';
 					});
 					reasonCell += '</div>';
 				}
@@ -4793,10 +4711,10 @@ $(function() {
 				if (hasActions) {
 					var actions = '';
 					if (secCount > 0) {
-						actions += '<span class="pn-rec-seconds-badge" data-tip="' + secCount + ' supporting ' + (secCount === 1 ? 'second' : 'seconds') + '"><i class="fas fa-thumbs-up"></i>' + secCount + '</span>';
+						actions += '<span class="rs-seconds-badge" data-rstip="' + secCount + ' supporting ' + (secCount === 1 ? 'second' : 'seconds') + '"><i class="fas fa-thumbs-up"></i>' + secCount + '</span>';
 					}
 					if (canSecond) {
-						actions += '<button class="pn-rec-second-btn" data-rec="' + recId + '" data-award="' + attr(rec.AwardName) + '" data-recipient="' + attr(rec.Persona) + '" data-tip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>';
+						actions += '<button class="rs-action-btn" data-rec="' + recId + '" data-award="' + attr(rec.AwardName) + '" data-recipient="' + attr(rec.Persona) + '" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>';
 					}
 					if (PnConfig.canManageAwards && kaid > 0) {
 						var rd = JSON.stringify({KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||''});
@@ -4804,7 +4722,7 @@ $(function() {
 					}
 					var canDel = PnConfig.canDeleteRec || rec.RecommendedById == PnConfig.loggedInUserId || mid == PnConfig.loggedInUserId;
 					if (canDel) actions += '<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn" data-href="' + PnConfig.uir + 'Player/profile/' + mid + '/deleterecommendation/' + recId + '"><i class="fas fa-times"></i> Delete</button>';
-					html += '<td class="pk-rec-actions pn-rec-actions-cell">' + actions + '</td>';
+					html += '<td class="pk-rec-actions rs-tip-right" style="white-space:nowrap;text-align:right;width:1%">' + actions + '</td>';
 				}
 				html += '</tr>';
 			});
@@ -4819,186 +4737,8 @@ $(function() {
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load recommendations.</div>'; });
 	}
 
-	// Allow other handlers to force a recs reload (e.g., after seconding).
+	// Allow OrkRsCfg.reload (set above) to force a recs reload after seconds actions.
 	window.pnReloadRecs = function() { pnRecsLoaded = false; pnLoadRecs(); };
-
-	// ---- Recommendation Seconds: modal wiring ----
-	(function() {
-		if (!PnConfig.loggedInUserId) return;
-		var secOverlay = document.getElementById('pn-second-overlay');
-		var secNotes   = document.getElementById('pn-second-notes');
-		var secCount   = document.getElementById('pn-second-char-count');
-		var secErr     = document.getElementById('pn-second-error');
-		var secCtx     = document.getElementById('pn-second-context');
-		var secTitle   = document.getElementById('pn-second-title');
-		var secSubLbl  = document.getElementById('pn-second-submit-label');
-		var secMode    = { kind: 'add', recId: 0, secondId: 0 };
-
-		function openSecondModal(opts) {
-			if (!secOverlay) return;
-			secMode = opts;
-			secErr.style.display = 'none';
-			secNotes.value = opts.notes || '';
-			secCount.textContent = (400 - secNotes.value.length) + ' characters remaining';
-			if (opts.kind === 'add') {
-				secTitle.textContent = 'Second this Recommendation';
-				secSubLbl.textContent = 'Add Second';
-				secCtx.textContent = 'You\'re seconding the recommendation of ' + (opts.award || 'this award') + (opts.recipient ? ' for ' + opts.recipient : '') + '. Notes are optional but help the awarding officer.';
-			} else {
-				secTitle.textContent = 'Edit Your Notes';
-				secSubLbl.textContent = 'Save Changes';
-				secCtx.textContent = 'Update the notes attached to your second.';
-			}
-			secOverlay.classList.add('pn-open');
-			setTimeout(function() { secNotes.focus(); }, 50);
-		}
-		function closeSecondModal() { if (secOverlay) secOverlay.classList.remove('pn-open'); }
-
-		if (secNotes) {
-			secNotes.addEventListener('input', function() {
-				secCount.textContent = Math.max(0, 400 - secNotes.value.length) + ' characters remaining';
-			});
-		}
-		var secCloseBtn = document.getElementById('pn-second-close-btn');
-		if (secCloseBtn) secCloseBtn.addEventListener('click', closeSecondModal);
-		var secCancel = document.getElementById('pn-second-cancel');
-		if (secCancel) secCancel.addEventListener('click', closeSecondModal);
-		if (secOverlay) secOverlay.addEventListener('click', function(e) { if (e.target === secOverlay) closeSecondModal(); });
-
-		var secSubmit = document.getElementById('pn-second-submit');
-		if (secSubmit) secSubmit.addEventListener('click', function() {
-			var notes = secNotes.value || '';
-			var url, payload = { notes: notes };
-			if (secMode.kind === 'add') {
-				url = PnConfig.uir + 'PlayerAjax/add_second/' + parseInt(secMode.recId);
-			} else {
-				url = PnConfig.uir + 'PlayerAjax/edit_second_notes/' + parseInt(secMode.secondId);
-			}
-			secSubmit.disabled = true;
-			$.post(url, payload, function(r) {
-				secSubmit.disabled = false;
-				if (r.status === 0) {
-					closeSecondModal();
-					window.pnReloadRecs();
-				} else {
-					secErr.textContent = (r.error || 'Error') + (r.detail ? ': ' + r.detail : '');
-					secErr.style.display = 'block';
-				}
-			}, 'json').fail(function() {
-				secSubmit.disabled = false;
-				secErr.textContent = 'Network error — please try again.';
-				secErr.style.display = 'block';
-			});
-		});
-
-		// ---- Edit Reason modal wiring ----
-		var erOverlay  = document.getElementById('pn-edit-reason-overlay');
-		var erText     = document.getElementById('pn-edit-reason-text');
-		var erCount    = document.getElementById('pn-edit-reason-char-count');
-		var erErr      = document.getElementById('pn-edit-reason-error');
-		var erCtx      = document.getElementById('pn-edit-reason-context');
-		var erRecId    = 0;
-
-		function openEditReason(recId, currentReason, awardName) {
-			erRecId = recId;
-			erErr.style.display = 'none';
-			erText.value = currentReason || '';
-			erCount.textContent = Math.max(0, 400 - erText.value.length) + ' characters remaining';
-			erCtx.textContent = 'Editing your reason for ' + (awardName || 'this recommendation') + '.';
-			erOverlay.classList.add('pn-open');
-			setTimeout(function() { erText.focus(); }, 50);
-		}
-		function closeEditReason() { if (erOverlay) erOverlay.classList.remove('pn-open'); }
-
-		if (erText) {
-			erText.addEventListener('input', function() {
-				erCount.textContent = Math.max(0, 400 - erText.value.length) + ' characters remaining';
-			});
-		}
-		var erCloseBtn = document.getElementById('pn-edit-reason-close-btn');
-		if (erCloseBtn) erCloseBtn.addEventListener('click', closeEditReason);
-		var erCancel = document.getElementById('pn-edit-reason-cancel');
-		if (erCancel) erCancel.addEventListener('click', closeEditReason);
-		if (erOverlay) erOverlay.addEventListener('click', function(e) { if (e.target === erOverlay) closeEditReason(); });
-
-		var erSubmit = document.getElementById('pn-edit-reason-submit');
-		if (erSubmit) erSubmit.addEventListener('click', function() {
-			var reason = (erText.value || '').trim();
-			if (!reason.length) {
-				erErr.textContent = 'Reason cannot be empty.';
-				erErr.style.display = 'block';
-				return;
-			}
-			erSubmit.disabled = true;
-			$.post(PnConfig.uir + 'PlayerAjax/edit_recommendation_reason/' + parseInt(erRecId), { reason: reason }, function(r) {
-				erSubmit.disabled = false;
-				if (r.status === 0) {
-					closeEditReason();
-					window.pnReloadRecs();
-				} else {
-					erErr.textContent = (r.error || 'Error') + (r.detail ? ': ' + r.detail : '');
-					erErr.style.display = 'block';
-				}
-			}, 'json').fail(function() {
-				erSubmit.disabled = false;
-				erErr.textContent = 'Network error — please try again.';
-				erErr.style.display = 'block';
-			});
-		});
-
-		// ---- Delegated click handlers for the dynamically-rendered rec table ----
-		$(document).on('click', '.pn-rec-second-btn', function(e) {
-			e.preventDefault();
-			var btn = e.currentTarget;
-			openSecondModal({
-				kind: 'add',
-				recId: parseInt(btn.getAttribute('data-rec')) || 0,
-				award: btn.getAttribute('data-award') || '',
-				recipient: btn.getAttribute('data-recipient') || '',
-				notes: ''
-			});
-		});
-
-		$(document).on('click', '.pn-rec-second-edit', function(e) {
-			e.preventDefault();
-			var btn = e.currentTarget;
-			openSecondModal({
-				kind: 'edit',
-				secondId: parseInt(btn.getAttribute('data-sid')) || 0,
-				notes: btn.getAttribute('data-notes') || ''
-			});
-		});
-
-		$(document).on('click', '.pn-rec-second-withdraw', function(e) {
-			e.preventDefault();
-			var btn = e.currentTarget;
-			var sid = parseInt(btn.getAttribute('data-sid')) || 0;
-			if (!sid) return;
-			if (!confirm('Withdraw your second?')) return;
-			btn.disabled = true;
-			$.post(PnConfig.uir + 'PlayerAjax/withdraw_second/' + sid, {}, function(r) {
-				btn.disabled = false;
-				if (r.status === 0) {
-					window.pnReloadRecs();
-				} else {
-					alert((r.error || 'Error') + (r.detail ? ': ' + r.detail : ''));
-				}
-			}, 'json').fail(function() {
-				btn.disabled = false;
-				alert('Network error — please try again.');
-			});
-		});
-
-		$(document).on('click', '.pn-rec-edit-reason-btn', function(e) {
-			e.preventDefault();
-			var btn = e.currentTarget;
-			openEditReason(
-				parseInt(btn.getAttribute('data-rec')) || 0,
-				btn.getAttribute('data-reason') || '',
-				btn.getAttribute('data-award') || ''
-			);
-		});
-	})();
 
 	// Hook tab clicks to trigger lazy loading
 	$(document).on('click', '.pn-tab-nav li', function() {
