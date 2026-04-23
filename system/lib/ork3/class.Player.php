@@ -272,6 +272,11 @@ class Player extends Ork3 {
 			$this->pronoun->clear();
 			$this->pronoun->pronoun_id = $this->mundane->pronoun_id;
 			$this->pronoun->find();
+			// Paired design-preferences row (always present after the 2026-04-23 migration).
+			$design = new yapo($this->db, DB_PREFIX . 'mundane_design');
+			$design->clear();
+			$design->mundane_id = $this->mundane->mundane_id;
+			$design->find();
 			$subject = $this->pronoun->subject;
 			$pronoun_custom = $this->mundane->pronoun_custom;
 			$pronountext = isset($subject) ? $this->pronoun->subject . '[' . $this->pronoun->object . ']' : '';
@@ -318,25 +323,25 @@ class Player extends Ork3 {
 					'ParkMemberSince' => $this->mundane->park_member_since,
 					'IsNewPlayer' => $is_new_player,
 					'DuesPaidList' => $dues,
-					'AboutPersona' => $this->mundane->about_persona,
-					'AboutStory' => $this->mundane->about_story,
-					'ColorPrimary' => $this->mundane->color_primary,
-					'ColorAccent' => $this->mundane->color_accent,
-						'ColorSecondary' => $this->mundane->color_secondary,
-						'HeroOverlay' => $this->mundane->hero_overlay,
-					'NamePrefix' => $this->mundane->name_prefix,
-					'NameSuffix' => $this->mundane->name_suffix,
-						'SuffixComma' => (int)$this->mundane->suffix_comma,
-					'PhotoFocusX' => $this->mundane->photo_focus_x,
-					'PhotoFocusY' => $this->mundane->photo_focus_y,
-					'PhotoFocusSize' => $this->mundane->photo_focus_size,
-						'ShowBeltline' => (int)$this->mundane->show_beltline,
-						'PronunciationGuide' => $this->mundane->pronunciation_guide,
-						'ShowMundaneFirst' => (int)$this->mundane->show_mundane_first,
-						'ShowMundaneLast' => (int)$this->mundane->show_mundane_last,
-						'ShowEmail' => (int)$this->mundane->show_email,
-						'MilestoneConfig' => $this->mundane->milestone_config,
-						'NameFont' => $this->mundane->name_font,
+					'AboutPersona' => $design->about_persona,
+					'AboutStory' => $design->about_story,
+					'ColorPrimary' => $design->color_primary,
+					'ColorAccent' => $design->color_accent,
+						'ColorSecondary' => $design->color_secondary,
+						'HeroOverlay' => $design->hero_overlay,
+					'NamePrefix' => $design->name_prefix,
+					'NameSuffix' => $design->name_suffix,
+						'SuffixComma' => (int)$design->suffix_comma,
+					'PhotoFocusX' => $design->photo_focus_x,
+					'PhotoFocusY' => $design->photo_focus_y,
+					'PhotoFocusSize' => $design->photo_focus_size,
+						'ShowBeltline' => (int)$design->show_beltline,
+						'PronunciationGuide' => $design->pronunciation_guide,
+						'ShowMundaneFirst' => (int)$design->show_mundane_first,
+						'ShowMundaneLast' => (int)$design->show_mundane_last,
+						'ShowEmail' => (int)$design->show_email,
+						'MilestoneConfig' => $design->milestone_config,
+						'NameFont' => $design->name_font,
 						'BasicFonts' => (int)$this->mundane->basic_fonts,
 						'DyslexiaFonts' => (int)$this->mundane->dyslexia_fonts,
 				);
@@ -620,6 +625,12 @@ class Player extends Ork3 {
 				$this->mundane->save();
 				$new_mundane_id = (int)$this->mundane->mundane_id;
 
+				// Paired design-preferences row (one per mundane, all schema defaults at creation).
+				$design = new yapo($this->db, DB_PREFIX . 'mundane_design');
+				$design->clear();
+				$design->mundane_id = $new_mundane_id;
+				$design->save();
+
 				Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
 
 				if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
@@ -859,6 +870,9 @@ class Player extends Ork3 {
 			// idp_auth: delete FROM player's IDP link — TO player keeps their login
 			$sql = "DELETE FROM " . DB_PREFIX . "idp_auth WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
+			// mundane_design: TO player keeps its own design; drop the FROM player's orphaned row.
+			$sql = "DELETE FROM " . DB_PREFIX . "mundane_design WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
 			return Success();
 		} else {
 			return NoAuthorization();
@@ -1018,28 +1032,34 @@ class Player extends Ork3 {
 				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
 				$this->mundane->pronoun_custom = is_null($request['PronounCustom'])?$this->mundane->pronoun_custom:$request['PronounCustom'];
 
-				// Profile customization fields (own-profile only)
+				// Profile customization fields (own-profile only).
+				// Stored in ork_mundane_design (paired 1:1 row) since 2026-04-23.
+				$design = null;
 				if ($requester_id == $request['MundaneId']) {
-					$this->mundane->about_persona = is_null($request['AboutPersona'])?$this->mundane->about_persona:$request['AboutPersona'];
-					$this->mundane->about_story = is_null($request['AboutStory'])?$this->mundane->about_story:$request['AboutStory'];
-					$this->mundane->color_primary = is_null($request['ColorPrimary'])?$this->mundane->color_primary:$request['ColorPrimary'];
-					$this->mundane->color_accent = is_null($request['ColorAccent'])?$this->mundane->color_accent:$request['ColorAccent'];
-					$this->mundane->color_secondary = is_null($request['ColorSecondary'])?$this->mundane->color_secondary:$request['ColorSecondary'];
+					$design = new yapo($this->db, DB_PREFIX . 'mundane_design');
+					$design->clear();
+					$design->mundane_id = $this->mundane->mundane_id;
+					$design->find();
+					$design->about_persona = is_null($request['AboutPersona'])?$design->about_persona:$request['AboutPersona'];
+					$design->about_story = is_null($request['AboutStory'])?$design->about_story:$request['AboutStory'];
+					$design->color_primary = is_null($request['ColorPrimary'])?$design->color_primary:$request['ColorPrimary'];
+					$design->color_accent = is_null($request['ColorAccent'])?$design->color_accent:$request['ColorAccent'];
+					$design->color_secondary = is_null($request['ColorSecondary'])?$design->color_secondary:$request['ColorSecondary'];
 					$validOverlays = ['low','med','high'];
-					$this->mundane->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : $this->mundane->hero_overlay;
-					$this->mundane->name_prefix = is_null($request['NamePrefix'])?$this->mundane->name_prefix:$request['NamePrefix'];
-					$this->mundane->name_suffix = is_null($request['NameSuffix'])?$this->mundane->name_suffix:$request['NameSuffix'];
-					$this->mundane->suffix_comma = is_null($request['SuffixComma'])?$this->mundane->suffix_comma:(int)$request['SuffixComma'];
-					$this->mundane->photo_focus_x = is_null($request['PhotoFocusX'])?$this->mundane->photo_focus_x:(int)$request['PhotoFocusX'];
-					$this->mundane->photo_focus_y = is_null($request['PhotoFocusY'])?$this->mundane->photo_focus_y:(int)$request['PhotoFocusY'];
-					$this->mundane->photo_focus_size = is_null($request['PhotoFocusSize'])?$this->mundane->photo_focus_size:(int)$request['PhotoFocusSize'];
-					$this->mundane->show_beltline = is_null($request['ShowBeltline'])?$this->mundane->show_beltline:(int)$request['ShowBeltline'];
-					$this->mundane->pronunciation_guide = is_null($request['PronunciationGuide'])?$this->mundane->pronunciation_guide:$request['PronunciationGuide'];
-					$this->mundane->show_mundane_first = is_null($request['ShowMundaneFirst'])?$this->mundane->show_mundane_first:(int)$request['ShowMundaneFirst'];
-					$this->mundane->show_mundane_last = is_null($request['ShowMundaneLast'])?$this->mundane->show_mundane_last:(int)$request['ShowMundaneLast'];
-					$this->mundane->show_email = is_null($request['ShowEmail'])?$this->mundane->show_email:(int)$request['ShowEmail'];
-					$this->mundane->milestone_config = is_null($request['MilestoneConfig'])?$this->mundane->milestone_config:$request['MilestoneConfig'];
-						$this->mundane->name_font = is_null($request['NameFont'])?$this->mundane->name_font:$request['NameFont'];
+					$design->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : $design->hero_overlay;
+					$design->name_prefix = is_null($request['NamePrefix'])?$design->name_prefix:$request['NamePrefix'];
+					$design->name_suffix = is_null($request['NameSuffix'])?$design->name_suffix:$request['NameSuffix'];
+					$design->suffix_comma = is_null($request['SuffixComma'])?$design->suffix_comma:(int)$request['SuffixComma'];
+					$design->photo_focus_x = is_null($request['PhotoFocusX'])?$design->photo_focus_x:(int)$request['PhotoFocusX'];
+					$design->photo_focus_y = is_null($request['PhotoFocusY'])?$design->photo_focus_y:(int)$request['PhotoFocusY'];
+					$design->photo_focus_size = is_null($request['PhotoFocusSize'])?$design->photo_focus_size:(int)$request['PhotoFocusSize'];
+					$design->show_beltline = is_null($request['ShowBeltline'])?$design->show_beltline:(int)$request['ShowBeltline'];
+					$design->pronunciation_guide = is_null($request['PronunciationGuide'])?$design->pronunciation_guide:$request['PronunciationGuide'];
+					$design->show_mundane_first = is_null($request['ShowMundaneFirst'])?$design->show_mundane_first:(int)$request['ShowMundaneFirst'];
+					$design->show_mundane_last = is_null($request['ShowMundaneLast'])?$design->show_mundane_last:(int)$request['ShowMundaneLast'];
+					$design->show_email = is_null($request['ShowEmail'])?$design->show_email:(int)$request['ShowEmail'];
+					$design->milestone_config = is_null($request['MilestoneConfig'])?$design->milestone_config:$request['MilestoneConfig'];
+					$design->name_font = is_null($request['NameFont'])?$design->name_font:$request['NameFont'];
 				}
 
 				// reeve or corpora qual changes
@@ -1055,6 +1075,7 @@ class Player extends Ork3 {
 				$this->set_waiver($request);
 				$this->mundane->save();
 				$this->set_image($request);
+				if ($design !== null) { $design->save(); }
 				$this->mundane->save();
 				logtrace("Mundane DB 1", $this->mundane);
 				$this->mundane->email = is_null($request['Email'])?$this->mundane->email:$request['Email'];
