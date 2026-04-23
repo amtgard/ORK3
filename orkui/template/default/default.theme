@@ -95,10 +95,33 @@
 	html[data-theme="dark"] .information-table td { border-color: #4a5568; color: #cbd5e0; }
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
+	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
 		</style>
 </head>
 	<body>
+<?php
+// -----------------------------------------------------------------------
+// SCHEDULED MAINTENANCE NOTICE
+// Set start/end as UTC ISO strings. Leave $downtime_start empty to hide.
+// Example: 6am–9am EDT (UTC-4) on April 24th = 10:00–13:00 UTC
+$downtime_start = '2026-04-24T10:00:00Z';
+$downtime_end   = '2026-04-24T13:00:00Z';
+$downtime_note  = 'The ORK and ORK APIs may not be available during this window. It may not be this entire timeframe.';
+// -----------------------------------------------------------------------
+?>
 		<div id='theme_container'>
+<?php if (!empty($downtime_start)): ?>
+		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;text-align:center;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;" onclick="(function(){var d=document.getElementById('nm-mobile-detail');d.style.display=d.style.display==='none'?'block':'none';})()" >
+			<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
+			<div id="nm-mobile-detail" style="display:none;font-weight:400;font-size:0.78rem;padding-top:5px;border-top:1px solid rgba(255,255,255,0.3);margin-top:5px;">
+				<span class="nm-time"></span>
+<?php if (!empty($downtime_note)): ?>
+				<span style="display:block;margin-top:3px;opacity:0.9;"><?= htmlspecialchars($downtime_note) ?></span>
+<?php endif; ?>
+			</div>
+		</div>
+		<style>@media (max-width:767px){#nav-maintenance-mobile{display:block!important;}}</style>
+<?php endif; ?>
 
 <?php
 	echo $CONTROLLER_CONTENTS;
@@ -121,6 +144,41 @@
 		<?php else : ?>
 		<div id='navmenu'></div>
 		<?php endif; ?>
+
+		<!-- Centre: scheduled maintenance notice (desktop) -->
+<?php if (!empty($downtime_start)): ?>
+		<div id="nav-maintenance-wrap" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:0;z-index:10;">
+			<button id="nav-maintenance-btn" onclick="(function(){var p=document.getElementById('nav-maintenance-pop');p.style.display=p.style.display==='none'?'block':'none';})()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;color:#fcd34d;font-size:0.8rem;font-weight:600;padding:4px 8px;letter-spacing:0.02em;white-space:nowrap;" title="Scheduled maintenance details">
+				<i class="fas fa-tools"></i> Scheduled Maintenance <i class="fas fa-info-circle" style="font-size:0.75rem;opacity:0.85"></i>
+			</button>
+			<div id="nav-maintenance-pop" style="display:none;position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#fff;color:#1a202c;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:12px 16px;font-size:0.83rem;white-space:nowrap;z-index:100001;">
+				<strong style="display:block;margin-bottom:4px;color:#92400e;"><i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance</strong>
+				<span id="nav-maintenance-time"
+					data-start="<?= htmlspecialchars($downtime_start) ?>"
+					data-end="<?= htmlspecialchars($downtime_end) ?>">
+				</span>
+<?php if (!empty($downtime_note)): ?>
+				<span style="display:block;margin-top:4px;color:#4a5568;"><?= htmlspecialchars($downtime_note) ?></span>
+<?php endif; ?>
+			</div>
+		</div>
+		<style>@media (max-width:767px){#nav-maintenance-wrap{display:none!important;}}</style>
+		<script>
+		(function() {
+			var el = document.getElementById('nav-maintenance-time');
+			if (!el) return;
+			var fmt = new Intl.DateTimeFormat([], { weekday:'long', month:'long', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' });
+			var fmtTime = new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit', timeZoneName:'short' });
+			var start = new Date(el.dataset.start);
+			var end   = new Date(el.dataset.end);
+			var timeStr = fmt.format(start) + ' \u2013 ' + fmtTime.format(end);
+			el.textContent = timeStr;
+			// Mobile bar
+			var bar = document.getElementById('nav-maintenance-mobile');
+			if (bar) bar.querySelector('.nm-time').textContent = timeStr;
+		})();
+		</script>
+<?php endif; ?>
 
 		<!-- Right: controls -->
 		<div id='controls'>
@@ -264,6 +322,11 @@
 				var wrap = document.getElementById(id);
 				if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
 			});
+			var mwrap = document.getElementById('nav-maintenance-wrap');
+			if (mwrap && !mwrap.contains(e.target)) {
+				var pop = document.getElementById('nav-maintenance-pop');
+				if (pop) pop.style.display = 'none';
+			}
 		});
 
 		// ---- Universal search ----
