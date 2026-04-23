@@ -3033,7 +3033,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				</div>
 				<div class="pn-design-field" style="margin-top:16px">
 					<label>Name Font</label>
-					<div class="pn-design-hint" style="margin-bottom:8px">Choose a decorative font for your persona name in the hero header.</div>
+					<div class="pn-design-hint" style="margin-bottom:8px">Choose a decorative font for your persona name in the hero header. If a user has simple or reading-friendly fonts enabled, this custom font will not be shown.</div>
 					<div class="pn-font-picker" id="pn-font-picker"></div>
 				</div>
 				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
