@@ -2,14 +2,38 @@
 
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
-define('WHATS_NEW_VERSION', '2026-04-18');
+define('WHATS_NEW_VERSION', '2026-04-22');
 
 // Application version — shown in the site footer. Change this if you change the above date.
-define('ORK_VERSION', '3.5.1 Owl');
+define('ORK_VERSION', '3.5.2 Falcon');
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+	['version' => '3.5.2 Falcon', 'date' => '2026-04-22', 'items' => [
+		['icon' => 'fas fa-thumbs-up', 'title' => 'Second a Recommendation', 'body' => 'See an award recommendation you agree with? Hit the new + button to add your support — optionally with a few words on why. Officers reviewing recommendations now see who else stands behind each one.'],
+		['icon' => 'fas fa-pen', 'title' => 'Edit Your Reason After Submitting', 'body' => 'Already filed a recommendation but learned something new about the recipient? You can now edit your own reason text from your Player profile, your Park profile, or your Kingdom profile — wherever you spotted the rec.'],
+		['icon' => 'fas fa-paint-roller', 'title' => 'Design My Profile — Now Way More', 'body' => 'The profile customizer added an About tab (markdown bio), color presets with hero gradients, a flexible name builder with comma toggle and noble-title support, beltline visibility, and pronunciation guides. Make your profile look like yours.'],
+		['icon' => 'fas fa-medal', 'title' => 'Custom Title Aliases', 'body' => 'Your Custom Award can now be tagged as the peerage equivalent of a Knighthood, Squire, Page, or other title — so it counts toward beltlines and rosters the way it should.'],
+		['icon' => 'fas fa-stream', 'title' => 'My Milestones Timeline', 'body' => 'Add personal milestones — knightings, first wins, retirements, anything worth remembering — to a new timeline on your profile\'s About tab.'],
+		['icon' => 'fas fa-bolt', 'title' => 'Snappier Player Profiles', 'body' => 'Profile pages now lazy-load attendance, notes, dues history, recommendations, and voting eligibility — the page paints fast and the heavier sections fill in as you click their tabs.'],
+		['icon' => 'fas fa-magic', 'title' => 'And Quality of Life Updates', 'body' => 'Plenty of smaller polish items, performance improvements, and bug fixes throughout — see the release notes for the full list.'],
+
+		// ----- Notes-only items (Release Notes page; not surfaced in the modal) -----
+		['icon' => 'fas fa-feather', 'title' => 'Quick Add Snippets + About-tab Edit Pencil', 'notes_only' => true, 'body' => 'Drop pre-built sections into your About bio with one click, and jump straight to editing from a pencil icon on the About tab itself.'],
+		['icon' => 'fas fa-font', 'title' => 'Basic & Dyslexia-Friendly Fonts', 'notes_only' => true, 'body' => 'New viewer preferences let you enforce basic fonts site-wide for legibility, or switch to Lexend — a typeface designed to improve reading proficiency for people with dyslexia.'],
+		['icon' => 'fas fa-microphone', 'title' => 'Pronunciation Guide + Persona Privacy', 'notes_only' => true, 'body' => 'Tell the world how to say your persona name, and choose who can see your real name and email — defaults match the existing privacy posture (always visible to monarchy and admins).'],
+		['icon' => 'fas fa-square-full', 'title' => 'Hero & Heraldry Overlay Controls', 'notes_only' => true, 'body' => 'Tune the gradient overlay strength on your hero banner and the heraldry frame — fine-grained control over how your profile reads at a glance.'],
+		['icon' => 'fas fa-i-cursor', 'title' => 'Smarter Name Builder', 'notes_only' => true, 'body' => 'The name builder now includes noble titles and Master/Paragon in the dropdown, supports a comma between core name and suffix, and warns you when you pick a title you may not be entitled to (with a softer yield-triangle treatment than before).'],
+		['icon' => 'fas fa-eye', 'title' => 'About-tab Visibility Banner', 'notes_only' => true, 'body' => 'A banner at the top of the About design tab makes it obvious whether what you\'re writing is private, restricted, or visible to everyone.'],
+		['icon' => 'fas fa-handshake-slash', 'title' => 'Notes Tab — Visibility & Self-Service Close-out', 'notes_only' => true, 'body' => 'Player Notes are now restricted to those who should see them, with an in-context infobox and the ability to close out your own follow-ups without bothering an officer.'],
+		['icon' => 'fas fa-history', 'title' => 'Reactivate Revoked Awards & Titles', 'notes_only' => true, 'body' => 'Revoked an award or title in error? You can now bring it back without re-creating the record from scratch.'],
+		['icon' => 'fas fa-search', 'title' => 'Mundane Name Search on Players Tab', 'notes_only' => true, 'body' => 'Search your kingdom\'s Players tab by mundane name — with the same restricted-flag honoring as the rest of the system.'],
+		['icon' => 'fab fa-discord', 'title' => 'Discord Link in Resources', 'notes_only' => true, 'body' => 'Logged-in users now get a quick link to the Amtgard ORK Discord under the Resources dropdown.'],
+		['icon' => 'fas fa-map-marker-alt', 'title' => 'Park Abbreviation in Events to Check Out', 'notes_only' => true, 'body' => 'The "Events to Check Out" widget now shows park abbreviations so you can tell at a glance which kingdom each event is in.'],
+		['icon' => 'fas fa-sign-in-alt', 'title' => 'Login Preserves Where You Were Going', 'notes_only' => true, 'body' => 'Get bumped to the login screen by a stale session? After signing in you\'ll land on the page you were trying to reach, not the dashboard.'],
+		['icon' => 'fas fa-bug', 'title' => 'Bug Fixes', 'notes_only' => true, 'body' => 'Custom Award → Custom Title reclassify now rewrites the kingdomaward_id correctly. Missing "aka" subtitle spans on Awards and Titles rows are restored. The event attendance table now initializes DataTables on first add. AwardsForPlayer responses include KingdomAwardId. Event attendance search no longer returns stale results or mislabels grouping. Event description headings and sidebar cards render correctly in dark mode. Event detail pages display the website link again. The dark-mode override no longer stomps your custom --pn-accent. The About section loads marked.js and DOMPurify in the correct order.'],
+	]],
 	['version' => '3.5.1 Owl', 'date' => '2026-04-18', 'items' => [
 		['icon' => 'fas fa-moon', 'title' => 'Dark Mode', 'body' => 'The ORK now supports dark mode! The theme toggle has three modes — click to cycle: Auto (half-circle icon — follows your OS setting) → Dark (moon) → Light (sun). Your preference is saved automatically.'],
 		['icon' => 'fas fa-desktop', 'title' => 'Follows Your System', 'body' => 'If you leave the theme set to automatic, the ORK will follow your device\'s light or dark preference and update instantly when it changes.'],
