@@ -620,6 +620,7 @@ class Controller_PlayerAjax extends Controller {
 		$recs = $this->Reports->recommended_awards([
 			'PlayerId' => $mundane_id, 'KingdomId' => 0, 'ParkId' => 0,
 			'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0,
+			'RequestedBy' => (int)$this->session->user_id,
 		]);
 		echo json_encode(['status' => 0, 'recs' => is_array($recs) ? $recs : []]);
 		exit;
@@ -646,6 +647,70 @@ class Controller_PlayerAjax extends Controller {
 		$DB->email = $email;
 		$DB->Execute("UPDATE ork_mundane SET email = :email WHERE mundane_id = $mundane_id");
 		echo json_encode(['status' => 0]);
+		exit;
+	}
+
+	// ---- Recommendation seconds ----
+
+	public function add_second($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+		$rec_id = (int)($p ?? 0);
+		if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation']); exit; }
+		$notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
+		$this->load_model('Player');
+		$r = $this->Player->AddSecondToRecommendation([
+			'Token' => $this->session->token,
+			'RecommendationsId' => $rec_id,
+			'Notes' => $notes,
+		]);
+		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
+		exit;
+	}
+
+	public function edit_second_notes($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+		$sid = (int)($p ?? 0);
+		if (!valid_id($sid)) { echo json_encode(['status' => 1, 'error' => 'Invalid second']); exit; }
+		$notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
+		$this->load_model('Player');
+		$r = $this->Player->EditSecondNotes([
+			'Token' => $this->session->token,
+			'RecommendationSecondsId' => $sid,
+			'Notes' => $notes,
+		]);
+		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
+		exit;
+	}
+
+	public function withdraw_second($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+		$sid = (int)($p ?? 0);
+		if (!valid_id($sid)) { echo json_encode(['status' => 1, 'error' => 'Invalid second']); exit; }
+		$this->load_model('Player');
+		$r = $this->Player->WithdrawSecond([
+			'Token' => $this->session->token,
+			'RecommendationSecondsId' => $sid,
+		]);
+		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
+		exit;
+	}
+
+	public function edit_recommendation_reason($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+		$rec_id = (int)($p ?? 0);
+		if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation']); exit; }
+		$reason = isset($_POST['reason']) ? (string)$_POST['reason'] : '';
+		$this->load_model('Player');
+		$r = $this->Player->EditAwardRecommendationReason([
+			'Token' => $this->session->token,
+			'RecommendationsId' => $rec_id,
+			'Reason' => $reason,
+		]);
+		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
 		exit;
 	}
 }

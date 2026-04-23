@@ -452,6 +452,7 @@ class Report  extends Ork3 {
 			recs.recommendations_id,
 			recs.award_id,
 			recs.reason,
+			recs.mask_giver,
 			recs.deleted_at,
 			recs.deleted_by,
 			ka.award_id as ka_award_id,
@@ -477,11 +478,22 @@ class Report  extends Ork3 {
 			order by m.persona, a.name, recs.rank, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
+		$viewer_id = isset($request['RequestedBy']) ? (int)$request['RequestedBy'] : 0;
 		if ($r !== false && $r->size() > 0) {
 			$response['AwardRecommendations'] = array();
+			$rec_ids = array();
+			$rec_meta_by_id = array();  // for ViewerCanSecond eligibility check
 			while ($r->next()) {
+				$rid = (int)$r->recommendations_id;
+				$rec_ids[] = $rid;
+				$rec_meta_by_id[$rid] = array(
+					'mundane_id' => (int)$r->mundane_id,
+					'recommended_by_id' => (int)$r->recommended_by_id,
+					'kingdomaward_id' => (int)$r->ka_kaward_id,
+					'rank' => (int)$r->rank,
+				);
 				$response['AwardRecommendations'][] = array(
-						'RecommendationsId' => $r->recommendations_id,
+						'RecommendationsId' => $rid,
 						'MundaneId' => $r->mundane_id,
 						'Persona' => $r->persona,
 						'DateRecommended' => $r->date_recommended,
@@ -490,6 +502,7 @@ class Report  extends Ork3 {
 						'Reason' => $r->reason,
 						'RecommendedByName' => $r->recommended_by_persona,
 						'RecommendedById' => $r->recommended_by_id,
+						'MaskGiver' => (int)$r->mask_giver,
 						'KingdomAwardId' => (int)$r->ka_kaward_id,
 						'ParkId' => $r->park_id,
 						'KingdomId' => $r->kingdom_id,
@@ -502,8 +515,74 @@ class Report  extends Ork3 {
 							: ($r->kacount > 0 || $r->awcount > 0),
 						'CurrentRank' => ($r->kacount > 0 || $r->awcount > 0) ? (int)$r->player_ka_rank : null,
 						'CurrentRankDate' => ($r->kacount > 0 || $r->awcount > 0) ? $r->player_ka_date : null,
+						'Seconds' => array(),
+						'SecondsCount' => 0,
+						'ViewerCanSecond' => false,
+						'ViewerCanEditReason' => false,
 					);
 			}
+
+			// Batch-fetch all active seconds for these recommendations.
+			$seconds_by_rec = Ork3::$Lib->player->GetSecondsForRecommendations($rec_ids, $viewer_id);
+
+			// Pre-compute the viewer's own active primary recs over (mundane_id, kingdomaward_id, rank)
+			// so ViewerCanSecond can be evaluated without N extra queries.
+			$viewer_own_keys = array();
+			if ($viewer_id > 0 && count($rec_ids) > 0) {
+				$rid_list = implode(',', array_map('intval', $rec_ids));
+				$this->db->Clear();
+				$ownSql = "SELECT DISTINCT CONCAT(r2.mundane_id, '|', r2.kingdomaward_id, '|', COALESCE(r2.rank, 0)) AS k
+					FROM " . DB_PREFIX . "recommendations r2
+					WHERE r2.recommended_by_id = $viewer_id
+					  AND (r2.deleted_at IS NULL)
+					  AND (r2.mundane_id, r2.kingdomaward_id, COALESCE(r2.rank, 0)) IN (
+						  SELECT r3.mundane_id, r3.kingdomaward_id, COALESCE(r3.rank, 0)
+						  FROM " . DB_PREFIX . "recommendations r3
+						  WHERE r3.recommendations_id IN ($rid_list)
+					  )";
+				$or = $this->db->query($ownSql);
+				if ($or !== false && $or->size() > 0) {
+					while ($or->next()) {
+						$viewer_own_keys[$or->k] = true;
+					}
+				}
+			}
+
+			// Pre-compute which recs the viewer has already seconded (active).
+			$viewer_seconded = array();
+			if ($viewer_id > 0 && count($rec_ids) > 0) {
+				$rid_list = implode(',', array_map('intval', $rec_ids));
+				$this->db->Clear();
+				$sSql = "SELECT recommendations_id FROM " . DB_PREFIX . "recommendation_seconds
+					WHERE supporter_mundane_id = $viewer_id
+					  AND deleted_at IS NULL
+					  AND recommendations_id IN ($rid_list)";
+				$sr = $this->db->query($sSql);
+				if ($sr !== false && $sr->size() > 0) {
+					while ($sr->next()) {
+						$viewer_seconded[(int)$sr->recommendations_id] = true;
+					}
+				}
+			}
+
+			// Attach seconds + viewer flags to each rec.
+			foreach ($response['AwardRecommendations'] as &$rec) {
+				$rid = (int)$rec['RecommendationsId'];
+				$rec['Seconds'] = isset($seconds_by_rec[$rid]) ? $seconds_by_rec[$rid] : array();
+				$rec['SecondsCount'] = count($rec['Seconds']);
+				$meta = $rec_meta_by_id[$rid];
+				$rec['ViewerCanEditReason'] = ($viewer_id > 0 && $viewer_id === $meta['recommended_by_id']);
+				$ownKey = $meta['mundane_id'] . '|' . $meta['kingdomaward_id'] . '|' . $meta['rank'];
+				$rec['ViewerCanSecond'] = (
+					$viewer_id > 0
+					&& $viewer_id !== $meta['mundane_id']
+					&& $viewer_id !== $meta['recommended_by_id']
+					&& empty($viewer_own_keys[$ownKey])
+					&& empty($viewer_seconded[$rid])
+				);
+			}
+			unset($rec);
+
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();

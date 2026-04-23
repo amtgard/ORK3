@@ -836,6 +836,16 @@ class Player extends Ork3 {
 			$this->db->query($sql);
 			$sql = "UPDATE " . DB_PREFIX . "recommendations SET recommended_by_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE recommended_by_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
+			// recommendation_seconds: unique key on (recommendations_id, supporter_mundane_id) — soft-delete from-rows that would collide before remapping.
+			$sql = "UPDATE " . DB_PREFIX . "recommendation_seconds fr
+				JOIN " . DB_PREFIX . "recommendation_seconds toR
+					ON toR.recommendations_id = fr.recommendations_id
+					AND toR.supporter_mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "'
+				SET fr.deleted_at = NOW(), fr.deleted_by = '" . mysql_real_escape_string($toMundane['id']) . "'
+				WHERE fr.supporter_mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "' AND fr.deleted_at IS NULL";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "recommendation_seconds SET supporter_mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE supporter_mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "' AND deleted_at IS NULL";
+			$this->db->query($sql);
 			$sql = "UPDATE " . DB_PREFIX . "dues SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
 			$sql = "UPDATE " . DB_PREFIX . "bracket_officiant SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
@@ -1974,10 +1984,14 @@ class Player extends Ork3 {
 						'date_recommended'   => $awardRec->date_recommended,
 						'reason'             => $awardRec->reason,
 					];
+					$cascade_at = date('Y-m-d H:i:s');
 					$awardRec->deleted_by = $request['RequestedBy'];
-					$awardRec->deleted_at = date('Y-m-d H:i:s');
+					$awardRec->deleted_at = $cascade_at;
 					$awardRec->save();
 					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+					// Cascade soft-delete to any active seconds on this recommendation.
+					$this->db->Clear();
+					$this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
 					if (isset(Ork3::$Lib->ghettocache->memcache)) {
 						Ork3::$Lib->ghettocache->memcache->flush();
 					}
@@ -1994,7 +2008,235 @@ class Player extends Ork3 {
 	}
 
 
-	public function GetCustomMilestones($mundane_id) {
+	/**
+	 * Add a "second" (supporting endorsement) to an existing award recommendation.
+	 * Eligibility:
+	 *   - Parent rec must exist and not be soft-deleted.
+	 *   - Supporter must not be the recipient.
+	 *   - Supporter must not be the originator.
+	 *   - Supporter must not have their own active primary rec for the same award/rank/player.
+	 * If the supporter previously seconded then withdrew, the row is resurrected with new notes.
+	 */
+	public function AddSecondToRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationsId'])) {
+			return InvalidParameter('Invalid recommendation.');
+		}
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $request['RecommendationsId'];
+		if (!$awardRec->find() || $awardRec->deleted_at) {
+			return InvalidParameter('Recommendation not found.');
+		}
+
+		if ((int)$awardRec->mundane_id === (int)$mundane_id) {
+			return InvalidParameter('You cannot second a recommendation for yourself.');
+		}
+		if ((int)$awardRec->recommended_by_id === (int)$mundane_id) {
+			return InvalidParameter('You are the original recommender — edit your reason instead of seconding.');
+		}
+
+		// Check for own active primary rec on the same award/rank/player.
+		$ownRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$ownRec->clear();
+		$ownRec->kingdomaward_id = $awardRec->kingdomaward_id;
+		$ownRec->mundane_id = $awardRec->mundane_id;
+		$ownRec->rank = $awardRec->rank;
+		$ownRec->recommended_by_id = $mundane_id;
+		if ($ownRec->find()) do {
+			if (!$ownRec->deleted_at) {
+				return InvalidParameter('You already have your own recommendation for this award and rank.');
+			}
+		} while ($ownRec->next());
+
+		$notes = isset($request['Notes']) ? substr(trim($request['Notes']), 0, 400) : '';
+
+		// Resurrect any prior soft-deleted second by this supporter on this rec.
+		$existing = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$existing->clear();
+		$existing->recommendations_id = $request['RecommendationsId'];
+		$existing->supporter_mundane_id = $mundane_id;
+		if ($existing->find()) {
+			if (!$existing->deleted_at) {
+				return InvalidParameter('You have already seconded this recommendation.');
+			}
+			$existing->deleted_at = null;
+			$existing->deleted_by = null;
+			$existing->notes = $notes;
+			$existing->updated_at = date('Y-m-d H:i:s');
+			$existing->save();
+			if (isset(Ork3::$Lib->ghettocache->memcache)) {
+				Ork3::$Lib->ghettocache->memcache->flush();
+			}
+			return Success($existing->recommendation_seconds_id);
+		}
+
+		$second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$second->clear();
+		$second->recommendations_id = $request['RecommendationsId'];
+		$second->supporter_mundane_id = $mundane_id;
+		$second->notes = $notes;
+		$second->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success($second->recommendation_seconds_id);
+	}
+
+	/**
+	 * Edit the notes on an existing second. Only the supporter may edit their own notes.
+	 */
+	public function EditSecondNotes($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationSecondsId'])) {
+			return InvalidParameter('Invalid second.');
+		}
+
+		$second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$second->clear();
+		$second->recommendation_seconds_id = $request['RecommendationSecondsId'];
+		if (!$second->find() || $second->deleted_at) {
+			return InvalidParameter('Second not found.');
+		}
+		if ((int)$second->supporter_mundane_id !== (int)$mundane_id) {
+			return InvalidParameter('Only the supporter may edit their own notes.');
+		}
+
+		$second->notes = isset($request['Notes']) ? substr(trim($request['Notes']), 0, 400) : '';
+		$second->updated_at = date('Y-m-d H:i:s');
+		$second->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success($second->recommendation_seconds_id);
+	}
+
+	/**
+	 * Withdraw (soft-delete) a second. Allowed by the supporter or by anyone with park-level
+	 * recommendation-delete authority on the recipient.
+	 */
+	public function WithdrawSecond($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationSecondsId'])) {
+			return InvalidParameter('Invalid second.');
+		}
+
+		$second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$second->clear();
+		$second->recommendation_seconds_id = $request['RecommendationSecondsId'];
+		if (!$second->find() || $second->deleted_at) {
+			return InvalidParameter('Second not found.');
+		}
+
+		$can_withdraw = ((int)$second->supporter_mundane_id === (int)$mundane_id);
+		if (!$can_withdraw) {
+			// Admin path: load the parent rec to find the recipient's park, then check park-level authority.
+			$parent = new yapo($this->db, DB_PREFIX . 'recommendations');
+			$parent->clear();
+			$parent->recommendations_id = $second->recommendations_id;
+			if ($parent->find()) {
+				$recipientInfo = $this->player_info($parent->mundane_id);
+				if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+					$can_withdraw = true;
+				}
+			}
+		}
+		if (!$can_withdraw) {
+			return InvalidParameter('Only the supporter or an admin may withdraw a second.');
+		}
+
+		$second->deleted_at = date('Y-m-d H:i:s');
+		$second->deleted_by = $mundane_id;
+		$second->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success('Second withdrawn.');
+	}
+
+	/**
+	 * Allow the originator of a recommendation to edit their own reason text.
+	 * Recipients and admins are intentionally NOT allowed here — admins delete and re-create
+	 * via existing tools.
+	 */
+	public function EditAwardRecommendationReason($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationsId'])) {
+			return InvalidParameter('Invalid recommendation.');
+		}
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $request['RecommendationsId'];
+		if (!$awardRec->find() || $awardRec->deleted_at) {
+			return InvalidParameter('Recommendation not found.');
+		}
+		if ((int)$awardRec->recommended_by_id !== (int)$mundane_id) {
+			return InvalidParameter('Only the original recommender may edit the reason.');
+		}
+
+		$awardRec->reason = isset($request['Reason']) ? substr(trim($request['Reason']), 0, 400) : '';
+		$awardRec->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success('Reason updated.');
+	}
+
+	/**
+	 * For a list of recommendation IDs, return active seconds grouped by recommendations_id.
+	 * Each entry includes the supporter's mundane_id, persona, notes, created_at, and updated_at.
+	 * The viewer_id is used to compute the IsMine flag and (caller) for masking decisions.
+	 */
+	public function GetSecondsForRecommendations($recommendation_ids, $viewer_id) {
+		if (!is_array($recommendation_ids) || count($recommendation_ids) === 0) {
+			return array();
+		}
+		$ids = array();
+		foreach ($recommendation_ids as $rid) {
+			$rid = (int)$rid;
+			if ($rid > 0) $ids[] = $rid;
+		}
+		if (count($ids) === 0) return array();
+		$idList = implode(',', $ids);
+		$viewer_id = (int)$viewer_id;
+		$this->db->Clear();
+		$sql = "SELECT s.recommendation_seconds_id, s.recommendations_id, s.supporter_mundane_id, s.notes, s.created_at, s.updated_at,
+			m.persona AS supporter_persona
+			FROM " . DB_PREFIX . "recommendation_seconds s
+			LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = s.supporter_mundane_id
+			WHERE s.recommendations_id IN ($idList) AND s.deleted_at IS NULL
+			ORDER BY s.recommendations_id, s.created_at ASC";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$rid = (int)$r->recommendations_id;
+				if (!isset($out[$rid])) $out[$rid] = array();
+				$out[$rid][] = array(
+					'RecommendationSecondsId' => (int)$r->recommendation_seconds_id,
+					'SupporterMundaneId' => (int)$r->supporter_mundane_id,
+					'SupporterName' => $r->supporter_persona,
+					'Notes' => $r->notes,
+					'CreatedAt' => $r->created_at,
+					'UpdatedAt' => $r->updated_at,
+					'IsMine' => ((int)$r->supporter_mundane_id === $viewer_id),
+				);
+			}
+		}
+		return $out;
+	}
+
+		public function GetCustomMilestones($mundane_id) {
 		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
 		$milestones->clear();
 		$milestones->mundane_id = (int)$mundane_id;
