@@ -1547,7 +1547,7 @@ var PkConfig = {
 			</div>
 			<div class="plr-field-row">
 				<div class="plr-field">
-					<label>Restricted</label>
+					<label>Restrict Mundane Name Visibility</label>
 					<div class="plr-radio-row">
 						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="0" checked> No</label>
 						<label class="plr-radio"><input type="radio" name="pk-addplayer-restricted" value="1"> Yes</label>

@@ -1666,7 +1666,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<div class="pn-acct-field">
 				<label>
 					<input type="checkbox" name="Restricted" value="Restricted" <?= $Player['Restricted'] == 1 ? 'checked' : '' ?> style="margin-right:6px" />
-					Restricted Account
+					Restrict Mundane Name Visibility
 				</label>
 				<small style="display:block;color:var(--ork-text-muted);margin-top:4px;padding-left:22px">Hides the player's real name from searches and public displays. Use for members who prefer their mundane identity kept private.</small>
 			</div>

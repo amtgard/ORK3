@@ -411,7 +411,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 			</div>
 			<div class="cp-field-row">
 				<div class="cp-field">
-					<label>Restricted</label>
+					<label>Restrict Mundane Name Visibility</label>
 					<div class="cp-radio-group">
 						<label><input type="radio" name="cp-cp-restricted" value="0" checked> No</label>
 						<label><input type="radio" name="cp-cp-restricted" value="1"> Yes</label>
