@@ -5,18 +5,18 @@
 define('WHATS_NEW_VERSION', '2026-04-22');
 
 // Application version — shown in the site footer. Change this if you change the above date.
-define('ORK_VERSION', '3.5.2 Falcon');
+define('ORK_VERSION', '3.5.2 Mask');
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
-	['version' => '3.5.2 Falcon', 'date' => '2026-04-22', 'items' => [
-		['icon' => 'fas fa-thumbs-up', 'title' => 'Second a Recommendation', 'body' => 'See an award recommendation you agree with? Hit the new + button to add your support — optionally with a few words on why. Officers reviewing recommendations now see who else stands behind each one.'],
-		['icon' => 'fas fa-pen', 'title' => 'Edit Your Reason After Submitting', 'body' => 'Already filed a recommendation but learned something new about the recipient? You can now edit your own reason text from your Player profile, your Park profile, or your Kingdom profile — wherever you spotted the rec.'],
+	['version' => '3.5.2 Mask', 'date' => '2026-04-22', 'items' => [
 		['icon' => 'fas fa-paint-roller', 'title' => 'Design My Profile — Now Way More', 'body' => 'The profile customizer added an About tab (markdown bio), color presets with hero gradients, a flexible name builder with comma toggle and noble-title support, beltline visibility, and pronunciation guides. Make your profile look like yours.'],
-		['icon' => 'fas fa-medal', 'title' => 'Custom Title Aliases', 'body' => 'Your Custom Award can now be tagged as the peerage equivalent of a Knighthood, Squire, Page, or other title — so it counts toward beltlines and rosters the way it should.'],
 		['icon' => 'fas fa-stream', 'title' => 'My Milestones Timeline', 'body' => 'Add personal milestones — knightings, first wins, retirements, anything worth remembering — to a new timeline on your profile\'s About tab.'],
 		['icon' => 'fas fa-bolt', 'title' => 'Snappier Player Profiles', 'body' => 'Profile pages now lazy-load attendance, notes, dues history, recommendations, and voting eligibility — the page paints fast and the heavier sections fill in as you click their tabs.'],
+		['icon' => 'fas fa-medal', 'title' => 'Custom Title Aliases', 'body' => 'Your Custom Award can now be tagged as the peerage equivalent of a Knighthood, Squire, Page, or other title — so it counts toward beltlines and rosters the way it should.'],
+		['icon' => 'fas fa-thumbs-up', 'title' => 'Second a Recommendation', 'body' => 'See an award recommendation you agree with? Hit the new + button to add your support — optionally with a few words on why. Officers reviewing recommendations now see who else stands behind each one.'],
+		['icon' => 'fas fa-pen', 'title' => 'Edit Your Reason After Submitting', 'body' => 'Already filed a recommendation but learned something new about the recipient? You can now edit your own reason text from your Player profile, your Park profile, or your Kingdom profile — wherever you spotted the rec.'],
 		['icon' => 'fas fa-magic', 'title' => 'And Quality of Life Updates', 'body' => 'Plenty of smaller polish items, performance improvements, and bug fixes throughout — see the release notes for the full list.'],
 
 		// ----- Notes-only items (Release Notes page; not surfaced in the modal) -----
