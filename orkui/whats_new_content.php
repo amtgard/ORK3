@@ -20,6 +20,7 @@ $WHATS_NEW_ITEMS = [
 		['icon' => 'fas fa-magic', 'title' => 'And Quality of Life Updates', 'body' => 'Plenty of smaller polish items, performance improvements, and bug fixes throughout — see the release notes for the full list.'],
 
 		// ----- Notes-only items (Release Notes page; not surfaced in the modal) -----
+		['icon' => 'fas fa-shield-alt', 'title' => 'Knights Can Choose Belt Display', 'notes_only' => true, 'body' => 'Belted Knights get a new Icons tab in Design My Profile with three options: the generic white belt (default), their actual knighthood belts shown in award-date order, or no belt at all.'],
 		['icon' => 'fas fa-feather', 'title' => 'Quick Add Snippets + About-tab Edit Pencil', 'notes_only' => true, 'body' => 'Drop pre-built sections into your About bio with one click, and jump straight to editing from a pencil icon on the About tab itself.'],
 		['icon' => 'fas fa-font', 'title' => 'Basic & Dyslexia-Friendly Fonts', 'notes_only' => true, 'body' => 'New viewer preferences let you enforce basic fonts site-wide for legibility, or switch to Lexend — a typeface designed to improve reading proficiency for people with dyslexia.'],
 		['icon' => 'fas fa-microphone', 'title' => 'Pronunciation Guide + Persona Privacy', 'notes_only' => true, 'body' => 'Tell the world how to say your persona name, and choose who can see your real name and email — defaults match the existing privacy posture (always visible to monarchy and admins).'],
