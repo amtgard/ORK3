@@ -393,6 +393,7 @@ class Controller_PlayerAjax extends Controller {
 				'ShowEmail'        => isset($_POST['ShowEmail'])        ? (int)$_POST['ShowEmail']        : null,
 				'MilestoneConfig'  => isset($_POST['MilestoneConfig'])  ? $_POST['MilestoneConfig']  : null,
 				'NameFont'         => (isset($_POST['NameFont']) && in_array($_POST['NameFont'], ['','Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'])) ? $_POST['NameFont'] : null,
+					'BeltDisplay'      => (isset($_POST['BeltDisplay']) && in_array($_POST['BeltDisplay'], ['white','own','none'])) ? $_POST['BeltDisplay'] : null,
 			];
 			$r = $this->Player->update_player($fields);
 			echo ($r['Status'] == 0)

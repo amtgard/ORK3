@@ -342,6 +342,7 @@ class Player extends Ork3 {
 						'ShowEmail' => (int)$design->show_email,
 						'MilestoneConfig' => $design->milestone_config,
 						'NameFont' => $design->name_font,
+							'BeltDisplay' => $design->belt_display,
 						'BasicFonts' => (int)$this->mundane->basic_fonts,
 						'DyslexiaFonts' => (int)$this->mundane->dyslexia_fonts,
 				);
@@ -1060,6 +1061,8 @@ class Player extends Ork3 {
 					$design->show_email = is_null($request['ShowEmail'])?$design->show_email:(int)$request['ShowEmail'];
 					$design->milestone_config = is_null($request['MilestoneConfig'])?$design->milestone_config:$request['MilestoneConfig'];
 					$design->name_font = is_null($request['NameFont'])?$design->name_font:$request['NameFont'];
+					$validBeltDisplays = ['white','own','none'];
+					$design->belt_display = (isset($request['BeltDisplay']) && in_array($request['BeltDisplay'], $validBeltDisplays)) ? $request['BeltDisplay'] : $design->belt_display;
 				}
 
 				// reeve or corpora qual changes

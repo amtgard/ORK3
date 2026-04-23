@@ -26,16 +26,38 @@
 	$imageUrl = $Player['HasImage'] > 0 ? $Player['Image'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 
 	$knightAwardIds = array(17, 18, 19, 20, 245);
+	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
+	$beltImageMap = array(
+		17  => $_beltImgHost . 'belt-flame.png',
+		18  => $_beltImgHost . 'belt-crown.png',
+		19  => $_beltImgHost . 'belt-serpent.png',
+		20  => $_beltImgHost . 'belt-sword.png',
+		245 => $_beltImgHost . 'belt-battle.png',
+	);
 	$isKnight = false;
+	$ownBelts = array(); // de-duped earned knighthood belts, sorted by award date ascending
 	if (is_array($Details['Awards'])) {
+		$_seenBeltAwardIds = array();
 		foreach ($Details['Awards'] as $a) {
-			if (in_array((int)$a['AwardId'], $knightAwardIds)) {
+			$_aid = (int)$a['AwardId'];
+			if (in_array($_aid, $knightAwardIds)) {
 				$isKnight = true;
-				break;
+				if (!in_array($_aid, $_seenBeltAwardIds)) {
+					$_seenBeltAwardIds[] = $_aid;
+					$ownBelts[] = array(
+						'Id'   => $_aid,
+						'Date' => $a['Date'] ?? '',
+						'Src'  => $beltImageMap[$_aid],
+						'Name' => $a['Name'] ?? '',
+					);
+				}
 			}
 		}
+		usort($ownBelts, function($x, $y) { return strcmp($x['Date'], $y['Date']); });
 	}
 	$beltIconUrl = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/belt.svg';
+	$_pnBeltDisplay = $Player['BeltDisplay'] ?? 'white';
+	if (!in_array($_pnBeltDisplay, array('white','own','none'))) { $_pnBeltDisplay = 'white'; }
 
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
@@ -462,6 +484,19 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-belt-name{font-size:13px;font-weight:600;color:var(--pn-accent,#4299e1);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pn-belt-name:hover{text-decoration:underline}
 .pn-belt-title{font-size:11px;color:#718096;white-space:nowrap;flex-shrink:0}
+/* Hero belt row (own knighthood belts) — matches the single white belt.svg icon sizing */
+.pn-hero-belts{display:inline-flex;align-items:center;gap:8px;margin-left:10px;vertical-align:middle}
+.pn-hero-belts .pn-belt-icon-own{height:1.2em;width:auto;display:inline-block;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35))}
+/* Icons tab — design modal preview strip */
+.pn-icons-preview{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px}
+.pn-icons-preview img{height:32px;width:auto}
+.pn-icons-preview-empty{font-size:12px;color:#a0aec0;font-style:italic}
+.pn-icons-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:8px;cursor:pointer;transition:border-color .12s}
+.pn-icons-option:hover{border-color:var(--pn-accent,#4299e1)}
+.pn-icons-option input[type="radio"]{margin-top:3px;accent-color:var(--pn-accent,#4299e1)}
+.pn-icons-option-body{flex:1;min-width:0}
+.pn-icons-option-title{font-size:13px;font-weight:600;color:#2d3748;margin-bottom:2px}
+.pn-icons-option-desc{font-size:11px;color:#718096;line-height:1.35}
 @media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-sidebar{flex:none;width:100%}}
 /* ===== Milestones Timeline ===== */
 .pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0}
@@ -690,6 +725,13 @@ html[data-theme="dark"] .pn-belt-card-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-belt-group { color: var(--ork-text-muted); border-top-color: var(--ork-border); }
 html[data-theme="dark"] .pn-belt-title { color: var(--ork-text-muted); }
 
+/* Icons tab — design modal preview + option cards */
+html[data-theme="dark"] .pn-icons-preview { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-icons-preview-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-icons-option { border-color: var(--ork-border); background: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-icons-option-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-icons-option-desc { color: var(--ork-text-muted); }
+
 /* Award-alias subtitle */
 html[data-theme="dark"] .pn-award-alias-sub { color: var(--ork-text-muted); }
 
@@ -840,8 +882,14 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			?>
 			<h1 class="pn-persona" id="pn-hero-persona">
 				<?= $_pnDisplayName ?>
-				<?php if ($isKnight): ?>
+				<?php if ($isKnight && $_pnBeltDisplay === 'white'): ?>
 					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
+				<?php elseif ($isKnight && $_pnBeltDisplay === 'own' && !empty($ownBelts)): ?>
+					<span class="pn-hero-belts">
+					<?php foreach ($ownBelts as $_b): ?>
+						<img class="pn-belt-icon pn-belt-icon-own" src="<?= htmlspecialchars($_b['Src']) ?>" alt="<?= htmlspecialchars($_b['Name']) ?>" data-tip="<?= htmlspecialchars($_b['Name']) ?>" />
+					<?php endforeach; ?>
+					</span>
 				<?php endif; ?>
 			</h1>
 			<?php
@@ -2732,6 +2780,9 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
 			<button class="pn-design-tab" data-panel="focus"><i class="fas fa-crosshairs"></i> Photo Focus</button>
 			<button class="pn-design-tab" data-panel="milestones"><i class="fas fa-stream"></i> Milestones</button>
+			<?php if ($isKnight): ?>
+			<button class="pn-design-tab" data-panel="icons"><i class="fas fa-shield-alt"></i> Icons</button>
+			<?php endif; ?>
 		</div>
 		<div class="pn-acct-modal-body" style="max-height:60vh;overflow-y:auto">
 			<div class="pn-form-error" id="pn-design-error"></div>
@@ -3145,6 +3196,44 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					</div>
 				</div>
 			</div>
+
+			<?php if ($isKnight): ?>
+			<!-- Icons Panel (Knights only) -->
+			<div class="pn-design-panel" id="pn-design-icons">
+				<div class="pn-design-hint" style="margin-bottom:12px">Choose which belt icon appears next to your name in the hero.</div>
+				<div class="pn-dm-hint" style="margin-bottom:16px">
+					<i class="fas fa-info-circle"></i>
+					<div>If one or more of your Knighthoods is recorded as a Note or unreconciled award, the icon will not be able to show. Reach out to your Monarch or Prime Minister to reconcile the record so things can display as expected.</div>
+				</div>
+				<label class="pn-icons-option">
+					<input type="radio" name="pn-design-belt-display" value="white" <?= $_pnBeltDisplay === 'white' ? 'checked' : '' ?> />
+					<div class="pn-icons-option-body">
+						<div class="pn-icons-option-title">Display White Belt</div>
+						<div class="pn-icons-option-desc">Show the generic white-belt icon that marks you as a belted knight. (Default.)</div>
+					</div>
+				</label>
+				<label class="pn-icons-option">
+					<input type="radio" name="pn-design-belt-display" value="own" <?= $_pnBeltDisplay === 'own' ? 'checked' : '' ?> />
+					<div class="pn-icons-option-body">
+						<div class="pn-icons-option-title">Display My Belt<?= count($ownBelts) > 1 ? 's' : '' ?></div>
+						<div class="pn-icons-option-desc">Show your earned knighthood belt<?= count($ownBelts) > 1 ? 's' : '' ?>, oldest first.</div>
+					</div>
+				</label>
+				<label class="pn-icons-option">
+					<input type="radio" name="pn-design-belt-display" value="none" <?= $_pnBeltDisplay === 'none' ? 'checked' : '' ?> />
+					<div class="pn-icons-option-body">
+						<div class="pn-icons-option-title">No Belt</div>
+						<div class="pn-icons-option-desc">Hide the belt icon entirely.</div>
+					</div>
+				</label>
+				<div class="pn-design-preview-label" style="margin-top:18px">Preview</div>
+				<div class="pn-icons-preview" id="pn-icons-preview"></div>
+				<script>
+					window.pnOwnBelts = <?= json_encode(array_map(function($b) { return array('src' => $b['Src'], 'name' => $b['Name']); }, $ownBelts)) ?>;
+					window.pnWhiteBeltUrl = <?= json_encode($beltIconUrl) ?>;
+				</script>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<div class="pn-modal-footer">
@@ -3877,6 +3966,12 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		fd.append('MilestoneConfig', JSON.stringify(msConfig));
 			fd.append('NameFont', pnSelectedFont || '');
 
+		// Belt display (Icons tab — Knights only; radios aren't rendered for non-knights)
+		var beltRadios = document.querySelectorAll('input[name="pn-design-belt-display"]');
+		for (var bi = 0; bi < beltRadios.length; bi++) {
+			if (beltRadios[bi].checked) { fd.append('BeltDisplay', beltRadios[bi].value); break; }
+		}
+
 		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/updateprofile', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(result) {
@@ -3896,6 +3991,47 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 				btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
 			});
 	});
+})();
+
+// ---- Icons tab (Design My Profile) — live preview ----
+(function() {
+	var preview = document.getElementById('pn-icons-preview');
+	if (!preview) return; // non-knight, panel not rendered
+	var radios = document.querySelectorAll('input[name="pn-design-belt-display"]');
+	function render() {
+		var val = 'white';
+		for (var i = 0; i < radios.length; i++) { if (radios[i].checked) { val = radios[i].value; break; } }
+		preview.innerHTML = '';
+		if (val === 'white') {
+			var img = document.createElement('img');
+			img.src = window.pnWhiteBeltUrl;
+			img.alt = 'White Belt';
+			preview.appendChild(img);
+		} else if (val === 'own') {
+			var belts = window.pnOwnBelts || [];
+			if (!belts.length) {
+				var msg = document.createElement('span');
+				msg.className = 'pn-icons-preview-empty';
+				msg.textContent = 'No reconciled knighthood awards found.';
+				preview.appendChild(msg);
+			} else {
+				for (var j = 0; j < belts.length; j++) {
+					var bi = document.createElement('img');
+					bi.src = belts[j].src;
+					bi.alt = belts[j].name || '';
+					bi.title = belts[j].name || '';
+					preview.appendChild(bi);
+				}
+			}
+		} else {
+			var none = document.createElement('span');
+			none.className = 'pn-icons-preview-empty';
+			none.textContent = 'No belt icon';
+			preview.appendChild(none);
+		}
+	}
+	for (var i = 0; i < radios.length; i++) { radios[i].addEventListener('change', render); }
+	render();
 })();
 
 // ---- Milestones Config (Design My Profile) ----
