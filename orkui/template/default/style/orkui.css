@@ -7782,9 +7782,15 @@ html[data-theme="dark"] .nav-dropdown-menu a:hover {
 html[data-theme="dark"] .nav-dropdown-divider {
   border-color: #4a5568;
 }
+html[data-theme="dark"] .nav-dropdown-danger {
+  color: #fc8181 !important;
+}
+html[data-theme="dark"] .nav-dropdown-danger i {
+  color: #fc8181 !important;
+}
 html[data-theme="dark"] .nav-dropdown-danger:hover {
-  background: #742a2a;
-  color: #feb2b2 !important;
+  background: #3b1a1a !important;
+  color: #fc8181 !important;
 }
 
 /* =====================================================
