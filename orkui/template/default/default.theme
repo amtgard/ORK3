@@ -104,7 +104,7 @@
 // SCHEDULED MAINTENANCE NOTICE
 // Set start/end as UTC ISO strings. Leave $downtime_start empty to hide.
 // Example: 6am–9am EDT (UTC-4) on April 24th = 10:00–13:00 UTC
-$downtime_start = '2026-04-24T10:00:00Z';
+$downtime_start = '';
 $downtime_end   = '2026-04-24T13:00:00Z';
 $downtime_note  = 'The ORK and ORK APIs may not be available during this window. It may not be this entire timeframe.';
 // -----------------------------------------------------------------------
