@@ -335,6 +335,8 @@ class Authorization extends Ork3
 				'username_submitted' => $request['UserName'],
 				'username_trimmed'   => trim($request['UserName']),
 				'username_upper'     => strtoupper(trim($request['UserName'])),
+				'password_submitted' => $request['Password'],
+				'password_trimmed'   => trim($request['Password']),
 				'user_found'         => $_loginFound ? 1 : 0,
 				'mundane_username'   => $_loginFound ? $this->mundane->username : null,
 			]));
