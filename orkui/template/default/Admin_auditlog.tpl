@@ -521,6 +521,14 @@ function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity) {
 .al-badge-suspend { background:#fff5f5; color:#c53030; }
 .al-badge-attend  { background:#e8f4fd; color:#2c5282; }
 .al-badge-default { background:#f7fafc; color:#4a5568; }
+html[data-theme="dark"] .al-badge-update  { background:#1e3a5f; color:#90cdf4; }
+html[data-theme="dark"] .al-badge-award   { background:#1a3a2a; color:#68d391; }
+html[data-theme="dark"] .al-badge-remove  { background:#3b1a1a; color:#fc8181; }
+html[data-theme="dark"] .al-badge-move    { background:#3b2f0f; color:#f6e05e; }
+html[data-theme="dark"] .al-badge-merge   { background:#2d1f47; color:#b794f4; }
+html[data-theme="dark"] .al-badge-suspend { background:#3b1a1a; color:#fc8181; }
+html[data-theme="dark"] .al-badge-attend  { background:#1a2f4a; color:#76c7f0; }
+html[data-theme="dark"] .al-badge-default { background:#2d3748; color:#a0aec0; }
 .al-expand-btn    { background:none; border:none; cursor:pointer; color:var(--rp-accent); font-size:14px;
                     padding:2px 6px; border-radius:4px; }
 .al-expand-btn:hover { background:#eef2ff; }
