@@ -117,8 +117,8 @@ class Authorization extends Ork3
 	{
 		$response = array();
 		$this->mundane->clear();
-		$this->mundane->like('username', $request['UserName']);
-		$this->mundane->like('email', $request['Email']);
+		$this->mundane->like('username', trim($request['UserName']));
+		$this->mundane->like('email', trim($request['Email']));
 		$_resetFound = $this->mundane->find();
 		error_log('DEBUG_ResetPassword: ' . json_encode([
 			'username_submitted' => $request['UserName'],
@@ -329,7 +329,7 @@ class Authorization extends Ork3
 		$this->mundane->clear();
 
 		if ($request['Token'] == null) {
-			$this->mundane->like('username', $request['UserName']);
+			$this->mundane->like('username', trim($request['UserName']));
 			$_loginFound = $this->mundane->find();
 			error_log('DEBUG_Login: ' . json_encode([
 				'username_submitted' => $request['UserName'],
