@@ -1003,7 +1003,10 @@ class Player extends Ork3 {
 				logtrace("Player Updated", array($request, $this->mundane->lastSql()));
    				$this->mundane->save();
 				$post_player = $this->GetPlayer(['MundaneId' => $request['MundaneId']]);
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player'], $post_player['Player']);
+				$_audit_req = $request;
+				$_audit_req['PasswordChanged'] = trimlen($request['Password'] ?? '') > 0 ? 1 : 0;
+				unset($_audit_req['Password']);
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $_audit_req, 'Player', $request['MundaneId'], $player['Player'], $post_player['Player']);
 				return Success($notices);
 			} else {
 				error_log('ORK_DEBUG No Player found.: ' . json_encode(null));

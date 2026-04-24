@@ -1203,10 +1203,10 @@ class Controller_Admin extends Controller {
 									'Waivered' => $this->request->Admin_player->Waivered == 'Waivered' || strlen($w_imdata),
 									'Waiver' => strlen($w_imdata)>0?$w_imdata:null,
 									'WaiverMimeType' => strlen($w_imdata)>0?$_FILES['Waiver']['type']:'',
-									'ReeveQualified' => ($this->request->Admin_player->ReeveQualified == 1)?1:0,
-									'ReeveQualifiedUntil' => strlen($this->request->Admin_player->ReeveQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->ReeveQualifiedUntil ?? '')):null,
-									'CorporaQualified' => ($this->request->Admin_player->CorporaQualified == 1)?1:0,
-									'CorporaQualifiedUntil' => strlen($this->request->Admin_player->CorporaQualifiedUntil)>0?date('Y-m-d', strtotime($this->request->Admin_player->CorporaQualifiedUntil ?? '')):null,
+									'ReeveQualified' => array_key_exists('ReeveQualified', $_POST) ? (($this->request->Admin_player->ReeveQualified == 1) ? 1 : 0) : null,
+									'ReeveQualifiedUntil' => array_key_exists('ReeveQualifiedUntil', $_POST) ? (($v = $this->request->Admin_player->ReeveQualifiedUntil) && strlen($v)>0 && $v !== '0000-00-00' && ($ts=strtotime($v)) && $ts>0 ? date('Y-m-d',$ts) : null) : null,
+									'CorporaQualified' => array_key_exists('CorporaQualified', $_POST) ? (($this->request->Admin_player->CorporaQualified == 1) ? 1 : 0) : null,
+									'CorporaQualifiedUntil' => array_key_exists('CorporaQualifiedUntil', $_POST) ? (($v = $this->request->Admin_player->CorporaQualifiedUntil) && strlen($v)>0 && $v !== '0000-00-00' && ($ts=strtotime($v)) && $ts>0 ? date('Y-m-d',$ts) : null) : null,
 									'Token' => $this->session->token
 								));
 							if ($this->request->Admin_player->Password!=$this->request->Admin_player->PasswordAgain)

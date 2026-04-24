@@ -121,6 +121,8 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 		case 'Player::UpdatePlayer':
 		case 'Player::update_player':
 			$changed = [];
+			if (($p['PasswordChanged'] ?? 0) == 1 || !empty($p['Password']))
+				$changed[] = 'Password';
 			$watchFields = ['Persona' => 'Persona', 'GivenName' => 'Given Name', 'Surname' => 'Surname',
 			                'Email' => 'Email', 'UserName' => 'Username', 'Active' => 'Active',
 			                'Suspended' => 'Suspended', 'Restricted' => 'Restricted'];
@@ -229,14 +231,16 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 				'CorporaQualifiedUntil' => 'Corpora Qualified Until',
 				'ParkMemberSince' => 'Member Since',
 				'PronounId' => 'Pronoun',
+				'PasswordChanged' => 'Password',
 			];
 			$hasPrior = !empty($b);
 			$_dateFields = ['ReeveQualifiedUntil', 'CorporaQualifiedUntil', 'ParkMemberSince'];
 			$_fmtVal = function($key, $val) use ($_dateFields) {
+				if ($key === 'PasswordChanged') return $val == 1 ? 'Changed' : '—';
 				if ($val === null || $val === '' || $val === '0000-00-00') return '—';
-				if (in_array($key, $_dateFields) && preg_match('/^\d{4}-\d{2}-\d{2}/', $val)) {
+				if (in_array($key, $_dateFields)) {
+					if (!preg_match('/^\d{4}-\d{2}-\d{2}/', $val)) return '—';
 					$ts = strtotime($val);
-					// Suppress invalid/zero dates (epoch or pre-epoch)
 					if (!$ts || $ts < 0) return '—';
 					return date('M j, Y', $ts);
 				}
@@ -244,6 +248,17 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			};
 			$rows = '';
 			foreach ($watchFields as $key => $label) {
+				// PasswordChanged lives in parameters ($p), not in prior/post state.
+				// Legacy records stored the raw Password field instead.
+				if ($key === 'PasswordChanged') {
+					if (($p['PasswordChanged'] ?? 0) != 1 && empty($p['Password'])) continue;
+					$rows .= '<tr class="al-diff-changed">'
+					       . '<td class="al-diff-field">Password</td>'
+					       . '<td class="al-diff-old">—</td>'
+					       . '<td class="al-diff-new" style="color:#276749">Changed</td>'
+					       . '</tr>';
+					continue;
+				}
 				$old_val = isset($b[$key]) ? (string)$b[$key] : null;
 				$new_val = isset($p[$key]) ? (string)$p[$key] : null;
 				if ($new_val === null) continue;
