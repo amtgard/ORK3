@@ -1643,6 +1643,14 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				</div>
 			</div>
 
+			<div class="pn-acct-field">
+				<label>
+					<input type="checkbox" name="Restricted" value="Restricted" <?= $Player['Restricted'] == 1 ? 'checked' : '' ?> style="margin-right:6px" />
+					Restrict Mundane Name Visibility
+				</label>
+				<small style="display:block;color:var(--ork-text-muted);margin-top:4px;padding-left:22px">Hides your real name from searches and public displays.</small>
+			</div>
+
 			<?php if ($canEditAdmin): ?>
 			<!-- Admin-only fields -->
 			<div class="pn-acct-section-title"><i class="fas fa-shield-alt" style="margin-right:5px"></i>Administrative</div>
@@ -1662,14 +1670,6 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						<label><input type="radio" name="Waivered" value="Lawsuit Bait" <?= $Player['Waivered'] != 1 ? 'checked' : '' ?> /> No Waiver</label>
 					</div>
 				</div>
-			</div>
-
-			<div class="pn-acct-field">
-				<label>
-					<input type="checkbox" name="Restricted" value="Restricted" <?= $Player['Restricted'] == 1 ? 'checked' : '' ?> style="margin-right:6px" />
-					Restrict Mundane Name Visibility
-				</label>
-				<small style="display:block;color:var(--ork-text-muted);margin-top:4px;padding-left:22px">Hides the player's real name from searches and public displays. Use for members who prefer their mundane identity kept private.</small>
 			</div>
 
 			<div class="pn-acct-field">
@@ -1817,7 +1817,6 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 			<input type="hidden" name="Password"       value="" />
 			<input type="hidden" name="PasswordAgain"  value="" />
 			<input type="hidden" name="Active"         value="<?= $Player['Active'] == 1 ? 'Active' : 'Inactive' ?>" />
-			<input type="hidden" name="Restricted"     value="<?= $Player['Restricted'] == 1 ? 'Restricted' : '' ?>" />
 			<input type="hidden" name="ParkMemberSince" value="<?= htmlspecialchars($Player['ParkMemberSince'] ?? '') ?>" />
 			<input type="hidden" name="Waivered"       value="<?= $Player['Waivered'] == 1 ? 'Waivered' : 'Lawsuit Bait' ?>" />
 		</div>
