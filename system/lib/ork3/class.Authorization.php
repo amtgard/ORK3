@@ -115,12 +115,21 @@ class Authorization extends Ork3
 
 	public function ResetPassword($request)
 	{
-		$this->log->Write('Credential', 0, LOG_EDIT, array($request, $_SESSION, $_SERVER));
 		$response = array();
 		$this->mundane->clear();
 		$this->mundane->like('username', $request['UserName']);
 		$this->mundane->like('email', $request['Email']);
-		if ($this->mundane->find()) {
+		$_resetFound = $this->mundane->find();
+		error_log('DEBUG_ResetPassword: ' . json_encode([
+			'username_submitted' => $request['UserName'],
+			'email_submitted'    => $request['Email'],
+			'username_trimmed'   => trim($request['UserName']),
+			'email_trimmed'      => trim($request['Email']),
+			'user_found'         => $_resetFound ? 1 : 0,
+			'mundane_username'   => $_resetFound ? $this->mundane->username : null,
+			'mundane_email'      => $_resetFound ? $this->mundane->email : null,
+		]));
+		if ($_resetFound) {
 			$password = substr(md5(microtime()), 2, 11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 1);
 			/* Only salt on password change or first password
@@ -321,7 +330,15 @@ class Authorization extends Ork3
 
 		if ($request['Token'] == null) {
 			$this->mundane->like('username', $request['UserName']);
-			if ($this->mundane->find()) {
+			$_loginFound = $this->mundane->find();
+			error_log('DEBUG_Login: ' . json_encode([
+				'username_submitted' => $request['UserName'],
+				'username_trimmed'   => trim($request['UserName']),
+				'username_upper'     => strtoupper(trim($request['UserName'])),
+				'user_found'         => $_loginFound ? 1 : 0,
+				'mundane_username'   => $_loginFound ? $this->mundane->username : null,
+			]));
+			if ($_loginFound) {
 				$mundane_id = $this->mundane->mundane_id;
 				// Harmonizes old password style with new password style
 				if (Authorization::KeyExists($this->mundane->password_salt, trim($request['Password']))) {
