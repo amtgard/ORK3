@@ -782,6 +782,9 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 					<tr id="<?=$_detailId?>" style="display:none">
 						<td colspan="6">
 							<?=_auditDetail($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_parkMap, $_kingdomMap, $_mundaneMap, $_eventMap, $_kawardMap, $_classMap)?>
+							<div style="margin-top:8px;font-size:11px;color:var(--rp-text-hint)">
+								audit id: <?=(int)$_r['Id']?>
+							</div>
 						</td>
 					</tr>
 					<?php endforeach; ?>
