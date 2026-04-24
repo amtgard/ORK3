@@ -224,10 +224,24 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 				'OtherName' => 'Other Name', 'Email' => 'Email', 'UserName' => 'Username',
 				'Active' => 'Active', 'Suspended' => 'Suspended', 'Restricted' => 'Restricted',
 				'Waivered' => 'Waivered', 'ReeveQualified' => 'Reeve Qualified',
-				'CorporaQualified' => 'Corpora Qualified', 'ParkMemberSince' => 'Member Since',
+				'ReeveQualifiedUntil' => 'Reeve Qualified Until',
+				'CorporaQualified' => 'Corpora Qualified',
+				'CorporaQualifiedUntil' => 'Corpora Qualified Until',
+				'ParkMemberSince' => 'Member Since',
 				'PronounId' => 'Pronoun',
 			];
 			$hasPrior = !empty($b);
+			$_dateFields = ['ReeveQualifiedUntil', 'CorporaQualifiedUntil', 'ParkMemberSince'];
+			$_fmtVal = function($key, $val) use ($_dateFields) {
+				if ($val === null || $val === '' || $val === '0000-00-00') return '—';
+				if (in_array($key, $_dateFields) && preg_match('/^\d{4}-\d{2}-\d{2}/', $val)) {
+					$ts = strtotime($val);
+					// Suppress invalid/zero dates (epoch or pre-epoch)
+					if (!$ts || $ts < 0) return '—';
+					return date('M j, Y', $ts);
+				}
+				return $val;
+			};
 			$rows = '';
 			foreach ($watchFields as $key => $label) {
 				$old_val = isset($b[$key]) ? (string)$b[$key] : null;
@@ -235,11 +249,13 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 				if ($new_val === null) continue;
 				// If we have prior state, only show fields that actually changed
 				if ($hasPrior && $old_val !== null && $old_val === $new_val) continue;
+				// Skip empty Until fields when not changing (reduces noise)
+				if (in_array($key, ['ReeveQualifiedUntil','CorporaQualifiedUntil']) && (!$new_val || $new_val === '0000-00-00') && !$old_val) continue;
 				$changed = $hasPrior && $old_val !== null && $old_val !== $new_val;
 				$rows .= '<tr' . ($changed ? ' class="al-diff-changed"' : '') . '>'
 				       . '<td class="al-diff-field">' . htmlspecialchars($label) . '</td>'
-				       . '<td class="' . ($changed ? 'al-diff-old' : 'al-diff-val') . '">' . htmlspecialchars($old_val ?? '—') . '</td>'
-				       . '<td class="' . ($changed ? 'al-diff-new' : 'al-diff-val') . '">' . htmlspecialchars($new_val) . '</td>'
+				       . '<td class="' . ($changed ? 'al-diff-old' : 'al-diff-val') . '">' . htmlspecialchars($_fmtVal($key, $old_val)) . '</td>'
+				       . '<td class="' . ($changed ? 'al-diff-new' : 'al-diff-val') . '">' . htmlspecialchars($_fmtVal($key, $new_val)) . '</td>'
 				       . '</tr>';
 			}
 			$truncatedNotice = !$hasPrior
@@ -493,7 +509,7 @@ function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity) {
 .al-main          { flex:1; min-width:0; }
 .al-filter-card   { background:#fff; border:1px solid var(--rp-border); border-radius:8px; padding:16px; }
 .al-filter-card h3 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
-                     color:var(--rp-text-muted); margin:0 0 12px; }
+                     color:var(--rp-text-muted); margin:0 0 12px; background:transparent; border:none; text-shadow:none; padding:0; }
 .al-form-group    { display:flex; flex-direction:column; gap:3px; margin-bottom:10px; }
 .al-form-group label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--rp-text-muted); }
 .al-form-input    { border:1px solid var(--rp-border); border-radius:5px; padding:6px 8px; font-size:13px;
@@ -557,18 +573,24 @@ html[data-theme="dark"] .al-badge-default { background:#2d3748; color:#a0aec0; }
 .al-entity-note   { font-size:10px; color:var(--rp-text-hint); display:block; }
 
 /* dark mode */
-html[data-theme="dark"] .al-filter-card  { background:var(--ork-card-bg); border-color:var(--ork-border); }
-html[data-theme="dark"] .al-form-input   { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
-html[data-theme="dark"] .al-table th     { background:var(--ork-bg-secondary); }
-html[data-theme="dark"] .al-table tbody tr:hover { background:var(--ork-bg-secondary); }
-html[data-theme="dark"] .al-detail-row td { background:var(--ork-bg-secondary); }
-html[data-theme="dark"] .al-diff-table th { background:var(--ork-bg-tertiary); color:var(--ork-text); }
-html[data-theme="dark"] .al-diff-table td { border-color:var(--ork-border); }
+html[data-theme="dark"] .al-filter-card  { background:#2d3748; border-color:#4a5568; }
+html[data-theme="dark"] .al-filter-card h3 { color:#a0aec0; background:transparent; border:none; text-shadow:none; }
+html[data-theme="dark"] .al-form-group label { color:#a0aec0; }
+html[data-theme="dark"] .al-form-input   { background:#1a202c; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .al-table th     { background:#374151; }
+html[data-theme="dark"] .al-table tbody tr:hover { background:#374151; }
+html[data-theme="dark"] .al-detail-row td { background:#374151; }
+html[data-theme="dark"] .al-diff-table th { background:#374151; color:#e2e8f0; }
+html[data-theme="dark"] .al-diff-table td { border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .al-diff-field   { color:#a0aec0; }
+html[data-theme="dark"] .al-diff-val     { color:#e2e8f0; }
+html[data-theme="dark"] .al-diff-old     { color:#fc8181; }
+html[data-theme="dark"] .al-diff-new     { color:#68d391; }
 html[data-theme="dark"] .al-diff-changed  { background:rgba(255,237,153,0.08); }
-html[data-theme="dark"] .al-page-link     { border-color:var(--ork-border); color:var(--ork-link-bright); }
-html[data-theme="dark"] .al-page-link:hover { background:var(--ork-bg-secondary); }
-html[data-theme="dark"] .al-btn-clear     { border-color:var(--ork-border); color:var(--ork-text-muted); }
-html[data-theme="dark"] .al-table         { color:var(--ork-text); }
+html[data-theme="dark"] .al-page-link     { border-color:#4a5568; color:#90cdf4; }
+html[data-theme="dark"] .al-page-link:hover { background:#374151; }
+html[data-theme="dark"] .al-btn-clear     { border-color:#4a5568; color:#a0aec0; }
+html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 
 @media (max-width:800px) {
 	.al-layout { flex-direction:column; }
