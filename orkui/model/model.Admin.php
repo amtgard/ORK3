@@ -25,6 +25,10 @@ class Model_Admin extends Model {
 		return $this->Report->GetNewPlayerAttendanceByKingdom(array('StartDate'=>$start_date, 'EndDate'=>$end_date));
 	}
 
+	function get_inactive_parks($kingdom_id = 0) {
+		return $this->Report->GetInactiveParks(array('KingdomId' => $kingdom_id));
+	}
+
 }
 
 ?>

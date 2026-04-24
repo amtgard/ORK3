@@ -283,6 +283,7 @@ class Controller_Kingdom extends Controller {
 	public function profile( $kingdom_id = null ) {
 		$this->template = '../revised-frontend/Kingdomnew_index.tpl';
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
+		if (!valid_id($kingdom_id)) { header('Location: ' . UIR); exit; }
 		$this->load_model('Award');
 		$this->load_model('Reports');
 		$this->load_model('Pronoun');

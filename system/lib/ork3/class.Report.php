@@ -3132,4 +3132,43 @@ class Report  extends Ork3 {
 		return $response;
 	}
 
+	public function GetInactiveParks($request) {
+		$kingdom_id = valid_id($request['KingdomId'] ?? 0) ? (int)$request['KingdomId'] : 0;
+		$kingdom_clause = $kingdom_id ? " AND p.kingdom_id = $kingdom_id" : '';
+
+		$sql = "
+			SELECT p.park_id, p.name AS park_name, p.active, p.modified,
+			       k.kingdom_id, k.name AS kingdom_name,
+			       pt.title AS park_type,
+			       (SELECT MAX(a.date) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id) AS last_attendance
+			FROM " . DB_PREFIX . "park p
+			JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+			LEFT JOIN " . DB_PREFIX . "parktitle pt ON pt.parktitle_id = p.parktitle_id
+			WHERE p.active != 'Active'
+			  AND p.park_id > 0
+			  AND p.name NOT LIKE '%No Park%'
+			  AND p.name != ''
+			$kingdom_clause
+			ORDER BY k.name, p.name
+		";
+
+		$r = $this->db->query($sql);
+		$response = ['Parks' => []];
+		if ($r !== false && $r->size() > 0) {
+			do {
+				$response['Parks'][] = [
+					'ParkId'         => $r->park_id,
+					'ParkName'       => $r->park_name,
+					'Active'         => $r->active,
+					'Modified'       => $r->modified,
+					'KingdomId'      => $r->kingdom_id,
+					'KingdomName'    => $r->kingdom_name,
+					'ParkType'       => $r->park_type,
+					'LastAttendance' => $r->last_attendance,
+				];
+			} while ($r->next());
+		}
+		return $response;
+	}
+
 }

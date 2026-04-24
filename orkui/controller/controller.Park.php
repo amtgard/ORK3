@@ -60,6 +60,7 @@ class Controller_Park extends Controller
 	{
 		$this->template = '../revised-frontend/Parknew_index.tpl';
 		$park_id = preg_replace('/[^0-9]/', '', $park_id);
+		if (!valid_id($park_id)) { header('Location: ' . UIR); exit; }
 		$this->load_model('Award');
 		$this->load_model('Attendance');
 		$this->load_model('Reports');

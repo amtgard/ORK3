@@ -1952,6 +1952,25 @@ class Controller_Admin extends Controller {
 		}
 	}
 
+	public function inactiveparks() {
+		$this->load_model('Admin');
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			header('Location: ' . UIR . 'Admin'); exit;
+		}
+		$kingdom_id = valid_id($this->request->KingdomId ?? 0) ? (int)$this->request->KingdomId : 0;
+		$result = $this->Admin->get_inactive_parks($kingdom_id);
+		$this->data['Parks']      = $result['Parks'] ?? [];
+		$this->data['KingdomId']  = $kingdom_id;
+
+		global $DB;
+		$DB->Clear();
+		$_kr = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom ORDER BY name");
+		$kingdoms = [];
+		if ($_kr && $_kr->Size() > 0) do { $kingdoms[(int)$_kr->kingdom_id] = $_kr->name; } while ($_kr->Next());
+		$this->data['Kingdoms'] = $kingdoms;
+	}
+
 	public function topparks($limit = null) {
 		$this->load_model('Admin');
 		$limit = intval($limit) > 0 ? intval($limit) : 25;
