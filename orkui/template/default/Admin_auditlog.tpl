@@ -127,8 +127,13 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$watchFields = ['Persona' => 'Persona', 'GivenName' => 'Given Name', 'Surname' => 'Surname',
 			                'Email' => 'Email', 'UserName' => 'Username', 'Active' => 'Active',
 			                'Suspended' => 'Suspended', 'Restricted' => 'Restricted'];
+			$_src = !empty($a) ? $a : $p;
 			foreach ($watchFields as $key => $label) {
-				if (isset($p[$key]) && isset($b[$key]) && (string)$p[$key] !== (string)$b[$key])
+				$_new = isset($_src[$key]) ? (string)$_src[$key] : null;
+				$_old = isset($b[$key])    ? (string)$b[$key]    : null;
+				if ($_old === '0000-00-00' || $_old === '' || $_old === 'false') $_old = null;
+				if ($_new === '0000-00-00' || $_new === '' || $_new === 'false') $_new = null;
+				if ($_new !== null && $_old !== null && $_new !== $_old)
 					$changed[] = $label;
 			}
 			if ($changed) return 'Changed: ' . implode(', ', $changed);
@@ -266,12 +271,19 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 					continue;
 				}
 				$old_val = isset($b[$key]) ? (string)$b[$key] : null;
-				$new_val = isset($p[$key]) ? (string)$p[$key] : null;
+				// Prefer post_state ($a) over raw request ($p) — the request may contain
+				// 0/false/"" defaults for fields the caller never touched (e.g. iOS password change).
+				$_src    = !empty($a) ? $a : $p;
+				$new_val = isset($_src[$key]) ? (string)$_src[$key] : null;
 				if ($new_val === null) continue;
+				// Normalize null-date sentinel and falsy empties so they compare equal to null
+				if ($old_val === '0000-00-00' || $old_val === '' || $old_val === 'false') $old_val = null;
+				if ($new_val === '0000-00-00' || $new_val === '' || $new_val === 'false') $new_val = null;
+				if ($old_val === null && $new_val === null) continue;
 				// If we have prior state, only show fields that actually changed
 				if ($hasPrior && $old_val !== null && $old_val === $new_val) continue;
 				// Skip empty Until fields when not changing (reduces noise)
-				if (in_array($key, ['ReeveQualifiedUntil','CorporaQualifiedUntil']) && (!$new_val || $new_val === '0000-00-00') && !$old_val) continue;
+				if (in_array($key, ['ReeveQualifiedUntil','CorporaQualifiedUntil']) && !$new_val && !$old_val) continue;
 				$changed = $hasPrior && $old_val !== null && $old_val !== $new_val;
 				$rows .= '<tr' . ($changed ? ' class="al-diff-changed"' : '') . '>'
 				       . '<td class="al-diff-field">' . htmlspecialchars($label) . '</td>'
