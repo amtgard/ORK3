@@ -446,9 +446,6 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php else: ?>
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
-				<?php if ($Player['Restricted'] == 1): ?>
-					<span class="pn-badge pn-badge-orange"><i class="fas fa-exclamation-triangle"></i> Restricted</span>
-				<?php endif; ?>
 				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
 				<?php elseif (!empty($Player['LastDuesThrough'])): ?>

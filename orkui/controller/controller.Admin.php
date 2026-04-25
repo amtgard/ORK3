@@ -1952,12 +1952,28 @@ class Controller_Admin extends Controller {
 		}
 	}
 
-	public function inactiveparks() {
+	public function inactivekingdoms() {
+		$this->template = 'Admin_inactivekingdoms.tpl';
 		$this->load_model('Admin');
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
 			header('Location: ' . UIR . 'Admin'); exit;
 		}
+		$this->data['page_title'] = 'Inactive Kingdoms';
+		unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
+		$result = $this->Admin->get_inactive_kingdoms();
+		$this->data['Kingdoms'] = $result['Kingdoms'] ?? [];
+	}
+
+	public function inactiveparks() {
+		$this->template = 'Admin_inactiveparks.tpl';
+		$this->load_model('Admin');
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			header('Location: ' . UIR . 'Admin'); exit;
+		}
+		$this->data['page_title'] = 'Inactive Parks';
+		unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
 		$kingdom_id = valid_id($this->request->KingdomId ?? 0) ? (int)$this->request->KingdomId : 0;
 		$result = $this->Admin->get_inactive_parks($kingdom_id);
 		$this->data['Parks']      = $result['Parks'] ?? [];

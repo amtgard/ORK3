@@ -382,6 +382,8 @@ class Controller_Player extends Controller {
 			LEFT JOIN ork_park p ON o.park_id = p.park_id AND o.park_id > 0
 			LEFT JOIN ork_parktitle pt ON p.parktitle_id = pt.parktitle_id
 			WHERE o.mundane_id = " . (int)$id . "
+			  AND k.active = 'Active'
+			  AND (o.park_id = 0 OR p.active = 'Active')
 			ORDER BY o.park_id DESC, o.role";
 		$officerResult = $DB->DataSet($officerSql);
 		$officerRoles  = [];

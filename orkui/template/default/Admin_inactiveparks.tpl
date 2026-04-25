@@ -2,6 +2,7 @@
 $_has_data = is_array($Parks) && count($Parks) > 0;
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
 <style>
 .rp-param-form { display: flex; flex-direction: column; gap: 10px; }
@@ -74,6 +75,7 @@ details > summary::-webkit-details-marker { display: none; }
 				<div class="rp-filter-card-header"><i class="fas fa-sliders-h"></i> Filter</div>
 				<div class="rp-filter-card-body">
 					<form method="GET" action="<?=UIR?>Admin/inactiveparks" class="rp-param-form">
+						<input type="hidden" name="Route" value="Admin/inactiveparks">
 						<div class="rp-form-group">
 							<label for="KingdomId">Kingdom</label>
 							<select id="KingdomId" name="KingdomId" class="rp-form-input">
@@ -101,8 +103,8 @@ details > summary::-webkit-details-marker { display: none; }
 			<table class="rp-table display" id="ip-table" style="width:100%">
 				<thead>
 					<tr>
-						<th>Park</th>
 						<th>Kingdom</th>
+						<th>Park</th>
 						<th>Type</th>
 						<th>Last Attendance</th>
 						<th>Modified</th>
@@ -111,8 +113,8 @@ details > summary::-webkit-details-marker { display: none; }
 				<tbody>
 <?php foreach ($Parks as $_park): ?>
 				<tr style="cursor:pointer;" onclick="window.location.href='<?=UIR?>Park/profile/<?=(int)$_park['ParkId']?>'">
-					<td><?=htmlspecialchars(stripslashes($_park['ParkName'] ?? ''))?></td>
 					<td><?=htmlspecialchars(stripslashes($_park['KingdomName'] ?? ''))?></td>
+					<td><?=htmlspecialchars(stripslashes($_park['ParkName'] ?? ''))?></td>
 					<td><?=htmlspecialchars($_park['ParkType'] ?? '—')?></td>
 					<td><?= !empty($_park['LastAttendance']) ? htmlspecialchars($_park['LastAttendance']) : '<span style="color:var(--rp-text-muted)">Never</span>' ?></td>
 					<td><?= !empty($_park['Modified']) ? htmlspecialchars(substr($_park['Modified'], 0, 10)) : '—' ?></td>
@@ -127,22 +129,38 @@ details > summary::-webkit-details-marker { display: none; }
 
 </div><!-- /.rp-root -->
 
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
 $(function () {
 <?php if ($_has_data): ?>
+	var _skipWords = /^(the|kingdom|empire|freehold|principality|confederacy|of)\s+/i;
+	function _kdSortKey(s) {
+		s = s.trim();
+		var prev;
+		do { prev = s; s = s.replace(_skipWords, ''); } while (s !== prev);
+		return s.toLowerCase();
+	}
 	$('#ip-table').DataTable({
 		dom: 'lfrtip',
 		pageLength: 50,
-		order: [[1, 'asc'], [0, 'asc']],
-		columnDefs: [{ targets: [3, 4], type: 'date' }]
+		order: [[0, 'asc'], [1, 'asc']],
+		columnDefs: [
+			{ targets: [3, 4], type: 'date' },
+			{
+				targets: 0,
+				render: function(data, type) {
+					return type === 'sort' ? _kdSortKey(data) : data;
+				}
+			}
+		]
 	});
 
 	$('#ip-btn-csv').on('click', function () {
-		var rows = [['Park', 'Kingdom', 'Type', 'Last Attendance', 'Modified']];
+		var rows = [['Kingdom', 'Park', 'Type', 'Last Attendance', 'Modified']];
 		<?php foreach ($Parks as $_park): ?>
 		rows.push([
-			'<?=addslashes(stripslashes($_park['ParkName'] ?? ''))?>',
 			'<?=addslashes(stripslashes($_park['KingdomName'] ?? ''))?>',
+			'<?=addslashes(stripslashes($_park['ParkName'] ?? ''))?>',
 			'<?=addslashes($_park['ParkType'] ?? '')?>',
 			'<?=addslashes($_park['LastAttendance'] ?? '')?>',
 			'<?=addslashes(substr($_park['Modified'] ?? '', 0, 10))?>'

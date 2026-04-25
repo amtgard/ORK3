@@ -3132,6 +3132,41 @@ class Report  extends Ork3 {
 		return $response;
 	}
 
+	public function GetInactiveKingdoms($request) {
+		$sql = "
+			SELECT k.kingdom_id, k.name AS kingdom_name, k.active, k.modified,
+			       k.parent_kingdom_id,
+			       pk.name AS parent_kingdom_name,
+			       (SELECT MAX(a.date) FROM " . DB_PREFIX . "attendance a
+			        JOIN " . DB_PREFIX . "park p2 ON p2.park_id = a.park_id
+			        WHERE p2.kingdom_id = k.kingdom_id) AS last_attendance
+			FROM " . DB_PREFIX . "kingdom k
+			LEFT JOIN " . DB_PREFIX . "kingdom pk ON pk.kingdom_id = k.parent_kingdom_id
+			WHERE k.active != 'Active'
+			  AND k.kingdom_id > 0
+			  AND k.name != ''
+			ORDER BY k.name
+		";
+
+		$r = $this->db->query($sql);
+		$response = ['Kingdoms' => []];
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$response['Kingdoms'][] = [
+					'KingdomId'         => $r->kingdom_id,
+					'KingdomName'       => $r->kingdom_name,
+					'Active'            => $r->active,
+					'Modified'          => $r->modified,
+					'ParentKingdomId'   => $r->parent_kingdom_id,
+					'ParentKingdomName' => $r->parent_kingdom_name,
+					'LastAttendance'    => $r->last_attendance,
+					'Type'              => $r->parent_kingdom_id > 0 ? 'Principality' : 'Kingdom',
+				];
+			}
+		}
+		return $response;
+	}
+
 	public function GetInactiveParks($request) {
 		$kingdom_id = valid_id($request['KingdomId'] ?? 0) ? (int)$request['KingdomId'] : 0;
 		$kingdom_clause = $kingdom_id ? " AND p.kingdom_id = $kingdom_id" : '';
@@ -3155,7 +3190,7 @@ class Report  extends Ork3 {
 		$r = $this->db->query($sql);
 		$response = ['Parks' => []];
 		if ($r !== false && $r->size() > 0) {
-			do {
+			while ($r->next()) {
 				$response['Parks'][] = [
 					'ParkId'         => $r->park_id,
 					'ParkName'       => $r->park_name,
@@ -3166,7 +3201,7 @@ class Report  extends Ork3 {
 					'ParkType'       => $r->park_type,
 					'LastAttendance' => $r->last_attendance,
 				];
-			} while ($r->next());
+			}
 		}
 		return $response;
 	}

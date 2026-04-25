@@ -9,7 +9,7 @@ $kingdomList = is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'] ?? nu
 $kingdoms       = array_values(array_filter($kingdomList, fn($k) => !$k['IsPrincipality']));
 $principalities = array_filter($kingdomList, fn($k) => $k['IsPrincipality']);
 
-$totalParks      = array_sum(array_column($kingdomList, 'ParkCount'));
+$totalParks      = array_sum(array_column($kingdoms, 'ParkCount')); // kingdoms only — principality parks are already included in parent kingdom count
 $totalKingdoms   = count($kingdoms);
 $totalAttendance = array_sum(array_column($kingdomList, 'Attendance'));
 $uir             = UIR;
@@ -50,6 +50,11 @@ function cpTrend(int $cur, ?int $prev): string {
 			<div class="cp-hero-stat">
 				<span class="cp-hero-stat-val"><?= count($kingdoms) ?></span>
 				<span class="cp-hero-stat-lbl">Kingdoms</span>
+			</div>
+			<div class="cp-hero-stat-div"></div>
+			<div class="cp-hero-stat">
+				<span class="cp-hero-stat-val"><?= count($principalities) ?></span>
+				<span class="cp-hero-stat-lbl">Principalities</span>
 			</div>
 			<div class="cp-hero-stat-div"></div>
 			<div class="cp-hero-stat">
@@ -143,6 +148,11 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Create Park</div>
 					<div class="cp-action-desc">Add a new park to any kingdom</div>
 				</button>
+				<a class="cp-action-card" href="<?= UIR ?>Admin/inactivekingdoms" style="text-decoration:none">
+					<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-ban"></i></div>
+					<div class="cp-action-label">Inactive Kingdoms</div>
+					<div class="cp-action-desc">Retired kingdoms &amp; principalities</div>
+				</a>
 			</div>
 		</div>
 
@@ -182,6 +192,11 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Migrate Park Members</div>
 					<div class="cp-action-desc">Move all members from one park to another</div>
 				</button>
+			<a class="cp-action-card" href="<?= UIR ?>Admin/inactiveparks" style="text-decoration:none">
+				<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-ban"></i></div>
+				<div class="cp-action-label">Inactive Parks</div>
+				<div class="cp-action-desc">Retired parks across all kingdoms</div>
+			</a>
 			</div>
 		</div>
 
@@ -274,7 +289,6 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Unit/unitlist"><i class="fas fa-users"></i><span>Companies &amp; Households<span class="cp-report-list-desc">All registered units</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/topparks"><i class="fas fa-trophy"></i><span>Top Parks by Attendance<span class="cp-report-list-desc">Ranked attendance report</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
-				<li><a href="<?= UIR ?>Admin/inactiveparks"><i class="fas fa-ban"></i><span>Inactive Parks<span class="cp-report-list-desc">Retired parks across all kingdoms</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
 			</ul>
 		</div>
