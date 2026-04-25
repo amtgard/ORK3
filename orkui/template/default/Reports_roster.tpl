@@ -237,8 +237,8 @@ if ($_isOrkAdmin) {
 						<span class="rp-col-guide-desc">Date the suspension was recorded in the system.</span>
 					</div>
 					<div class="rp-col-guide-item">
-						<span class="rp-col-guide-name">Suspendator</span>
-						<span class="rp-col-guide-desc">The user who entered the suspension record.</span>
+						<span class="rp-col-guide-name">Suspended By</span>
+						<span class="rp-col-guide-desc">The player responsible for the suspension — may differ from the admin who entered the record.</span>
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Comments</span>
@@ -297,7 +297,7 @@ if ($_isOrkAdmin) {
 						<th>Suspended Until</th>
 <?php if ($is_suspended) : ?>
 						<th class="rp-col-propagates">Propagates</th>
-						<th>Suspendator</th>
+						<th>Suspended By</th>
 						<th>Comments</th>
 <?php endif; ?>
 				</tr>
@@ -323,7 +323,8 @@ if ($_isOrkAdmin) {
 						data-suspended-until="<?=htmlspecialchars($player['SuspendedUntil'] ?? '')?>"
 						data-suspension="<?=htmlspecialchars($player['Suspension'] ?? '')?>"
 						data-propagates="<?= isset($player['SuspensionPropagates']) ? (int)$player['SuspensionPropagates'] : '' ?>"
-						data-suspendator-id="<?= (int)($player['SuspendatorId'] ?? 0) ?>">
+						data-suspendator-id="<?= (int)($player['SuspendatorId'] ?? 0) ?>"
+						data-suspendator-persona="<?=htmlspecialchars($player['Suspendator'] ?? '')?>">
 						<i class="fas fa-pencil-alt" style="margin-right:3px"></i> Edit
 					</a>
 					&nbsp;·&nbsp;
@@ -519,6 +520,16 @@ $(function() {
 			<input type="hidden" id="es-player-id">
 		</div>
 
+		<div style="margin-bottom:14px">
+			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended By</label>
+			<div style="position:relative">
+				<input type="text" id="es-by-text" autocomplete="off" placeholder="Leave blank to keep existing"
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
+				<div id="es-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
+			</div>
+			<input type="hidden" id="es-by-id">
+		</div>
+
 		<div style="display:flex;gap:14px;margin-bottom:14px">
 			<div style="flex:1">
 				<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended From <span style="color:#e53e3e">*</span></label>
@@ -557,8 +568,8 @@ $(function() {
 </div>
 <script>
 (function() {
-	var _suspUrl       = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
-	var _suspendatorId = <?= (int)$this->__session->user_id ?>; // used for new suspensions; overridden per-row on edit
+	var _suspUrl    = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
+	var _searchUrl  = '<?= UIR ?>KingdomAjax/playersearch/<?= (int)$_scopeId ?>&scope=all';
 	var _fpFrom, _fpUntil;
 
 	_fpFrom  = flatpickr('#es-from',  { dateFormat: 'Y-m-d' });
@@ -577,10 +588,65 @@ $(function() {
 		}
 	}
 
+	// Suspended By autocomplete for edit modal
+	(function() {
+		var timer = null;
+		var textEl    = document.getElementById('es-by-text');
+		var hiddenEl  = document.getElementById('es-by-id');
+		var resultsEl = document.getElementById('es-by-results');
+
+		function getItems() { return Array.from(resultsEl.querySelectorAll('[data-ac-item]')); }
+		function highlight(items, idx) {
+			items.forEach(function(el, i) { el.style.background = i === idx ? '#ebf4ff' : ''; });
+		}
+		function select(p) {
+			textEl.value   = p.Persona;
+			hiddenEl.value = p.MundaneId;
+			resultsEl.style.display = 'none';
+		}
+		textEl.addEventListener('input', function() {
+			var q = this.value.trim();
+			hiddenEl.value = '';
+			clearTimeout(timer);
+			if (q.length < 2) { resultsEl.style.display = 'none'; return; }
+			timer = setTimeout(function() {
+				fetch(_searchUrl + '&q=' + encodeURIComponent(q))
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						resultsEl.innerHTML = '';
+						if (!data.length) { resultsEl.style.display = 'none'; return; }
+						data.forEach(function(p) {
+							var div = document.createElement('div');
+							div.setAttribute('data-ac-item', '1');
+							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
+							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
+							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+							div.addEventListener('click', function() { select(p); });
+							resultsEl.appendChild(div);
+						});
+						resultsEl.style.display = 'block';
+					});
+			}, 200);
+		});
+		textEl.addEventListener('keydown', function(e) {
+			var items = getItems();
+			if (!items.length) return;
+			var cur = items.findIndex(function(el) { return el.style.background !== ''; });
+			if (e.key === 'ArrowDown') { e.preventDefault(); var n = cur < items.length-1 ? cur+1 : 0; highlight(items,n); items[n].scrollIntoView({block:'nearest'}); }
+			else if (e.key === 'ArrowUp') { e.preventDefault(); var p = cur > 0 ? cur-1 : items.length-1; highlight(items,p); items[p].scrollIntoView({block:'nearest'}); }
+			else if (e.key === 'Enter')   { if (cur >= 0) { e.preventDefault(); items[cur].click(); } }
+			else if (e.key === 'Escape')  { resultsEl.style.display = 'none'; }
+		});
+		textEl.addEventListener('blur', function() {
+			setTimeout(function() { resultsEl.style.display = 'none'; }, 150);
+		});
+	})();
+
 	function openEditOverlay(data) {
-		if (data.suspendatorId) _suspendatorId = data.suspendatorId;
 		document.getElementById('es-player-name').textContent = data.persona;
 		document.getElementById('es-player-id').value         = data.mundaneId;
+		document.getElementById('es-by-text').value           = data.suspendatorPersona || '';
+		document.getElementById('es-by-id').value             = data.suspendatorId ? String(data.suspendatorId) : '';
 		document.getElementById('es-error').style.display     = 'none';
 
 		_fpFrom.setDate(data.suspendedAt || '', true);
@@ -640,9 +706,10 @@ $(function() {
 		btn.disabled  = true;
 
 		var fd = new FormData();
-		fd.append('MundaneId',         mundaneId);
-		fd.append('SuspendatorId',     _suspendatorId);
-		fd.append('SuspendedAt',       from);
+		var byId = document.getElementById('es-by-id').value;
+		fd.append('MundaneId',   mundaneId);
+		if (byId) fd.append('SuspendedById', byId);
+		fd.append('SuspendedAt', from);
 		if (!indefinite) fd.append('SuspendedUntil', until);
 		fd.append('Suspension',        comment);
 		fd.append('SuspensionPropagates', propagates);
@@ -663,13 +730,14 @@ $(function() {
 		e.preventDefault();
 		var el = this;
 		openEditOverlay({
-			mundaneId:     $(el).data('mundane-id'),
-			persona:       $(el).data('persona'),
-			suspendedAt:   $(el).data('suspended-at'),
-			suspendedUntil: $(el).data('suspended-until'),
-			suspension:    $(el).data('suspension'),
-			propagates:    String($(el).data('propagates')),
-			suspendatorId: $(el).data('suspendator-id') || 0
+			mundaneId:          $(el).data('mundane-id'),
+			persona:            $(el).data('persona'),
+			suspendedAt:        $(el).data('suspended-at'),
+			suspendedUntil:     $(el).data('suspended-until'),
+			suspension:         $(el).data('suspension'),
+			propagates:         String($(el).data('propagates')),
+			suspendatorId:      $(el).data('suspendator-id') || 0,
+			suspendatorPersona: $(el).data('suspendator-persona') || ''
 		});
 	});
 })();
@@ -701,6 +769,16 @@ $(function() {
 				<div id="sp-player-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="sp-player-id">
+		</div>
+
+		<div style="margin-bottom:14px">
+			<label style="display:block;font-size:.88em;font-weight:600;color:#4a5568;margin-bottom:4px">Suspended By</label>
+			<div style="position:relative">
+				<input type="text" id="sp-by-text" autocomplete="off" placeholder="Default: you (leave blank to use your account)"
+					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
+				<div id="sp-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
+			</div>
+			<input type="hidden" id="sp-by-id">
 		</div>
 
 		<div style="display:flex;gap:14px;margin-bottom:14px">
@@ -811,42 +889,96 @@ $(function() {
 		document.getElementById('sp-player-results').style.display = 'none';
 	});
 
-	// Player search autocomplete
-	var _searchTimer = null;
-	document.getElementById('sp-player-text').addEventListener('input', function() {
-		var q = this.value.trim();
-		var results = document.getElementById('sp-player-results');
-		document.getElementById('sp-player-id').value = '';
-		updateSubmitBtn();
-		clearTimeout(_searchTimer);
-		if (q.length < 2) { results.style.display = 'none'; return; }
-		_searchTimer = setTimeout(function() {
-			var parkId = document.getElementById('sp-park').value;
-			var parkParam = parkId ? '&park_id=' + encodeURIComponent(parkId) : '';
-			fetch(_searchUrl + '&q=' + encodeURIComponent(q) + parkParam)
-				.then(function(r) { return r.json(); })
-				.then(function(data) {
-					results.innerHTML = '';
-					if (!data.length) { results.style.display = 'none'; return; }
-					data.forEach(function(p) {
-						var div = document.createElement('div');
-						div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
-						div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
-						div.addEventListener('mousedown', function(e) { e.preventDefault(); });
-						div.addEventListener('click', function() {
-							document.getElementById('sp-player-text').value = p.Persona;
-							document.getElementById('sp-player-id').value   = p.MundaneId;
-							results.style.display = 'none';
-							updateSubmitBtn();
+	// Shared autocomplete helper
+	function spAc(opts) {
+		// opts: textId, hiddenId, resultsId, getUrl, onSelect, extraParams
+		var textEl    = document.getElementById(opts.textId);
+		var hiddenEl  = document.getElementById(opts.hiddenId);
+		var resultsEl = document.getElementById(opts.resultsId);
+		var timer = null;
+
+		function getItems() {
+			return Array.from(resultsEl.querySelectorAll('[data-ac-item]'));
+		}
+		function highlight(items, idx) {
+			items.forEach(function(el, i) {
+				el.style.background = i === idx ? '#ebf4ff' : '';
+			});
+		}
+		function select(p) {
+			textEl.value   = p.Persona;
+			hiddenEl.value = p.MundaneId;
+			resultsEl.style.display = 'none';
+			if (opts.onSelect) opts.onSelect(p);
+		}
+
+		textEl.addEventListener('input', function() {
+			var q = this.value.trim();
+			hiddenEl.value = '';
+			if (opts.onSelect) opts.onSelect(null);
+			clearTimeout(timer);
+			if (q.length < 2) { resultsEl.style.display = 'none'; return; }
+			timer = setTimeout(function() {
+				var url = opts.getUrl() + '&q=' + encodeURIComponent(q);
+				fetch(url)
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						resultsEl.innerHTML = '';
+						if (!data.length) { resultsEl.style.display = 'none'; return; }
+						data.forEach(function(p) {
+							var div = document.createElement('div');
+							div.setAttribute('data-ac-item', '1');
+							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
+							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
+							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
+							div.addEventListener('click', function() { select(p); });
+							resultsEl.appendChild(div);
 						});
-						results.appendChild(div);
+						resultsEl.style.display = 'block';
 					});
-					results.style.display = 'block';
-				});
-		}, 200);
+			}, 200);
+		});
+
+		textEl.addEventListener('keydown', function(e) {
+			var items = getItems();
+			if (!items.length) return;
+			var cur = items.findIndex(function(el) { return el.style.background !== ''; });
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				var next = cur < items.length - 1 ? cur + 1 : 0;
+				highlight(items, next);
+				items[next].scrollIntoView({ block: 'nearest' });
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				var prev = cur > 0 ? cur - 1 : items.length - 1;
+				highlight(items, prev);
+				items[prev].scrollIntoView({ block: 'nearest' });
+			} else if (e.key === 'Enter') {
+				if (cur >= 0) { e.preventDefault(); items[cur].click(); }
+			} else if (e.key === 'Escape') {
+				resultsEl.style.display = 'none';
+			}
+		});
+
+		textEl.addEventListener('blur', function() {
+			setTimeout(function() { resultsEl.style.display = 'none'; }, 150);
+		});
+	}
+
+	// Player search
+	spAc({
+		textId: 'sp-player-text', hiddenId: 'sp-player-id', resultsId: 'sp-player-results',
+		getUrl: function() {
+			var parkId = document.getElementById('sp-park').value;
+			return _searchUrl + (parkId ? '&park_id=' + encodeURIComponent(parkId) : '');
+		},
+		onSelect: function() { updateSubmitBtn(); }
 	});
-	document.getElementById('sp-player-text').addEventListener('blur', function() {
-		setTimeout(function() { document.getElementById('sp-player-results').style.display = 'none'; }, 150);
+
+	// Suspended By search
+	spAc({
+		textId: 'sp-by-text', hiddenId: 'sp-by-id', resultsId: 'sp-by-results',
+		getUrl: function() { return _searchUrl + '&scope=all'; }
 	});
 
 	// Open / close
@@ -855,6 +987,8 @@ $(function() {
 		document.getElementById('sp-error').style.display = 'none';
 		document.getElementById('sp-player-text').value = '';
 		document.getElementById('sp-player-id').value   = '';
+		document.getElementById('sp-by-text').value     = '';
+		document.getElementById('sp-by-id').value       = '';
 		document.getElementById('sp-comment').value     = '';
 		document.getElementById('sp-char-count').textContent = '0 / 100';
 		document.getElementById('sp-indefinite').checked = false;
@@ -910,9 +1044,10 @@ $(function() {
 		btn.innerHTML = 'Suspending…';
 		btn.disabled  = true;
 
+		var byId = document.getElementById('sp-by-id').value;
 		var fd = new FormData();
 		fd.append('MundaneId',    mundaneId);
-		fd.append('SuspendatorId', _suspendatorId);
+		if (byId) fd.append('SuspendedById', byId);
 		fd.append('SuspendedAt',  from);
 		if (!indefinite) fd.append('SuspendedUntil', until);
 		fd.append('Suspension',   comment);

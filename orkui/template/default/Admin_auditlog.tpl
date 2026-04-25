@@ -216,7 +216,7 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 // Build detailed diff / detail HTML for the expand panel
 function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $mundaneMap, $eventMap, $kawardMap = [], $classMap = []) {
 	$p = _jsonDecode($params, ['ParkId','MundaneId','KingdomId','FromMundaneId','ToMundaneId','SuspendedUntil','SuspendedById','ClassId','Credits','Date']);
-	$b = _jsonDecode($prior,  ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','Persona','class_id','date','credits','dues_until','dues_for_life','name','kingdomaward_id','given_by','given_by_id','at_park_id','at_kingdom_id','at_event_id']);
+	$b = _jsonDecode($prior,  ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','Persona','class_id','date','credits','dues_until','dues_for_life','name','kingdomaward_id','given_by','given_by_id','at_park_id','at_kingdom_id','at_event_id','SuspendedById']);
 	$a = _jsonDecode($post,   ['ParkId','park_id','KingdomId','MundaneId','mundane_id','Persona','kingdomaward_id']);
 
 	switch ($method) {
@@ -354,19 +354,34 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 		case 'Player::SetPlayerSuspension':
 			$_hasPrior = !empty($b);
 			$_suspFields = [
-				'Suspended'            => ['lbl' => 'Status',     'fmt' => 'bool_suspended'],
-				'SuspendedUntil'       => ['lbl' => 'Until',      'fmt' => 'text'],
-				'Suspension'           => ['lbl' => 'Reason',     'fmt' => 'text'],
-				'SuspensionPropagates' => ['lbl' => 'Propagates', 'fmt' => 'bool'],
+				'Suspended'            => ['lbl' => 'Status',       'fmt' => 'bool_suspended'],
+				'SuspendedById'        => ['lbl' => 'Suspended By', 'fmt' => 'player_link'],
+				'SuspendedUntil'       => ['lbl' => 'Until',        'fmt' => 'text'],
+				'Suspension'           => ['lbl' => 'Reason',       'fmt' => 'text'],
+				'SuspensionPropagates' => ['lbl' => 'Propagates',   'fmt' => 'bool'],
 			];
 			if ($_hasPrior) {
 				$html = '<table class="al-diff-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>';
 				foreach ($_suspFields as $_k => $_f) {
 					$_old = isset($b[$_k]) ? (string)$b[$_k] : null;
 					$_new = isset($p[$_k]) ? (string)$p[$_k] : null;
+					// MySQL null-date sentinel is semantically empty — treat as null
+					if ($_old === '0000-00-00' || $_old === '') $_old = null;
+					if ($_new === '0000-00-00' || $_new === '') $_new = null;
 					if ($_old === null && $_new === null) continue;
 					if ($_f['fmt'] === 'bool_suspended') { $_old = $_old !== null ? ($_old ? 'Suspended' : 'Not Suspended') : null; $_new = $_new !== null ? ($_new ? 'Suspended' : 'Not Suspended') : null; }
 					elseif ($_f['fmt'] === 'bool') { $_old = $_old !== null ? ($_old ? 'Yes' : 'No') : null; $_new = $_new !== null ? ($_new ? 'Yes' : 'No') : null; }
+					elseif ($_f['fmt'] === 'player_link') {
+						$_oldId = (int)($_old ?? 0); $_newId = (int)($_new ?? 0);
+						if (!$_oldId && !$_newId) continue;
+						$_changed = $_oldId !== $_newId;
+						$html .= '<tr' . ($_changed ? ' class="al-diff-changed"' : '') . '>'
+						       . '<td class="al-diff-field">' . $_f['lbl'] . '</td>'
+						       . '<td class="' . ($_changed ? 'al-diff-old' : 'al-diff-val') . '">' . _auditIdLink('player', $_oldId, $mundaneMap) . '</td>'
+						       . '<td class="' . ($_changed ? 'al-diff-new' : 'al-diff-val') . '">' . _auditIdLink('player', $_newId, $mundaneMap) . '</td>'
+						       . '</tr>';
+						continue;
+					}
 					$_changed = $_old !== null && $_new !== null && $_old !== $_new;
 					$html .= '<tr' . ($_changed ? ' class="al-diff-changed"' : '') . '>'
 					       . '<td class="al-diff-field">' . $_f['lbl'] . '</td>'
@@ -377,15 +392,19 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			} else {
 				$html = '<table class="al-diff-table"><tbody>';
 				foreach ($_suspFields as $_k => $_f) {
-					if (!isset($p[$_k]) || $p[$_k] === '') continue;
+					if (!isset($p[$_k]) || $p[$_k] === '' || $p[$_k] === '0000-00-00') continue;
+					if ($_f['fmt'] === 'player_link') {
+						$_pid = (int)$p[$_k];
+						if (!$_pid) continue;
+						$html .= '<tr><td class="al-diff-field">' . $_f['lbl'] . '</td><td colspan="2">' . _auditIdLink('player', $_pid, $mundaneMap) . '</td></tr>';
+						continue;
+					}
 					$_val = $_f['fmt'] === 'bool_suspended' ? ($p[$_k] ? 'Suspended' : 'Not Suspended') : ($_f['fmt'] === 'bool' ? ($p[$_k] ? 'Yes' : 'No') : htmlspecialchars($p[$_k]));
 					$html .= '<tr><td class="al-diff-field">' . $_f['lbl'] . '</td><td colspan="2">' . $_val . '</td></tr>';
 				}
 			}
 			if (!empty($p['MundaneId']))
 				$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $p['MundaneId'], $mundaneMap) . '</td></tr>';
-			if (!empty($p['SuspendedById']))
-				$html .= '<tr><td class="al-diff-field">Suspended By</td><td colspan="2">' . _auditIdLink('player', $p['SuspendedById'], $mundaneMap) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 

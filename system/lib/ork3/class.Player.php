@@ -880,7 +880,14 @@ class Player extends Ork3 {
 				$this->mundane->suspension_propagates = isset($request['SuspensionPropagates']) ? (int)(bool)$request['SuspensionPropagates'] : 1;
 			}
 			$this->mundane->save();
-			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $prior_suspension);
+			$post_suspension = [
+				'Suspended'            => (int)$this->mundane->suspended,
+				'SuspendedById'        => $this->mundane->suspended_by_id,
+				'SuspendedUntil'       => $this->mundane->suspended_until,
+				'Suspension'           => $this->mundane->suspension,
+				'SuspensionPropagates' => (int)$this->mundane->suspension_propagates,
+			];
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $prior_suspension, $post_suspension);
 		} else {
 			return NoAuthorization();
 		}
