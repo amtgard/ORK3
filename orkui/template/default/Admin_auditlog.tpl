@@ -126,7 +126,7 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 				$changed[] = 'Password';
 			$watchFields = ['Persona' => 'Persona', 'GivenName' => 'Given Name', 'Surname' => 'Surname',
 			                'Email' => 'Email', 'UserName' => 'Username', 'Active' => 'Active',
-			                'Suspended' => 'Suspended', 'Restricted' => 'Restricted'];
+			                'Waivered' => 'Waivered', 'Suspended' => 'Suspended', 'Restricted' => 'Restricted'];
 			$_src = !empty($a) ? $a : $p;
 			foreach ($watchFields as $key => $label) {
 				$_new = isset($_src[$key]) ? (string)$_src[$key] : null;
