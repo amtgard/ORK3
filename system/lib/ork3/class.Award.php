@@ -7,6 +7,32 @@ class Award  extends Ork3 {
 		$this->award = new yapo($this->db, DB_PREFIX . 'award');
 	}
 
+	/**
+	 * Map of ladder award_id => metadata used to detect when a player has already reached
+	 * the top of that ladder or earned its Master-peerage companion award.
+	 *
+	 * Keep in sync with the $pnOrderToMaster / $pnOrderNames maps in
+	 * orkui/template/revised-frontend/Playernew_index.tpl (Awards tab).
+	 */
+	public static function GetLadderMasterMap() {
+		return [
+			21  => ['MasterAwardIds' => [1],   'LadderName' => 'Order of the Rose',    'MasterName' => 'Master Rose',    'MaxRank' => 10],
+			22  => ['MasterAwardIds' => [2],   'LadderName' => 'Order of the Smith',   'MasterName' => 'Master Smith',   'MaxRank' => 10],
+			23  => ['MasterAwardIds' => [3],   'LadderName' => 'Order of the Lion',    'MasterName' => 'Master Lion',    'MaxRank' => 10],
+			24  => ['MasterAwardIds' => [4],   'LadderName' => 'Order of the Owl',     'MasterName' => 'Master Owl',     'MaxRank' => 10],
+			25  => ['MasterAwardIds' => [5],   'LadderName' => 'Order of the Dragon',  'MasterName' => 'Master Dragon',  'MaxRank' => 10],
+			26  => ['MasterAwardIds' => [6],   'LadderName' => 'Order of the Garber',  'MasterName' => 'Master Garber',  'MaxRank' => 10],
+			27  => ['MasterAwardIds' => [12],  'LadderName' => 'Order of the Warrior', 'MasterName' => 'Warlord',        'MaxRank' => 10],
+			28  => ['MasterAwardIds' => [7],   'LadderName' => 'Order of the Jovius',  'MasterName' => 'Master Jovius',  'MaxRank' => 10],
+			29  => ['MasterAwardIds' => [9],   'LadderName' => 'Order of the Mask',    'MasterName' => 'Master Mask',    'MaxRank' => 10],
+			30  => ['MasterAwardIds' => [8],   'LadderName' => 'Order of the Zodiac',  'MasterName' => 'Master Zodiac',  'MaxRank' => 12],
+			32  => ['MasterAwardIds' => [10],  'LadderName' => 'Order of the Hydra',   'MasterName' => 'Master Hydra',   'MaxRank' => 10],
+			33  => ['MasterAwardIds' => [11],  'LadderName' => 'Order of the Griffin', 'MasterName' => 'Master Griffin', 'MaxRank' => 10],
+			239 => ['MasterAwardIds' => [240], 'LadderName' => 'Order of the Crown',   'MasterName' => 'Master Crown',   'MaxRank' => 10],
+			243 => ['MasterAwardIds' => [244], 'LadderName' => 'Order of Battle',      'MasterName' => 'Battlemaster',   'MaxRank' => 10],
+		];
+	}
+
     public function LookupAward($request) {
         if (valid_id($request['KingdomId']) && valid_id($request['AwardId'])) {
         	$kingdomaward = new yapo($this->db, DB_PREFIX . 'kingdomaward');
