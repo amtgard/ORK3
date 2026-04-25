@@ -2078,16 +2078,18 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 <?php endif; ?>
 
 <?php
-// Build KingdomAwardId => max rank held by this player (for ladder award pre-fill)
-// and the set of KingdomAwardIds the player already holds (for title duplicate detection)
-$playerAwardRanks        = array();
+// Build AwardId => max rank held by this player (for ladder award pre-fill),
+// and the set of held base AwardIds and KingdomAwardIds (for duplicate / Master-peerage detection)
+$playerAwardRanks          = array();
+$playerHeldAwardIds        = array();
 $playerHeldKingdomAwardIds = array();
 if (is_array($Details['Awards'])) {
 	foreach ($Details['Awards'] as $a) {
 		$aid  = (int)$a['AwardId'];
 		$rank = (int)$a['Rank'];
-		if ($aid > 0 && $rank > 0) {
-			if (!isset($playerAwardRanks[$aid]) || $rank > $playerAwardRanks[$aid]) {
+		if ($aid > 0) {
+			$playerHeldAwardIds[$aid] = true;
+			if ($rank > 0 && (!isset($playerAwardRanks[$aid]) || $rank > $playerAwardRanks[$aid])) {
 				$playerAwardRanks[$aid] = $rank;
 			}
 		}
@@ -2097,7 +2099,9 @@ if (is_array($Details['Awards'])) {
 		}
 	}
 }
+$playerHeldAwardIds        = array_keys($playerHeldAwardIds);
 $playerHeldKingdomAwardIds = array_keys($playerHeldKingdomAwardIds);
+$ladderMasterMap           = Award::GetLadderMasterMap();
 ?>
 
 <!-- =============================================
@@ -2141,7 +2145,10 @@ var PnConfig = {
 	canManageAwards:<?= !empty($canManageAwards) ? 'true' : 'false' ?>,
 	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
+	heldAwardIds:        <?= json_encode(array_values($playerHeldAwardIds)) ?>,
 	heldKingdomAwardIds: <?= json_encode($playerHeldKingdomAwardIds) ?>,
+	ladderMasterMap:     <?= json_encode($ladderMasterMap) ?>,
+	playerName:          <?= json_encode($Player['Persona'] ?? 'This player') ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? '')) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
