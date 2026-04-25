@@ -783,7 +783,117 @@ if (PnConfig.recError) {
         var desc = AWARD_DESCRIPTIONS[aid] || '';
         var el = document.getElementById('pn-rec-award-desc');
         if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
+        pnApplyLadderSuggestion($(this).val());
     });
+
+    // Called whenever the award picker changes. If the player has already achieved the
+    // Master peerage for a ladder, hard-block submit. If they've reached the top rank but
+    // not the Master yet, offer a clickable suggestion that swaps the select to the Master.
+    function pnApplyLadderSuggestion(kingdomAwardId) {
+        var $err    = $('#pn-rec-error');
+        var $submit = $('#pn-rec-submit');
+        // Reset any previous suggestion state
+        $err.removeClass('pn-rec-suggest pn-rec-block').hide().empty();
+        $submit.prop('disabled', false);
+
+        if (!kingdomAwardId) return;
+        var opt = document.querySelector('#pn-rec-award option[value="' + kingdomAwardId + '"]');
+        if (!opt) return;
+
+        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var map  = (PnConfig && PnConfig.ladderMasterMap) || {};
+        var held = (PnConfig.heldAwardIds || []).reduce(function(s, x) { s[x] = true; return s; }, {});
+        var name = PnConfig.playerName || 'This player';
+
+        // Case A — recommending a Master peerage the player already holds
+        if (baseAwardId > 0 && opt.getAttribute('data-peerage') === 'Master' && held[baseAwardId]) {
+            $err.addClass('pn-rec-block')
+                .text(name + ' has already achieved the rank of ' + (opt.textContent || '').trim() + '. Maybe consider recommending for a different award?')
+                .show();
+            $submit.prop('disabled', true);
+            return;
+        }
+
+        if (opt.getAttribute('data-is-ladder') !== '1') return;
+
+        var info = map[baseAwardId];
+        if (!info) return;
+
+        var maxRank  = parseInt(info.MaxRank) || (/zodiac/i.test(opt.textContent) ? 12 : 10);
+        var rankHeld = (PnConfig.awardRanks || {})[baseAwardId] || 0;
+
+        // Branch 1 — player already holds the Master peerage
+        var masterHeld = (info.MasterAwardIds || []).some(function(mid) { return !!held[mid]; });
+        if (masterHeld) {
+            $err.addClass('pn-rec-block')
+                .text(name + ' has already achieved the rank of ' + info.MasterName + '. Maybe consider recommending for a different award?')
+                .show();
+            $submit.prop('disabled', true);
+            return;
+        }
+
+        // Branch 2 — player at top rank of the ladder, no Master peerage yet
+        if (rankHeld >= maxRank) {
+            var masterOpt = null;
+            (info.MasterAwardIds || []).some(function(mid) {
+                masterOpt = document.querySelector('#pn-rec-award option[data-peerage="Master"][data-award-id="' + mid + '"]');
+                return !!masterOpt;
+            });
+            var msgParts = [
+                pnEscapeHtml(name),
+                ' has already received the ',
+                pnOrdinal(maxRank),
+                ' ',
+                pnEscapeHtml(info.LadderName),
+                '.'
+            ];
+            if (masterOpt) {
+                msgParts.push(
+                    ' Would you like to recommend them for ',
+                    '<a href="#" class="pn-rec-suggest-link" data-master-value="',
+                    pnEscapeAttr(masterOpt.value),
+                    '">',
+                    pnEscapeHtml(info.MasterName),
+                    '</a> instead?'
+                );
+            } else {
+                msgParts.push(' No higher rank is available.');
+            }
+            $err.addClass('pn-rec-suggest').html(msgParts.join('')).show();
+            $submit.prop('disabled', true);
+            return;
+        }
+    }
+
+    // Click handler: swap the select to the suggested Master option
+    $(document).on('click', '.pn-rec-suggest-link', function(e) {
+        e.preventDefault();
+        var val = $(this).data('master-value');
+        if (!val) return;
+        var $sel = $('#pn-rec-award');
+        $sel.val(String(val));
+        // Rebuild the Select2-style picker if present; otherwise fire change
+        if (typeof awInitPicker === 'function') {
+            try { awInitPicker($sel.get(0)); } catch(e) {}
+        }
+        $sel.trigger('change');
+        $('#pn-rec-reason').focus();
+    });
+
+    function pnOrdinal(n) {
+        n = parseInt(n) || 0;
+        var s = ['th','st','nd','rd'];
+        var v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+    function pnEscapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function pnEscapeAttr(s) {
+        return pnEscapeHtml(s);
+    }
 
     // ---- Rec dismiss button (player page) ----
     document.addEventListener('click', function(e) {

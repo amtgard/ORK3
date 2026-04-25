@@ -94,7 +94,11 @@ class Model_Award extends Model {
                 if (empty($items)) continue;
                 $options .= "<optgroup label='" . htmlspecialchars($label, ENT_QUOTES) . "'>";
                 foreach ($items as $award) {
-                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
+                    $extra = '';
+                    if ($label === 'Masterhoods') {
+                        $extra = " data-award-id='" . htmlspecialchars((int)($award['AwardId'] ?? 0), ENT_QUOTES) . "' data-peerage='Master'";
+                    }
+                    $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'{$extra}>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
                 }
                 $options .= "</optgroup>";
             }

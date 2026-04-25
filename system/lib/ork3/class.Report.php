@@ -476,27 +476,104 @@ class Report  extends Ork3 {
 		$r = $this->db->query($sql);
 		$response = array();
 		if ($r !== false && $r->size() > 0) {
-			$response['AwardRecommendations'] = array();
+			// First pass: collect raw rows and the set of (mundane_id, ladder_award_id) we'll need Master-peerage lookups for.
+			$rawRows = array();
+			$ladderMap = Award::GetLadderMasterMap();
+			$masterIdSet = array();
+			foreach ($ladderMap as $lInfo) {
+				foreach ((array)$lInfo['MasterAwardIds'] as $mAid) {
+					$masterIdSet[(int)$mAid] = true;
+				}
+			}
+			$needMundaneIds = array();
 			while ($r->next()) {
+				$row = (object)[
+					'recommendations_id' => $r->recommendations_id,
+					'mundane_id'         => (int)$r->mundane_id,
+					'persona'            => $r->persona,
+					'date_recommended'   => $r->date_recommended,
+					'rank'               => $r->rank,
+					'award_name'         => $r->award_name,
+					'reason'             => $r->reason,
+					'recommended_by_persona' => $r->recommended_by_persona,
+					'recommended_by_id'      => $r->recommended_by_id,
+					'ka_kaward_id'       => (int)$r->ka_kaward_id,
+					'ka_award_id'        => (int)$r->ka_award_id,
+					'recs_award_id'      => (int)$r->award_id,
+					'park_id'            => $r->park_id,
+					'kingdom_id'         => $r->kingdom_id,
+					'park_name'          => $r->park_name,
+					'kingdom_name'       => $r->kingdom_name,
+					'kacount'            => (int)$r->kacount,
+					'awcount'            => (int)$r->awcount,
+					'player_ka_rank'     => (int)$r->player_ka_rank,
+					'player_ka_date'     => $r->player_ka_date,
+				];
+				$recAwardId = $row->ka_award_id ?: $row->recs_award_id;
+				if (isset($ladderMap[$recAwardId])) {
+					$needMundaneIds[$row->mundane_id] = true;
+				}
+				$rawRows[] = $row;
+			}
+
+			// Second pass: batch-fetch Master-peerage holdings for any mundanes whose recs target a ladder.
+			$heldMasters = array(); // mundane_id => [master_award_id => true]
+			if (!empty($needMundaneIds) && !empty($masterIdSet)) {
+				$midCsv = implode(',', array_map('intval', array_keys($needMundaneIds)));
+				$maCsv  = implode(',', array_map('intval', array_keys($masterIdSet)));
+				$mRes = $this->db->query(
+					"SELECT mundane_id, award_id FROM " . DB_PREFIX . "awards
+					 WHERE mundane_id IN ({$midCsv}) AND award_id IN ({$maCsv})"
+				);
+				if ($mRes !== false && $mRes->size() > 0) {
+					while ($mRes->next()) {
+						$heldMasters[(int)$mRes->mundane_id][(int)$mRes->award_id] = true;
+					}
+				}
+			}
+
+			// Custom Award / Custom Title instances share a single base award_id across every
+			// instance (or use a stale award_id with the display name "Custom Award"), so the
+			// awcount subquery over-matches. Detect by displayed award name and skip AlreadyHas.
+			$customNameSet = ['Custom Award' => true, 'Custom Title' => true];
+
+			// Final pass: build response, flipping AlreadyHas when a Master peerage covers a ladder rec.
+			$response['AwardRecommendations'] = array();
+			foreach ($rawRows as $row) {
+				$recAwardId = $row->ka_award_id ?: $row->recs_award_id;
+				$isCustom   = isset($customNameSet[trim((string)$row->award_name)]);
+				$alreadyHas = $isCustom ? false : ($row->kacount > 0 || $row->awcount > 0);
+				$coveredByMaster = false;
+				if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
+					foreach ((array)$ladderMap[$recAwardId]['MasterAwardIds'] as $mAid) {
+						if (!empty($heldMasters[$row->mundane_id][(int)$mAid])) {
+							$alreadyHas = true;
+							$coveredByMaster = true;
+							break;
+						}
+					}
+				}
 				$response['AwardRecommendations'][] = array(
-						'RecommendationsId' => $r->recommendations_id,
-						'MundaneId' => $r->mundane_id,
-						'Persona' => $r->persona,
-						'DateRecommended' => $r->date_recommended,
-						'Rank' => $r->rank,
-						'AwardName' => $r->award_name,
-						'Reason' => $r->reason,
-						'RecommendedByName' => $r->recommended_by_persona,
-						'RecommendedById' => $r->recommended_by_id,
-						'KingdomAwardId' => (int)$r->ka_kaward_id,
-						'ParkId' => $r->park_id,
-						'KingdomId' => $r->kingdom_id,
-						'ParkName' => $r->park_name,
-						'KingdomName' => $r->kingdom_name,
-						'AlreadyHas' => ($r->kacount > 0 || $r->awcount > 0),
-						'CurrentRank' => ($r->kacount > 0 || $r->awcount > 0) ? (int)$r->player_ka_rank : null,
-						'CurrentRankDate' => ($r->kacount > 0 || $r->awcount > 0) ? $r->player_ka_date : null,
-					);
+					'RecommendationsId' => $row->recommendations_id,
+					'MundaneId' => $row->mundane_id,
+					'Persona' => $row->persona,
+					'DateRecommended' => $row->date_recommended,
+					'Rank' => $row->rank,
+					'AwardName' => $row->award_name,
+					'Reason' => $row->reason,
+					'RecommendedByName' => $row->recommended_by_persona,
+					'RecommendedById' => $row->recommended_by_id,
+					'KingdomAwardId' => $row->ka_kaward_id,
+					'AwardId' => $recAwardId,
+					'ParkId' => $row->park_id,
+					'KingdomId' => $row->kingdom_id,
+					'ParkName' => $row->park_name,
+					'KingdomName' => $row->kingdom_name,
+					'AlreadyHas' => $alreadyHas,
+					'CoveredByMaster' => $coveredByMaster,
+					'CurrentRank' => $alreadyHas ? ($row->player_ka_rank ?: null) : null,
+					'CurrentRankDate' => $alreadyHas ? $row->player_ka_date : null,
+				);
 			}
 			$response['Status'] = Success();
 		} else {

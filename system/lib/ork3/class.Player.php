@@ -1675,6 +1675,56 @@ class Player extends Ork3 {
             return InvalidParameter();
         }
 
+		// Block recommendations for a ladder the player has already topped out on
+		// (either via the Master-peerage companion award or by holding the ladder's max rank).
+		// Also block direct recommendations for a Master peerage the player already holds.
+		$ladderMap  = Award::GetLadderMasterMap();
+		$recAwardId = (int)$request['AwardId'];
+		$persona    = $this->mundane->persona;
+		$mid        = (int)$request['MundaneId'];
+
+		// Build reverse map: master_award_id => ['MasterName' => ...]
+		$masterNameById = [];
+		foreach ($ladderMap as $lid => $lInfo) {
+			foreach ((array)$lInfo['MasterAwardIds'] as $mAid) {
+				$masterNameById[(int)$mAid] = $lInfo['MasterName'];
+			}
+		}
+
+		// Case A: recommending a Master peerage the player already holds (any kingdomaward)
+		if ($recAwardId > 0 && isset($masterNameById[$recAwardId])) {
+			$held = $this->db->query(
+				"select a.awards_id from " . DB_PREFIX . "awards a
+				 where a.mundane_id = {$mid} and a.award_id = {$recAwardId} limit 1"
+			);
+			if ($held !== false && $held->size() > 0) {
+				return InvalidParameter($persona . ' has already achieved the rank of ' . $masterNameById[$recAwardId] . '. Maybe consider recommending for a different award?');
+			}
+		}
+
+		// Case B: recommending a ladder where the player has topped out or holds the Master peerage
+		if (isset($ladderMap[$recAwardId])) {
+			$info = $ladderMap[$recAwardId];
+
+			$masterIdsCsv = implode(',', array_map('intval', $info['MasterAwardIds']));
+			$masterHeld   = $this->db->query(
+				"select a.awards_id from " . DB_PREFIX . "awards a
+				 where a.mundane_id = {$mid} and a.award_id in ({$masterIdsCsv}) limit 1"
+			);
+			if ($masterHeld !== false && $masterHeld->size() > 0) {
+				return InvalidParameter($persona . ' has already achieved the rank of ' . $info['MasterName'] . '. Maybe consider recommending for a different award?');
+			}
+
+			$maxRank   = (int)$info['MaxRank'];
+			$topResult = $this->db->query(
+				"select max(a.rank) as max_rank from " . DB_PREFIX . "awards a
+				 where a.mundane_id = {$mid} and a.award_id = {$recAwardId}"
+			);
+			if ($topResult !== false && $topResult->size() > 0 && $topResult->next() && (int)$topResult->max_rank >= $maxRank) {
+				return InvalidParameter($persona . ' has already reached the top rank of ' . $info['LadderName'] . '. Maybe consider recommending for a different award?');
+			}
+		}
+
 		// Check for existing award rank
 		$check_rank = 0;
 		if (trimlen($request['Rank']) > 0) {

@@ -195,6 +195,68 @@ class Controller_Kingdom extends Controller {
 		exit();
 	}
 
+	public function events_more($kingdom_id = null) {
+		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
+		$kid = (int)$kingdom_id;
+		$window = isset($_GET['window']) ? (int)$_GET['window'] : 1;
+		if ($window < 1) $window = 1;
+		if ($window > 10) $window = 10;
+		$startMonths = $window * 12;
+		$endMonths   = $startMonths + 12;
+
+		global $DB;
+		$evtSql = "
+			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
+			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
+			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'going') AS rsvp_going,
+			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested
+			FROM ork_event e
+			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			    AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$startMonths} MONTH)
+			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL {$endMonths} MONTH)
+			WHERE e.kingdom_id = {$kid}
+			ORDER BY cd.event_start, p.name, e.name";
+		$DB->Clear();
+		$evtResult = $DB->DataSet($evtSql);
+		$events = [];
+		$fallbackHeraldry = HTTP_EVENT_HERALDRY . '00000.jpg';
+		while ($evtResult && $evtResult->Next()) {
+			$eid = (int)($evtResult->event_id ?? 0);
+			if (!$eid) continue;
+			$start = $evtResult->event_start;
+			$events[] = [
+				'EventId'        => $eid,
+				'Name'           => $evtResult->name,
+				'ParkName'       => $evtResult->park_name,
+				'NextDate'       => $start,
+				'NextDateText'   => ($start && $start !== '0000-00-00 00:00:00' && $start !== '0000-00-00')
+					? date('M j, Y', strtotime($start)) : '',
+				'NextDetailId'   => (int)$evtResult->next_detail_id,
+				'HasHeraldry'    => (int)$evtResult->has_heraldry,
+				'HeraldryUrl'    => ((int)$evtResult->has_heraldry === 1)
+					? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eid))
+					: $fallbackHeraldry,
+				'ParkAbbr'       => $evtResult->park_abbr,
+				'RsvpGoing'      => (int)$evtResult->rsvp_going,
+				'RsvpInterested' => (int)$evtResult->rsvp_interested,
+				'IsParkEvent'    => (int)$evtResult->park_id > 0,
+			];
+		}
+		header('Content-Type: application/json');
+		echo json_encode([
+			'Window'           => $window,
+			'StartMonths'      => $startMonths,
+			'EndMonths'        => $endMonths,
+			'Count'            => count($events),
+			'HasMore'          => $window < 10,
+			'FallbackHeraldry' => $fallbackHeraldry,
+			'Uir'              => UIR,
+			'Events'           => $events,
+		]);
+		exit();
+	}
+
 	public function players_json($kingdom_id = null) {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid = (int)$kingdom_id;

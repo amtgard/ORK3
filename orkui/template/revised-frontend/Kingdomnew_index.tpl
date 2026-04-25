@@ -489,54 +489,62 @@
 				<!-- List view -->
 				<div id="kn-events-list-view">
 				<?php $hasParkDays = count($kingdom_park_days ?? []) > 0; ?>
-				<?php if (count($eventList) > 0 || $hasParkDays): ?>
-					<table class="kn-table kn-sortable" id="kn-events-table">
-						<thead>
-							<tr>
-								<th data-sorttype="date">Next Date</th>
-								<th data-sorttype="text">Event</th>
-								<th data-sorttype="text">Park</th>
-								<th data-sorttype="numeric">Going</th>
-							<th data-sorttype="numeric">Interested</th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($eventList as $event): ?>
-								<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
-									<td class="kn-col-nowrap">
-										<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
-											? date("M j, Y", strtotime($event['NextDate']))
-											: '<span style="color:#a0aec0">—</span>' ?>
-									</td>
-									<td class="kn-col-nowrap">
-										<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
-											loading="lazy"
-											src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
-											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-											alt="">
-										<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
-									</td>
-									<td><?= htmlspecialchars($event['ParkName']) ?></td>
-									<td style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
-								<td style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
-								</tr>
-							<?php endforeach; ?>
-						<?php foreach ($kingdom_park_days ?? [] as $day): ?>
-							<tr class="kn-row-link" data-type="park-day" style="display:none" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $day['ParkId'] ?>'">
-								<td class="kn-col-nowrap" style="color:#718096;font-style:italic"><?= htmlspecialchars($day['Schedule']) ?></td>
+				<?php $eventCount = count($eventList); ?>
+				<?php $hasAnyRows = ($eventCount > 0) || $hasParkDays; ?>
+				<table class="kn-table kn-sortable" id="kn-events-table"<?= $hasAnyRows ? '' : ' style="display:none"' ?>>
+					<thead>
+						<tr>
+							<th data-sorttype="date">Next Date</th>
+							<th data-sorttype="text">Event</th>
+							<th data-sorttype="text">Park</th>
+							<th data-sorttype="numeric">Going</th>
+						<th data-sorttype="numeric">Interested</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($eventList as $event): ?>
+							<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
 								<td class="kn-col-nowrap">
-									<i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0"></i>
-									<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:#4a5568;margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
-									<?= htmlspecialchars($day['Purpose']) ?> — <?= (!empty($day['Time'])) ? date('g:i A', strtotime($day['Time'])) : '' ?>
+									<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
+										? date("M j, Y", strtotime($event['NextDate']))
+										: '<span style="color:#a0aec0">—</span>' ?>
 								</td>
-								<td><?= htmlspecialchars($day['ParkName']) ?></td>
+								<td class="kn-col-nowrap">
+									<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
+										loading="lazy"
+										src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
+										onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
+										alt="">
+									<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+								</td>
+								<td><?= htmlspecialchars($event['ParkName']) ?></td>
+								<td style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
+							<td style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
 							</tr>
 						<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php else: ?>
-					<div class="kn-empty">No upcoming events</div>
-				<?php endif; ?>
+					<?php foreach ($kingdom_park_days ?? [] as $day): ?>
+						<tr class="kn-row-link" data-type="park-day" style="display:none" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $day['ParkId'] ?>'">
+							<td class="kn-col-nowrap" style="color:#718096;font-style:italic"><?= htmlspecialchars($day['Schedule']) ?></td>
+							<td class="kn-col-nowrap">
+								<i class="fas fa-calendar" style="margin-right:6px;color:#a0aec0"></i>
+								<?php if (!empty($day['ParkAbbr'])): ?><strong style="color:#4a5568;margin-right:3px"><?= htmlspecialchars($day['ParkAbbr']) ?>:</strong><?php endif; ?>
+								<?= htmlspecialchars($day['Purpose']) ?> — <?= (!empty($day['Time'])) ? date('g:i A', strtotime($day['Time'])) : '' ?>
+							</td>
+							<td><?= htmlspecialchars($day['ParkName']) ?></td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+				<div class="kn-empty" id="kn-events-empty"<?= $hasAnyRows ? ' style="display:none"' : '' ?>>No upcoming events</div>
+
+				<div class="kn-events-loadmore" id="kn-events-loadmore" data-next-window="1" data-loaded-event-count="<?= $eventCount ?>">
+					<span class="kn-events-loadmore-msg">
+						Showing <strong id="kn-events-loadmore-count"><?= $eventCount ?></strong>
+						event<span id="kn-events-loadmore-plural"><?= $eventCount === 1 ? '' : 's' ?></span>
+						in the next <strong id="kn-events-loadmore-months">12</strong> months.
+					</span>
+					<a href="#" class="kn-events-loadmore-link" id="kn-events-loadmore-link" onclick="knLoadMoreEvents(event); return false;">Load more <i class="fas fa-chevron-down" style="font-size:10px;margin-left:3px"></i></a>
+				</div>
 				</div><!-- /kn-events-list-view -->
 
 				<?php /* [TOURNAMENTS HIDDEN] */ ?>
@@ -747,7 +755,7 @@
 							<dt>Below Recommended</dt>
 							<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
 							<dt>Non-Ladder</dt>
-							<dd>Flat awards with no rank progression (e.g. service awards). Grant or Delete as appropriate.</dd>
+							<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
 							<dt>At or Above Recommended</dt>
 							<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
 							<dt>All</dt>
@@ -2167,6 +2175,131 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 	});
 
 })();
+</script>
+<script>
+// ---- Events: Load-more (next 12-month window) ----
+function knLoadMoreEvents(ev) {
+	if (ev) ev.preventDefault();
+	var wrap = document.getElementById('kn-events-loadmore');
+	var link = document.getElementById('kn-events-loadmore-link');
+	if (!wrap || !link) return;
+	var nextWindow = parseInt(wrap.dataset.nextWindow || '1', 10);
+	var kingdomId = (window.KnConfig && KnConfig.kingdomId) || 0;
+	var uir       = (window.KnConfig && KnConfig.uir)       || '<?= UIR ?>';
+	if (!kingdomId) return;
+
+	var origHtml = link.innerHTML;
+	link.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+	link.style.pointerEvents = 'none';
+	link.setAttribute('aria-busy', 'true');
+
+	fetch(uir + 'Kingdom/events_more/' + kingdomId + '&window=' + nextWindow, { credentials: 'same-origin' })
+		.then(function(r) {
+			if (!r.ok) throw new Error('HTTP ' + r.status);
+			return r.json();
+		})
+		.then(function(data) {
+			var table = document.getElementById('kn-events-table');
+			var tbody = table ? table.querySelector('tbody') : null;
+			if (!tbody) return;
+
+			// Reveal the table if it was hidden (empty-state page)
+			if (table.style.display === 'none') table.style.display = '';
+			var emptyEl = document.getElementById('kn-events-empty');
+			if (emptyEl) emptyEl.style.display = 'none';
+
+			// Append the new rows
+			var appended = 0;
+			(data.Events || []).forEach(function(e) {
+				// Skip duplicates (shouldn't happen with non-overlapping windows, but defensive)
+				if (document.querySelector('#kn-events-table tr[data-event-id="' + e.EventId + '"]')) return;
+				tbody.appendChild(knBuildEventRow(e, data.FallbackHeraldry, data.Uir || uir));
+				appended++;
+			});
+
+			// Update count + months in footer
+			var countEl  = document.getElementById('kn-events-loadmore-count');
+			var pluralEl = document.getElementById('kn-events-loadmore-plural');
+			var monthsEl = document.getElementById('kn-events-loadmore-months');
+			var prevLoaded = parseInt(wrap.dataset.loadedEventCount || '0', 10);
+			var total = prevLoaded + appended;
+			wrap.dataset.loadedEventCount = String(total);
+			if (countEl)  countEl.textContent  = String(total);
+			if (pluralEl) pluralEl.textContent = (total === 1 ? '' : 's');
+			if (monthsEl) monthsEl.textContent = String(data.EndMonths);
+
+			wrap.dataset.nextWindow = String(nextWindow + 1);
+
+			// Respect current filter toggles for newly-appended rows
+			try {
+				if (typeof knFilters === 'object' && knFilters) {
+					Object.keys(knFilters).forEach(function(type) {
+						if (!knFilters[type]) {
+							var rows = tbody.querySelectorAll('tr[data-type="' + type + '"]');
+							rows.forEach(function(tr) { tr.style.display = 'none'; });
+						}
+					});
+				}
+			} catch (e) { console.warn('[knLoadMoreEvents] filter reapply failed', e); }
+
+			// Re-run pagination if present
+			try { if (typeof knPaginate === 'function' && window.jQuery) knPaginate(window.jQuery('#kn-events-table'), 1); } catch(e) {}
+
+			// Calendar view: invalidate so next open re-fetches
+			try { if (window.knCalendar) knCalendar.refetchEvents(); } catch(e) {}
+
+			if (!data.HasMore) {
+				link.remove();
+			} else {
+				link.innerHTML = 'Load more <i class="fas fa-chevron-down" style="font-size:10px;margin-left:3px"></i>';
+				link.style.pointerEvents = '';
+				link.removeAttribute('aria-busy');
+			}
+		})
+		.catch(function(err) {
+			console.error('[knLoadMoreEvents]', err);
+			link.innerHTML = origHtml;
+			link.style.pointerEvents = '';
+			link.removeAttribute('aria-busy');
+		});
+}
+
+function knBuildEventRow(e, fallbackHeraldry, uir) {
+	var tr = document.createElement('tr');
+	tr.className = 'kn-row-link';
+	tr.dataset.type    = e.IsParkEvent ? 'park-event' : 'kingdom-event';
+	tr.dataset.eventId = String(e.EventId);
+	var detailHref = e.NextDetailId ? (uir + 'Event/detail/' + e.EventId + '/' + e.NextDetailId) : '';
+	if (detailHref) tr.setAttribute('onclick', "window.location.href='" + detailHref + "'");
+
+	var nameHtml = detailHref
+		? '<a href="' + detailHref + '">' + knEscape(e.Name) + '</a>'
+		: knEscape(e.Name);
+	var dateHtml = e.NextDateText ? knEscape(e.NextDateText) : '<span style="color:#a0aec0">&mdash;</span>';
+	var heraldry = e.HeraldryUrl || fallbackHeraldry;
+
+	tr.innerHTML =
+		'<td class="kn-col-nowrap">' + dateHtml + '</td>' +
+		'<td class="kn-col-nowrap">' +
+			'<img class="kn-thumb ' + (e.IsParkEvent ? 'kn-evt-park' : 'kn-evt-kingdom') +
+				'" loading="lazy" src="' + knEscapeAttr(heraldry) +
+				'" onerror="this.src=\'' + knEscapeAttr(fallbackHeraldry) + '\'" alt="">' +
+			nameHtml +
+		'</td>' +
+		'<td>' + knEscape(e.ParkName || '') + '</td>' +
+		'<td style="text-align:center">' + (e.RsvpGoing > 0 ? e.RsvpGoing : '&mdash;') + '</td>' +
+		'<td style="text-align:center">' + (e.RsvpInterested > 0 ? e.RsvpInterested : '&mdash;') + '</td>';
+	return tr;
+}
+
+function knEscape(s) {
+	var d = document.createElement('div');
+	d.textContent = (s == null ? '' : String(s));
+	return d.innerHTML;
+}
+function knEscapeAttr(s) {
+	return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>

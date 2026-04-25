@@ -313,7 +313,7 @@ class Controller_Player extends Controller {
 						} elseif ($r['Status'] == 5) {
 							header('Location: ' . UIR . "Login/login/Player/profile/$id");
 						} else {
-							$msg = urlencode($r['Error'] . ': ' . $r['Detail']);
+							$msg = urlencode(!empty($r['Detail']) ? $r['Detail'] : $r['Error']);
 							header('Location: ' . UIR . "Player/profile/{$id}?rec_error={$msg}");
 						}
 						exit;

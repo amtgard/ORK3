@@ -1076,7 +1076,7 @@
 								<dt>Below Recommended</dt>
 								<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
 								<dt>Non-Ladder</dt>
-								<dd>Flat awards with no rank progression (e.g. service awards). Grant or Delete as appropriate.</dd>
+								<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
 								<dt>At or Above Recommended</dt>
 								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
 								<dt>All</dt>
