@@ -18,6 +18,10 @@ class Controller_Admin extends Controller {
 	}
 
 	public function index($duh = null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+			header('Location: ' . UIR); exit;
+		}
 		unset($this->session->kingdom_id);
 		unset($this->session->kingdom_name);
 		unset($this->session->park_name);
