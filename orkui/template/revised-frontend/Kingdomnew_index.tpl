@@ -711,6 +711,8 @@
 					<ul>
 						<li><a href="<?= UIR ?>Admin/permissions/Kingdom/<?= $kingdom_id ?>">Roles &amp; Permissions</a></li>
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
+						<li><a href="<?= UIR ?>Waiver/builder/<?= $kingdom_id ?>">Manage Waivers</a></li>
+						<li><a href="<?= UIR ?>Waiver/queue/kingdom/<?= $kingdom_id ?>">Waiver Review Queue</a></li>
 					</ul>
 				</div>
 			</div>

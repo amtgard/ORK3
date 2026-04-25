@@ -443,6 +443,8 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<?php endif; ?>
 				<?php if ($Player['Waivered'] == 1): ?>
 					<span class="pn-badge pn-badge-blue"><i class="fas fa-file-signature"></i> Waivered</span>
+				<?php elseif ($isOwnProfile && valid_id($Player['KingdomId'] ?? 0)): ?>
+					<a href="<?= UIR ?>Waiver/sign/kingdom/<?= (int)$Player['KingdomId'] ?>" class="pn-badge pn-badge-yellow pn-badge-link" style="text-decoration:none;"><i class="fas fa-exclamation-circle"></i> Needs Waiver &rarr;</a>
 				<?php else: ?>
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
@@ -656,6 +658,20 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 				<div class="pn-empty">No dues records</div>
 			<?php endif; ?>
 		</div>
+
+		<!-- Digital Waivers (own profile only) -->
+		<?php $_wvSide = $this->data['_wv_sidebar'] ?? ['is_own' => false, 'items' => []]; ?>
+		<?php if (!empty($_wvSide['is_own']) && !empty($_wvSide['items'])): ?>
+		<div class="pn-card">
+			<h4 style="background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important;"><i class="fas fa-file-signature"></i> Digital Waivers</h4>
+			<?php foreach ($_wvSide['items'] as $it): ?>
+			<div class="pn-detail-row">
+				<span class="pn-detail-label"><?= htmlspecialchars(ucfirst($it['scope'])) ?> waiver (v<?= (int)$it['version'] ?>)</span>
+				<span class="pn-detail-value"><a href="<?= UIR ?>Waiver/sign/<?= htmlspecialchars($it['scope']) ?>/<?= (int)$it['entity_id'] ?>">Sign / View</a></span>
+			</div>
+			<?php endforeach; ?>
+		</div>
+		<?php endif; ?>
 
 		<!-- Event RSVPs -->
 		<?php if (!empty($UpcomingRsvps)): ?>
