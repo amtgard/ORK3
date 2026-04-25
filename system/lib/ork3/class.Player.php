@@ -1817,9 +1817,20 @@ class Player extends Ork3 {
 					$can_delete_recommendation = true;
 				}
 				if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
+					$prior_rec = [
+						'recommendations_id' => (int)$awardRec->recommendations_id,
+						'mundane_id'         => (int)$awardRec->mundane_id,
+						'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
+						'award_id'           => (int)$awardRec->award_id,
+						'rank'               => (int)$awardRec->rank,
+						'recommended_by_id'  => (int)$awardRec->recommended_by_id,
+						'date_recommended'   => $awardRec->date_recommended,
+						'reason'             => $awardRec->reason,
+					];
 					$awardRec->deleted_by = $request['RequestedBy'];
 					$awardRec->deleted_at = date('Y-m-d H:i:s');
 					$awardRec->save();
+					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
 					if (isset(Ork3::$Lib->ghettocache->memcache)) {
 						Ork3::$Lib->ghettocache->memcache->flush();
 					}

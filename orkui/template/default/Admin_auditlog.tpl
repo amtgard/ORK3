@@ -13,6 +13,7 @@ $_actionLabels = [
 	'Player::RemoveNote'           => 'Note Deleted',
 	'Attendance::SetAttendance'    => 'Attendance Modified',
 	'Attendance::RemoveAttendance' => 'Attendance Removed',
+	'Player::DeleteAwardRecommendation' => 'Recommendation Removed',
 	'Player::RevokeDues'           => 'Dues Revoked',
 	'Kingdom::RemoveAward'         => 'Kingdom Award Deleted',
 	'Park::MergeParks'             => 'Parks Merged',
@@ -49,7 +50,7 @@ foreach ($AuditRows as $_lr) {
 		if (!is_array($_d)) $_d = _jsonExtract($_js ?? '', ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','given_by_id','stripped_from','RecipientId','FromMundaneId','ToMundaneId','event_id','at_park_id','at_kingdom_id','at_event_id','kingdomaward_id','KingdomAwardId','old_kingdom_id','new_kingdom_id','from_park_id','to_park_id','from_kingdom_id','to_kingdom_id']);
 		foreach (['park_id','at_park_id','ParkId','from_park_id','to_park_id'] as $_k) if (!empty($_d[$_k])) $_parkIds[(int)$_d[$_k]] = true;
 		foreach (['kingdom_id','at_kingdom_id','KingdomId','old_kingdom_id','new_kingdom_id','from_kingdom_id','to_kingdom_id'] as $_k) if (!empty($_d[$_k])) $_kingdomIds[(int)$_d[$_k]] = true;
-		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
+		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById','recommended_by_id'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
 	// entity_id is usually a mundane_id — collect it too
 	if (!empty($_lr['EntityId'])) $_mundaneIds[(int)$_lr['EntityId']] = true;
 		foreach (['event_id','at_event_id','EventId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_eventIds[(int)$_d[$_k]] = true;
@@ -174,6 +175,11 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			// Fallback for old records without prior state
 			$until = $p['SuspendedUntil'] ?? '';
 			return ($until || !empty($p['Suspension'])) ? 'Suspended' . ($until ? ' until ' . htmlspecialchars($until) : '') : 'Suspension changed';
+		case 'Player::DeleteAwardRecommendation':
+			$_kid = (int)($b['kingdomaward_id'] ?? 0);
+			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
+			$rank = !empty($b['rank']) && $b['rank'] > 0 ? ' rank ' . (int)$b['rank'] : '';
+			return 'Removed recommendation' . ($name ? ': ' . htmlspecialchars($name . $rank) : '');
 		case 'Player::RemoveNote':
 			$_noteText = $b['note'] ?? $b['Note'] ?? '';
 			$_snippet = $_noteText ? mb_strimwidth(strip_tags($_noteText), 0, 60, '…') : '';
@@ -405,6 +411,27 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			}
 			if (!empty($p['MundaneId']))
 				$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $p['MundaneId'], $mundaneMap) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Player::DeleteAwardRecommendation':
+			$html = '<table class="al-diff-table"><tbody>';
+			$_kid = (int)($b['kingdomaward_id'] ?? 0);
+			$_awardName = $kawardMap[$_kid] ?? null;
+			if ($_awardName)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2">' . htmlspecialchars($_awardName) . '</td></tr>';
+			elseif ($_kid)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2"><em style="color:#a0aec0">Unknown award #' . $_kid . '</em></td></tr>';
+			if (!empty($b['rank']) && $b['rank'] > 0)
+				$html .= '<tr><td class="al-diff-field">Rank</td><td colspan="2">' . (int)$b['rank'] . '</td></tr>';
+			if (!empty($b['mundane_id']))
+				$html .= '<tr><td class="al-diff-field">Recipient</td><td colspan="2">' . _auditIdLink('player', $b['mundane_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($b['recommended_by_id']))
+				$html .= '<tr><td class="al-diff-field">Recommended By</td><td colspan="2">' . _auditIdLink('player', $b['recommended_by_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($b['date_recommended']))
+				$html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($b['date_recommended']) . '</td></tr>';
+			if (!empty($b['reason']))
+				$html .= '<tr><td class="al-diff-field">Reason</td><td colspan="2">' . htmlspecialchars($b['reason']) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
@@ -746,7 +773,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 						// Badge CSS class
 						if (strpos($_mc, 'UpdatePlayer') !== false) $_bc = 'al-badge-update';
 						elseif (strpos($_mc, 'Award') !== false || strpos($_mc, 'award') !== false) {
-							$_bc = (strpos($_mc, 'Remove') !== false || strpos($_mc, 'revoke') !== false) ? 'al-badge-remove' : 'al-badge-award';
+							$_bc = (strpos($_mc, 'Remove') !== false || strpos($_mc, 'revoke') !== false || strpos($_mc, 'Delete') !== false) ? 'al-badge-remove' : 'al-badge-award';
 						}
 						elseif (strpos($_mc, 'Merge') !== false) $_bc = 'al-badge-merge';
 						elseif (strpos($_mc, 'Move') !== false)  $_bc = 'al-badge-move';
