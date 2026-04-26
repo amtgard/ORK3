@@ -213,6 +213,79 @@
 	.sr-body { padding: 20px; }
 	.sr-field-row { flex-direction: column; gap: 0; }
 }
+
+/* Dark mode */
+html[data-theme="dark"] .sr-wrap { background: var(--ork-card-bg, #2d3748); box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .sr-intro {
+	background: var(--ork-bg-secondary, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+	border-left-color: #38a169;
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .sr-intro strong { color: #9ae6b4; }
+html[data-theme="dark"] .sr-intro ul { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .sr-intro div { color: var(--ork-text-muted, #a0aec0) !important; }
+html[data-theme="dark"] .sr-error,
+html[data-theme="dark"] .sr-inline-error {
+	background: var(--ork-alert-danger-bg, #742a2a);
+	border-color: var(--ork-alert-danger-border, #9b2c2c);
+	color: var(--ork-alert-danger-text, #feb2b2);
+}
+html[data-theme="dark"] .sr-field label { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .sr-field label .sr-req { color: #fc8181; }
+html[data-theme="dark"] .sr-field input[type=text],
+html[data-theme="dark"] .sr-field input[type=email],
+html[data-theme="dark"] .sr-field input[type=password] {
+	background: var(--ork-input-bg, #374151);
+	border-color: var(--ork-input-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .sr-field input:focus {
+	border-color: #38a169;
+	box-shadow: 0 0 0 3px rgba(56,161,105,0.2);
+}
+html[data-theme="dark"] .sr-field-hint { color: var(--ork-text-lighter, #718096); }
+html[data-theme="dark"] .sr-btn-primary { background: #38a169; color: #fff; }
+html[data-theme="dark"] .sr-btn-primary:hover:not(:disabled) { background: #48bb78; }
+html[data-theme="dark"] .sr-btn-primary:disabled { background: var(--ork-bg-tertiary, #4a5568); color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .sr-expired-wrap i { color: #fc8181; }
+html[data-theme="dark"] .sr-expired-wrap h3 { color: var(--ork-text, #e2e8f0) !important; }
+html[data-theme="dark"] .sr-expired-wrap p { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .sr-timer { background: var(--ork-bg-tertiary, #374151); color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .sr-timer.sr-timer-warning { background: #744210; color: #fbd38d; }
+html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert-danger-bg, #742a2a); color: var(--ork-alert-danger-text, #feb2b2); }
+
+/* prefers-color-scheme fallback (when no manual theme set) */
+@media (prefers-color-scheme: dark) {
+	html:not([data-theme="light"]) .sr-wrap { background: #2d3748; box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+	html:not([data-theme="light"]) .sr-intro {
+		background: #2d3748; border-color: #4a5568; border-left-color: #38a169; color: #e2e8f0;
+	}
+	html:not([data-theme="light"]) .sr-intro strong { color: #9ae6b4; }
+	html:not([data-theme="light"]) .sr-intro ul { color: #cbd5e0; }
+	html:not([data-theme="light"]) .sr-intro div { color: #a0aec0 !important; }
+	html:not([data-theme="light"]) .sr-error,
+	html:not([data-theme="light"]) .sr-inline-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+	html:not([data-theme="light"]) .sr-field label { color: #a0aec0; }
+	html:not([data-theme="light"]) .sr-field label .sr-req { color: #fc8181; }
+	html:not([data-theme="light"]) .sr-field input[type=text],
+	html:not([data-theme="light"]) .sr-field input[type=email],
+	html:not([data-theme="light"]) .sr-field input[type=password] {
+		background: #374151; border-color: #4a5568; color: #e2e8f0;
+	}
+	html:not([data-theme="light"]) .sr-field input:focus {
+		border-color: #38a169; box-shadow: 0 0 0 3px rgba(56,161,105,0.2);
+	}
+	html:not([data-theme="light"]) .sr-field-hint { color: #718096; }
+	html:not([data-theme="light"]) .sr-btn-primary:hover:not(:disabled) { background: #48bb78; }
+	html:not([data-theme="light"]) .sr-btn-primary:disabled { background: #4a5568; color: #a0aec0; }
+	html:not([data-theme="light"]) .sr-expired-wrap i { color: #fc8181; }
+	html:not([data-theme="light"]) .sr-expired-wrap h3 { color: #e2e8f0 !important; }
+	html:not([data-theme="light"]) .sr-expired-wrap p { color: #a0aec0; }
+	html:not([data-theme="light"]) .sr-timer { background: #374151; color: #e2e8f0; }
+	html:not([data-theme="light"]) .sr-timer.sr-timer-warning { background: #744210; color: #fbd38d; }
+	html:not([data-theme="light"]) .sr-timer.sr-timer-expired { background: #742a2a; color: #feb2b2; }
+}
 </style>
 
 <?php if ($error && !$link): ?>

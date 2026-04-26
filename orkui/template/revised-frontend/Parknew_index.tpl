@@ -1490,7 +1490,7 @@ var PkConfig = {
 <div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100;align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
 	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
 			<button onclick="pkCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
 		</div>
 		<img id="pk-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
@@ -1780,6 +1780,9 @@ tr:hover .pk-copy-link { opacity: 1; }
 	position: relative;
 	display: inline-block;
 	margin: 0 auto 16px;
+	background: #fff;
+	padding: 10px;
+	border-radius: 6px;
 }
 .pk-selfreg-qr-container {
 	user-select: none;
@@ -2153,6 +2156,51 @@ html[data-theme="dark"] .fc-button { background: var(--ork-bg-secondary); border
 html[data-theme="dark"] .fc-button:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
 html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+
+/* ---- Self-Registration QR modal — dark mode ---- */
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-box {
+	background: var(--ork-card-bg);
+	box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-header { border-bottom-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-footer { border-top-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-close-btn:hover { color: var(--ork-text); }
+html[data-theme="dark"] .pk-selfreg-warning {
+	background: #744210;
+	border-color: #975a16;
+	color: #fbd38d;
+}
+html[data-theme="dark"] .pk-selfreg-warning i { color: #f6ad55; }
+html[data-theme="dark"] .pk-selfreg-note {
+	background: #1a365d;
+	border-color: #2c5282;
+	color: #90cdf4;
+}
+html[data-theme="dark"] .pk-selfreg-note i { color: #63b3ed; }
+html[data-theme="dark"] .pk-selfreg-timer-row { color: var(--ork-text); }
+html[data-theme="dark"] .pk-selfreg-timer-row i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-selfreg-timer-expired { color: #fc8181 !important; }
+html[data-theme="dark"] .pk-selfreg-expired-badge {
+	background: rgba(45,55,72,0.85);
+	color: #fc8181;
+}
+
+/* ---- Sign-in QR overlay (#pk-qr-overlay) — dark mode ---- */
+html[data-theme="dark"] #pk-qr-overlay > div { background: var(--ork-card-bg) !important; box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; color: var(--ork-text); }
+html[data-theme="dark"] #pk-qr-img { border-color: var(--ork-border) !important; background: #fff; }
+html[data-theme="dark"] #pk-qr-expires { color: var(--ork-text-muted) !important; }
+
+/* ---- Sign-in Link panel inputs/labels (within pk-att-* tabs) — dark mode ---- */
+html[data-theme="dark"] #pk-att-link-url { background: var(--ork-input-bg) !important; border-color: var(--ork-input-border) !important; color: var(--ork-text); }
+html[data-theme="dark"] #pk-att-link-expires { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-wrap { border-top-color: var(--ork-border) !important; }
+html[data-theme="dark"] #pk-att-links-toggle { color: var(--ork-text-secondary) !important; }
+html[data-theme="dark"] #pk-att-links-loading,
+html[data-theme="dark"] #pk-att-links-empty { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-table thead tr,
+html[data-theme="dark"] #pk-att-links-table th { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-count { color: var(--ork-text-muted) !important; }
 
 /* ============================================================
    </style>

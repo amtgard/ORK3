@@ -514,6 +514,28 @@ html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowDown:hover {
 html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowUp:after { border-bottom-color: #90cdf4 !important; }
 html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowDown:after { border-top-color: #90cdf4 !important; }
 
+/* Sign-in link modal — dark mode */
+html[data-theme="dark"] .ev-signin-link-modal { background: var(--ork-card-bg); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .ev-signin-link-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .ev-signin-link-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-signin-link-close:hover { color: var(--ork-text); }
+html[data-theme="dark"] .ev-signin-link-blurb { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-signin-link-field label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-signin-link-field input,
+html[data-theme="dark"] .ev-signin-link-url-row input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ev-signin-link-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] #ev-signin-link-expires { color: var(--ork-text-muted); }
+html[data-theme="dark"] #ev-signin-links-wrap { border-top-color: var(--ork-border); }
+html[data-theme="dark"] #ev-signin-links-toggle { color: var(--ork-text-secondary); }
+html[data-theme="dark"] #ev-signin-links-loading,
+html[data-theme="dark"] #ev-signin-links-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] #ev-signin-links-table th { color: var(--ork-text-muted); }
+html[data-theme="dark"] #ev-signin-links-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+
+/* QR modal — dark mode */
+html[data-theme="dark"] #ev-qr-overlay .ev-qr-box { background: var(--ork-card-bg); color: var(--ork-text); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background: #fff; }
+
 
 .ev-sched-pill {
 	display: inline-flex; align-items: center; padding: 4px 11px;
@@ -1903,7 +1925,7 @@ var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _ev
 <div id="ev-qr-overlay" onclick="if(event.target===this)evCloseQrModal()">
 	<div class="ev-qr-box">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
+			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
 			<button type="button" onclick="evCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
 		</div>
 		<img id="ev-qr-img" src="" alt="QR Code">
