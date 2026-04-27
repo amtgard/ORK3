@@ -275,10 +275,10 @@ class Controller_Park extends Controller
 		$canManagePark = $this->data['CanManagePark'] ?? false;
 		if ($recsPublic || $canManagePark) {
 			$this->data['ShowRecsTab'] = true;
-			$recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0]);
+			$recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
 			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
 		} elseif ($uid > 0) {
-			$recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0]);
+			$recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
 			$allRecs = is_array($recs) ? $recs : [];
 			$myRecs = array_values(array_filter($allRecs, function($r) use ($uid) {
 				return (int)$r['RecommendedById'] === $uid;

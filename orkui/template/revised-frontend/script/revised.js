@@ -1358,6 +1358,31 @@ if (PnConfig.recError) {
             posspId: 'pn-p-possessivepronoun', reflexId: 'pn-p-reflexive',
             existingJson: (function() { var el = document.getElementById('pn-pronoun-custom-val'); return el ? el.value : ''; })(),
         });
+
+        // Help-tip bubbles inside the modal (position:fixed so modal overflow doesn't clip them)
+        var helpBubble = null;
+        function ensureBubble() {
+            if (!helpBubble) {
+                helpBubble = document.createElement('div');
+                helpBubble.className = 'pn-acct-help-bubble';
+                helpBubble.style.display = 'none';
+                document.body.appendChild(helpBubble);
+            }
+            return helpBubble;
+        }
+        gid('pn-acct-overlay').querySelectorAll('.pn-acct-help-tip[data-tip]').forEach(function(el) {
+            el.addEventListener('mouseenter', function() {
+                var b = ensureBubble();
+                b.textContent = el.getAttribute('data-tip');
+                var r = el.getBoundingClientRect();
+                b.style.display = 'block';
+                b.style.top  = (r.bottom + 6) + 'px';
+                b.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 286)) + 'px';
+            });
+            el.addEventListener('mouseleave', function() {
+                if (helpBubble) helpBubble.style.display = 'none';
+            });
+        });
     })();
 
     // ---- Add Dues Modal ----
@@ -1702,11 +1727,23 @@ if (PnConfig.recError) {
             var opt      = this.options[this.selectedIndex];
             var isLadder = (opt.getAttribute('data-is-ladder') == '1');
             var awardId  = parseInt(opt.getAttribute('data-award-id')) || 0;
-            var isCustom = (opt.text.indexOf('Custom Award') !== -1);
+            var isCustomAward = opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award';
+            var isCustomTitle = opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title';
+            var needsCustomName = isCustomAward || isCustomTitle;
             var optName  = opt.text.toLowerCase();
             var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
 
-            gid('pn-award-custom-row').style.display  = isCustom ? '' : 'none';
+            gid('pn-award-custom-row').style.display  = needsCustomName ? '' : 'none';
+            var labelEl = gid('pn-award-custom-label');
+            if (labelEl) labelEl.textContent = isCustomTitle ? 'Custom Title Name' : 'Custom Award Name';
+            var nameInput = gid('pn-award-custom-name');
+            if (nameInput) nameInput.placeholder = isCustomTitle ? 'Enter custom title name…' : 'Enter custom award name…';
+            var aliasRow = gid('pn-award-alias-row');
+            if (aliasRow) aliasRow.style.display = isCustomTitle ? '' : 'none';
+            if (!isCustomTitle) {
+                var aliasSel = gid('pn-award-alias');
+                if (aliasSel) aliasSel.value = '0';
+            }
             gid('pn-award-info-line').innerHTML        = showBadge
                 ? '<span class="pn-badge-ladder"><i class="fas fa-chart-line"></i> Ladder Award</span>'
                 : '';
@@ -1900,6 +1937,8 @@ if (PnConfig.recError) {
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             gid('pn-award-custom-name').value     = '';
             gid('pn-award-custom-row').style.display = 'none';
+            if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
+            if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-award-rank-val').value           = '';
             gid('pn-award-info-line').innerHTML      = '';
@@ -1978,6 +2017,8 @@ if (PnConfig.recError) {
             gid('pn-award-info-line').innerHTML      = '';
             gid('pn-award-custom-name').value        = '';
             gid('pn-award-custom-row').style.display = 'none';
+            if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
+            if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
             gid('pn-award-givenat-text').value       = PnConfig.parkName;
             gid('pn-award-park-id').value            = String(PnConfig.parkId);
             gid('pn-award-kingdom-id').value         = String(PnConfig.kingdomId || 0);
@@ -2010,6 +2051,9 @@ if (PnConfig.recError) {
             if (rank) fd.append('Rank', rank);
             var customName = gid('pn-award-custom-name').value.trim();
             if (customName) fd.append('AwardName', customName);
+            var aliasSel = gid('pn-award-alias');
+            var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
+            if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
             var btnSame = gid('pn-award-save-same');
             btnSame.disabled = true;
@@ -8508,6 +8552,37 @@ function setupPronounPicker(cfg) {
         }
         var fb = gid('pn-edit-award-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+
+        // Custom Award / Custom Title reclassification UI
+        var awardIdNum = parseInt(data.AwardId || 0, 10);
+        var isCA = awardIdNum === parseInt(PnConfig.customAwardId || 0, 10);
+        var isCT = PnConfig.customTitleAwardId && awardIdNum === parseInt(PnConfig.customTitleAwardId, 10);
+        var typeRow = gid('pn-edit-type-row');
+        var customRow = gid('pn-edit-custom-name-row');
+        var customInput = gid('pn-edit-custom-name');
+        var customLabel = gid('pn-edit-custom-name-label');
+        var aliasRow = gid('pn-edit-alias-row');
+        var aliasSel = gid('pn-edit-alias');
+        var radioA = gid('pn-edit-type-award');
+        var radioT = gid('pn-edit-type-title');
+        if (typeRow) typeRow.style.display = (isCA || isCT) ? '' : 'none';
+        if (customRow) customRow.style.display = (isCA || isCT) ? '' : 'none';
+        if (aliasRow) aliasRow.style.display = isCT ? '' : 'none';
+        if (radioA) radioA.checked = isCA;
+        if (radioT) radioT.checked = isCT;
+        if (customInput) customInput.value = data.CustomName || data.displayName || '';
+        if (customLabel) customLabel.textContent = isCT ? 'Custom Title Name' : 'Custom Award Name';
+        if (aliasSel) aliasSel.value = String(data.AliasAwardId || 0);
+
+        function pnEditTypeChanged() {
+            var nowCT = radioT && radioT.checked;
+            if (aliasRow) aliasRow.style.display = nowCT ? '' : 'none';
+            if (!nowCT && aliasSel) aliasSel.value = '0';
+            if (customLabel) customLabel.textContent = nowCT ? 'Custom Title Name' : 'Custom Award Name';
+        }
+        if (radioA) radioA.onchange = pnEditTypeChanged;
+        if (radioT) radioT.onchange = pnEditTypeChanged;
+
         var overlay = gid('pn-award-edit-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
     };
@@ -8785,6 +8860,19 @@ function setupPronounPicker(cfg) {
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/reconcileaward/' + currentAwardsId;
                 } else {
                     fd.append('Rank', gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '');
+                    // Custom Award/Title reclassification payload
+                    var editRadioA = gid('pn-edit-type-award');
+                    var editRadioT = gid('pn-edit-type-title');
+                    if (editRadioA && (editRadioA.checked || editRadioT.checked)) {
+                        var targetAwardId = editRadioT.checked
+                            ? parseInt(PnConfig.customTitleAwardId || 0, 10)
+                            : parseInt(PnConfig.customAwardId || 0, 10);
+                        if (targetAwardId > 0) fd.append('AwardId', String(targetAwardId));
+                        var cn = gid('pn-edit-custom-name');
+                        if (cn) fd.append('AwardName', cn.value || '');
+                        var alSel = gid('pn-edit-alias');
+                        fd.append('AliasAwardId', (editRadioT.checked && alSel) ? (alSel.value || '0') : '0');
+                    }
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId;
                 }
 
@@ -9726,6 +9814,63 @@ function setupPronounPicker(cfg) {
                 }
             })
             .catch(function() { self.disabled = false; alert('Request failed.'); });
+        });
+
+        // Clear notes tab confirm modal
+        $(document).on('click', '#pn-clear-notes-link', function(e) {
+            e.preventDefault();
+            var overlay = gid('pn-clearnotes-overlay');
+            if (overlay) { overlay.style.display = ''; }
+        });
+        $(document).on('click', '#pn-clearnotes-close-btn, #pn-clearnotes-cancel', function() {
+            var overlay = gid('pn-clearnotes-overlay');
+            if (overlay) { overlay.style.display = 'none'; }
+        });
+        $(document).on('click', '#pn-clearnotes-overlay', function(e) {
+            if ($(e.target).is('#pn-clearnotes-overlay')) {
+                var overlay = gid('pn-clearnotes-overlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+        });
+        $(document).on('click', '#pn-clearnotes-confirm', function() {
+            var btn = this;
+            var fb  = gid('pn-clearnotes-feedback');
+            btn.disabled = true;
+            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/clearnotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: '',
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    // Hide overlay, tab panel, and tab li
+                    var overlay = gid('pn-clearnotes-overlay');
+                    if (overlay) overlay.style.display = 'none';
+                    var tabPanel = gid('pn-tab-history');
+                    if (tabPanel) tabPanel.style.display = 'none';
+                    var tabLi = document.querySelector('[data-tab=history]');
+                    if (tabLi) tabLi.style.display = 'none';
+                    // Switch to awards tab
+                    var awardsLi = document.querySelector('[data-tab=awards]');
+                    if (awardsLi) awardsLi.click();
+                } else {
+                    btn.disabled = false;
+                    if (fb) {
+                        fb.textContent = data.error || 'Error removing notes.';
+                        fb.className = 'pn-feedback pn-feedback-err';
+                        fb.style.display = '';
+                    }
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                if (fb) {
+                    fb.textContent = 'Request failed.';
+                    fb.className = 'pn-feedback pn-feedback-err';
+                    fb.style.display = '';
+                }
+            });
         });
     });
 })();

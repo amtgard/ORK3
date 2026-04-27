@@ -771,7 +771,7 @@
 							<th data-short="Rec. By">Recommended By</th>
 							<th>Date</th>
 							<th>Notes</th>
-							<?php if ($CanManageKingdom ?? false): ?><th></th><?php endif; ?>
+							<?php if (!empty($IsLoggedIn)): ?><th style="width:1%;white-space:nowrap"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody id="kn-recs-tbody">
@@ -792,9 +792,27 @@
 						</td>
 						<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
-						<td class="pk-rec-notes"><?php if (!empty($rec['Reason'])): ?><span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span><?php else: ?>&mdash;<?php endif; ?></td>
-						<?php if ($CanManageKingdom ?? false): ?>
-						<td class="pk-rec-actions">
+						<td class="pk-rec-notes"><?php if (!empty($rec['Reason'])): ?><span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span><?php else: ?>&mdash;<?php endif; ?>
+							<?php if (!empty($rec['ViewerCanEditReason'])): ?>
+							<button class="rs-edit-reason-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-reason="<?= htmlspecialchars($rec['Reason'] ?? '', ENT_QUOTES) ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-rstip="Edit your reason"><i class="fas fa-pen"></i></button>
+							<?php endif; ?>
+							<?php if (!empty($rec['Seconds']) && is_array($rec['Seconds'])): ?>
+							<div class="rs-seconds">
+								<?php foreach ($rec['Seconds'] as $sec): ?>
+								<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i><a class="rs-supporter" href="<?= UIR ?>Player/profile/<?= (int)$sec['SupporterMundaneId'] ?>"><?= htmlspecialchars($sec['SupporterName'] ?? '') ?></a><?php if (!empty($sec['Notes'])): ?><span class="rs-notes">&mdash; "<?= htmlspecialchars($sec['Notes']) ?>"</span><?php else: ?><span class="rs-notes-empty">&mdash; (no comment)</span><?php endif; ?><?php if (!empty($sec['IsMine'])): ?> <button class="rs-second-edit" data-sid="<?= (int)$sec['RecommendationSecondsId'] ?>" data-notes="<?= htmlspecialchars($sec['Notes'] ?? '', ENT_QUOTES) ?>" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button><button class="rs-second-withdraw" data-sid="<?= (int)$sec['RecommendationSecondsId'] ?>" data-rstip="Withdraw your second"><i class="fas fa-times"></i></button><?php endif; ?></div>
+								<?php endforeach; ?>
+							</div>
+							<?php endif; ?>
+						</td>
+						<?php if (!empty($IsLoggedIn)): ?>
+						<td class="pk-rec-actions rs-tip-right" style="white-space:nowrap;text-align:right;width:1%">
+							<?php if (!empty($rec['SecondsCount'])): $_sc = (int)$rec['SecondsCount']; ?>
+							<span class="rs-seconds-badge" data-rstip="<?= $_sc ?> supporting <?= $_sc === 1 ? 'second' : 'seconds' ?>"><i class="fas fa-thumbs-up"></i><?= $_sc ?></span>
+							<?php endif; ?>
+							<?php if (!empty($rec['ViewerCanSecond'])): ?>
+							<button class="rs-action-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-recipient="<?= htmlspecialchars($rec['Persona'] ?? '', ENT_QUOTES) ?>" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>
+							<?php endif; ?>
+							<?php if ($CanManageKingdom ?? false): ?>
 							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
 								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
 								<i class="fas fa-medal"></i> Grant
@@ -803,6 +821,7 @@
 								data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
 								<i class="fas fa-times"></i> Delete
 							</button>
+							<?php endif; ?>
 						</td>
 						<?php endif; ?>
 					</tr>
@@ -2215,3 +2234,15 @@ window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(wind
 window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
 initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
 </script>
+
+<?php if (!empty($IsLoggedIn)): ?>
+<script>
+window.OrkRsCfg = {
+	url: null,  /* unused */
+	uir:    '<?= UIR ?>',
+	userId: <?= (int)$this->__session->user_id ?>,
+	reload: function() { location.reload(); }
+};
+</script>
+<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
