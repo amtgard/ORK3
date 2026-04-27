@@ -284,15 +284,18 @@ details > summary::-webkit-details-marker { display: none; }
 
 <?php if ($_npa_has_summary): ?>
 	/* ── Summary DataTable ── */
+	$.fn.dataTable.ext.type.order['pct-pre'] = function (d) {
+		return parseFloat(d) || 0;
+	};
 	$('#npa-summary-table').DataTable({
 		dom        : 'lfrtip',
-		scrollX    : true,
 		fixedHeader: { headerOffset: 48 },
 		pageLength : 25,
 		columnDefs : [
-			{ targets: [0], type: 'string' },
+			{ targets: [0], type: 'html' },
 			{ targets: [1, 2, 4], type: 'num', className: 'dt-right' },
-			{ targets: [3, 5],    type: 'num', className: 'dt-right' }
+			{ targets: [5],       type: 'num', className: 'dt-right' },
+			{ targets: [3],       type: 'pct', className: 'dt-right' }
 		]
 	});
 

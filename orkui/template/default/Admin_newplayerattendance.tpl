@@ -216,16 +216,18 @@ details > summary::-webkit-details-marker { display: none; }
 	$('.datepicker').datepicker({ dateFormat: 'yy-mm-dd' });
 
 <?php if ($_npa_has_summary): ?>
+	$.fn.dataTable.ext.type.order['pct-pre'] = function (d) {
+		return parseFloat(d) || 0;
+	};
 	var table = $('#npa-table').DataTable({
 		dom        : 't',
-		scrollX    : true,
-		fixedHeader: { headerOffset: 48 },
 		paging     : false,
 		order      : [[1, 'desc']],
 		columnDefs : [
-			{ targets: [0], type: 'string' },
+			{ targets: [0],       type: 'html' },
 			{ targets: [1, 2, 4], type: 'num', className: 'dt-right' },
-			{ targets: [3, 5],    type: 'num', className: 'dt-right' }
+			{ targets: [5],       type: 'num', className: 'dt-right' },
+			{ targets: [3],       type: 'pct', className: 'dt-right' }
 		]
 	});
 
