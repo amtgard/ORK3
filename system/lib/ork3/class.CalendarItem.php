@@ -54,6 +54,7 @@ class CalendarItem extends Ork3 {
 		$this->item->all_day     = $allDay;
 		$this->item->event_start = $start;
 		$this->item->event_end   = $end;
+		$this->item->is_officer_only = !empty($request['IsOfficerOnly']) ? 1 : 0;
 		$this->item->created_by  = (int)$mundane_id;
 		$this->item->created     = date('Y-m-d H:i:s');
 		$this->item->save();
@@ -86,6 +87,7 @@ class CalendarItem extends Ork3 {
 		$this->item->all_day     = $allDay;
 		$this->item->event_start = $start;
 		$this->item->event_end   = $end;
+		$this->item->is_officer_only = !empty($request['IsOfficerOnly']) ? 1 : 0;
 		$this->item->save();
 
 		return Success($id);
@@ -123,8 +125,38 @@ class CalendarItem extends Ork3 {
 			'AllDay'         => (int)$this->item->all_day,
 			'EventStart'     => $this->item->event_start,
 			'EventEnd'       => $this->item->event_end,
+			'IsOfficerOnly'  => (int)$this->item->is_officer_only,
 			'Status'         => Success(),
 		];
+	}
+
+	// Visibility check for officer-only items (Q1=C):
+	//   ORK admins always see; otherwise the caller must hold a row in ork_officer
+	//   matching the item's scope (park_id when set, else kingdom_id with park_id=0).
+	public static function IsOfficer($mundane_id, $kingdom_id, $park_id) {
+		if (!valid_id($mundane_id)) return false;
+		if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) return true;
+		global $DB;
+		$DB->Clear();
+		$mid = (int)$mundane_id;
+		if (valid_id($park_id)) {
+			$sql = "SELECT 1 AS ok FROM " . DB_PREFIX . "officer
+			        WHERE mundane_id = {$mid} AND park_id = " . (int)$park_id . " LIMIT 1";
+		} elseif (valid_id($kingdom_id)) {
+			$sql = "SELECT 1 AS ok FROM " . DB_PREFIX . "officer
+			        WHERE mundane_id = {$mid} AND kingdom_id = " . (int)$kingdom_id . "
+			          AND park_id = 0 LIMIT 1";
+		} else {
+			return false;
+		}
+		$rs = $DB->DataSet($sql);
+		return ($rs && $rs->Next()) ? true : false;
+	}
+
+	// Returns true if $mundane_id may see an item with the given scope + officer flag.
+	public static function CanSee($mundane_id, $kingdom_id, $park_id, $is_officer_only) {
+		if (!$is_officer_only) return true;
+		return self::IsOfficer($mundane_id, $kingdom_id, $park_id);
 	}
 
 	private function normalizeDates($start, $end, $allDay) {

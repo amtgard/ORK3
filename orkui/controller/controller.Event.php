@@ -566,6 +566,63 @@ class Controller_Event extends Controller {
 		$this->data['CanManageFeast'] = $uid > 0
 			&& (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_feast);
 
+		// Pull event status + creator id (for draft visibility gate).
+		global $DB;
+		$DB->Clear();
+		$evtStatusRow = $DB->DataSet("SELECT status, mundane_id FROM " . DB_PREFIX . "event WHERE event_id = " . (int)$event_id . " LIMIT 1");
+		$_evtStatus = 'published';
+		$_evtCreator = 0;
+		if ($evtStatusRow && $evtStatusRow->Next()) {
+			$_evtStatus  = (string)($evtStatusRow->status ?? 'published');
+			$_evtCreator = (int)($evtStatusRow->mundane_id ?? 0);
+		}
+		$this->data['EventStatus']        = $_evtStatus;
+		$this->data['EventCanEditStatus'] = $this->data['CanManageEvent'];
+		// Gate non-editor viewers when status is draft.
+		if ($_evtStatus !== 'published'
+		    && !$this->data['CanManageEvent']
+		    && $uid !== $_evtCreator
+		    && !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_CREATE)) {
+			$this->data['DraftBlocked'] = true;
+		}
+
+		// Resolve event coords (event Location JSON → at_park park lat/lng) for weather + sunrise.
+		$_lat = null; $_lng = null;
+		if (!empty($cd['Location'])) {
+			$_loc = @json_decode(stripslashes((string)$cd['Location']));
+			if ($_loc) {
+				$_pt = isset($_loc->location) ? $_loc->location
+					: (isset($_loc->bounds->northeast) ? $_loc->bounds->northeast : null);
+				if ($_pt && is_numeric($_pt->lat ?? null) && is_numeric($_pt->lng ?? null)) {
+					$_lat = (float)$_pt->lat; $_lng = (float)$_pt->lng;
+				}
+			}
+		}
+		if ($_lat === null && !empty($this->data['AtParkLocation'])) {
+			$_loc = @json_decode(stripslashes((string)$this->data['AtParkLocation']));
+			if ($_loc) {
+				$_pt = isset($_loc->location) ? $_loc->location
+					: (isset($_loc->bounds->northeast) ? $_loc->bounds->northeast : null);
+				if ($_pt && is_numeric($_pt->lat ?? null) && is_numeric($_pt->lng ?? null)) {
+					$_lat = (float)$_pt->lat; $_lng = (float)$_pt->lng;
+				}
+			}
+		}
+		// Weather (start day, within 16-day window).
+		if ($_lat !== null && !empty($cd['EventStart'])) {
+			$_dayStr = date('Y-m-d', strtotime($cd['EventStart']));
+			$wx = Ork3::$Lib->weather->GetForecast($_lat, $_lng, $_dayStr);
+			$this->data['EventWeather'] = $wx;
+		}
+		// Sunrise / sunset (for the event start date).
+		if ($_lat !== null && !empty($cd['EventStart'])) {
+			$_dayStr = date('Y-m-d', strtotime($cd['EventStart']));
+			$_solar  = SolarTimes::ForDate($_lat, $_lng, $_dayStr);
+			if ($_solar) $this->data['EventSolar'] = $_solar;
+		}
+		$this->data['EventCoordsLat'] = $_lat;
+		$this->data['EventCoordsLng'] = $_lng;
+
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
 		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];

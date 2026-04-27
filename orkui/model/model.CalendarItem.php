@@ -7,20 +7,21 @@ class Model_CalendarItem extends Model {
 		$this->CalendarItem = new APIModel('CalendarItem');
 	}
 
-	function create_calendar_item($token, $kingdom_id, $park_id, $name, $description, $all_day, $event_start, $event_end) {
+	function create_calendar_item($token, $kingdom_id, $park_id, $name, $description, $all_day, $event_start, $event_end, $is_officer_only = 0) {
 		return $this->CalendarItem->CreateCalendarItem([
-			'Token'       => $token,
-			'KingdomId'   => $kingdom_id,
-			'ParkId'      => $park_id,
-			'Name'        => $name,
-			'Description' => $description,
-			'AllDay'      => $all_day,
-			'EventStart'  => $event_start,
-			'EventEnd'    => $event_end,
+			'Token'         => $token,
+			'KingdomId'     => $kingdom_id,
+			'ParkId'        => $park_id,
+			'Name'          => $name,
+			'Description'   => $description,
+			'AllDay'        => $all_day,
+			'EventStart'    => $event_start,
+			'EventEnd'      => $event_end,
+			'IsOfficerOnly' => $is_officer_only,
 		]);
 	}
 
-	function update_calendar_item($token, $id, $name, $description, $all_day, $event_start, $event_end) {
+	function update_calendar_item($token, $id, $name, $description, $all_day, $event_start, $event_end, $is_officer_only = 0) {
 		return $this->CalendarItem->UpdateCalendarItem([
 			'Token'          => $token,
 			'CalendarItemId' => $id,
@@ -29,6 +30,7 @@ class Model_CalendarItem extends Model {
 			'AllDay'         => $all_day,
 			'EventStart'     => $event_start,
 			'EventEnd'       => $event_end,
+			'IsOfficerOnly'  => $is_officer_only,
 		]);
 	}
 

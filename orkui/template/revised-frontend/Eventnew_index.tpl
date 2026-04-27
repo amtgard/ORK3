@@ -161,6 +161,13 @@
 	$checkinOpenTs    = $eventStart ? strtotime($eventStart) - 86400 : 0;
 	$checkinOpen      = !$isUpcoming || !$checkinOpenTs || time() >= $checkinOpenTs;
 	$checkinOpenLabel = $checkinOpenTs ? date('D, M j, Y \\a\\t g:i A T', $checkinOpenTs) : '';
+
+	// Calendar-enhancements R2: status / weather / solar
+	$evtStatus       = $EventStatus      ?? 'published';
+	$evtIsDraft      = ($evtStatus === 'draft');
+	$evtCanEditStat  = !empty($EventCanEditStatus);
+	$evtWeather      = $EventWeather     ?? null;
+	$evtSolar        = $EventSolar       ?? null;
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -603,6 +610,36 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 .ev-edit-btn:hover { color: #2b6cb0; }
 </style>
 
+<?php // ---- DRAFT BLOCKED ---- ?>
+<?php if (!empty($DraftBlocked ?? false)): ?>
+<div style="margin:30px auto;max-width:520px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;text-align:center;color:#4a5568;">
+	<i class="fas fa-eye-slash" style="font-size:32px;color:#a0aec0;margin-bottom:14px;display:block"></i>
+	<h2 style="margin:0 0 6px;font-size:18px;background:transparent;border:none;padding:0;border-radius:0;">This event isn't visible</h2>
+	<p style="margin:0;font-size:13px;color:#718096">It's currently a draft, accessible only to the creator and people authorized to edit it.</p>
+</div>
+<?php else: ?>
+
+<?php // ---- DRAFT BANNER (visible to editors) ---- ?>
+<?php if ($evtIsDraft): ?>
+<div class="ev-draft-banner">
+	<div class="ev-draft-banner-text">
+		<i class="fas fa-eye-slash"></i>
+		<strong>Draft</strong> — this event is hidden from members. Publish to make it visible.
+	</div>
+	<?php if ($evtCanEditStat): ?>
+	<button type="button" class="ev-draft-publish-btn" onclick="evSetEventStatus(<?= $eventId ?>, 'published', this)">
+		<i class="fas fa-paper-plane"></i> Publish
+	</button>
+	<?php endif; ?>
+</div>
+<?php elseif ($evtCanEditStat): ?>
+<div class="ev-draft-toggle-bar">
+	<button type="button" class="ev-draft-toggle-btn" onclick="evSetEventStatus(<?= $eventId ?>, 'draft', this)" data-tip="Hide this event from members. Only editors and admins will see it.">
+		<i class="fas fa-eye-slash"></i> Move to draft
+	</button>
+</div>
+<?php endif; ?>
+
 <?php // ---- HERO ---- ?>
 <?php
 	$_heroBgUrl = $bannerUrl ?: $heraldryUrl;
@@ -649,6 +686,15 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 				<?php if ($dateBadgeText): ?>
 				<span class="ev-badge <?= $isUpcoming ? 'ev-badge-green' : 'ev-badge-gray' ?>">
 					<i class="fas fa-calendar-alt"></i> <?= htmlspecialchars($dateBadgeText) ?>
+					<?php if ($evtSolar): ?>
+						<span class="ev-solar-icon" data-tip="Sunrise <?= htmlspecialchars($evtSolar['sunrise']) ?>&#10;Sunset <?= htmlspecialchars($evtSolar['sunset']) ?><?php if (!empty($evtSolar['twilight_start']) && !empty($evtSolar['twilight_end'])): ?>&#10;Twilight <?= htmlspecialchars($evtSolar['twilight_start']) ?> – <?= htmlspecialchars($evtSolar['twilight_end']) ?><?php endif; ?>"><i class="fas fa-sun"></i></span>
+					<?php endif; ?>
+				</span>
+				<?php endif; ?>
+				<?php if ($evtWeather && $evtWeather['high_f'] !== null): ?>
+				<span class="ev-weather-badge" data-tip="<?= htmlspecialchars($evtWeather['label']) ?>">
+					<span class="ev-weather-icon"><?= $evtWeather['icon'] ?></span>
+					H <?= (int)$evtWeather['high_f'] ?>°  L <?= (int)$evtWeather['low_f'] ?>°
 				</span>
 				<?php endif; ?>
 				<?php if (!$isOngoing): ?>
@@ -3645,3 +3691,4 @@ html[data-theme="dark"] .ev-grid-view-btn.ev-grid-view-active {
 })();
 </script>
 
+<?php endif; /* DraftBlocked */ ?>

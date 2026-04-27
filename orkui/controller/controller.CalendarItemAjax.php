@@ -34,7 +34,8 @@ class Controller_CalendarItemAjax extends Controller {
 			(string)($_POST['Description'] ?? ''),
 			!empty($_POST['AllDay']) ? 1 : 0,
 			(string)($_POST['EventStart']  ?? ''),
-			(string)($_POST['EventEnd']    ?? '')
+			(string)($_POST['EventEnd']    ?? ''),
+			!empty($_POST['IsOfficerOnly']) ? 1 : 0
 		);
 		$this->sendResult($r);
 	}
@@ -52,7 +53,8 @@ class Controller_CalendarItemAjax extends Controller {
 			(string)($_POST['Description'] ?? ''),
 			!empty($_POST['AllDay']) ? 1 : 0,
 			(string)($_POST['EventStart']  ?? ''),
-			(string)($_POST['EventEnd']    ?? '')
+			(string)($_POST['EventEnd']    ?? ''),
+			!empty($_POST['IsOfficerOnly']) ? 1 : 0
 		);
 		$this->sendResult($r);
 	}
@@ -79,8 +81,15 @@ class Controller_CalendarItemAjax extends Controller {
 			exit;
 		}
 
-		// Determine edit permission for the caller (same check the class uses).
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+		// Officer-only visibility gate (Q1=C: officers + ORK admins).
+		if (!empty($r['IsOfficerOnly']) && !CalendarItem::CanSee($uid, (int)$r['KingdomId'], (int)$r['ParkId'], 1)) {
+			echo json_encode(['status' => 5, 'error' => 'Not authorized']);
+			exit;
+		}
+
+		// Determine edit permission for the caller (same check the class uses).
 		$canEdit = false;
 		if ($uid > 0) {
 			if ((int)$r['ParkId'] > 0) {
@@ -100,6 +109,7 @@ class Controller_CalendarItemAjax extends Controller {
 			'AllDay'         => (int)$r['AllDay'],
 			'EventStart'     => $r['EventStart'],
 			'EventEnd'       => $r['EventEnd'],
+			'IsOfficerOnly'  => (int)$r['IsOfficerOnly'],
 			'CanEdit'        => $canEdit,
 		]);
 		exit;

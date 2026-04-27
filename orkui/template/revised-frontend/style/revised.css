@@ -9401,3 +9401,172 @@ html[data-theme="dark"] .kn-prinz-extlink {
 html[data-theme="dark"] a.kn-prinz-head:hover .kn-prinz-extlink {
 	color: var(--ork-link-bright);
 }
+
+/* ============================================================
+ * Calendar Enhancements R2: Officer-only, Drafts, RSVP, Map, Weather, Sunrise
+ * ============================================================ */
+
+/* Officer-only calendar items (kingdom + park) */
+.kn-officer-only,
+.pk-officer-only { background: rgba(128, 90, 213, 0.05); }
+html[data-theme="dark"] .kn-officer-only,
+html[data-theme="dark"] .pk-officer-only { background: rgba(128, 90, 213, 0.18); }
+.kn-officer-pill, .pk-officer-pill {
+	display: inline-flex; align-items: center; justify-content: center;
+	background: rgba(128, 90, 213, 0.13); color: #6b46c1;
+	padding: 1px 5px; border-radius: 4px; font-size: 10px;
+	margin-right: 5px; vertical-align: middle;
+}
+html[data-theme="dark"] .kn-officer-pill,
+html[data-theme="dark"] .pk-officer-pill { background: rgba(128, 90, 213, 0.32); color: #d6bcfa; }
+
+/* DRAFT pill on event rows */
+.kn-draft-pill, .pk-draft-pill {
+	display: inline-block; background: #fed7aa; color: #9a3412;
+	font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
+	padding: 2px 6px; border-radius: 3px; margin-right: 5px; vertical-align: middle;
+}
+html[data-theme="dark"] .kn-draft-pill,
+html[data-theme="dark"] .pk-draft-pill { background: #7c2d12; color: #ffedd5; }
+.kn-row-draft, .pk-row-draft { opacity: 0.62; }
+.kn-row-draft:hover, .pk-row-draft:hover { opacity: 0.92; }
+
+/* Weather pill on rows */
+.kn-wx-pill, .pk-wx-pill {
+	display: inline-block; background: #ebf8ff; color: #2c5282;
+	font-size: 10px; font-weight: 600; padding: 1px 6px;
+	border-radius: 3px; margin-left: 6px; white-space: nowrap;
+}
+html[data-theme="dark"] .kn-wx-pill,
+html[data-theme="dark"] .pk-wx-pill { background: rgba(66,153,225,0.18); color: #90cdf4; }
+
+/* Solar (sunrise/sunset) icon next to event date on detail page */
+.ev-solar-icon {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 6px; color: #d69e2e; font-size: 11px; cursor: help;
+}
+html[data-theme="dark"] .ev-solar-icon { color: #f6ad55; }
+
+/* Weather badge on event detail */
+.ev-weather-badge {
+	display: inline-flex; align-items: center; gap: 5px;
+	background: #ebf8ff; color: #2c5282;
+	border: 1px solid #bee3f8; border-radius: 16px;
+	padding: 4px 11px; font-size: 11px; font-weight: 600;
+	margin-left: 4px; vertical-align: middle;
+}
+.ev-weather-icon { font-size: 13px; }
+html[data-theme="dark"] .ev-weather-badge {
+	background: rgba(66,153,225,0.18); color: #90cdf4; border-color: rgba(66,153,225,0.42);
+}
+
+/* Draft banner + toggle on event detail */
+.ev-draft-banner {
+	display: flex; align-items: center; justify-content: space-between; gap: 12px;
+	background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px;
+	padding: 12px 16px; margin: 16px auto; max-width: 900px;
+}
+.ev-draft-banner-text { color: #78350f; font-size: 13px; line-height: 1.5; }
+.ev-draft-banner-text i { margin-right: 6px; color: #d97706; }
+.ev-draft-publish-btn {
+	background: #92400e; color: #fff; border: none; border-radius: 6px;
+	padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+	white-space: nowrap;
+}
+.ev-draft-publish-btn:hover { background: #78350f; }
+.ev-draft-toggle-bar {
+	display: flex; justify-content: flex-end; margin: 8px auto;
+	max-width: 900px; padding: 0 16px;
+}
+.ev-draft-toggle-btn {
+	background: #fff; color: #4a5568; border: 1px solid #e2e8f0;
+	border-radius: 6px; padding: 5px 11px; font-size: 11px; cursor: pointer;
+}
+.ev-draft-toggle-btn:hover { background: #fef3c7; border-color: #fbbf24; color: #78350f; }
+html[data-theme="dark"] .ev-draft-banner { background: #4a2c0e; border-color: #d97706; }
+html[data-theme="dark"] .ev-draft-banner-text { color: #fde68a; }
+html[data-theme="dark"] .ev-draft-toggle-btn { background: #2d3748; color: #cbd5e0; border-color: #4a5568; }
+
+/* RSVP dropdown widget (used in lists + map popovers) */
+.kn-rsvp-wrap, .pk-rsvp-wrap { position: relative; display: inline-block; }
+.ev-rsvp-btn {
+	display: inline-flex; align-items: center; gap: 5px;
+	background: #fff; border: 1px solid #cbd5e0; color: #4a5568;
+	padding: 5px 11px; border-radius: 6px; font-size: 11px; font-weight: 600;
+	cursor: pointer; line-height: 1.2; user-select: none;
+}
+.ev-rsvp-btn:hover { border-color: #4a5568; background: #f7fafc; }
+.ev-rsvp-rsvp-going { background: #c6f6d5; border-color: #68d391; color: #22543d; }
+.ev-rsvp-rsvp-going:hover { background: #9ae6b4; }
+.ev-rsvp-rsvp-interested { background: #fefcbf; border-color: #f6e05e; color: #744210; }
+.ev-rsvp-rsvp-interested:hover { background: #faf089; }
+.ev-rsvp-counts {
+	display: inline-block; font-size: 10px; color: #a0aec0; margin-left: 6px;
+	vertical-align: middle;
+}
+.ev-rsvp-count-going { color: #38a169; font-weight: 700; }
+.ev-rsvp-count-sep { margin: 0 3px; opacity: 0.6; }
+.ev-rsvp-count-interest { color: #d69e2e; font-weight: 700; }
+.ev-rsvp-menu {
+	display: none; position: absolute; right: 50%; transform: translateX(50%); top: 100%;
+	margin-top: 5px; min-width: 170px; z-index: 1000;
+	background: #fff; border: 1px solid #e2e8f0; border-radius: 7px;
+	box-shadow: 0 4px 14px rgba(0,0,0,0.13); padding: 4px;
+}
+.ev-rsvp-open .ev-rsvp-menu { display: block; }
+.ev-rsvp-menu-item {
+	display: flex; align-items: center; gap: 7px; width: 100%;
+	background: none; border: none; padding: 7px 11px; font-size: 12px;
+	color: #2d3748; cursor: pointer; text-align: left; border-radius: 5px;
+}
+.ev-rsvp-menu-item:hover:not([disabled]) { background: #edf2f7; }
+.ev-rsvp-menu-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+.ev-rsvp-withdraw { color: #c53030; }
+.ev-rsvp-busy .ev-rsvp-btn { opacity: 0.6; pointer-events: none; }
+html[data-theme="dark"] .ev-rsvp-btn { background: #2d3748; border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .ev-rsvp-btn:hover { background: #1a202c; }
+html[data-theme="dark"] .ev-rsvp-rsvp-going { background: #22543d; border-color: #38a169; color: #c6f6d5; }
+html[data-theme="dark"] .ev-rsvp-rsvp-interested { background: #744210; border-color: #d69e2e; color: #fefcbf; }
+html[data-theme="dark"] .ev-rsvp-menu { background: #1a202c; border-color: #2d3748; }
+html[data-theme="dark"] .ev-rsvp-menu-item { color: #cbd5e0; }
+html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #2d3748; }
+
+/* Map view popover */
+.ev-map-popover { font-family: inherit; font-size: 12px; min-width: 200px; padding: 4px; }
+.ev-map-popover-name { display: block; font-size: 14px; font-weight: 700; color: #2b6cb0; text-decoration: none; margin-bottom: 4px; }
+.ev-map-popover-name:hover { text-decoration: underline; }
+.ev-map-popover-meta { color: #718096; font-size: 11px; margin-bottom: 6px; }
+.ev-map-popover-wx { color: #2c5282; font-size: 11px; margin-bottom: 6px; }
+.ev-map-popover-rsvp { margin-top: 6px; }
+
+/* Generic data-tip CSS tooltip (light, dark-mode aware) */
+.kn-officer-pill[data-tip], .pk-officer-pill[data-tip],
+.kn-draft-pill[data-tip], .pk-draft-pill[data-tip],
+.kn-wx-pill[data-tip], .pk-wx-pill[data-tip],
+.ev-solar-icon[data-tip], .ev-weather-badge[data-tip] {
+	position: relative;
+}
+.kn-officer-pill[data-tip]:hover::after, .pk-officer-pill[data-tip]:hover::after,
+.kn-draft-pill[data-tip]:hover::after, .pk-draft-pill[data-tip]:hover::after,
+.kn-wx-pill[data-tip]:hover::after, .pk-wx-pill[data-tip]:hover::after,
+.ev-solar-icon[data-tip]:hover::after, .ev-weather-badge[data-tip]:hover::after {
+	content: attr(data-tip);
+	position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+	background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
+	padding: 6px 10px; border-radius: 4px; white-space: pre-line;
+	pointer-events: none; z-index: 500; min-width: max-content; max-width: 240px;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+
+/* Kingdomnew Save-as-draft button */
+.kn-emod-draft-btn,
+.pk-emod-draft-btn {
+	background: #fff; color: #92400e; border-color: #fbbf24 !important;
+}
+.kn-emod-draft-btn:hover:not(:disabled),
+.pk-emod-draft-btn:hover:not(:disabled) {
+	background: #fef3c7;
+}
+html[data-theme="dark"] .kn-emod-draft-btn,
+html[data-theme="dark"] .pk-emod-draft-btn { background: #2d3748; color: #fde68a; }
+

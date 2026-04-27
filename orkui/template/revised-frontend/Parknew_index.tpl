@@ -754,6 +754,7 @@
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
+						<button class="pk-view-btn" id="pk-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
 						<div id="pk-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
 							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
 							<button class="pk-filter-toggle pk-filter-on" data-filter="event">Events</button>
@@ -773,6 +774,12 @@
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="pk-events-cal" style="display:none"></div>
 
+				<!-- Map view (lazy-loaded Google Maps) -->
+				<div id="pk-events-map-wrap" style="position:relative;display:none">
+					<div id="pk-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid #e2e8f0;"></div>
+					<div id="pk-events-map-footer" style="margin-top:8px;font-size:12px;color:#718096;display:none"></div>
+				</div>
+
 				<!-- List view -->
 				<div id="pk-events-list-view">
 				<?php if (count($eventList) > 0 || count($parkDayList) > 0): ?>
@@ -781,16 +788,17 @@
 							<tr>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="date">Next Date</th>
-								<th data-sorttype="numeric">Going</th>
-							<th data-sorttype="numeric">Interested</th>
+								<th colspan="2" style="text-align:center;">RSVP</th>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
 								<?php if (!empty($event['_IsCalendarItem'])): ?>
-								<tr data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
+								<?php $ciOff = !empty($event['IsOfficerOnly']); ?>
+								<tr class="<?= $ciOff ? 'pk-officer-only' : '' ?>" data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
 									<td>
 										<span class="pk-ci-pill"><i class="fas fa-calendar-day"></i> Calendar Item</span>
+										<?php if ($ciOff): ?><span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
 									</td>
 									<td class="pk-date-col" data-sortval="<?= htmlspecialchars($event['NextDate']) ?>">
@@ -800,7 +808,8 @@
 									<td class="pk-date-col" style="text-align:center;color:#a0aec0">—</td>
 								</tr>
 								<?php else: ?>
-								<tr data-type="event"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
+								<?php $isDraft = (($event['Status'] ?? 'published') === 'draft'); ?>
+								<tr class="<?= $isDraft ? 'pk-row-draft' : '' ?>" data-type="event"<?= $event['NextDetailId'] ? ' onclick="if(event.target.closest(\'.pk-rsvp-wrap\'))return; window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
 									<td>
 										<div class="pk-tiny-heraldry">
 											<?php if ($event['HasHeraldry'] == 1): ?>
@@ -810,7 +819,8 @@
 											<?php else: ?>
 												<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
 											<?php endif; ?>
-											<?= htmlspecialchars($event['Name']) ?>
+											<?php if ($isDraft): ?><span class="pk-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?><?= htmlspecialchars($event['Name']) ?>
+											<?php if (!empty($event['Weather']['high_f'])): ?><span class="pk-wx-pill" data-tip="<?= htmlspecialchars($event['Weather']['label']) ?>"><?= $event['Weather']['icon'] ?> <?= (int)$event['Weather']['high_f'] ?>°/<?= (int)$event['Weather']['low_f'] ?>°</span><?php endif; ?>
 										</div>
 									</td>
 									<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
@@ -834,8 +844,13 @@
 											<?php endif; ?>
 										<?php endif; ?>
 									</td>
-									<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
-									<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
+									<td class="pk-date-col" colspan="2" style="text-align:center;padding:6px 8px;">
+										<?php if ((int)$event['NextDetailId'] > 0): ?>
+											<span class="pk-rsvp-wrap" data-detail="<?= (int)$event['NextDetailId'] ?>" data-going="<?= (int)($event['RsvpGoing'] ?? 0) ?>" data-interested="<?= (int)($event['RsvpInterested'] ?? 0) ?>" data-mine="<?= htmlspecialchars($event['MyRsvp'] ?? '') ?>"></span>
+										<?php else: ?>
+											<span style="color:#a0aec0">—</span>
+										<?php endif; ?>
+									</td>
 								</tr>
 								<?php endif; ?>
 							<?php endforeach; ?>
@@ -1390,6 +1405,8 @@ var PkConfig = {
 		directions:  <?= json_encode($directions) ?>,
 	},
 };
+window.pkEventMapLocations  = <?= json_encode(array_values($pkEventMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 </script>
 <?php if (!empty($CanAdminPark)): ?>
 <div id="pk-award-overlay">
@@ -1818,6 +1835,11 @@ var PkConfig = {
 						<input type="checkbox" id="pk-ci-allday"> All day
 					</label>
 				</div>
+				<div class="pk-emod-field" style="margin-top:6px">
+					<label class="pk-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
+						<input type="checkbox" id="pk-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Officer-only — hide from non-officers
+					</label>
+				</div>
 				<div style="display:flex;gap:10px;margin-top:8px">
 					<div class="pk-emod-field" style="flex:1">
 						<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
@@ -1842,6 +1864,9 @@ var PkConfig = {
 		</div>
 		<div class="pk-emod-footer">
 			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
+			<button class="pk-emod-btn-cancel pk-emod-draft-btn" id="pk-emod-draft-btn" onclick="pkCreateEvent('draft')" disabled style="display:none;font-size:12px;">
+				<i class="fas fa-eye-slash"></i> Save as Draft
+			</button>
 			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
 				<span id="pk-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
 			</button>

@@ -34,10 +34,46 @@ class Controller_EventAjax extends Controller {
 		);
 
 		if ($r['Status'] == 0) {
-			echo json_encode(['status' => 0, 'eventId' => (int)($r['Detail'] ?? 0)]);
+			$newId = (int)($r['Detail'] ?? 0);
+			// Honor optional Status=draft on create.
+			$status = (string)($_POST['Status'] ?? 'published');
+			if ($status === 'draft' && $newId > 0) {
+				global $DB;
+				$DB->Clear();
+				$DB->Execute("UPDATE " . DB_PREFIX . "event SET status = 'draft' WHERE event_id = " . $newId);
+			}
+			echo json_encode(['status' => 0, 'eventId' => $newId]);
 		} else {
 			echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 		}
+		exit;
+	}
+
+	// Publish / unpublish an event. Caller must hold AUTH_EVENT/AUTH_EDIT.
+	public function set_status($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$uid    = (int)$this->session->user_id;
+		$evtId  = (int)($_POST['EventId'] ?? 0);
+		$status = (string)($_POST['Status'] ?? '');
+		if ($evtId <= 0 || !in_array($status, ['published', 'draft'], true)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
+			exit;
+		}
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $evtId, AUTH_EDIT)) {
+			echo json_encode(['status' => 5, 'error' => 'Not authorized']);
+			exit;
+		}
+		global $DB;
+		$DB->Clear();
+		$DB->Execute("UPDATE " . DB_PREFIX . "event SET status = '" . mysql_real_escape_string($status) . "' WHERE event_id = " . $evtId);
+		// Bust SearchService.Event memcache for this event.
+		$evKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $evtId]);
+		Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
+		echo json_encode(['status' => 0, 'event_status' => $status]);
 		exit;
 	}
 
