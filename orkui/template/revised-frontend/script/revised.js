@@ -3573,6 +3573,8 @@ $(document).ready(function() {
     var CI_UPDATE_URL = KnConfig.uir + 'CalendarItemAjax/update';
     var CI_DELETE_URL = KnConfig.uir + 'CalendarItemAjax/delete';
     var CI_GET_URL    = KnConfig.uir + 'CalendarItemAjax/get/';
+    var RSVP_SET_URL  = KnConfig.uir + 'EventRsvpAjax/set';
+    var RSVP_OFF_URL  = KnConfig.uir + 'EventRsvpAjax/withdraw';
     var knCiEditingId = 0; // 0 = create mode; >0 = editing existing item
     var knCiFlatStart = null, knCiFlatEnd = null;
 
@@ -3581,6 +3583,7 @@ $(document).ready(function() {
         document.getElementById('kn-ci-park-id').value   = '';
         document.getElementById('kn-ci-description').value = '';
         document.getElementById('kn-ci-allday').checked = false;
+        var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = false;
         knCiRebuildPickers(presetDate || '', '', false);
     }
 
@@ -3613,6 +3616,8 @@ $(document).ready(function() {
         var isCi = (t === 'calendar-item');
         document.querySelectorAll('.kn-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
         document.querySelectorAll('.kn-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        if (dbtn) dbtn.style.display = isCi ? 'none' : '';
         document.getElementById('kn-emod-go-label').textContent = isCi ? (knCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
         var title = document.getElementById('kn-emod-title');
         title.innerHTML = isCi
@@ -3636,6 +3641,8 @@ $(document).ready(function() {
             ok = !!document.getElementById('kn-event-name').value.trim();
         }
         document.getElementById('kn-emod-go-btn').disabled = !ok;
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        if (dbtn) dbtn.disabled = !ok;
     }
 
     window.knOpenEventModal = function(dateStr) {
@@ -3672,14 +3679,16 @@ $(document).ready(function() {
         document.body.style.overflow = '';
     };
 
-    window.knCreateEvent = function() {
+    window.knCreateEvent = function(statusOverride) {
         if (knGetModalType() === 'calendar-item') return knSubmitCalendarItem();
         var name   = document.getElementById('kn-event-name').value.trim();
         var parkId = parseInt(document.getElementById('kn-event-park-id').value) || 0;
         if (!name) return;
         var btn = document.getElementById('kn-emod-go-btn');
-        btn.disabled = true;
-        $.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId },
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        btn.disabled = true; if (dbtn) dbtn.disabled = true;
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        $.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId, Status: status },
             function(r) {
                 if (r && r.status === 0) {
                     var presetDate = document.getElementById('kn-event-modal').dataset.presetDate || '';
@@ -3689,10 +3698,10 @@ $(document).ready(function() {
                     window.location.href = url;
                 } else {
                     knEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
-                    btn.disabled = false;
+                    btn.disabled = false; if (dbtn) dbtn.disabled = false;
                 }
             }, 'json'
-        ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+        ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
     };
 
     function knSubmitCalendarItem() {
@@ -3707,10 +3716,12 @@ $(document).ready(function() {
         var btn = document.getElementById('kn-emod-go-btn');
         btn.disabled = true;
 
+        var officerOnly = document.getElementById('kn-ci-officer-only');
         var payload = {
             Name: name, Description: desc, AllDay: allDay,
             EventStart: start, EventEnd: end,
-            KingdomId: KnConfig.kingdomId, ParkId: parkId
+            KingdomId: KnConfig.kingdomId, ParkId: parkId,
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0
         };
         var url = CI_CREATE_URL;
         if (knCiEditingId > 0) { payload.CalendarItemId = knCiEditingId; url = CI_UPDATE_URL; }
@@ -3738,7 +3749,7 @@ $(document).ready(function() {
             knCiCurrent = r;
             document.getElementById('kn-ci-view-name').textContent = r.Name || '';
             document.getElementById('kn-ci-view-when').textContent = knCiFormatWhen(r);
-            document.getElementById('kn-ci-view-scope').textContent = r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item';
+            document.getElementById('kn-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item') + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '');
             var descEl = document.getElementById('kn-ci-view-desc');
             descEl.textContent = r.Description || '';
             descEl.style.display = r.Description ? '' : 'none';
@@ -3787,6 +3798,7 @@ $(document).ready(function() {
         document.getElementById('kn-event-name').value = knCiCurrent.Name || '';
         document.getElementById('kn-ci-description').value = knCiCurrent.Description || '';
         document.getElementById('kn-ci-allday').checked = (knCiCurrent.AllDay == 1);
+        var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = (knCiCurrent.IsOfficerOnly == 1);
         document.getElementById('kn-ci-park-id').value = knCiCurrent.ParkId || '';
         document.getElementById('kn-ci-park-name').value = ''; // user can re-select if they want to change
         document.getElementById('kn-emod-feedback').style.display = 'none';
@@ -6841,6 +6853,7 @@ $(document).ready(function() {
     function pkCiResetForm(presetDate) {
         document.getElementById('pk-ci-description').value = '';
         document.getElementById('pk-ci-allday').checked = false;
+        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = false;
         pkCiRebuildPickers(presetDate || '', '', false);
     }
 
@@ -6854,6 +6867,8 @@ $(document).ready(function() {
         var isCi = (t === 'calendar-item');
         document.querySelectorAll('.pk-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
         document.querySelectorAll('.pk-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        if (dbtn) dbtn.style.display = isCi ? 'none' : '';
         document.getElementById('pk-emod-go-label').textContent = isCi ? (pkCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
         var title = document.getElementById('pk-emod-title');
         title.innerHTML = isCi
@@ -6873,6 +6888,8 @@ $(document).ready(function() {
             ok = !!document.getElementById('pk-event-name').value.trim();
         }
         document.getElementById('pk-emod-go-btn').disabled = !ok;
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        if (dbtn) dbtn.disabled = !ok;
     }
 
     window.pkOpenEventModal = function(dateStr) {
@@ -6905,13 +6922,15 @@ $(document).ready(function() {
         document.body.style.overflow = '';
     };
 
-    window.pkCreateEvent = function() {
+    window.pkCreateEvent = function(statusOverride) {
         if (pkGetModalType() === 'calendar-item') return pkSubmitCalendarItem();
         var name = document.getElementById('pk-event-name').value.trim();
         if (!name) return;
         var btn = document.getElementById('pk-emod-go-btn');
-        btn.disabled = true;
-        $.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId },
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        btn.disabled = true; if (dbtn) dbtn.disabled = true;
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        $.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId, Status: status },
             function(r) {
                 if (r && r.status === 0) {
                     var presetDate = document.getElementById('pk-event-modal').dataset.presetDate || '';
@@ -6920,10 +6939,10 @@ $(document).ready(function() {
                     window.location.href = url;
                 } else {
                     pkEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
-                    btn.disabled = false;
+                    btn.disabled = false; if (dbtn) dbtn.disabled = false;
                 }
             }, 'json'
-        ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+        ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
     };
 
     function pkSubmitCalendarItem() {
@@ -6937,10 +6956,12 @@ $(document).ready(function() {
         var btn = document.getElementById('pk-emod-go-btn');
         btn.disabled = true;
 
+        var officerOnly = document.getElementById('pk-ci-officer-only');
         var payload = {
             Name: name, Description: desc, AllDay: allDay,
             EventStart: start, EventEnd: end,
-            KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId
+            KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0
         };
         var url = CI_CREATE_URL;
         if (pkCiEditingId > 0) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
@@ -6963,7 +6984,7 @@ $(document).ready(function() {
             pkCiCurrent = r;
             document.getElementById('pk-ci-view-name').textContent = r.Name || '';
             document.getElementById('pk-ci-view-when').textContent = pkCiFormatWhen(r);
-            document.getElementById('pk-ci-view-scope').textContent = r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item';
+            document.getElementById('pk-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item') + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '');
             var descEl = document.getElementById('pk-ci-view-desc');
             descEl.textContent = r.Description || '';
             descEl.style.display = r.Description ? '' : 'none';
@@ -7013,6 +7034,7 @@ $(document).ready(function() {
         document.getElementById('pk-event-name').value = pkCiCurrent.Name || '';
         document.getElementById('pk-ci-description').value = pkCiCurrent.Description || '';
         document.getElementById('pk-ci-allday').checked = (pkCiCurrent.AllDay == 1);
+        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = (pkCiCurrent.IsOfficerOnly == 1);
         document.getElementById('pk-emod-feedback').style.display = 'none';
         document.getElementById('pk-emod-date-row').style.display = 'none';
         var sVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventStart.substring(0, 10) : pkCiCurrent.EventStart.substring(0, 16).replace('T', ' ');
@@ -12881,4 +12903,290 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
             );
         }
     });
+})();
+
+
+// =============================================================================
+// Calendar Enhancements R2: RSVP dropdowns, Map view, Event status setter
+// Works on both Kingdomnew (kn-*) and Parknew (pk-*) surfaces.
+// =============================================================================
+(function() {
+    var Cfg = (typeof KnConfig !== 'undefined') ? KnConfig
+            : (typeof PkConfig !== 'undefined') ? PkConfig : null;
+    if (!Cfg) return;
+    var UIR = Cfg.uir;
+
+    // Reachable from event detail page directly.
+    window.evSetEventStatus = function(eventId, status, btn) {
+        if (btn) btn.disabled = true;
+        $.post(UIR + 'EventAjax/set_status', { EventId: eventId, Status: status }, function(r) {
+            if (r && r.status === 0) {
+                window.location.reload();
+            } else {
+                alert((r && r.error) || 'Failed to set event status.');
+                if (btn) btn.disabled = false;
+            }
+        }, 'json').fail(function() { alert('Request failed.'); if (btn) btn.disabled = false; });
+    };
+
+    // ---- RSVP component ----
+    var RSVP_LABELS = {
+        '':           { html: 'RSVP <i class="fas fa-caret-down"></i>',                            cls: 'rsvp-none' },
+        'going':      { html: '<i class="fas fa-check-circle"></i> Going <i class="fas fa-caret-down"></i>',  cls: 'rsvp-going' },
+        'interested': { html: '<i class="fas fa-star"></i> Interested <i class="fas fa-caret-down"></i>',     cls: 'rsvp-interested' }
+    };
+
+    function renderRsvpButton(span, prefix) {
+        var detailId    = parseInt(span.getAttribute('data-detail') || '0', 10);
+        var goingCnt    = parseInt(span.getAttribute('data-going') || '0', 10);
+        var interestCnt = parseInt(span.getAttribute('data-interested') || '0', 10);
+        var mine        = span.getAttribute('data-mine') || '';
+
+        if (!detailId) return;
+        var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
+        span.innerHTML = ''
+            + '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>'
+            + '<div class="ev-rsvp-counts">'
+                + '<span class="ev-rsvp-count-going">' + goingCnt + '</span>'
+                + '<span class="ev-rsvp-count-sep">·</span>'
+                + '<span class="ev-rsvp-count-interest">' + interestCnt + '</span>'
+            + '</div>'
+            + '<div class="ev-rsvp-menu">'
+                + '<button type="button" class="ev-rsvp-menu-item" data-rsvp="going"><i class="fas fa-check-circle"></i> Going</button>'
+                + '<button type="button" class="ev-rsvp-menu-item" data-rsvp="interested"><i class="fas fa-star"></i> Interested</button>'
+                + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-withdraw" data-rsvp=""' + (mine ? '' : ' disabled') + '><i class="fas fa-times"></i> Withdraw RSVP</button>'
+            + '</div>';
+    }
+
+    function closeAllRsvp() {
+        document.querySelectorAll('.ev-rsvp-open').forEach(function(el) { el.classList.remove('ev-rsvp-open'); });
+    }
+
+    // Delegated listeners — works for both kingdom and park surfaces.
+    function wireRsvp(prefix) {
+        document.querySelectorAll('.' + prefix + '-rsvp-wrap').forEach(function(span) {
+            renderRsvpButton(span, prefix);
+        });
+        document.body.addEventListener('click', function(e) {
+            var btn = e.target.closest('.ev-rsvp-btn');
+            var menuItem = e.target.closest('.ev-rsvp-menu-item');
+            if (btn) {
+                e.stopPropagation();
+                if (!Cfg.loggedIn) { window.location.href = UIR + 'Account/login'; return; }
+                var wrap = btn.closest('.' + prefix + '-rsvp-wrap');
+                if (!wrap) return;
+                var open = wrap.classList.contains('ev-rsvp-open');
+                closeAllRsvp();
+                if (!open) wrap.classList.add('ev-rsvp-open');
+            } else if (menuItem) {
+                e.stopPropagation();
+                var wrap2 = menuItem.closest('.' + prefix + '-rsvp-wrap');
+                if (!wrap2) return;
+                var status = menuItem.getAttribute('data-rsvp') || '';
+                var detailId = parseInt(wrap2.getAttribute('data-detail') || '0', 10);
+                var url = status ? (UIR + 'EventRsvpAjax/set') : (UIR + 'EventRsvpAjax/withdraw');
+                var payload = { EventCalendarDetailId: detailId };
+                if (status) payload.Status = status;
+                wrap2.classList.add('ev-rsvp-busy');
+                $.post(url, payload, function(r) {
+                    wrap2.classList.remove('ev-rsvp-busy');
+                    if (r && r.status === 0) {
+                        wrap2.setAttribute('data-mine',       r.my_status || '');
+                        wrap2.setAttribute('data-going',      r.going_count || 0);
+                        wrap2.setAttribute('data-interested', r.interested_count || 0);
+                        renderRsvpButton(wrap2, prefix);
+                        closeAllRsvp();
+                    } else {
+                        alert((r && r.error) || 'Failed to update RSVP.');
+                    }
+                }, 'json').fail(function() {
+                    wrap2.classList.remove('ev-rsvp-busy');
+                    alert('Request failed.');
+                });
+            } else {
+                closeAllRsvp();
+            }
+        });
+    }
+
+    if (typeof KnConfig !== 'undefined') wireRsvp('kn');
+    if (typeof PkConfig !== 'undefined') wireRsvp('pk');
+
+    // ---- Events Map view (lazy Google Maps) ----
+    var GMAPS_API_KEY = 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8'; // mirrors knInitMap's key
+    var gmapsLoading  = false;
+    var gmapsReady    = (typeof google !== 'undefined' && google.maps && google.maps.Map);
+
+    function ensureGoogleMaps(cb) {
+        if (gmapsReady) return cb();
+        if (gmapsLoading) {
+            window.addEventListener('orkGmapsReady', cb, { once: true });
+            return;
+        }
+        gmapsLoading = true;
+        window.__orkGmapsCb = function() {
+            gmapsReady = true;
+            window.dispatchEvent(new Event('orkGmapsReady'));
+            cb();
+        };
+        var s = document.createElement('script');
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly';
+        s.async = true; s.defer = true;
+        document.head.appendChild(s);
+    }
+
+    function popoverHtml(loc) {
+        var rsvpHtml = '';
+        if (loc.event_calendardetail_id) {
+            rsvpHtml = '<span class="kn-rsvp-wrap" data-detail="' + loc.event_calendardetail_id
+                + '" data-going="' + (loc.going || 0)
+                + '" data-interested="' + (loc.interested || 0)
+                + '" data-mine="' + (loc.my_rsvp || '') + '"></span>';
+        }
+        var wxHtml = '';
+        if (loc.weather && loc.weather.high_f !== null && loc.weather.high_f !== undefined) {
+            wxHtml = '<div class="ev-map-popover-wx">' + loc.weather.icon
+                + ' H ' + loc.weather.high_f + '° L ' + loc.weather.low_f + '°</div>';
+        }
+        return ''
+            + '<div class="ev-map-popover">'
+                + '<a class="ev-map-popover-name" href="' + UIR + 'Event/detail/' + loc.event_id + '/' + (loc.event_calendardetail_id || '') + '">' + escapeHtml(loc.name) + '</a>'
+                + (loc.is_draft ? ' <span class="kn-draft-pill" style="margin-left:4px">DRAFT</span>' : '')
+                + '<div class="ev-map-popover-meta">' + escapeHtml(loc.date_label || loc.date) + (loc.park_name ? ' · ' + escapeHtml(loc.park_name) : '') + '</div>'
+                + wxHtml
+                + '<div class="ev-map-popover-rsvp">' + rsvpHtml + '</div>'
+            + '</div>';
+    }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+    }
+
+    function buildEventMap(prefix, locations) {
+        var elId = prefix + '-events-map';
+        var el = document.getElementById(elId);
+        if (!el) return;
+        if (!locations || !locations.length) {
+            el.innerHTML = '<div style="padding:32px;text-align:center;color:#a0aec0">No upcoming events with map locations.</div>';
+            return;
+        }
+        var bounds = new google.maps.LatLngBounds();
+        var map = new google.maps.Map(el, {
+            zoom: 4, center: { lat: locations[0].lat, lng: locations[0].lng },
+            mapTypeControl: false, streetViewControl: false, fullscreenControl: false
+        });
+        var infow = new google.maps.InfoWindow();
+        locations.forEach(function(loc) {
+            var pos = { lat: parseFloat(loc.lat), lng: parseFloat(loc.lng) };
+            bounds.extend(pos);
+            var m = new google.maps.Marker({
+                position: pos, map: map, title: loc.name,
+                icon: {
+                    path: 'M -10,-3 L -3,-3 0,-12 3,-3 10,-3 4,3 6,12 0,7 -6,12 -4,3 z',
+                    fillColor: loc.is_draft ? '#a0aec0' : '#dd6b20', fillOpacity: 1,
+                    strokeColor: '#fff', strokeWeight: 1, scale: 1.4
+                }
+            });
+            m.addListener('click', function() {
+                infow.setContent(popoverHtml(loc));
+                infow.open(map, m);
+                // Re-render RSVP button inside the freshly opened InfoWindow.
+                setTimeout(function() {
+                    document.querySelectorAll('.gm-style .' + prefix + '-rsvp-wrap').forEach(function(span) {
+                        renderRsvpButton(span, prefix);
+                    });
+                }, 50);
+            });
+        });
+        if (locations.length > 1) {
+            map.fitBounds(bounds);
+            var listener = google.maps.event.addListenerOnce(map, 'idle', function() {
+                if (map.getZoom() > 11) map.setZoom(11);
+            });
+        } else {
+            map.setZoom(11);
+        }
+    }
+
+    function getEventLocations(prefix) {
+        if (prefix === 'kn' && typeof KnConfig !== 'undefined') {
+            return window.knEventMapLocations || [];
+        }
+        if (prefix === 'pk' && typeof PkConfig !== 'undefined') {
+            return window.pkEventMapLocations || [];
+        }
+        return [];
+    }
+
+    var mapInited = { kn: false, pk: false };
+
+    function showEventMap(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (!mapWrap) return;
+        if (listView) listView.style.display = 'none';
+        if (calWrap)  calWrap.style.display  = 'none';
+        mapWrap.style.display = '';
+
+        // Update toggle button active state
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-map');
+        if (btn) btn.classList.add(prefix + '-view-active');
+
+        if (mapInited[prefix]) return;
+        mapInited[prefix] = true;
+        ensureGoogleMaps(function() {
+            var locs = getEventLocations(prefix);
+            buildEventMap(prefix, locs);
+            // Footer "no location" line
+            var noLocCount = (prefix === 'kn') ? (window.knEventMapNoLocCount || 0) : (window.pkEventMapNoLocCount || 0);
+            var footer = document.getElementById(prefix + '-events-map-footer');
+            if (footer && noLocCount > 0) {
+                footer.textContent = noLocCount + ' event' + (noLocCount === 1 ? '' : 's') + ' in this window have no map location.';
+                footer.style.display = '';
+            }
+        });
+    }
+
+    function showListView(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (mapWrap)  mapWrap.style.display  = 'none';
+        if (calWrap)  calWrap.style.display  = 'none';
+        if (listView) listView.style.display = '';
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-list');
+        if (btn) btn.classList.add(prefix + '-view-active');
+    }
+
+    function showCalView(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (mapWrap)  mapWrap.style.display  = 'none';
+        if (listView) listView.style.display = 'none';
+        if (calWrap)  calWrap.style.display  = '';
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-cal');
+        if (btn) btn.classList.add(prefix + '-view-active');
+    }
+
+    // Wire the Map button (List + Calendar already wired by existing code).
+    function wireMapBtn(prefix) {
+        var btn = document.getElementById(prefix + '-ev-view-map');
+        if (!btn) return;
+        btn.addEventListener('click', function() { showEventMap(prefix); });
+        // Also intercept the existing list/cal buttons to hide map when clicked.
+        var listBtn = document.getElementById(prefix + '-ev-view-list');
+        var calBtn  = document.getElementById(prefix + '-ev-view-cal');
+        if (listBtn) listBtn.addEventListener('click', function() { showListView(prefix); });
+        if (calBtn)  calBtn.addEventListener('click', function() { showCalView(prefix);  });
+    }
+
+    if (typeof KnConfig !== 'undefined') wireMapBtn('kn');
+    if (typeof PkConfig !== 'undefined') wireMapBtn('pk');
 })();
