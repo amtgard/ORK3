@@ -661,9 +661,14 @@ class Controller_KingdomAjax extends Controller {
 		global $DB;
 		$events = [];
 
+		$kn_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+		$kn_draftClause = $kn_isAdmin ? '' : ($kn_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$kn_uid})" : "AND e.status = 'published'");
+
 		// Events in range (all calendar-detail occurrences within window)
 		$evtSql = "
-			SELECT e.event_id, e.name, e.park_id, p.abbreviation AS park_abbr,
+			SELECT e.event_id, e.name, e.park_id, e.status, e.mundane_id AS event_creator,
+			       p.abbreviation AS park_abbr,
 			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
@@ -671,10 +676,17 @@ class Controller_KingdomAjax extends Controller {
 			WHERE e.kingdom_id = {$kid}
 			  AND cd.event_start >= '{$start}'
 			  AND cd.event_start < '{$end}'
+			  {$kn_draftClause}
 			ORDER BY cd.event_start";
 		$evtResult = $DB->DataSet($evtSql);
 		if ($evtResult && $evtResult->Size() > 0) {
 			while ($evtResult->Next()) {
+				$evStatus = (string)($evtResult->status ?? 'published');
+				// Per-row draft check (covers AUTH_EVENT/AUTH_EDIT users beyond simple creator/admin filter above)
+				if ($evStatus !== 'published' && !$kn_isAdmin && (int)$evtResult->event_creator !== $kn_uid) {
+					$canEditRow = ($kn_uid > 0) && Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_EVENT, (int)$evtResult->event_id, AUTH_EDIT);
+					if (!$canEditRow) continue;
+				}
 				$isPark = (int)$evtResult->park_id > 0;
 				$abbr   = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
 				$eid    = (int)$evtResult->event_id;
@@ -685,6 +697,11 @@ class Controller_KingdomAjax extends Controller {
 					'url'   => $did ? UIR . "Event/detail/{$eid}/{$did}" : '',
 					'color' => $isPark ? '#6b46c1' : '#0891b2',
 					'type'  => $isPark ? 'park-event' : 'kingdom-event',
+					'extendedProps' => [
+						'eventId'  => $eid,
+						'detailId' => $did,
+						'isDraft'  => $evStatus === 'draft',
+					],
 				];
 				$endRaw = $evtResult->event_end ?? '';
 				if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {

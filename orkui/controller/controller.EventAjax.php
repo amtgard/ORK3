@@ -77,6 +77,170 @@ class Controller_EventAjax extends Controller {
 		exit;
 	}
 
+	// Lightweight event preview for the calendar grid quick-look modal.
+	// Path: EventAjax/preview/{event_id}/{detail_id}
+	public function preview($p = null) {
+		header('Content-Type: application/json');
+		$parts    = explode('/', (string)$p);
+		$eventId  = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+		$detailId = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+		if ($eventId <= 0) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid event id']);
+			exit;
+		}
+		global $DB;
+		$uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$isAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
+
+		// Event row
+		$DB->Clear();
+		$ev = $DB->DataSet("
+			SELECT e.event_id, e.name, e.kingdom_id, e.park_id, e.has_heraldry, e.status, e.mundane_id AS creator,
+			       p.name AS park_name
+			FROM " . DB_PREFIX . "event e
+			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
+			WHERE e.event_id = {$eventId} LIMIT 1");
+		if (!$ev || !$ev->Next()) {
+			echo json_encode(['status' => 1, 'error' => 'Event not found']);
+			exit;
+		}
+		$status      = (string)($ev->status ?? 'published');
+		$canEdit     = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $eventId, AUTH_EDIT);
+		if ($status !== 'published' && !$canEdit && !$isAdmin && (int)$ev->creator !== $uid) {
+			echo json_encode(['status' => 5, 'error' => 'Not authorized']);
+			exit;
+		}
+
+		// Detail row (price, description, dates, address, location JSON, at_park_id)
+		$cd = null;
+		if ($detailId > 0) {
+			$DB->Clear();
+			$cdRs = $DB->DataSet("
+				SELECT cd.event_calendardetail_id, cd.event_start, cd.event_end, cd.description,
+				       cd.price, cd.address, cd.city, cd.province, cd.location, cd.at_park_id
+				FROM " . DB_PREFIX . "event_calendardetail cd
+				WHERE cd.event_calendardetail_id = {$detailId} AND cd.event_id = {$eventId} LIMIT 1");
+			if ($cdRs && $cdRs->Next()) $cd = $cdRs;
+		}
+		if (!$cd) {
+			// Fall back to current detail
+			$DB->Clear();
+			$cdRs = $DB->DataSet("
+				SELECT cd.event_calendardetail_id, cd.event_start, cd.event_end, cd.description,
+				       cd.price, cd.address, cd.city, cd.province, cd.location, cd.at_park_id
+				FROM " . DB_PREFIX . "event_calendardetail cd
+				WHERE cd.event_id = {$eventId} AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+				ORDER BY cd.event_start LIMIT 1");
+			if ($cdRs && $cdRs->Next()) {
+				$cd = $cdRs;
+				$detailId = (int)$cd->event_calendardetail_id;
+			}
+		}
+
+		// RSVP counts + caller's status
+		$going = 0; $interested = 0; $myRsvp = '';
+		if ($detailId > 0) {
+			$DB->Clear();
+			$rs = $DB->DataSet("
+				SELECT
+					SUM(CASE WHEN status = 'going'      THEN 1 ELSE 0 END) AS g,
+					SUM(CASE WHEN status = 'interested' THEN 1 ELSE 0 END) AS i
+				FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = {$detailId}");
+			if ($rs && $rs->Next()) { $going = (int)$rs->g; $interested = (int)$rs->i; }
+			if ($uid > 0) {
+				$DB->Clear();
+				$mrs = $DB->DataSet("
+					SELECT status FROM " . DB_PREFIX . "event_rsvp
+					WHERE event_calendardetail_id = {$detailId} AND mundane_id = {$uid} LIMIT 1");
+				if ($mrs && $mrs->Next()) $myRsvp = (string)$mrs->status;
+			}
+		}
+
+		// Resolve coords for weather + sunrise (event location → at_park park lat/lng → host park lat/lng)
+		$lat = null; $lng = null;
+		if ($cd) {
+			$rawLoc = (string)($cd->location ?? '');
+			if ($rawLoc) {
+				$loc = @json_decode(stripslashes($rawLoc));
+				if ($loc) {
+					$pt = isset($loc->location) ? $loc->location
+						: (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+					if ($pt && is_numeric($pt->lat ?? null) && is_numeric($pt->lng ?? null)) {
+						$lat = (float)$pt->lat; $lng = (float)$pt->lng;
+					}
+				}
+			}
+			if ($lat === null && (int)($cd->at_park_id ?? 0) > 0) {
+				$DB->Clear();
+				$pkLook = $DB->DataSet("SELECT latitude, longitude FROM " . DB_PREFIX . "park WHERE park_id = " . (int)$cd->at_park_id . " LIMIT 1");
+				if ($pkLook && $pkLook->Next() && is_numeric($pkLook->latitude) && (float)$pkLook->latitude != 0) {
+					$lat = (float)$pkLook->latitude; $lng = (float)$pkLook->longitude;
+				}
+			}
+		}
+		if ($lat === null && (int)$ev->park_id > 0) {
+			$DB->Clear();
+			$pkLook = $DB->DataSet("SELECT latitude, longitude FROM " . DB_PREFIX . "park WHERE park_id = " . (int)$ev->park_id . " LIMIT 1");
+			if ($pkLook && $pkLook->Next() && is_numeric($pkLook->latitude) && (float)$pkLook->latitude != 0) {
+				$lat = (float)$pkLook->latitude; $lng = (float)$pkLook->longitude;
+			}
+		}
+
+		$weather = null; $solar = null;
+		if ($lat !== null && $cd) {
+			$dayStr = date('Y-m-d', strtotime($cd->event_start));
+			$weather = Ork3::$Lib->weather->GetForecast($lat, $lng, $dayStr);
+			$solar   = SolarTimes::ForDate($lat, $lng, $dayStr);
+		}
+
+		// Description excerpt — strip markdown to first ~200 chars on a sentence boundary.
+		$desc = (string)($cd->description ?? '');
+		$plain = trim(preg_replace('/\s+/', ' ', preg_replace('/[#*_\[\]\(\)`>~-]+/', ' ', $desc)));
+		$excerpt = '';
+		if (strlen($plain)) {
+			if (strlen($plain) <= 220) {
+				$excerpt = $plain;
+			} else {
+				$cut = substr($plain, 0, 220);
+				$cutAt = max(strrpos($cut, '. '), strrpos($cut, ' '));
+				$excerpt = ($cutAt > 120 ? substr($cut, 0, $cutAt) : $cut) . '…';
+			}
+		}
+
+		$startTs = $cd ? strtotime($cd->event_start) : 0;
+		$endTs   = $cd ? strtotime($cd->event_end)   : 0;
+		$dateLabel = $startTs ? date('l, F j, Y', $startTs) : '';
+		$timeLabel = '';
+		if ($startTs) {
+			$timeLabel = date('g:i A', $startTs);
+			if ($endTs && $endTs > $startTs) $timeLabel .= ' – ' . date('g:i A', $endTs);
+		}
+
+		echo json_encode([
+			'status'           => 0,
+			'event_id'         => $eventId,
+			'event_calendardetail_id' => $detailId,
+			'name'             => $ev->name,
+			'park_id'          => (int)$ev->park_id,
+			'park_name'        => $ev->park_name,
+			'is_park_event'    => (int)$ev->park_id > 0,
+			'is_draft'         => $status === 'draft',
+			'has_heraldry'     => (int)$ev->has_heraldry === 1,
+			'date_label'       => $dateLabel,
+			'time_label'       => $timeLabel,
+			'price'            => $cd ? (float)$cd->price : 0,
+			'description_excerpt' => $excerpt,
+			'going_count'      => $going,
+			'interested_count' => $interested,
+			'my_rsvp'          => $myRsvp,
+			'weather'          => $weather,
+			'solar'            => $solar,
+			'detail_url'       => $detailId > 0 ? (UIR . 'Event/detail/' . $eventId . '/' . $detailId) : (UIR . 'Event/index/' . $eventId),
+			'can_edit'         => $canEdit,
+		]);
+		exit;
+	}
+
 	public function add_attendance($p = null) {
 		header('Content-Type: application/json');
 

@@ -2373,8 +2373,9 @@ function knRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
-            var ciId = info.event.extendedProps && info.event.extendedProps.calendarItemId;
-            if (ciId) { knShowCalendarItemOverlay(ciId); return; }
+            var xp = info.event.extendedProps || {};
+            if (xp.calendarItemId) { knShowCalendarItemOverlay(xp.calendarItemId); return; }
+            if (xp.eventId) { window.evpvOpen(xp.eventId, xp.detailId || 0); return; }
             if (info.event.url) window.location.href = info.event.url;
         },
         dayCellDidMount: function(info) {
@@ -5713,8 +5714,9 @@ function pkRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
-            var ciId = info.event.extendedProps && info.event.extendedProps.calendarItemId;
-            if (ciId) { pkShowCalendarItemOverlay(ciId); return; }
+            var xp = info.event.extendedProps || {};
+            if (xp.calendarItemId) { pkShowCalendarItemOverlay(xp.calendarItemId); return; }
+            if (xp.eventId) { window.evpvOpen(xp.eventId, xp.detailId || 0); return; }
             if (info.event.url) window.location.href = info.event.url;
         },
         dayCellDidMount: function(info) {
@@ -13068,6 +13070,9 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
         });
     }
 
+    // Expose renderRsvpButton + ensure both prefixes' click delegates are active
+    // (so the event-preview overlay can render via either context).
+    window.renderRsvpButton = renderRsvpButton;
     if (typeof KnConfig !== 'undefined') wireRsvp('kn');
     if (typeof PkConfig !== 'undefined') wireRsvp('pk');
 
@@ -13268,4 +13273,150 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
 
     if (typeof KnConfig !== 'undefined') wireMapBtn('kn');
     if (typeof PkConfig !== 'undefined') wireMapBtn('pk');
+})();
+
+
+// =============================================================================
+// Event Preview overlay — calendar grid quick-look modal for full Amtgard events.
+// Triggered by FullCalendar eventClick on Kingdomnew + Parknew. Renders basic
+// info + RSVP ▾ + a "See Full Details" CTA so casual browsing doesn't trigger
+// a page load per click.
+// =============================================================================
+(function() {
+    var Cfg = (typeof KnConfig !== 'undefined') ? KnConfig
+            : (typeof PkConfig !== 'undefined') ? PkConfig : null;
+    if (!Cfg) return;
+    if (!document.getElementById('evpv-overlay')) return;
+
+    var UIR  = Cfg.uir;
+    var HTTP_EVENT_HERALDRY = (typeof HTTP_EVENT_HERALDRY !== 'undefined') ? HTTP_EVENT_HERALDRY : (Cfg.uir.replace(/\/orkui\/.*/, '') + '/assets/heraldry/event/');
+    var heraldryFallback = HTTP_EVENT_HERALDRY + '00000.jpg';
+
+    function gid(id) { return document.getElementById(id); }
+    function show(el, on) { if (el) el.style.display = on ? '' : 'none'; }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+    }
+
+    function heraldryUrl(eventId, hasHeraldry) {
+        if (!hasHeraldry) return heraldryFallback;
+        var padded = String(eventId).padStart(5, '0');
+        return HTTP_EVENT_HERALDRY + padded + '.jpg';
+    }
+
+    window.evpvOpen = function(eventId, detailId) {
+        var overlay = gid('evpv-overlay');
+        if (!overlay) return;
+        overlay.classList.add('evpv-loading');
+        overlay.classList.add('evpv-open');
+        document.body.style.overflow = 'hidden';
+
+        $.getJSON(UIR + 'EventAjax/preview/' + eventId + '/' + (detailId || 0), function(r) {
+            overlay.classList.remove('evpv-loading');
+            if (!r || r.status !== 0) {
+                alert((r && r.error) || 'Failed to load event preview.');
+                evpvClose();
+                return;
+            }
+            // Header pills
+            var kindLabel = r.is_park_event ? 'Park Event' : 'Kingdom Event';
+            var kindIcon  = r.is_park_event ? 'fa-tree' : 'fa-crown';
+            var kindPill  = gid('evpv-kind-pill');
+            kindPill.className = 'evpv-kind-pill ' + (r.is_park_event ? 'evpv-kind-park' : 'evpv-kind-kingdom');
+            kindPill.innerHTML = '<i class="fas ' + kindIcon + '"></i> <span>' + escapeHtml(kindLabel) + '</span>';
+            show(gid('evpv-draft-pill'), !!r.is_draft);
+
+            // Hero
+            var img = gid('evpv-heraldry');
+            img.src = heraldryUrl(r.event_id, r.has_heraldry);
+            img.onerror = function() { this.onerror = null; this.src = heraldryFallback; };
+            img.alt = r.name + ' heraldry';
+
+            var nameLink = gid('evpv-name');
+            nameLink.textContent = r.name;
+            nameLink.href = r.detail_url;
+
+            gid('evpv-date').textContent = r.date_label || '';
+            var timeRow = gid('evpv-time-row');
+            if (r.time_label) { gid('evpv-time').textContent = r.time_label; show(timeRow, true); } else { show(timeRow, false); }
+
+            var parkRow = gid('evpv-park-row');
+            if (r.park_name) { gid('evpv-park').textContent = r.park_name; show(parkRow, true); } else { show(parkRow, false); }
+
+            // Solar tooltip
+            var solarEl = gid('evpv-solar');
+            if (r.solar && r.solar.sunrise) {
+                var tip = 'Sunrise ' + r.solar.sunrise + '\nSunset ' + r.solar.sunset;
+                if (r.solar.twilight_start && r.solar.twilight_end) {
+                    tip += '\nTwilight ' + r.solar.twilight_start + ' – ' + r.solar.twilight_end;
+                }
+                solarEl.setAttribute('data-tip', tip);
+                show(solarEl, true);
+            } else {
+                show(solarEl, false);
+            }
+
+            // Weather chip
+            var wxWrap = gid('evpv-wx-wrap');
+            var wxEl   = gid('evpv-wx');
+            if (r.weather && r.weather.high_f != null) {
+                wxEl.innerHTML = '<span class="ev-weather-icon">' + r.weather.icon + '</span> H ' + r.weather.high_f + '° L ' + r.weather.low_f + '°';
+                wxEl.setAttribute('data-tip', r.weather.label || '');
+                show(wxWrap, true);
+            } else {
+                show(wxWrap, false);
+            }
+
+            // Description excerpt
+            var descEl = gid('evpv-description');
+            if (r.description_excerpt) {
+                descEl.textContent = r.description_excerpt;
+                show(descEl, true);
+            } else {
+                show(descEl, false);
+            }
+
+            // RSVP wrap — match the page context's prefix so the right click delegate fires.
+            var rsvpPrefix = (typeof KnConfig !== 'undefined') ? 'kn' : 'pk';
+            var rsvpWrap = gid('evpv-rsvp');
+            rsvpWrap.className = rsvpPrefix + '-rsvp-wrap';
+            rsvpWrap.setAttribute('data-detail',     r.event_calendardetail_id || 0);
+            rsvpWrap.setAttribute('data-going',      r.going_count || 0);
+            rsvpWrap.setAttribute('data-interested', r.interested_count || 0);
+            rsvpWrap.setAttribute('data-mine',       r.my_rsvp || '');
+            if (typeof window.renderRsvpButton === 'function') {
+                window.renderRsvpButton(rsvpWrap, rsvpPrefix);
+            } else {
+                // Fallback: dispatch a synthetic event the wireRsvp body listener won't help here, so
+                // we rely on the existing renderer being available. Render a minimal label so it's not
+                // empty if the helper hasn't been exposed.
+                rsvpWrap.innerHTML = '<span class="ev-rsvp-btn ev-rsvp-rsvp-none">RSVP <i class="fas fa-caret-down"></i></span>';
+            }
+
+            // CTA
+            gid('evpv-cta').href = r.detail_url;
+        }).fail(function() {
+            overlay.classList.remove('evpv-loading');
+            alert('Request failed.');
+            evpvClose();
+        });
+    };
+
+    window.evpvClose = function() {
+        var overlay = gid('evpv-overlay');
+        if (overlay) overlay.classList.remove('evpv-open', 'evpv-loading');
+        document.body.style.overflow = '';
+    };
+
+    // Outside-click + escape
+    var overlay = gid('evpv-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', function(e) { if (e.target === this) evpvClose(); });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay && overlay.classList.contains('evpv-open')) evpvClose();
+    });
 })();
