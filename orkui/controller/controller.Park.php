@@ -166,7 +166,7 @@ class Controller_Park extends Controller
 		// Merge calendar items (park-scoped AND parent-kingdom-scoped) into the list.
 		$kidForPark = (int)$this->session->kingdom_id;
 		$ciSql = "
-			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day, ci.is_officer_only,
+			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day, ci.is_officer_only, ci.is_locals_only,
 			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
 			       p.name AS park_name, p.abbreviation AS park_abbr
 			FROM " . DB_PREFIX . "calendar_item ci
@@ -179,7 +179,8 @@ class Controller_Park extends Controller
 		$ciResult = $DB->DataSet($ciSql);
 		while ($ciResult && $ciResult->Next()) {
 			$ci_isOfficerOnly = (int)$ciResult->is_officer_only;
-			if ($ci_isOfficerOnly && !CalendarItem::CanSee($pk_uid, (int)$ciResult->kingdom_id, (int)$ciResult->park_id, 1)) continue;
+			$ci_isLocalsOnly  = (int)$ciResult->is_locals_only;
+			if (!CalendarItem::CanSee($pk_uid, (int)$ciResult->kingdom_id, (int)$ciResult->park_id, $ci_isOfficerOnly, $ci_isLocalsOnly)) continue;
 			$eventSummary[] = [
 				'CalendarItemId' => (int)$ciResult->calendar_item_id,
 				'Name'           => $ciResult->name,
@@ -190,6 +191,7 @@ class Controller_Park extends Controller
 				'AllDay'         => (int)$ciResult->all_day,
 				'Description'    => $ciResult->description,
 				'IsOfficerOnly'  => $ci_isOfficerOnly,
+				'IsLocalsOnly'   => $ci_isLocalsOnly,
 				'_IsCalendarItem'=> true,
 				'_IsKingdomLevel'=> (int)$ciResult->park_id === 0,
 			];
