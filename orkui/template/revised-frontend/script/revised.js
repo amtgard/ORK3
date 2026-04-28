@@ -12929,11 +12929,11 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
         }, 'json').fail(function() { alert('Request failed.'); if (btn) btn.disabled = false; });
     };
 
-    // ---- RSVP component ----
+    // ---- RSVP component (portal-based menu — escapes Google Maps InfoWindow clipping) ----
     var RSVP_LABELS = {
-        '':           { html: 'RSVP <i class="fas fa-caret-down"></i>',                            cls: 'rsvp-none' },
-        'going':      { html: '<i class="fas fa-check-circle"></i> Going <i class="fas fa-caret-down"></i>',  cls: 'rsvp-going' },
-        'interested': { html: '<i class="fas fa-star"></i> Interested <i class="fas fa-caret-down"></i>',     cls: 'rsvp-interested' }
+        '':           { html: 'RSVP <i class="fas fa-caret-down"></i>',                                cls: 'rsvp-none' },
+        'going':      { html: '<i class="fas fa-check-circle"></i> Going <i class="fas fa-caret-down"></i>',   cls: 'rsvp-going' },
+        'interested': { html: '<i class="fas fa-star"></i> Interested <i class="fas fa-caret-down"></i>',      cls: 'rsvp-interested' }
     };
 
     function renderRsvpButton(span, prefix) {
@@ -12941,76 +12941,126 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
         var goingCnt    = parseInt(span.getAttribute('data-going') || '0', 10);
         var interestCnt = parseInt(span.getAttribute('data-interested') || '0', 10);
         var mine        = span.getAttribute('data-mine') || '';
-
         if (!detailId) return;
+
         var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
+        // No inline menu — opened menu lives in a single body-attached portal element.
         span.innerHTML = ''
             + '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>'
-            + '<div class="ev-rsvp-counts">'
-                + '<span class="ev-rsvp-count-going">' + goingCnt + '</span>'
+            + '<span class="ev-rsvp-counts">'
+                + '<span class="ev-rsvp-count-going" title="Going">' + goingCnt + '</span>'
                 + '<span class="ev-rsvp-count-sep">·</span>'
-                + '<span class="ev-rsvp-count-interest">' + interestCnt + '</span>'
-            + '</div>'
-            + '<div class="ev-rsvp-menu">'
-                + '<button type="button" class="ev-rsvp-menu-item" data-rsvp="going"><i class="fas fa-check-circle"></i> Going</button>'
-                + '<button type="button" class="ev-rsvp-menu-item" data-rsvp="interested"><i class="fas fa-star"></i> Interested</button>'
-                + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-withdraw" data-rsvp=""' + (mine ? '' : ' disabled') + '><i class="fas fa-times"></i> Withdraw RSVP</button>'
-            + '</div>';
+                + '<span class="ev-rsvp-count-interest" title="Interested">' + interestCnt + '</span>'
+            + '</span>';
     }
 
-    function closeAllRsvp() {
-        document.querySelectorAll('.ev-rsvp-open').forEach(function(el) { el.classList.remove('ev-rsvp-open'); });
+    // ---- Single shared portal menu (lazy-init) ----
+    var rsvpPortal       = null;
+    var rsvpActiveWrap   = null;
+    var rsvpActivePrefix = null;
+
+    function ensureRsvpPortal() {
+        if (rsvpPortal) return rsvpPortal;
+        rsvpPortal = document.createElement('div');
+        rsvpPortal.className = 'ev-rsvp-portal';
+        rsvpPortal.setAttribute('role', 'menu');
+        rsvpPortal.innerHTML = ''
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-mi-going"    data-rsvp="going"      role="menuitem"><i class="fas fa-check-circle"></i> Going</button>'
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-mi-interest" data-rsvp="interested" role="menuitem"><i class="fas fa-star"></i> Interested</button>'
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-withdraw"    data-rsvp=""           role="menuitem"><i class="fas fa-times"></i> Withdraw RSVP</button>';
+        document.body.appendChild(rsvpPortal);
+        rsvpPortal.addEventListener('click', function(e) {
+            var item = e.target.closest('.ev-rsvp-menu-item');
+            if (!item || item.disabled) return;
+            e.stopPropagation();
+            if (rsvpActiveWrap) commitRsvp(rsvpActiveWrap, rsvpActivePrefix, item.getAttribute('data-rsvp') || '');
+            closeRsvpPortal();
+        });
+        return rsvpPortal;
     }
 
-    // Delegated listeners — works for both kingdom and park surfaces.
+    function openRsvpPortal(wrap, prefix) {
+        var portal = ensureRsvpPortal();
+        rsvpActiveWrap   = wrap;
+        rsvpActivePrefix = prefix;
+
+        var mine = wrap.getAttribute('data-mine') || '';
+        portal.querySelector('.ev-rsvp-withdraw').disabled = !mine;
+        portal.classList.toggle('ev-rsvp-mine-going',      mine === 'going');
+        portal.classList.toggle('ev-rsvp-mine-interested', mine === 'interested');
+
+        var btn = wrap.querySelector('.ev-rsvp-btn');
+        if (!btn) return;
+        var r = btn.getBoundingClientRect();
+        // Render hidden first to measure, then position with overflow guards.
+        portal.style.visibility = 'hidden';
+        portal.classList.add('ev-rsvp-portal-open');
+        var pw = portal.offsetWidth  || 180;
+        var ph = portal.offsetHeight || 120;
+        var top  = r.bottom + 6;
+        if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+        var left = Math.min(Math.max(8, r.left), window.innerWidth - pw - 8);
+        portal.style.top  = top  + 'px';
+        portal.style.left = left + 'px';
+        portal.style.visibility = '';
+    }
+
+    function closeRsvpPortal() {
+        if (rsvpPortal) rsvpPortal.classList.remove('ev-rsvp-portal-open', 'ev-rsvp-mine-going', 'ev-rsvp-mine-interested');
+        rsvpActiveWrap   = null;
+        rsvpActivePrefix = null;
+    }
+
+    function commitRsvp(wrap, prefix, status) {
+        var detailId = parseInt(wrap.getAttribute('data-detail') || '0', 10);
+        var url = status ? (UIR + 'EventRsvpAjax/set') : (UIR + 'EventRsvpAjax/withdraw');
+        var payload = { EventCalendarDetailId: detailId };
+        if (status) payload.Status = status;
+        wrap.classList.add('ev-rsvp-busy');
+        $.post(url, payload, function(r) {
+            wrap.classList.remove('ev-rsvp-busy');
+            if (r && r.status === 0) {
+                wrap.setAttribute('data-mine',       r.my_status || '');
+                wrap.setAttribute('data-going',      r.going_count || 0);
+                wrap.setAttribute('data-interested', r.interested_count || 0);
+                renderRsvpButton(wrap, prefix);
+            } else {
+                alert((r && r.error) || 'Failed to update RSVP.');
+            }
+        }, 'json').fail(function() {
+            wrap.classList.remove('ev-rsvp-busy');
+            alert('Request failed.');
+        });
+    }
+
     function wireRsvp(prefix) {
         document.querySelectorAll('.' + prefix + '-rsvp-wrap').forEach(function(span) {
             renderRsvpButton(span, prefix);
         });
         document.body.addEventListener('click', function(e) {
             var btn = e.target.closest('.ev-rsvp-btn');
-            var menuItem = e.target.closest('.ev-rsvp-menu-item');
             if (btn) {
                 e.stopPropagation();
                 if (!Cfg.loggedIn) { window.location.href = UIR + 'Account/login'; return; }
                 var wrap = btn.closest('.' + prefix + '-rsvp-wrap');
                 if (!wrap) return;
-                var open = wrap.classList.contains('ev-rsvp-open');
-                closeAllRsvp();
-                if (!open) wrap.classList.add('ev-rsvp-open');
-            } else if (menuItem) {
-                e.stopPropagation();
-                var wrap2 = menuItem.closest('.' + prefix + '-rsvp-wrap');
-                if (!wrap2) return;
-                var status = menuItem.getAttribute('data-rsvp') || '';
-                var detailId = parseInt(wrap2.getAttribute('data-detail') || '0', 10);
-                var url = status ? (UIR + 'EventRsvpAjax/set') : (UIR + 'EventRsvpAjax/withdraw');
-                var payload = { EventCalendarDetailId: detailId };
-                if (status) payload.Status = status;
-                wrap2.classList.add('ev-rsvp-busy');
-                $.post(url, payload, function(r) {
-                    wrap2.classList.remove('ev-rsvp-busy');
-                    if (r && r.status === 0) {
-                        wrap2.setAttribute('data-mine',       r.my_status || '');
-                        wrap2.setAttribute('data-going',      r.going_count || 0);
-                        wrap2.setAttribute('data-interested', r.interested_count || 0);
-                        renderRsvpButton(wrap2, prefix);
-                        closeAllRsvp();
-                    } else {
-                        alert((r && r.error) || 'Failed to update RSVP.');
-                    }
-                }, 'json').fail(function() {
-                    wrap2.classList.remove('ev-rsvp-busy');
-                    alert('Request failed.');
-                });
-            } else {
-                closeAllRsvp();
+                if (rsvpActiveWrap === wrap) closeRsvpPortal();
+                else openRsvpPortal(wrap, prefix);
+            } else if (!e.target.closest('.ev-rsvp-portal')) {
+                closeRsvpPortal();
             }
         });
     }
 
     if (typeof KnConfig !== 'undefined') wireRsvp('kn');
     if (typeof PkConfig !== 'undefined') wireRsvp('pk');
+
+    // Close portal on scroll/resize/escape — relevant inside scrollable map containers and InfoWindows.
+    window.addEventListener('scroll',  closeRsvpPortal, true);
+    window.addEventListener('resize',  closeRsvpPortal);
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeRsvpPortal();
+    });
 
     // ---- Events Map view (lazy Google Maps) ----
     var GMAPS_API_KEY = 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8'; // mirrors knInitMap's key
@@ -13036,24 +13086,30 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
     }
 
     function popoverHtml(loc) {
-        var rsvpHtml = '';
-        if (loc.event_calendardetail_id) {
-            rsvpHtml = '<span class="kn-rsvp-wrap" data-detail="' + loc.event_calendardetail_id
-                + '" data-going="' + (loc.going || 0)
-                + '" data-interested="' + (loc.interested || 0)
-                + '" data-mine="' + (loc.my_rsvp || '') + '"></span>';
-        }
-        var wxHtml = '';
+        var rsvpHtml = loc.event_calendardetail_id
+            ? '<span class="kn-rsvp-wrap" data-detail="' + loc.event_calendardetail_id
+              + '" data-going="' + (loc.going || 0)
+              + '" data-interested="' + (loc.interested || 0)
+              + '" data-mine="' + (loc.my_rsvp || '') + '"></span>'
+            : '';
+        var wxChip = '';
         if (loc.weather && loc.weather.high_f !== null && loc.weather.high_f !== undefined) {
-            wxHtml = '<div class="ev-map-popover-wx">' + loc.weather.icon
-                + ' H ' + loc.weather.high_f + '° L ' + loc.weather.low_f + '°</div>';
+            wxChip = '<span class="ev-map-popover-wx" title="' + escapeHtml(loc.weather.label || '') + '">'
+                   + loc.weather.icon + ' '
+                   + loc.weather.high_f + '°/' + loc.weather.low_f + '°'
+                   + '</span>';
         }
         return ''
             + '<div class="ev-map-popover">'
-                + '<a class="ev-map-popover-name" href="' + UIR + 'Event/detail/' + loc.event_id + '/' + (loc.event_calendardetail_id || '') + '">' + escapeHtml(loc.name) + '</a>'
-                + (loc.is_draft ? ' <span class="kn-draft-pill" style="margin-left:4px">DRAFT</span>' : '')
-                + '<div class="ev-map-popover-meta">' + escapeHtml(loc.date_label || loc.date) + (loc.park_name ? ' · ' + escapeHtml(loc.park_name) : '') + '</div>'
-                + wxHtml
+                + '<a class="ev-map-popover-name" href="' + UIR + 'Event/detail/' + loc.event_id + '/' + (loc.event_calendardetail_id || '') + '">'
+                    + escapeHtml(loc.name)
+                + '</a>'
+                + (loc.is_draft ? '<span class="kn-draft-pill ev-map-popover-draft">DRAFT</span>' : '')
+                + '<div class="ev-map-popover-meta">'
+                    + '<span class="ev-map-popover-meta-date"><i class="far fa-calendar-alt"></i> ' + escapeHtml(loc.date_label || loc.date) + '</span>'
+                    + (loc.park_name ? '<span class="ev-map-popover-meta-dot"></span><span class="ev-map-popover-meta-park">' + escapeHtml(loc.park_name) + '</span>' : '')
+                    + (wxChip ? '<span class="ev-map-popover-meta-spacer"></span>' + wxChip : '')
+                + '</div>'
                 + '<div class="ev-map-popover-rsvp">' + rsvpHtml + '</div>'
             + '</div>';
     }
