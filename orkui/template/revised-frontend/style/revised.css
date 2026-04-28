@@ -9886,3 +9886,108 @@ html[data-theme="dark"] .pk-ci-pill {
 	color: var(--ork-text-muted, #a0aec0);
 	border-color: var(--ork-border, #4a5568);
 }
+
+
+/* ============================================================
+ * Dark-mode contrast pass for Calendar Item modals + create modal
+ * ============================================================ */
+
+/* Reset global h1-h6 box-pill styling inside ALL modal headers (both themes).
+   Without this, orkui.css's "every heading is a gray pill" wins and the
+   header title renders as a barely-visible chip in dark mode. */
+.kn-emod-header h3,
+.kn-ci-header h3,
+.pk-ci-header h3 {
+	background: transparent !important;
+	border: none !important;
+	padding: 0 !important;
+	border-radius: 0 !important;
+	text-shadow: none !important;
+}
+
+/* Title color: explicit, so it doesn't fall back to muted gray. */
+html[data-theme="dark"] .kn-emod-header h3,
+html[data-theme="dark"] .kn-ci-header h3,
+html[data-theme="dark"] .pk-ci-header h3 {
+	color: var(--ork-text, #e2e8f0);
+}
+
+/* Cancel/Close/Edit buttons in dark mode — full-contrast text + a real
+   1px border so they read as buttons instead of ghost shapes. */
+html[data-theme="dark"] .kn-emod-btn-cancel,
+html[data-theme="dark"] .pk-emod-btn-cancel {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text, #e2e8f0);
+	border: 1px solid var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .kn-emod-btn-cancel:hover,
+html[data-theme="dark"] .pk-emod-btn-cancel:hover {
+	background: var(--ork-border, #4a5568);
+	color: var(--ork-text, #fff);
+}
+
+/* The Delete button uses inline `color:#c53030; border-color:#fc8181`
+   which is unreadable on a dark surface. Lighten it for dark theme. */
+html[data-theme="dark"] #kn-ci-delete-btn,
+html[data-theme="dark"] #pk-ci-delete-btn {
+	color: #fc8181 !important;
+	border-color: rgba(252, 129, 129, 0.45) !important;
+	background: rgba(252, 129, 129, 0.08);
+}
+html[data-theme="dark"] #kn-ci-delete-btn:hover,
+html[data-theme="dark"] #pk-ci-delete-btn:hover {
+	background: rgba(252, 129, 129, 0.18);
+}
+
+/* Checkbox-row labels — "All day", "Officer-only", "Locals-only" were
+   landing at .kn-emod-check-label's #4a5568 which is washed-out on dark. */
+html[data-theme="dark"] .kn-emod-check-label,
+html[data-theme="dark"] .pk-emod-check-label {
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .kn-emod-check-label input,
+html[data-theme="dark"] .pk-emod-check-label input {
+	accent-color: #4299e1;
+}
+
+/* Type-toggle (Amtgard Event / Calendar Item) tab strip */
+html[data-theme="dark"] .kn-emod-typesel,
+html[data-theme="dark"] .pk-emod-typesel {
+	background: var(--ork-bg-tertiary, #2d3748);
+}
+html[data-theme="dark"] .kn-emod-typeopt,
+html[data-theme="dark"] .pk-emod-typeopt {
+	color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .kn-emod-typeopt:hover,
+html[data-theme="dark"] .pk-emod-typeopt:hover {
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .kn-emod-typeopt:has(input:checked),
+html[data-theme="dark"] .pk-emod-typeopt:has(input:checked) {
+	background: var(--ork-card-bg, #1a202c);
+	color: #68d391;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* The "Calendar Items are lightweight…" yellow info box */
+html[data-theme="dark"] .kn-emod-ci-note,
+html[data-theme="dark"] .pk-emod-ci-note {
+	background: rgba(251, 191, 36, 0.10);
+	border-left-color: #d97706;
+	color: #fde68a;
+}
+
+/* Section labels (NAME, HOST PARK, START, END, DESCRIPTION) need a real
+   bump — currently --ork-text-muted is too dim against the dark inputs. */
+html[data-theme="dark"] .kn-emod-label,
+html[data-theme="dark"] .pk-emod-label {
+	color: var(--ork-text-secondary, #cbd5e0);
+}
+
+/* Input placeholders too — they were near-invisible. */
+html[data-theme="dark"] .kn-emod-input::placeholder,
+html[data-theme="dark"] .pk-emod-input::placeholder {
+	color: var(--ork-text-muted, #718096);
+	opacity: 0.85;
+}
