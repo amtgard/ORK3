@@ -401,7 +401,6 @@ class Event  extends Ork3 {
 				$geocode  = ($details && !empty($details['Geocode'])) ? json_decode($details['Geocode']) : null;
 
 				$this->detail->event_id = $request['EventId'];
-				$this->detail->current = $request['Current'];
 				$this->detail->price = $request['Price'];
 				$this->detail->event_start = $request['EventStart'];
 				$this->detail->event_end = $request['EventEnd'];
