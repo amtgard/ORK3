@@ -9991,3 +9991,236 @@ html[data-theme="dark"] .pk-emod-input::placeholder {
 	color: var(--ork-text-muted, #718096);
 	opacity: 0.85;
 }
+
+
+/* ============================================================
+ * Event Preview Overlay — calendar grid quick-look modal
+ * Triggered by FullCalendar eventClick on Kingdomnew + Parknew.
+ * Shares the kn-ci-overlay aesthetic — same shape, eventy content.
+ * ============================================================ */
+
+.evpv-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 1100;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+.evpv-overlay.evpv-open { display: flex; }
+
+.evpv-box {
+	background: #fff;
+	border-radius: 12px;
+	width: 100%;
+	max-width: 520px;
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32);
+	overflow: hidden;
+	animation: evpv-in 160ms ease-out;
+}
+@keyframes evpv-in {
+	from { opacity: 0; transform: translateY(8px) scale(0.98); }
+	to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.evpv-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 18px;
+	border-bottom: 1px solid #e2e8f0;
+	background: #f7fafc;
+	gap: 10px;
+}
+.evpv-header h3 {
+	background: transparent !important;
+	border: none !important;
+	padding: 0 !important;
+	border-radius: 0 !important;
+	text-shadow: none !important;
+}
+.evpv-header-meta {
+	display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+}
+.evpv-kind-pill {
+	display: inline-flex; align-items: center; gap: 5px;
+	background: rgba(43, 108, 176, 0.10);
+	color: #2c5282;
+	border: 1px solid rgba(43, 108, 176, 0.18);
+	padding: 3px 10px;
+	border-radius: 14px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.evpv-kind-pill.evpv-kind-park {
+	background: rgba(107, 70, 193, 0.10);
+	color: #553c9a;
+	border-color: rgba(107, 70, 193, 0.20);
+}
+.evpv-close {
+	background: none; border: none; cursor: pointer;
+	font-size: 22px; line-height: 1;
+	color: #a0aec0;
+	padding: 2px 6px;
+	border-radius: 4px;
+}
+.evpv-close:hover { color: #4a5568; background: rgba(0,0,0,0.04); }
+
+.evpv-body { padding: 18px 20px 14px; }
+
+/* Hero row: heraldry thumb · name+meta · weather chip pinned right */
+.evpv-hero {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	margin-bottom: 14px;
+}
+.evpv-heraldry {
+	width: 64px; height: 64px;
+	border-radius: 8px;
+	object-fit: cover;
+	flex-shrink: 0;
+	border: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.evpv-hero-text {
+	flex: 1;
+	min-width: 0;
+}
+.evpv-name {
+	display: block;
+	font-size: 18px;
+	font-weight: 700;
+	color: #2b6cb0;
+	text-decoration: none;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	margin-bottom: 6px;
+	overflow-wrap: anywhere;
+}
+.evpv-name:hover { text-decoration: underline; }
+.evpv-meta-row {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+	color: #718096;
+	font-size: 12px;
+	line-height: 1.4;
+	margin-top: 2px;
+}
+.evpv-meta-row i { color: #a0aec0; margin-right: 5px; }
+.evpv-meta-park   { color: #4a5568; font-weight: 600; }
+.evpv-solar-icon {
+	color: #d69e2e;
+	font-size: 11px;
+	cursor: help;
+	margin-left: -4px;
+}
+.evpv-wx-wrap { flex-shrink: 0; align-self: center; }
+
+/* Description excerpt block — same style as kn-ci-description but bigger */
+.evpv-description {
+	font-size: 13px;
+	color: #4a5568;
+	line-height: 1.6;
+	padding: 12px 14px;
+	background: #f7fafc;
+	border-radius: 7px;
+	border-left: 3px solid #cbd5e0;
+	margin-bottom: 14px;
+	max-height: 110px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.evpv-rsvp-row {
+	display: flex; align-items: center; gap: 10px;
+	margin-top: 4px;
+}
+
+.evpv-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.evpv-cta {
+	display: inline-flex; align-items: center; gap: 6px;
+	background: var(--kn-accent, #276749);
+	color: #fff;
+	padding: 8px 16px;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+}
+.evpv-cta:hover { background: #22543d; color: #fff; }
+
+/* Loading state */
+.evpv-overlay.evpv-loading .evpv-body,
+.evpv-overlay.evpv-loading .evpv-header-meta,
+.evpv-overlay.evpv-loading .evpv-footer { opacity: 0.4; pointer-events: none; }
+
+
+/* ── Dark mode (per dark-mode checklist) ─────────────────────── */
+html[data-theme="dark"] .evpv-overlay { background: rgba(0, 0, 0, 0.7); }
+html[data-theme="dark"] .evpv-box {
+	background: var(--ork-bg-secondary, #1a202c);
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+}
+html[data-theme="dark"] .evpv-header {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .evpv-close { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .evpv-close:hover { color: var(--ork-text, #e2e8f0); background: rgba(255,255,255,0.06); }
+
+html[data-theme="dark"] .evpv-kind-pill {
+	background: rgba(99, 179, 237, 0.16);
+	color: #90cdf4;
+	border-color: rgba(99, 179, 237, 0.30);
+}
+html[data-theme="dark"] .evpv-kind-pill.evpv-kind-park {
+	background: rgba(159, 122, 234, 0.18);
+	color: #d6bcfa;
+	border-color: rgba(159, 122, 234, 0.32);
+}
+
+html[data-theme="dark"] .evpv-heraldry {
+	border-color: var(--ork-border, #4a5568);
+	background: var(--ork-bg-tertiary, #2d3748);
+}
+html[data-theme="dark"] .evpv-name { color: #90cdf4; }
+html[data-theme="dark"] .evpv-name:hover { color: #bee3f8; }
+html[data-theme="dark"] .evpv-meta-row { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .evpv-meta-row i { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .evpv-meta-park { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .evpv-solar-icon { color: #f6ad55; }
+
+html[data-theme="dark"] .evpv-description {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-secondary, #cbd5e0);
+	border-left-color: var(--ork-border, #4a5568);
+}
+
+html[data-theme="dark"] .evpv-footer {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-top-color: var(--ork-border, #4a5568);
+}
+
+/* CTA stays accent green in both themes — readable on either bg */
+html[data-theme="dark"] .evpv-cta { background: #38a169; }
+html[data-theme="dark"] .evpv-cta:hover { background: #2f855a; }
+
+/* Mobile tweaks */
+@media (max-width: 540px) {
+	.evpv-box { max-width: 100%; }
+	.evpv-hero { gap: 10px; }
+	.evpv-heraldry { width: 52px; height: 52px; }
+	.evpv-name { font-size: 16px; }
+	.evpv-wx-wrap { display: none; } /* fold weather under name on small screens */
+}
