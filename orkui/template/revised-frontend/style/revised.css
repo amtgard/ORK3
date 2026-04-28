@@ -4072,22 +4072,33 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .ev-badges {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 6px;
 	margin-bottom: 8px;
 }
-.ev-badge {
-	display: inline-block;
-	padding: 3px 10px;
+/* Unified pill geometry — every hero pill (badge + weather) sits on the same grid. */
+.ev-badge,
+.ev-weather-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 24px;
+	padding: 0 11px;
 	border-radius: 12px;
 	font-size: 11px;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	line-height: 1.4;
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
+	box-sizing: border-box;
+	margin: 0;
+	vertical-align: middle;
 }
+.ev-badge { text-transform: uppercase; letter-spacing: 0.05em; }
+.ev-badge i { font-size: 10px; line-height: 1; }
 .ev-badge-green  { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .ev-badge-gray   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
 .ev-badge-blue   { background: #bee3f8; color: #2a69ac; }
+html[data-theme="dark"] .ev-badge-blue { background: rgba(66,153,225,0.20); color: #bee3f8; }
 
 .ev-owner-inline {
 	color: rgba(255,255,255,0.85);
@@ -4586,7 +4597,8 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	.ev-owner-sep { display: none; }
 	.ev-owner-inline > i.fa-layer-group { display: none; }
 	.ev-badges { gap: 4px; margin-bottom: 4px; }
-	.ev-badge { font-size: 10px; padding: 2px 7px; }
+	.ev-badge, .ev-weather-badge { font-size: 10px; padding: 0 8px; height: 20px; gap: 4px; }
+	.ev-badge i { font-size: 9px; }
 	.ev-hero-actions {
 		grid-column: 2;
 		grid-row: 2;
@@ -8868,24 +8880,34 @@ html[data-theme="dark"] .pk-draft-pill { background: #7c2d12; color: #ffedd5; }
 html[data-theme="dark"] .kn-wx-pill,
 html[data-theme="dark"] .pk-wx-pill { background: rgba(66,153,225,0.18); color: #90cdf4; }
 
-/* Solar (sunrise/sunset) icon next to event date on detail page */
-.ev-solar-icon {
-	display: inline-flex; align-items: center; justify-content: center;
-	margin-left: 6px; color: #d69e2e; font-size: 11px; cursor: help;
+/* Solar (sunrise/sunset) icon — sits inside the date pill, properly aligned */
+.ev-badge .ev-solar-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-left: 4px;
+	color: #d69e2e;
+	font-size: 10px;
+	cursor: help;
+	line-height: 1;
 }
-html[data-theme="dark"] .ev-solar-icon { color: #f6ad55; }
+html[data-theme="dark"] .ev-badge .ev-solar-icon { color: #f6ad55; }
 
-/* Weather badge on event detail */
+/* Weather badge — same pill geometry as .ev-badge (set in main block above), distinct color */
 .ev-weather-badge {
-	display: inline-flex; align-items: center; gap: 5px;
-	background: #ebf8ff; color: #2c5282;
-	border: 1px solid #bee3f8; border-radius: 16px;
-	padding: 4px 11px; font-size: 11px; font-weight: 600;
-	margin-left: 4px; vertical-align: middle;
+	background: rgba(99, 179, 237, 0.20);
+	color: #2c5282;
+	border: 1px solid rgba(66, 153, 225, 0.34);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0;
+	padding: 0 10px;          /* compensate for the 1px border */
+	height: 24px;
 }
-.ev-weather-icon { font-size: 13px; }
+.ev-weather-icon { font-size: 13px; line-height: 1; }
 html[data-theme="dark"] .ev-weather-badge {
-	background: rgba(66,153,225,0.18); color: #90cdf4; border-color: rgba(66,153,225,0.42);
+	background: rgba(99, 179, 237, 0.18);
+	color: #bee3f8;
+	border-color: rgba(99, 179, 237, 0.36);
 }
 
 /* Draft banner + toggle on event detail */
@@ -9220,3 +9242,75 @@ html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-mi-going    i    { color: #68d3
 html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-mi-interest i    { color: #f6ad55; }
 html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-withdraw,
 html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-withdraw i       { color: #fc8181; }
+
+
+/* ============================================================
+ * Calendar Items: Locals-only pill + dark mode for the detail overlay
+ * ============================================================ */
+
+/* Locals-only row tint + pill (teal, distinct from officer-only purple) */
+.kn-locals-only,
+.pk-locals-only { background: rgba(13, 148, 136, 0.05); }
+html[data-theme="dark"] .kn-locals-only,
+html[data-theme="dark"] .pk-locals-only { background: rgba(13, 148, 136, 0.16); }
+.kn-locals-pill, .pk-locals-pill {
+	display: inline-flex; align-items: center; justify-content: center;
+	background: rgba(13, 148, 136, 0.13); color: #0f766e;
+	padding: 1px 5px; border-radius: 4px; font-size: 10px;
+	margin-right: 5px; vertical-align: middle;
+}
+html[data-theme="dark"] .kn-locals-pill,
+html[data-theme="dark"] .pk-locals-pill { background: rgba(13, 148, 136, 0.32); color: #5eead4; }
+
+/* Combined: rows that are BOTH officer + locals get a subtler blended tint */
+.kn-officer-only.kn-locals-only,
+.pk-officer-only.pk-locals-only { background: linear-gradient(135deg, rgba(128,90,213,0.05), rgba(13,148,136,0.05)); }
+html[data-theme="dark"] .kn-officer-only.kn-locals-only,
+html[data-theme="dark"] .pk-officer-only.pk-locals-only { background: linear-gradient(135deg, rgba(128,90,213,0.18), rgba(13,148,136,0.16)); }
+
+
+/* ── Dark mode: Calendar Item detail overlay (kn-ci-* / pk-ci-*) ─── */
+html[data-theme="dark"] .kn-ci-overlay,
+html[data-theme="dark"] .pk-ci-overlay {
+	background: rgba(0, 0, 0, 0.7);
+}
+html[data-theme="dark"] .kn-ci-box,
+html[data-theme="dark"] .pk-ci-box {
+	background: var(--ork-bg-secondary, #1a202c);
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+html[data-theme="dark"] .kn-ci-header,
+html[data-theme="dark"] .pk-ci-header {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .kn-ci-header h3,
+html[data-theme="dark"] .pk-ci-header h3 { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .kn-ci-name,
+html[data-theme="dark"] .pk-ci-name { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .kn-ci-meta,
+html[data-theme="dark"] .pk-ci-meta { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .kn-ci-scope,
+html[data-theme="dark"] .pk-ci-scope {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .kn-ci-description,
+html[data-theme="dark"] .pk-ci-description {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-secondary, #cbd5e0);
+	border-left-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .kn-ci-footer,
+html[data-theme="dark"] .pk-ci-footer {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-top-color: var(--ork-border, #4a5568);
+}
+
+/* Light-mode calendar-item pill on rows: dark-mode variant */
+html[data-theme="dark"] .kn-ci-pill,
+html[data-theme="dark"] .pk-ci-pill {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-muted, #a0aec0);
+	border-color: var(--ork-border, #4a5568);
+}

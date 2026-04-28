@@ -505,8 +505,8 @@
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
 								<?php if (!empty($event['_IsCalendarItem'])): ?>
-									<?php $ciOff = !empty($event['IsOfficerOnly']); ?>
-									<tr class="kn-row-link <?= $ciOff ? 'kn-officer-only' : '' ?>" data-type="calendar-item" onclick="knShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
+									<?php $ciOff = !empty($event['IsOfficerOnly']); $ciLoc = !empty($event['IsLocalsOnly']); ?>
+									<tr class="kn-row-link <?= $ciOff ? 'kn-officer-only' : '' ?> <?= $ciLoc ? 'kn-locals-only' : '' ?>" data-type="calendar-item" onclick="knShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
 										<td class="kn-col-nowrap">
 											<?= ($event['NextDate'] && $event['NextDate'] != '0000-00-00')
 												? date("M j, Y", strtotime($event['NextDate']))
@@ -514,7 +514,7 @@
 										</td>
 										<td class="kn-col-nowrap">
 											<span class="kn-ci-pill"><i class="fas fa-calendar-day"></i> Calendar Item</span>
-											<?php if ($ciOff): ?><span class="kn-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?>
+											<?php if ($ciOff): ?><span class="kn-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="kn-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
 											<?= htmlspecialchars($event['Name']) ?>
 										</td>
 										<td><?= htmlspecialchars($event['ParkName'] ?? '') ?></td>
@@ -1201,6 +1201,11 @@ window.knEventMapNoLocCount = <?= (int)($knEventMapNoLocCount ?? 0) ?>;
 				<div class="kn-emod-field" style="margin-top:6px">
 					<label class="kn-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
 						<input type="checkbox" id="kn-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Officer-only — hide from non-officers
+					</label>
+				</div>
+				<div class="kn-emod-field" style="margin-top:6px">
+					<label class="kn-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
+						<input type="checkbox" id="kn-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Locals-only — hide from out-of-area players
 					</label>
 				</div>
 				<div class="kn-emod-row" style="display:flex;gap:10px;margin-top:8px">

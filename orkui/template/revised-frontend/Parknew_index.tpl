@@ -660,11 +660,11 @@
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
 								<?php if (!empty($event['_IsCalendarItem'])): ?>
-								<?php $ciOff = !empty($event['IsOfficerOnly']); ?>
-								<tr class="<?= $ciOff ? 'pk-officer-only' : '' ?>" data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
+								<?php $ciOff = !empty($event['IsOfficerOnly']); $ciLoc = !empty($event['IsLocalsOnly']); ?>
+								<tr class="<?= $ciOff ? 'pk-officer-only' : '' ?> <?= $ciLoc ? 'pk-locals-only' : '' ?>" data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
 									<td>
 										<span class="pk-ci-pill"><i class="fas fa-calendar-day"></i> Calendar Item</span>
-										<?php if ($ciOff): ?><span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?>
+										<?php if ($ciOff): ?><span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="pk-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
 									</td>
 									<td class="pk-date-col" data-sortval="<?= htmlspecialchars($event['NextDate']) ?>">
@@ -1580,6 +1580,11 @@ window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 				<div class="pk-emod-field" style="margin-top:6px">
 					<label class="pk-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
 						<input type="checkbox" id="pk-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Officer-only — hide from non-officers
+					</label>
+				</div>
+				<div class="pk-emod-field" style="margin-top:6px">
+					<label class="pk-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
+						<input type="checkbox" id="pk-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Locals-only — hide from out-of-area players
 					</label>
 				</div>
 				<div style="display:flex;gap:10px;margin-top:8px">

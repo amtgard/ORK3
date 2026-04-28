@@ -35,7 +35,8 @@ class Controller_CalendarItemAjax extends Controller {
 			!empty($_POST['AllDay']) ? 1 : 0,
 			(string)($_POST['EventStart']  ?? ''),
 			(string)($_POST['EventEnd']    ?? ''),
-			!empty($_POST['IsOfficerOnly']) ? 1 : 0
+			!empty($_POST['IsOfficerOnly']) ? 1 : 0,
+			!empty($_POST['IsLocalsOnly'])  ? 1 : 0
 		);
 		$this->sendResult($r);
 	}
@@ -54,7 +55,8 @@ class Controller_CalendarItemAjax extends Controller {
 			!empty($_POST['AllDay']) ? 1 : 0,
 			(string)($_POST['EventStart']  ?? ''),
 			(string)($_POST['EventEnd']    ?? ''),
-			!empty($_POST['IsOfficerOnly']) ? 1 : 0
+			!empty($_POST['IsOfficerOnly']) ? 1 : 0,
+			!empty($_POST['IsLocalsOnly'])  ? 1 : 0
 		);
 		$this->sendResult($r);
 	}
@@ -83,8 +85,8 @@ class Controller_CalendarItemAjax extends Controller {
 
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
-		// Officer-only visibility gate (Q1=C: officers + ORK admins).
-		if (!empty($r['IsOfficerOnly']) && !CalendarItem::CanSee($uid, (int)$r['KingdomId'], (int)$r['ParkId'], 1)) {
+		// Visibility gate: officer-only AND/OR locals-only flags must each pass.
+		if (!CalendarItem::CanSee($uid, (int)$r['KingdomId'], (int)$r['ParkId'], (int)$r['IsOfficerOnly'], (int)$r['IsLocalsOnly'])) {
 			echo json_encode(['status' => 5, 'error' => 'Not authorized']);
 			exit;
 		}
@@ -110,6 +112,7 @@ class Controller_CalendarItemAjax extends Controller {
 			'EventStart'     => $r['EventStart'],
 			'EventEnd'       => $r['EventEnd'],
 			'IsOfficerOnly'  => (int)$r['IsOfficerOnly'],
+			'IsLocalsOnly'   => (int)$r['IsLocalsOnly'],
 			'CanEdit'        => $canEdit,
 		]);
 		exit;

@@ -55,6 +55,7 @@ class CalendarItem extends Ork3 {
 		$this->item->event_start = $start;
 		$this->item->event_end   = $end;
 		$this->item->is_officer_only = !empty($request['IsOfficerOnly']) ? 1 : 0;
+		$this->item->is_locals_only  = !empty($request['IsLocalsOnly'])  ? 1 : 0;
 		$this->item->created_by  = (int)$mundane_id;
 		$this->item->created     = date('Y-m-d H:i:s');
 		$this->item->save();
@@ -88,6 +89,7 @@ class CalendarItem extends Ork3 {
 		$this->item->event_start = $start;
 		$this->item->event_end   = $end;
 		$this->item->is_officer_only = !empty($request['IsOfficerOnly']) ? 1 : 0;
+		$this->item->is_locals_only  = !empty($request['IsLocalsOnly'])  ? 1 : 0;
 		$this->item->save();
 
 		return Success($id);
@@ -126,11 +128,12 @@ class CalendarItem extends Ork3 {
 			'EventStart'     => $this->item->event_start,
 			'EventEnd'       => $this->item->event_end,
 			'IsOfficerOnly'  => (int)$this->item->is_officer_only,
+			'IsLocalsOnly'   => (int)$this->item->is_locals_only,
 			'Status'         => Success(),
 		];
 	}
 
-	// Visibility check for officer-only items (Q1=C):
+	// Visibility check for officer-only items:
 	//   ORK admins always see; otherwise the caller must hold a row in ork_officer
 	//   matching the item's scope (park_id when set, else kingdom_id with park_id=0).
 	public static function IsOfficer($mundane_id, $kingdom_id, $park_id) {
@@ -153,10 +156,31 @@ class CalendarItem extends Ork3 {
 		return ($rs && $rs->Next()) ? true : false;
 	}
 
-	// Returns true if $mundane_id may see an item with the given scope + officer flag.
-	public static function CanSee($mundane_id, $kingdom_id, $park_id, $is_officer_only) {
-		if (!$is_officer_only) return true;
-		return self::IsOfficer($mundane_id, $kingdom_id, $park_id);
+	// Visibility check for locals-only items:
+	//   ORK admins always see; otherwise the caller's home park/kingdom must
+	//   match the item's scope (park_id when set, else kingdom_id).
+	public static function IsLocal($mundane_id, $kingdom_id, $park_id) {
+		if (!valid_id($mundane_id)) return false;
+		if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) return true;
+		global $DB;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT kingdom_id, park_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . (int)$mundane_id . " LIMIT 1");
+		if (!$rs || !$rs->Next()) return false;
+		if (valid_id($park_id)) {
+			return (int)$rs->park_id === (int)$park_id;
+		}
+		if (valid_id($kingdom_id)) {
+			return (int)$rs->kingdom_id === (int)$kingdom_id;
+		}
+		return false;
+	}
+
+	// Returns true if $mundane_id may see an item given its officer/locals flags.
+	// Both gates compose: each set flag must independently pass (admins always pass).
+	public static function CanSee($mundane_id, $kingdom_id, $park_id, $is_officer_only, $is_locals_only = 0) {
+		if ($is_officer_only && !self::IsOfficer($mundane_id, $kingdom_id, $park_id)) return false;
+		if ($is_locals_only  && !self::IsLocal($mundane_id, $kingdom_id, $park_id))   return false;
+		return true;
 	}
 
 	private function normalizeDates($start, $end, $allDay) {

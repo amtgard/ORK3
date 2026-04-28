@@ -3584,6 +3584,7 @@ $(document).ready(function() {
         document.getElementById('kn-ci-description').value = '';
         document.getElementById('kn-ci-allday').checked = false;
         var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = false;
+        var loc = document.getElementById('kn-ci-locals-only');  if (loc) loc.checked = false;
         knCiRebuildPickers(presetDate || '', '', false);
     }
 
@@ -3717,11 +3718,13 @@ $(document).ready(function() {
         btn.disabled = true;
 
         var officerOnly = document.getElementById('kn-ci-officer-only');
+        var localsOnly  = document.getElementById('kn-ci-locals-only');
         var payload = {
             Name: name, Description: desc, AllDay: allDay,
             EventStart: start, EventEnd: end,
             KingdomId: KnConfig.kingdomId, ParkId: parkId,
-            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0
         };
         var url = CI_CREATE_URL;
         if (knCiEditingId > 0) { payload.CalendarItemId = knCiEditingId; url = CI_UPDATE_URL; }
@@ -3749,7 +3752,9 @@ $(document).ready(function() {
             knCiCurrent = r;
             document.getElementById('kn-ci-view-name').textContent = r.Name || '';
             document.getElementById('kn-ci-view-when').textContent = knCiFormatWhen(r);
-            document.getElementById('kn-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item') + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '');
+            document.getElementById('kn-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item')
+                + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '')
+                + (r.IsLocalsOnly  == 1 ? ' &middot; <span style="color:#0d9488"><i class="fas fa-map-marker-alt"></i> Locals-only</span>' : '');
             var descEl = document.getElementById('kn-ci-view-desc');
             descEl.textContent = r.Description || '';
             descEl.style.display = r.Description ? '' : 'none';
@@ -3799,6 +3804,7 @@ $(document).ready(function() {
         document.getElementById('kn-ci-description').value = knCiCurrent.Description || '';
         document.getElementById('kn-ci-allday').checked = (knCiCurrent.AllDay == 1);
         var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = (knCiCurrent.IsOfficerOnly == 1);
+        var loc = document.getElementById('kn-ci-locals-only');  if (loc) loc.checked = (knCiCurrent.IsLocalsOnly == 1);
         document.getElementById('kn-ci-park-id').value = knCiCurrent.ParkId || '';
         document.getElementById('kn-ci-park-name').value = ''; // user can re-select if they want to change
         document.getElementById('kn-emod-feedback').style.display = 'none';
@@ -6854,6 +6860,7 @@ $(document).ready(function() {
         document.getElementById('pk-ci-description').value = '';
         document.getElementById('pk-ci-allday').checked = false;
         var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = false;
+        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = false;
         pkCiRebuildPickers(presetDate || '', '', false);
     }
 
@@ -6957,11 +6964,13 @@ $(document).ready(function() {
         btn.disabled = true;
 
         var officerOnly = document.getElementById('pk-ci-officer-only');
+        var localsOnly  = document.getElementById('pk-ci-locals-only');
         var payload = {
             Name: name, Description: desc, AllDay: allDay,
             EventStart: start, EventEnd: end,
             KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
-            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0
         };
         var url = CI_CREATE_URL;
         if (pkCiEditingId > 0) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
@@ -6984,7 +6993,9 @@ $(document).ready(function() {
             pkCiCurrent = r;
             document.getElementById('pk-ci-view-name').textContent = r.Name || '';
             document.getElementById('pk-ci-view-when').textContent = pkCiFormatWhen(r);
-            document.getElementById('pk-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item') + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '');
+            document.getElementById('pk-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item')
+                + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '')
+                + (r.IsLocalsOnly  == 1 ? ' &middot; <span style="color:#0d9488"><i class="fas fa-map-marker-alt"></i> Locals-only</span>' : '');
             var descEl = document.getElementById('pk-ci-view-desc');
             descEl.textContent = r.Description || '';
             descEl.style.display = r.Description ? '' : 'none';
@@ -7035,6 +7046,7 @@ $(document).ready(function() {
         document.getElementById('pk-ci-description').value = pkCiCurrent.Description || '';
         document.getElementById('pk-ci-allday').checked = (pkCiCurrent.AllDay == 1);
         var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = (pkCiCurrent.IsOfficerOnly == 1);
+        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = (pkCiCurrent.IsLocalsOnly  == 1);
         document.getElementById('pk-emod-feedback').style.display = 'none';
         document.getElementById('pk-emod-date-row').style.display = 'none';
         var sVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventStart.substring(0, 10) : pkCiCurrent.EventStart.substring(0, 16).replace('T', ' ');
