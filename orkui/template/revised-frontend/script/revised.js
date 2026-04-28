@@ -15921,13 +15921,17 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 
         var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
         // No inline menu — opened menu lives in a single body-attached portal element.
+        // Counts: hide entirely when both 0; otherwise label inline.
+        var countsHtml = '';
+        if (goingCnt > 0 || interestCnt > 0) {
+            var parts = [];
+            if (goingCnt    > 0) parts.push('<span class="ev-rsvp-count-going">'    + goingCnt    + ' going</span>');
+            if (interestCnt > 0) parts.push('<span class="ev-rsvp-count-interest">' + interestCnt + ' interested</span>');
+            countsHtml = '<span class="ev-rsvp-counts">' + parts.join('<span class="ev-rsvp-count-sep">·</span>') + '</span>';
+        }
         span.innerHTML = ''
             + '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>'
-            + '<span class="ev-rsvp-counts">'
-                + '<span class="ev-rsvp-count-going" title="Going">' + goingCnt + '</span>'
-                + '<span class="ev-rsvp-count-sep">·</span>'
-                + '<span class="ev-rsvp-count-interest" title="Interested">' + interestCnt + '</span>'
-            + '</span>';
+            + countsHtml;
     }
 
     // ---- Single shared portal menu (lazy-init) ----
@@ -16071,22 +16075,29 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         var wxChip = '';
         if (loc.weather && loc.weather.high_f !== null && loc.weather.high_f !== undefined) {
             wxChip = '<span class="ev-map-popover-wx" title="' + escapeHtml(loc.weather.label || '') + '">'
-                   + loc.weather.icon + ' '
-                   + loc.weather.high_f + '°/' + loc.weather.low_f + '°'
+                   + '<span class="ev-map-popover-wx-icon">' + loc.weather.icon + '</span>'
+                   + '<span class="ev-map-popover-wx-temp">' + loc.weather.high_f + '°<span class="ev-map-popover-wx-sep">/</span>' + loc.weather.low_f + '°</span>'
                    + '</span>';
         }
+        var metaParts = [
+            '<span class="ev-map-popover-meta-date">' + escapeHtml(loc.date_label || loc.date) + '</span>'
+        ];
+        if (loc.park_name) {
+            metaParts.push('<span class="ev-map-popover-meta-dot"></span><span class="ev-map-popover-meta-park">' + escapeHtml(loc.park_name) + '</span>');
+        }
         return ''
-            + '<div class="ev-map-popover">'
-                + '<a class="ev-map-popover-name" href="' + UIR + 'Event/detail/' + loc.event_id + '/' + (loc.event_calendardetail_id || '') + '">'
-                    + escapeHtml(loc.name)
-                + '</a>'
-                + (loc.is_draft ? '<span class="kn-draft-pill ev-map-popover-draft">DRAFT</span>' : '')
-                + '<div class="ev-map-popover-meta">'
-                    + '<span class="ev-map-popover-meta-date"><i class="far fa-calendar-alt"></i> ' + escapeHtml(loc.date_label || loc.date) + '</span>'
-                    + (loc.park_name ? '<span class="ev-map-popover-meta-dot"></span><span class="ev-map-popover-meta-park">' + escapeHtml(loc.park_name) + '</span>' : '')
-                    + (wxChip ? '<span class="ev-map-popover-meta-spacer"></span>' + wxChip : '')
+            + '<div class="ev-map-popover' + (loc.is_draft ? ' ev-map-popover-isdraft' : '') + '">'
+                + '<div class="ev-map-popover-head">'
+                    + '<a class="ev-map-popover-name" href="' + UIR + 'Event/detail/' + loc.event_id + '/' + (loc.event_calendardetail_id || '') + '">'
+                        + escapeHtml(loc.name)
+                    + '</a>'
+                    + (loc.is_draft ? '<span class="kn-draft-pill ev-map-popover-draft">DRAFT</span>' : '')
                 + '</div>'
-                + '<div class="ev-map-popover-rsvp">' + rsvpHtml + '</div>'
+                + '<div class="ev-map-popover-meta">' + metaParts.join('') + '</div>'
+                + '<div class="ev-map-popover-action">'
+                    + '<div class="ev-map-popover-rsvp">' + rsvpHtml + '</div>'
+                    + (wxChip ? '<div class="ev-map-popover-wx-wrap">' + wxChip + '</div>' : '')
+                + '</div>'
             + '</div>';
     }
 
