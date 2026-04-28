@@ -1200,12 +1200,12 @@ window.knEventMapNoLocCount = <?= (int)($knEventMapNoLocCount ?? 0) ?>;
 				</div>
 				<div class="kn-emod-field" style="margin-top:6px">
 					<label class="kn-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
-						<input type="checkbox" id="kn-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Officer-only — hide from non-officers
+						<input type="checkbox" id="kn-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Only Display to Officers
 					</label>
 				</div>
 				<div class="kn-emod-field" style="margin-top:6px">
 					<label class="kn-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
-						<input type="checkbox" id="kn-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Locals-only — hide from out-of-area players
+						<input type="checkbox" id="kn-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Only Display to Local Park/Kingdom Players
 					</label>
 				</div>
 				<div class="kn-emod-row" style="display:flex;gap:10px;margin-top:8px">
