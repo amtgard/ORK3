@@ -9004,84 +9004,129 @@ html[data-theme="dark"] .pk-emod-draft-btn { background: #2d3748; color: #fde68a
  * Calendar R2 — Polish + Dark Mode (popover, RSVP portal, gmap chrome)
  * ============================================================ */
 
-/* ── Popover layout polish ───────────────────────────────────── */
+/* ── Popover layout (tight, intentional) ─────────────────────── */
+/* Compress Google's default InfoWindow inner padding so our content controls rhythm. */
+.gm-style .gm-style-iw-c { padding: 0 !important; }
+.gm-style .gm-style-iw-d { padding: 0 !important; max-height: none !important; overflow: visible !important; }
+
 .ev-map-popover {
 	font-family: inherit;
 	font-size: 12px;
-	min-width: 220px;
-	padding: 4px 4px 6px;
-	line-height: 1.5;
+	line-height: 1.45;
+	min-width: 232px;
+	max-width: 280px;
+	padding: 14px 16px 12px;
+	color: #2d3748;
+}
+
+/* Header row: name + draft pill aligned. */
+.ev-map-popover-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 4px;
+	padding-right: 22px;  /* leave room for Google's close X */
 }
 .ev-map-popover-name {
-	display: inline-block;
-	font-size: 14.5px;
+	flex: 0 1 auto;
+	font-size: 15px;
 	font-weight: 700;
-	color: #2b6cb0;
+	color: #2c5282;
 	text-decoration: none;
-	letter-spacing: -0.005em;
-	margin-bottom: 4px;
+	letter-spacing: -0.01em;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
 }
-.ev-map-popover-name:hover { color: #2c5282; text-decoration: underline; }
-.ev-map-popover-draft {
-	margin-left: 6px;
-	vertical-align: 2px;
-}
+.ev-map-popover-name:hover { color: #2b6cb0; text-decoration: underline; }
+.ev-map-popover-draft { flex-shrink: 0; }
+
+/* Meta row: simple inline date · park, no flex-spacer trickery. */
 .ev-map-popover-meta {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 4px 6px;
+	gap: 0 6px;
 	color: #718096;
 	font-size: 11.5px;
-	margin-bottom: 8px;
+	margin-bottom: 12px;
 }
-.ev-map-popover-meta i { color: #a0aec0; margin-right: 3px; }
 .ev-map-popover-meta-date  { white-space: nowrap; }
 .ev-map-popover-meta-park  { white-space: nowrap; color: #4a5568; font-weight: 600; }
 .ev-map-popover-meta-dot {
 	width: 3px; height: 3px; border-radius: 50%;
-	background: currentColor; opacity: 0.45;
+	background: currentColor; opacity: 0.5;
 	display: inline-block;
-}
-.ev-map-popover-meta-spacer { flex-grow: 1; }
-
-/* Weather chip — clear affordance, tabular nums */
-.ev-map-popover-wx {
-	display: inline-flex; align-items: center; gap: 4px;
-	color: #2c5282;
-	background: rgba(66, 153, 225, 0.10);
-	border-radius: 999px;
-	padding: 2px 9px;
-	font-size: 11px;
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	white-space: nowrap;
+	flex-shrink: 0;
 }
 
+/* Action row: RSVP on the left, weather chip pinned right. */
+.ev-map-popover-action {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
 .ev-map-popover-rsvp {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-top: 2px;
+	flex-wrap: wrap;
+	min-height: 28px;
 }
+.ev-map-popover-wx-wrap { flex-shrink: 0; }
 
-/* RSVP counts — tabular alignment, calmer baseline color */
-.ev-rsvp-counts {
-	font-size: 10.5px;
+/* Weather chip — refined two-part layout (icon · temp range). */
+.ev-map-popover-wx {
+	display: inline-flex; align-items: center; gap: 6px;
+	color: #2c5282;
+	background: rgba(66, 153, 225, 0.12);
+	border: 1px solid rgba(66, 153, 225, 0.18);
+	border-radius: 999px;
+	padding: 3px 10px 3px 8px;
+	font-size: 11px;
+	font-weight: 600;
 	font-variant-numeric: tabular-nums;
-	letter-spacing: 0.01em;
+	white-space: nowrap;
+	line-height: 1.2;
+}
+.ev-map-popover-wx-icon { font-size: 13px; line-height: 1; }
+.ev-map-popover-wx-temp { letter-spacing: 0.01em; }
+.ev-map-popover-wx-sep  { opacity: 0.45; margin: 0 2px; font-weight: 500; }
+
+/* RSVP counts (label-aware now: "5 going · 2 interested" or hidden when both 0) */
+.ev-rsvp-counts {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: #718096;
+}
+.ev-rsvp-count-going    { color: #38a169; font-weight: 600; }
+.ev-rsvp-count-interest { color: #b7791f; font-weight: 600; }
+.ev-rsvp-count-sep      { opacity: 0.5; }
+
+/* Draft popover affordance — left rail accent. */
+.ev-map-popover-isdraft {
+	border-left: 3px solid #f6ad55;
+	padding-left: 13px;
 }
 
 /* ── Dark mode: popover content ──────────────────────────────── */
-html[data-theme="dark"] .ev-map-popover-name        { color: #63b3ed; }
-html[data-theme="dark"] .ev-map-popover-name:hover  { color: #90cdf4; }
-html[data-theme="dark"] .ev-map-popover-meta        { color: var(--ork-text-muted, #a0aec0); }
-html[data-theme="dark"] .ev-map-popover-meta i      { color: var(--ork-text-muted, #a0aec0); }
-html[data-theme="dark"] .ev-map-popover-meta-park   { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .ev-map-popover               { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .ev-map-popover-name          { color: #90cdf4; }
+html[data-theme="dark"] .ev-map-popover-name:hover    { color: #bee3f8; }
+html[data-theme="dark"] .ev-map-popover-meta          { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .ev-map-popover-meta-park     { color: var(--ork-text-secondary, #cbd5e0); }
 html[data-theme="dark"] .ev-map-popover-wx {
-	color: #90cdf4;
-	background: rgba(99, 179, 237, 0.16);
+	color: #bee3f8;
+	background: rgba(99, 179, 237, 0.14);
+	border-color: rgba(99, 179, 237, 0.28);
 }
+html[data-theme="dark"] .ev-map-popover-isdraft       { border-left-color: #d97706; }
+html[data-theme="dark"] .ev-rsvp-counts               { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .ev-rsvp-count-going          { color: #68d391; }
+html[data-theme="dark"] .ev-rsvp-count-interest       { color: #f6ad55; }
 
 /* ── Dark mode: Google Maps InfoWindow chrome ────────────────── */
 html[data-theme="dark"] .gm-style .gm-style-iw-c {
