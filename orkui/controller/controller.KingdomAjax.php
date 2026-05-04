@@ -715,6 +715,7 @@ class Controller_KingdomAjax extends Controller {
 			  AND cd.event_start < '{$end}'
 			  {$kn_draftClause}
 			ORDER BY cd.event_start";
+		$DB->Clear();
 		$evtResult = $DB->DataSet($evtSql);
 		if ($evtResult && $evtResult->Size() > 0) {
 			while ($evtResult->Next()) {
