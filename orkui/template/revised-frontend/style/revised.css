@@ -171,7 +171,7 @@ html[data-theme="dark"] .pk-btn-white {
 	top: -10px; left: -10px; right: -10px; bottom: -10px;
 	background-size: cover;
 	background-position: center;
-	opacity: 0.12;
+	opacity: var(--pn-overlay-opacity, 0.12);
 	filter: blur(6px);
 }
 .pn-hero-content {
@@ -183,6 +183,7 @@ html[data-theme="dark"] .pk-btn-white {
 	z-index: 1;
 }
 .pn-avatar {
+	position: relative;
 	width: 110px;
 	height: 110px;
 	border-radius: 50%;
@@ -228,16 +229,10 @@ html[data-theme="dark"] .pk-btn-white {
 	filter: brightness(0) invert(1);
 	opacity: 0.9;
 }
-.pn-real-name {
+.pn-hero-subline {
+	font-size: 13.5px;
 	color: rgba(255,255,255,0.7);
-	font-size: 14px;
 	margin-bottom: 4px;
-}
-.pn-pronouns {
-	color: rgba(255,255,255,0.6);
-	font-size: 13px;
-	font-style: italic;
-	margin-bottom: 6px;
 }
 .pn-breadcrumb {
 	color: rgba(255,255,255,0.75);
@@ -657,6 +652,14 @@ html[data-theme="dark"] .pk-btn-white {
 .pn-table .pn-award-base {
 	color: #a0aec0;
 	font-size: 11px;
+}
+.pn-table .pn-award-alias-sub {
+	display: block;
+	margin-top: 2px;
+	color: #718096;
+	font-size: 11px;
+	font-style: italic;
+	white-space: normal;
 }
 
 /* Ladder award progress widgets */
@@ -1119,6 +1122,42 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 	border-top: 1px solid #edf2f7;
 	margin-top: 4px;
 }
+.pn-acct-help-tip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #e2e8f0;
+	color: #4a5568;
+	font-size: 11px;
+	font-weight: 700;
+	margin-left: 6px;
+	cursor: help;
+	user-select: none;
+	line-height: 1;
+}
+.pn-acct-help-tip:hover {
+	background: #cbd5e0;
+	color: #2d3748;
+}
+.pn-acct-help-bubble {
+	position: fixed;
+	max-width: 280px;
+	background: #2d3748;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.5;
+	padding: 8px 10px;
+	border-radius: 6px;
+	pointer-events: none;
+	z-index: 9999;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+html[data-theme="dark"] .pn-acct-help-tip { background: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); color: var(--ork-text); }
 .pn-acct-two-col {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -1257,8 +1296,7 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 		width: auto;
 	}
 	.pn-persona { font-size: 18px; }
-	.pn-real-name { font-size: 12px; margin-bottom: 2px; }
-	.pn-pronouns { font-size: 11px; margin-bottom: 4px; }
+	.pn-hero-subline { font-size: 11px; margin-bottom: 2px; }
 	.pn-breadcrumb { font-size: 11px; margin-bottom: 6px; }
 	.pn-badges { gap: 4px; }
 	.pn-badge { font-size: 10px; padding: 2px 7px; }
@@ -5427,6 +5465,10 @@ html[data-theme="dark"] .plr-merge-warning { background:rgba(197,48,48,0.15); bo
 #pn-addnote-overlay .pn-modal-box { width:480px; max-width:calc(100vw - 40px); }
 .pn-addnote-date-row { display:flex; gap:12px; }
 .pn-notes-toolbar { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.pn-notes-infobox { display:flex; gap:12px; align-items:flex-start; background:#ebf8ff; border:1px solid #bee3f8; border-radius:8px; padding:14px 16px; margin-bottom:16px; font-size:13px; color:#2c5282; line-height:1.5; }
+.pn-notes-infobox-icon { color:#3182ce; font-size:16px; flex-shrink:0; margin-top:1px; }
+.pn-notes-infobox a { color:#2b6cb0; font-weight:600; }
+.pn-notes-infobox a:hover { text-decoration:underline; }
 .pn-note-del-btn { background:none; border:1px solid transparent; color:#a0aec0; cursor:pointer; width:24px; height:24px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; transition:background 0.15s, color 0.15s, border-color 0.15s; padding:0; }
 .pn-note-del-btn:hover { background:#fff5f5; border-color:#fc8181; color:#e53e3e; }
 
@@ -8391,3 +8433,12 @@ html[data-theme="dark"] .pk-att-ac-inactive-badge {
 }
 
 /* @media fallbacks */
+/* Notes infobox dark mode */
+html[data-theme="dark"] .pn-notes-infobox { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
+html[data-theme="dark"] .pn-notes-infobox a { color: #90cdf4; }
+html[data-theme="dark"] .pn-notes-infobox-icon { color: #63b3ed; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox { background: #1a365d; border-color: #2a4365; color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox a { color: #90cdf4; }
+  html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox-icon { color: #63b3ed; }
+}

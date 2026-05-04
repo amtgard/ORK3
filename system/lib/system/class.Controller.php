@@ -70,6 +70,20 @@ class Controller
 
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
+		// Viewer accessibility-font preferences — read once and surface to every template
+		$this->data['ViewerBasicFonts']    = 0;
+		$this->data['ViewerDyslexiaFonts'] = 0;
+		if ($_uid > 0) {
+			global $DB;
+			$DB->Clear();
+			$_prefRs = $DB->DataSet("SELECT basic_fonts, dyslexia_fonts FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_uid} LIMIT 1");
+			if ($_prefRs && $_prefRs->Next()) {
+				$this->data['ViewerBasicFonts']    = (int)$_prefRs->basic_fonts;
+				$this->data['ViewerDyslexiaFonts'] = (int)$_prefRs->dyslexia_fonts;
+			}
+			$DB->Clear();
+		}
+
 		$this->data[ 'controller_title' ] = get_class( $this );
 		$this->data[ 'path' ] = [ get_class( $this ), $method ];
 

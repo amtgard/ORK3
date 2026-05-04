@@ -127,6 +127,8 @@ class Controller_Player extends Controller {
 								'Token' => $this->session->token,
 								'RecipientId' => $id,
 								'AwardId' => $this->request->Player_index->AwardId,
+								'CustomName' => $this->request->Player_index->CustomName ?? '',
+								'AliasAwardId' => $this->request->Player_index->AliasAwardId ?? 0,
 								'Rank' => $this->request->Player_index->Rank,
 								'Date' => $this->request->Player_index->Date,
 								'GivenById' => $this->request->Player_index->MundaneId,
@@ -149,6 +151,8 @@ class Controller_Player extends Controller {
 								'AwardsId' => $roastbeef,
 								'RecipientId' => $id,
 								'AwardId' => $this->request->Player_index->AwardId,
+								'CustomName' => $this->request->Player_index->CustomName ?? '',
+								'AliasAwardId' => $this->request->Player_index->AliasAwardId ?? 0,
 								'Rank' => $this->request->Player_index->Rank,
 								'Date' => $this->request->Player_index->Date,
 								'GivenById' => $this->request->Player_index->MundaneId,
@@ -356,6 +360,44 @@ class Controller_Player extends Controller {
 		$this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
 		$this->data['Player']['LastSignInDate']  = $this->Player->get_latest_attendance_date($id);
 		$this->data['Player']['PlayerSinceDate'] = $this->Player->get_earliest_attendance_date($id);
+
+		// Custom Title alias dropdown data
+		$this->data['CustomAwardId'] = 94;
+		global $DB;
+		$DB->Clear();
+		$_ctSentinel = $DB->DataSet("SELECT award_id FROM " . DB_PREFIX . "award WHERE name = 'Custom Title' AND officer_role='none' LIMIT 1");
+		$_ctid = 0;
+		if ($_ctSentinel && $_ctSentinel->Size() > 0) { $_ctSentinel->Next(); $_ctid = (int)$_ctSentinel->award_id; }
+		$this->data['CustomTitleAwardId'] = $_ctid;
+		$DB->Clear();
+		$_ctAliasSql = "SELECT award_id, name, peerage, is_title
+			FROM " . DB_PREFIX . "award
+			WHERE officer_role = 'none'
+			  AND name <> 'Custom Title'
+			  AND name <> 'Custom Award'
+			  AND (peerage IN ('Page','Lords-Page','Squire','Man-At-Arms','Master','Knight') OR is_title = 1)
+			ORDER BY FIELD(peerage,'Knight','Master','Squire','Man-At-Arms','Lords-Page','Page') DESC, is_title DESC, name ASC";
+		$_ctAliasRes = $DB->DataSet($_ctAliasSql);
+		$_peerageLadder = []; $_otherTitles = [];
+		if ($_ctAliasRes && $_ctAliasRes->Size() > 0) {
+			while ($_ctAliasRes->Next()) {
+				$row = [
+					'AwardId' => (int)$_ctAliasRes->award_id,
+					'Name'    => $_ctAliasRes->name,
+					'Peerage' => $_ctAliasRes->peerage,
+				];
+				if (in_array($_ctAliasRes->peerage, ['Page','Lords-Page','Squire','Man-At-Arms','Master','Knight'], true)) {
+					$_peerageLadder[] = $row;
+				} elseif ((int)$_ctAliasRes->is_title === 1) {
+					$_otherTitles[] = $row;
+				}
+			}
+		}
+		$DB->Clear();
+		$this->data['CustomTitleAliasOptions'] = [
+			'Peerage' => $_peerageLadder,
+			'Titles'  => $_otherTitles,
+		];
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details']       = $this->Player->fetch_player_details($id);
@@ -504,19 +546,89 @@ class Controller_Player extends Controller {
 		$this->data['IsOwnProfile']    = $uid === (int)$id;
 		$this->data['Player']['ParkName'] = $this->session->park_name;
 
+
+		// Beltline: My Peers (who gave this player peerage awards)
+		$DB->Clear();
+		$__peerSql = "SELECT m.mundane_id AS PeerId, m.persona AS Persona,
+			COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+			COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
+			FROM ork_awards ma
+			JOIN ork_award a ON a.award_id = ma.award_id
+			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
+			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			JOIN ork_mundane m ON m.mundane_id = ma.given_by_id
+			WHERE ma.mundane_id = " . (int)$id . "
+				AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
+					OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+				AND ma.given_by_id > 0
+			ORDER BY CASE COALESCE(alias.peerage, a.peerage)
+				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
+				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
+		$__peerResult = $DB->DataSet($__peerSql);
+		$__peers = [];
+		if ($__peerResult) {
+			while ($__peerResult->Next()) {
+				$__peers[] = [
+					'PeerId'    => (int)$__peerResult->PeerId,
+					'Persona'   => $__peerResult->Persona,
+					'TitleName' => $__peerResult->TitleName,
+					'Peerage'   => $__peerResult->Peerage,
+					'Date'      => $__peerResult->Date,
+				];
+			}
+		}
+		$DB->Clear();
+		$this->data['BeltlinePeers'] = $__peers;
+
+		// Beltline: My Associates (who this player gave peerage awards to)
+		$DB->Clear();
+		$__blAssocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
+			COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+			COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
+			FROM ork_awards ma
+			JOIN ork_award a ON a.award_id = ma.award_id
+			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
+			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
+			WHERE ma.given_by_id = " . (int)$id . "
+				AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
+					OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
+				AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			ORDER BY CASE COALESCE(alias.peerage, a.peerage)
+				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
+				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
+		$__blAssocResult = $DB->DataSet($__blAssocSql);
+		$__blAssocs = [];
+		if ($__blAssocResult) {
+			while ($__blAssocResult->Next()) {
+				$__blAssocs[] = [
+					'RecipientId' => (int)$__blAssocResult->RecipientId,
+					'Persona'     => $__blAssocResult->Persona,
+					'TitleName'   => $__blAssocResult->TitleName,
+					'Peerage'     => $__blAssocResult->Peerage,
+					'Date'        => $__blAssocResult->Date,
+				];
+			}
+		}
+		$DB->Clear();
+		$this->data['BeltlineAssociates'] = $__blAssocs;
+
 		if ($uid === (int)$id) {
 			$DB->Clear();
 			$__assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
-				IFNULL(ka.name, a.name) AS TitleName, a.peerage AS Peerage, ma.date AS Date
+				COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+				COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
 				FROM ork_awards ma
 				JOIN ork_award a ON a.award_id = ma.award_id
+				LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
 				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 				JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
 				WHERE ma.given_by_id = $uid
-					AND (a.peerage IN ('Squire','Man-At-Arms','Page','Lords-Page')
-						OR LOWER(IFNULL(ka.name, a.name)) LIKE '%woman%at%arms%')
+					AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
+						OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
 					AND (ma.revoked = 0 OR ma.revoked IS NULL)
-				ORDER BY CASE a.peerage
+				ORDER BY CASE COALESCE(alias.peerage, a.peerage)
 					WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
 					WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
 			$__assocResult = $DB->DataSet($__assocSql);
@@ -534,7 +646,221 @@ class Controller_Player extends Controller {
 			}
 			$DB->Clear();
 			$this->data['MyAssociates'] = $__assocs;
+
+			// Fetch player's titles for name builder prefix/suffix options
+			$DB->Clear();
+			$__titleSql = "SELECT DISTINCT
+				COALESCE(NULLIF(ma.custom_name,''), NULLIF(ka.name,''), a.name) AS title_name,
+				COALESCE(alias.officer_role, a.officer_role) AS officer_role,
+				COALESCE(alias.peerage, a.peerage) AS peerage,
+				GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), a.is_title) AS is_title
+				FROM ork_awards ma
+				JOIN ork_award a ON a.award_id = ma.award_id
+				LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
+				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+				WHERE ma.mundane_id = " . (int)$id . "
+				  AND (ma.revoked = 0 OR ma.revoked IS NULL)
+				  AND (COALESCE(alias.officer_role, a.officer_role) != 'none'
+				       OR IFNULL(ka.is_title, 0) = 1 OR IFNULL(alias.is_title, 0) = 1 OR a.is_title = 1
+				       OR COALESCE(alias.peerage, a.peerage) NOT IN ('None',''))
+				ORDER BY COALESCE(alias.peerage, a.peerage) ASC, title_name ASC";
+			$__titleResult = $DB->DataSet($__titleSql);
+			$__titles = [];
+			if ($__titleResult) {
+				while ($__titleResult->Next()) {
+					$__titles[] = [
+						'TitleName'   => $__titleResult->title_name,
+						'OfficerRole' => $__titleResult->officer_role,
+						'Peerage'     => $__titleResult->peerage,
+						'IsTitle'     => (int)$__titleResult->is_title,
+					];
+				}
+			}
+			$DB->Clear();
+			// Add standalone Master/Paragon if player has any Master X or Paragon X awards
+			$hasMaster = false;
+			$hasParagon = false;
+			foreach ($__titles as $_t) {
+				if ($_t['Peerage'] === 'Master') $hasMaster = true;
+				if ($_t['Peerage'] === 'Paragon') $hasParagon = true;
+			}
+			if ($hasMaster) array_unshift($__titles, ['TitleName' => 'Master', 'OfficerRole' => 'none', 'Peerage' => 'Master', 'IsTitle' => 0]);
+			if ($hasParagon) array_unshift($__titles, ['TitleName' => 'Paragon', 'OfficerRole' => 'none', 'Peerage' => 'Paragon', 'IsTitle' => 0]);
+			$this->data['PlayerTitles'] = $__titles;
 		}
+
+		// ===== Milestones Timeline Data =====
+		$__milestones = [];
+		$__awards = is_array($this->data['Details']['Awards']) ? $this->data['Details']['Awards'] : [];
+		$__attendance = is_array($this->data['Details']['Attendance']) ? $this->data['Details']['Attendance'] : [];
+		$__classes = is_array($this->data['Details']['Classes']) ? $this->data['Details']['Classes'] : [];
+
+		// 1. First Sign-In (earliest attendance date)
+		$__earliestDate = null;
+		foreach ($__attendance as $__a) {
+			if (!empty($__a['Date']) && $__a['Date'] !== '0000-00-00' && $__a['Date'] !== '1970-01-01') {
+				if ($__earliestDate === null || strtotime($__a['Date']) < strtotime($__earliestDate))
+					$__earliestDate = $__a['Date'];
+			}
+		}
+		if ($__earliestDate) {
+			$__milestones[] = ['type' => 'first_signin', 'date' => $__earliestDate, 'icon' => 'fa-door-open', 'description' => 'First sign-in at Amtgard'];
+		}
+
+		// 2. Reached Level 6 in Class
+		// Build attendance history per class to find earliest date with 53+ cumulative credits
+		$__classAttByDate = [];
+		foreach ($__attendance as $__a) {
+			$__cid = (int)($__a['ClassId'] ?? 0);
+			$__cdate = $__a['Date'] ?? '';
+			if ($__cid > 0 && !empty($__cdate) && $__cdate !== '0000-00-00') {
+				$__classAttByDate[$__cid][] = ['date' => $__cdate, 'credits' => (float)($__a['Credits'] ?? 0)];
+			}
+		}
+		foreach ($__classAttByDate as $__cid => $__entries) {
+			// Sort by date ascending
+			usort($__entries, function($a, $b) { return strtotime($a['date']) - strtotime($b['date']); });
+			$__cumCredits = 0;
+			// Also add reconciled credits for this class
+			foreach ($__classes as $__c) {
+				if ((int)$__c['ClassId'] === $__cid) {
+					$__cumCredits += (int)($__c['Reconciled'] ?? 0);
+					$__className = $__c['ClassName'];
+					break;
+				}
+			}
+			if (empty($__className)) continue;
+			foreach ($__entries as $__e) {
+				$__cumCredits += $__e['credits'];
+				if ($__cumCredits >= 53) {
+					$__milestones[] = ['type' => 'level6', 'date' => $__e['date'], 'icon' => 'fa-hat-wizard', 'description' => 'Reached Level 6 in ' . $__className];
+					break;
+				}
+			}
+			unset($__className);
+		}
+
+		// 3-6: Awards-based milestones
+		$__knightIds = [17, 18, 19, 20, 245];
+		$__knightNames = [17 => 'Sword', 18 => 'Flame', 19 => 'Serpent', 20 => 'Crown', 245 => 'Battle'];
+		foreach ($__awards as $__aw) {
+			$__aid = (int)($__aw['AwardId'] ?? 0);
+			$__awDate = $__aw['Date'] ?? '';
+			$__awName = !empty($__aw['KingdomAwardName']) ? $__aw['KingdomAwardName'] : (!empty($__aw['CustomAwardName']) ? $__aw['CustomAwardName'] : ($__aw['Name'] ?? ''));
+			$__officerRole = $__aw['OfficerRole'] ?? 'none';
+			$__isTitle = (int)($__aw['IsTitle'] ?? 0);
+
+			if (empty($__awDate) || $__awDate === '0000-00-00') continue;
+
+			// Knight
+			if (in_array($__aid, $__knightIds)) {
+				$__knLabel = isset($__knightNames[$__aid]) ? 'Knight of the ' . $__knightNames[$__aid] : 'Knighted';
+				$__milestones[] = ['type' => 'knight', 'date' => $__awDate, 'icon' => 'fa-shield-alt', 'description' => 'Earned ' . $__knLabel];
+			}
+
+			// Master (10th order of a ladder award)
+			if ((int)($__aw['Rank'] ?? 0) >= 10 && (int)($__aw['IsLadder'] ?? 0) === 1 && in_array($__officerRole, ['none', null]) && $__isTitle !== 1) {
+				// Strip "Order of the/Order of" prefix; otherwise the name IS the title (e.g. Warlord, Battlemaster)
+				$__masterLabel = $__awName;
+				if (stripos($__masterLabel, 'order of the ') === 0) {
+					$__masterLabel = 'Master ' . substr($__masterLabel, 13);
+				} elseif (stripos($__masterLabel, 'order of ') === 0) {
+					$__masterLabel = 'Master ' . substr($__masterLabel, 9);
+				}
+				$__milestones[] = ['type' => 'master', 'date' => $__awDate, 'icon' => 'fa-star', 'description' => 'Earned ' . $__masterLabel];
+			}
+
+			// Paragon (class-specific paragon awards)
+			$__paragonIds = [37,38,39,40,41,241,42,43,44,45,46,47,242,49,50,51];
+			if (in_array($__aid, $__paragonIds)) {
+				$__milestones[] = ['type' => 'paragon', 'date' => $__awDate, 'icon' => 'fa-gem', 'description' => 'Earned ' . $__awName];
+			}
+
+			// Title (IsTitle=1 and OfficerRole is none, exclude paragons/knights already handled above)
+			if ($__isTitle === 1 && in_array($__officerRole, ['none', null]) && !in_array($__aid, $__paragonIds) && !in_array($__aid, $__knightIds)) {
+				$__milestones[] = ['type' => 'title', 'date' => $__awDate, 'icon' => 'fa-crown', 'description' => 'Earned the title ' . $__awName];
+			}
+
+			// Served as Officer (OfficerRole is not none)
+			if (!in_array($__officerRole, ['none', null, ''])) {
+				$__milestones[] = ['type' => 'officer', 'date' => $__awDate, 'icon' => 'fa-landmark', 'description' => 'Served as ' . $__awName];
+			}
+		}
+
+		// 7. Became Associate (peerage awards given TO this player - from BeltlinePeers data)
+		$__blPeerLabels = ['Squire' => 'Squire', 'Man-At-Arms' => 'Person-at-Arms', 'Lords-Page' => "Lord's Page", 'Page' => 'Page'];
+		if (!empty($this->data['BeltlinePeers'])) {
+			foreach ($this->data['BeltlinePeers'] as $__bp) {
+				$__peerDate = $__bp['Date'] ?? '';
+				if (empty($__peerDate) || $__peerDate === '0000-00-00') continue;
+				$__peerLabel = $__blPeerLabels[$__bp['Peerage']] ?? $__bp['Peerage'];
+				$__milestones[] = ['type' => 'became_associate', 'date' => $__peerDate, 'icon' => 'fa-handshake', 'description' => 'Became ' . $__peerLabel . ' to ' . $__bp['Persona']];
+			}
+		}
+
+		// 8. Took Associate (peerage awards given BY this player - from BeltlineAssociates data)
+		if (!empty($this->data['BeltlineAssociates'])) {
+			foreach ($this->data['BeltlineAssociates'] as $__ba) {
+				$__assocDate = $__ba['Date'] ?? '';
+				if (empty($__assocDate) || $__assocDate === '0000-00-00') continue;
+				$__assocLabel = $__blPeerLabels[$__ba['Peerage']] ?? $__ba['Peerage'];
+				$__milestones[] = ['type' => 'took_associate', 'date' => $__assocDate, 'icon' => 'fa-hand-holding-heart', 'description' => 'Took ' . $__ba['Persona'] . ' as ' . $__assocLabel];
+			}
+		}
+
+		// 9. Custom milestones from DB
+		$__customMs = $this->Player->get_custom_milestones((int)$id);
+		if (is_array($__customMs)) {
+			foreach ($__customMs as $__cm) {
+				$__milestones[] = [
+					'type' => 'custom',
+					'date' => $__cm['MilestoneDate'],
+					'icon' => $__cm['Icon'],
+					'description' => $__cm['Description'],
+					'milestoneId' => (int)$__cm['MilestoneId'],
+				];
+			}
+		}
+
+		// Cross-type dedup:
+		// 1. Remove 'title' milestones for peerage terms (already covered by 'became_associate')
+		// 2. Remove 'title' milestones for "Master X" that duplicate an existing 'master' milestone
+		$__masterMsNames = [];
+		foreach ($__milestones as $__m) {
+			if ($__m['type'] === 'master') {
+				$__masterMsNames[] = strtolower(preg_replace('/^Earned (?:Master )?/', '', $__m['description']));
+			}
+		}
+		$__peerageTerms = ['squire', 'man-at-arms', 'person-at-arms', "lord's page", 'page'];
+		$__milestones = array_values(array_filter($__milestones, function($m) use ($__masterMsNames, $__peerageTerms) {
+			if ($m['type'] !== 'title') return true;
+			$__tn = strtolower(preg_replace('/^Earned the title /', '', $m['description']));
+			if (in_array($__tn, $__peerageTerms)) return false;
+			if (substr($__tn, 0, 7) === 'master ') {
+				$__kw = substr($__tn, 7);
+				foreach ($__masterMsNames as $__mn) {
+					if (strpos($__mn, $__kw) !== false) return false;
+				}
+			}
+			return true;
+		}));
+
+		// Deduplicate milestones with same description + date
+		$__seen = [];
+		$__milestones = array_filter($__milestones, function($m) use (&$__seen) {
+			$key = $m['date'] . '|' . $m['description'];
+			if (isset($__seen[$key])) return false;
+			$__seen[$key] = true;
+			return true;
+		});
+
+		// Sort chronologically ascending
+		usort($__milestones, function($a, $b) { return strtotime($a['date']) - strtotime($b['date']); });
+
+		$this->data['Milestones'] = $__milestones;
+		$this->data['CustomMilestones'] = is_array($__customMs) ? $__customMs : [];
+		$this->data['MilestoneConfig'] = $this->data['Player']['MilestoneConfig'] ?? '';
+
 	}
 
 

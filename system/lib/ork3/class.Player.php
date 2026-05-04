@@ -13,6 +13,18 @@ class Player extends Ork3 {
 		$this->load_model('Pronoun');
 	}
 
+	private $_customTitleAwardId = null;
+	public function getCustomTitleAwardId() {
+		if ($this->_customTitleAwardId !== null) return $this->_customTitleAwardId;
+		$r = $this->db->query("SELECT award_id FROM " . DB_PREFIX . "award WHERE name = 'Custom Title' AND officer_role='none' LIMIT 1");
+		$this->_customTitleAwardId = 0;
+		if ($r && $r->size() > 0) {
+			$r->next();
+			$this->_customTitleAwardId = (int)$r->award_id;
+		}
+		return $this->_customTitleAwardId;
+	}
+
     public function AddOneShotFaceImage($request) {
       $mundane = $this->player_info($request['MundaneId']);
 		  $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -178,6 +190,18 @@ class Player extends Ork3 {
 		return NoAuthorization();
 	}
 
+	public function ClearNotes($request) {
+		if (!valid_id($request['MundaneId'])) return InvalidParameter('Invalid player ID.');
+		$uid = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if ($uid <= 0) return NoAuthorization();
+		$thePlayer = $this->player_info($request['MundaneId']);
+		$isOwn  = $uid === (int)$request['MundaneId'];
+		$isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT);
+		if (!$isOwn && !$isAdmin) return NoAuthorization();
+		$this->db->query('DELETE FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . intval($request['MundaneId']));
+		return Success();
+	}
+
 	public function SetPlayerReconciledCredits($request) {
 
 		$thePlayer = $this->player_info($request['MundaneId']);
@@ -248,6 +272,11 @@ class Player extends Ork3 {
 			$this->pronoun->clear();
 			$this->pronoun->pronoun_id = $this->mundane->pronoun_id;
 			$this->pronoun->find();
+			// Paired design-preferences row (always present after the 2026-04-23 migration).
+			$design = new yapo($this->db, DB_PREFIX . 'mundane_design');
+			$design->clear();
+			$design->mundane_id = $this->mundane->mundane_id;
+			$design->find();
 			$subject = $this->pronoun->subject;
 			$pronoun_custom = $this->mundane->pronoun_custom;
 			$pronountext = isset($subject) ? $this->pronoun->subject . '[' . $this->pronoun->object . ']' : '';
@@ -293,7 +322,29 @@ class Player extends Ork3 {
 					//'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
 					'ParkMemberSince' => $this->mundane->park_member_since,
 					'IsNewPlayer' => $is_new_player,
-					'DuesPaidList' => $dues
+					'DuesPaidList' => $dues,
+					'AboutPersona' => $design->about_persona,
+					'AboutStory' => $design->about_story,
+					'ColorPrimary' => $design->color_primary,
+					'ColorAccent' => $design->color_accent,
+						'ColorSecondary' => $design->color_secondary,
+						'HeroOverlay' => $design->hero_overlay,
+					'NamePrefix' => $design->name_prefix,
+					'NameSuffix' => $design->name_suffix,
+						'SuffixComma' => (int)$design->suffix_comma,
+					'PhotoFocusX' => $design->photo_focus_x,
+					'PhotoFocusY' => $design->photo_focus_y,
+					'PhotoFocusSize' => $design->photo_focus_size,
+						'ShowBeltline' => (int)$design->show_beltline,
+						'PronunciationGuide' => $design->pronunciation_guide,
+						'ShowMundaneFirst' => (int)$design->show_mundane_first,
+						'ShowMundaneLast' => (int)$design->show_mundane_last,
+						'ShowEmail' => (int)$design->show_email,
+						'MilestoneConfig' => $design->milestone_config,
+						'NameFont' => $design->name_font,
+							'BeltDisplay' => $design->belt_display,
+						'BasicFonts' => (int)$this->mundane->basic_fonts,
+						'DyslexiaFonts' => (int)$this->mundane->dyslexia_fonts,
 				);
 			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
@@ -380,12 +431,19 @@ class Player extends Ork3 {
 			$player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
 		}
 		$sql = "select distinct awards.*, a.*,
-						COALESCE(a.is_title, ka.is_title) as is_title,
-						COALESCE(a.title_class, ka.title_class) as title_class,
+						GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)) as is_title,
+						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,
+						COALESCE(alias.peerage, a.peerage) as peerage,
+						COALESCE(alias.officer_role, a.officer_role) as officer_role,
+						COALESCE(alias.is_ladder, a.is_ladder) as is_ladder,
+						alias.award_id as alias_award_id_resolved,
+						alias.name as alias_award_name,
+						alias.peerage as alias_peerage,
 						ka.name as kingdom_awardname, p.name as park_name, k.name as kingdom_name, e.name as event_name, m.persona, bwm.persona as entered_by_persona, bwm.mundane_id as entered_by_id
 					from " . DB_PREFIX . "awards awards
 						left join " . DB_PREFIX . "kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+						left join " . DB_PREFIX . "award alias on alias.award_id = awards.alias_award_id
 						left join " . DB_PREFIX . "park p on p.park_id = awards.at_park_id
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = awards.at_kingdom_id
 						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id
@@ -393,7 +451,7 @@ class Player extends Ork3 {
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
 					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
 					order by
-						COALESCE(a.is_ladder, 0), COALESCE(a.is_title, ka.is_title, 0), COALESCE(a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
+						COALESCE(alias.is_ladder, a.is_ladder, 0), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
 		$r = $this->db->query($sql);
 		$response = array();
@@ -422,6 +480,9 @@ class Player extends Ork3 {
 						'TitleClass' => $r->title_class,
 						'OfficerRole' => $r->officer_role,
 						'Peerage' => $r->peerage,
+						'AliasAwardId' => (int)($r->alias_award_id_resolved ?? 0),
+						'AliasAwardName' => $r->alias_award_name,
+						'AliasPeerage' => $r->alias_peerage,
 						'ParkName' => $r->park_name,
 						'KingdomName' => $r->kingdom_name,
 						'EventName' => $r->event_name,
@@ -565,6 +626,12 @@ class Player extends Ork3 {
 				$this->mundane->save();
 				$new_mundane_id = (int)$this->mundane->mundane_id;
 
+				// Paired design-preferences row (one per mundane, all schema defaults at creation).
+				$design = new yapo($this->db, DB_PREFIX . 'mundane_design');
+				$design->clear();
+				$design->mundane_id = $new_mundane_id;
+				$design->save();
+
 				Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
 
 				if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
@@ -598,7 +665,7 @@ class Player extends Ork3 {
 						$this->mundane->waiver_ext = 'pdf';
 					}
 				}
-				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
+				if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 					$playerimage = @imagecreatefromstring(base64_decode($request['Image']));
 					if ($playerimage !== false)
 					{
@@ -781,6 +848,16 @@ class Player extends Ork3 {
 			$this->db->query($sql);
 			$sql = "UPDATE " . DB_PREFIX . "recommendations SET recommended_by_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE recommended_by_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
+			// recommendation_seconds: unique key on (recommendations_id, supporter_mundane_id) — soft-delete from-rows that would collide before remapping.
+			$sql = "UPDATE " . DB_PREFIX . "recommendation_seconds fr
+				JOIN " . DB_PREFIX . "recommendation_seconds toR
+					ON toR.recommendations_id = fr.recommendations_id
+					AND toR.supporter_mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "'
+				SET fr.deleted_at = NOW(), fr.deleted_by = '" . mysql_real_escape_string($toMundane['id']) . "'
+				WHERE fr.supporter_mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "' AND fr.deleted_at IS NULL";
+			$this->db->query($sql);
+			$sql = "UPDATE " . DB_PREFIX . "recommendation_seconds SET supporter_mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE supporter_mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "' AND deleted_at IS NULL";
+			$this->db->query($sql);
 			$sql = "UPDATE " . DB_PREFIX . "dues SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
 			$sql = "UPDATE " . DB_PREFIX . "bracket_officiant SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
@@ -793,6 +870,9 @@ class Player extends Ork3 {
 			$this->db->query($sql);
 			// idp_auth: delete FROM player's IDP link — TO player keeps their login
 			$sql = "DELETE FROM " . DB_PREFIX . "idp_auth WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+			$this->db->query($sql);
+			// mundane_design: TO player keeps its own design; drop the FROM player's orphaned row.
+			$sql = "DELETE FROM " . DB_PREFIX . "mundane_design WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
 			return Success();
 		} else {
@@ -953,6 +1033,38 @@ class Player extends Ork3 {
 				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
 				$this->mundane->pronoun_custom = is_null($request['PronounCustom'])?$this->mundane->pronoun_custom:$request['PronounCustom'];
 
+				// Profile customization fields (own-profile only).
+				// Stored in ork_mundane_design (paired 1:1 row) since 2026-04-23.
+				$design = null;
+				if ($requester_id == $request['MundaneId']) {
+					$design = new yapo($this->db, DB_PREFIX . 'mundane_design');
+					$design->clear();
+					$design->mundane_id = $this->mundane->mundane_id;
+					$design->find();
+					$design->about_persona = is_null($request['AboutPersona'])?$design->about_persona:$request['AboutPersona'];
+					$design->about_story = is_null($request['AboutStory'])?$design->about_story:$request['AboutStory'];
+					$design->color_primary = is_null($request['ColorPrimary'])?$design->color_primary:$request['ColorPrimary'];
+					$design->color_accent = is_null($request['ColorAccent'])?$design->color_accent:$request['ColorAccent'];
+					$design->color_secondary = is_null($request['ColorSecondary'])?$design->color_secondary:$request['ColorSecondary'];
+					$validOverlays = ['low','med','high'];
+					$design->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : $design->hero_overlay;
+					$design->name_prefix = is_null($request['NamePrefix'])?$design->name_prefix:$request['NamePrefix'];
+					$design->name_suffix = is_null($request['NameSuffix'])?$design->name_suffix:$request['NameSuffix'];
+					$design->suffix_comma = is_null($request['SuffixComma'])?$design->suffix_comma:(int)$request['SuffixComma'];
+					$design->photo_focus_x = is_null($request['PhotoFocusX'])?$design->photo_focus_x:(int)$request['PhotoFocusX'];
+					$design->photo_focus_y = is_null($request['PhotoFocusY'])?$design->photo_focus_y:(int)$request['PhotoFocusY'];
+					$design->photo_focus_size = is_null($request['PhotoFocusSize'])?$design->photo_focus_size:(int)$request['PhotoFocusSize'];
+					$design->show_beltline = is_null($request['ShowBeltline'])?$design->show_beltline:(int)$request['ShowBeltline'];
+					$design->pronunciation_guide = is_null($request['PronunciationGuide'])?$design->pronunciation_guide:$request['PronunciationGuide'];
+					$design->show_mundane_first = is_null($request['ShowMundaneFirst'])?$design->show_mundane_first:(int)$request['ShowMundaneFirst'];
+					$design->show_mundane_last = is_null($request['ShowMundaneLast'])?$design->show_mundane_last:(int)$request['ShowMundaneLast'];
+					$design->show_email = is_null($request['ShowEmail'])?$design->show_email:(int)$request['ShowEmail'];
+					$design->milestone_config = is_null($request['MilestoneConfig'])?$design->milestone_config:$request['MilestoneConfig'];
+					$design->name_font = is_null($request['NameFont'])?$design->name_font:$request['NameFont'];
+					$validBeltDisplays = ['white','own','none'];
+					$design->belt_display = (isset($request['BeltDisplay']) && in_array($request['BeltDisplay'], $validBeltDisplays)) ? $request['BeltDisplay'] : $design->belt_display;
+				}
+
 				// reeve or corpora qual changes
 				// TODO: add error messaging
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) {
@@ -966,6 +1078,7 @@ class Player extends Ork3 {
 				$this->set_waiver($request);
 				$this->mundane->save();
 				$this->set_image($request);
+				if ($design !== null) { $design->save(); }
 				$this->mundane->save();
 				logtrace("Mundane DB 1", $this->mundane);
 				$this->mundane->email = is_null($request['Email'])?$this->mundane->email:$request['Email'];
@@ -981,6 +1094,8 @@ class Player extends Ork3 {
 				}
 				logtrace("Mundane DB 2", $this->mundane);
 				$this->mundane->restricted = is_null($request['Restricted']) ? $this->mundane->restricted : ($request['Restricted'] ? 1 : 0);
+				$this->mundane->basic_fonts = is_null($request['BasicFonts']) ? $this->mundane->basic_fonts : ($request['BasicFonts'] ? 1 : 0);
+				$this->mundane->dyslexia_fonts = is_null($request['DyslexiaFonts']) ? $this->mundane->dyslexia_fonts : ($request['DyslexiaFonts'] ? 1 : 0);
 
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
     				$this->mundane->active = is_null($request['Active']) ? $this->mundane->restricted : ($request['Active']?1:0);
@@ -1057,7 +1172,7 @@ class Player extends Ork3 {
         $mime = $prefix . 'MimeType';
     	if (strlen($request[$url]) > 0 && Common::url_exists($request[$url])) {
 			$mime_type = Common::exif_to_mime(@exif_imagetype($request[$url]), $request[$url]);
-			if (Common::supported_mime_types($mime_type) && Ork3::$Lib->heraldry->url_file_size($request[$url]) < 465000) {
+			if (Common::supported_mime_types($mime_type) && Ork3::$Lib->heraldry->url_file_size($request[$url]) < 1365334) {
 				$request[$media] = base64_encode(file_get_contents($request[$url]));
 				$request[$mime] = $mime_type;
 			}
@@ -1068,7 +1183,7 @@ class Player extends Ork3 {
 	public function set_image($request) {
         logtrace("set_image", $request);
         $request = $this->media_fetch('Image', $request);
-		if (strlen($request['Image']) > 0 && strlen($request['Image']) < 465000 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
+		if (strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
 			$playerimage = imagecreatefromstring(base64_decode($request['Image']));
 			if ($playerimage !== false)
 			{
@@ -1090,7 +1205,7 @@ class Player extends Ork3 {
 				$notices .= "Image could not be decoded.";
 			}
 		} else {
-			$notices .= 'Images must be jpeg, gifs, or pngs, and may be no larger than 340KB.<br />';
+			$notices .= 'Images must be jpeg, gifs, or pngs, and may be no larger than 1MB.<br />';
 		}
 		logtrace("set_image() complete", array($request, $notices));
 		return Success($notices);
@@ -1327,6 +1442,7 @@ class Player extends Ork3 {
 			$awards->kingdomaward_id = $request['KingdomAwardId'];
     		$awards->award_id = $request['AwardId'];
 			$awards->custom_name = $request['CustomName'] ?? '';
+			$awards->alias_award_id = (!empty($request['AliasAwardId']) && (int)$request['AliasAwardId'] > 0) ? (int)$request['AliasAwardId'] : null;
 			$awards->mundane_id = $request['RecipientId'];
 			$awards->rank = $request['Rank'];
 			$awards->date = $request['Date'];
@@ -1344,6 +1460,21 @@ class Player extends Ork3 {
     			$awards->kingdom_id = valid_id($given_by['Player']['KingdomId'])?$given_by['Player']['KingdomId']:0;
             }
 			// Events are awesome.
+
+			if (!empty($awards->alias_award_id)) {
+				$ctid = $this->getCustomTitleAwardId();
+				$aid = (int)$awards->alias_award_id;
+				$chk = $this->db->query("SELECT award_id, is_title, peerage, officer_role FROM " . DB_PREFIX . "award WHERE award_id = " . $aid . " LIMIT 1");
+				$bad = true;
+				if ($chk && $chk->size() > 0) {
+					$chk->next();
+					if ((int)$chk->award_id !== $ctid && $chk->officer_role === 'none'
+					    && ((int)$chk->is_title === 1 || !in_array($chk->peerage, array('', 'None'), true))) {
+						$bad = false;
+					}
+				}
+				if ($bad) return InvalidParameter();
+			}
 
 			$awards->save();
 
@@ -1481,7 +1612,56 @@ class Player extends Ork3 {
 				$set_at_event_id   = valid_id($request['EventId']) ? intval($request['EventId']) : 0;
 				$set_awards_id  = intval($request['AwardsId']);
 
-				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . ' WHERE awards_id=' . $set_awards_id;
+				// Custom Title reclassification: allow switching between Custom Award and Custom Title sentinels,
+				// updating custom_name, alias_award_id, and kingdomaward_id in the same write.
+				$extra_sql = '';
+				$ctid = $this->getCustomTitleAwardId();
+				if (array_key_exists('AwardId', $request) && valid_id($request['AwardId'])) {
+					$req_award_id = (int)$request['AwardId'];
+					if ($req_award_id === 94 || $req_award_id === $ctid) {
+						$extra_sql .= ', award_id=' . $req_award_id;
+						// Also rewrite kingdomaward_id so AwardsForPlayer's ka->a join yields the
+						// correct base award (is_title flag, peerage, etc). Find the matching
+						// kingdomaward row in the same kingdom as the existing row.
+						$curKaKingdomId = 0;
+						if (valid_id($awards->kingdomaward_id)) {
+							$kq = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdomaward WHERE kingdomaward_id = " . (int)$awards->kingdomaward_id . " LIMIT 1");
+							if ($kq && $kq->size() > 0) { $kq->next(); $curKaKingdomId = (int)$kq->kingdom_id; }
+						}
+						if ($curKaKingdomId > 0) {
+							$targetName = ($req_award_id === $ctid) ? 'Custom Title' : 'Custom Award';
+							$tq = $this->db->query("SELECT kingdomaward_id FROM " . DB_PREFIX . "kingdomaward WHERE kingdom_id = " . $curKaKingdomId . " AND award_id = " . $req_award_id . " AND name = '" . addslashes($targetName) . "' LIMIT 1");
+							if ($tq && $tq->size() > 0) {
+								$tq->next();
+								$extra_sql .= ', kingdomaward_id=' . (int)$tq->kingdomaward_id;
+							}
+						}
+					}
+				}
+				if (array_key_exists('CustomName', $request)) {
+					$extra_sql .= ", custom_name='" . addslashes($request['CustomName']) . "'";
+				}
+				if (array_key_exists('AliasAwardId', $request)) {
+					$new_alias = (!empty($request['AliasAwardId']) && (int)$request['AliasAwardId'] > 0) ? (int)$request['AliasAwardId'] : 0;
+					if ($new_alias > 0) {
+						// Validate alias target
+						$chk = $this->db->query("SELECT award_id, is_title, peerage, officer_role FROM " . DB_PREFIX . "award WHERE award_id = " . $new_alias . " LIMIT 1");
+						$bad = true;
+						if ($chk && $chk->size() > 0) {
+							$chk->next();
+							if ((int)$chk->award_id !== $ctid && $chk->officer_role === 'none'
+							    && ((int)$chk->is_title === 1 || !in_array($chk->peerage, array('', 'None'), true))) {
+								$bad = false;
+							}
+						}
+						if ($bad) return InvalidParameter();
+						$extra_sql .= ', alias_award_id=' . $new_alias;
+					} else {
+						$extra_sql .= ', alias_award_id=NULL';
+					}
+				}
+
+				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
 				$this->db->query($sql);
 
 				return Success($set_awards_id);
@@ -1574,6 +1754,7 @@ class Player extends Ork3 {
 		$award->at_kingdom_id = $awards->at_kingdom_id;
 		$award->at_event_id = $awards->at_event_id;
 		$award->custom_name = $awards->custom_name;
+		$award->alias_award_id = $awards->alias_award_id;
 		$award->award_id = $awards->award_id;
 		return $award;
 	}
@@ -1827,10 +2008,14 @@ class Player extends Ork3 {
 						'date_recommended'   => $awardRec->date_recommended,
 						'reason'             => $awardRec->reason,
 					];
+					$cascade_at = date('Y-m-d H:i:s');
 					$awardRec->deleted_by = $request['RequestedBy'];
-					$awardRec->deleted_at = date('Y-m-d H:i:s');
+					$awardRec->deleted_at = $cascade_at;
 					$awardRec->save();
 					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+					// Cascade soft-delete to any active seconds on this recommendation.
+					$this->db->Clear();
+					$this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
 					if (isset(Ork3::$Lib->ghettocache->memcache)) {
 						Ork3::$Lib->ghettocache->memcache->flush();
 					}
@@ -1844,6 +2029,308 @@ class Player extends Ork3 {
 		} else {
 			return NoAuthorization();
 		}
+	}
+
+
+	/**
+	 * Add a "second" (supporting endorsement) to an existing award recommendation.
+	 * Eligibility:
+	 *   - Parent rec must exist and not be soft-deleted.
+	 *   - Supporter must not be the recipient.
+	 *   - Supporter must not be the originator.
+	 *   - Supporter must not have their own active primary rec for the same award/rank/player.
+	 * If the supporter previously seconded then withdrew, the row is resurrected with new notes.
+	 */
+	public function AddSecondToRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationsId'])) {
+			return InvalidParameter('Invalid recommendation.');
+		}
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $request['RecommendationsId'];
+		if (!$awardRec->find() || $awardRec->deleted_at) {
+			return InvalidParameter('Recommendation not found.');
+		}
+
+		if ((int)$awardRec->mundane_id === (int)$mundane_id) {
+			return InvalidParameter('You cannot second a recommendation for yourself.');
+		}
+		if ((int)$awardRec->recommended_by_id === (int)$mundane_id) {
+			return InvalidParameter('You are the original recommender — edit your reason instead of seconding.');
+		}
+
+		// Check for own active primary rec on the same award/rank/player.
+		$ownRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$ownRec->clear();
+		$ownRec->kingdomaward_id = $awardRec->kingdomaward_id;
+		$ownRec->mundane_id = $awardRec->mundane_id;
+		$ownRec->rank = $awardRec->rank;
+		$ownRec->recommended_by_id = $mundane_id;
+		if ($ownRec->find()) do {
+			if (!$ownRec->deleted_at) {
+				return InvalidParameter('You already have your own recommendation for this award and rank.');
+			}
+		} while ($ownRec->next());
+
+		$notes = isset($request['Notes']) ? substr(trim($request['Notes']), 0, 400) : '';
+
+		// Resurrect any prior soft-deleted second by this supporter on this rec.
+		$existing = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$existing->clear();
+		$existing->recommendations_id = $request['RecommendationsId'];
+		$existing->supporter_mundane_id = $mundane_id;
+		if ($existing->find()) {
+			if (!$existing->deleted_at) {
+				return InvalidParameter('You have already seconded this recommendation.');
+			}
+			$existing->deleted_at = null;
+			$existing->deleted_by = null;
+			$existing->notes = $notes;
+			$existing->updated_at = date('Y-m-d H:i:s');
+			$existing->save();
+			if (isset(Ork3::$Lib->ghettocache->memcache)) {
+				Ork3::$Lib->ghettocache->memcache->flush();
+			}
+			return Success($existing->recommendation_seconds_id);
+		}
+
+		$second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$second->clear();
+		$second->recommendations_id = $request['RecommendationsId'];
+		$second->supporter_mundane_id = $mundane_id;
+		$second->notes = $notes;
+		$second->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success($second->recommendation_seconds_id);
+	}
+
+	/**
+	 * Edit the notes on an existing second. Only the supporter may edit their own notes.
+	 */
+	public function EditSecondNotes($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationSecondsId'])) {
+			return InvalidParameter('Invalid second.');
+		}
+
+		$second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$second->clear();
+		$second->recommendation_seconds_id = $request['RecommendationSecondsId'];
+		if (!$second->find() || $second->deleted_at) {
+			return InvalidParameter('Second not found.');
+		}
+		if ((int)$second->supporter_mundane_id !== (int)$mundane_id) {
+			return InvalidParameter('Only the supporter may edit their own notes.');
+		}
+
+		$second->notes = isset($request['Notes']) ? substr(trim($request['Notes']), 0, 400) : '';
+		$second->updated_at = date('Y-m-d H:i:s');
+		$second->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success($second->recommendation_seconds_id);
+	}
+
+	/**
+	 * Withdraw (soft-delete) a second. Allowed by the supporter or by anyone with park-level
+	 * recommendation-delete authority on the recipient.
+	 */
+	public function WithdrawSecond($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationSecondsId'])) {
+			return InvalidParameter('Invalid second.');
+		}
+
+		$second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
+		$second->clear();
+		$second->recommendation_seconds_id = $request['RecommendationSecondsId'];
+		if (!$second->find() || $second->deleted_at) {
+			return InvalidParameter('Second not found.');
+		}
+
+		$can_withdraw = ((int)$second->supporter_mundane_id === (int)$mundane_id);
+		if (!$can_withdraw) {
+			// Admin path: load the parent rec to find the recipient's park, then check park-level authority.
+			$parent = new yapo($this->db, DB_PREFIX . 'recommendations');
+			$parent->clear();
+			$parent->recommendations_id = $second->recommendations_id;
+			if ($parent->find()) {
+				$recipientInfo = $this->player_info($parent->mundane_id);
+				if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+					$can_withdraw = true;
+				}
+			}
+		}
+		if (!$can_withdraw) {
+			return InvalidParameter('Only the supporter or an admin may withdraw a second.');
+		}
+
+		$second->deleted_at = date('Y-m-d H:i:s');
+		$second->deleted_by = $mundane_id;
+		$second->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success('Second withdrawn.');
+	}
+
+	/**
+	 * Allow the originator of a recommendation to edit their own reason text.
+	 * Recipients and admins are intentionally NOT allowed here — admins delete and re-create
+	 * via existing tools.
+	 */
+	public function EditAwardRecommendationReason($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationsId'])) {
+			return InvalidParameter('Invalid recommendation.');
+		}
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $request['RecommendationsId'];
+		if (!$awardRec->find() || $awardRec->deleted_at) {
+			return InvalidParameter('Recommendation not found.');
+		}
+		if ((int)$awardRec->recommended_by_id !== (int)$mundane_id) {
+			return InvalidParameter('Only the original recommender may edit the reason.');
+		}
+
+		$awardRec->reason = isset($request['Reason']) ? substr(trim($request['Reason']), 0, 400) : '';
+		$awardRec->save();
+		if (isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+		return Success('Reason updated.');
+	}
+
+	/**
+	 * For a list of recommendation IDs, return active seconds grouped by recommendations_id.
+	 * Each entry includes the supporter's mundane_id, persona, notes, created_at, and updated_at.
+	 * The viewer_id is used to compute the IsMine flag and (caller) for masking decisions.
+	 */
+	public function GetSecondsForRecommendations($recommendation_ids, $viewer_id) {
+		if (!is_array($recommendation_ids) || count($recommendation_ids) === 0) {
+			return array();
+		}
+		$ids = array();
+		foreach ($recommendation_ids as $rid) {
+			$rid = (int)$rid;
+			if ($rid > 0) $ids[] = $rid;
+		}
+		if (count($ids) === 0) return array();
+		$idList = implode(',', $ids);
+		$viewer_id = (int)$viewer_id;
+		$this->db->Clear();
+		$sql = "SELECT s.recommendation_seconds_id, s.recommendations_id, s.supporter_mundane_id, s.notes, s.created_at, s.updated_at,
+			m.persona AS supporter_persona
+			FROM " . DB_PREFIX . "recommendation_seconds s
+			LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = s.supporter_mundane_id
+			WHERE s.recommendations_id IN ($idList) AND s.deleted_at IS NULL
+			ORDER BY s.recommendations_id, s.created_at ASC";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$rid = (int)$r->recommendations_id;
+				if (!isset($out[$rid])) $out[$rid] = array();
+				$out[$rid][] = array(
+					'RecommendationSecondsId' => (int)$r->recommendation_seconds_id,
+					'SupporterMundaneId' => (int)$r->supporter_mundane_id,
+					'SupporterName' => $r->supporter_persona,
+					'Notes' => $r->notes,
+					'CreatedAt' => $r->created_at,
+					'UpdatedAt' => $r->updated_at,
+					'IsMine' => ((int)$r->supporter_mundane_id === $viewer_id),
+				);
+			}
+		}
+		return $out;
+	}
+
+		public function GetCustomMilestones($mundane_id) {
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->mundane_id = (int)$mundane_id;
+		$results = array();
+		if ($milestones->find()) {
+			do {
+				$results[] = array(
+					'MilestoneId' => $milestones->milestone_id,
+					'MundaneId' => $milestones->mundane_id,
+					'Icon' => $milestones->icon,
+					'Description' => $milestones->description,
+					'MilestoneDate' => $milestones->milestone_date,
+				);
+			} while ($milestones->next());
+		}
+		return $results;
+	}
+
+	public function AddCustomMilestone($request) {
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($requester_id) || (int)$requester_id !== (int)$request['MundaneId']) {
+			return NoAuthorization();
+		}
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->mundane_id = (int)$request['MundaneId'];
+		$icon = trim($request['Icon']) ?: 'fa-star';
+		if (!preg_match('/^fa-[a-z0-9-]+$/', $icon)) $icon = 'fa-star';
+		$milestones->icon = $icon;
+		$milestones->description = trim($request['Description']);
+		$milestones->milestone_date = date('Y-m-d', strtotime($request['MilestoneDate']));
+		$milestones->save();
+		return Success($milestones->milestone_id);
+	}
+
+	public function UpdateCustomMilestone($request) {
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($requester_id) || (int)$requester_id !== (int)$request['MundaneId']) {
+			return NoAuthorization();
+		}
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->milestone_id = (int)$request['MilestoneId'];
+		$milestones->mundane_id = (int)$request['MundaneId'];
+		if (!$milestones->find()) {
+			return InvalidParameter('Milestone not found.');
+		}
+		$icon = trim($request['Icon']);
+		if ($icon && !preg_match('/^fa-[a-z0-9-]+$/', $icon)) $icon = '';
+		$milestones->icon = $icon ?: $milestones->icon;
+		$milestones->description = trim($request['Description']) ?: $milestones->description;
+		$milestones->milestone_date = !empty($request['MilestoneDate']) ? date('Y-m-d', strtotime($request['MilestoneDate'])) : $milestones->milestone_date;
+		$milestones->save();
+		return Success($milestones->milestone_id);
+	}
+
+	public function DeleteCustomMilestone($request) {
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($requester_id) || (int)$requester_id !== (int)$request['MundaneId']) {
+			return NoAuthorization();
+		}
+		$milestones = new yapo($this->db, DB_PREFIX . 'player_milestones');
+		$milestones->clear();
+		$milestones->milestone_id = (int)$request['MilestoneId'];
+		$milestones->mundane_id = (int)$request['MundaneId'];
+		if (!$milestones->find()) {
+			return InvalidParameter('Milestone not found.');
+		}
+		$milestones->delete();
+		return Success();
 	}
 
 	public function get_latest_attendance_date($mundane_id) {

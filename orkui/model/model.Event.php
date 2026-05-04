@@ -173,9 +173,11 @@ class Model_Event extends Model {
 		global $DB;
 		$DB->Clear();
 		$r = $DB->DataSet(
-			"SELECT DISTINCT cd.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end" .
+			"SELECT DISTINCT cd.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end," .
+			" p.abbreviation AS park_abbreviation" .
 			" FROM " . DB_PREFIX . "event_calendardetail cd" .
 			" JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id" .
+			" LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id" .
 			" WHERE e.kingdom_id = " . (int)$kingdom_id .
 			" AND cd.event_start > NOW()" .
 			" AND cd.event_calendardetail_id NOT IN (" .
@@ -191,6 +193,7 @@ class Model_Event extends Model {
 				'EventName'             => $r->event_name,
 				'EventStart'            => $r->event_start,
 				'EventEnd'              => $r->event_end,
+				'ParkAbbreviation'      => $r->park_abbreviation,
 			];
 		}
 		return $list;
