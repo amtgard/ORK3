@@ -136,10 +136,10 @@ class Model_Event extends Model {
 	function get_rsvp_list($detail_id) {
 		global $DB;
 		$DB->Clear();
-		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status, m.waivered, p.abbreviation AS park_abbr, k.abbreviation AS kingdom_abbr, la.class_id AS last_class_id, c.name AS last_class_name FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = (SELECT a.attendance_id FROM " . DB_PREFIX . "attendance a WHERE a.mundane_id = m.mundane_id ORDER BY a.attendance_id DESC LIMIT 1) LEFT JOIN " . DB_PREFIX . "class c ON c.class_id = la.class_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
+		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status, m.waivered, p.park_id, p.abbreviation AS park_abbr, k.kingdom_id, k.abbreviation AS kingdom_abbr, la.class_id AS last_class_id, c.name AS last_class_name FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = (SELECT a.attendance_id FROM " . DB_PREFIX . "attendance a WHERE a.mundane_id = m.mundane_id ORDER BY a.attendance_id DESC LIMIT 1) LEFT JOIN " . DB_PREFIX . "class c ON c.class_id = la.class_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
 		$list = [];
 		if ($r) while ($r->Next()) {
-			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status, 'Waivered' => (bool)$r->waivered, 'KingdomAbbr' => $r->kingdom_abbr, 'ParkAbbr' => $r->park_abbr, 'LastClassId' => $r->last_class_id, 'LastClassName' => $r->last_class_name];
+			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status, 'Waivered' => (bool)$r->waivered, 'KingdomId' => $r->kingdom_id, 'KingdomAbbr' => $r->kingdom_abbr, 'ParkId' => $r->park_id, 'ParkAbbr' => $r->park_abbr, 'LastClassId' => $r->last_class_id, 'LastClassName' => $r->last_class_name];
 		}
 		return $list;
 	}
