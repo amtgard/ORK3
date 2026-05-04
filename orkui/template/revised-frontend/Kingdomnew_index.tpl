@@ -2193,7 +2193,7 @@ function knLoadMoreEvents(ev) {
 	link.style.pointerEvents = 'none';
 	link.setAttribute('aria-busy', 'true');
 
-	fetch(uir + 'Kingdom/events_more/' + kingdomId + '&window=' + nextWindow, { credentials: 'same-origin' })
+	fetch(uir + 'Kingdom/events_more/' + kingdomId + '?window=' + nextWindow, { credentials: 'same-origin' })
 		.then(function(r) {
 			if (!r.ok) throw new Error('HTTP ' + r.status);
 			return r.json();
