@@ -234,7 +234,7 @@ html[data-theme="dark"] .sh-last-updated { color: #718096; }
 		var uptimeStr = h + 'h ' + m + 'm';
 
 		document.getElementById('sh-db-metrics').innerHTML =
-			metric('Queries / sec', qps, '') +
+			metric('DB Statements / sec', qps, '') +
 			metric('↳ Reads / sec', sps, '') +
 			metric('↳ Writes / sec', wps, '') +
 			metric('↳ Schema inspects / sec', sfps, '') +
