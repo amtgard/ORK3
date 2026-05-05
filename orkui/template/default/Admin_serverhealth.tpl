@@ -82,7 +82,9 @@ html[data-theme="dark"] .sh-metric {
 }
 html[data-theme="dark"] .sh-metric-label { color: #a0aec0; }
 html[data-theme="dark"] .sh-metric-val   { color: #e2e8f0; }
-html[data-theme="dark"] .sh-worker       { background: #374151; }
+html[data-theme="dark"] .sh-worker        { background: #374151; }
+html[data-theme="dark"] .sh-worker.active { background: #4f46e5; }
+html[data-theme="dark"] .sh-worker.idle   { background: #16a34a; }
 html[data-theme="dark"] .sh-proc-table th {
 	color: #718096;
 	border-color: #4a5568;
