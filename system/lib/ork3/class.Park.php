@@ -690,6 +690,13 @@ class Park extends Ork3
 			if ( strlen( $request[ 'Heraldry' ] ) ) {
 				Ork3::$Lib->heraldry->SetParkHeraldry( $request );
 			}
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Park', $new_park_id, null, [
+				'park_id'      => $new_park_id,
+				'kingdom_id'   => (int)$request['KingdomId'],
+				'name'         => $request['Name'],
+				'abbreviation' => strtoupper($request['Abbreviation']),
+				'parktitle_id' => (int)$request['ParkTitleId'],
+			]);
 			$response = Success( $new_park_id );
 		} else {
 			$response = NoAuthorization();

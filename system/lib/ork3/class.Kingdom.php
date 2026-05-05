@@ -348,7 +348,12 @@ class Kingdom  extends Ork3 {
 			
 			$request['KingdomId'] = $this->kingdom->kingdom_id;
 			Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
-			
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Kingdom', (int)$this->kingdom->kingdom_id, null, [
+				'kingdom_id'        => (int)$this->kingdom->kingdom_id,
+				'name'              => $request['Name'],
+				'abbreviation'      => $request['Abbreviation'],
+				'parent_kingdom_id' => (int)$request['ParentKingdomId'],
+			]);
 			$response = Success($this->kingdom->kingdom_id);
 		} else {
 			$response = NoAuthorization();
