@@ -2156,6 +2156,18 @@ class Controller_Admin extends Controller {
 		}
 		$this->data['page_title'] = 'Server Health';
 		unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
+
+		$this->data['ShowLoadTest'] = (getenv('ENVIRONMENT') === 'DEV');
+		if ($this->data['ShowLoadTest']) {
+			global $DB;
+			$DB->Clear();
+			$kr = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE active='Active' ORDER BY name LIMIT 10");
+			$targets = [['label' => 'Home Page', 'url' => 'Home/index']];
+			if ($kr && $kr->Size() > 0) do {
+				$targets[] = ['label' => 'Kingdom: ' . $kr->name, 'url' => 'Kingdom/profile/' . (int)$kr->kingdom_id];
+			} while ($kr->Next());
+			$this->data['LoadTestTargets'] = $targets;
+		}
 	}
 
 	public function ajax($action = null) {
