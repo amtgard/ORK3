@@ -290,6 +290,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Admin/topparks"><i class="fas fa-trophy"></i><span>Top Parks by Attendance<span class="cp-report-list-desc">Ranked attendance report</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
+				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
 			</ul>
 		</div>
 
