@@ -926,6 +926,7 @@ $(function() {
 	$('#att-btn-print' ).on('click', function() { table.button(1).trigger(); });
 
 	/* ── Class chart ─────────────────────────────────── */
+	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 	new Highcharts.Chart({
 		chart: { renderTo: 'att-class-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
@@ -938,7 +939,13 @@ $(function() {
 		series: [{ name: 'Attendees', data: <?=json_encode(array_values($class_counts))?>, color: '#7c3aed' }],
 		legend: { enabled: false },
 		credits: { enabled: false },
-		tooltip: { headerFormat: '', pointFormat: '<b>{point.category}</b>: {point.y}' },
+		tooltip: {
+			headerFormat: '',
+			pointFormat: '<b>{point.category}</b>: {point.y}',
+			backgroundColor: _isDark ? '#1e293b' : undefined,
+			borderColor: _isDark ? '#334155' : undefined,
+			style: { color: _isDark ? '#e2e8f0' : '#333333' }
+		},
 		plotOptions: { column: { dataLabels: { enabled: true } } }
 	});
 <?php endif; ?>
