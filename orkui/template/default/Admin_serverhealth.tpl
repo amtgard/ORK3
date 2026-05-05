@@ -149,6 +149,12 @@ html[data-theme="dark"] .sh-last-updated { color: #718096; }
 (function() {
 	var UIR = '<?=UIR?>';
 	var prevQuestions = null;
+	var prevSelects   = null;
+	var prevInserts   = null;
+	var prevUpdates   = null;
+	var prevDeletes   = null;
+	var prevShowFields = null;
+	var prevShowKeys   = null;
 	var prevPollTime  = null;
 
 	/* ── Render FPM panel ───────────────────────────── */
@@ -191,18 +197,37 @@ html[data-theme="dark"] .sh-last-updated { color: #718096; }
 			return;
 		}
 		var now        = Date.now();
-		var questions  = parseInt(db['Questions'] || 0, 10);
-		var qps        = '—';
+		var questions  = parseInt(db['Questions']        || 0, 10);
+		var selects    = parseInt(db['Com_select']       || 0, 10);
+		var inserts    = parseInt(db['Com_insert']       || 0, 10);
+		var updates    = parseInt(db['Com_update']       || 0, 10);
+		var deletes    = parseInt(db['Com_delete']       || 0, 10);
+		var showFields = parseInt(db['Com_show_fields'] || 0, 10);
+		var showKeys   = parseInt(db['Com_show_keys']   || 0, 10);
+		var qps = '—', sps = '—', wps = '—', sfps = '—';
 		if (prevQuestions !== null && prevPollTime !== null) {
 			var dt = (now - prevPollTime) / 1000;
-			if (dt > 0) qps = ((questions - prevQuestions) / dt).toFixed(1);
+			if (dt > 0) {
+				qps  = ((questions  - prevQuestions)  / dt).toFixed(1);
+				sps  = ((selects    - prevSelects)    / dt).toFixed(1);
+				var writes = (inserts - prevInserts) + (updates - prevUpdates) + (deletes - prevDeletes);
+				wps  = (writes / dt).toFixed(1);
+				var schemaInspects = (showFields - prevShowFields) + (showKeys - prevShowKeys);
+				sfps = (schemaInspects / dt).toFixed(1);
+			}
 		}
-		prevQuestions = questions;
-		prevPollTime  = now;
+		prevQuestions  = questions;
+		prevSelects    = selects;
+		prevInserts    = inserts;
+		prevUpdates    = updates;
+		prevDeletes    = deletes;
+		prevShowFields = showFields;
+		prevShowKeys   = showKeys;
+		prevPollTime   = now;
 
-		var running   = parseInt(db['Threads_running']    || 0, 10);
-		var connected = parseInt(db['Threads_connected']  || 0, 10);
-		var slow      = parseInt(db['Slow_queries']       || 0, 10);
+		var running   = parseInt(db['Threads_running']      || 0, 10);
+		var connected = parseInt(db['Threads_connected']    || 0, 10);
+		var slow      = parseInt(db['Slow_queries']         || 0, 10);
 		var maxConn   = parseInt(db['Max_used_connections'] || 0, 10);
 		var uptime    = parseInt(db['Uptime'] || 0, 10);
 		var h = Math.floor(uptime/3600), m = Math.floor((uptime%3600)/60);
@@ -210,6 +235,9 @@ html[data-theme="dark"] .sh-last-updated { color: #718096; }
 
 		document.getElementById('sh-db-metrics').innerHTML =
 			metric('Queries / sec', qps, '') +
+			metric('↳ Reads / sec', sps, '') +
+			metric('↳ Writes / sec', wps, '') +
+			metric('↳ Schema inspects / sec', sfps, '') +
 			metric('Threads Running', running, running > 3 ? 'warn' : '') +
 			metric('Threads Connected', connected, '') +
 			metric('Slow Queries (total)', slow, slow > 0 ? 'warn' : '') +

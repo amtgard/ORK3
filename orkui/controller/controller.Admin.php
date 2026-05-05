@@ -2328,7 +2328,7 @@ class Controller_Admin extends Controller {
 			if ($fpm_json) $fpm_data = json_decode($fpm_json, true);
 
 			global $DB;
-			$wanted = ['Slow_queries','Threads_connected','Threads_running','Questions','Uptime','Max_used_connections','Connections'];
+			$wanted = ['Slow_queries','Threads_connected','Threads_running','Questions','Uptime','Max_used_connections','Connections','Com_select','Com_insert','Com_update','Com_delete','Com_show_fields','Com_show_keys'];
 			$DB->Clear();
 			$rs = $DB->DataSet("SHOW GLOBAL STATUS WHERE Variable_name IN ('" . implode("','", $wanted) . "')");
 			$db_status = [];
