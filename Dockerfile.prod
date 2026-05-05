@@ -9,6 +9,10 @@ RUN apt-get update && apt-get install -y php8.1-fpm php8.1-cli php8.1-common php
 
 RUN sed -i 's/;\s*clear_env = no/clear_env = no/g' /etc/php/8.1/fpm/pool.d/www.conf
 RUN echo "pm.status_path = /fpm-status" >> /etc/php/8.1/fpm/pool.d/www.conf
+RUN sed -i 's/^pm\.max_children\s*=.*/pm.max_children = 20/'     /etc/php/8.1/fpm/pool.d/www.conf
+RUN sed -i 's/^pm\.start_servers\s*=.*/pm.start_servers = 5/'    /etc/php/8.1/fpm/pool.d/www.conf
+RUN sed -i 's/^pm\.min_spare_servers\s*=.*/pm.min_spare_servers = 3/' /etc/php/8.1/fpm/pool.d/www.conf
+RUN sed -i 's/^pm\.max_spare_servers\s*=.*/pm.max_spare_servers = 8/' /etc/php/8.1/fpm/pool.d/www.conf
 #RUN echo "env[ENVIRONMENT] = DEV" >> /etc/php/8.1/fpm/pool.d/www.conf
 RUN sed -i 's/memory_limit = 128M/memory_limit = 512M/g' /etc/php/8.1/fpm/php.ini
 RUN sed -i 's/;max_input_vars = 1000/max_input_vars = 2000/g' /etc/php/8.1/fpm/php.ini
