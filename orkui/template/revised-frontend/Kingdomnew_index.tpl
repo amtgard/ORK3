@@ -236,12 +236,6 @@
 					<span class="kn-link-icon"><i class="fas fa-calendar"></i></span>
 					<a href="<?= UIR ?>Search/event&KingdomId=<?= $kingdom_id ?>">Find Events</a>
 				</li>
-				<?php if ($CanManageKingdom ?? false): ?>
-					<li>
-						<span class="kn-link-icon"><i class="fas fa-cog"></i></span>
-						<a href="<?= UIR ?>Admin/kingdom/<?= $kingdom_id ?>">Admin Panel</a>
-					</li>
-				<?php endif; ?>
 			</ul>
 		</div>
 
