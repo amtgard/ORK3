@@ -537,6 +537,14 @@ $(function() {
 	$('#att-btn-print' ).on('click', function() { table.button(1).trigger(); });
 
 	/* ── Charts ──────────────────────────────────────── */
+	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+	var _ttOpts = {
+		headerFormat: '',
+		pointFormat: '<b>{point.category}</b>: {point.y}',
+		backgroundColor: _isDark ? '#1e293b' : undefined,
+		borderColor: _isDark ? '#334155' : undefined,
+		style: { color: _isDark ? '#e2e8f0' : '#333333' }
+	};
 	new Highcharts.Chart({
 		chart: { renderTo: 'att-park-chart', type: 'column', backgroundColor: 'transparent',
 			style: { fontFamily: 'inherit' } },
@@ -549,7 +557,7 @@ $(function() {
 		series: [{ name: 'Attendees', data: <?=json_encode(array_values($park_counts))?>, color: '#4338ca' }],
 		legend: { enabled: false },
 		credits: { enabled: false },
-		tooltip: { headerFormat: '', pointFormat: '<b>{point.category}</b>: {point.y}' },
+		tooltip: _ttOpts,
 		plotOptions: { column: { dataLabels: { enabled: true } } }
 	});
 
@@ -565,7 +573,7 @@ $(function() {
 		series: [{ name: 'Attendees', data: <?=json_encode(array_values($class_counts))?>, color: '#7c3aed' }],
 		legend: { enabled: false },
 		credits: { enabled: false },
-		tooltip: { headerFormat: '', pointFormat: '<b>{point.category}</b>: {point.y}' },
+		tooltip: _ttOpts,
 		plotOptions: { column: { dataLabels: { enabled: true } } }
 	});
 <?php endif; ?>
