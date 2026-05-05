@@ -13,7 +13,9 @@ class YapoDb {
 	var $__ERRORS = array();
 	
 	var $__SetupParameters = array();
-	
+
+	private static $schema_cache = [];
+
 	function __construct($host, $dbname, $user, $password) {
 		$this->__SetupParameters = array("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password);
 		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password);
@@ -26,10 +28,13 @@ class YapoDb {
 	}
 	
 	function TableDescription($table) {
+		if (isset(self::$schema_cache[$table])) {
+			return self::$schema_cache[$table];
+		}
 		$Keys = $this->DataSet("SHOW KEYS IN $table");
 		$Fields = $this->DataSet("describe $table");
 		$this->Clear();
-		
+
 		$keys = array();
 		
 		while ($Keys->Next()) {
@@ -54,7 +59,8 @@ class YapoDb {
 			if (strtoupper($Fields->Key) == 'PRI') $primary_key = $Fields->Field;
 		}
 		
-		return array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
+		self::$schema_cache[$table] = array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
+		return self::$schema_cache[$table];
 	}	
 	
 	function GetLastInsertId() {
