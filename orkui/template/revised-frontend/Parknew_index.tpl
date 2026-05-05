@@ -1422,7 +1422,9 @@ var PkConfig = {
 	</div>
 </div>
 
-<!-- Recommend Award Modal -->
+<!-- Recommend Award Modal — outside CanManagePark block; any logged-in user can submit -->
+</div><!-- /CanManagePark -->
+<?php endif; ?>
 <div id="pk-rec-overlay">
 	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -1467,8 +1469,6 @@ var PkConfig = {
 		</div>
 	</div>
 </div>
-
-<?php endif; ?>
 
 <?php if ($CanAdminPark ?? false): ?>
 
