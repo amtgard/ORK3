@@ -1264,7 +1264,8 @@ class Report  extends Ork3 {
 		if (strlen($request['ParkAttendanceWithin'] ?? '') == 0) $request['ParkAttendanceWithin'] = 4;
 		if (strlen($request['ReportFromDate'] ?? '') == 0) $request['ReportFromDate'] = 'curdate()';
 		$wk_start = date("Y-m-d", strtotime("-6 month"));
-		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(activeparks.parkcount,0) active_parks
+		$mo_start = date("Y-m-d", strtotime("-1 year"));
+		$sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(avg_monthly_att.avg_monthly,0) avg_monthly, ifnull(activeparks.parkcount,0) active_parks
 					FROM `" . DB_PREFIX . "kingdom` k
 					left join
 						(select count(*) as park_count, pcnt.kingdom_id from `" . DB_PREFIX . "park` pcnt where pcnt.active = 'Active' group by pcnt.kingdom_id) pcount on pcount.kingdom_id = k.kingdom_id
@@ -1285,8 +1286,18 @@ class Report  extends Ork3 {
 								(select
 										mundane_id, date_month as month, kingdom_id
 									from " . DB_PREFIX . "attendance
-									where date > '" . date("Y-m-d", strtotime("-1 year")) . "' and mundane_id > 0 group by date_month, mundane_id, kingdom_id)
+									where date > '$mo_start' and mundane_id > 0 group by date_month, mundane_id, kingdom_id)
 									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
+					left join
+						(select kingdom_id, AVG(monthly_unique) AS avg_monthly
+							from (
+								select a.date_year, a.date_month, p2.kingdom_id, COUNT(DISTINCT a.mundane_id) AS monthly_unique
+								from " . DB_PREFIX . "attendance a
+								inner join " . DB_PREFIX . "park p2 on p2.park_id = a.park_id
+								where a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) and a.mundane_id > 0
+								group by a.date_year, a.date_month, p2.kingdom_id
+							) mo_sub
+							group by kingdom_id) avg_monthly_att on avg_monthly_att.kingdom_id = k.kingdom_id
 					left join
 						(select
 								count(*) parkcount, kingdom_id
@@ -1308,7 +1319,7 @@ class Report  extends Ork3 {
 		while ($r->next()) {
 			$report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id,
 									'IsPrincipality' => $r->parent_kingdom_id>0?1:0, 'KingdomId' => $r->kingdom_id,
-									'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'Participation' => $r->active_parks );
+									'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'MonthlyAvg' => round((float)$r->avg_monthly, 1), 'Participation' => $r->active_parks );
 		}
 		$response = array(
 			'Status' => Success(),

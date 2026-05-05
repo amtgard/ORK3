@@ -514,7 +514,7 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 		<div class="ev-card">
 			<h4><i class="fas fa-external-link-alt" style="margin-right:5px"></i>Website</h4>
 			<a href="<?= htmlspecialchars($websiteUrl) ?>" target="_blank" rel="noopener" class="ev-map-btn">
-				<?= htmlspecialchars($websiteName ?: $websiteUrl) ?>
+				<?= htmlspecialchars($websiteName ?: 'Event Website') ?>
 			</a>
 		</div>
 		<?php endif; ?>

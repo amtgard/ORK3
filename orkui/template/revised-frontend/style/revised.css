@@ -8390,4 +8390,17 @@ html[data-theme="dark"] .pk-att-ac-inactive-badge {
 	color: var(--ork-badge-red-text);
 }
 
+/* Past-event badge on kingdom/park event tables */
+.event-past-badge {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: 10px;
+	font-size: 0.75em;
+	font-weight: 600;
+	background: var(--ork-badge-gray-bg);
+	color: var(--ork-badge-gray-text);
+	vertical-align: middle;
+	margin-left: 4px;
+}
+
 /* @media fallbacks */

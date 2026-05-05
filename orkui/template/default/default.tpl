@@ -10,7 +10,7 @@
 	if (is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'])) {
 		foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $r) {
 			$r['_weekly']   = $r['Attendance'] > 0 ? round($r['Attendance'] / $hmWkCount, 1) : 0;
-			$r['_monthly']  = $r['Monthly']    > 0 ? round($r['Monthly']    / 12.0, 1) : 0;
+			$r['_monthly']  = $r['MonthlyAvg'] > 0 ? $r['MonthlyAvg'] : 0;
 			$r['_heraldry'] = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', (int)$r['KingdomId']));
 			if ((int)$r['ParentKingdomId'] === 0) {
 				$hmKingdoms[]       = $r;
@@ -255,6 +255,8 @@
 	gap: 4px;
 }
 .hm-card-stat i { font-size: 10px; }
+.hm-card-stat-full { width: 100%; }
+.hm-stat-sep { margin: 0 2px; opacity: 0.5; }
 
 /* ---- Principalities grid (smaller cards) ---- */
 .hm-prinz-grid {
@@ -576,13 +578,16 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 			<div class="hm-card-body">
 				<div class="hm-card-name"><?= htmlspecialchars(stripslashes($k['KingdomName'])) ?></div>
 				<div class="hm-card-stats">
-					<span class="hm-card-stat">
+					<span class="hm-card-stat hm-card-stat-full">
 						<i class="fas fa-map-marker-alt"></i>
 						<?= (int)$k['ParkCount'] ?> park<?= (int)$k['ParkCount'] != 1 ? 's' : '' ?>
 					</span>
-					<span class="hm-card-stat">
+					<span class="hm-card-stat hm-card-stat-full">
 						<i class="fas fa-users"></i>
 						<?= number_format($k['_weekly'], 1) ?>/wk
+						<span class="hm-stat-sep">&middot;</span>
+						<i class="fas fa-calendar-alt"></i>
+						<?= number_format($k['_monthly'], 1) ?>/mo
 					</span>
 				</div>
 			</div>
@@ -613,7 +618,7 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 					     alt="<?= htmlspecialchars(stripslashes($p['KingdomName'])) ?>">
 				</div>
 				<div class="hm-prinz-name"><?= htmlspecialchars(stripslashes($p['KingdomName'])) ?></div>
-				<div class="hm-prinz-stat"><?= (int)$p['ParkCount'] ?> parks &middot; <?= number_format($p['_weekly'], 1) ?>/wk</div>
+				<div class="hm-prinz-stat"><?= (int)$p['ParkCount'] ?> parks &middot; <?= number_format($p['_weekly'], 1) ?>/wk &middot; <?= number_format($p['_monthly'], 1) ?>/mo</div>
 			</a>
 			<?php endforeach; ?>
 		</div>

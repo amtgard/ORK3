@@ -493,8 +493,8 @@
 					<table class="kn-table kn-sortable" id="kn-events-table">
 						<thead>
 							<tr>
-								<th data-sorttype="date">Next Date</th>
 								<th data-sorttype="text">Event</th>
+								<th data-sorttype="date">Next Date</th>
 								<th data-sorttype="text">Park</th>
 								<th data-sorttype="numeric">Going</th>
 							<th data-sorttype="numeric">Interested</th>
@@ -504,17 +504,20 @@
 							<?php foreach ($eventList as $event): ?>
 								<tr class="kn-row-link" data-type="<?= $event['_IsParkEvent'] ? 'park-event' : 'kingdom-event' ?>"<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
 									<td class="kn-col-nowrap">
-										<?= (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00')
-											? date("M j, Y", strtotime($event['NextDate']))
-											: '<span style="color:#a0aec0">—</span>' ?>
-									</td>
-									<td class="kn-col-nowrap">
 										<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
 											loading="lazy"
 											src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
 											onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 											alt="">
 										<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+									</td>
+									<td class="kn-col-nowrap">
+										<?php if (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00'): ?>
+											<?= date("M j, Y", strtotime($event['NextDate'])) ?>
+											<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+										<?php else: ?>
+											<span style="color:#a0aec0">—</span>
+										<?php endif; ?>
 									</td>
 									<td><?= htmlspecialchars($event['ParkName']) ?></td>
 									<td style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>

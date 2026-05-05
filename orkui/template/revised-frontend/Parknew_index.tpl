@@ -631,7 +631,10 @@
 									</div>
 								</td>
 								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
-									<?= 0 == $event['NextDate'] ? '' : date('M. j, Y', strtotime($event['NextDate'])) ?>
+									<?php if (0 != $event['NextDate']): ?>
+										<?= date('M. j, Y', strtotime($event['NextDate'])) ?>
+										<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+									<?php endif; ?>
 								</td>
 								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
 							<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>

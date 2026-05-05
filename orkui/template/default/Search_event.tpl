@@ -108,6 +108,14 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 }
 .se-date-past i { font-size:10px; }
 .se-no-date { font-size:12px; color:#a0aec0; font-style:italic; }
+.se-rsvp-badge {
+	display:inline-flex; align-items:center; gap:4px;
+	background:#f0fff4; color:#276749;
+	font-size:11px; font-weight:600;
+	padding:2px 7px; border-radius:4px; white-space:nowrap;
+}
+.se-rsvp-badge i { font-size:10px; }
+.se-rsvp-none { font-size:12px; color:#a0aec0; }
 
 /* ── Empty / loading ── */
 .se-empty {
@@ -158,15 +166,15 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	<!-- Upcoming Events -->
 	<div class="se-results-card" id="se-upcoming-card">
 		<div class="se-results-header">
-			<div class="se-results-title"><i class="fas fa-calendar-check"></i> Upcoming Events</div>
+			<div class="se-results-title"><i class="fas fa-calendar-check"></i> <span id="se-upcoming-label">Next Upcoming Events</span></div>
 			<div class="se-results-count" id="se-upcoming-count" style="display:none"></div>
 		</div>
 		<table class="se-table">
 			<thead>
-				<tr><th>Event</th><th>Date</th><th>Kingdom</th><th>Park</th></tr>
+				<tr><th>Event</th><th>Date</th><th>Kingdom</th><th>Park</th><th>RSVP</th></tr>
 			</thead>
 			<tbody id="se-upcoming-tbody">
-				<tr><td colspan="4" class="se-empty"><i class="fas fa-calendar-alt"></i>Enter a name above to search for events.</td></tr>
+				<tr><td colspan="5" class="se-empty"><i class="fas fa-calendar-alt"></i>Enter a name above to search for events.</td></tr>
 			</tbody>
 		</table>
 	</div>
@@ -182,7 +190,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 		</div>
 		<table class="se-table">
 			<thead>
-				<tr><th>Event</th><th>Date</th><th>Kingdom</th><th>Park</th></tr>
+				<tr><th>Event</th><th>Date</th><th>Kingdom</th><th>Park</th><th>RSVP</th></tr>
 			</thead>
 			<tbody id="se-past-tbody">
 			</tbody>
@@ -231,11 +239,22 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 		var parkCel = v.ParkName && v.ParkId
 			? navLink('<?= UIR ?>Park/profile/' + v.ParkId, v.ParkName)
 			: (v.ParkName || '');
+		var rsvpGoing      = parseInt(v.RsvpGoing)      || 0;
+		var rsvpInterested = parseInt(v.RsvpInterested) || 0;
+		var rsvpCel;
+		if (rsvpGoing === 0 && rsvpInterested === 0) {
+			rsvpCel = '<span class="se-rsvp-none">—</span>';
+		} else {
+			rsvpCel = '';
+			if (rsvpGoing      > 0) rsvpCel += '<span class="se-rsvp-badge"><i class="fas fa-check-circle"></i>' + rsvpGoing      + ' going</span> ';
+			if (rsvpInterested > 0) rsvpCel += '<span class="se-rsvp-badge" style="background:#fffbeb;color:#92400e;"><i class="fas fa-star"></i>' + rsvpInterested + ' interested</span>';
+		}
 		return '<tr onclick="window.location.href=\'' + url + '\'">'
 			+ '<td><span class="se-event-name">' + name + '</span></td>'
 			+ '<td>' + dateCel + '</td>'
 			+ '<td>' + kingdomCel + '</td>'
 			+ '<td>' + parkCel + '</td>'
+			+ '<td>' + rsvpCel + '</td>'
 			+ '</tr>';
 	}
 
@@ -248,7 +267,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 
 		// Upcoming table
 		if (upcoming.length === 0) {
-			uTbody.innerHTML = '<tr><td colspan="4" class="se-empty">'
+			uTbody.innerHTML = '<tr><td colspan="5" class="se-empty">'
 				+ '<i class="fas fa-calendar-check"></i>No upcoming events found.</td></tr>';
 			uCount.style.display = 'none';
 		} else {
@@ -296,7 +315,9 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 			// Past: all occurrences before today, sorted desc
 			var todayStr = new Date().toISOString().slice(0, 10);
 			var upcoming = upcomingData.filter(hasLocation);
-			var past = allData.filter(hasLocation).sort(function(a, b) {
+			var past = allData.filter(function(v) {
+					return hasLocation(v) && v.NextDate && v.NextDate.slice(0, 10) < todayStr;
+				}).sort(function(a, b) {
 				if (!a.NextDate && !b.NextDate) return 0;
 				if (!a.NextDate) return 1;
 				if (!b.NextDate) return -1;
@@ -319,13 +340,35 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 		);
 	}
 
-	function resetTables() {
-		var msg = '<tr><td colspan="4" class="se-empty"><i class="fas fa-calendar-alt"></i>Enter a name above to search for events.</td></tr>';
-		document.getElementById('se-upcoming-tbody').innerHTML = msg;
+	function loadDefaults() {
+		var base = { Action: 'Search/Event', name: '', limit: 25, date_order: 1, date_start: new Date().toISOString().slice(0, 10) };
+		if (_kid > 0)     base.kingdom_id = _kid;
+		if (_pid > 0)     base.park_id    = _pid;
+		if (_uid_val > 0) base.unit_id    = _uid_val;
 		document.getElementById('se-upcoming-count').style.display = 'none';
 		document.getElementById('se-past-card').classList.add('se-hidden');
-		document.getElementById('se-past-count').style.display = 'none';
+		$.getJSON('<?= HTTP_SERVICE ?>Search/SearchService.php', base, function(data) {
+			if (_current.length >= 2) return; // search started while loading
+			var upcoming = (data || []).filter(function(v) {
+				return (v.KingdomName && v.KingdomName.trim()) || (v.ParkName && v.ParkName.trim());
+			});
+			var uTbody = document.getElementById('se-upcoming-tbody');
+			var uCount = document.getElementById('se-upcoming-count');
+			if (upcoming.length === 0) {
+				uTbody.innerHTML = '<tr><td colspan="5" class="se-empty"><i class="fas fa-calendar-check"></i>No upcoming events found.</td></tr>';
+			} else {
+				uTbody.innerHTML = upcoming.map(function(v) { return buildRow(v, false); }).join('');
+				uCount.textContent = upcoming.length + ' upcoming';
+				uCount.style.display = '';
+			}
+		});
 	}
+
+	function resetTables() {
+		loadDefaults();
+	}
+
+	loadDefaults();
 
 	document.getElementById('se-all-past-toggle').addEventListener('change', function() {
 		_allPast = this.checked;
@@ -336,7 +379,8 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 		var term = this.value;
 		_current = term;
 		clearTimeout(_timer);
-		if (term.length < 2) { resetTables(); return; }
+		if (term.length < 2) { resetTables(); document.getElementById('se-upcoming-label').textContent = 'Next Upcoming Events'; return; }
+		document.getElementById('se-upcoming-label').textContent = 'Upcoming Events';
 		_timer = setTimeout(function() { doSearch(term); }, 300);
 	});
 })();
