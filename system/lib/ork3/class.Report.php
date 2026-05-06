@@ -2825,6 +2825,12 @@ class Report  extends Ork3 {
 		$park_clause    = $park_id    ? " AND m.park_id    = $park_id"    : '';
 		$mundane_clause = $mundane_id ? " AND m.mundane_id = $mundane_id" : '';
 
+		// Single-player calls (Player profile voting badge) only need attendance for one mundane_id.
+		// Without this push-down, every LEFT JOIN subquery aggregates over the whole kingdom's
+		// attendance and then joins to find one row — turning a single-player check into a
+		// kingdom-wide report.
+		$single_att_clause = $mundane_id ? " AND a.mundane_id = $mundane_id" : '';
+
 		// Online exclusion: LEFT JOIN event + park inside attendance subqueries, filter out
 		// rows where the event name or park name contains 'Online' (case-insensitive).
 		// ExcludeEvents: restrict attendance to park-day sign-ins only (event_id = 0 or NULL).
@@ -2903,6 +2909,7 @@ class Report  extends Ork3 {
 					    FROM " . DB_PREFIX . "attendance a
 					    WHERE a.event_id IS NOT NULL AND a.event_id != 0
 					      AND a.date >= '$start_date'
+					      $single_att_clause
 					    GROUP BY a.mundane_id, a.event_id, a.kingdom_id
 					    UNION ALL
 					    SELECT a.mundane_id,
@@ -2911,6 +2918,7 @@ class Report  extends Ork3 {
 					    FROM " . DB_PREFIX . "attendance a
 					    WHERE (a.event_id = 0 OR a.event_id IS NULL)
 					      AND a.date >= '$start_date'
+					      $single_att_clause
 					) att_inner
 					GROUP BY mundane_id
 				) att ON att.mundane_id = m.mundane_id";
@@ -2930,6 +2938,7 @@ class Report  extends Ork3 {
 					$online_join
 					WHERE $_att_where_kw
 					  AND a.date >= '$start_date'
+					  $single_att_clause
 					  $online_clause
 					  $events_clause
 					GROUP BY a.mundane_id
@@ -2948,6 +2957,7 @@ class Report  extends Ork3 {
 					$online_join
 					WHERE " . ($all_kingdoms ? "1=1" : "a.kingdom_id = $kingdom_id") . "
 					  AND a.date >= '$start_date'
+					  $single_att_clause
 					  $online_clause
 					GROUP BY a.mundane_id
 				) patt ON patt.mundane_id = m.mundane_id
@@ -2968,6 +2978,7 @@ class Report  extends Ork3 {
 					LEFT JOIN " . DB_PREFIX . "park  _op ON _op.park_id  = a.park_id
 					WHERE a.kingdom_id = $kingdom_id
 					  AND a.date >= '$start_date'
+					  $single_att_clause
 					  AND (_oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
 					GROUP BY a.mundane_id
 				) oatt ON oatt.mundane_id = m.mundane_id
@@ -2986,6 +2997,7 @@ class Report  extends Ork3 {
 					FROM " . DB_PREFIX . "attendance a
 					WHERE a.kingdom_id = $kingdom_id
 					  AND a.date >= '$start_date'
+					  $single_att_clause
 					  AND a.event_id IS NOT NULL AND a.event_id != 0
 					GROUP BY a.mundane_id
 				) evatt ON evatt.mundane_id = m.mundane_id
@@ -3005,6 +3017,7 @@ class Report  extends Ork3 {
 					$online_join
 					WHERE " . ($all_kingdoms ? "1=1" : "a.kingdom_id = $kingdom_id") . "
 					  AND a.date >= '$start_date'
+					  $single_att_clause
 					  $online_clause
 					GROUP BY a.mundane_id
 				) katt ON katt.mundane_id = m.mundane_id
