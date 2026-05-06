@@ -2300,43 +2300,6 @@ function knAvatarFallback(img, initial) {
     img.parentElement.innerText = initial;
 }
 
-// ---- Load More: card view (reveals next hidden period block) ----
-function knLoadMoreCards(group, btn) {
-    var $wrap = $(btn).closest('.kn-load-more-wrap');
-    var next  = parseInt($wrap.attr('data-next') || '1');
-    var $block = $('#' + group + '-block-' + next);
-    if ($block.length) {
-        $block.show();
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        if (!$('#' + group + '-block-' + newNext).length) {
-            $wrap.hide();
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
-// ---- Load More: list view (appends template rows to table, re-paginates) ----
-function knLoadMoreList(tableId, tmplBase, btn) {
-    var $wrap  = $(btn).closest('.kn-load-more-wrap');
-    var next   = parseInt($wrap.attr('data-next') || '1');
-    var tmpl   = document.getElementById(tmplBase + '-' + next);
-    if (tmpl) {
-        var $tbody = $('#' + tableId + ' tbody');
-        var frag = document.importNode(tmpl.content, true);
-        $(frag.querySelectorAll('tr')).appendTo($tbody);
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        knPaginate($('#' + tableId), 1);
-        if (!document.getElementById(tmplBase + '-' + newNext)) {
-            $wrap.hide();
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
 // ---- Activate a tab by name (used by buttons + links) ----
 function knActivateTab(tab) {
     $('.kn-tab-nav li').removeClass('kn-tab-active');
@@ -2631,25 +2594,37 @@ $(document).ready(function() {
         }
     });
 
-    // ---- Players: search (filters all .kn-player-card across all periods) ----
+    // ---- Players: search across every year section (cards + list rows) ----
+    // The DOM is fully populated up-front; content-visibility:auto on each year
+    // section keeps off-screen ones cheap. Search filters in place and force-opens
+    // any year section that has matches.
     $('#kn-player-search').on('input', function() {
         var q = $(this).val().trim().toLowerCase();
+        var $roots = $('#kn-players-cards, #kn-players-list');
         if (q === '') {
-            $('.kn-period-block').show();
-            $('.kn-player-card').show();
-        } else {
-            // Show all period blocks first so cards inside are visible/searchable
-            $('.kn-period-block').show();
-            $('.kn-player-card').each(function() {
-                var name = $(this).find('.kn-player-name').text().toLowerCase();
-                $(this).toggle(name.indexOf(q) !== -1);
-            });
-            // Hide period blocks with no visible cards
-            $('.kn-period-block').each(function() {
-                var hasVisible = $(this).find('.kn-player-card:visible').length > 0;
-                $(this).toggle(hasVisible);
-            });
+            $roots.find('.kn-player-card, .kn-year-table tbody tr').show();
+            $roots.find('.kn-year-section').show();
+            return;
         }
+        $roots.each(function() {
+            var $root = $(this);
+            $root.find('.kn-player-card').each(function() {
+                var name = $(this).find('.kn-player-name').text().toLowerCase();
+                var mn   = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                $(this).toggle(name.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+            });
+            $root.find('.kn-year-table tbody tr').each(function() {
+                var persona = (this.cells[0] ? this.cells[0].textContent : '').toLowerCase();
+                var mn      = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                $(this).toggle(persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+            });
+            $root.find('.kn-year-section').each(function() {
+                var hasVisible =
+                    $(this).find('.kn-player-card:visible, .kn-year-table tbody tr:visible').length > 0;
+                $(this).toggle(hasVisible);
+                if (hasVisible) this.open = true;
+            });
+        });
     });
 
     // ---- Default sort + initial pagination ----
@@ -2662,8 +2637,6 @@ $(document).ready(function() {
 
     // [TOURNAMENTS HIDDEN] knSortDesc($('#kn-tournaments-table'), 0, 'date');
     // [TOURNAMENTS HIDDEN] knPaginate($('#kn-tournaments-table'), 1);
-
-    knPaginate($('#kn-players-table'), 1);
 
 });
 (function() {
@@ -5354,50 +5327,6 @@ function pkAvatarFallback(img, initial) {
     img.parentElement.innerText = initial;
 }
 
-// ---- Load More: card view (reveals next hidden period block) ----
-// group: prefix string like 'pk-players' or 'pk-hoa'
-// btn:   the button element inside .pk-load-more-wrap[data-next][data-group]
-function pkLoadMoreCards(group, btn) {
-    var $wrap = $(btn).closest('.pk-load-more-wrap');
-    var next  = parseInt($wrap.attr('data-next') || '1');
-    var $block = $('#' + group + '-block-' + next);
-    if ($block.length) {
-        $block.show();
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        if (!$('#' + group + '-block-' + newNext).length) {
-            $wrap.hide(); // no more periods to load
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
-// ---- Load More: list view (appends template rows to table, re-paginates) ----
-// tableId:  id of the <table> element
-// tmplBase: id prefix of <template> elements (e.g. 'pk-players-tmpl')
-// btn:      the button element inside .pk-load-more-wrap[data-next]
-function pkLoadMoreList(tableId, tmplBase, btn) {
-    var $wrap  = $(btn).closest('.pk-load-more-wrap');
-    var next   = parseInt($wrap.attr('data-next') || '1');
-    var tmpl   = document.getElementById(tmplBase + '-' + next);
-    if (tmpl) {
-        var $tbody = $('#' + tableId + ' tbody');
-        // Clone template content and append to tbody
-        var frag = document.importNode(tmpl.content, true);
-        $(frag.querySelectorAll('tr')).appendTo($tbody);
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        // Re-paginate from page 1 with the expanded row set
-        pkPaginate($('#' + tableId), 1);
-        if (!document.getElementById(tmplBase + '-' + newNext)) {
-            $wrap.hide();
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
 // ---- Hero color from heraldry ----
 // Samples the heraldry image via Canvas to find its dominant non-white, non-black
 // color and applies a darkened version as the hero background.
@@ -5640,30 +5569,36 @@ $(document).ready(function() {
         pkPaginate($table, page);
     });
 
-    // ---- Player search (filters cards + list rows across all periods) ----
+    // ---- Player search across every year section (cards + list rows) ----
+    // The DOM holds every player up-front; content-visibility:auto on each year
+    // section keeps off-screen ones cheap. Search filters in place and force-opens
+    // any year section that has matches.
     $('#pk-player-search').on('input', function() {
         var q = $(this).val().trim().toLowerCase();
+        var $roots = $('#pk-players-cards, #pk-players-list');
         if (q === '') {
-            $('.pk-period-block').show();
-            $('.pk-player-card').show();
-        } else {
-            $('.pk-period-block').show();
-            $('.pk-player-card').each(function() {
-                var name = $(this).find('.pk-player-name').text().toLowerCase();
-                var mundane = ($(this).data('mundane-name') || '').toLowerCase();
-                $(this).toggle(name.indexOf(q) !== -1 || mundane.indexOf(q) !== -1);
-            });
-            // Hide period blocks with no visible cards
-            $('.pk-period-block').each(function() {
-                var hasVisible = $(this).find('.pk-player-card:visible').length > 0;
-                $(this).toggle(hasVisible);
-            });
+            $roots.find('.pk-player-card, .pk-year-table tbody tr').show();
+            $roots.find('.pk-year-section').show();
+            return;
         }
-        // Also filter list view rows
-        $('#pk-players-table tbody tr').each(function() {
-            var name = $(this).find('td:first').text().toLowerCase();
-            var mundane = ($(this).data('mundane-name') || '').toLowerCase();
-            $(this).toggle(!q || name.indexOf(q) !== -1 || mundane.indexOf(q) !== -1);
+        $roots.each(function() {
+            var $root = $(this);
+            $root.find('.pk-player-card').each(function() {
+                var name = $(this).find('.pk-player-name').text().toLowerCase();
+                var mn   = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                $(this).toggle(name.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+            });
+            $root.find('.pk-year-table tbody tr').each(function() {
+                var persona = (this.cells[0] ? this.cells[0].textContent : '').toLowerCase();
+                var mn      = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                $(this).toggle(persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+            });
+            $root.find('.pk-year-section').each(function() {
+                var hasVisible =
+                    $(this).find('.pk-player-card:visible, .pk-year-table tbody tr:visible').length > 0;
+                $(this).toggle(hasVisible);
+                if (hasVisible) this.open = true;
+            });
         });
     });
 
@@ -5688,8 +5623,6 @@ $(document).ready(function() {
 
     pkSortDesc($('#pk-tournaments-table'), 2, 'date');
     pkPaginate($('#pk-tournaments-table'), 1);
-
-    pkPaginate($('#pk-players-table'), 1);
 
 });
 (function() {

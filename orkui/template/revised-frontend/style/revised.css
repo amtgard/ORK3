@@ -2447,21 +2447,49 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 	background: #fef3c7; color: #92400e;
 	white-space: nowrap; margin-top: 2px; margin-right: 2px;
 }
-.kn-period-label {
+/* Year-bucketed players list — collapsible per-year sections.
+ * content-visibility:auto lets the browser skip layout/paint for off-screen
+ * sections so we can render every year in the DOM without paying for it until
+ * the user scrolls them into view (or expands them). contain-intrinsic-size
+ * gives the browser a reasonable placeholder height so the scrollbar is stable. */
+.kn-year-section {
+	margin: 14px 0 6px;
+	border-top: 1px solid #e2e8f0;
+	content-visibility: auto;
+	contain-intrinsic-size: 1px 600px;
+}
+.kn-year-section:first-of-type { border-top: 0; margin-top: 0; }
+.kn-year-summary {
+	cursor: pointer;
+	list-style: none;
+	display: flex; align-items: baseline; gap: 10px;
+	padding: 10px 4px;
 	font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
 	color: #a0aec0; text-transform: uppercase;
-	border-bottom: 1px solid #e2e8f0;
-	padding-bottom: 4px; margin: 18px 0 10px;
+	user-select: none;
 }
-.kn-load-more-wrap { text-align: center; padding: 18px 0 8px; }
-.kn-load-more-btn {
-	background: #fff; border: 1.5px solid #cbd5e0; border-radius: 6px;
-	padding: 8px 22px; font-size: 13px; font-weight: 600; color: #4a5568;
-	cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
-	transition: border-color 0.15s, color 0.15s;
+.kn-year-summary::-webkit-details-marker { display: none; }
+.kn-year-summary::before {
+	content: '\25B8'; /* right-pointing triangle */
+	display: inline-block;
+	font-size: 10px;
+	color: #cbd5e0;
+	transition: transform 0.12s ease;
+	transform-origin: 50% 55%;
 }
-.kn-load-more-btn:hover { border-color: var(--kn-accent, #276749); color: var(--kn-accent, #276749); }
-.kn-load-more-hint { display: block; font-size: 11px; color: #a0aec0; margin-top: 6px; }
+.kn-year-section[open] > .kn-year-summary::before { transform: rotate(90deg); }
+.kn-year-summary:hover { color: var(--kn-accent, #276749); }
+.kn-year-summary:hover::before { color: var(--kn-accent, #276749); }
+.kn-year-label { font-size: 12px; }
+.kn-year-count {
+	font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+	color: #a0aec0;
+	background: #edf2f7;
+	padding: 2px 8px; border-radius: 10px;
+	text-transform: none;
+}
+.kn-year-section .kn-players-grid { padding-top: 4px; }
+.kn-year-table { margin-top: 4px; }
 /* ---- Award entry modal (kn-award-*) ---- */
 .kn-award-type-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
 .kn-award-type-btn { padding:8px 4px; min-height:44px; line-height:1.2; border:2px solid var(--ork-border); border-radius:8px; background:var(--ork-card-bg); font-size:13px; font-weight:600; color:var(--ork-text-secondary); cursor:pointer; transition:all 0.15s; text-align:center; }
@@ -3373,47 +3401,51 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	.pk-active-tab-label { display: block; }
 }
 
-/* ---- Period label (Load More separators) ---- */
-.pk-period-label {
-	font-size: 11px;
-	font-weight: 700;
-	letter-spacing: 0.07em;
-	color: #a0aec0;
-	text-transform: uppercase;
-	border-bottom: 1px solid #e2e8f0;
-	padding-bottom: 4px;
-	margin: 18px 0 10px;
+/* ---- Year-bucketed players list (collapsible per-year sections) ----
+ * content-visibility:auto lets the browser skip layout/paint for off-screen
+ * sections so the full roster lives in the DOM without rendering cost until
+ * scrolled into view. contain-intrinsic-size keeps the scrollbar stable. */
+.pk-year-section {
+	margin: 14px 0 6px;
+	border-top: 1px solid #e2e8f0;
+	content-visibility: auto;
+	contain-intrinsic-size: 1px 600px;
 }
-
-/* ---- Load More button ---- */
-.pk-load-more-wrap {
-	text-align: center;
-	padding: 18px 0 8px;
-}
-.pk-load-more-btn {
-	background: #fff;
-	border: 1.5px solid #cbd5e0;
-	border-radius: 6px;
-	padding: 8px 22px;
-	font-size: 13px;
-	font-weight: 600;
-	color: #4a5568;
+.pk-year-section:first-of-type { border-top: 0; margin-top: 0; }
+.pk-year-summary {
 	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	gap: 7px;
-	transition: border-color 0.15s, color 0.15s;
+	list-style: none;
+	display: flex; align-items: baseline; gap: 10px;
+	padding: 10px 4px;
+	font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
+	color: #a0aec0; text-transform: uppercase;
+	user-select: none;
 }
-.pk-load-more-btn:hover {
-	border-color: #0891b2;
-	color: #0891b2;
+.pk-year-summary::-webkit-details-marker { display: none; }
+.pk-year-summary::before {
+	content: '\25B8';
+	display: inline-block;
+	font-size: 10px;
+	color: #cbd5e0;
+	transition: transform 0.12s ease;
+	transform-origin: 50% 55%;
 }
-.pk-load-more-hint {
-	display: block;
-	font-size: 11px;
+.pk-year-section[open] > .pk-year-summary::before { transform: rotate(90deg); }
+.pk-year-summary:hover,
+.pk-year-summary:hover::before { color: #0891b2; }
+.pk-year-label { font-size: 12px; }
+.pk-year-count {
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
 	color: #a0aec0;
-	margin-top: 6px;
+	background: #edf2f7;
+	padding: 2px 8px;
+	border-radius: 10px;
+	text-transform: none;
 }
+.pk-year-section .pk-players-grid { padding-top: 4px; }
+.pk-year-table { margin-top: 4px; }
 
 /* ---- Hall of Arms gallery ---- */
 .pk-hoa-search-wrap {
@@ -6681,8 +6713,6 @@ html[data-theme="dark"] #theme_container .kn-description-url,
 html[data-theme="dark"] #theme_container .kn-table a,
 html[data-theme="dark"] #theme_container .kn-report-group a,
 html[data-theme="dark"] #theme_container .kn-prinz-name a,
-html[data-theme="dark"] .kn-load-more-btn,
-html[data-theme="dark"] #theme_container .kn-load-more-btn,
 html[data-theme="dark"] #theme_container .kn-award-success,
 html[data-theme="dark"] #kn-events-cal .fc .fc-list-event-title a {
   color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 58%));
@@ -6691,15 +6721,26 @@ html[data-theme="dark"] .kn-description-body,
 html[data-theme="dark"] .kn-description-card {
   color: var(--ork-text);
 }
-html[data-theme="dark"] .kn-load-more-btn,
-html[data-theme="dark"] .pk-load-more-btn {
-  background: var(--ork-bg-secondary);
-  border-color: var(--ork-border);
+html[data-theme="dark"] .kn-year-section,
+html[data-theme="dark"] .pk-year-section {
+  border-top-color: var(--ork-border);
+}
+html[data-theme="dark"] .kn-year-summary,
+html[data-theme="dark"] .pk-year-summary {
   color: var(--ork-text-secondary);
 }
-html[data-theme="dark"] .kn-load-more-btn:hover {
-  border-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
+html[data-theme="dark"] .kn-year-count,
+html[data-theme="dark"] .pk-year-count {
+  background: var(--ork-bg-secondary);
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .kn-year-summary:hover,
+html[data-theme="dark"] .kn-year-summary:hover::before {
   color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
+}
+html[data-theme="dark"] .pk-year-summary:hover,
+html[data-theme="dark"] .pk-year-summary:hover::before {
+  color: hsl(var(--pk-hue, 195), var(--pk-sat, 80%), var(--ork-accent-lightness, 65%));
 }
 html[data-theme="dark"] .kn-officer-chip.kn-selected,
 html[data-theme="dark"] .kn-rank-pill:hover,

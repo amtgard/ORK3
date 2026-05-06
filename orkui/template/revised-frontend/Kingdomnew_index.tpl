@@ -843,28 +843,7 @@
 			</div>
 			<div id="kn-players-loading" style="text-align:center;padding:32px;color:#a0aec0"><i class="fas fa-spinner fa-spin"></i> Loading players&hellip;</div>
 			<div id="kn-players-cards" style="display:none"></div>
-			<div id="kn-players-list" style="display:none">
-				<table class="kn-table" id="kn-players-table">
-					<thead>
-						<tr>
-							<th data-sorttype="text">Persona</th>
-							<th data-sorttype="text">Park</th>
-							<th data-sorttype="numeric">Sign-ins</th>
-							<th data-sorttype="date">Last Visit</th>
-							<th data-sorttype="text">Last Class</th>
-							<th data-sorttype="text">Role</th>
-						</tr>
-					</thead>
-					<tbody id="kn-players-tbody"></tbody>
-				</table>
-				<div id="kn-players-list-more" style="display:none">
-					<div class="kn-load-more-wrap kn-load-more-list" data-next="1">
-						<button class="kn-load-more-btn" onclick="knLoadMoreList('kn-players-table', 'kn-players-tmpl', this)"><i class="fas fa-chevron-down"></i> Load More...</button>
-						<span class="kn-load-more-hint" id="kn-players-list-hint"></span>
-					</div>
-				</div>
-				<div class="kn-pagination" id="kn-players-table-pages"></div>
-			</div>
+			<div id="kn-players-list" style="display:none"></div>
 		</div><!-- /kn-tab-players -->
 
 		</div><!-- /kn-tabs -->
@@ -2055,67 +2034,84 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			.then(function(r) { return r.json(); })
 			.then(function(data) {
 				knPlayersLoaded = true;
-				var players  = data.players || [];
-				var nowTs    = Math.floor(Date.now() / 1000);
-				var periods  = {};
-				players.forEach(function(p) {
-					var ts     = new Date((p.lastSignin || '1970-01-01') + 'T00:00:00').getTime() / 1000;
-					var period = Math.max(0, Math.floor((nowTs - ts) / (30.44 * 24 * 3600 * 6)));
-					if (!periods[period]) periods[period] = [];
-					periods[period].push(p);
-				});
-				var periodKeys = Object.keys(periods).map(Number).sort(function(a,b){return a-b;});
-				var active = (periods[0] || []).length, total = players.length;
+				var players = data.players || [];
+				var total   = players.length;
 
-				// Update tab count
+				// Bucket by year of last sign-in. Use a sentinel "Inactive" bucket for
+				// players whose last_signin is the 1970 default (never attended).
+				var byYear = {};
+				var nowYear = new Date().getFullYear();
+				var sixMoCutoff = Date.now() - 6 * 30.44 * 24 * 3600 * 1000;
+				var activeRecent = 0;
+				players.forEach(function(p) {
+					var raw = p.lastSignin || '1970-01-01';
+					var key;
+					if (raw === '1970-01-01' || raw.indexOf('1970') === 0) {
+						key = 'never';
+					} else {
+						key = raw.slice(0, 4); // YYYY
+					}
+					(byYear[key] = byYear[key] || []).push(p);
+					var ts = new Date(raw + 'T00:00:00').getTime();
+					if (ts >= sixMoCutoff) activeRecent++;
+				});
+
+				// Sort keys: real years descending (newest first), 'never' last.
+				var yearKeys = Object.keys(byYear).filter(function(k){ return k !== 'never'; })
+					.sort(function(a,b){ return b.localeCompare(a); });
+				if (byYear.never) yearKeys.push('never');
+
+				// Update tab count + summary line
 				var tabCount = document.getElementById('kn-players-tab-count');
 				if (tabCount) tabCount.textContent = '(' + total + ')';
-				// Update summary line
 				var summEl = document.getElementById('kn-players-summary');
-				if (summEl) summEl.textContent = active + ' active member' + (active!==1?'s':'') + ' (past 6 months)' + (total > active ? ' · ' + total + ' total' : '');
+				if (summEl) {
+					summEl.textContent = activeRecent + ' active member' + (activeRecent!==1?'s':'')
+						+ ' (past 6 months)' + (total > activeRecent ? ' · ' + total + ' total' : '');
+				}
 
-				// Build cards HTML
+				// Build year-bucketed cards + list sections in one pass.
 				var cardsEl = document.getElementById('kn-players-cards');
-				if (cardsEl) {
-					var html = '<div class="kn-players-grid">' + (periods[0]||[]).map(function(p){return knPlayerCardHtml(p,uir);}).join('') + '</div>';
-					periodKeys.slice(1).forEach(function(period) {
-						html += '<div class="kn-period-block" id="kn-players-block-' + period + '" style="display:none">'
-							+ '<div class="kn-period-label">' + (period*6) + '–' + ((period+1)*6) + ' months ago</div>'
-							+ '<div class="kn-players-grid">' + periods[period].map(function(p){return knPlayerCardHtml(p,uir);}).join('') + '</div>'
-							+ '</div>';
-					});
-					if (periodKeys.length > 1) {
-						html += '<div class="kn-load-more-wrap" data-next="1" data-group="kn-players">'
-							+ '<button class="kn-load-more-btn" onclick="knLoadMoreCards(\'kn-players\',this)"><i class="fas fa-chevron-down"></i> Load More...</button>'
-							+ '<span class="kn-load-more-hint">Showing ' + active + ' of ' + total + ' members</span>'
-							+ '</div>';
-					}
-					cardsEl.innerHTML = html;
-					cardsEl.style.display = '';
-				}
+				var listEl  = document.getElementById('kn-players-list');
+				var cardsHtml = [];
+				var listHtml  = [];
+				yearKeys.forEach(function(yk, idx) {
+					var bucket = byYear[yk];
+					var label  = (yk === 'never') ? 'No recorded sign-ins' : yk;
+					if (yk !== 'never' && yk == nowYear) label = yk + ' (current)';
+					var openAttr = idx === 0 ? ' open' : '';
+					var count    = bucket.length;
+					var summary  =
+						'<summary class="kn-year-summary">'
+						+ '<span class="kn-year-label">' + label + '</span>'
+						+ '<span class="kn-year-count">' + count + ' member' + (count!==1?'s':'') + '</span>'
+						+ '</summary>';
 
-				// Build list tbody + templates
-				var tbody = document.getElementById('kn-players-tbody');
-				if (tbody) {
-					tbody.innerHTML = (periods[0]||[]).map(function(p){return knPlayerRowHtml(p,uir);}).join('');
-					var table = document.getElementById('kn-players-table');
-					if (table) {
-						periodKeys.slice(1).forEach(function(period) {
-							var tmpl = document.createElement('template');
-							tmpl.id = 'kn-players-tmpl-' + period;
-							tmpl.innerHTML = periods[period].map(function(p){return knPlayerRowHtml(p,uir);}).join('');
-							table.parentNode.insertBefore(tmpl, table.nextSibling);
-						});
-					}
-					if (periodKeys.length > 1) {
-						var moreWrap = document.getElementById('kn-players-list-more');
-						if (moreWrap) {
-							moreWrap.style.display = '';
-							var hint = document.getElementById('kn-players-list-hint');
-							if (hint) hint.textContent = 'Showing ' + active + ' of ' + total + ' members';
-						}
-					}
-				}
+					cardsHtml.push(
+						'<details class="kn-year-section"' + openAttr + ' data-year="' + yk + '">'
+						+ summary
+						+ '<div class="kn-players-grid">'
+						+ bucket.map(function(p){ return knPlayerCardHtml(p, uir); }).join('')
+						+ '</div></details>'
+					);
+					listHtml.push(
+						'<details class="kn-year-section"' + openAttr + ' data-year="' + yk + '">'
+						+ summary
+						+ '<table class="kn-table kn-year-table"><thead><tr>'
+						+ '<th data-sorttype="text">Persona</th>'
+						+ '<th data-sorttype="text">Park</th>'
+						+ '<th data-sorttype="numeric">Sign-ins</th>'
+						+ '<th data-sorttype="date">Last Visit</th>'
+						+ '<th data-sorttype="text">Last Class</th>'
+						+ '<th data-sorttype="text">Role</th>'
+						+ '</tr></thead><tbody>'
+						+ bucket.map(function(p){ return knPlayerRowHtml(p, uir); }).join('')
+						+ '</tbody></table></details>'
+					);
+				});
+
+				if (cardsEl) { cardsEl.innerHTML = cardsHtml.join(''); cardsEl.style.display = ''; }
+				if (listEl)  { listEl.innerHTML  = listHtml.join('');  /* keeps display:none until view toggle */ }
 
 				// Hide spinner
 				var loadEl = document.getElementById('kn-players-loading');
@@ -2137,23 +2133,36 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 		if (searchInput) {
 			searchInput.addEventListener('input', function() {
 				var q = this.value.trim().toLowerCase();
-				var tbody = document.getElementById('kn-players-tbody');
-				if (tbody) {
-					tbody.querySelectorAll('tr').forEach(function(row) {
+				var roots = [
+					document.getElementById('kn-players-cards'),
+					document.getElementById('kn-players-list')
+				];
+				roots.forEach(function(root) {
+					if (!root) return;
+					// Cards
+					root.querySelectorAll('.kn-player-card').forEach(function(card) {
+						var nameEl = card.querySelector('.kn-player-name');
+						var pName  = nameEl ? nameEl.textContent.toLowerCase() : '';
+						var mn     = (card.dataset.mundaneName || '').toLowerCase();
+						card.style.display = (!q || pName.indexOf(q) !== -1 || mn.indexOf(q) !== -1) ? '' : 'none';
+					});
+					// List rows
+					root.querySelectorAll('.kn-year-table tbody tr').forEach(function(row) {
 						var persona = row.cells[0] ? row.cells[0].textContent.toLowerCase() : '';
-						var mundane = (row.dataset.mundaneName || '').toLowerCase();
-						row.style.display = (!q || persona.indexOf(q) !== -1 || mundane.indexOf(q) !== -1) ? '' : 'none';
+						var mn      = (row.dataset.mundaneName || '').toLowerCase();
+						row.style.display = (!q || persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1) ? '' : 'none';
 					});
-				}
-				var cards = document.getElementById('kn-players-cards');
-				if (cards) {
-					cards.querySelectorAll('.kn-player-card').forEach(function(card) {
-						var persona = card.querySelector('.kn-player-name');
-						var pName = persona ? persona.textContent.toLowerCase() : '';
-						var mundane = (card.dataset.mundaneName || '').toLowerCase();
-						card.style.display = (!q || pName.indexOf(q) !== -1 || mundane.indexOf(q) !== -1) ? '' : 'none';
+					// Auto-open + collapse year sections based on visible content during search
+					root.querySelectorAll('.kn-year-section').forEach(function(sec) {
+						if (!q) return; // leave default open/closed state alone when search is cleared
+						var hasMatch = sec.querySelector('.kn-player-card:not([style*="display: none"]), .kn-year-table tbody tr:not([style*="display: none"])');
+						sec.style.display = hasMatch ? '' : 'none';
+						if (hasMatch) sec.open = true;
 					});
-				}
+					if (!q) {
+						root.querySelectorAll('.kn-year-section').forEach(function(sec) { sec.style.display = ''; });
+					}
+				});
 			});
 		}
 	});

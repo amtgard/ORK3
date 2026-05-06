@@ -223,10 +223,16 @@ class Controller_Kingdom extends Controller {
 					MAX(a.date) AS last_signin,
 					SUM(a.date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)) AS signin_count
 				FROM ork_attendance a
-				INNER JOIN ork_park kp ON kp.park_id = a.park_id AND kp.kingdom_id = {$kid}
+				INNER JOIN ork_mundane mm
+					ON mm.mundane_id = a.mundane_id
+				   AND mm.suspended = 0 AND mm.active = 1
+				WHERE a.kingdom_id = {$kid}
 				GROUP BY a.mundane_id
 			) sub ON sub.mundane_id = m.mundane_id
-			LEFT JOIN ork_attendance la ON la.mundane_id = m.mundane_id AND la.date = sub.last_signin
+			LEFT JOIN ork_attendance la
+				ON la.mundane_id = m.mundane_id
+			   AND la.date       = sub.last_signin
+			   AND la.kingdom_id = {$kid}
 			LEFT JOIN ork_class c ON la.class_id = c.class_id
 			LEFT JOIN ork_officer o ON o.mundane_id = m.mundane_id AND o.park_id = m.park_id
 			WHERE m.suspended = 0 AND m.active = 1
