@@ -24,9 +24,9 @@
 .sh-panel-body { padding: 14px; }
 
 /* Worker dots */
-.sh-workers { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.sh-workers { display: flex; flex-wrap: nowrap; gap: 4px; margin-bottom: 12px; }
 .sh-worker {
-	width: 22px; height: 22px;
+	width: 20px; height: 20px;
 	border-radius: 4px;
 	background: #e5e7eb;
 	display: flex; align-items: center; justify-content: center;
