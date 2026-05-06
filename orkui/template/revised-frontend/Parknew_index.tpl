@@ -38,23 +38,34 @@
 		? 'https://maps.google.com/maps?q=@' . $parkLat . ',' . $parkLng
 		: null;
 
-	// Group all players by 6-month period (0 = 0–6 months ago, 1 = 6–12, etc.)
-	$allPlayers = $park_players ?? [];
-	$nowTs      = time();
-	$playerPeriods  = [];
-	$heraldryPeriods = [];
+	// Group all players by year of last sign-in (newest year first; 'never' last).
+	// Also separately track players whose last signin is within the past 6 months
+	// (for the "active member" stat) and 12 months (for the Heraldry hall of arms).
+	$allPlayers      = $park_players ?? [];
+	$nowTs           = time();
+	$nowYear         = (int)date('Y');
+	$sixMoCutoff     = strtotime('-6 months');
+	$twelveMoCutoff  = strtotime('-12 months');
+	$playersByYear   = [];   // key: 'YYYY' or 'never', value: array of players
+	$playerList      = [];   // active in past 6 months
+	$hoaPlayers12    = [];   // heraldry holders active in past 12 months
+	$totalHeraldry   = 0;
 	foreach ($allPlayers as $p) {
-		$ts = strtotime($p['LastSignin']);
-		$period = max(0, (int)floor(($nowTs - $ts) / (30.44 * 24 * 3600) / 6));
-		$playerPeriods[$period][] = $p;
-		if ($p['HasHeraldry']) $heraldryPeriods[$period][] = $p;
+		$ts  = strtotime($p['LastSignin']);
+		$key = ($ts && $ts > 0 && date('Y', $ts) !== '1970') ? date('Y', $ts) : 'never';
+		$playersByYear[$key][] = $p;
+		if (!empty($p['HasHeraldry'])) {
+			$totalHeraldry++;
+			if ($ts >= $twelveMoCutoff) $hoaPlayers12[] = $p;
+		}
+		if ($ts >= $sixMoCutoff) $playerList[] = $p;
 	}
-	ksort($playerPeriods);
-	ksort($heraldryPeriods);
-
-	$playerList    = $playerPeriods[0] ?? [];  // 0–6 months (used for stats row count)
-	$totalHeraldry = array_sum(array_map('count', $heraldryPeriods));
-	$hoaPlayers12  = array_merge($heraldryPeriods[0] ?? [], $heraldryPeriods[1] ?? []);
+	// Sort: real years descending (newest first); 'never' bucket goes last.
+	uksort($playersByYear, function ($a, $b) {
+		if ($a === 'never') return 1;
+		if ($b === 'never') return -1;
+		return strcmp($b, $a);
+	});
 
 	$firstTab = 'about';
 
@@ -159,7 +170,7 @@
 	}
 
 	// Active Players: last sign-in within the past 6 months — matches the Players tab subtitle
-	$activePlayersYear = count($playerPeriods[0] ?? []);
+	$activePlayersYear = count($playerList);
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -680,7 +691,7 @@
 				<?php if (count($allPlayers) > 0): ?>
 					<div class="pk-players-toolbar">
 						<span class="pk-players-toolbar-left">
-							<?= count($playerPeriods[0] ?? []) ?> active member<?= count($playerPeriods[0] ?? []) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($allPlayers) > count($playerPeriods[0] ?? [])): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
+							<?= count($playerList) ?> active member<?= count($playerList) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($allPlayers) > count($playerList)): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
 						</span>
 						<div class="pk-players-toolbar-right">
 							<div class="pk-player-search-wrap">
@@ -710,23 +721,20 @@
 						</div>
 					</div>
 
-					<!-- Card view (default) -->
-					<div id="pk-players-cards">
-						<!-- Period 0 (0–6 months) always visible -->
-						<div class="pk-players-grid">
-							<?php foreach ($playerPeriods[0] ?? [] as $p): ?>
-							<?php
-								$initial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
-								$heraldryBgSrc = $p['HasHeraldry']
-									? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
-									: null;
-								if ($p['HasImage']) {
-									$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
-								} elseif ($p['HasHeraldry']) {
-									$avatarSrc = $heraldryBgSrc;
-								} else {
-									$avatarSrc = null;
-								}
+					<?php
+						// Renderers reused for each year section.
+						$pkRenderCard = function (array $p) {
+							$initial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
+							$heraldryBgSrc = $p['HasHeraldry']
+								? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
+								: null;
+							if ($p['HasImage']) {
+								$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
+							} elseif ($p['HasHeraldry']) {
+								$avatarSrc = $heraldryBgSrc;
+							} else {
+								$avatarSrc = null;
+							}
 							?>
 							<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
 							   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
@@ -735,10 +743,7 @@
 								<div class="pk-player-card-top">
 									<div class="pk-player-avatar">
 										<?php if ($avatarSrc): ?>
-											<img src="<?= htmlspecialchars($avatarSrc) ?>"
-											     alt=""
-											     loading="lazy"
-											     onerror="pkAvatarFallback(this,'<?= $initial ?>')">
+											<img src="<?= htmlspecialchars($avatarSrc) ?>" alt="" loading="lazy" onerror="pkAvatarFallback(this,'<?= $initial ?>')">
 										<?php else: ?>
 											<?= $initial ?>
 										<?php endif; ?>
@@ -754,119 +759,18 @@
 								</div>
 								<div class="pk-player-stats">
 									<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
-									<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j', strtotime($p['LastSignin'])) ?></span>
+									<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j, Y', strtotime($p['LastSignin'])) ?></span>
 									<?php if (!empty($p['LastClass'])): ?>
 										<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> <?= htmlspecialchars($p['LastClass']) ?></span>
 									<?php endif; ?>
 								</div>
 							</a>
-							<?php endforeach; ?>
-						</div>
+							<?php
+						};
 
-						<!-- Period 1+ (hidden; revealed by Load More) -->
-						<?php $_pkCardIdx = 1; foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
-						<div class="pk-period-block" id="pk-players-block-<?= $_pkCardIdx ?>" style="display:none">
-							<div class="pk-period-label"><?= $pkPeriod * 6 ?>–<?= ($pkPeriod + 1) * 6 ?> months ago</div>
-							<div class="pk-players-grid">
-								<?php foreach ($pkPeriodPlayers as $p): ?>
-								<?php
-									$initial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
-									$heraldryBgSrc = $p['HasHeraldry']
-										? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
-										: null;
-									if ($p['HasImage']) {
-										$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
-									} elseif ($p['HasHeraldry']) {
-										$avatarSrc = $heraldryBgSrc;
-									} else {
-										$avatarSrc = null;
-									}
-								?>
-								<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
-								   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
-								   <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?>
-								   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
-									<div class="pk-player-card-top">
-										<div class="pk-player-avatar">
-											<?php if ($avatarSrc): ?>
-												<img src="<?= htmlspecialchars($avatarSrc) ?>"
-												     loading="lazy"
-												     alt=""
-												     onerror="pkAvatarFallback(this,'<?= $initial ?>')">
-											<?php else: ?>
-												<?= $initial ?>
-											<?php endif; ?>
-										</div>
-										<div>
-											<div class="pk-player-name"><?= htmlspecialchars($p['Persona']) ?></div>
-											<?php if (!empty($p['OfficerRoles'])): ?>
-												<?php foreach (explode(', ', $p['OfficerRoles']) as $role): ?>
-													<span class="pk-officer-pill"><?= htmlspecialchars(trim($role)) ?></span>
-												<?php endforeach; ?>
-											<?php endif; ?>
-										</div>
-									</div>
-									<div class="pk-player-stats">
-										<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
-										<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j', strtotime($p['LastSignin'])) ?></span>
-										<?php if (!empty($p['LastClass'])): ?>
-											<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> <?= htmlspecialchars($p['LastClass']) ?></span>
-										<?php endif; ?>
-									</div>
-								</a>
-								<?php endforeach; ?>
-							</div>
-						</div>
-						<?php $_pkCardIdx++; endforeach; ?>
-
-						<?php if (count($playerPeriods) > 1): ?>
-						<div class="pk-load-more-wrap" data-next="1" data-group="pk-players">
-							<button class="pk-load-more-btn" onclick="pkLoadMoreCards('pk-players', this)">
-								<i class="fas fa-chevron-down"></i> Load More...
-							</button>
-							<span class="pk-load-more-hint">Showing <?= count($playerPeriods[0] ?? []) ?> of <?= count($allPlayers) ?> members</span>
-						</div>
-						<?php endif; ?>
-					</div><!-- /pk-players-cards -->
-
-					<!-- List view (hidden by default) -->
-					<div id="pk-players-list" style="display:none">
-						<table class="pk-table" id="pk-players-table">
-							<thead>
-								<tr>
-									<th data-sorttype="text">Persona</th>
-									<th data-sorttype="numeric">Sign-ins</th>
-									<th data-sorttype="date">Last Visit</th>
-									<th data-sorttype="text">Last Class</th>
-									<th data-sorttype="text">Role</th>
-								</tr>
-							</thead>
-							<tbody>
-								<?php foreach ($playerPeriods[0] ?? [] as $p): ?>
-								<tr <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?> onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
-									<td>
-										<?= htmlspecialchars($p['Persona']) ?>
-										<?php if (!empty($p['OfficerRoles'])): ?>
-											<?php foreach (explode(', ', $p['OfficerRoles']) as $role): ?>
-												<span class="pk-officer-pill"><?= htmlspecialchars(trim($role)) ?></span>
-											<?php endforeach; ?>
-										<?php endif; ?>
-									</td>
-									<td data-sortval="<?= $p['SigninCount'] ?>"><?= $p['SigninCount'] ?></td>
-									<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>">
-										<?= date('M j, Y', strtotime($p['LastSignin'])) ?>
-									</td>
-									<td><?= htmlspecialchars($p['LastClass'] ?? '') ?></td>
-									<td><?= htmlspecialchars($p['OfficerRoles'] ?? '') ?></td>
-								</tr>
-								<?php endforeach; ?>
-							</tbody>
-						</table>
-						<!-- Hidden row templates for older periods -->
-						<?php $_pkListIdx = 1; foreach (array_slice($playerPeriods, 1, null, true) as $pkPeriod => $pkPeriodPlayers): ?>
-						<template id="pk-players-tmpl-<?= $_pkListIdx ?>">
-							<?php foreach ($pkPeriodPlayers as $p): ?>
-							<tr onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
+						$pkRenderRow = function (array $p) {
+							?>
+							<tr <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?> onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
 								<td>
 									<?= htmlspecialchars($p['Persona']) ?>
 									<?php if (!empty($p['OfficerRoles'])): ?>
@@ -876,24 +780,58 @@
 									<?php endif; ?>
 								</td>
 								<td data-sortval="<?= $p['SigninCount'] ?>"><?= $p['SigninCount'] ?></td>
-								<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>">
-									<?= date('M j, Y', strtotime($p['LastSignin'])) ?>
-								</td>
+								<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>"><?= date('M j, Y', strtotime($p['LastSignin'])) ?></td>
 								<td><?= htmlspecialchars($p['LastClass'] ?? '') ?></td>
 								<td><?= htmlspecialchars($p['OfficerRoles'] ?? '') ?></td>
 							</tr>
-							<?php endforeach; ?>
-						</template>
-						<?php $_pkListIdx++; endforeach; ?>
-						<?php if (count($playerPeriods) > 1): ?>
-						<div class="pk-load-more-wrap pk-load-more-list" data-next="1">
-							<button class="pk-load-more-btn" onclick="pkLoadMoreList('pk-players-table', 'pk-players-tmpl', this)">
-								<i class="fas fa-chevron-down"></i> Load More...
-							</button>
-							<span class="pk-load-more-hint">Showing <?= count($playerPeriods[0] ?? []) ?> of <?= count($allPlayers) ?> members</span>
-						</div>
-						<?php endif; ?>
-						<div class="pk-pagination" id="pk-players-table-pages"></div>
+							<?php
+						};
+
+						$pkYearLabel = function ($year) use ($nowYear) {
+							if ($year === 'never') return 'No recorded sign-ins';
+							return ((int)$year === $nowYear) ? ($year . ' (current)') : (string)$year;
+						};
+					?>
+
+					<!-- Card view (default) — one details/year section -->
+					<div id="pk-players-cards">
+						<?php $_pkIdx = 0; foreach ($playersByYear as $_pkYear => $_pkYearPlayers): ?>
+						<details class="pk-year-section"<?= $_pkIdx === 0 ? ' open' : '' ?> data-year="<?= htmlspecialchars((string)$_pkYear) ?>">
+							<summary class="pk-year-summary">
+								<span class="pk-year-label"><?= htmlspecialchars($pkYearLabel($_pkYear)) ?></span>
+								<span class="pk-year-count"><?= count($_pkYearPlayers) ?> member<?= count($_pkYearPlayers) != 1 ? 's' : '' ?></span>
+							</summary>
+							<div class="pk-players-grid">
+								<?php foreach ($_pkYearPlayers as $p) { $pkRenderCard($p); } ?>
+							</div>
+						</details>
+						<?php $_pkIdx++; endforeach; ?>
+					</div><!-- /pk-players-cards -->
+
+					<!-- List view (hidden by default) — one details/year section, each with its own table -->
+					<div id="pk-players-list" style="display:none">
+						<?php $_pkIdx = 0; foreach ($playersByYear as $_pkYear => $_pkYearPlayers): ?>
+						<details class="pk-year-section"<?= $_pkIdx === 0 ? ' open' : '' ?> data-year="<?= htmlspecialchars((string)$_pkYear) ?>">
+							<summary class="pk-year-summary">
+								<span class="pk-year-label"><?= htmlspecialchars($pkYearLabel($_pkYear)) ?></span>
+								<span class="pk-year-count"><?= count($_pkYearPlayers) ?> member<?= count($_pkYearPlayers) != 1 ? 's' : '' ?></span>
+							</summary>
+							<table class="pk-table pk-year-table">
+								<thead>
+									<tr>
+										<th data-sorttype="text">Persona</th>
+										<th data-sorttype="numeric">Sign-ins</th>
+										<th data-sorttype="date">Last Visit</th>
+										<th data-sorttype="text">Last Class</th>
+										<th data-sorttype="text">Role</th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php foreach ($_pkYearPlayers as $p) { $pkRenderRow($p); } ?>
+								</tbody>
+							</table>
+						</details>
+						<?php $_pkIdx++; endforeach; ?>
 					</div><!-- /pk-players-list -->
 				<?php else: ?>
 					<div class="pk-empty">No players found</div>

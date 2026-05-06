@@ -171,10 +171,13 @@ class Controller_Park extends Controller
 				GROUP_CONCAT(DISTINCT o.role ORDER BY o.role SEPARATOR ', ') AS officer_roles
 			FROM ork_mundane m
 			INNER JOIN (
-				SELECT mundane_id, MAX(date) AS last_signin
-				FROM ork_attendance
-				WHERE park_id = {$pid}
-				GROUP BY mundane_id
+				SELECT a.mundane_id, MAX(a.date) AS last_signin
+				FROM ork_attendance a
+				INNER JOIN ork_mundane mm
+					ON mm.mundane_id = a.mundane_id
+				   AND mm.suspended = 0 AND mm.active = 1
+				WHERE a.park_id = {$pid}
+				GROUP BY a.mundane_id
 			) sub ON sub.mundane_id = m.mundane_id
 			LEFT JOIN ork_attendance a6 ON a6.mundane_id = m.mundane_id
 				AND a6.park_id = {$pid}
