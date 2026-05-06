@@ -233,18 +233,21 @@ class Player extends Ork3 {
 				return strtotime($a['DuesUntil']) - strtotime($b['DuesUntil']);
 			});
 			$last_dues_through = (!empty($all_dues)) ? $all_dues[sizeof($all_dues)-1]['DuesUntil'] : '';
-			// Determine if player is new: fewer than 4 total credits AND at least one credit within the last 14 days
+			// Determine if player is new: fewer than 4 total credits AND at least one credit within the last 14 days.
+			// Skip the attendance query for the 99.9%+ of players who joined more than 14 days ago.
 			$mid = (int)$this->mundane->mundane_id;
-			$att_row = $this->db->query(
-				"SELECT SUM(credits) AS total_credits, SUM(CASE WHEN date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY) THEN credits ELSE 0 END) AS recent_credits" .
-				" FROM " . DB_PREFIX . "attendance WHERE mundane_id = $mid AND credits > 0"
-			);
-			$att_row->next();
-			$total_credits  = (float)($att_row->total_credits  ?? 0);
-			$recent_credits = (float)($att_row->recent_credits ?? 0);
 			$park_member_since = $this->mundane->park_member_since;
-			$is_new_player  = $total_credits < 4 && ($total_credits === 0.0 || $recent_credits > 0)
-				&& !empty($park_member_since) && strtotime($park_member_since) >= strtotime('-14 days');
+			$is_new_player = false;
+			if (!empty($park_member_since) && $park_member_since !== '0000-00-00' && strtotime($park_member_since) >= strtotime('-14 days')) {
+				$att_row = $this->db->query(
+					"SELECT SUM(credits) AS total_credits, SUM(CASE WHEN date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY) THEN credits ELSE 0 END) AS recent_credits" .
+					" FROM " . DB_PREFIX . "attendance WHERE mundane_id = $mid AND credits > 0"
+				);
+				$att_row->next();
+				$total_credits  = (float)($att_row->total_credits  ?? 0);
+				$recent_credits = (float)($att_row->recent_credits ?? 0);
+				$is_new_player  = $total_credits < 4 && ($total_credits === 0.0 || $recent_credits > 0);
+			}
 			$this->pronoun->clear();
 			$this->pronoun->pronoun_id = $this->mundane->pronoun_id;
 			$this->pronoun->find();
