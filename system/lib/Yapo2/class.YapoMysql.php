@@ -19,19 +19,26 @@ class YapoMysql extends YapoDb {
 		if (isset(self::$schema_cache[$table])) {
 			return self::$schema_cache[$table];
 		}
+		if (function_exists('apcu_fetch')) {
+			$cached = apcu_fetch('yapo_schema_' . $table, $found);
+			if ($found) {
+				self::$schema_cache[$table] = $cached;
+				return $cached;
+			}
+		}
 		$Keys = $this->DataSet("SHOW KEYS IN $table");
 		$Fields = $this->DataSet("describe $table");
 		$this->Clear();
-		
+
 		$keys = array();
-		
+
 		while ($Keys->Next()) {
 			if (!isset($keys[$Keys->Key_name]) || !is_array($keys[$Keys->Key_name]))
 				$keys[$Keys->Key_name] = array('Unique'=>!$Keys->Non_unique,'Columns'=>array());
 			$keys[$Keys->Key_name]['Columns'][] = $Keys->Column_name;
 		}
-		
-		
+
+
 		$fields = array();
 		$primary_key = false;
 		while ($Fields->Next()) {
@@ -46,9 +53,13 @@ class YapoMysql extends YapoDb {
 				);
 			if (strtoupper($Fields->Key) == 'PRI') $primary_key = $Fields->Field;
 		}
-		
-		self::$schema_cache[$table] = array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
-		return self::$schema_cache[$table];
+
+		$result = array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
+		self::$schema_cache[$table] = $result;
+		if (function_exists('apcu_store')) {
+			apcu_store('yapo_schema_' . $table, $result, 86400);
+		}
+		return $result;
 	}
 
 	function GetLastInsertId() {
