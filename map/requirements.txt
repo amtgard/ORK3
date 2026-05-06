@@ -1,0 +1,8 @@
+scipy
+shapely
+geopandas
+geodatasets
+pooch
+folium
+pandas
+numpy
