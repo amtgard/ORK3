@@ -2347,12 +2347,13 @@ class Controller_Admin extends Controller {
 			if ($rs && $rs->Size() > 0) do { $db_status[$rs->Variable_name] = $rs->Value; } while ($rs->Next());
 
 			$DB->Clear();
-			$pr = $DB->DataSet("SELECT ID, USER, COMMAND, TIME, STATE, LEFT(INFO, 300) AS INFO FROM information_schema.PROCESSLIST WHERE COMMAND != 'Sleep' ORDER BY TIME DESC LIMIT 20");
+			$pr = $DB->DataSet("SELECT ID, USER, HOST, COMMAND, TIME, STATE, LEFT(INFO, 300) AS INFO FROM information_schema.PROCESSLIST WHERE COMMAND != 'Sleep' ORDER BY TIME DESC LIMIT 20");
 			$processes = [];
 			if ($pr && $pr->Size() > 0) do {
 				$processes[] = [
 					'id'      => (int)$pr->ID,
 					'user'    => $pr->USER,
+					'host'    => $pr->HOST ?? '',
 					'command' => $pr->COMMAND,
 					'time'    => (int)$pr->TIME,
 					'state'   => $pr->STATE ?? '',

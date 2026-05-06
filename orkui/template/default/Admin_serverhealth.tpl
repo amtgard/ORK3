@@ -111,6 +111,7 @@ html[data-theme="dark"] .sh-last-updated { color: #718096; }
 .sh-al-row { display: flex; gap: 8px; font-size: 0.76rem; align-items: baseline; }
 .sh-al-rowtime { min-width: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sh-al-state { min-width: 120px; color: var(--rp-text-muted, #9ca3af); font-size: 0.72rem; }
+.sh-al-user  { min-width: 100px; color: var(--rp-text-muted, #9ca3af); font-size: 0.72rem; }
 .sh-al-sql { font-family: monospace; font-size: 0.72rem; color: var(--rp-text-secondary, #374151); word-break: break-all; }
 .sh-al-none { font-size: 0.76rem; color: var(--rp-text-muted, #9ca3af); font-style: italic; }
 
@@ -122,6 +123,7 @@ html[data-theme="dark"] .sh-al-tag   { background: #422006; border-color: #78350
 html[data-theme="dark"] .sh-al-ctx   { color: #718096; }
 html[data-theme="dark"] .sh-al-rows  { border-color: #4a5568; }
 html[data-theme="dark"] .sh-al-state { color: #718096; }
+html[data-theme="dark"] .sh-al-user  { color: #718096; }
 html[data-theme="dark"] .sh-al-sql   { color: #a0aec0; }
 html[data-theme="dark"] .sh-al-none  { color: #718096; }
 
@@ -355,12 +357,15 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			document.getElementById('sh-procs').innerHTML = '<div class="sh-empty"><i class="fas fa-check-circle" style="font-size:1.5rem;color:#16a34a;margin-bottom:6px;display:block"></i>No active queries</div>';
 			return;
 		}
-		var html = '<table class="sh-proc-table"><thead><tr><th>Time</th><th>Cmd</th><th>State</th><th>Query</th></tr></thead><tbody>';
+		var html = '<table class="sh-proc-table"><thead><tr><th>Time</th><th>Cmd</th><th>User</th><th>State</th><th>Query</th></tr></thead><tbody>';
 		procs.forEach(function(p) {
 			var tc = p.time >= 5 ? 'sh-proc-very-slow' : (p.time >= 1 ? 'sh-proc-slow' : '');
+			var host = p.host ? p.host.replace(/:.*$/, '') : '';
+			var userDisplay = p.user + (host ? '@' + host : '');
 			html += '<tr>' +
 				'<td class="' + tc + '">' + p.time + 's</td>' +
 				'<td>' + esc(p.command) + '</td>' +
+				'<td style="color:#9ca3af;font-size:.85em">' + esc(userDisplay) + '</td>' +
 				'<td style="color:#9ca3af">' + esc(p.state || '') + '</td>' +
 				'<td class="sh-query" title="' + esc(p.info || '') + '">' + esc(p.info || '—') + '</td>' +
 				'</tr>';
@@ -429,9 +434,12 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 				html += '<div class="sh-al-rows">';
 				e.queries.forEach(function(p) {
 					var tc = p.time >= 5 ? 'sh-proc-very-slow' : (p.time >= 1 ? 'sh-proc-slow' : '');
+					var host = p.host ? p.host.replace(/:.*$/, '') : '';
+					var userDisplay = p.user + (host ? '@' + host : '');
 					html += '<div class="sh-al-row">' +
 						'<span class="sh-al-rowtime ' + tc + '">' + p.time + 's</span>' +
 						'<span class="sh-al-state">' + esc(p.state || p.command) + '</span>' +
+						'<span class="sh-al-user">' + esc(userDisplay) + '</span>' +
 						'<span class="sh-al-sql">' + esc(p.info || '—') + '</span>' +
 						'</div>';
 				});
