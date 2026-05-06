@@ -198,6 +198,12 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 
 	</div>
 
+	<!-- Active Workers Panel -->
+	<div class="sh-panel" style="margin-bottom:16px">
+		<div class="sh-panel-hdr"><i class="fas fa-running"></i> Active Workers <span class="sh-al-subtitle">PHP-FPM requests in flight</span></div>
+		<div class="sh-panel-body" id="sh-workers-list"></div>
+	</div>
+
 	<?php if (!empty($ShowLoadTest)): ?>
 	<!-- Load Test Panel (dev only) -->
 	<div class="sh-panel" style="margin-bottom:16px">
@@ -374,6 +380,29 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		document.getElementById('sh-procs').innerHTML = html;
 	}
 
+	function renderWorkers(workers) {
+		var el = document.getElementById('sh-workers-list');
+		if (!workers || !workers.length) {
+			el.innerHTML = '<div class="sh-empty">No active workers</div>';
+			return;
+		}
+		workers.sort(function(a, b) { return (b.duration || 0) - (a.duration || 0); });
+		var html = '<table class="sh-proc-table"><thead><tr><th>Time</th><th>PID</th><th>Method</th><th>Request URI</th></tr></thead><tbody>';
+		workers.forEach(function(w) {
+			var ms = w.duration || 0;
+			var sec = (ms / 1000000).toFixed(1);
+			var tc = ms >= 5000000 ? 'sh-proc-very-slow' : (ms >= 1000000 ? 'sh-proc-slow' : '');
+			html += '<tr>' +
+				'<td class="' + tc + '">' + sec + 's</td>' +
+				'<td style="color:#9ca3af">' + w.pid + '</td>' +
+				'<td>' + esc(w.method || '') + '</td>' +
+				'<td class="sh-query" title="' + esc(w.uri || '') + '">' + esc(w.uri || '—') + '</td>' +
+				'</tr>';
+		});
+		html += '</tbody></table>';
+		el.innerHTML = html;
+	}
+
 	function metric(label, val, cls) {
 		return '<div class="sh-metric"><span class="sh-metric-label">' + label + '</span><span class="sh-metric-val ' + (cls||'') + '">' + val + '</span></div>';
 	}
@@ -385,7 +414,7 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 	var alertLog = [];
 	var threshState = { workersFull: false, queueFull: false, threadsHigh: false };
 
-	function checkThresholds(fpm, db, procs) {
+	function checkThresholds(fpm, db, procs, workers) {
 		var active  = fpm ? (fpm['active processes'] || 0) : 0;
 		var total   = fpm ? (fpm['total processes']  || 0) : 0;
 		var queue   = fpm ? (fpm['listen queue']     || 0) : 0;
@@ -410,6 +439,7 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			time:     new Date().toLocaleTimeString(),
 			triggers: fired,
 			queries:  procs ? procs.slice() : [],
+			workers:  workers ? workers.slice() : [],
 			qps:      currentQps,
 			sps:      currentSps,
 		});
@@ -447,6 +477,22 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			} else {
 				html += '<div class="sh-al-none">No active queries at capture time</div>';
 			}
+			if (e.workers && e.workers.length) {
+				html += '<div class="sh-al-rows" style="margin-top:6px">';
+				e.workers.sort(function(a, b) { return (b.duration || 0) - (a.duration || 0); });
+				e.workers.forEach(function(w) {
+					var ms = w.duration || 0;
+					var sec = (ms / 1000000).toFixed(1);
+					var tc = ms >= 5000000 ? 'sh-proc-very-slow' : (ms >= 1000000 ? 'sh-proc-slow' : '');
+					html += '<div class="sh-al-row">' +
+						'<span class="sh-al-rowtime ' + tc + '">' + sec + 's</span>' +
+						'<span class="sh-al-state">pid ' + w.pid + '</span>' +
+						'<span class="sh-al-user">' + esc(w.method || '') + '</span>' +
+						'<span class="sh-al-sql">' + esc(w.uri || '—') + '</span>' +
+						'</div>';
+				});
+				html += '</div>';
+			}
 			html += '</div>';
 		});
 		body.innerHTML = html;
@@ -467,7 +513,8 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 				renderFpm(d.fpm);
 				renderDb(d.db);
 				renderProcs(d.processes);
-				checkThresholds(d.fpm, d.db, d.processes);
+				renderWorkers(d.workers);
+				checkThresholds(d.fpm, d.db, d.processes, d.workers);
 				document.getElementById('sh-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
 			})
 			.catch(function() {

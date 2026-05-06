@@ -2336,8 +2336,26 @@ class Controller_Admin extends Controller {
 
 		} elseif ($action === 'serverhealth_stats') {
 			$fpm_data = null;
-			$fpm_json = @file_get_contents('http://127.0.0.1/fpm-status?json');
-			if ($fpm_json) $fpm_data = json_decode($fpm_json, true);
+			$fpm_workers = [];
+			$fpm_json = @file_get_contents('http://127.0.0.1/fpm-status?json&full');
+			if ($fpm_json) {
+				$fpm_data = json_decode($fpm_json, true);
+				if (!empty($fpm_data['processes']) && is_array($fpm_data['processes'])) {
+					foreach ($fpm_data['processes'] as $proc) {
+						if (($proc['state'] ?? '') !== 'Running') continue;
+						$uri = $proc['request uri'] ?? '';
+						if (strpos($uri, '/fpm-status') === 0) continue;
+						if (strpos($uri, 'serverhealth_stats') !== false) continue;
+						$fpm_workers[] = [
+							'pid'      => (int)($proc['pid'] ?? 0),
+							'duration' => (int)($proc['request duration'] ?? 0),
+							'method'   => $proc['request method'] ?? '',
+							'uri'      => $uri,
+						];
+					}
+					unset($fpm_data['processes']);
+				}
+			}
 
 			global $DB;
 			$wanted = ['Slow_queries','Threads_connected','Threads_running','Questions','Uptime','Max_used_connections','Connections','Com_select','Com_insert','Com_update','Com_delete','Com_show_fields','Com_show_keys'];
@@ -2361,7 +2379,7 @@ class Controller_Admin extends Controller {
 				];
 			} while ($pr->Next());
 
-			echo json_encode(['status' => 0, 'fpm' => $fpm_data, 'db' => $db_status, 'processes' => $processes]);
+			echo json_encode(['status' => 0, 'fpm' => $fpm_data, 'workers' => $fpm_workers, 'db' => $db_status, 'processes' => $processes]);
 
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
