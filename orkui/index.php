@@ -5,6 +5,27 @@ define( 'UIR', HTTP_UI_REMOTE . 'index.php?Route=' );
 
 ini_set("error_reporting", E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 
+if ( isset($_REQUEST['Route']) && $_REQUEST['Route'] === 'Health' ) {
+    $ok = false;
+    try {
+        $r = $DB->query("SELECT 1 AS ok");
+        $ok = ( $r && $r->size() > 0 );
+    } catch (Throwable $e) {
+        $ok = false;
+    }
+    http_response_code( $ok ? 200 : 503 );
+    if ( $_SERVER['REQUEST_METHOD'] !== 'HEAD' ) {
+        header('Content-Type: text/plain');
+        echo $ok ? "OK\n" : "DB UNAVAILABLE\n";
+    }
+    exit;
+}
+
+if ( $_SERVER['REQUEST_METHOD'] === 'HEAD' ) {
+    http_response_code(200);
+    exit;
+}
+
 /***********************************************
  * Simple MVC Site
  *

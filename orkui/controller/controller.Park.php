@@ -156,6 +156,12 @@ class Controller_Park extends Controller
 		$parkPlayers = Ork3::$Lib->ghettocache->get(__CLASS__ . '.park_players', $pkRosterCacheKey, 1200);
 		if ($parkPlayers === false) {
 			$parkPlayers = [];
+			// last_signin = player's MOST RECENT sign-in anywhere — drives the year bucket so
+			// home-park members who've drifted to other parks aren't shown as lost.
+			// signin_count = overall 6-month count (matches the bucket's "anywhere" semantic).
+			// last_signin_at_park drives the la JOIN for last class and the "here X" annotation
+			// shown on the card to identify members who've drifted away.
+			// LEFT JOIN sub (was INNER JOIN) so home-park members who never signed in are still listed.
 			$rosterSql = "
 			SELECT
 				m.mundane_id,
@@ -165,26 +171,28 @@ class Controller_Park extends Controller
 				m.restricted,
 				COALESCE(m.given_name, '') AS given_name,
 				COALESCE(m.surname, '')    AS surname,
-				sub.last_signin,
+				COALESCE(sub.last_signin, '1970-01-01')         AS last_signin,
+				COALESCE(sub.last_signin_at_park, '1970-01-01') AS last_signin_at_park,
 				COUNT(DISTINCT a6.date) AS signin_count,
 				c.name AS last_class,
 				GROUP_CONCAT(DISTINCT o.role ORDER BY o.role SEPARATOR ', ') AS officer_roles
 			FROM ork_mundane m
-			INNER JOIN (
-				SELECT a.mundane_id, MAX(a.date) AS last_signin
+			LEFT JOIN (
+				SELECT a.mundane_id,
+					MAX(a.date) AS last_signin,
+					MAX(CASE WHEN a.park_id = {$pid} THEN a.date END) AS last_signin_at_park
 				FROM ork_attendance a
 				INNER JOIN ork_mundane mm
 					ON mm.mundane_id = a.mundane_id
+				   AND mm.park_id = {$pid}
 				   AND mm.suspended = 0 AND mm.active = 1
-				WHERE a.park_id = {$pid}
 				GROUP BY a.mundane_id
 			) sub ON sub.mundane_id = m.mundane_id
 			LEFT JOIN ork_attendance a6 ON a6.mundane_id = m.mundane_id
-				AND a6.park_id = {$pid}
 				AND a6.date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
 			LEFT JOIN ork_attendance la ON la.mundane_id = m.mundane_id
 				AND la.park_id = {$pid}
-				AND la.date = sub.last_signin
+				AND la.date    = sub.last_signin_at_park
 			LEFT JOIN ork_class c ON la.class_id = c.class_id
 			LEFT JOIN ork_officer o ON o.mundane_id = m.mundane_id AND o.park_id = {$pid}
 			WHERE m.park_id = {$pid}
@@ -198,15 +206,16 @@ class Controller_Park extends Controller
 				do {
 					$mn = ((int)$rosterResult->restricted === 0) ? trim($rosterResult->given_name . ' ' . $rosterResult->surname) : '';
 					$parkPlayers[] = [
-						'MundaneId'    => (int)$rosterResult->mundane_id,
-						'Persona'      => $rosterResult->persona,
-						'MundaneName'  => $mn,
-						'HasImage'     => (int)$rosterResult->has_image > 0,
-						'HasHeraldry'  => (int)$rosterResult->has_heraldry > 0,
-						'SigninCount'  => (int)$rosterResult->signin_count,
-						'LastSignin'   => $rosterResult->last_signin,
-						'LastClass'    => $rosterResult->last_class,
-						'OfficerRoles' => $rosterResult->officer_roles,
+						'MundaneId'        => (int)$rosterResult->mundane_id,
+						'Persona'          => $rosterResult->persona,
+						'MundaneName'      => $mn,
+						'HasImage'         => (int)$rosterResult->has_image > 0,
+						'HasHeraldry'      => (int)$rosterResult->has_heraldry > 0,
+						'SigninCount'      => (int)$rosterResult->signin_count,
+						'LastSignin'       => $rosterResult->last_signin,
+						'LastSigninAtPark' => $rosterResult->last_signin_at_park,
+						'LastClass'        => $rosterResult->last_class,
+						'OfficerRoles'     => $rosterResult->officer_roles,
 					];
 				} while ($rosterResult->Next());
 			}

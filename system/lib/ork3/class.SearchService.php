@@ -302,14 +302,31 @@ class SearchService extends Ork3 {
 			(is_null($p_id)?$park_id:$p_id) );
 	}
   
-	public function Player($type, $search, $limit=15, $kingdom_id = null, $park_id = null, $waivered = null, $persona_required = true) {
+	public function Player($type, $search, $limit=15, $kingdom_id = null, $park_id = null, $waivered = null, $token = null, $persona_required = true) {
     	list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
-				
+
+		// ORK admins may search by mundane info regardless of a player's restricted flag.
+		// IsAuthorized/HasAuthority run yapo internally which leaves bound parameters on the
+		// shared DB handle; clear them so the next raw query in this function doesn't try
+		// to bind them.
+		$is_ork_admin = false;
+		if (!empty($token)) {
+			$_caller_uid = Ork3::$Lib->authorization->IsAuthorized($token);
+			if ($_caller_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_caller_uid, AUTH_ADMIN, null, null)) {
+				$is_ork_admin = true;
+			}
+		}
+		$this->db->clear();
+		// Restricted gate fragments for the WHERE clause — empty wrapper for admins so the
+		// gate effectively disappears.
+		$_rg_open  = $is_ork_admin ? '(' : '(m.restricted = 0 AND (';
+		$_rg_close = $is_ork_admin ? ')' : '))';
+
 		$searchtokens = preg_split("/[\s,-]+/", $search ?? '');
     	$opt = array("1");
         $limit = min(valid_id($limit)?$limit:15, 100);
 		switch (strtoupper($type)) {
-			case 'PERSONA': 
+			case 'PERSONA':
 				if (count($searchtokens) > 0)
 					$s = implode(' or ', array_map(function($t) { return "`persona` like '%" . mysql_real_escape_string($t) . "%'"; }, $searchtokens));
 			    	$order = "order by m.active DESC, persona,surname,given_name";
@@ -317,7 +334,7 @@ class SearchService extends Ork3 {
 				break;
 			case 'MUNDANE':
 				if (count($searchtokens) > 0)
-					$s = implode(' or ', array_map(function($t) { return "(m.restricted = 0 AND (`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'))"; }, $searchtokens));
+					$s = implode(' or ', array_map(function($t) use ($_rg_open, $_rg_close) { return $_rg_open . "`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'" . $_rg_close; }, $searchtokens));
 				    $order = "order by m.active DESC, surname,given_name";
                     $opt[] = "(length(`surname`) > 0 or length(`given_name`) > 0)";
 				break;
@@ -332,7 +349,7 @@ class SearchService extends Ork3 {
 				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)
 				and (`username` like '%" . mysql_real_escape_string($search) . "%'
 				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%'
-				or (m.restricted = 0 AND (`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%')))";
+				or " . $_rg_open . "`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%'" . $_rg_close . ")";
 			break;
 		}
         if ($persona_required === true) {

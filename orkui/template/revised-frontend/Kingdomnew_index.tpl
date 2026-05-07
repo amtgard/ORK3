@@ -540,7 +540,9 @@
 						event<span id="kn-events-loadmore-plural"><?= $eventCount === 1 ? '' : 's' ?></span>
 						in the next <strong id="kn-events-loadmore-months">12</strong> months.
 					</span>
+					<?php if (!empty($HasMoreEvents)): ?>
 					<a href="#" class="kn-events-loadmore-link" id="kn-events-loadmore-link" onclick="knLoadMoreEvents(event); return false;">Load more <i class="fas fa-chevron-down" style="font-size:10px;margin-left:3px"></i></a>
+					<?php endif; ?>
 				</div>
 				</div><!-- /kn-events-list-view -->
 
@@ -828,6 +830,7 @@
 						<i class="fas fa-search kn-player-search-icon"></i>
 						<input type="text" id="kn-player-search" class="kn-player-search-input" placeholder="Search all players&hellip;" autocomplete="off">
 					</div>
+					<button class="kn-view-btn" id="kn-active-only-btn" type="button" title="Show only members with sign-ins in the past 6 months"><i class="fas fa-filter"></i> Active only</button>
 					<div class="kn-view-toggle">
 						<button class="kn-view-btn kn-view-active" data-knview="cards"><i class="fas fa-th-large"></i> Cards</button>
 						<button class="kn-view-btn" data-knview="list"><i class="fas fa-list"></i> List</button>
@@ -2007,12 +2010,12 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 		}).join('');
 		var classSpan = p.lastClass ? '<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> ' + knHtmlEsc(p.lastClass) + '</span>' : '';
 		var mnAttr = p.mundaneName ? ' data-mundane-name="' + knHtmlEsc(p.mundaneName.toLowerCase()) + '"' : '';
-		return '<a class="kn-player-card' + hbgClass + '"' + hbgAttr + mnAttr + ' href="' + uir + 'Player/profile/' + p.id + '">'
+		return '<a class="kn-player-card' + hbgClass + '"' + hbgAttr + mnAttr + ' data-signin-count="' + p.signinCount + '" href="' + uir + 'Player/profile/' + p.id + '">'
 			+ '<div class="kn-player-card-top"><div class="kn-player-avatar">' + avatarHtml + '</div>'
 			+ '<div><div class="kn-player-name">' + knHtmlEsc(p.persona) + '</div>' + pills + '</div></div>'
 			+ '<div class="kn-player-stats">'
 			+ '<span><i class="fas fa-map-marker-alt" style="color:#68d391;width:14px"></i> ' + knHtmlEsc(p.parkName) + '</span>'
-			+ '<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> ' + p.signinCount + ' sign-in' + (p.signinCount !== 1 ? 's' : '') + '</span>'
+			+ '<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> ' + p.signinCount + ' six month sign-in' + (p.signinCount !== 1 ? 's' : '') + '</span>'
 			+ '<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> ' + knFmtDate(p.lastSignin) + '</span>'
 			+ classSpan + '</div></a>';
 	}
@@ -2021,7 +2024,7 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			return '<span class="kn-officer-pill">' + knHtmlEsc(r.trim()) + '</span>';
 		}).join('');
 		var mnAttr = p.mundaneName ? ' data-mundane-name="' + knHtmlEsc(p.mundaneName.toLowerCase()) + '"' : '';
-		return '<tr' + mnAttr + ' onclick=\'window.location.href="' + uir + 'Player/profile/' + p.id + '"\'>'
+		return '<tr' + mnAttr + ' data-signin-count="' + p.signinCount + '" onclick=\'window.location.href="' + uir + 'Player/profile/' + p.id + '"\'>'
 			+ '<td>' + knHtmlEsc(p.persona) + pills + '</td>'
 			+ '<td>' + knHtmlEsc(p.parkName || '') + '</td>'
 			+ '<td data-sortval="' + p.signinCount + '">' + p.signinCount + '</td>'
@@ -2105,7 +2108,7 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 						+ '<table class="kn-table kn-year-table"><thead><tr>'
 						+ '<th data-sorttype="text">Persona</th>'
 						+ '<th data-sorttype="text">Park</th>'
-						+ '<th data-sorttype="numeric">Sign-ins</th>'
+						+ '<th data-sorttype="numeric">6mo Sign-ins</th>'
 						+ '<th data-sorttype="date">Last Visit</th>'
 						+ '<th data-sorttype="text">Last Class</th>'
 						+ '<th data-sorttype="text">Role</th>'
@@ -2134,42 +2137,49 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 		var btn = document.querySelector('[data-kntab="players"]');
 		if (btn) btn.addEventListener('click', knLoadPlayers, {once: true});
 
-		var searchInput = document.getElementById('kn-player-search');
-		if (searchInput) {
-			searchInput.addEventListener('input', function() {
-				var q = this.value.trim().toLowerCase();
-				var roots = [
-					document.getElementById('kn-players-cards'),
-					document.getElementById('kn-players-list')
-				];
-				roots.forEach(function(root) {
-					if (!root) return;
-					// Cards
-					root.querySelectorAll('.kn-player-card').forEach(function(card) {
-						var nameEl = card.querySelector('.kn-player-name');
-						var pName  = nameEl ? nameEl.textContent.toLowerCase() : '';
-						var mn     = (card.dataset.mundaneName || '').toLowerCase();
-						card.style.display = (!q || pName.indexOf(q) !== -1 || mn.indexOf(q) !== -1) ? '' : 'none';
-					});
-					// List rows
-					root.querySelectorAll('.kn-year-table tbody tr').forEach(function(row) {
-						var persona = row.cells[0] ? row.cells[0].textContent.toLowerCase() : '';
-						var mn      = (row.dataset.mundaneName || '').toLowerCase();
-						row.style.display = (!q || persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1) ? '' : 'none';
-					});
-					// Auto-open + collapse year sections based on visible content during search
-					root.querySelectorAll('.kn-year-section').forEach(function(sec) {
-						if (!q) return; // leave default open/closed state alone when search is cleared
-						var hasMatch = sec.querySelector('.kn-player-card:not([style*="display: none"]), .kn-year-table tbody tr:not([style*="display: none"])');
-						sec.style.display = hasMatch ? '' : 'none';
-						if (hasMatch) sec.open = true;
-					});
-					if (!q) {
-						root.querySelectorAll('.kn-year-section').forEach(function(sec) { sec.style.display = ''; });
-					}
+		function knApplyPlayerFilters() {
+			var qInput = document.getElementById('kn-player-search');
+			var q = (qInput ? qInput.value : '').trim().toLowerCase();
+			var aoBtn = document.getElementById('kn-active-only-btn');
+			var activeOnly = aoBtn && aoBtn.classList.contains('kn-view-active');
+			var roots = [
+				document.getElementById('kn-players-cards'),
+				document.getElementById('kn-players-list')
+			];
+			roots.forEach(function(root) {
+				if (!root) return;
+				root.querySelectorAll('.kn-player-card').forEach(function(card) {
+					var nameEl = card.querySelector('.kn-player-name');
+					var pName  = nameEl ? nameEl.textContent.toLowerCase() : '';
+					var mn     = (card.dataset.mundaneName || '').toLowerCase();
+					var sc     = parseInt(card.dataset.signinCount || '0', 10);
+					var match  = (!q || pName.indexOf(q) !== -1 || mn.indexOf(q) !== -1) && (!activeOnly || sc > 0);
+					card.style.display = match ? '' : 'none';
+				});
+				root.querySelectorAll('.kn-year-table tbody tr').forEach(function(row) {
+					var persona = row.cells[0] ? row.cells[0].textContent.toLowerCase() : '';
+					var mn      = (row.dataset.mundaneName || '').toLowerCase();
+					var sc      = parseInt(row.dataset.signinCount || '0', 10);
+					var match   = (!q || persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1) && (!activeOnly || sc > 0);
+					row.style.display = match ? '' : 'none';
+				});
+				var filtering = q || activeOnly;
+				root.querySelectorAll('.kn-year-section').forEach(function(sec) {
+					if (!filtering) { sec.style.display = ''; return; }
+					var hasMatch = sec.querySelector('.kn-player-card:not([style*="display: none"]), .kn-year-table tbody tr:not([style*="display: none"])');
+					sec.style.display = hasMatch ? '' : 'none';
+					if (hasMatch) sec.open = true;
 				});
 			});
 		}
+
+		var searchInput = document.getElementById('kn-player-search');
+		if (searchInput) searchInput.addEventListener('input', knApplyPlayerFilters);
+		var aoBtn = document.getElementById('kn-active-only-btn');
+		if (aoBtn) aoBtn.addEventListener('click', function() {
+			this.classList.toggle('kn-view-active');
+			knApplyPlayerFilters();
+		});
 	});
 
 	window.knCopyIcsUrl = function() {

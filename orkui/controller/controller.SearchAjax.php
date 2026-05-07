@@ -102,10 +102,21 @@ class Controller_SearchAjax extends Controller {
 		// narrow by kingdom/park if abbreviation prefix was parsed
 		$activeClause    = $includeInactive ? '1' : 'm.active = 1';
 		$suspendedClause = $includeInactive ? '1' : 'm.suspended = 0';
+		// ORK admins bypass the restricted-name gate so they can find players by mundane info
+		// for support/moderation. Non-admins continue to only see restricted-name matches when
+		// the player has not opted in to restricted privacy.
+		// HasAuthority() runs yapo internally which sets $DB->Data with bound parameters;
+		// clear them after so the next raw $DB->DataSet() doesn't try to bind them.
+		$_searchUid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$isOrkAdmin     = $_searchUid > 0 && Ork3::$Lib->authorization->HasAuthority($_searchUid, AUTH_ADMIN, null, null);
+		$DB->Clear();
+		$mundaneClause  = $isOrkAdmin
+			? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
+			: "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
 		$playerWhere = "{$suspendedClause} AND {$activeClause} AND LENGTH(m.persona) > 0
 			  AND (m.persona LIKE '%{$term}%'
 			    OR m.username LIKE '%{$term}%'
-			    OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%')))";
+			    {$mundaneClause})";
 		if ($filterPid > 0)           { $playerWhere .= " AND m.park_id = {$filterPid}"; }
 		elseif ($filterKid > 0)       { $playerWhere .= " AND m.kingdom_id = {$filterKid}"; }
 		$playerOrder = valid_id($pid)

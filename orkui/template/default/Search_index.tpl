@@ -285,7 +285,8 @@ html[data-theme="dark"] .sr-overflow-warning { background: #744210; color: #fbd3
 			Action:  'Search/Player',
 			search:  term.trim(),
 			type:    'all',
-			limit:   100
+			limit:   100,
+			token:   '<?= htmlspecialchars($Token ?? '', ENT_QUOTES) ?>'
 		};
 		if (_kid > 0) params.kingdom_id = _kid;
 		if (_pid > 0) params.park_id    = _pid;

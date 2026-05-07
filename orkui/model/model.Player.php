@@ -59,6 +59,30 @@ class Model_Player extends Model {
 		Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
 	}
 
+	// Bust the kingdom + park roster caches for the player's current home.
+	// Roster JSON is cached for 20 minutes and was previously never invalidated when a
+	// player's name, persona, or restricted flag changed — leading to stale rosters
+	// (e.g. a restricted player still showed up in client-side searches by mundane name
+	// for up to 20 minutes after the toggle).
+	private function bust_player_roster_caches($request) {
+		$mundane_id = (int)($request['RecipientId'] ?? $request['MundaneId'] ?? 0);
+		if (!$mundane_id) return;
+		global $DB;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT kingdom_id, park_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $mundane_id LIMIT 1");
+		if (!$rs || !$rs->Next()) return;
+		$kid = (int)$rs->kingdom_id;
+		$pid = (int)$rs->park_id;
+		if ($kid > 0) {
+			$kKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid]);
+			Ork3::$Lib->ghettocache->bust('Controller_Kingdom.players_json', $kKey);
+		}
+		if ($pid > 0) {
+			$pKey = Ork3::$Lib->ghettocache->key(['ParkId' => $pid]);
+			Ork3::$Lib->ghettocache->bust('Controller_Park.park_players', $pKey);
+		}
+	}
+
 	function delete_player_award($request) {
 		$r = $this->Player->RemoveAward($request);
 		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
@@ -120,7 +144,10 @@ class Model_Player extends Model {
 	}
   
 	function update_player($request) {
-		return $this->Player->UpdatePlayer($request);
+		$r = $this->Player->UpdatePlayer($request);
+		$this->bust_player_details_cache($request);
+		$this->bust_player_roster_caches($request);
+		return $r;
 	}
 	
 	function set_ban($request) {
@@ -131,17 +158,26 @@ class Model_Player extends Model {
 		return $this->Player->CreatePlayer($request);
 	}
 	function move_player($request) {
+		// Bust source kingdom/park caches BEFORE the move (player still has old park_id),
+		// and again AFTER so the destination's caches refresh too.
+		$this->bust_player_roster_caches($request);
 		$r = $this->Player->MovePlayer($request);
+		$this->bust_player_roster_caches($request);
+		$this->bust_player_details_cache($request);
 		return $r;
 	}
-	
+
 	function suspend_player($request) {
 		$r = $this->Player->SetPlayerSuspension($request);
+		$this->bust_player_roster_caches($request);
+		$this->bust_player_details_cache($request);
 		return $r;
 	}
-	
+
 	function merge_player($request) {
 		$r = $this->Player->MergePlayer($request);
+		$this->bust_player_roster_caches($request);
+		$this->bust_player_details_cache($request);
 		return $r;
 	}
 
