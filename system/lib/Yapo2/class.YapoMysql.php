@@ -21,11 +21,21 @@ class YapoMysql extends YapoDb {
 		}
 		if (function_exists('apcu_fetch')) {
 			$cached = apcu_fetch('yapo_schema_' . $table, $found);
-			if ($found) {
+			// Treat empty Fields as a poisoned entry (DESCRIBE failed when it was cached) —
+			// drop it and re-fetch.
+			if ($found && !empty($cached['Fields'])) {
 				self::$schema_cache[$table] = $cached;
 				return $cached;
 			}
+			if ($found) {
+				apcu_delete('yapo_schema_' . $table);
+			}
 		}
+		// Clear any leftover bound parameters before DESCRIBE/SHOW KEYS so PDO doesn't
+		// try to bind them to these placeholder-free queries (which causes them to fail
+		// silently and return 0 rows — at which point we'd cache an empty schema and
+		// poison every subsequent INSERT/UPDATE/find on this table for 24 hours).
+		$this->Clear();
 		$Keys = $this->DataSet("SHOW KEYS IN $table");
 		$Fields = $this->DataSet("describe $table");
 		$this->Clear();
@@ -56,7 +66,8 @@ class YapoMysql extends YapoDb {
 
 		$result = array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
 		self::$schema_cache[$table] = $result;
-		if (function_exists('apcu_store')) {
+		// Only persist when we got a real schema back — never cache an empty Fields array.
+		if (function_exists('apcu_store') && !empty($fields)) {
 			apcu_store('yapo_schema_' . $table, $result, 86400);
 		}
 		return $result;
