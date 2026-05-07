@@ -1756,6 +1756,7 @@ class Player extends Ork3 {
 
 		// Case A: recommending a Master peerage the player already holds (any kingdomaward)
 		if ($recAwardId > 0 && isset($masterNameById[$recAwardId])) {
+			$this->db->clear();
 			$held = $this->db->query(
 				"select a.awards_id from " . DB_PREFIX . "awards a
 				 where a.mundane_id = {$mid} and a.award_id = {$recAwardId} limit 1"
@@ -1770,6 +1771,7 @@ class Player extends Ork3 {
 			$info = $ladderMap[$recAwardId];
 
 			$masterIdsCsv = implode(',', array_map('intval', $info['MasterAwardIds']));
+			$this->db->clear();
 			$masterHeld   = $this->db->query(
 				"select a.awards_id from " . DB_PREFIX . "awards a
 				 where a.mundane_id = {$mid} and a.award_id in ({$masterIdsCsv}) limit 1"
@@ -1779,6 +1781,7 @@ class Player extends Ork3 {
 			}
 
 			$maxRank   = (int)$info['MaxRank'];
+			$this->db->clear();
 			$topResult = $this->db->query(
 				"select max(a.rank) as max_rank from " . DB_PREFIX . "awards a
 				 where a.mundane_id = {$mid} and a.award_id = {$recAwardId}"
