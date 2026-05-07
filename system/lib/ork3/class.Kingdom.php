@@ -99,6 +99,13 @@ class Kingdom  extends Ork3 {
 		return $response;
 	}
 */
+	private static function awardNameLooksLikeOfficer($name) {
+		if (!is_string($name) || $name === '') return false;
+		$prefix = '(Provincial|Baronial|Ducal|Grand\s+Ducal|Shire|Kingdom|Imperial|Principality|Barony|Duchy|Grand\s+Duchy)';
+		$suffix = '(Monarch|Regent|Prime\s+Minister|Champion|Defender|Seneschal|Chancellor|Clerk|GMR|Guildmaster\s+of\s+Reeves|Guild\s+Master\s+of\s+Reeves|General\s+Minister|Sheriff|Baron(ess)?|Grand\s+Duke|Grand\s+Duchess|Duke|Duchess)';
+		return preg_match('/^' . $prefix . '\s+' . $suffix . '\b/i', trim($name)) === 1;
+	}
+
 	public function GetAwardList($request) {
 		if ($request['IsLadder'] == 'Ladder') {
 			$ladder_clause = " and ka.is_ladder = 1";
@@ -128,11 +135,19 @@ class Kingdom  extends Ork3 {
 		if ($r !== false && $r->size() > 0) {
 			$response['Awards'] = array();
 			while ($r->next()) {
-				if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards' && !in_array($r->officer_role, ['none', null])) {
+				$isOfficerRole = !in_array($r->officer_role, ['none', null]);
+				// Some kingdomaward rows are mapped to a non-officer system award (e.g. Custom Award)
+				// or are orphaned (LEFT JOIN -> NULL officer_role) but are clearly officer titles by
+				// name — e.g. "Baronial Guild Master of Reeves", "Imperial Monarch", "Shire Regent".
+				// Treat those as officers so they bucket into the Officers list, not Awards.
+				if (!$isOfficerRole && self::awardNameLooksLikeOfficer($r->kingdom_awardname)) {
+					$isOfficerRole = true;
+				}
+				if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards' && $isOfficerRole) {
 					continue;
-				} else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers' && in_array($r->officer_role, ['none', null])) {
+				} else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers' && !$isOfficerRole) {
 					continue;
-				} 
+				}
 
 				$response['Awards'][$r->kingdomaward_id] = array(
 					'KingdomAwardId' => $r->kingdomaward_id,
