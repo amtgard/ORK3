@@ -245,13 +245,29 @@ class Controller_Kingdom extends Controller {
 				'IsParkEvent'    => (int)$evtResult->park_id > 0,
 			];
 		}
+		// HasMore: not just a window cap — actually check if any events exist past this window.
+		$hasMore = false;
+		if ($window < 10) {
+			$_nextStart = $endMonths;
+			$DB->Clear();
+			$_more = $DB->DataSet(
+				"SELECT 1 FROM ork_event_calendardetail cd
+				 JOIN ork_event e ON e.event_id = cd.event_id
+				 WHERE e.kingdom_id = {$kid}
+				   AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$_nextStart} MONTH)
+				   AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
+				 LIMIT 1"
+			);
+			$hasMore = ($_more && $_more->Size() > 0);
+		}
+
 		header('Content-Type: application/json');
 		echo json_encode([
 			'Window'           => $window,
 			'StartMonths'      => $startMonths,
 			'EndMonths'        => $endMonths,
 			'Count'            => count($events),
-			'HasMore'          => $window < 10,
+			'HasMore'          => $hasMore,
 			'FallbackHeraldry' => $fallbackHeraldry,
 			'Uir'              => UIR,
 			'Events'           => $events,
@@ -270,30 +286,36 @@ class Controller_Kingdom extends Controller {
 			exit();
 		}
 		global $DB;
+		// last_signin = player's MOST RECENT sign-in anywhere — drives the year bucket so active
+		// travelers don't appear "lost" on their home kingdom roster.
+		// signin_count = overall 6-month count (matches the bucket's "anywhere" semantic).
+		// last_signin_in_kingdom drives the la JOIN so the "last class" we display is from
+		// in-kingdom attendance (most relevant to the kingdom page).
 		$kpSql = "SELECT m.mundane_id, m.persona, m.has_image, m.has_heraldry, m.restricted,
-				COALESCE(m.given_name, '')               AS given_name,
-				COALESCE(m.surname, '')                  AS surname,
-				COALESCE(sub.last_signin, '1970-01-01') AS last_signin,
-				COALESCE(sub.signin_count, 0)           AS signin_count,
-				c.name                                  AS last_class,
-				hp.name                                 AS park_name,
+				COALESCE(m.given_name, '')                          AS given_name,
+				COALESCE(m.surname, '')                             AS surname,
+				COALESCE(sub.last_signin, '1970-01-01')             AS last_signin,
+				COALESCE(sub.signin_count, 0)                       AS signin_count,
+				c.name                                              AS last_class,
+				hp.name                                             AS park_name,
 				GROUP_CONCAT(DISTINCT o.role ORDER BY o.role SEPARATOR ', ') AS officer_roles
 			FROM ork_mundane m
 			INNER JOIN ork_park hp ON hp.park_id = m.park_id AND hp.kingdom_id = {$kid}
 			LEFT JOIN (
 				SELECT a.mundane_id,
 					MAX(a.date) AS last_signin,
+					MAX(CASE WHEN a.kingdom_id = {$kid} THEN a.date END) AS last_signin_in_kingdom,
 					SUM(a.date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)) AS signin_count
 				FROM ork_attendance a
 				INNER JOIN ork_mundane mm
 					ON mm.mundane_id = a.mundane_id
+				   AND mm.kingdom_id = {$kid}
 				   AND mm.suspended = 0 AND mm.active = 1
-				WHERE a.kingdom_id = {$kid}
 				GROUP BY a.mundane_id
 			) sub ON sub.mundane_id = m.mundane_id
 			LEFT JOIN ork_attendance la
 				ON la.mundane_id = m.mundane_id
-			   AND la.date       = sub.last_signin
+			   AND la.date       = sub.last_signin_in_kingdom
 			   AND la.kingdom_id = {$kid}
 			LEFT JOIN ork_class c ON la.class_id = c.class_id
 			LEFT JOIN ork_officer o ON o.mundane_id = m.mundane_id AND o.park_id = m.park_id
@@ -313,16 +335,16 @@ class Controller_Kingdom extends Controller {
 				$imgUrl  = $hasImg ? HTTP_PLAYER_IMAGE    . Common::resolve_image_ext(DIR_PLAYER_IMAGE,    $midPad) : ($hasHer ? $herUrl : null);
 				$mn = ((int)$r->restricted === 0) ? trim($r->given_name . ' ' . $r->surname) : '';
 				$players[] = [
-					'id'          => $mid,
-					'persona'     => $r->persona,
-					'mundaneName' => $mn,
-					'parkName'    => $r->park_name,
-					'signinCount' => (int)$r->signin_count,
-					'lastSignin'  => $r->last_signin,
-					'lastClass'   => $r->last_class,
-					'officerRoles'=> $r->officer_roles,
-					'avatarUrl'   => $imgUrl,
-					'heraldryUrl' => $herUrl,
+					'id'           => $mid,
+					'persona'      => $r->persona,
+					'mundaneName'  => $mn,
+					'parkName'     => $r->park_name,
+					'signinCount'  => (int)$r->signin_count,
+					'lastSignin'   => $r->last_signin,
+					'lastClass'    => $r->last_class,
+					'officerRoles' => $r->officer_roles,
+					'avatarUrl'    => $imgUrl,
+					'heraldryUrl'  => $herUrl,
 				];
 			}
 		}
@@ -442,6 +464,20 @@ class Controller_Kingdom extends Controller {
 			}
 		}
 		$this->data['event_summary'] = $eventSummary;
+
+		// Hide the "Load more" button when there are no events past the initial 12-month window.
+		// events_more iterates 12-month windows up to 120 months out, so any cd in (12, 120]
+		// months means at least one click would yield results.
+		$DB->Clear();
+		$moreRes = $DB->DataSet(
+			"SELECT 1 FROM ork_event_calendardetail cd
+			 JOIN ork_event e ON e.event_id = cd.event_id
+			 WHERE e.kingdom_id = {$kid}
+			   AND cd.event_start >  DATE_ADD(NOW(), INTERVAL 12 MONTH)
+			   AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
+			 LIMIT 1"
+		);
+		$this->data['HasMoreEvents'] = ($moreRes && $moreRes->Size() > 0);
 
 		$pdSql = "
 			SELECT pd.parkday_id, pd.park_id, pd.recurrence, pd.week_day,

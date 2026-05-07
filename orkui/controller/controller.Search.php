@@ -10,6 +10,9 @@ class Controller_Search extends Controller {
 		if ($_uid > 0 && valid_id($this->session->park_id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}
+		// Expose the auth token so the search-results JS can pass it to the SOAP service
+		// (admins use it to bypass the restricted-name gate in Search/Player).
+		$this->data['Token'] = $this->session->token ?? '';
 	}
 	
 	public function index($id=null) {

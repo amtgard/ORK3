@@ -2172,11 +2172,15 @@ html[data-theme="dark"] .kn-events-loadmore {
 html[data-theme="dark"] .kn-events-loadmore .kn-events-loadmore-msg strong {
 	color: var(--ork-text, #e2e8f0);
 }
-html[data-theme="dark"] .kn-events-loadmore-link {
+/* Override the late-cascade `.kn-card a` rule that otherwise re-tints this link
+   with --ork-link-bright in dark mode. */
+html[data-theme="dark"] .kn-events-loadmore .kn-events-loadmore-link {
 	background: #38a169;
+	color: #fff !important;
 }
-html[data-theme="dark"] .kn-events-loadmore-link:hover {
+html[data-theme="dark"] .kn-events-loadmore .kn-events-loadmore-link:hover {
 	background: #48bb78;
+	color: #fff !important;
 }
 
 /* Pagination */

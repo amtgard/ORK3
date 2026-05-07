@@ -5678,37 +5678,44 @@ $(document).ready(function() {
         pkPaginate($table, page);
     });
 
-    // ---- Player search across every year section (cards + list rows) ----
+    // ---- Player search + active-only filter (cards + list rows) ----
     // The DOM holds every player up-front; content-visibility:auto on each year
-    // section keeps off-screen ones cheap. Search filters in place and force-opens
+    // section keeps off-screen ones cheap. Filters apply in place and force-open
     // any year section that has matches.
-    $('#pk-player-search').on('input', function() {
-        var q = $(this).val().trim().toLowerCase();
+    function pkApplyPlayerFilters() {
+        var q = ($('#pk-player-search').val() || '').trim().toLowerCase();
+        var activeOnly = $('#pk-active-only-btn').hasClass('pk-view-active');
+        var filtering  = q || activeOnly;
         var $roots = $('#pk-players-cards, #pk-players-list');
-        if (q === '') {
-            $roots.find('.pk-player-card, .pk-year-table tbody tr').show();
-            $roots.find('.pk-year-section').show();
-            return;
-        }
         $roots.each(function() {
             var $root = $(this);
             $root.find('.pk-player-card').each(function() {
                 var name = $(this).find('.pk-player-name').text().toLowerCase();
                 var mn   = ($(this).attr('data-mundane-name') || '').toLowerCase();
-                $(this).toggle(name.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+                var sc   = parseInt($(this).attr('data-signin-count') || '0', 10);
+                var match = (!q || name.indexOf(q) !== -1 || mn.indexOf(q) !== -1) && (!activeOnly || sc > 0);
+                $(this).toggle(match);
             });
             $root.find('.pk-year-table tbody tr').each(function() {
                 var persona = (this.cells[0] ? this.cells[0].textContent : '').toLowerCase();
                 var mn      = ($(this).attr('data-mundane-name') || '').toLowerCase();
-                $(this).toggle(persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+                var sc      = parseInt($(this).attr('data-signin-count') || '0', 10);
+                var match = (!q || persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1) && (!activeOnly || sc > 0);
+                $(this).toggle(match);
             });
             $root.find('.pk-year-section').each(function() {
+                if (!filtering) { $(this).show(); return; }
                 var hasVisible =
                     $(this).find('.pk-player-card:visible, .pk-year-table tbody tr:visible').length > 0;
                 $(this).toggle(hasVisible);
                 if (hasVisible) this.open = true;
             });
         });
+    }
+    $('#pk-player-search').on('input', pkApplyPlayerFilters);
+    $('#pk-active-only-btn').on('click', function() {
+        $(this).toggleClass('pk-view-active');
+        pkApplyPlayerFilters();
     });
 
     // ---- Players view toggle (cards / list) ----

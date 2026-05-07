@@ -698,6 +698,7 @@
 								<i class="fas fa-search pk-player-search-icon"></i>
 								<input type="text" id="pk-player-search" class="pk-player-search-input" placeholder="Search all players…" autocomplete="off">
 							</div>
+							<button class="pk-view-btn" id="pk-active-only-btn" type="button" title="Show only members with sign-ins in the past 6 months"><i class="fas fa-filter"></i> Active only</button>
 							<div class="pk-view-toggle">
 								<button class="pk-view-btn pk-view-active" data-pkview="cards">
 									<i class="fas fa-th-large"></i> Cards
@@ -739,6 +740,7 @@
 							<a class="pk-player-card<?= $heraldryBgSrc ? ' pk-player-card-hbg' : '' ?>"
 							   <?= $heraldryBgSrc ? 'style="--hbg: url(\'' . htmlspecialchars($heraldryBgSrc) . '\')"'  : '' ?>
 							   <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?>
+							   data-signin-count="<?= (int)$p['SigninCount'] ?>"
 							   href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>">
 								<div class="pk-player-card-top">
 									<div class="pk-player-avatar">
@@ -758,8 +760,17 @@
 									</div>
 								</div>
 								<div class="pk-player-stats">
-									<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
-									<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= date('M j, Y', strtotime($p['LastSignin'])) ?></span>
+									<span><i class="fas fa-check-circle" style="color:#68d391;width:14px"></i> <?= $p['SigninCount'] ?> six month sign-in<?= $p['SigninCount'] != 1 ? 's' : '' ?></span>
+									<?php $_lsTs = strtotime($p['LastSignin']); ?>
+									<span><i class="fas fa-calendar-check" style="color:#63b3ed;width:14px"></i> <?= ($_lsTs > 0 && date('Y', $_lsTs) !== '1970') ? date('M j, Y', $_lsTs) : '—' ?></span>
+									<?php
+										// "Last here" indicator when the player's most recent sign-in wasn't at this park.
+										$_lpTs = !empty($p['LastSigninAtPark']) ? strtotime($p['LastSigninAtPark']) : 0;
+										if (!empty($p['LastSigninAtPark']) && $p['LastSigninAtPark'] !== $p['LastSignin']):
+											$_hereTxt = ($_lpTs > 0 && date('Y', $_lpTs) !== '1970') ? 'here ' . date('M j, Y', $_lpTs) : 'never here';
+									?>
+										<span style="color:#a0aec0"><i class="fas fa-flag" style="color:#a0aec0;width:14px"></i> <?= htmlspecialchars($_hereTxt) ?></span>
+									<?php endif; ?>
 									<?php if (!empty($p['LastClass'])): ?>
 										<span><i class="fas fa-shield-alt" style="color:#b794f4;width:14px"></i> <?= htmlspecialchars($p['LastClass']) ?></span>
 									<?php endif; ?>
@@ -770,7 +781,7 @@
 
 						$pkRenderRow = function (array $p) {
 							?>
-							<tr <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?> onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
+							<tr <?= !empty($p['MundaneName']) ? 'data-mundane-name="' . htmlspecialchars(strtolower($p['MundaneName'])) . '"' : '' ?> data-signin-count="<?= (int)$p['SigninCount'] ?>" onclick='window.location.href="<?= UIR ?>Player/profile/<?= $p['MundaneId'] ?>"'>
 								<td>
 									<?= htmlspecialchars($p['Persona']) ?>
 									<?php if (!empty($p['OfficerRoles'])): ?>
@@ -780,7 +791,16 @@
 									<?php endif; ?>
 								</td>
 								<td data-sortval="<?= $p['SigninCount'] ?>"><?= $p['SigninCount'] ?></td>
-								<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>"><?= date('M j, Y', strtotime($p['LastSignin'])) ?></td>
+								<?php
+									$_lsTsRow = strtotime($p['LastSignin']);
+									$_lpTsRow = !empty($p['LastSigninAtPark']) ? strtotime($p['LastSigninAtPark']) : 0;
+									$_dateCell = ($_lsTsRow > 0 && date('Y', $_lsTsRow) !== '1970') ? date('M j, Y', $_lsTsRow) : '—';
+									if (!empty($p['LastSigninAtPark']) && $p['LastSigninAtPark'] !== $p['LastSignin']) {
+										$_hereTxtRow = ($_lpTsRow > 0 && date('Y', $_lpTsRow) !== '1970') ? 'here ' . date('M j, Y', $_lpTsRow) : 'never here';
+										$_dateCell .= ' <span style="color:#a0aec0;font-size:.85em">(' . htmlspecialchars($_hereTxtRow) . ')</span>';
+									}
+								?>
+								<td class="pk-date-col" data-sortval="<?= $p['LastSignin'] ?>"><?= $_dateCell ?></td>
 								<td><?= htmlspecialchars($p['LastClass'] ?? '') ?></td>
 								<td><?= htmlspecialchars($p['OfficerRoles'] ?? '') ?></td>
 							</tr>
@@ -820,7 +840,7 @@
 								<thead>
 									<tr>
 										<th data-sorttype="text">Persona</th>
-										<th data-sorttype="numeric">Sign-ins</th>
+										<th data-sorttype="numeric">6mo Sign-ins</th>
 										<th data-sorttype="date">Last Visit</th>
 										<th data-sorttype="text">Last Class</th>
 										<th data-sorttype="text">Role</th>

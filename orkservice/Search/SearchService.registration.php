@@ -85,7 +85,8 @@ $server->Register(
 						array( 'limit','request',true,'int',true ),
 						array( 'kingdom_id','request',true,'int',true ),
 						array( 'park_id','request',true,'int',true ),
-						array( 'waivered','request',true,'int',true )
+						array( 'waivered','request',true,'int',true ),
+						array( 'token','request',true,'string',true )
 					)
 			)
 	);
