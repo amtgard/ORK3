@@ -1191,7 +1191,8 @@ class Report  extends Ork3 {
 									where
 										$native_populace
 										$waivered_peeps
-										date >= '$per_period'
+										a.kingdom_id = '$escaped_kingdom_id'
+										and date >= '$per_period'
 										and a.mundane_id > 0
 									group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
@@ -1233,7 +1234,8 @@ class Report  extends Ork3 {
 						SELECT a.date_year, a.date_month, a.park_id,
 						       COUNT(DISTINCT a.mundane_id) AS monthly_unique
 						FROM " . DB_PREFIX . "attendance a
-						WHERE a.date > '$monthly_period'
+						WHERE a.kingdom_id = '$escaped_kingdom_id'
+						  AND a.date > '$monthly_period'
 						  AND a.mundane_id > 0
 						GROUP BY a.date_year, a.date_month, a.park_id
 					) sub
