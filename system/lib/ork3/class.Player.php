@@ -201,6 +201,8 @@ class Player extends Ork3 {
 					return InvalidParameter('Problem with request.');
 				}
 			}
+			$ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$request['MundaneId']]);
+			Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $ck);
 			return Success();
 		} else {
 			return NoAuthorization();
@@ -441,6 +443,13 @@ class Player extends Ork3 {
 	}
 
 	public function GetPlayerClasses($request) {
+		// Cold-cache the dedupe-by-date subquery costs ~185ms for the busiest player
+		// in the DB (1500+ attendance rows). Memcache to convert most loads to ~1ms.
+		// Bust in Attendance::Add/Set/RemoveAttendance and SetPlayerReconciledCredits.
+		$ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)($request['MundaneId'] ?? 0)]);
+		if (($cached = Ork3::$Lib->ghettocache->get('Player.GetPlayerClasses', $ck, 300)) !== false) {
+			return $cached;
+		}
 		/*
 			This does not prevent double-counting for someone who signs as different classes in the same week
 
@@ -504,7 +513,7 @@ class Player extends Ork3 {
 		} else {
 			$response['Status'] = Success();
 		}
-		return $response;
+		return Ork3::$Lib->ghettocache->cache('Player.GetPlayerClasses', $ck, $response);
 	}
 
     public function unique_username($username, $calls = 0) {
@@ -797,6 +806,9 @@ class Player extends Ork3 {
 			// idp_auth: delete FROM player's IDP link — TO player keeps their login
 			$sql = "DELETE FROM " . DB_PREFIX . "idp_auth WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
 			$this->db->query($sql);
+			// Bust the merged-into player's class cache; the source row is gone.
+			$_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$toMundane['id']]);
+			Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
 			return Success();
 		} else {
 			return NoAuthorization();

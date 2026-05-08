@@ -135,6 +135,8 @@ class Attendance  extends Ork3 {
 		));
 
         if ($this->attendance->attendance_id) {
+			$ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$this->attendance->mundane_id]);
+			Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $ck);
     		  return Success($this->attendance->attendance_id);
         }
 		logtrace("AddAttendance: falling through to InvalidParameter", array('att_id' => $this->attendance->attendance_id));
@@ -185,12 +187,20 @@ class Attendance  extends Ork3 {
 		$this->attendance->date_week6 = $_parts['date_week6'];
 
 		$this->attendance->save();
-		
+
 		logtrace("Attendance->AddAttendance()", array($this->attendance->lastSql()));
-		
+
+		// Bust both old and (possibly different) new owner — admin reassigns happen.
+		foreach (array_unique([(int)$attendance->mundane_id, (int)$request['MundaneId']]) as $_mid) {
+			if ($_mid > 0) {
+				$_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => $_mid]);
+				Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
+			}
+		}
+
 		return Success($this->attendance->attendance_id);
 	}
-	
+
 	public function HasAttendance($request) {
 		$sql = "select count(*) > 0 as has_attendance from " . DB_PREFIX . "attendance where ";
 		switch ($request['Filter']) {
@@ -286,9 +296,14 @@ class Attendance  extends Ork3 {
 		$attendance->note = $this->attendance->note;
 				
 		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $attendance->mundane_id, $attendance);
-		
+
 		$this->attendance->delete();
-		
+
+		if ((int)$attendance->mundane_id > 0) {
+			$_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$attendance->mundane_id]);
+			Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
+		}
+
 		return Success($this->attendance->attendance_id);
 	}
 
