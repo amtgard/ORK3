@@ -631,9 +631,10 @@ class Report  extends Ork3 {
 	}
 
 	public function UnitSummary($request) {
+		$has_mundane = valid_id($request['MundaneId']);
+		if ($has_mundane) $mid = (int)$request['MundaneId'];
 		if (valid_id($request['KingdomId'])) $kingdom = " and m.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $park = " and m.park_id = '$request[ParkId]'";
-		if (valid_id($request['MundaneId'])) $mundane = " and um.mundane_id = '$request[MundaneId]'";
 		if (valid_id($request['EventId'])) $event = " and e.event_id = '$request[EventId]'";
 		if (valid_id($request['IncludeCompanies'])) $companies = " or u.type = 'Company' ";
 		if (valid_id($request['IncludeHouseHolds'])) $households = " or u.type = 'Household' ";
@@ -652,17 +653,29 @@ class Report  extends Ork3 {
 		$order_by = (isset($request['OrderBy']) && in_array($request['OrderBy'], $allowed_order))
 			? $request['OrderBy'] : 'u.name';
 
-		$sql = "select distinct u.*, m.*, u.has_heraldry, count(um.mundane_id) as member_count,
+		// When MundaneId is given (player profile path), fold the player + active
+		// filters into the ON clause so the planner enters via ix_um_mundane and
+		// only touches that player's unit_mundane rows. Without this, MariaDB
+		// full-scans ork_unit (~3.5k rows) before filtering.
+		if ($has_mundane) {
+			$um_join = "inner join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id and um.mundane_id = '$mid'" . ($active_only ?? '');
+			$active_only_where = '';
+		} else {
+			$um_join = "left join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id";
+			$active_only_where = $active_only ?? '';
+		}
+
+		$sql = "select u.*, m.*, u.has_heraldry, count(um.mundane_id) as member_count,
 					(select count(*) from " . DB_PREFIX . "unit_mundane um2 where um2.unit_id = u.unit_id) as total_member_count,
 					(select max(a.date) from " . DB_PREFIX . "attendance a join " . DB_PREFIX . "unit_mundane um3 on um3.mundane_id = a.mundane_id where um3.unit_id = u.unit_id $activity_scope) as last_activity_date,
 					(select count(distinct um4.mundane_id) from " . DB_PREFIX . "unit_mundane um4 join " . DB_PREFIX . "attendance a4 on a4.mundane_id = um4.mundane_id where um4.unit_id = u.unit_id and a4.date >= date_sub(curdate(), interval 1 year)) as active_member_count,
 					(select group_concat(m5.persona order by m5.persona separator ', ') from " . DB_PREFIX . "unit_mundane um5 join " . DB_PREFIX . "mundane m5 on m5.mundane_id = um5.mundane_id where um5.unit_id = u.unit_id and um5.role in ('captain','lord') and um5.active = 'Active') as leader_names,
 					um.unit_mundane_id
 					from " . DB_PREFIX . "unit u
-						left join " . DB_PREFIX . "unit_mundane um on u.unit_id = um.unit_id
+						$um_join
 							left join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id
 						left join " . DB_PREFIX . "event e on e.unit_id = u.unit_id
-					where 1 and (1 $kingdom $park $mundane $event_id $active_only $name_where) and (0 $companies $households $events)
+					where 1 and (1 $kingdom $park $event_id $active_only_where $name_where) and (0 $companies $households $events)
 					group by u.unit_id
 				order by $order_by $limit_clause";
 		$r = $this->db->query($sql);
