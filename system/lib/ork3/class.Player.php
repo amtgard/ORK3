@@ -692,6 +692,31 @@ class Player extends Ork3 {
 		}
 	}
 
+	// Bust the three Report.PlayerAwardRecommendations cache keys that could
+	// hold this player's data: the player-keyed view, plus the kingdom and
+	// park scoped lists they appear in. Pass kingdom_id/park_id when the
+	// caller already knows them (e.g. merge/delete after the row is gone);
+	// otherwise we look them up.
+	private function bust_player_award_recs_cache($mundane_id, $kingdom_id = null, $park_id = null) {
+		if (!valid_id($mundane_id)) return;
+		if ($kingdom_id === null || $park_id === null) {
+			$info = $this->player_info($mundane_id);
+			if (!$info) return;
+			if ($kingdom_id === null) $kingdom_id = (int)($info['KingdomId'] ?? 0);
+			if ($park_id    === null) $park_id    = (int)($info['ParkId']    ?? 0);
+		}
+		$kid = (int)$kingdom_id;
+		$pid = (int)$park_id;
+		$mid = (int)$mundane_id;
+		$keys = [['KingdomId' => 0, 'ParkId' => 0, 'PlayerId' => $mid]];
+		if ($kid > 0) $keys[] = ['KingdomId' => $kid, 'ParkId' => 0,   'PlayerId' => 0];
+		if ($pid > 0) $keys[] = ['KingdomId' => 0,    'ParkId' => $pid,'PlayerId' => 0];
+		foreach ($keys as $kd) {
+			Ork3::$Lib->ghettocache->bust('Report.PlayerAwardRecommendations',
+				Ork3::$Lib->ghettocache->key($kd));
+		}
+	}
+
 	public function MergePlayer($request) {
 
 		if ((($fromMundane = $this->player_info($request['FromMundaneId'])) === false)
@@ -809,6 +834,10 @@ class Player extends Ork3 {
 			// Bust the merged-into player's class cache; the source row is gone.
 			$_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$toMundane['id']]);
 			Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
+			// Recommendations were re-pointed to the destination — bust both
+			// players' Report.PlayerAwardRecommendations cache scopes.
+			$this->bust_player_award_recs_cache((int)$fromMundane['id'], (int)$fromMundane['kingdom_id'], (int)$fromMundane['park_id']);
+			$this->bust_player_award_recs_cache((int)$toMundane['id'],   (int)$toMundane['kingdom_id'],   (int)$toMundane['park_id']);
 			return Success();
 		} else {
 			return NoAuthorization();
@@ -835,11 +864,18 @@ class Player extends Ork3 {
 
 			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 
+			// Capture the old kingdom/park before the save so we can bust both
+			// the source and destination Report.PlayerAwardRecommendations caches.
+			$_oldKid = (int)$this->mundane->kingdom_id;
+			$_oldPid = (int)$this->mundane->park_id;
+
 			$this->mundane->park_id = $request['ParkId'];
 			$this->mundane->kingdom_id = $park->kingdom_id;
 			$this->mundane->park_member_since = date('Y-m-d');
 			$this->mundane->waivered = $request['Waivered']?1:0;
 			$this->mundane->save();
+			$this->bust_player_award_recs_cache((int)$request['MundaneId'], $_oldKid, $_oldPid);
+			$this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);
 			error_log('ORK_DEBUG MovePlayer(): Success: ' . json_encode($request));
 			return Success();
 		} else {
@@ -1860,9 +1896,7 @@ class Player extends Ork3 {
 			$awardRec->recommended_by_id = $mundane_id;
 			$awardRec->reason = $request['Reason'];
 			$awardRec->save();
-			if (isset(Ork3::$Lib->ghettocache->memcache)) {
-				Ork3::$Lib->ghettocache->memcache->flush();
-			}
+			$this->bust_player_award_recs_cache($request['MundaneId']);
 			return Success('Recommendation Added!');
 		} else {
 			return NoAuthorization();
@@ -1899,9 +1933,7 @@ class Player extends Ork3 {
 					$awardRec->deleted_at = date('Y-m-d H:i:s');
 					$awardRec->save();
 					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
-					if (isset(Ork3::$Lib->ghettocache->memcache)) {
-						Ork3::$Lib->ghettocache->memcache->flush();
-					}
+					$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
 					return Success('Recommendation Removed!');
 				} else {
 					return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');

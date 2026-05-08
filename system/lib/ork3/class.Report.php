@@ -419,12 +419,16 @@ class Report  extends Ork3 {
 
 	public function PlayerAwardRecommendations($request) {
 
-		$key = Ork3::$Lib->ghettocache->key($request);
-
-		// Removing the cache to ensure the feature is working correctly and users are not confused when
-		// recommendations are not deleted or added as expected.
-		// if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
-		// 	return $cache;
+		// Cache key only the SQL filter dimensions — the non-filter params (IncludeKnights,
+		// IncludeMasters, IncludeLadder, LadderMinimum) don't change the response, so keying
+		// on them just bloats the keyspace and breaks bust.
+		$key = Ork3::$Lib->ghettocache->key([
+			'KingdomId' => (int)($request['KingdomId'] ?? 0),
+			'ParkId'    => (int)($request['ParkId']    ?? 0),
+			'PlayerId'  => (int)($request['PlayerId']  ?? 0),
+		]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
 
 		if (valid_id($request['KingdomId'])) {
 			$location_clause = " AND m.kingdom_id = $request[KingdomId]";
