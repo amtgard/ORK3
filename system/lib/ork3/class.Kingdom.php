@@ -580,6 +580,7 @@ class Kingdom  extends Ork3 {
 							left join ".DB_PREFIX."event e on a.event_id = e.event_id
 							left join ".DB_PREFIX."unit u on a.unit_id = u.unit_id
 				where o.kingdom_id = '" . $kingdom_id . "' and o.park_id = 0
+				order by FIELD(o.role, 'Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'), o.role
 			";
 		$r = $this->db->query($sql);
 		$response = array();

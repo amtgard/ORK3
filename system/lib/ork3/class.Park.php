@@ -331,6 +331,7 @@ class Park extends Ork3
 							left join " . DB_PREFIX . "event e on a.event_id = e.event_id
 							left join " . DB_PREFIX . "unit u on a.unit_id = u.unit_id
 				where o.park_id = '" . $park_id . "' and o.kingdom_id > 0
+				order by FIELD(o.role, 'Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'), o.role
 			";
 		$r = $this->db->query( $sql );
 		$response = [ ];
