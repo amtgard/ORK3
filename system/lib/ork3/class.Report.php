@@ -1531,7 +1531,7 @@ class Report  extends Ork3 {
 		}
 
     $park_id = valid_id($request['ParkId']) ? $request['ParkId'] : 0;
-    
+
 		if (valid_id($request['ParkId'])) {
 			$location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
     		if (valid_id($request['ByLocalPark'])) {
@@ -1548,6 +1548,18 @@ class Report  extends Ork3 {
     		}
 		} else {
 		    $park_comparator = "";
+		}
+		// Same scope, but on a.* (attendance row) instead of m.* (player home).
+		// This lets the 4 inner subqueries enter via idx_attendance_kingdom_date_*
+		// instead of full-scanning the date range and post-filtering by player kingdom.
+		// Semantic match to the GetKingdomPark{,Monthly}Averages rewrite (06714a9f):
+		// "active in this kingdom" = attendance recorded in this kingdom.
+		if (valid_id($request['ParkId'])) {
+			$activity_location = " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
+		} else if (strlen($request['KingdomId']) > 0 && $request['KingdomId'] > 0) {
+			$activity_location = " and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		} else {
+			$activity_location = "";
 		}
 		$select_dues_paid = '';
 		if ($request['KingdomId'] > 0 || $request['ParkId'] > 0) {
@@ -1590,7 +1602,7 @@ class Report  extends Ork3 {
         							from " . DB_PREFIX . "attendance a
         								left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
         							where
-												m.suspended = 0 and date > '$per_period' $park_comparator $location $waiver_clause
+												m.suspended = 0 and date > '$per_period' $park_comparator $activity_location $waiver_clause
         							group by date_week3, date_year, mundane_id) attendance_summary
         					left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
         						left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
@@ -1612,7 +1624,7 @@ class Report  extends Ork3 {
             							from ork_attendance a
             								left join ork_mundane m on a.mundane_id = m.mundane_id
             							where
-														m.suspended = 0 and date > '$per_period' $location $waiver_clause $park_comparator
+														m.suspended = 0 and date > '$per_period' $activity_location $waiver_clause $park_comparator
             							group by date_month, date_year, mundane_id) monthly_list
                                 group by monthly_list.mundane_id) monthly_summary on main_summary.mundane_id = monthly_summary.mundane_id
                         left join
@@ -1625,7 +1637,7 @@ class Report  extends Ork3 {
                     							from ork_attendance a
                     								left join ork_mundane m on a.mundane_id = m.mundane_id
                     							where
-																		m.suspended = 0 and date > '$per_period' $location $waiver_clause $park_comparator
+																		m.suspended = 0 and date > '$per_period' $activity_location $waiver_clause $park_comparator
                     							group by date, date_year, mundane_id) credit_list_source
                 					    group by mundane_id, date_month) credit_list
                                 group by credit_list.mundane_id) credit_counts on main_summary.mundane_id = credit_counts.mundane_id
@@ -1633,14 +1645,14 @@ class Report  extends Ork3 {
                           (select
 										          count(local_park_week_count.attendance_id) as local_park_weeks, local_park_week_count.mundane_id
 									          from 
-                              (select max(a.attendance_id) as attendance_id, a.mundane_id as mundane_id 
+                              (select max(a.attendance_id) as attendance_id, a.mundane_id as mundane_id
                                 from ork_attendance a
                                   left join ork_mundane m on a.mundane_id = m.mundane_id
                                 where
                                   m.park_id = a.park_id
     										          and date > '$per_period'
                                   and m.mundane_id > 0
-                                  $location
+                                  $activity_location
                                   $park_comparator
                                 group by a.date_year, a.date_week3, a.mundane_id) local_park_week_count
                             group by local_park_week_count.mundane_id) park_local_attendance on main_summary.mundane_id = park_local_attendance.mundane_id
