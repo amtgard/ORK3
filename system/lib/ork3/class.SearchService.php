@@ -136,10 +136,10 @@ class SearchService extends Ork3 {
 		$keys = func_get_args();
 		if (count($keys) > 0)
 			$keys[0] = substr($keys[0] ?? '', 0, 4);
-		$key = Ork3::$Lib->ghettocache->key($keys); 
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
+		$key = Ork3::$Lib->ghettocache->key($keys);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
 			return $cache;
-		
+
 		$limit = min($limit, 50);
 
 		// $current=0 → past mode: pick most recent past occurrence per event (regardless of whether upcoming also exists)
@@ -193,9 +193,9 @@ class SearchService extends Ork3 {
 			$when = "date_add(now(), interval - 7 day)";
 			if (!is_null($date_start) && strtotime($date_start))
         $when = "'".date("Y-m-d", strtotime($date_start))."'";
-			$sql .= " and cd.event_start is not null and cd.event_start > $when order by cd.event_start, kingdom_name, park_name, e.name";
+			$sql .= " and cd.event_start is not null and cd.event_start > $when order by cd.event_start, COALESCE(k.name, pk.name), p.name, e.name";
 		} else {
-			$sql .= " order by kingdom_name, park_name, e.name";
+			$sql .= " order by COALESCE(k.name, pk.name), p.name, e.name";
 		}
 		$d = $this->db->query($sql);
 		$i = 0;
