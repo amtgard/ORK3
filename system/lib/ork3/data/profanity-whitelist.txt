@@ -1,0 +1,9 @@
+# Profanity filter whole-word allowlist.
+# When the filter matches a profanity term inside a longer word,
+# this list lets us declare the longer word legitimate (the Scunthorpe escape).
+#
+# Match semantics: case-insensitive whole-word ([\p{L}\p{N}']+) match against
+# the original (non-normalized) input.
+#
+# Format: one whole word per line. Lines starting with '#' or blank are ignored.
+# Edit freely; reload by restarting the request.
