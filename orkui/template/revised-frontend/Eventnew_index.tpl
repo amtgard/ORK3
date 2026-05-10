@@ -663,32 +663,28 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 				</span>
 				<?php endif; ?>
 			</div>
+			<?php
+				$breadcrumbParkId   = $atParkId   ?: $parkId;
+				$breadcrumbParkName = $atParkName; // controller fetches name for atParkId ?: parkId
+			?>
+			<?php if ($kingdomId || ($breadcrumbParkId && $breadcrumbParkName)): ?>
 			<div class="ev-owner-inline">
 				<i class="fas fa-layer-group" style="font-size:10px;opacity:0.6;margin-right:4px"></i>
-				<?= $eventName ?>
 				<?php if ($kingdomId): ?>
-					<span class="ev-owner-sep">›</span>
 					<a href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"><?= $kingdomName ?></a>
 				<?php endif; ?>
-				<?php
-					$breadcrumbParkId   = $atParkId   ?: $parkId;
-					$breadcrumbParkName = $atParkName; // controller fetches name for atParkId ?: parkId
-				?>
 				<?php if ($breadcrumbParkId && $breadcrumbParkName): ?>
-					<span class="ev-owner-sep">›</span>
+					<?php if ($kingdomId): ?><span class="ev-owner-sep">›</span><?php endif; ?>
 					<a href="<?= UIR ?>Park/profile/<?= $breadcrumbParkId ?>"><?= $breadcrumbParkName ?></a>
 				<?php endif; ?>
 			</div>
+			<?php endif; ?>
 		</div>
 
 		<div class="ev-hero-actions">
 			<button class="ev-btn ev-btn-white" type="button" id="ev-share-btn" onclick="evShareUrl(this)" title="Copy link to this event">
 				<i class="fas fa-share-alt"></i> Share
 			</button>
-			<a class="ev-btn ev-btn-white"
-				href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdomId ?>&filter=<?= urlencode($info['Name'] ?? '') ?>">
-				<i class="fas fa-list-alt"></i> Attendance Report
-			</a>
 			<?php if ($CanManageEvent ?? false): ?>
 			<button class="ev-btn ev-btn-outline" type="button" onclick="evOpenEditModal()">
 				<i class="fas fa-pencil-alt"></i> Edit Details
@@ -1319,6 +1315,14 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 				</div>
 				<?php endif; ?>
 				<div class="ev-export-bar">
+					<?php if ($kingdomId): ?>
+					<a class="ev-icon-btn"
+						title="Attendance Report"
+						style="display:inline-flex;align-items:center;gap:6px;text-decoration:none"
+						href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdomId ?>&filter=<?= urlencode($info['Name'] ?? '') ?>">
+						<i class="fas fa-list-alt"></i> Attendance Report
+					</a>
+					<?php endif; ?>
 					<?php if ($canManageAttendance && $checkinOpen): ?>
 					<button type="button" class="ev-icon-btn" id="ev-signin-link-open-btn" title="Sign-in Link" onclick="evOpenSigninLinkModal()" style="display:inline-flex;align-items:center;gap:6px"><i class="fas fa-qrcode"></i> Sign-In Link</button>
 					<?php endif; ?>
