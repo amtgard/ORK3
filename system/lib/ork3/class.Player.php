@@ -1213,6 +1213,15 @@ class Player extends Ork3 {
 					if (!is_null($request['AboutStory']) && $pf->containsProfanity($request['AboutStory'])) {
 						return InvalidParameter('AboutStory', ProfanityFilter::ERROR_MESSAGE);
 					}
+					if (!is_null($request['NamePrefix']) && $pf->containsProfanity($request['NamePrefix'])) {
+						return InvalidParameter('NamePrefix', ProfanityFilter::ERROR_MESSAGE);
+					}
+					if (!is_null($request['NameSuffix']) && $pf->containsProfanity($request['NameSuffix'])) {
+						return InvalidParameter('NameSuffix', ProfanityFilter::ERROR_MESSAGE);
+					}
+					if (!is_null($request['PronunciationGuide']) && $pf->containsProfanity($request['PronunciationGuide'])) {
+						return InvalidParameter('PronunciationGuide', ProfanityFilter::ERROR_MESSAGE);
+					}
 
 					$design->about_persona = $_pick($request['AboutPersona'], 'about_persona');
 					$design->about_story = $_pick($request['AboutStory'], 'about_story');
