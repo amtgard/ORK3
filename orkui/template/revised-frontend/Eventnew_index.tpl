@@ -995,7 +995,19 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 							</div>
 						<?php endif; ?>
 					</div>
-					<?php $_hasFees = !empty($eventFees); $_hasLinks = !empty($externalLinks); ?>
+					<?php
+						// Split the ticket link out of the External Links list so it can
+						// surface as a "Buy Tickets" button inside the Fees card. The
+						// ExternalLinks payload still stores both kinds together.
+						$_ticketLink   = null;
+						$_visibleLinks = [];
+						foreach ($externalLinks as $_el) {
+							if (($_el['Icon'] ?? '') === 'fas fa-ticket-alt') $_ticketLink = $_el;
+							else                                              $_visibleLinks[] = $_el;
+						}
+						$_hasFees  = !empty($eventFees);
+						$_hasLinks = !empty($_visibleLinks);
+					?>
 					<?php if ($_hasFees || $_hasLinks): ?>
 					<div style="flex:0 0 240px">
 						<?php if ($_hasFees): ?>
@@ -1007,12 +1019,17 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 								<span class="ev-detail-value"><?= (float)$fee['Cost'] == 0 ? '<span style="color:#276749">Free</span>' : '$' . number_format((float)$fee['Cost'], 2) ?></span>
 							</div>
 							<?php endforeach; ?>
+							<?php if ($_ticketLink && trim($_ticketLink['Url'] ?? '')): ?>
+							<a href="<?= htmlspecialchars($_ticketLink['Url']) ?>" target="_blank" rel="noopener" class="ev-map-btn ev-buy-tickets-btn" style="margin-top:10px">
+								<i class="fas fa-ticket-alt"></i> <?= htmlspecialchars(trim($_ticketLink['Title'] ?? '') ?: 'Buy Tickets') ?>
+							</a>
+							<?php endif; ?>
 						</div>
 						<?php endif; ?>
 						<?php if ($_hasLinks): ?>
 						<div class="ev-card" style="margin-bottom:0">
 							<h4><i class="fas fa-link" style="margin-right:5px"></i>Links</h4>
-							<?php foreach ($externalLinks as $_el): ?>
+							<?php foreach ($_visibleLinks as $_el): ?>
 								<?php if (trim($_el['Url']) && trim($_el['Title'])): ?>
 								<a href="<?= htmlspecialchars($_el['Url']) ?>" target="_blank" class="ev-map-btn" style="margin-top:6px">
 									<i class="<?= htmlspecialchars($_el['Icon']) ?>"></i> <?= htmlspecialchars($_el['Title']) ?>
@@ -1752,6 +1769,24 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 						<i class="fas fa-plus"></i> Add Fee
 					</button>
 					<input type="hidden" name="Fees" id="ev-fees-json">
+
+					<div id="ev-ticket-link-block" class="ec-ticket-link-block" style="display:none">
+						<div class="ec-ticket-link-heading">
+							<i class="fas fa-ticket-alt"></i>
+							Add Ticket Link?
+							<span class="ec-help-tip" data-ec-tip="If you are offering a mechanism for people to pay fees online, such as through a ticketing website or digital payments (PayPal, Venmo, etc), make it easy to collect fees by adding your link here." aria-label="Help" tabindex="0">?</span>
+						</div>
+						<div class="ec-ticket-link-row">
+							<div class="ec-ticket-link-field">
+								<label for="ev-ticket-link-label" class="ec-ticket-link-label">Label</label>
+								<input type="text" id="ev-ticket-link-label" class="ec-ticket-link-input" value="Buy Tickets" maxlength="60">
+							</div>
+							<div class="ec-ticket-link-field ec-ticket-link-field-grow">
+								<label for="ev-ticket-link-url" class="ec-ticket-link-label">URL</label>
+								<input type="url" id="ev-ticket-link-url" class="ec-ticket-link-input" placeholder="https://...">
+							</div>
+						</div>
+					</div>
 				</div>
 
 				<div class="ev-modal-section">

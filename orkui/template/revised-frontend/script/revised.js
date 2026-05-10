@@ -7328,6 +7328,7 @@ $(document).ready(function() {
         document.body.style.overflow = 'hidden';
         if (typeof evFeesReset === 'function') evFeesReset(EvConfig.fees || []);
         if (typeof evLinksReset === 'function') evLinksReset(EvConfig.links || []);
+        if (typeof evTicketLinkReset === 'function') evTicketLinkReset();
     };
     window.evCloseEditModal = function() {
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
@@ -14645,10 +14646,13 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
 
     render();
 })();
+// Ticket links use this icon as their internal marker. They are managed by the
+// Ticket Link box in the Fees section (not shown in the External Links list).
+var EV_TICKET_ICON = 'fas fa-ticket-alt';
+
 // ---- External Links management (event detail + create) ----
 (function() {
     var LINK_ICONS = [
-        { icon: 'fas fa-ticket-alt', label: 'Ticket'    },
         { icon: 'fab fa-facebook',  label: 'Facebook'  },
         { icon: 'fab fa-discord',   label: 'Discord'   },
         { icon: 'fas fa-globe',     label: 'Globe'     },
@@ -14674,16 +14678,21 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
         }
     });
 
+    function isTicketLink(link) { return link && link.Icon === EV_TICKET_ICON; }
+
     function render() {
         var list = document.getElementById(listId);
         if (!list) return;
         list.innerHTML = '';
-        if (evLinks.length === 0) {
+        // Ticket links are managed in the Fees section, not shown here.
+        var visibleCount = evLinks.filter(function(l) { return !isTicketLink(l); }).length;
+        if (visibleCount === 0) {
             list.innerHTML = '<div style="color:#718096;font-size:13px;padding:4px 0">No links added.</div>';
             serialize();
             return;
         }
         evLinks.forEach(function(link, idx) {
+            if (isTicketLink(link)) return;
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
 
@@ -14798,4 +14807,97 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
     }
 
     render();
+})();
+
+// ---- Ticket Link shortcut (Fees section) ----
+// A convenience UI inside the Admission & Fees section that lets the user
+// attach a single "Buy Tickets" URL when at least one fee is non-zero. The
+// entry is stored in the same ExternalLinks array (with the ticket-alt
+// icon as its marker) but is rendered ONLY in the Fees section, not in
+// the External Links list, to keep the relationship to fees explicit.
+(function() {
+    var TICKET_TITLE_DEFAULT = 'Buy Tickets';
+    var block, labelInput, urlInput, feesJson, linksJson;
+
+    function getJSON(el) {
+        try { return JSON.parse((el && el.value) || '[]'); } catch (e) { return []; }
+    }
+    function hasPositiveFee() {
+        return getJSON(feesJson).some(function(f) { return parseFloat(f.Cost) > 0; });
+    }
+    function findTicketIdx(links) {
+        for (var i = 0; i < links.length; i++) {
+            if (links[i] && links[i].Icon === EV_TICKET_ICON) return i;
+        }
+        return -1;
+    }
+    function syncFromLinks() {
+        var links = getJSON(linksJson);
+        var idx   = findTicketIdx(links);
+        if (idx >= 0) {
+            urlInput.value   = links[idx].Url   || '';
+            labelInput.value = links[idx].Title || TICKET_TITLE_DEFAULT;
+        } else {
+            urlInput.value   = '';
+            labelInput.value = TICKET_TITLE_DEFAULT;
+        }
+    }
+    function syncVisibility() {
+        var show = hasPositiveFee();
+        block.style.display = show ? '' : 'none';
+        if (show) syncFromLinks();
+    }
+    function upsertTicketLink() {
+        var url   = (urlInput.value   || '').trim();
+        var title = (labelInput.value || '').trim() || TICKET_TITLE_DEFAULT;
+        var links = getJSON(linksJson);
+        var idx   = findTicketIdx(links);
+        if (url) {
+            if (idx >= 0) { links[idx].Url = url; links[idx].Title = title; }
+            else          { links.push({ Title: title, Url: url, Icon: EV_TICKET_ICON }); }
+        } else if (idx >= 0) {
+            links.splice(idx, 1);
+        }
+        if (typeof window.evLinksReset === 'function') window.evLinksReset(links);
+        else if (linksJson) linksJson.value = JSON.stringify(links);
+    }
+
+    function init() {
+        block      = document.getElementById('ev-ticket-link-block');
+        labelInput = document.getElementById('ev-ticket-link-label');
+        urlInput   = document.getElementById('ev-ticket-link-url');
+        feesJson   = document.getElementById('ev-fees-json');
+        linksJson  = document.getElementById('ev-links-json');
+        if (!block || !labelInput || !urlInput || !feesJson || !linksJson) return;
+
+        // Initial state — wait a tick so the fees/links IIFEs have populated their JSON inputs
+        setTimeout(syncVisibility, 0);
+
+        var feesList = document.getElementById(
+            (typeof EvConfig !== 'undefined' && EvConfig.feesListId) ? EvConfig.feesListId
+            : (typeof EcConfig !== 'undefined' && EcConfig.feesListId) ? EcConfig.feesListId
+            : 'ev-fees-list'
+        );
+        if (feesList) {
+            feesList.addEventListener('input', syncVisibility);
+            feesList.addEventListener('click', function(e) {
+                if (e.target.closest('button[data-fees-remove]')) setTimeout(syncVisibility, 0);
+            });
+        }
+        document.querySelectorAll('button[onclick*="evFeesAdd"]').forEach(function(btn) {
+            btn.addEventListener('click', function() { setTimeout(syncVisibility, 0); });
+        });
+
+        labelInput.addEventListener('input', upsertTicketLink);
+        urlInput.addEventListener('input',   upsertTicketLink);
+
+        // Re-sync when the edit modal is opened with fresh data.
+        window.evTicketLinkReset = syncVisibility;
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
