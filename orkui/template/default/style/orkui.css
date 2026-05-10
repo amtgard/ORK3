@@ -1039,7 +1039,7 @@ p {
     box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     min-width: 180px;
     padding: 6px 0;
-    z-index: 10000;
+    z-index: var(--ork-z-nav-dropdown);
     overflow: hidden;
 }
 .nav-dropdown-wrap.open .nav-dropdown-menu { display: block; }
