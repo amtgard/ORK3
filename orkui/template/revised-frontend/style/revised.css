@@ -4021,6 +4021,55 @@ html[data-theme="dark"] .ev-banner-toggle small { color: var(--ork-text-muted); 
 html[data-theme="dark"] .ev-banner-position-wrap { background: #0f1419; border-color: var(--ork-border); }
 html[data-theme="dark"] .ev-banner-position-hint { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ev-banner-position-hint i { color: var(--ork-link-bright); }
+
+/* ---- Details tab layout: fees + description + links ---- */
+.ev-details-row {
+	display: flex; gap: 20px; align-items: flex-start;
+}
+.ev-details-main { flex: 1 1 auto; min-width: 0; }
+.ev-details-side {
+	flex: 0 0 240px; display: flex; flex-direction: column; gap: 14px;
+}
+.ev-fees-chevron { display: none; }
+
+/* Mobile-only: stack the cards, put Admission & Fees on top (collapsed
+   by default), description below, links last. The fees header becomes
+   a tap target. */
+@media (max-width: 768px) {
+	.ev-details-row { flex-direction: column; }
+	/* display:contents flattens the side wrapper so its children become
+	   direct flex items of .ev-details-row and can be reordered. */
+	.ev-details-side  { display: contents; }
+	.ev-details-fees  { order: 1; }
+	.ev-details-main  { order: 2; }
+	.ev-details-links { order: 3; }
+	.ev-details-fees, .ev-details-links { width: 100%; box-sizing: border-box; }
+	.ev-fees-toggle {
+		cursor: pointer; user-select: none;
+		display: flex; align-items: center; justify-content: space-between;
+		gap: 8px;
+	}
+	.ev-fees-chevron {
+		display: inline-block;
+		color: #718096; font-size: 12px;
+		transition: transform .18s ease;
+	}
+	.ev-fees-card:not(.ev-open) .ev-fees-body { display: none; }
+	.ev-fees-card.ev-open .ev-fees-chevron { transform: rotate(180deg); }
+	html[data-theme="dark"] .ev-fees-chevron { color: var(--ork-text-muted); }
+
+	/* Edit Details: icon only on mobile. */
+	.ev-edit-details-btn .ev-edit-details-label { display: none; }
+	.ev-edit-details-btn { padding-left: 10px; padding-right: 10px; }
+
+	/* Banner edit pill: top-right, icon-only on mobile. */
+	.ev-banner-edit-btn {
+		top: 10px; left: auto; right: 10px; transform: none;
+		padding: 6px 10px; gap: 4px;
+	}
+	.ev-banner-edit-label { display: none; }
+	.ev-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
+}
 .ev-hero-content {
 	position: relative;
 	display: flex;

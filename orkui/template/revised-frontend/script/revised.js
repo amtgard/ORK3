@@ -14858,3 +14858,27 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         loadIntoPositionStep(file, isPng);
     });
 })();
+
+// ---- Mobile-only: tap to collapse/expand the Admission & Fees card on the
+// About tab. Class toggle is unconditional; CSS only honors it under the
+// mobile breakpoint, so toggling on desktop is a no-op.
+(function() {
+    function bind() {
+        document.querySelectorAll('.ev-fees-toggle').forEach(function(t) {
+            if (t.dataset.bound) return;
+            t.dataset.bound = '1';
+            function toggle() {
+                var card = t.closest('.ev-fees-card');
+                if (!card) return;
+                card.classList.toggle('ev-open');
+                t.setAttribute('aria-expanded', card.classList.contains('ev-open') ? 'true' : 'false');
+            }
+            t.addEventListener('click', toggle);
+            t.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+            });
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+    else bind();
+})();
