@@ -4066,6 +4066,12 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 .ev-banner-edit-btn:focus { opacity: 1; outline: none; }
 .ev-banner-edit-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.55); }
 .ev-banner-edit-btn i { font-size: 11px; }
+/* Touch / coarse pointer: no hover state, so reveal the pill at a softer
+   opacity by default so event hosts on phones can reach it. */
+@media (hover: none), (pointer: coarse) {
+	.ev-hero-editable .ev-banner-edit-btn { opacity: 0.85; }
+	.ev-hero-editable .ev-banner-edit-btn:active { opacity: 1; }
+}
 
 /* ---- Banner upload modal (wireframes + toggles) ---- */
 .ev-banner-wireframes {

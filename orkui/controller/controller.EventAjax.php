@@ -761,10 +761,12 @@ class Controller_EventAjax extends Controller {
 
 		if ($action === 'remove') {
 			global $DB;
+			$DB->Clear();
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_heraldry = 0 WHERE event_id = ' . $event_id);
 			$base = DIR_EVENT_HERALDRY . sprintf('%05d', $event_id);
 			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
 			if (file_exists($base . '.png')) unlink($base . '.png');
+			$this->_bustEventSearchCache($event_id);
 			echo json_encode(['status' => 0]);
 			exit;
 		}
@@ -783,6 +785,7 @@ class Controller_EventAjax extends Controller {
 				'HeraldryMimeType' => $mime,
 			]);
 			if (isset($r['Status']) && $r['Status'] == 0) {
+				$this->_bustEventSearchCache($event_id);
 				echo json_encode(['status' => 0]);
 			} else {
 				echo json_encode(['status' => 1, 'error' => $r['Error'] ?? 'Upload failed.']);
@@ -792,6 +795,21 @@ class Controller_EventAjax extends Controller {
 
 		echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
 		exit;
+	}
+
+	/**
+	 * Bust the SearchService::Event GhettoCache entries that could embed
+	 * event-level fields (HasHeraldry, HasBanner, BannerShowLogo, BannerVignette).
+	 * The cache key is positional on Event()'s arg list; mirror it here for
+	 * the canonical `get_event_info($event_id)` call signature so the next
+	 * page load reads fresh data.
+	 */
+	private function _bustEventSearchCache($event_id) {
+		// Event(null, null, null, null, null, null, $event_id) — 7 positional args.
+		// SearchService::Event applies substr($keys[0] ?? '', 0, 4) before keying.
+		$keys = ['', null, null, null, null, null, (int)$event_id];
+		$key  = Ork3::$Lib->ghettocache->key($keys);
+		Ork3::$Lib->ghettocache->bust('SearchService.Event', $key);
 	}
 
 
@@ -829,19 +847,30 @@ class Controller_EventAjax extends Controller {
 
 		if ($action === 'remove') {
 			$DB->Clear();
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 0 WHERE event_id = ' . $event_id);
+			// Reset display toggles to defaults so a future upload starts fresh
+			// instead of inheriting the removed banner's config.
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1 WHERE event_id = ' . $event_id);
 			$base = DIR_EVENT_BANNER . sprintf('%05d', $event_id);
 			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
 			if (file_exists($base . '.png')) unlink($base . '.png');
+			$this->_bustEventSearchCache($event_id);
 			echo json_encode(['status' => 0]);
 			exit;
 		}
 
 		if ($action === 'config') {
+			// Refuse silent no-ops: config only meaningful with a banner present.
+			$DB->Clear();
+			$row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $event_id);
+			if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
+				echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
+				exit;
+			}
 			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
 			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
 			$DB->Clear();
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ' WHERE event_id = ' . $event_id);
+			$this->_bustEventSearchCache($event_id);
 			echo json_encode(['status' => 0]);
 			exit;
 		}
@@ -853,8 +882,12 @@ class Controller_EventAjax extends Controller {
 			}
 			$tmp  = $_FILES['Banner']['tmp_name'];
 			$mime = $_FILES['Banner']['type'] ?? 'image/jpeg';
-			if (!in_array($mime, ['image/jpeg', 'image/png', 'image/gif'], true)) {
-				echo json_encode(['status' => 1, 'error' => 'Unsupported image type.']);
+			// JPEG and PNG only: resolve_image_ext returns .jpg or .png and the
+			// rest of the pipeline (storage filename, frontend cache-bust, banner
+			// modal accept attribute) only knows those two. GIFs would land as
+			// .jpg on disk with corrupt bytes.
+			if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
+				echo json_encode(['status' => 1, 'error' => 'Unsupported image type. Use JPG or PNG.']);
 				exit;
 			}
 			if (!is_dir(DIR_EVENT_BANNER)) {
@@ -873,6 +906,18 @@ class Controller_EventAjax extends Controller {
 			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
 			$DB->Clear();
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ' WHERE event_id = ' . $event_id);
+			// $DB->Execute() is void; the YapoMysql layer can silently swallow
+			// failures (sql_mode=STRICT etc). Verify the update landed by
+			// re-reading has_banner. If it didn't, roll back the file so we
+			// don't leave an orphan whose flag is still 0.
+			$DB->Clear();
+			$verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $event_id);
+			if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
+				@unlink($base . '.' . $ext);
+				echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
+				exit;
+			}
+			$this->_bustEventSearchCache($event_id);
 			echo json_encode(['status' => 0]);
 			exit;
 		}

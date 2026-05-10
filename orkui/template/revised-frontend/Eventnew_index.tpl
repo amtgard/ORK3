@@ -2159,7 +2159,6 @@ var EvConfig = {
 	canManageStaff:    <?= !empty($canManageStaff) ? 'true' : 'false' ?>,
 	canManageAttendance: <?= !empty($canManageAttendance) ? 'true' : 'false' ?>,
 	checkinOpen:       <?= !empty($checkinOpen) ? 'true' : 'false' ?>,
-	kingdomId:  <?= $kingdomId ?>,
 	eventId:    <?= $eventId ?>,
 	detailId:   <?= $detailId ?>,
 	eventName:  <?= json_encode($info['Name'] ?? 'Event') ?>,
@@ -2302,7 +2301,7 @@ var EvConfig = {
 			<div class="ev-banner-wireframes">
 				<figure class="ev-banner-wireframe ev-banner-wf-desktop">
 					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; full width</figcaption>
-					<svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+					<svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="320" height="100" fill="#cbd5e0"/>
 						<rect x="0" y="0" width="200" height="100" fill="url(#wfLeftFade)" opacity="0.55"/>
 						<rect x="0" y="68" width="320" height="32" fill="url(#wfBottomFade)" opacity="0.55"/>
@@ -2325,7 +2324,7 @@ var EvConfig = {
 
 				<figure class="ev-banner-wireframe ev-banner-wf-mobile">
 					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle third</figcaption>
-					<svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+					<svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="53" height="100" fill="#e2e8f0"/>
 						<rect x="107" y="0" width="53" height="100" fill="#e2e8f0"/>
 						<rect x="53" y="0" width="54" height="100" fill="#cbd5e0"/>
@@ -2371,9 +2370,11 @@ var EvConfig = {
 			<div class="ev-img-form-error" id="ev-banner-error" style="display:none;"></div>
 
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
-				<button class="ev-btn ev-btn-outline" id="ev-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
 				<?php if ($hasBanner): ?>
+				<button class="ev-btn ev-btn-outline" id="ev-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
 				<button class="ev-btn ev-btn-outline" id="ev-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
 				<?php endif; ?>
 			</div>
 		</div>
