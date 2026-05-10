@@ -4104,7 +4104,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 				fieldEl.parentNode.insertBefore(err, fieldEl);
 			}
 			err.textContent = msg;
-			err.style.display = '';
+			err.style.display = 'block';
 			setTimeout(function() {
 				err.scrollIntoView({behavior: 'smooth', block: 'start'});
 			}, 50);
@@ -4124,7 +4124,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 					}
 					if (!shown) {
 						errEl.textContent = msg;
-						errEl.style.display = '';
+						errEl.style.display = 'block';
 					}
 					btn.disabled = false;
 					btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
@@ -4132,7 +4132,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 			})
 			.catch(function(err) {
 				errEl.textContent = 'Request failed: ' + err.message;
-				errEl.style.display = '';
+				errEl.style.display = 'block';
 				btn.disabled = false;
 				btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
 			});
