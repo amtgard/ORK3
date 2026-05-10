@@ -119,7 +119,7 @@ class Controller_Admin extends Controller {
                     error_log('ORK_DEBUG Header redirect: bad status: ' . json_encode($r));
 					header( 'Location: '.UIR."Login/login/Admin/mergepark" );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -144,7 +144,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR."Login/login/Admin/mergeunit" );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -170,7 +170,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR."Login/login/Admin/transferpark/$kingdom_id" );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -269,7 +269,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					//header( 'Location: '.UIR."Login/login/Admin/unit/$unit_id" );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -638,7 +638,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR."Login/login/Admin/event/$event_id" );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -676,7 +676,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -762,7 +762,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1342,7 +1342,7 @@ class Controller_Admin extends Controller {
 					} else if($r['Status'] == 5) {
 						header( 'Location: '.UIR."Login/login/Admin/player/$id" );
 					} else {
-						$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+						$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 					}
 				}
 			}
@@ -1435,7 +1435,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1473,7 +1473,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1510,7 +1510,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			} else {
 				$this->request->clear('Admin_suspendplayer');
@@ -1539,7 +1539,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1611,7 +1611,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1639,7 +1639,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1683,7 +1683,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login' );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1830,7 +1830,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR.'Login/login/Admin/editkingdom/' . $id );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
@@ -1888,7 +1888,7 @@ class Controller_Admin extends Controller {
 				} else if($r['Status'] == 5) {
 					header('Location: '.UIR.'Login/login/Admin/createpark' . (($post!=null)?('/'.$post):''));
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}
