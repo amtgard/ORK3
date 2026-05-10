@@ -297,7 +297,7 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-bar-max{background:linear-gradient(90deg,#f6ad55,#dd6b20)}
 .pna-class-credits{font-size:10px;color:var(--ork-text-hint);margin-top:3px}
 .pna-paragon-dot{color:#b7791f;font-size:10px;margin-left:3px}
-.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #f7fafc}
+.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--ork-surface-light)}
 .pna-officer-row:last-child{border-bottom:none}
 .pna-officer-title{font-size:12px;font-weight:600;color:#2d3748}
 .pna-officer-entity{font-size:11px;color:#4299e1;text-decoration:none}
@@ -388,7 +388,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: #a0aec0; }
+html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }

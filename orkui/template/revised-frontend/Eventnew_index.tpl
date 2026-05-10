@@ -199,7 +199,7 @@
 @keyframes ev-credits-pulse {
 	0%   { box-shadow: 0 0 0 0 rgba(66,153,225,.7); border-color: #4299e1; }
 	60%  { box-shadow: 0 0 0 6px rgba(66,153,225,0); border-color: #4299e1; }
-	100% { box-shadow: 0 0 0 0 rgba(66,153,225,0); border-color: #e2e8f0; }
+	100% { box-shadow: 0 0 0 0 rgba(66,153,225,0); border-color: var(--ork-border); }
 }
 .ev-credits-pulse { animation: ev-credits-pulse 1s ease-out; }
 /* Sign-in link modal */
