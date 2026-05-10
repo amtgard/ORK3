@@ -353,7 +353,7 @@ class Controller_Event extends Controller {
 					// event_type is always saved directly — SetEventDetails blocks all saves when attendance exists,
 					// but event_type is metadata that should be editable at any time.
 					$_evType = trim($this->request->Eventnew_edit->EventType ?? '');
-					$_etAllowed = ['Coronation','Midreign','Endreign','Crown Qualifications','Meeting','Althing','Interkingdom Event','Weaponmaster','Warmaster','Dragonmaster','Other'];
+					$_etAllowed = ['Coronation','Midreign','Endreign','Crown Qualifications','Day Event','Park Raid','Meeting','Althing','Interkingdom Event','Weaponmaster','Warmaster','Dragonmaster','Other'];
 					if ($_evType === '' || in_array($_evType, $_etAllowed, true)) {
 						global $DB;
 						$DB->Clear();

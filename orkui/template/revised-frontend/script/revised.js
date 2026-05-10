@@ -14173,7 +14173,7 @@ window.pnCloseUnitCreateModal = function() {
     var removeBtn = gid('ev-img-remove-btn');
     if (removeBtn) {
         removeBtn.addEventListener('click', function() {
-            if (!confirm('Remove the event heraldry? This cannot be undone.')) return;
+            if (!confirm('Remove the event logo? This cannot be undone.')) return;
             removeBtn.disabled = true;
             fetch(REMOVE_URL, { method: 'POST' })
                 .then(function(r) { return r.json(); })

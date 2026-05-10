@@ -14,9 +14,10 @@
 
 	$eventName   = htmlspecialchars($info['Name'] ?? 'Event');
 	$hasHeraldry = !empty($info['HasHeraldry']);
-	$heraldryUrl = $hasHeraldry
-		? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eventId))
-		: HTTP_EVENT_HERALDRY . '00000.jpg';
+	$heraldryFile = $hasHeraldry ? Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eventId)) : '00000.jpg';
+	$heraldryFs   = DIR_EVENT_HERALDRY . $heraldryFile;
+	$heraldryVer  = ($hasHeraldry && file_exists($heraldryFs)) ? '?v=' . filemtime($heraldryFs) : '';
+	$heraldryUrl  = HTTP_EVENT_HERALDRY . $heraldryFile . $heraldryVer;
 
 	$kingdomId   = (int)($info['KingdomId'] ?? 0);
 	$kingdomName = htmlspecialchars($info['KingdomName'] ?? '');
@@ -597,11 +598,11 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 	></div>
 	<div class="ev-hero-content">
 
-		<div class="ev-heraldry-frame<?= $canManage ? ' ev-heraldry-edit-wrap' : '' ?>"<?= $canManage ? ' onclick="evOpenImgModal()" title="Change heraldry"' : '' ?>>
+		<div class="ev-heraldry-frame<?= $canManage ? ' ev-heraldry-edit-wrap' : '' ?>"<?= $canManage ? ' onclick="evOpenImgModal()" title="Change logo"' : '' ?>>
 			<img id="ev-heraldry-img"
 				src="<?= htmlspecialchars($heraldryUrl) ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-				alt="<?= $eventName ?> heraldry"
+				alt="<?= $eventName ?> logo"
 				crossorigin="anonymous">
 			<?php if ($canManage): ?>
 			<div class="ev-heraldry-edit-overlay"><i class="fas fa-camera ev-heraldry-edit-icon"></i></div>
@@ -626,7 +627,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 					<?= $parkId > 0 ? 'Park Event' : 'Kingdom Event' ?>
 				</span>
 				<?php
-				$_etIcons = ['Coronation'=>'fa-crown','Midreign'=>'fa-star-half-alt','Endreign'=>'fa-star','Crown Qualifications'=>'fa-trophy','Meeting'=>'fa-users','Althing'=>'fa-landmark','Interkingdom Event'=>'fa-globe','Weaponmaster'=>'fa-fist-raised','Warmaster'=>'fa-shield-alt','Dragonmaster'=>'fa-dragon','Other'=>'fa-calendar'];
+				$_etIcons = ['Coronation'=>'fa-crown','Midreign'=>'fa-star-half-alt','Endreign'=>'fa-star','Crown Qualifications'=>'fa-trophy','Day Event'=>'fa-calendar-day','Park Raid'=>'fa-flag','Meeting'=>'fa-users','Althing'=>'fa-landmark','Interkingdom Event'=>'fa-globe','Weaponmaster'=>'fa-fist-raised','Warmaster'=>'fa-shield-alt','Dragonmaster'=>'fa-dragon','Other'=>'fa-calendar'];
 				$_etIcon = $_etIcons[$eventType ?? ''] ?? 'fa-calendar';
 				?>
 				<?php if (!empty($eventType)): ?>
@@ -840,7 +841,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 	<div class="ev-sidebar">
 
 		<?php if ($canManage): ?>
-		<div class="ev-heraldry-edit-wrap" onclick="evOpenImgModal()" title="Change heraldry">
+		<div class="ev-heraldry-edit-wrap" onclick="evOpenImgModal()" title="Change logo">
 			<img class="ev-heraldry-large"
 				src="<?= htmlspecialchars($heraldryUrl) ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
@@ -1734,6 +1735,8 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 								<option value="Midreign"<?= ($eventType === 'Midreign') ? ' selected' : '' ?>>Midreign</option>
 								<option value="Endreign"<?= ($eventType === 'Endreign') ? ' selected' : '' ?>>Endreign</option>
 								<option value="Crown Qualifications"<?= ($eventType === 'Crown Qualifications') ? ' selected' : '' ?>>Crown Qualifications</option>
+								<option value="Day Event"<?= ($eventType === 'Day Event') ? ' selected' : '' ?>>Day Event</option>
+								<option value="Park Raid"<?= ($eventType === 'Park Raid') ? ' selected' : '' ?>>Park Raid</option>
 								<option value="Meeting"<?= ($eventType === 'Meeting') ? ' selected' : '' ?>>Meeting</option>
 								<option value="Althing"<?= ($eventType === 'Althing') ? ' selected' : '' ?>>Althing</option>
 								<option value="Interkingdom Event"<?= ($eventType === 'Interkingdom Event') ? ' selected' : '' ?>>Interkingdom Event</option>
@@ -2218,7 +2221,7 @@ var EvConfig = {
 <div class="ev-img-overlay" id="ev-img-overlay">
 	<div class="ev-img-modal">
 		<div class="ev-img-modal-header">
-			<span class="ev-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Event Heraldry</span>
+			<span class="ev-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Event Logo</span>
 			<button class="ev-img-close-btn" id="ev-img-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-select">
@@ -2231,7 +2234,7 @@ var EvConfig = {
 			<div id="ev-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
 			<div class="ev-img-form-error" id="ev-img-error" style="display:none;"></div>
 			<div style="text-align:center;margin-top:10px">
-				<button class="ev-btn ev-btn-outline" id="ev-img-remove-btn" type="button" style="font-size:12px;padding:4px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Heraldry</button>
+				<button class="ev-btn ev-btn-outline" id="ev-img-remove-btn" type="button" style="font-size:12px;padding:4px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Logo</button>
 			</div>
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-crop" style="display:none;">
