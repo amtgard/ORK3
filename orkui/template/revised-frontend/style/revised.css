@@ -4079,16 +4079,16 @@ html[data-theme="dark"] .ev-banner-position-hint i { color: var(--ork-link-brigh
 	z-index: 2;
 }
 .ev-heraldry-frame {
-	width: 110px;
-	height: 110px;
-	border-radius: 8px;
+	width: 140px;
+	height: 140px;
+	border-radius: 10px;
 	overflow: hidden;
-	border: 3px solid rgba(255,255,255,0.8);
 	flex-shrink: 0;
-	background: rgba(0,0,0,0.15);
+	background: transparent;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	filter: drop-shadow(0 4px 10px rgba(0,0,0,0.45));
 }
 .ev-heraldry-frame img {
 	width: 100%;
