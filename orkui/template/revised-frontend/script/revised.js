@@ -14416,3 +14416,140 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         init();
     }
 })();
+
+// ---- "Help Me Write..." description starter ----
+// Populates the About / Description textarea with one of several
+// Markdown-friendly templates, randomly chosen so events don't all
+// read identically. Templates use {NAME} as a substitution token for
+// the current event name, and leave bracketed placeholders for the
+// host to fill in.
+(function() {
+    var TEMPLATES = [
+        // 1 — classic invite
+        "# Join us at {NAME}!\n\n" +
+        "Whether you're a long-time veteran or this will be your very first time on the field, we'd love to have you out for **{NAME}**.\n\n" +
+        "## Featuring fun activities such as:\n" +
+        "- [activity — e.g. open battlegames all day]\n" +
+        "- [activity — e.g. a class on shield construction]\n" +
+        "- [activity — e.g. arts & sciences competition]\n\n" +
+        "## Court & Awards\n" +
+        "Celebrate your fellow Amtgarders at Court. **Don't forget to submit award recommendations!**\n\n" +
+        "## What to bring\n" +
+        "- Garb (loaner gear available — just ask!)\n" +
+        "- Water and snacks for the day\n" +
+        "- Cash or card if you'd like feast or merch\n\n" +
+        "See you on the field!",
+
+        // 2 — adventurer's call
+        "# {NAME} awaits!\n\n" +
+        "Pack your gear, sharpen your wit, and meet us at **{NAME}** for a day of swords, story, and good company.\n\n" +
+        "## On the schedule:\n" +
+        "- [main battlegame or tournament]\n" +
+        "- [class or workshop]\n" +
+        "- [arts & sciences activity]\n\n" +
+        "## Bring your nominees\n" +
+        "Court is one of the best parts of any Amtgard event — it's how we recognize the people who make this game what it is. Celebrate your fellow Amtgarders at Court. **Don't forget to submit award recommendations!**\n\n" +
+        "## Heads up\n" +
+        "- Bring water — lots of it\n" +
+        "- Garb is encouraged; loaner gear is available\n" +
+        "- All experience levels welcome\n\n" +
+        "Questions? Reach out to the host park before the event.",
+
+        // 3 — short and punchy
+        "# Come fight, feast, and friend up at {NAME}.\n\n" +
+        "A quick rundown of what's in store:\n\n" +
+        "**Featuring fun activities such as:**\n" +
+        "- [activity 1]\n" +
+        "- [activity 2]\n" +
+        "- [activity 3]\n\n" +
+        "**Court & recognition** — Celebrate your fellow Amtgarders at Court. Don't forget to submit award recommendations!\n\n" +
+        "**Brand new?** No problem. We have loaner garb and weapons, and someone will walk you through the basics. Just show up.\n\n" +
+        "**Logistics**\n" +
+        "- Bring water, sunscreen, and something to sit on\n" +
+        "- Cash for merch or food\n" +
+        "- [anything specific you want attendees to know]",
+
+        // 4 — narrative
+        "# {NAME}\n\n" +
+        "The horns are about to sound. **{NAME}** is coming, and we want you there — whether you're picking up a sword for the first time or returning to the field after a long absence.\n\n" +
+        "## What's planned:\n" +
+        "- [signature activity — e.g. open weapons tournament]\n" +
+        "- [class or workshop]\n" +
+        "- [evening activity — court, feast, bardic, etc.]\n\n" +
+        "## At Court\n" +
+        "Court is where we celebrate one another. Tell us who has made the game better for you this season. **Submit your award recommendations** before Court so the heralds have time to read them.\n\n" +
+        "## Practical bits\n" +
+        "- [gate time and any check-in details]\n" +
+        "- [parking or camping notes]\n" +
+        "- Loaner gear is available — just ask anyone in garb\n\n" +
+        "Looking forward to seeing you there.",
+
+        // 5 — rallying cry
+        "# {NAME} — let's make it a good one.\n\n" +
+        "We're putting together **{NAME}**, and the more of you who come out, the better it'll be. Here's a taste of what's planned:\n\n" +
+        "## Featuring fun activities such as:\n" +
+        "- [activity 1]\n" +
+        "- [activity 2]\n" +
+        "- [activity 3]\n\n" +
+        "## Honor the people who make this game great\n" +
+        "Celebrate your fellow Amtgarders at Court. **Don't forget to submit award recommendations** — the heralds love a deep stack to read from.\n\n" +
+        "## Before you head out\n" +
+        "- [date, time, location quick-reference]\n" +
+        "- [what to bring]\n" +
+        "- [special notes — RSVP deadline, fees, etc.]\n\n" +
+        "If this is your first time, welcome — you'll fit right in. Reach out with questions."
+    ];
+
+    function pickTemplate(prevIdx) {
+        if (TEMPLATES.length <= 1) return 0;
+        var i = Math.floor(Math.random() * TEMPLATES.length);
+        // Avoid back-to-back duplicates so a re-roll always changes copy.
+        if (i === prevIdx) i = (i + 1) % TEMPLATES.length;
+        return i;
+    }
+
+    function getEventName(btn) {
+        var nameInput = document.querySelector('input[name="EventName"], input[name="Name"]');
+        var fromInput = nameInput && nameInput.value && nameInput.value.trim();
+        return fromInput || (btn.getAttribute('data-event-name') || '').trim() || 'this event';
+    }
+
+    function fill(textarea, btn) {
+        var idx  = pickTemplate(parseInt(btn.getAttribute('data-last-idx'), 10));
+        var body = TEMPLATES[idx].split('{NAME}').join(getEventName(btn));
+        textarea.value = body;
+        btn.setAttribute('data-last-idx', idx);
+        // Notify any listeners (autosave, char counters, etc.)
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.focus();
+        // Briefly relabel the button so re-clicks read "Try Another..."
+        if (!btn.dataset.origLabel) btn.dataset.origLabel = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-dice"></i> Try Another…';
+    }
+
+    window.evHelpMeWrite = function(btn) {
+        var sel = btn.getAttribute('data-target');
+        var textarea = sel ? document.querySelector(sel) : null;
+        if (!textarea) return;
+
+        var hasContent = (textarea.value || '').trim().length > 0;
+        // Only confirm when the user typed something themselves — re-rolling a
+        // previously-generated template should be a single click.
+        var alreadyGenerated = !!btn.getAttribute('data-last-idx');
+        if (hasContent && !alreadyGenerated) {
+            var go = function() { fill(textarea, btn); };
+            if (typeof window.pnConfirm === 'function') {
+                pnConfirm({
+                    title: 'Replace your description?',
+                    message: 'This will overwrite the text currently in the description box.',
+                    confirmText: 'Replace',
+                    danger: true
+                }, go);
+            } else if (window.confirm('Replace the current description?')) {
+                go();
+            }
+            return;
+        }
+        fill(textarea, btn);
+    };
+})();

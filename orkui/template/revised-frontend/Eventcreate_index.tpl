@@ -161,6 +161,12 @@
 						<label style="display:flex;align-items:center;gap:6px;">
 							Event Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
 							<button type="button" class="kn-md-help-btn" onclick="document.getElementById('ec-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+							<button type="button" class="ev-help-write-btn"
+								data-target='textarea[name="Description"]'
+								data-event-name="<?= $eventName ?>"
+								onclick="evHelpMeWrite(this)">
+								<i class="fas fa-magic"></i> Help Me Write…
+							</button>
 						</label>
 						<textarea name="Description" rows="6" placeholder="Describe the event — activities, schedule, what to bring, camping info, etc."></textarea>
 					</div>
