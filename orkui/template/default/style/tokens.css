@@ -1,0 +1,69 @@
+/* ==========================================================================
+   ORK3 Design Tokens
+   ==========================================================================
+   Loaded before all other CSS via default.theme. Defines custom properties
+   only — this file produces zero visual output on its own.
+
+   Naming: --ork-* for global/app tokens. Component-scoped tokens
+   (--kn-*, --pk-*, --pn-*, --rp-*, --ev-*) remain where they are defined.
+
+   See /tmp/css-refactor/design.md for rationale and frequency evidence.
+   ========================================================================== */
+
+:root {
+	/* ----- Colors ------------------------------------------------------- */
+	--ork-bg-dark:        #2d3748;  /* Nav background, dark surfaces */
+	--ork-text-light:     #e2e8f0;  /* Nav text/icons on dark */
+	--ork-surface-hover:  #edf2f7;  /* Row/tab/button hover */
+	--ork-surface-light:  #f7fafc;  /* Card BGs, table header fills */
+	--ork-text-body:      #4a5568;  /* Body/label text on cards */
+	--ork-text-muted:     #718096;  /* Secondary text */
+	--ork-text-hint:      #a0aec0;  /* Placeholder, muted labels */
+	--ork-blue-primary:   #2c5282;  /* Player hero default, primary action */
+	--ork-blue-link:      #3182ce;  /* Table links */
+	--ork-teal-accent:    #0891b2;  /* Park/event accent */
+	--ork-red-danger:     #e53e3e;  /* Error, danger, deletion */
+	--ork-border:         #e2e8f0;  /* Standard card/table border color */
+
+	/* ----- Spacing ------------------------------------------------------ */
+	--ork-space-card:     16px;     /* Card internal padding */
+	--ork-space-section:  24px;     /* Hero/section padding */
+
+	/* ----- Typography --------------------------------------------------- */
+	--ork-font-body:           "Gill Sans MT","lucida sans unicode",helvetica,arial;
+	--ork-font-heading:        "Gill Sans MT Bold","lucida sans unicode",helvetica,arial;
+	--ork-font-size-sm:        12px;
+	--ork-font-size-base:      13px;
+	--ork-font-weight-semibold: 600;
+	--ork-font-weight-bold:     700;
+
+	/* ----- Border Radii ------------------------------------------------- */
+	--ork-radius-sm:  4px;
+	--ork-radius-md:  6px;
+	--ork-radius-lg:  8px;
+	--ork-radius-xl: 10px;
+
+	/* ----- Shadows ------------------------------------------------------ */
+	--ork-shadow-card:       0 1px 3px rgba(0,0,0,0.05);
+	--ork-shadow-card-hover: 0 3px 10px rgba(0,0,0,0.10);
+	--ork-shadow-dropdown:   0 4px 12px rgba(0,0,0,0.12);
+	--ork-shadow-focus:      0 0 0 2px rgba(49,130,206,0.12);
+
+	/* ----- Z-Index Scale ------------------------------------------------ */
+	--z-dropdown:        300;
+	--z-tooltip:         500;
+	--z-modal-backdrop: 1040;
+	--z-modal:          1100;
+	--z-modal-top:      1200;
+	--z-help-overlay:   1300;
+	--ork-z-nav:        9999;  /* #newmenu in orkui.css */
+	--ork-z-nav-overlay: 10001; /* nav search dropdown */
+
+	/* ----- Transitions -------------------------------------------------- */
+	--ork-transition-base:      border-color 0.15s, box-shadow 0.15s;
+	--ork-transition-opacity:   opacity 0.2s;
+	--ork-transition-transform: transform 0.15s;
+
+	/* ----- Borders (shorthand) ----------------------------------------- */
+	--ork-border-standard: 1px solid #e2e8f0;
+}
