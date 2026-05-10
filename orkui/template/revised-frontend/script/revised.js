@@ -6901,10 +6901,10 @@ $(document).ready(function() {
     var _evEditSaveBtn = document.getElementById('ev-edit-save-btn');
 
     if (_evEditForm) {
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             if (el.name) _evEditOriginals[el.name] = el.value;
         });
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             el.addEventListener('input', evCheckEditDirty);
             el.addEventListener('change', evCheckEditDirty);
         });
@@ -6913,7 +6913,7 @@ $(document).ready(function() {
     function evCheckEditDirty() {
         if (!_evEditForm) return;
         var dirty = false;
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             if (el.name && _evEditOriginals.hasOwnProperty(el.name) && el.value !== _evEditOriginals[el.name]) {
                 dirty = true;
             }
@@ -6923,7 +6923,7 @@ $(document).ready(function() {
 
     function evRestoreEditForm() {
         if (!_evEditForm) return;
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             if (el.name && _evEditOriginals.hasOwnProperty(el.name)) {
                 el.value = _evEditOriginals[el.name];
                 if (el._flatpickr) el._flatpickr.setDate(el.value, false);
