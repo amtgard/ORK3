@@ -42,7 +42,15 @@ class Model_Event extends Model {
 			// Reuse the first GetEvent() result ($r) instead of calling GetEvent() again
 			$ret['HeraldryUrl'] = $r['HeraldryUrl'] ?? '';
 			$ret['HasHeraldry'] = $r['HasHeraldry'] ?? false;
-			
+
+			// Merge banner-image fields onto EventInfo[0] so the template (which
+			// reads $info[0] from Search_Event) sees them alongside HasHeraldry.
+			if (isset($ret['EventInfo'][0]) && is_array($ret['EventInfo'][0])) {
+				$ret['EventInfo'][0]['HasBanner']      = $r['HasBanner']      ?? 0;
+				$ret['EventInfo'][0]['BannerShowLogo'] = $r['BannerShowLogo'] ?? 1;
+				$ret['EventInfo'][0]['BannerVignette'] = $r['BannerVignette'] ?? 1;
+			}
+
 			return $ret;
 		} else {
 			return $r;

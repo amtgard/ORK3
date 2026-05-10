@@ -793,4 +793,91 @@ class Controller_EventAjax extends Controller {
 		echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
 		exit;
 	}
+
+
+	public function banner($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$params   = explode('/', $p ?? '');
+		$event_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$action   = $params[1] ?? '';
+
+		if (!valid_id($event_id)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+			exit;
+		}
+
+		$bUid = (int)$this->session->user_id;
+		$bCanManage = Ork3::$Lib->authorization->HasAuthority($bUid, AUTH_EVENT, $event_id, AUTH_EDIT);
+		if (!$bCanManage) {
+			global $DB;
+			$DB->Clear();
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff s JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = s.event_calendardetail_id WHERE cd.event_id = ' . $event_id . ' AND s.mundane_id = ' . $bUid . ' AND s.can_manage = 1 LIMIT 1');
+			$bCanManage = $staffRow && $staffRow->Next();
+		}
+		if (!$bCanManage) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+			exit;
+		}
+
+		global $DB;
+
+		if ($action === 'remove') {
+			$DB->Clear();
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 0 WHERE event_id = ' . $event_id);
+			$base = DIR_EVENT_BANNER . sprintf('%05d', $event_id);
+			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+			if (file_exists($base . '.png')) unlink($base . '.png');
+			echo json_encode(['status' => 0]);
+			exit;
+		}
+
+		if ($action === 'config') {
+			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
+			$DB->Clear();
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ' WHERE event_id = ' . $event_id);
+			echo json_encode(['status' => 0]);
+			exit;
+		}
+
+		if ($action === 'update') {
+			if (empty($_FILES['Banner']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
+				exit;
+			}
+			$tmp  = $_FILES['Banner']['tmp_name'];
+			$mime = $_FILES['Banner']['type'] ?? 'image/jpeg';
+			if (!in_array($mime, ['image/jpeg', 'image/png', 'image/gif'], true)) {
+				echo json_encode(['status' => 1, 'error' => 'Unsupported image type.']);
+				exit;
+			}
+			if (!is_dir(DIR_EVENT_BANNER)) {
+				@mkdir(DIR_EVENT_BANNER, 0775, true);
+			}
+			$ext  = ($mime === 'image/png') ? 'png' : 'jpg';
+			$base = DIR_EVENT_BANNER . sprintf('%05d', $event_id);
+			// Remove the alternate extension so resolve_image_ext returns the new one.
+			$other = ($ext === 'png') ? 'jpg' : 'png';
+			if (file_exists($base . '.' . $other)) unlink($base . '.' . $other);
+			if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
+				echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
+				exit;
+			}
+			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
+			$DB->Clear();
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ' WHERE event_id = ' . $event_id);
+			echo json_encode(['status' => 0]);
+			exit;
+		}
+
+		echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
+		exit;
+	}
 }

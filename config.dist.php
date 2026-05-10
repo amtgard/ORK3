@@ -21,6 +21,7 @@ define('HTTP_PLAYER_HERALDRY', HTTP_HERALDRY . 'player/');
 define('HTTP_PARK_HERALDRY', HTTP_HERALDRY . 'park/');
 define('HTTP_KINGDOM_HERALDRY', HTTP_HERALDRY . 'kingdom/');
 define('HTTP_EVENT_HERALDRY', HTTP_HERALDRY . 'event/');
+define('HTTP_EVENT_BANNER',   HTTP_HERALDRY . 'event-banner/');
 define('HTTP_UNIT_HERALDRY', HTTP_HERALDRY . 'unit/');
 
 define('HERALDRY_PLAYER_DEFAULT', HTTP_PLAYER_HERALDRY . '000000.jpg');
@@ -47,6 +48,7 @@ define('DIR_PLAYER_HERALDRY', DIR_HERALDRY . "player/");
 define('DIR_PARK_HERALDRY', DIR_HERALDRY . "park/");
 define('DIR_KINGDOM_HERALDRY', DIR_HERALDRY . "kingdom/");
 define('DIR_EVENT_HERALDRY', DIR_HERALDRY . "event/");
+define('DIR_EVENT_BANNER',   DIR_HERALDRY . "event-banner/");
 define('DIR_UNIT_HERALDRY', DIR_HERALDRY . "unit/");
 define('DIR_CACHE', DIR_BASENAME . 'cache/');
 
