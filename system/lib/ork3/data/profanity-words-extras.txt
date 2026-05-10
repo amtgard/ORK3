@@ -245,3 +245,172 @@ whores
 whoreson
 whoresons
 whorish
+
+# Comprehensive slur coverage: racial, ableist, LGBTQ-phobic, misogynistic
+# (added round 3). Excludes terms with strong dual meanings in LARP context
+# (fairy, dwarf, hag, queer, broad, chick, cougar) and political slurs
+# (incel, soyboy, snowflake) where the moderator value is debatable.
+bint
+bints
+camel jockey
+cameljockey
+cameljockeys
+ching chong
+chingchong
+chingchongs
+chink
+chinkier
+chinkiest
+chinks
+chinky
+christkiller
+christkillers
+cretin
+cretins
+crossdresser
+crossdressers
+cuck
+cuckold
+cuckoldry
+cuckolds
+cucks
+dago
+dagoes
+dagos
+dune coon
+dunecoon
+dunecoons
+dyke
+dykes
+fatso
+fatsos
+fattie
+fatties
+fourteen words
+fourteenwords
+gimp
+goatfucker
+goatfuckers
+gook
+gooks
+goombah
+goombahs
+grand wizard
+grandwizard
+gypo
+gypos
+gyppo
+gyppos
+hebe
+hebes
+heeb
+heebs
+heshe
+hesheit
+house nigger
+housenigger
+injun
+injuns
+jewboy
+jewboys
+jigaboos
+jungle bunny
+junglebunnies
+junglebunny
+kikes
+kkk
+klansman
+klansmen
+lardarse
+lardarses
+libtard
+libtards
+limey
+limeys
+midget
+midgets
+mongs
+mongtard
+mongtards
+moon cricket
+mooncricket
+mooncrickets
+mooselimb
+mooselimbs
+mulignan
+mulignans
+niggerlover
+niggerlovers
+niggerloving
+niggers
+niglet
+niglets
+nigras
+pakis
+pickaninnies
+pickaninny
+pikeys
+pizzaface
+pizzafaces
+polack
+polacks
+poofter
+poofters
+porch monkey
+porchmonkey
+porchmonkeys
+prairie nigger
+prairienigger
+prairieniggers
+ragheads
+redskin
+redskins
+rightard
+rightards
+ruskie
+ruskies
+russkie
+sand nigger
+sandnigger
+sandniggers
+sheenies
+sheeny
+sheenys
+shemaled
+shemales
+simp
+simps
+skank
+skankier
+skankiest
+skanks
+skanky
+slants
+spasticated
+spastics
+spaz
+spazz
+spazzed
+spazzes
+spazzing
+spics
+spik
+spiks
+towelheads
+trailer trash
+trailertrash
+transfag
+transfags
+transvestite
+transvestites
+wetbacks
+white power
+white trash
+whitepower
+whitetrash
+wop
+wops
+yard ape
+yardape
+zipperhead
+zipperheads
