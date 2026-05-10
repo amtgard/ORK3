@@ -51,7 +51,10 @@ class ProfanityFilter
 
 		foreach ($m[0] as $hit) {
 			$word = $this->wordAtNormalizedOffset($input, $normalized, $hit[1], strlen($hit[0]));
-			if ($word === null || !isset($this->whitelist[mb_strtolower($word, 'UTF-8')])) {
+			if ($word !== null) {
+				$word = preg_replace('/^[\'\x{2018}\x{2019}]+|[\'\x{2018}\x{2019}]+$/u', '', $word);
+			}
+			if ($word === null || $word === '' || !isset($this->whitelist[mb_strtolower($word, 'UTF-8')])) {
 				return true;
 			}
 		}
