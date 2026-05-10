@@ -1408,19 +1408,19 @@ if (PnConfig.recError) {
             // Client-side validation
             if (!persona) {
                 errEl.textContent = 'Persona is required.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-acct-persona').focus();
                 return;
             }
             if (!username) {
                 errEl.textContent = 'Username is required.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-acct-username').focus();
                 return;
             }
             if (password !== password2) {
                 errEl.textContent = 'Passwords do not match.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-acct-password').focus();
                 return;
             }
@@ -1455,7 +1455,7 @@ if (PnConfig.recError) {
                     if (m) {
                         var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
                         errEl.textContent = msg || 'Save failed.';
-                        errEl.style.display = '';
+                        errEl.style.display = 'block';
                         btn.disabled = false;
                         btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
                         return;
@@ -1464,7 +1464,7 @@ if (PnConfig.recError) {
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
                 });
@@ -1607,7 +1607,7 @@ if (PnConfig.recError) {
 
             if (!duesFrom) {
                 errEl.textContent = 'Date Paid is required.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-dues-from').focus();
                 return;
             }
@@ -1633,7 +1633,7 @@ if (PnConfig.recError) {
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save"></i> Add Dues';
                 });
@@ -1738,7 +1738,7 @@ if (PnConfig.recError) {
                     if (m) {
                         var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
                         errEl.textContent = msg || 'Save failed.';
-                        errEl.style.display = '';
+                        errEl.style.display = 'block';
                         btn.disabled = false;
                         btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
                         return;
@@ -1747,7 +1747,7 @@ if (PnConfig.recError) {
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
                 });
@@ -2168,9 +2168,9 @@ if (PnConfig.recError) {
             var date    = gid('pn-award-date').value;
 
             errEl.style.display = 'none';
-            if (!awardId) { errEl.textContent = 'Please select an award.';            errEl.style.display = ''; return; }
-            if (!giverId) { errEl.textContent = 'Please select who gave this award.'; errEl.style.display = ''; return; }
-            if (!date)    { errEl.textContent = 'Please enter the award date.';       errEl.style.display = ''; return; }
+            if (!awardId) { errEl.textContent = 'Please select an award.';            errEl.style.display = 'block'; return; }
+            if (!giverId) { errEl.textContent = 'Please select who gave this award.'; errEl.style.display = 'block'; return; }
+            if (!date)    { errEl.textContent = 'Please enter the award date.';       errEl.style.display = 'block'; return; }
 
             var fd = new FormData();
             fd.append('KingdomAwardId', awardId);
@@ -2199,7 +2199,7 @@ if (PnConfig.recError) {
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                 })
                 .finally(function() {
                     btnSame.innerHTML = '<i class="fas fa-plus"></i> Add Award';
@@ -3293,10 +3293,10 @@ $(document).ready(function() {
         var date     = gid('kn-award-date').value;
 
         errEl.style.display = 'none';
-        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = ''; return; }
-        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = ''; return; }
-        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = ''; return; }
-        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = ''; return; }
+        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = 'block'; return; }
+        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
+        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
+        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -3325,7 +3325,7 @@ $(document).ready(function() {
             })
             .catch(function(err) {
                 errEl.textContent = 'Save failed: ' + err.message;
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
@@ -3528,12 +3528,12 @@ $(document).ready(function() {
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
                     errEl.textContent = data.error || 'Save failed.';
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                 }
             })
             .catch(function() {
                 errEl.textContent = 'Request failed. Please try again.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btn.disabled = false;
@@ -6306,10 +6306,10 @@ $(document).ready(function() {
         var date     = gid('pk-award-date').value;
 
         errEl.style.display = 'none';
-        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = ''; return; }
-        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = ''; return; }
-        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = ''; return; }
-        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = ''; return; }
+        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = 'block'; return; }
+        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
+        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
+        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -6338,7 +6338,7 @@ $(document).ready(function() {
             })
             .catch(function(err) {
                 errEl.textContent = 'Save failed: ' + err.message;
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
@@ -6543,12 +6543,12 @@ $(document).ready(function() {
                     setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                 } else {
                     errEl.textContent = data.error || 'Save failed.';
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                 }
             })
             .catch(function() {
                 errEl.textContent = 'Request failed. Please try again.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btn.disabled = false;
