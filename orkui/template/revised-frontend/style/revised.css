@@ -3961,7 +3961,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 }
 .ev-banner-wireframe figcaption i { color: #718096; font-size: 11px; }
 .ev-banner-wireframe svg { display: block; width: 100%; height: auto; }
-.ev-banner-wf-mobile { flex: 0 0 38%; }
+/* Both wireframes are 7.5:1, so let them share the row width equally. */
 .ev-banner-wf-hint {
 	margin: 0 0 12px; font-size: 12px; color: #718096;
 	display: flex; align-items: flex-start; gap: 6px;

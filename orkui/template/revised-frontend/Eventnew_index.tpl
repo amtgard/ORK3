@@ -2224,20 +2224,28 @@ var EvConfig = {
 
 				<figure class="ev-banner-wireframe ev-banner-wf-mobile">
 					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
-					<svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-						<rect x="0" y="0" width="53" height="100" fill="#e2e8f0"/>
-						<rect x="107" y="0" width="53" height="100" fill="#e2e8f0"/>
-						<rect x="53" y="0" width="54" height="100" fill="#cbd5e0"/>
-						<rect x="53" y="0" width="54" height="100" fill="url(#wfMobileFade)" opacity="0.45"/>
-						<rect x="60" y="14" width="28" height="28" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
-						<rect x="60" y="50" width="40" height="6" rx="1.5" fill="#fff"/>
-						<rect x="60" y="60" width="34" height="4" rx="1" fill="#fff" opacity="0.85"/>
-						<text x="6"  y="54" font-size="7" fill="#a0aec0">cropped</text>
-						<text x="118" y="54" font-size="7" fill="#a0aec0">cropped</text>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
 							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
 								<stop offset="0" stop-color="#000" stop-opacity="0"/>
-								<stop offset="1" stop-color="#000" stop-opacity="0.6"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
 							</linearGradient>
 						</defs>
 					</svg>
