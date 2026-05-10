@@ -40,15 +40,20 @@
 		$_seenBeltAwardIds = array();
 		foreach ($Details['Awards'] as $a) {
 			$_aid = (int)$a['AwardId'];
-			if (in_array($_aid, $knightAwardIds)) {
+			// Custom Titles aliased to a Knight-of-X count as that knighthood for
+			// belt purposes — use the alias's award_id for the icon mapping and
+			// fall back to the player's custom_name for the display label.
+			$_aliasId = (int)($a['AliasAwardId'] ?? 0);
+			$_effectiveId = in_array($_aliasId, $knightAwardIds) ? $_aliasId : $_aid;
+			if (in_array($_effectiveId, $knightAwardIds)) {
 				$isKnight = true;
-				if (!in_array($_aid, $_seenBeltAwardIds)) {
-					$_seenBeltAwardIds[] = $_aid;
+				if (!in_array($_effectiveId, $_seenBeltAwardIds)) {
+					$_seenBeltAwardIds[] = $_effectiveId;
 					$ownBelts[] = array(
-						'Id'   => $_aid,
+						'Id'   => $_effectiveId,
 						'Date' => $a['Date'] ?? '',
-						'Src'  => $beltImageMap[$_aid],
-						'Name' => $a['Name'] ?? '',
+						'Src'  => $beltImageMap[$_effectiveId],
+						'Name' => !empty($a['CustomAwardName']) ? $a['CustomAwardName'] : ($a['Name'] ?? ''),
 					);
 				}
 			}
@@ -70,9 +75,13 @@
 	// Display privacy: monarchy/admin always see; others see if player opted in
 	$isLoggedIn = isset($this->__session->user_id) && (int)$this->__session->user_id > 0;
 	$canSeePrivate = $isOwnProfile || $canEditAdmin;
-	$showFirstName = $canSeePrivate || ($isLoggedIn && (int)($Player['ShowMundaneFirst'] ?? 1));
-	$showLastName  = $canSeePrivate || ($isLoggedIn && (int)($Player['ShowMundaneLast'] ?? 1));
-	$showEmail     = $canSeePrivate || ($isLoggedIn && (int)($Player['ShowEmail'] ?? 1));
+	// "Restrict Mundane Name Visibility" hard-overrides the per-field toggles —
+	// if the player flipped that, none of the per-field opt-ins should leak info
+	// to ordinary logged-in viewers (only admins / the player themselves see it).
+	$_isRestricted = (int)($Player['Restricted'] ?? 0) === 1;
+	$showFirstName = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneFirst'] ?? 0));
+	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
+	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
 	// Check if player has any reconcilable historical awards (ladder only — matches reconcile page filter)
 	$hasHistorical = false;
@@ -465,7 +474,10 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-sub-pronunciation{font-style:italic;color:rgba(255,255,255,0.6);letter-spacing:.02em}
 .pn-sub-pronouns{font-style:italic;color:rgba(255,255,255,0.6)}
 .pn-sub-sep{margin:0 6px;color:rgba(255,255,255,0.4);font-size:10px}
-.pn-tooltip-trigger{position:relative;display:inline-flex}
+.pn-tooltip-trigger{position:relative;display:inline-flex;align-items:center}
+.pn-tooltip-trigger .pn-tooltip-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-tooltip-trigger:hover .pn-tooltip-text,.pn-tooltip-trigger:focus-within .pn-tooltip-text{display:block}
+html[data-theme="dark"] .pn-tooltip-trigger .pn-tooltip-text{background:var(--ork-bg-tertiary,#1a202c);border:1px solid var(--ork-border)}
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
 .pn-about-main{flex:1;min-width:0;position:relative}
@@ -961,8 +973,8 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<?php endif; ?>
 		</div>
 		<div class="pn-hero-actions">
-			<?php if ($isOwnProfile): ?>
-				<button class="pn-btn pn-btn-white" id="pn-design-btn" onclick="pnOpenDesignModal()"><i class="fas fa-palette"></i> Design My Profile</button>
+			<?php if ($isOwnProfile || $ViewerIsOrkAdmin): ?>
+				<button class="pn-btn pn-btn-white" id="pn-design-btn" onclick="pnOpenDesignModal()"><i class="fas fa-palette"></i> <?= $isOwnProfile ? 'Design My Profile' : 'Edit Profile Design' ?></button>
 			<?php endif; ?>
 			<?php if ($LoggedIn): ?>
 				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
@@ -1035,6 +1047,12 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<span class="pn-detail-label">Username</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['UserName']) ?></span>
 			</div>
+			<?php if ($showEmail && !empty($Player['Email'])): ?>
+			<div class="pn-detail-row">
+				<span class="pn-detail-label">Email</span>
+				<span class="pn-detail-value"><a href="mailto:<?= htmlspecialchars($Player['Email']) ?>"><?= htmlspecialchars($Player['Email']) ?></a></span>
+			</div>
+			<?php endif; ?>
 			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:var(--ork-alert-warning-bg,#fffbe6);border-left:3px solid var(--ork-alert-warning-border,#f6ad55);padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
@@ -1247,13 +1265,18 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					}
 					$_showSidebar = $_hasBeltline || ($_msCompact && !empty($_visibleMilestones));
 					$_showAboutTab    = $_hasAboutPersona || $_hasAboutStory || $_hasBeltline || $_hasMilestones || $isOwnProfile;
+					// On non-own profiles, default to the About tab if the player has actively
+					// filled in their About content (Persona/Story text). Otherwise default to
+					// Awards as before. Auto-derived stuff like milestones/beltline doesn't
+					// count — only deliberate text content from the design modal.
+					$_aboutIsDefault = !$isOwnProfile && ($_hasAboutPersona || $_hasAboutStory);
 				?>
 				<?php if ($_showAboutTab): ?>
-				<li data-tab="about">
+				<li<?= $_aboutIsDefault ? ' class="pn-tab-active"' : '' ?> data-tab="about">
 					<i class="fas fa-scroll"></i><span class="pn-tab-label"> About</span>
 				</li>
 				<?php endif; ?>
-				<li<?= $isOwnProfile ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
+				<li<?= ($isOwnProfile || $_aboutIsDefault) ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
 					<i class="fas fa-medal"></i><span class="pn-tab-label"> Awards</span> <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
 				</li>
 				<li data-tab="titles">
@@ -1275,7 +1298,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
 			</ul>
-			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : 'Awards' ?></div>
+			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards') ?></div>
 
 			<!-- My Amtgard Tab (own profile default) -->
 			<?php if ($isOwnProfile): ?>
@@ -1447,7 +1470,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						<!-- My Associates -->
 						<?php if (!empty($MyAssociates)): ?>
 						<div class="pna-card">
-							<div class="pna-card-title"><i class="fas fa-user-friends"></i> My Associates</div>
+							<div class="pna-card-title"><i class="fas fa-user-friends"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Associates</div>
 							<?php
 							$_maCurPeerage = null;
 							$_maPeerageLabels = ['Squire' => 'Squires', 'Man-At-Arms' => 'Men/Women-at-Arms', 'Lords-Page' => 'Lords-Pages', 'Page' => 'Pages'];
@@ -1471,7 +1494,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 
 			<!-- About Tab -->
 				<?php if ($_showAboutTab): ?>
-				<div class="pn-tab-panel" id="pn-tab-about" style="display:none">
+				<div class="pn-tab-panel" id="pn-tab-about"<?= $_aboutIsDefault ? '' : ' style="display:none"' ?>>
 					<div class="pn-about-layout">
 						<div class="pn-about-main">
 							<?php if ($isOwnProfile && ($_hasAboutPersona || $_hasAboutStory)): ?>
@@ -1485,7 +1508,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<?php endif; ?>
 							<?php if ($_hasAboutStory): ?>
 							<div class="pn-about-section">
-								<h3 class="pn-about-heading">My Story</h3>
+								<h3 class="pn-about-heading"><?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Story</h3>
 								<div class="pn-about-content" id="pn-about-story-rendered"></div>
 							</div>
 							<?php endif; ?>
@@ -1497,13 +1520,23 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<?php endif; ?>
 
 							<?php if (!$_msCompact): ?>
-							<?php if (!empty($_visibleMilestones)): ?>
-							<div class="pn-timeline-section">
-								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> My Milestones</h3>
+							<?php
+								// Always emit the timeline skeleton when the About tab is in view.
+								// Even with zero server-side milestones, level6 entries may be
+								// injected client-side after the async attendance fetch lands.
+								// The JS hides the whole section if it ends up empty.
+								$_renderTimeline = !empty($_visibleMilestones)
+									|| ($isOwnProfile && empty($_hasAboutPersona) && empty($_hasAboutStory) && empty($_hasBeltline))
+									|| (!isset($_msConfig['level6']) || $_msConfig['level6']);
+							?>
+							<?php if ($_renderTimeline): ?>
+							<div class="pn-timeline-section" id="pn-timeline-section">
+								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Milestones</h3>
+								<?php if (!empty($_visibleMilestones)): ?>
 								<div class="pn-timeline">
 									<?php foreach ($_visibleMilestones as $_idx => $_ms): ?>
 									<div class="pn-tl-item">
-																				<div class="pn-tl-left">
+										<div class="pn-tl-left">
 											<div class="pn-tl-date"><?= date('M j, Y', strtotime($_ms['date'])) ?></div>
 										</div>
 										<div class="pn-tl-node"><i class="fas <?= htmlspecialchars($_ms['icon']) ?>"></i></div>
@@ -1514,14 +1547,13 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 									</div>
 									<?php endforeach; ?>
 								</div>
-							</div>
-							<?php elseif ($isOwnProfile && empty($_hasAboutPersona) && empty($_hasAboutStory) && empty($_hasBeltline)): ?>
-							<div class="pn-timeline-section">
-								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> My Milestones</h3>
-								<div class="pn-tl-empty">
+								<?php else: ?>
+								<div class="pn-timeline" id="pn-timeline-empty-target"></div>
+								<div class="pn-tl-empty" id="pn-timeline-empty-state">
 									<i class="fas fa-stream" style="font-size:24px;color:#cbd5e0;margin-bottom:8px;display:block"></i>
-									No milestones to display yet. As you play, milestones will appear here automatically!
+									<?= $isOwnProfile ? 'No milestones to display yet. As you play, milestones will appear here automatically!' : 'No milestones to display yet.' ?>
 								</div>
+								<?php endif; ?>
 							</div>
 							<?php endif; ?>
 							<?php endif; // !$_msCompact ?>
@@ -1531,7 +1563,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<?php if ($_hasBeltline): ?>
 							<?php if (!empty($BeltlinePeers)): ?>
 							<div class="pn-belt-card">
-								<div class="pn-belt-card-title"><i class="fas fa-shield-alt"></i> My Peer<?= count($BeltlinePeers) > 1 ? 's' : '' ?></div>
+								<div class="pn-belt-card-title"><i class="fas fa-shield-alt"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Peer<?= count($BeltlinePeers) > 1 ? 's' : '' ?></div>
 								<?php
 								$_blCurPeerage = null;
 								$_blPeerLabels = ['Squire' => 'Squire to', 'Man-At-Arms' => 'Person-at-Arms to', 'Lords-Page' => "Lord's Page to", 'Page' => 'Page to'];
@@ -1549,7 +1581,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<?php endif; ?>
 							<?php if (!empty($BeltlineAssociates)): ?>
 							<div class="pn-belt-card">
-								<div class="pn-belt-card-title"><i class="fas fa-user-friends"></i> My Associate<?= count($BeltlineAssociates) > 1 ? 's' : '' ?></div>
+								<div class="pn-belt-card-title"><i class="fas fa-user-friends"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Associate<?= count($BeltlineAssociates) > 1 ? 's' : '' ?></div>
 								<?php
 								$_blaCurPeerage = null;
 								$_blAssocLabels = ['Squire' => 'Squires', 'Man-At-Arms' => 'People-at-Arms', 'Lords-Page' => "Lords-Pages", 'Page' => 'Pages'];
@@ -1566,9 +1598,15 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							</div>
 							<?php endif; ?>
 							<?php endif; // $_hasBeltline ?>
-							<?php if ($_msCompact && !empty($_visibleMilestones)): ?>
-							<div class="pn-cms-card">
-								<div class="pn-cms-title"><i class="fas fa-stream"></i> My Milestones</div>
+							<?php
+								// Compact view skeleton — always emit when in compact mode so
+								// JS can inject level6 items even when zero server-side ones exist.
+								$_renderCompact = $_msCompact && (!empty($_visibleMilestones)
+									|| (!isset($_msConfig['level6']) || $_msConfig['level6']));
+							?>
+							<?php if ($_renderCompact): ?>
+							<div class="pn-cms-card" id="pn-cms-card">
+								<div class="pn-cms-title"><i class="fas fa-stream"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Milestones</div>
 								<?php foreach ($_visibleMilestones as $_cms): ?>
 								<div class="pn-cms-item">
 									<i class="fas <?= htmlspecialchars($_cms['icon']) ?> pn-cms-icon"></i>
@@ -1584,7 +1622,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<?php endif; ?>
 
 				<!-- Awards Tab -->
-			<div class="pn-tab-panel" id="pn-tab-awards"<?= $isOwnProfile ? ' style="display:none"' : '' ?>>
+			<div class="pn-tab-panel" id="pn-tab-awards"<?= ($isOwnProfile || $_aboutIsDefault) ? ' style="display:none"' : '' ?>>
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 				?>
@@ -2771,7 +2809,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <!-- =============================================
      Design My Profile Modal
      ============================================= -->
-<?php if ($isOwnProfile): ?>
+<?php if ($isOwnProfile || $ViewerIsOrkAdmin): ?>
 <div class="pn-overlay" id="pn-design-overlay">
 	<div class="pn-modal-box" style="width:720px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
@@ -2814,7 +2852,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<div class="pn-welcome-card-title">About</div>
 						</div>
 						<div class="pn-welcome-card-body">
-							Write your bio and persona story. Both fields support <strong>Markdown</strong> for headings, lists, and links.
+							Write your bio and persona story. Both fields support <strong>Markdown</strong> for headings, lists, and links. Once you add About or Story content, visitors land on your <strong>About</strong> tab by default instead of Awards.
 						</div>
 						<div class="pn-welcome-mock pn-wm-about">
 							<div class="pn-wm-line pn-wm-line-h"></div>
@@ -2923,7 +2961,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					</div>
 					<textarea id="pn-design-about-persona" placeholder="Ex. Hi there! I'm an archer in the Northern Kingdom who loves brewing mead and singing bardic songs. You can find me in the Barony of..."><?= htmlspecialchars($Player['AboutPersona'] ?? '') ?></textarea>
 					<div class="pn-md-preview" id="pn-design-about-persona-preview" style="display:none"></div>
-					<div class="pn-design-hint">Supports <strong>Markdown</strong>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
+					<div class="pn-design-hint">Supports <strong>Markdown</strong> <button type="button" class="kn-md-help-btn" onclick="document.getElementById('pn-md-help-overlay').classList.add('kn-open')" title="Markdown reference">?</button>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
 				</div>
 				<div class="pn-design-field">
 					<label>My Story</label>
@@ -2939,7 +2977,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					</div>
 					<textarea id="pn-design-about-story" placeholder="Ex. Feywild the Brewer has been traveling the realms looking for the Amulet of Fireballs. After his village was destroyed in a rock giant stampede..."><?= htmlspecialchars($Player['AboutStory'] ?? '') ?></textarea>
 					<div class="pn-md-preview" id="pn-design-about-story-preview" style="display:none"></div>
-					<div class="pn-design-hint">Supports <strong>Markdown</strong>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
+					<div class="pn-design-hint">Supports <strong>Markdown</strong> <button type="button" class="kn-md-help-btn" onclick="document.getElementById('pn-md-help-overlay').classList.add('kn-open')" title="Markdown reference">?</button>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
 				</div>
 				<div class="pn-design-field pn-about-beltline-toggle">
 					<label>
@@ -3094,25 +3132,31 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				</div>
 				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
 					<div class="pn-section-heading">Persona Display Controls</div>
+					<?php if ($_isRestricted): ?>
+					<div class="pn-design-hint" style="margin-bottom:10px;padding:8px 10px;background:#fef5e7;border:1px solid #f6ad55;border-radius:6px;color:#7b341e">
+						<i class="fas fa-lock" style="margin-right:4px"></i>
+						<strong>Restrict Mundane Name Visibility</strong> is on, so these toggles are disabled. While restricted, only kingdom officers and ORK admins can see your mundane name and email — even if these are checked.
+					</div>
+					<?php endif; ?>
 					<div class="pn-design-field" style="margin-bottom:10px">
-						<label class="pn-section-toggle-label">
-							<input type="checkbox" id="pn-design-show-first" <?= ((int)($Player['ShowMundaneFirst'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						<label class="pn-section-toggle-label" <?= $_isRestricted ? 'style="opacity:0.5"' : '' ?>>
+							<input type="checkbox" id="pn-design-show-first" <?= ((int)($Player['ShowMundaneFirst'] ?? 0)) ? 'checked' : '' ?> <?= $_isRestricted ? 'disabled' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 							Show Mundane First Name
-							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
+							<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user.</span></span>
 						</label>
 					</div>
 					<div class="pn-design-field" style="margin-bottom:10px">
-						<label class="pn-section-toggle-label">
-							<input type="checkbox" id="pn-design-show-last" <?= ((int)($Player['ShowMundaneLast'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						<label class="pn-section-toggle-label" <?= $_isRestricted ? 'style="opacity:0.5"' : '' ?>>
+							<input type="checkbox" id="pn-design-show-last" <?= ((int)($Player['ShowMundaneLast'] ?? 0)) ? 'checked' : '' ?> <?= $_isRestricted ? 'disabled' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 							Show Mundane Last Name
-							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
+							<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Monarchy and administrators can always see your real name. Set this to yes to show it to any logged-in user.</span></span>
 						</label>
 					</div>
 					<div class="pn-design-field">
-						<label class="pn-section-toggle-label">
-							<input type="checkbox" id="pn-design-show-email" <?= ((int)($Player['ShowEmail'] ?? 1)) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						<label class="pn-section-toggle-label" <?= $_isRestricted ? 'style="opacity:0.5"' : '' ?>>
+							<input type="checkbox" id="pn-design-show-email" <?= ((int)($Player['ShowEmail'] ?? 0)) ? 'checked' : '' ?> <?= $_isRestricted ? 'disabled' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 							Show Email Address
-							<span class="pn-tooltip-trigger" title="Monarchy and administrators can always see your email address. Set this to yes to show it to any logged-in user."><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i></span>
+							<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Monarchy and administrators can always see your email address. Set this to yes to show it to any logged-in user.</span></span>
 						</label>
 					</div>
 				</div>
@@ -3244,6 +3288,35 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-design-cancel">Cancel</button>
 			<button class="pn-btn pn-btn-primary" id="pn-design-save"><i class="fas fa-save"></i> Save Changes</button>
+		</div>
+	</div>
+</div>
+
+<!-- Markdown Help Modal (shared by About and My Story fields) -->
+<div id="pn-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
+	<div class="kn-modal-box" style="width:420px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-hashtag" style="margin-right:8px;color:#2b6cb0"></i>Markdown Reference</h3>
+			<button class="kn-modal-close-btn" onclick="document.getElementById('pn-md-help-overlay').classList.remove('kn-open')">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="padding:16px 20px">
+			<table class="kn-md-help-table">
+				<thead><tr><th>You type</th><th>Result</th></tr></thead>
+				<tbody>
+					<tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+					<tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+					<tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+					<tr><td><code>[link](https://...)</code></td><td><a href="#" onclick="return false">link</a></td></tr>
+					<tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+					<tr><td><code>- item</code></td><td>&bull; Bullet list</td></tr>
+					<tr><td><code>1. item</code></td><td>1. Numbered list</td></tr>
+					<tr><td><code># Heading</code></td><td><strong>Large heading</strong></td></tr>
+					<tr><td><code>## Heading</code></td><td><strong>Smaller heading</strong></td></tr>
+					<tr><td><code>&gt; quote</code></td><td><em>Blockquote</em></td></tr>
+					<tr><td>Blank line</td><td>New paragraph</td></tr>
+					<tr><td>Single newline</td><td>Line break</td></tr>
+				</tbody>
+			</table>
 		</div>
 	</div>
 </div>
@@ -3388,6 +3461,7 @@ var PnConfig = {
 	customAwardId:      <?= (int)($CustomAwardId ?? 94) ?>,
 	customTitleAwardId: <?= (int)($CustomTitleAwardId ?? 0) ?>,
 	isOwnProfile:     <?= !empty($isOwnProfile) ? 'true' : 'false' ?>,
+	canEditDesign:    <?= (!empty($isOwnProfile) || !empty($ViewerIsOrkAdmin)) ? 'true' : 'false' ?>,
 	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
 	classToParagon:   <?= json_encode($pnClassToParagon) ?>,
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
@@ -3435,6 +3509,10 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 })();
 
 // ---- Photo Focus (precise pixel positioning) ----
+// Mirrors the geometry used by the Design modal canvas (drawFocus): the visible
+// circle has diameter = (size/100) * min(imgW, imgH) in image-pixel space, with
+// its centre at (fx%, fy%) of the image. We scale the image so that diameter
+// fills min(boxW, boxH), then translate the focal point to the box centre.
 (function() {
 	var imgs = document.querySelectorAll('.pn-avatar img[data-focus-size]');
 	function applyFocus(img) {
@@ -3442,35 +3520,38 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var fy = parseFloat(img.dataset.focusY);
 		var fs = parseFloat(img.dataset.focusSize);
 		if (isNaN(fx) || isNaN(fy) || isNaN(fs)) return;
+		if (!img.naturalWidth || !img.naturalHeight) return;
 		var box = img.parentElement;
-		var cw = box.offsetWidth || 110, ch = box.offsetHeight || 110;
-		// Zoom: fs=100 → 1x (fills container), fs=50 → 2x, etc.
-		// Using object-fit:cover preserves aspect ratio and handles EXIF rotation correctly.
-		var zoom = 100 / Math.max(15, fs);
-		var ew = cw * zoom, eh = ch * zoom;
-		// Focal point within the (zoomed) element
-		var ox = (fx / 100) * ew - cw / 2;
-		var oy = (fy / 100) * eh - ch / 2;
-		ox = Math.max(0, Math.min(ew - cw, ox));
-		oy = Math.max(0, Math.min(eh - ch, oy));
+		// clientWidth/Height exclude the avatar's border; absolutely positioned
+		// children measure from the padding edge, so we want content dimensions.
+		var cw = box.clientWidth || 102, ch = box.clientHeight || 102;
+		var iw = img.naturalWidth, ih = img.naturalHeight;
+		var cropDiameter = (Math.max(15, fs) / 100) * Math.min(iw, ih);
+		var scale = Math.min(cw, ch) / cropDiameter;
+		var rw = iw * scale, rh = ih * scale;
+		var fxPx = (fx / 100) * rw;
+		var fyPx = (fy / 100) * rh;
 		img.style.position = 'absolute';
-		img.style.width = ew + 'px';
-		img.style.height = eh + 'px';
-		img.style.left = (-ox) + 'px';
-		img.style.top = (-oy) + 'px';
-		img.style.objectFit = 'cover';
-		img.style.objectPosition = fx + '% ' + fy + '%';
+		img.style.width  = rw + 'px';
+		img.style.height = rh + 'px';
+		img.style.left   = (cw / 2 - fxPx) + 'px';
+		img.style.top    = (ch / 2 - fyPx) + 'px';
+		img.style.objectFit = '';
+		img.style.objectPosition = '';
+		// .heraldry-img in orkui.css sets max-width:179px / max-height:240px,
+		// which would otherwise clamp the zoomed-up image and break the crop.
 		img.style.maxWidth = 'none';
+		img.style.maxHeight = 'none';
 	}
 	imgs.forEach(function(img) {
-		applyFocus(img);
-		if (!img.complete) img.addEventListener('load', function() { applyFocus(img); });
+		if (img.complete && img.naturalWidth) applyFocus(img);
+		img.addEventListener('load', function() { applyFocus(img); });
 	});
 })();
 
 // ---- Design My Profile Modal ----
 (function() {
-	if (!PnConfig.isOwnProfile) return;
+	if (!PnConfig.canEditDesign) return;
 	function gid(id) { return document.getElementById(id); }
 
 	// Open/Close
@@ -3487,7 +3568,14 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	}
 	gid('pn-design-close-btn').addEventListener('click', closeDesign);
 	gid('pn-design-cancel').addEventListener('click', closeDesign);
-	gid('pn-design-overlay').addEventListener('click', function(e) { if (e.target === this) closeDesign(); });
+	// Close on overlay click — but only when the press *started* on the overlay.
+	// Otherwise drag-selecting text and releasing outside the modal closes it.
+	(function() {
+		var overlay = gid('pn-design-overlay');
+		var pressOnOverlay = false;
+		overlay.addEventListener('mousedown', function(e) { pressOnOverlay = (e.target === overlay); });
+		overlay.addEventListener('click', function(e) { if (pressOnOverlay && e.target === overlay) closeDesign(); pressOnOverlay = false; });
+	})();
 	document.addEventListener('keydown', function(e) {
 		if ((e.key === 'Escape' || e.keyCode === 27) && gid('pn-design-overlay').classList.contains('pn-open')) closeDesign();
 	});
@@ -3760,9 +3848,12 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var preview = gid('pn-name-preview');
 		var heroPreview = document.querySelector('.pn-hero-preview-name');
 		var heroName = gid('pn-hero-persona');
-		if (preview) preview.style.fontFamily = f.family;
-		if (heroPreview) heroPreview.style.fontFamily = f.family;
-		if (heroName) heroName.style.fontFamily = heroFam;
+		// setProperty with 'important' is needed so inline styles win over the
+		// server-rendered <style>...!important rule that exists once a name font
+		// has been saved (see template line ~225).
+		if (preview)     preview.style.setProperty('font-family', f.family, 'important');
+		if (heroPreview) heroPreview.style.setProperty('font-family', f.family, 'important');
+		if (heroName)    heroName.style.setProperty('font-family', heroFam, 'important');
 	}
 	function pnRenderFontPicker() {
 		var container = gid('pn-font-picker');
@@ -4048,7 +4139,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 
 // ---- Milestones Config (Design My Profile) ----
 (function() {
-	if (!PnConfig.isOwnProfile) return;
+	if (!PnConfig.canEditDesign) return;
 
 	// Init toggles from saved config
 	var cfg = PnConfig.milestoneConfig || {};
@@ -4154,20 +4245,37 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 
 	// Delete custom milestone
 	window.pnDeleteMilestone = function(msId) {
-		if (!confirm('Delete this custom milestone?')) return;
-		var fd = new FormData();
-		fd.append('MilestoneId', msId);
-		fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletemilestone', { method: 'POST', body: fd })
-			.then(function(r) { return r.json(); })
-			.then(function(result) {
-				if (result && result.status === 0) {
-					customData = customData.filter(function(m) { return m.MilestoneId !== msId; });
-					renderCustomList();
-				} else {
-					alert((result && result.error) || 'Failed to delete milestone.');
-				}
-			})
-			.catch(function() { alert('Request failed.'); });
+		var ms = customData.find(function(m) { return m.MilestoneId === msId; });
+		var preview = '';
+		if (ms) {
+			var dateStr = ms.MilestoneDate || '';
+			var humanDate = dateStr;
+			if (dateStr && dateStr !== '0000-00-00') {
+				var d = new Date(dateStr + 'T00:00:00');
+				if (!isNaN(d.getTime())) humanDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+			}
+			preview = humanDate + ' — ' + (ms.Description || '');
+		}
+		pnConfirm({
+			title:       'Delete Milestone',
+			message:     preview ? ('Delete this custom milestone — ' + preview + '?') : 'Delete this custom milestone?',
+			confirmText: 'Delete',
+			danger:      true
+		}, function() {
+			var fd = new FormData();
+			fd.append('MilestoneId', msId);
+			fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletemilestone', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(result) {
+					if (result && result.status === 0) {
+						customData = customData.filter(function(m) { return m.MilestoneId !== msId; });
+						renderCustomList();
+					} else {
+						alert((result && result.error) || 'Failed to delete milestone.');
+					}
+				})
+				.catch(function() { alert('Request failed.'); });
+		});
 	};
 })();
 
@@ -4586,6 +4694,129 @@ $(function() {
 			// Re-render sparkline now that dates are populated
 			if (typeof pnRenderSparkline === 'function') pnRenderSparkline();
 
+			// ---- Inject "Reached Level 6" milestones into the timeline ----
+			// We compute these client-side (instead of server-side) because they
+			// need full attendance history, which is fetched async to keep the
+			// initial page render fast. Honors the user's milestone toggle config.
+			(function() {
+				var msCfg = PnConfig.milestoneConfig || {};
+				if (msCfg.level6 === 0) return; // disabled in user prefs
+				var classList = PnConfig.classList || [];
+				if (!classList.length || !att.length) return;
+
+				// classId → { name, reconciled, history: [{date, credits}, ...] }
+				var classData = {};
+				classList.forEach(function(c) {
+					classData[c.ClassId] = { name: c.ClassName, reconciled: parseInt(c.Reconciled || 0), history: [] };
+				});
+				att.forEach(function(a) {
+					var cid = parseInt(a.ClassId || 0);
+					if (cid && classData[cid] && a.Date && a.Date !== '0000-00-00') {
+						classData[cid].history.push({ date: a.Date, credits: parseFloat(a.Credits || 0) });
+					}
+				});
+
+				var newMilestones = [];
+				Object.keys(classData).forEach(function(cid) {
+					var cd = classData[cid];
+					if (!cd.history.length) return;
+					cd.history.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+					var cum = cd.reconciled;
+					for (var i = 0; i < cd.history.length; i++) {
+						cum += cd.history[i].credits;
+						if (cum >= 53) {
+							newMilestones.push({ date: cd.history[i].date, name: cd.name });
+							break;
+						}
+					}
+				});
+				if (!newMilestones.length) return;
+
+				// Build a DOM node for one milestone matching the server template structure
+				function fmtDate(iso) {
+					var d = new Date(iso + 'T00:00:00');
+					if (isNaN(d.getTime())) return iso;
+					return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+				}
+				function makeTlItem(date, desc) {
+					var item = document.createElement('div');
+					item.className = 'pn-tl-item';
+					item.setAttribute('data-tl-date', date);
+					var human = fmtDate(date);
+					item.innerHTML = ''
+						+ '<div class="pn-tl-left"><div class="pn-tl-date">' + human + '</div></div>'
+						+ '<div class="pn-tl-node"><i class="fas fa-hat-wizard"></i></div>'
+						+ '<div class="pn-tl-right">'
+						+   '<div class="pn-tl-desc">' + $('<div>').text(desc).html() + '</div>'
+						+   '<span class="pn-tl-date-mobile">' + human + '</span>'
+						+ '</div>';
+					return item;
+				}
+				function makeCmsItem(date, desc) {
+					var item = document.createElement('div');
+					item.className = 'pn-cms-item';
+					item.setAttribute('data-tl-date', date);
+					var d = new Date(date + 'T00:00:00');
+					var my = isNaN(d.getTime()) ? date : (String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getFullYear()).slice(-2));
+					item.innerHTML = ''
+						+ '<i class="fas fa-hat-wizard pn-cms-icon"></i>'
+						+ '<div class="pn-cms-line"><strong>' + my + '</strong> &ndash; ' + $('<div>').text(desc).html() + '</div>';
+					return item;
+				}
+
+				function injectInto(container, itemSelector, factory) {
+					if (!container) return;
+					// Backfill data-tl-date on existing items (server template doesn't emit it).
+					var existing = container.querySelectorAll(itemSelector);
+					for (var k = 0; k < existing.length; k++) {
+						if (existing[k].getAttribute('data-tl-date')) continue;
+						var label = existing[k].querySelector('.pn-tl-date, .pn-cms-line strong');
+						if (!label) continue;
+						var txt = label.textContent.trim();
+						// Compact label is "MM/YY" — assume day=01 for sort.
+						var iso = null;
+						var m = txt.match(/^(\d{2})\/(\d{2})$/);
+						if (m) {
+							var yr = parseInt(m[2]); yr += yr < 70 ? 2000 : 1900;
+							iso = yr + '-' + m[1] + '-01';
+						} else {
+							var parsed = Date.parse(txt);
+							if (!isNaN(parsed)) {
+								var d2 = new Date(parsed);
+								iso = d2.getFullYear() + '-' + String(d2.getMonth()+1).padStart(2,'0') + '-' + String(d2.getDate()).padStart(2,'0');
+							}
+						}
+						if (iso) existing[k].setAttribute('data-tl-date', iso);
+					}
+					newMilestones.forEach(function(m) {
+						var node = factory(m.date, 'Reached Level 6 in ' + m.name);
+						var siblings = container.querySelectorAll(itemSelector);
+						var inserted = false;
+						for (var j = 0; j < siblings.length; j++) {
+							var sd = siblings[j].getAttribute('data-tl-date') || '';
+							if (sd && sd > m.date) {
+								container.insertBefore(node, siblings[j]);
+								inserted = true;
+								break;
+							}
+						}
+						if (!inserted) container.appendChild(node);
+					});
+				}
+
+				// Center-timeline view (default) and compact-sidebar view (opt-in).
+				injectInto(document.querySelector('.pn-timeline'), '.pn-tl-item', makeTlItem);
+				injectInto(document.querySelector('.pn-cms-card'), '.pn-cms-item', makeCmsItem);
+
+				// If we emitted an empty skeleton (no server-side milestones) and JS injected
+				// any level6 items, hide the empty-state placeholder so it doesn't show alongside.
+				var emptyTarget = document.getElementById('pn-timeline-empty-target');
+				var emptyState = document.getElementById('pn-timeline-empty-state');
+				if (emptyTarget && emptyState && emptyTarget.querySelector('.pn-tl-item')) {
+					emptyState.style.display = 'none';
+				}
+			})();
+
 			// ---- Attendance tab ----
 			var body = document.getElementById('pn-attendance-body');
 			if (body) {
@@ -4842,12 +5073,20 @@ $(function() {
 						var notesPart = (s.Notes && s.Notes.length > 0)
 							? '<span class="rs-notes">&mdash; "' + esc(s.Notes) + '"</span>'
 							: '<span class="rs-notes-empty">&mdash; (no comment)</span>';
-						var mineButtons = '';
+						// Edit (pencil) is supporter-only — server gates EditSecondNotes that way.
+						// Withdraw mirrors recommendation-delete: supporter OR anyone with
+						// park-level rec-delete authority (PnConfig.canDeleteRec).
+						// Wrap both in rs-second-actions so they always wrap as a unit.
+						var actionButtons = '';
 						if (s.IsMine) {
-							mineButtons = ' <button class="rs-second-edit" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-notes="' + attr(s.Notes) + '" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button>'
-								+ '<button class="rs-second-withdraw" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-rstip="Withdraw your second"><i class="fas fa-times"></i></button>';
+							actionButtons += '<button class="rs-second-edit" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-notes="' + attr(s.Notes) + '" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button>';
 						}
-						reasonCell += '<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i>' + supLink + notesPart + mineButtons + '</div>';
+						if (s.IsMine || PnConfig.canDeleteRec) {
+							var withdrawTip = s.IsMine ? 'Withdraw your second' : 'Remove this second';
+							actionButtons += '<button class="rs-second-withdraw" data-sid="' + parseInt(s.RecommendationSecondsId) + '" data-supporter="' + attr(s.SupporterName) + '" data-rstip="' + withdrawTip + '"><i class="fas fa-times"></i></button>';
+						}
+						var secondButtons = actionButtons ? ' <span class="rs-second-actions">' + actionButtons + '</span>' : '';
+						reasonCell += '<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i>' + supLink + notesPart + secondButtons + '</div>';
 					});
 					reasonCell += '</div>';
 				}

@@ -488,7 +488,9 @@ class Controller_Player extends Controller {
 			   AND park_id = 0 AND kingdom_id = 0 AND event_id = 0 AND unit_id = 0
 			 LIMIT 1"
 		);
-		$this->data['IsOrkAdmin'] = ($adminCheck && $adminCheck->Size() > 0);
+		$this->data['IsOrkAdmin']       = ($adminCheck && $adminCheck->Size() > 0);
+		$this->data['ViewerIsOrkAdmin'] = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null);
+		$DB->Clear();
 
 		// Scoped park/kingdom admin grants — surfaces "untitled" admins. Includes
 		// role='admin' and role='create' because they grant the same effective
@@ -680,109 +682,82 @@ class Controller_Player extends Controller {
 			}
 			$DB->Clear();
 			$this->data['MyAssociates'] = $__assocs;
-
-			// Fetch player's titles for name builder prefix/suffix options
-			$DB->Clear();
-			$__titleSql = "SELECT DISTINCT
-				COALESCE(NULLIF(ma.custom_name,''), NULLIF(ka.name,''), a.name) AS title_name,
-				COALESCE(alias.officer_role, a.officer_role) AS officer_role,
-				COALESCE(alias.peerage, a.peerage) AS peerage,
-				GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), a.is_title) AS is_title
-				FROM ork_awards ma
-				JOIN ork_award a ON a.award_id = ma.award_id
-				LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
-				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-				WHERE ma.mundane_id = " . (int)$id . "
-				  AND (ma.revoked = 0 OR ma.revoked IS NULL)
-				  AND (COALESCE(alias.officer_role, a.officer_role) != 'none'
-				       OR IFNULL(ka.is_title, 0) = 1 OR IFNULL(alias.is_title, 0) = 1 OR a.is_title = 1
-				       OR COALESCE(alias.peerage, a.peerage) NOT IN ('None',''))
-				ORDER BY COALESCE(alias.peerage, a.peerage) ASC, title_name ASC";
-			$__titleResult = $DB->DataSet($__titleSql);
-			$__titles = [];
-			if ($__titleResult) {
-				while ($__titleResult->Next()) {
-					$__titles[] = [
-						'TitleName'   => $__titleResult->title_name,
-						'OfficerRole' => $__titleResult->officer_role,
-						'Peerage'     => $__titleResult->peerage,
-						'IsTitle'     => (int)$__titleResult->is_title,
-					];
-				}
-			}
-			$DB->Clear();
-			// Add standalone Master/Paragon if player has any Master X or Paragon X awards
-			$hasMaster = false;
-			$hasParagon = false;
-			foreach ($__titles as $_t) {
-				if ($_t['Peerage'] === 'Master') $hasMaster = true;
-				if ($_t['Peerage'] === 'Paragon') $hasParagon = true;
-			}
-			if ($hasMaster) array_unshift($__titles, ['TitleName' => 'Master', 'OfficerRole' => 'none', 'Peerage' => 'Master', 'IsTitle' => 0]);
-			if ($hasParagon) array_unshift($__titles, ['TitleName' => 'Paragon', 'OfficerRole' => 'none', 'Peerage' => 'Paragon', 'IsTitle' => 0]);
-			$this->data['PlayerTitles'] = $__titles;
 		}
+
+		// Player titles for the design modal's prefix/suffix dropdowns. Belongs
+		// to the *profile owner*, not the viewer — so it must populate for any
+		// editor (self or ORK admin), not just self-views.
+		$DB->Clear();
+		$__titleSql = "SELECT DISTINCT
+			COALESCE(NULLIF(ma.custom_name,''), NULLIF(ka.name,''), a.name) AS title_name,
+			COALESCE(alias.officer_role, a.officer_role) AS officer_role,
+			COALESCE(alias.peerage, a.peerage) AS peerage,
+			GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), a.is_title) AS is_title
+			FROM ork_awards ma
+			JOIN ork_award a ON a.award_id = ma.award_id
+			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
+			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+			WHERE ma.mundane_id = " . (int)$id . "
+			  AND (ma.revoked = 0 OR ma.revoked IS NULL)
+			  AND (COALESCE(alias.officer_role, a.officer_role) != 'none'
+			       OR IFNULL(ka.is_title, 0) = 1 OR IFNULL(alias.is_title, 0) = 1 OR a.is_title = 1
+			       OR COALESCE(alias.peerage, a.peerage) NOT IN ('None',''))
+			ORDER BY COALESCE(alias.peerage, a.peerage) ASC, title_name ASC";
+		$__titleResult = $DB->DataSet($__titleSql);
+		$__titles = [];
+		if ($__titleResult) {
+			while ($__titleResult->Next()) {
+				$__titles[] = [
+					'TitleName'   => $__titleResult->title_name,
+					'OfficerRole' => $__titleResult->officer_role,
+					'Peerage'     => $__titleResult->peerage,
+					'IsTitle'     => (int)$__titleResult->is_title,
+				];
+			}
+		}
+		$DB->Clear();
+		// Add standalone Master/Paragon if player has any Master X or Paragon X awards
+		$hasMaster = false;
+		$hasParagon = false;
+		foreach ($__titles as $_t) {
+			if ($_t['Peerage'] === 'Master') $hasMaster = true;
+			if ($_t['Peerage'] === 'Paragon') $hasParagon = true;
+		}
+		if ($hasMaster) array_unshift($__titles, ['TitleName' => 'Master', 'OfficerRole' => 'none', 'Peerage' => 'Master', 'IsTitle' => 0]);
+		if ($hasParagon) array_unshift($__titles, ['TitleName' => 'Paragon', 'OfficerRole' => 'none', 'Peerage' => 'Paragon', 'IsTitle' => 0]);
+		$this->data['PlayerTitles'] = $__titles;
 
 		// ===== Milestones Timeline Data =====
 		$__milestones = [];
 		$__awards = is_array($this->data['Details']['Awards']) ? $this->data['Details']['Awards'] : [];
-		$__attendance = is_array($this->data['Details']['Attendance']) ? $this->data['Details']['Attendance'] : [];
 		$__classes = is_array($this->data['Details']['Classes']) ? $this->data['Details']['Classes'] : [];
 
-		// 1. First Sign-In (earliest attendance date)
-		$__earliestDate = null;
-		foreach ($__attendance as $__a) {
-			if (!empty($__a['Date']) && $__a['Date'] !== '0000-00-00' && $__a['Date'] !== '1970-01-01') {
-				if ($__earliestDate === null || strtotime($__a['Date']) < strtotime($__earliestDate))
-					$__earliestDate = $__a['Date'];
-			}
-		}
-		if ($__earliestDate) {
+		// 1. First Sign-In — use PlayerSinceDate (already computed via MIN(date)
+		// query at controller line ~358); no full-attendance scan needed.
+		$__earliestDate = $this->data['Player']['PlayerSinceDate'] ?? null;
+		if ($__earliestDate && $__earliestDate !== '0000-00-00' && $__earliestDate !== '1970-01-01') {
 			$__milestones[] = ['type' => 'first_signin', 'date' => $__earliestDate, 'icon' => 'fa-door-open', 'description' => 'First sign-in at Amtgard'];
 		}
 
-		// 2. Reached Level 6 in Class
-		// Build attendance history per class to find earliest date with 53+ cumulative credits
-		$__classAttByDate = [];
-		foreach ($__attendance as $__a) {
-			$__cid = (int)($__a['ClassId'] ?? 0);
-			$__cdate = $__a['Date'] ?? '';
-			if ($__cid > 0 && !empty($__cdate) && $__cdate !== '0000-00-00') {
-				$__classAttByDate[$__cid][] = ['date' => $__cdate, 'credits' => (float)($__a['Credits'] ?? 0)];
-			}
-		}
-		foreach ($__classAttByDate as $__cid => $__entries) {
-			// Sort by date ascending
-			usort($__entries, function($a, $b) { return strtotime($a['date']) - strtotime($b['date']); });
-			$__cumCredits = 0;
-			// Also add reconciled credits for this class
-			foreach ($__classes as $__c) {
-				if ((int)$__c['ClassId'] === $__cid) {
-					$__cumCredits += (int)($__c['Reconciled'] ?? 0);
-					$__className = $__c['ClassName'];
-					break;
-				}
-			}
-			if (empty($__className)) continue;
-			foreach ($__entries as $__e) {
-				$__cumCredits += $__e['credits'];
-				if ($__cumCredits >= 53) {
-					$__milestones[] = ['type' => 'level6', 'date' => $__e['date'], 'icon' => 'fa-hat-wizard', 'description' => 'Reached Level 6 in ' . $__className];
-					break;
-				}
-			}
-			unset($__className);
-		}
+		// 2. Reached Level 6 in Class — computed client-side once attendance loads
+		// (see PlayerAjax/attendance handler in Playernew_index.tpl). Server-side
+		// generation removed so we don't have to fetch full attendance during
+		// page render.
 
 		// 3-6: Awards-based milestones
-		$__knightIds = [17, 18, 19, 20, 245];
-		$__knightNames = [17 => 'Sword', 18 => 'Flame', 19 => 'Serpent', 20 => 'Crown', 245 => 'Battle'];
+		$__knightIds  = [17, 18, 19, 20, 245];
+		$__knightNames = [17 => 'Flame', 18 => 'Crown', 19 => 'Serpent', 20 => 'Sword', 245 => 'Battle'];
+		$__masterIds  = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 240, 244]; // mirrors $pnOrderToMaster values in Playernew_index.tpl
 		foreach ($__awards as $__aw) {
 			$__aid = (int)($__aw['AwardId'] ?? 0);
 			$__awDate = $__aw['Date'] ?? '';
-			$__awName = !empty($__aw['KingdomAwardName']) ? $__aw['KingdomAwardName'] : (!empty($__aw['CustomAwardName']) ? $__aw['CustomAwardName'] : ($__aw['Name'] ?? ''));
+			// Prefer the player-specific custom_name when present (Custom Title /
+			// Custom Award rows). Otherwise fall back to the kingdomaward name,
+			// then the underlying award name.
+			$__awName = !empty($__aw['CustomAwardName']) ? $__aw['CustomAwardName'] : (!empty($__aw['KingdomAwardName']) ? $__aw['KingdomAwardName'] : ($__aw['Name'] ?? ''));
 			$__officerRole = $__aw['OfficerRole'] ?? 'none';
 			$__isTitle = (int)($__aw['IsTitle'] ?? 0);
+			$__aliasPeerage = $__aw['AliasPeerage'] ?? '';
 
 			if (empty($__awDate) || $__awDate === '0000-00-00') continue;
 
@@ -792,16 +767,10 @@ class Controller_Player extends Controller {
 				$__milestones[] = ['type' => 'knight', 'date' => $__awDate, 'icon' => 'fa-shield-alt', 'description' => 'Earned ' . $__knLabel];
 			}
 
-			// Master (10th order of a ladder award)
-			if ((int)($__aw['Rank'] ?? 0) >= 10 && (int)($__aw['IsLadder'] ?? 0) === 1 && in_array($__officerRole, ['none', null]) && $__isTitle !== 1) {
-				// Strip "Order of the/Order of" prefix; otherwise the name IS the title (e.g. Warlord, Battlemaster)
-				$__masterLabel = $__awName;
-				if (stripos($__masterLabel, 'order of the ') === 0) {
-					$__masterLabel = 'Master ' . substr($__masterLabel, 13);
-				} elseif (stripos($__masterLabel, 'order of ') === 0) {
-					$__masterLabel = 'Master ' . substr($__masterLabel, 9);
-				}
-				$__milestones[] = ['type' => 'master', 'date' => $__awDate, 'icon' => 'fa-star', 'description' => 'Earned ' . $__masterLabel];
+			// Master title — only when the player actually holds the formal Master award,
+			// not merely because they reached rank 10 of the corresponding Order.
+			if (in_array($__aid, $__masterIds)) {
+				$__milestones[] = ['type' => 'master', 'date' => $__awDate, 'icon' => 'fa-star', 'description' => 'Earned ' . $__awName];
 			}
 
 			// Paragon (class-specific paragon awards)
@@ -810,8 +779,11 @@ class Controller_Player extends Controller {
 				$__milestones[] = ['type' => 'paragon', 'date' => $__awDate, 'icon' => 'fa-gem', 'description' => 'Earned ' . $__awName];
 			}
 
-			// Title (IsTitle=1 and OfficerRole is none, exclude paragons/knights already handled above)
-			if ($__isTitle === 1 && in_array($__officerRole, ['none', null]) && !in_array($__aid, $__paragonIds) && !in_array($__aid, $__knightIds)) {
+			// Title (IsTitle=1 and OfficerRole is none, exclude paragons/knights already handled above).
+			// For Custom Titles aliased to a beltline peerage (Page/Squire/etc.),
+			// suppress this — the 'became_associate' milestone already covers it.
+			if ($__isTitle === 1 && in_array($__officerRole, ['none', null]) && !in_array($__aid, $__paragonIds) && !in_array($__aid, $__knightIds)
+				&& !in_array($__aliasPeerage, ['Page', 'Lords-Page', 'Squire', 'Man-At-Arms'])) {
 				$__milestones[] = ['type' => 'title', 'date' => $__awDate, 'icon' => 'fa-crown', 'description' => 'Earned the title ' . $__awName];
 			}
 

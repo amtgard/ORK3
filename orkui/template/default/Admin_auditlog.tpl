@@ -1,6 +1,11 @@
 <?php
 $_actionLabels = [
 	'Player::UpdatePlayer'         => 'Player Updated',
+	'Player::SetImage'             => 'Photo Uploaded',
+	'Player::SetWaiver'            => 'Waiver Uploaded',
+	'Player::SetHeraldry'          => 'Heraldry Uploaded',
+	'Player::RemoveImage'          => 'Photo Removed',
+	'Player::RemoveHeraldry'       => 'Heraldry Removed',
 	'Player::AddAward'             => 'Award Given',
 	'Player::GiveAward'            => 'Award Given',
 	'Player::RemoveAward'          => 'Award Deleted',
@@ -14,6 +19,8 @@ $_actionLabels = [
 	'Attendance::SetAttendance'    => 'Attendance Modified',
 	'Attendance::RemoveAttendance' => 'Attendance Removed',
 	'Player::DeleteAwardRecommendation' => 'Recommendation Removed',
+	'Player::AddSecondToRecommendation' => 'Recommendation Seconded',
+	'Player::WithdrawSecond'            => 'Second Withdrawn',
 	'Player::RevokeDues'           => 'Dues Revoked',
 	'Kingdom::RemoveAward'         => 'Kingdom Award Deleted',
 	'Park::CreatePark'             => 'Park Created',
@@ -51,7 +58,7 @@ foreach ($AuditRows as $_lr) {
 		if (!is_array($_d)) $_d = _jsonExtract($_js ?? '', ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','given_by_id','stripped_from','RecipientId','FromMundaneId','ToMundaneId','event_id','at_park_id','at_kingdom_id','at_event_id','kingdomaward_id','KingdomAwardId','old_kingdom_id','new_kingdom_id','from_park_id','to_park_id','from_kingdom_id','to_kingdom_id']);
 		foreach (['park_id','at_park_id','ParkId','from_park_id','to_park_id'] as $_k) if (!empty($_d[$_k])) $_parkIds[(int)$_d[$_k]] = true;
 		foreach (['kingdom_id','at_kingdom_id','KingdomId','old_kingdom_id','new_kingdom_id','from_kingdom_id','to_kingdom_id'] as $_k) if (!empty($_d[$_k])) $_kingdomIds[(int)$_d[$_k]] = true;
-		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById','recommended_by_id'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
+		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById','recommended_by_id','SupporterMundaneId','supporter_mundane_id'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
 	// entity_id is usually a mundane_id — collect it too
 	if (!empty($_lr['EntityId'])) $_mundaneIds[(int)$_lr['EntityId']] = true;
 		foreach (['event_id','at_event_id','EventId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_eventIds[(int)$_d[$_k]] = true;
@@ -115,11 +122,37 @@ function _auditIdLink($type, $id, $nameMap) {
 }
 
 // Build a one-line summary from the action and stored JSON
-function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMap = [], $kingdomMap = [], $classMap = []) {
+function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMap = [], $kingdomMap = [], $classMap = [], $mundaneMap = []) {
 	$p = _jsonDecode($params, ['ParkId','MundaneId','KingdomId','FromMundaneId','ToMundaneId','SuspendedUntil','ClassId','Credits']);
 	$b = _jsonDecode($prior,  ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','Persona','class_id','date','credits','dues_until','dues_for_life','name']);
 	$a = _jsonDecode($post,   ['ParkId','park_id','KingdomId','MundaneId','mundane_id','Persona']);
 	switch ($method) {
+		case 'Player::SetImage':
+		case 'Player::SetWaiver':
+		case 'Player::SetHeraldry':
+		case 'Player::RemoveImage':
+		case 'Player::RemoveHeraldry':
+			$_isRemove = strpos($method, 'Remove') !== false;
+			$_kindMap = [
+				'Player::SetImage' => 'Image', 'Player::SetWaiver' => 'Waiver', 'Player::SetHeraldry' => 'Heraldry',
+				'Player::RemoveImage' => 'Image', 'Player::RemoveHeraldry' => 'Heraldry',
+			];
+			$_kind = $_kindMap[$method];
+			$_labelMap = ['Image' => 'photo', 'Waiver' => 'waiver', 'Heraldry' => 'heraldry'];
+			$_label = $_labelMap[$_kind];
+			$_actor = !empty($p['SelfEdit']) ? 'self' : (!empty($p['AdminEdit']) ? 'admin' : (!empty($p['OfficerEdit']) ? 'officer' : ''));
+			$_actorSuffix = ($_actor && $_actor !== 'self') ? ' by ' . $_actor : '';
+			if ($_isRemove) {
+				return 'Removed ' . $_label . $_actorSuffix;
+			}
+			$_meta = is_array($p[$_kind] ?? null) ? $p[$_kind] : [];
+			$_bytes = (int)($_meta['bytes'] ?? 0);
+			$_mime  = $_meta['mime'] ?? '';
+			$_size = $_bytes >= 1024 * 1024
+				? number_format($_bytes / (1024 * 1024), 1) . ' MB'
+				: ($_bytes >= 1024 ? number_format($_bytes / 1024, 0) . ' KB' : $_bytes . ' B');
+			$_extra = trim(($_mime ? $_mime : '') . ($_actor && $_actor !== 'self' ? ($_mime ? ', ' : '') . 'by ' . $_actor : ''));
+			return 'Uploaded ' . $_label . ' (' . $_size . ($_extra ? ', ' . $_extra : '') . ')';
 		case 'Player::UpdatePlayer':
 		case 'Player::update_player':
 			$changed = [];
@@ -127,7 +160,12 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 				$changed[] = 'Password';
 			$watchFields = ['Persona' => 'Persona', 'GivenName' => 'Given Name', 'Surname' => 'Surname',
 			                'Email' => 'Email', 'UserName' => 'Username', 'Active' => 'Active',
-			                'Waivered' => 'Waivered', 'Suspended' => 'Suspended', 'Restricted' => 'Restricted'];
+			                'Waivered' => 'Waivered', 'Suspended' => 'Suspended', 'Restricted' => 'Restricted',
+			                'NamePrefix' => 'Name Prefix', 'NameSuffix' => 'Name Suffix',
+			                'SuffixComma' => 'Suffix Comma', 'PronunciationGuide' => 'Pronunciation Guide',
+			                'ShowMundaneFirst' => 'Show Mundane First',
+			                'ShowMundaneLast' => 'Show Mundane Last',
+			                'ShowEmail' => 'Show Email'];
 			$_src = !empty($a) ? $a : $p;
 			foreach ($watchFields as $key => $label) {
 				$_new = isset($_src[$key]) ? (string)$_src[$key] : null;
@@ -186,6 +224,24 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
 			$rank = !empty($b['rank']) && $b['rank'] > 0 ? ' rank ' . (int)$b['rank'] : '';
 			return 'Removed recommendation' . ($name ? ': ' . htmlspecialchars($name . $rank) : '');
+		case 'Player::AddSecondToRecommendation':
+			$_kid = (int)($p['KingdomAwardId'] ?? 0);
+			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
+			$rank = !empty($p['Rank']) && $p['Rank'] > 0 ? ' rank ' . (int)$p['Rank'] : '';
+			return (!empty($p['Resurrected']) ? 'Re-seconded' : 'Seconded') . ' recommendation' . ($name ? ': ' . htmlspecialchars($name . $rank) : '');
+		case 'Player::WithdrawSecond':
+			$_kid = (int)($p['KingdomAwardId'] ?? 0);
+			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
+			$rank = !empty($p['Rank']) && $p['Rank'] > 0 ? ' rank ' . (int)$p['Rank'] : '';
+			$_supId = (int)($p['SupporterMundaneId'] ?? 0);
+			$_supName = $_supId ? ($mundaneMap[$_supId] ?? '') : '';
+			$_self = !empty($p['SelfAction']);
+			$_who = $_self
+				? ''
+				: ($_supName ? ' (' . htmlspecialchars($_supName) . '\'s)' : '');
+			$_actorTag = !empty($p['AdminAction']) ? ' (by Admin)'
+				: (!empty($p['OfficerAction']) ? ' (by Officer)' : '');
+			return ($_self ? 'Withdrew own second' : 'Removed second') . $_who . ($name ? ' on ' . htmlspecialchars($name . $rank) : '') . $_actorTag;
 		case 'Player::RemoveNote':
 			$_noteText = $b['note'] ?? $b['Note'] ?? '';
 			$_snippet = $_noteText ? mb_strimwidth(strip_tags($_noteText), 0, 60, '…') : '';
@@ -251,6 +307,11 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 				'ParkMemberSince' => 'Member Since',
 				'PronounId' => 'Pronoun',
 				'PasswordChanged' => 'Password',
+				'NamePrefix' => 'Name Prefix', 'NameSuffix' => 'Name Suffix',
+				'SuffixComma' => 'Suffix Comma', 'PronunciationGuide' => 'Pronunciation Guide',
+				'ShowMundaneFirst' => 'Show Mundane First Name',
+				'ShowMundaneLast' => 'Show Mundane Last Name',
+				'ShowEmail' => 'Show Email Address',
 			];
 			$hasPrior = !empty($b);
 			$_dateFields = ['ReeveQualifiedUntil', 'CorporaQualifiedUntil', 'ParkMemberSince'];
@@ -455,6 +516,34 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			$html .= '</tbody></table>';
 			return $html;
 
+		case 'Player::AddSecondToRecommendation':
+		case 'Player::WithdrawSecond':
+			$html = '<table class="al-diff-table"><tbody>';
+			$_kid = (int)($p['KingdomAwardId'] ?? 0);
+			$_awardName = $kawardMap[$_kid] ?? null;
+			if ($_awardName)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2">' . htmlspecialchars($_awardName) . '</td></tr>';
+			elseif ($_kid)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2"><em style="color:#a0aec0">Unknown award #' . $_kid . '</em></td></tr>';
+			if (!empty($p['Rank']) && $p['Rank'] > 0)
+				$html .= '<tr><td class="al-diff-field">Rank</td><td colspan="2">' . (int)$p['Rank'] . '</td></tr>';
+			if (!empty($p['SupporterMundaneId']))
+				$html .= '<tr><td class="al-diff-field">Supporter</td><td colspan="2">' . _auditIdLink('player', $p['SupporterMundaneId'], $mundaneMap) . '</td></tr>';
+			if (!empty($p['RecommendationsId']))
+				$html .= '<tr><td class="al-diff-field">Recommendation</td><td colspan="2">#' . (int)$p['RecommendationsId'] . '</td></tr>';
+			if ($method === 'Player::AddSecondToRecommendation') {
+				if (!empty($p['Resurrected']))
+					$html .= '<tr><td class="al-diff-field">Type</td><td colspan="2">Re-second (resurrecting prior withdrawal)</td></tr>';
+				if (isset($p['NotesLen']))
+					$html .= '<tr><td class="al-diff-field">Notes Length</td><td colspan="2">' . (int)$p['NotesLen'] . ' chars</td></tr>';
+			}
+			$_actor = !empty($p['SelfAction']) ? 'Self'
+				: (!empty($p['AdminAction']) ? 'Admin'
+				: (!empty($p['OfficerAction']) ? 'Officer' : '—'));
+			$html .= '<tr><td class="al-diff-field">Actor</td><td colspan="2">' . htmlspecialchars($_actor) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
 		case 'Player::RemoveNote':
 			$html = '<table class="al-diff-table"><tbody>';
 			if (!empty($b['mundane_id']))  $html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">'      . _auditIdLink('player', $b['mundane_id'], $mundaneMap) . '</td></tr>';
@@ -574,6 +663,37 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 					: ($_bytes >= 1024 ? number_format($_bytes / 1024, 0) . ' KB' : $_bytes . ' B');
 				$html .= '<tr><td class="al-diff-field">Heraldry</td><td colspan="2">Uploaded' . ($_bytes ? ' (' . htmlspecialchars($_size) . ')' : '') . '</td></tr>';
 			}
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Player::SetImage':
+		case 'Player::SetWaiver':
+		case 'Player::SetHeraldry':
+		case 'Player::RemoveImage':
+		case 'Player::RemoveHeraldry':
+			$_isRemove = strpos($method, 'Remove') !== false;
+			$_kindMap = [
+				'Player::SetImage' => 'Image', 'Player::SetWaiver' => 'Waiver', 'Player::SetHeraldry' => 'Heraldry',
+				'Player::RemoveImage' => 'Image', 'Player::RemoveHeraldry' => 'Heraldry',
+			];
+			$_kind = $_kindMap[$method];
+			$_labelMap = ['Image' => 'Photo', 'Waiver' => 'Waiver', 'Heraldry' => 'Heraldry'];
+			$_label = $_labelMap[$_kind];
+			$_actor = !empty($p['SelfEdit']) ? 'Self' : (!empty($p['AdminEdit']) ? 'Admin' : (!empty($p['OfficerEdit']) ? 'Officer' : '—'));
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">' . htmlspecialchars($_label) . '</td><td colspan="2">' . ($_isRemove ? 'Removed' : 'Uploaded') . '</td></tr>';
+			if (!$_isRemove) {
+				$_meta = is_array($p[$_kind] ?? null) ? $p[$_kind] : [];
+				$_bytes = (int)($_meta['bytes'] ?? 0);
+				$_mime  = $_meta['mime'] ?? '';
+				$_size = $_bytes >= 1024 * 1024
+					? number_format($_bytes / (1024 * 1024), 1) . ' MB'
+					: ($_bytes >= 1024 ? number_format($_bytes / 1024, 0) . ' KB' : $_bytes . ' B');
+				$html .= '<tr><td class="al-diff-field">Size</td><td colspan="2">' . htmlspecialchars($_size) . ($_bytes > 0 ? ' <span style="color:#a0aec0;font-size:11px">(' . number_format($_bytes) . ' bytes)</span>' : '') . '</td></tr>';
+				if ($_mime)
+					$html .= '<tr><td class="al-diff-field">MIME Type</td><td colspan="2">' . htmlspecialchars($_mime) . '</td></tr>';
+			}
+			$html .= '<tr><td class="al-diff-field">Editor</td><td colspan="2">' . htmlspecialchars($_actor) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
@@ -812,7 +932,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 						if (empty($_r['MethodCall'])) continue;
 						$_mc      = $_r['MethodCall'];
 						$_label   = $_actionLabels[$_mc] ?? $_mc;
-						$_summary = _auditSummary($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_kawardMap, $_parkMap, $_kingdomMap, $_classMap);
+						$_summary = _auditSummary($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_kawardMap, $_parkMap, $_kingdomMap, $_classMap, $_mundaneMap);
 
 						// Badge CSS class
 						if (strpos($_mc, 'UpdatePlayer') !== false) $_bc = 'al-badge-update';
