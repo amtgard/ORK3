@@ -8389,6 +8389,30 @@ html[data-theme="dark"] .ec-help-tip:hover, html[data-theme="dark"] .ec-help-tip
 html[data-theme="dark"] .ec-help-tip[data-ec-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border), 0 4px 12px rgba(0,0,0,.55); }
 html[data-theme="dark"] .ec-help-tip[data-ec-tip]::before { border-top-color: #1a202c; }
 
+/* ---- "Help Me Write..." pill button (above the Description textarea
+       on Eventcreate and the Eventnew edit modal) ---- */
+.ev-help-write-btn {
+	display: inline-flex; align-items: center; gap: 5px;
+	background: linear-gradient(135deg, #ebf4ff 0%, #e9d8fd 100%);
+	color: #553c9a; border: 1px solid #d6bcfa;
+	border-radius: 999px; padding: 3px 10px;
+	font-size: 11px; font-weight: 600; cursor: pointer;
+	margin-left: auto; line-height: 1.4;
+	text-transform: none; letter-spacing: 0;
+	transition: background .15s, border-color .15s, transform .08s;
+}
+.ev-help-write-btn:hover { background: linear-gradient(135deg, #bee3f8 0%, #d6bcfa 100%); border-color: #b794f4; }
+.ev-help-write-btn:active { transform: translateY(1px); }
+.ev-help-write-btn i { font-size: 10px; }
+html[data-theme="dark"] .ev-help-write-btn {
+	background: linear-gradient(135deg, rgba(99,179,237,0.18) 0%, rgba(159,122,234,0.22) 100%);
+	color: #d6bcfa; border-color: rgba(159,122,234,0.40);
+}
+html[data-theme="dark"] .ev-help-write-btn:hover {
+	background: linear-gradient(135deg, rgba(99,179,237,0.28) 0%, rgba(159,122,234,0.32) 100%);
+	border-color: rgba(159,122,234,0.65);
+}
+
 /* Hero heading reset */
 html[data-theme="dark"] .ec-banner-name {
   background: transparent !important;
