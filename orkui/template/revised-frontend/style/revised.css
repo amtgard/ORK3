@@ -2896,7 +2896,7 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 	border-bottom: 1px solid #e2e8f0;
 	background: #f7fafc;
 }
-.kn-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
+.kn-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
 .kn-emod-close {
 	background: none; border: none; font-size: 20px; cursor: pointer;
 	color: #718096; padding: 2px 6px; border-radius: 4px; line-height: 1;
