@@ -2217,8 +2217,15 @@ html[data-theme="dark"] #pk-att-links-table thead tr,
 html[data-theme="dark"] #pk-att-links-table th { color: var(--ork-text-muted) !important; }
 html[data-theme="dark"] #pk-att-links-count { color: var(--ork-text-muted) !important; }
 
+/* Copy-link / data-tip — dark mode */
+html[data-theme="dark"] [data-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
+html[data-theme="dark"] .pk-copy-link { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-copy-link:hover { color: #63b3ed; }
+html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+
 /* ============================================================
-   </style>
+</style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
