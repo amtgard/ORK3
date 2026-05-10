@@ -1152,6 +1152,14 @@ class Player extends Ork3 {
 				$this->mundane->surname = is_null($request['Surname'])?$this->mundane->surname:$request['Surname'];
 				$this->mundane->other_name = is_null($request['OtherName'])?$this->mundane->other_name:$request['OtherName'];
 				$this->mundane->username = is_null($request['UserName'])?$this->mundane->username:$request['UserName'];
+				// Profanity check on persona (display name) before save.
+				if (!is_null($request['Persona']) && trim($request['Persona']) !== '') {
+					require_once(__DIR__ . '/class.ProfanityFilter.php');
+					$pf = new ProfanityFilter();
+					if ($pf->containsProfanity($request['Persona'])) {
+						return InvalidParameter('', ProfanityFilter::ERROR_MESSAGE);
+					}
+				}
 				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:$request['Persona'];
 				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
 				$this->mundane->pronoun_custom = is_null($request['PronounCustom'])?$this->mundane->pronoun_custom:$request['PronounCustom'];
