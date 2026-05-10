@@ -282,37 +282,42 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) {
 			$location_clause = " and m.park_id = $request[ParkId]";
 		}
+		// Custom Titles aliased to a peerage award (e.g. Knight of the Sword) need
+		// to surface in these reports as if they were the alias target. Use
+		// COALESCE(alias.col, a.col) anywhere we read peerage / is_ladder / is_title.
 		if (valid_id($request['IncludeKnights'])) {
-			$knights_clause = "or a.peerage = 'Knight'";
+			$knights_clause = "or COALESCE(alias.peerage, a.peerage) = 'Knight'";
 		}
 		if (valid_id($request['IncludeMasters'])) {
-			$masters_clause = "or a.peerage = 'Master'";
+			$masters_clause = "or COALESCE(alias.peerage, a.peerage) = 'Master'";
 		}
 		if (valid_id($request['IncludeLadder']) && is_numeric($request['LadderMinimum'])) {
-			$ladder_clause = " or (a.is_ladder = 1 and ma.rank >= $request[LadderMinimum])";
+			$ladder_clause = " or (COALESCE(alias.is_ladder, a.is_ladder) = 1 and ma.rank >= $request[LadderMinimum])";
 		}
 		if (valid_id($request['IncludeTitles'])) {
-			$title_clause =  "or a.is_title = 1";
+			$title_clause =  "or COALESCE(alias.is_title, a.is_title) = 1";
 		}
 		if (is_array($request['Awards'])) {
 			$awards_clause = 'and in (' . implode(',',$request['Awards']) . ')';
 		}
-		$sql = "select 
-              distinct p.park_id, p.name as park_name, 
-              k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, 
-              a.peerage, ifnull(ka.name, a.name) as award_name, 
-              m.persona, ma.date, m.mundane_id, ma.rank, 
+		$sql = "select
+              distinct p.park_id, p.name as park_name,
+              k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id,
+              COALESCE(alias.peerage, a.peerage) as peerage,
+              COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) as award_name,
+              m.persona, ma.date, m.mundane_id, ma.rank,
               bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
               ma.awards_id
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+						left join " . DB_PREFIX . "award alias on alias.award_id = ma.alias_award_id
 								left join " . DB_PREFIX . "mundane m on m.mundane_id = ma.mundane_id
 								left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = ma.by_whom_id
 									left join " . DB_PREFIX . "park p on p.park_id = m.park_id
 									left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 					where (0 $knights_clause $masters_clause $ladder_clause $title_clause) and m.active = 1 $location_clause $awards_clause
-					order by $order a.peerage, a.name, m.persona
+					order by $order COALESCE(alias.peerage, a.peerage), COALESCE(alias.name, a.name), m.persona
 			";
 
         logtrace("PlayerAwards", $sql);
@@ -1650,14 +1655,18 @@ class Report  extends Ork3 {
 			}
 		}
         if (trimlen($request['Peerage']) > 0) {
+            // Resolve the effective peerage via Custom-Title alias substitution
+            // so an aliased Custom Title (e.g. "Sir Bob aka Knight of the Sword")
+            // is counted as that peerage.
             $peerage = "
                     left join
-                        (select distinct awards.mundane_id, award.peerage
+                        (select distinct awards.mundane_id, COALESCE(alias.peerage, award.peerage) as peerage
                             from " . DB_PREFIX . "awards awards
                                 left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = awards.kingdomaward_id
                                     left join " . DB_PREFIX . "award award on ka.award_id = award.award_id
+                                left join " . DB_PREFIX . "award alias on alias.award_id = awards.alias_award_id
                                 left join " . DB_PREFIX . "mundane m on awards.mundane_id = m.mundane_id
-                            where award.peerage = '" . mysql_real_escape_string($request['Peerage']) . "' and awards.mundane_id > 0 $location
+                            where COALESCE(alias.peerage, award.peerage) = '" . mysql_real_escape_string($request['Peerage']) . "' and awards.mundane_id > 0 $location
                             group by awards.mundane_id
                         ) peers on attendance_summary.mundane_id = peers.mundane_id
             ";
@@ -3214,8 +3223,9 @@ class Report  extends Ork3 {
 				, CASE WHEN EXISTS (
 					SELECT 1 FROM " . DB_PREFIX . "awards ma
 					JOIN " . DB_PREFIX . "award aw ON aw.award_id = ma.award_id
+					LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 					WHERE ma.mundane_id = m.mundane_id
-					  AND aw.peerage = 'Knight'
+					  AND COALESCE(alias.peerage, aw.peerage) = 'Knight'
 					  AND (ma.revoked = 0 OR ma.revoked IS NULL)
 				) THEN 1 ELSE 0 END AS is_knight
 			";

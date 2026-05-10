@@ -18,11 +18,13 @@
 .rs-second-withdraw:hover{border-color:#fc8181;color:#c53030;background:#fff5f5}
 .rs-seconds-badge{position:relative;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:#c6f6d5;color:#22543d;font-size:11px;font-weight:700;margin-right:6px;cursor:default}
 .rs-edit-reason-btn{height:20px;min-width:20px;padding:0 4px;font-size:10px;margin-left:6px;vertical-align:1px}
-.rs-seconds{margin-top:8px;padding-top:8px;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:4px}
-.rs-second{font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative}
+.rs-seconds{margin-top:8px;padding-top:8px;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:4px;min-width:0}
+.rs-second{font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;min-width:0;overflow-wrap:anywhere;word-break:break-word}
 .rs-second .rs-supporter{font-weight:600;color:#2d3748}
-.rs-second .rs-notes{color:#718096;font-style:italic}
+.rs-second .rs-notes{color:#718096;font-style:italic;min-width:0;overflow-wrap:anywhere;word-break:break-word}
 .rs-second .rs-notes-empty{color:#a0aec0;font-style:italic;font-size:11px}
+/* Keep edit + withdraw together as a unit when wrapping */
+.rs-second .rs-second-actions{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 
 /* ---- Instant CSS-only tooltip (host-agnostic, edge-aware) ---- */
 /* Default: center over element, growing upward. */
@@ -261,16 +263,35 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 		var btn = e.currentTarget;
 		var sid = parseInt(btn.getAttribute('data-sid')) || 0;
 		if (!sid) return;
-		if (!confirm('Withdraw your second?')) return;
-		btn.disabled = true;
-		jQuery.post(Cfg.uir + 'PlayerAjax/withdraw_second/' + sid, {}, function(r) {
-			btn.disabled = false;
-			if (r.status === 0) { reload(); }
-			else { alert((r.error || 'Error') + (r.detail ? ': ' + r.detail : '')); }
-		}, 'json').fail(function() {
-			btn.disabled = false;
-			alert('Network error — please try again.');
-		});
+		var isMine = (btn.getAttribute('data-rstip') || '').indexOf('your') !== -1;
+		var supporter = btn.getAttribute('data-supporter') || '';
+		var doWithdraw = function() {
+			btn.disabled = true;
+			jQuery.post(Cfg.uir + 'PlayerAjax/withdraw_second/' + sid, {}, function(r) {
+				btn.disabled = false;
+				if (r.status === 0) { reload(); }
+				else { alert((r.error || 'Error') + (r.detail ? ': ' + r.detail : '')); }
+			}, 'json').fail(function() {
+				btn.disabled = false;
+				alert('Network error — please try again.');
+			});
+		};
+		var adminMsg = supporter
+			? 'Remove ' + supporter + '’s second on this recommendation?'
+			: 'This second will be removed from the recommendation.';
+		var confirmOpts = {
+			title: isMine ? 'Withdraw your second?' : 'Remove this second?',
+			message: isMine
+				? 'Your second on this recommendation will be removed. You can re-add it later if you change your mind.'
+				: adminMsg,
+			confirmText: isMine ? 'Withdraw' : 'Remove',
+			danger: true
+		};
+		if (typeof window.pnConfirm === 'function') {
+			window.pnConfirm(confirmOpts, doWithdraw);
+		} else if (confirm(confirmOpts.title)) {
+			doWithdraw();
+		}
 	});
 
 	jQuery(document).on('click', '.rs-edit-reason-btn', function(e) {

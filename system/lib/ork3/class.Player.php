@@ -282,6 +282,14 @@ class Player extends Ork3 {
 			$design->clear();
 			$design->mundane_id = $this->mundane->mundane_id;
 			$design->find();
+			// Per-field public exposure: when fetchprivate is true (viewer is a
+			// non-admin, non-self logged-in user), honor the player's design-
+			// modal opt-ins — but only if they aren't Restricted.
+			$_isLoggedIn   = $mundane_id > 0;
+			$_isRestricted = (int)$this->mundane->restricted === 1;
+			$_exposeFirst  = !$fetchprivate || ($_isLoggedIn && !$_isRestricted && (int)$design->show_mundane_first === 1);
+			$_exposeLast   = !$fetchprivate || ($_isLoggedIn && !$_isRestricted && (int)$design->show_mundane_last  === 1);
+			$_exposeEmail  = !$fetchprivate || ($_isLoggedIn && !$_isRestricted && (int)$design->show_email         === 1);
 			$subject = $this->pronoun->subject;
 			$pronoun_custom = $this->mundane->pronoun_custom;
 			$pronountext = isset($subject) ? $this->pronoun->subject . '[' . $this->pronoun->object . ']' : '';
@@ -291,9 +299,9 @@ class Player extends Ork3 {
 
 			$response['Player'] = array(
 					'MundaneId' => $this->mundane->mundane_id,
-					'GivenName' => $fetchprivate?"":$this->mundane->given_name,
-					'Surname' => $fetchprivate?"":$this->mundane->surname,
-					'OtherName' => $fetchprivate?"":$this->mundane->other_name,
+					'GivenName' => $_exposeFirst ? $this->mundane->given_name : "",
+					'Surname'   => $_exposeLast  ? $this->mundane->surname    : "",
+					'OtherName' => $fetchprivate ? "" : $this->mundane->other_name,
 					'UserName' => $this->mundane->username,
 					'PronounId' => $this->mundane->pronoun_id,
 					'PronounCustom' => $this->mundane->pronoun_custom,
@@ -304,7 +312,7 @@ class Player extends Ork3 {
 					'SuspendedAt' => $this->mundane->suspended_at,
 					'SuspendedUntil' => $this->mundane->suspended_until,
 					'Suspension' => $this->mundane->suspension,
-					'Email' => $fetchprivate?"":$this->mundane->email,
+					'Email' => $_exposeEmail ? $this->mundane->email : "",
 					'ParkId' => $this->mundane->park_id,
 					'KingdomId' => $this->mundane->kingdom_id,
 					'Restricted' => $this->mundane->restricted,
@@ -1033,6 +1041,70 @@ class Player extends Ork3 {
 		}
 	}
 
+	// Trim large/blob fields out of the audit payload so danger_audit rows stay
+	// queryable. Body content lives in ork_mundane_design — the audit only needs
+	// to record that it changed, by whom, for whom.
+	private function audit_redact_profile($request, $prior, $post) {
+		$LARGE_TEXT = ['AboutPersona', 'AboutStory', 'MilestoneConfig'];
+		$BLOB       = ['Image', 'Waiver', 'Heraldry'];
+
+		foreach ($LARGE_TEXT as $f) {
+			if (array_key_exists($f, $request) && !is_null($request[$f])) {
+				$request[$f] = ['changed' => true, 'len' => strlen((string)$request[$f])];
+			}
+			if (isset($prior[$f])) $prior[$f] = ['len' => strlen((string)$prior[$f])];
+			if (isset($post[$f]))  $post[$f]  = ['len' => strlen((string)$post[$f])];
+		}
+		foreach ($BLOB as $f) {
+			if (!empty($request[$f])) {
+				$mime = $request[$f.'MimeType'] ?? null;
+				$request[$f] = ['uploaded' => true, 'bytes' => strlen((string)$request[$f]), 'mime' => $mime];
+			}
+		}
+		return [$request, $prior, $post];
+	}
+
+	// Decide whether an UpdatePlayer call is worth an audit row. File uploads
+	// and password changes always count. Otherwise, walk the prior→post diff
+	// and only audit when something non-cosmetic changed. Tweaking colours,
+	// photo focus, name prefix/suffix, etc. should not produce an audit entry.
+	private function audit_should_log($request, $prior, $post) {
+		if (!empty($request['PasswordChanged'])) return true;
+		// Raw request: blob fields are still base64 strings here (redaction
+		// runs only on the path that actually writes the audit row).
+		foreach (['Image', 'Waiver', 'Heraldry'] as $f) {
+			if (!empty($request[$f])) return true;
+		}
+
+		// Cosmetic profile-design fields — changes here are not audit-worthy.
+		// Name-builder fields, pronunciation guide, and privacy toggles are
+		// intentionally NOT cosmetic: they affect identity presentation and
+		// what's exposed publicly, so changes there should land in the log.
+		$cosmetic = [
+			'AboutPersona' => 1, 'AboutStory' => 1, 'MilestoneConfig' => 1,
+			'ColorPrimary' => 1, 'ColorAccent' => 1, 'ColorSecondary' => 1, 'HeroOverlay' => 1,
+			'NameFont' => 1,
+			'PhotoFocusX' => 1, 'PhotoFocusY' => 1, 'PhotoFocusSize' => 1,
+			'ShowBeltline' => 1, 'BeltDisplay' => 1,
+			'BasicFonts' => 1, 'DyslexiaFonts' => 1,
+		];
+		// Fields whose value always shifts even on no-op saves — ignore.
+		$ignore = [
+			'Heraldry' => 1, 'Image' => 1, // URLs carry ?modified cache-buster
+			'Waiver' => 1,
+			'DuesThrough' => 1, 'LastDuesThrough' => 1, 'DuesPaidList' => 1, // dues path has its own audits
+		];
+
+		$keys = array_unique(array_merge(array_keys((array)$prior), array_keys((array)$post)));
+		foreach ($keys as $k) {
+			if (isset($ignore[$k]) || isset($cosmetic[$k])) continue;
+			$a = $prior[$k] ?? null;
+			$b = $post[$k]  ?? null;
+			if ($a != $b) return true;
+		}
+		return false;
+	}
+
 	public function UpdatePlayer($request) {
 		logtrace("UpdatePlayer()", $request);
 		$mundane = $this->player_info($request['MundaneId']);
@@ -1084,36 +1156,68 @@ class Player extends Ork3 {
 				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
 				$this->mundane->pronoun_custom = is_null($request['PronounCustom'])?$this->mundane->pronoun_custom:$request['PronounCustom'];
 
-				// Profile customization fields (own-profile only).
+				// Profile customization fields — own profile or ORK admin.
 				// Stored in ork_mundane_design (paired 1:1 row) since 2026-04-23.
 				$design = null;
-				if ($requester_id == $request['MundaneId']) {
+				$_canEditDesign = ($requester_id == $request['MundaneId'])
+					|| Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, null, null);
+				if ($_canEditDesign) {
 					$design = new yapo($this->db, DB_PREFIX . 'mundane_design');
 					$design->clear();
 					$design->mundane_id = $this->mundane->mundane_id;
-					$design->find();
-					$design->about_persona = is_null($request['AboutPersona'])?$design->about_persona:$request['AboutPersona'];
-					$design->about_story = is_null($request['AboutStory'])?$design->about_story:$request['AboutStory'];
-					$design->color_primary = is_null($request['ColorPrimary'])?$design->color_primary:$request['ColorPrimary'];
-					$design->color_accent = is_null($request['ColorAccent'])?$design->color_accent:$request['ColorAccent'];
-					$design->color_secondary = is_null($request['ColorSecondary'])?$design->color_secondary:$request['ColorSecondary'];
+					$_designExisted = $design->find() > 0;
+
+					// Snapshot current values so we can preserve them when the request
+					// omits a field. After clear(), $design->X would throw because the
+					// record_set is gone — capture before clearing.
+					$_cur = [];
+					if ($_designExisted) {
+						foreach (['about_persona','about_story','color_primary','color_accent','color_secondary',
+								  'hero_overlay','name_prefix','name_suffix','suffix_comma',
+								  'photo_focus_x','photo_focus_y','photo_focus_size',
+								  'show_beltline','belt_display','pronunciation_guide',
+								  'show_mundane_first','show_mundane_last','show_email',
+								  'milestone_config','name_font'] as $_f) {
+							$_cur[$_f] = $design->{$_f};
+						}
+					}
+
+					// Yapo's save() chooses INSERT vs UPDATE off HasActiveRecord (= record_set
+					// is non-null). A 0-row find() leaves record_set non-null but empty, which
+					// drops save() into the UPDATE branch and silently matches zero rows.
+					// Re-clear and re-set on the !existed path forces the INSERT branch.
+					if (!$_designExisted) {
+						$design->clear();
+						$design->mundane_id = $this->mundane->mundane_id;
+					}
+
+					$_pick = function($req_val, $col) use ($_designExisted, $_cur) {
+						if (!is_null($req_val)) return $req_val;
+						return $_designExisted ? $_cur[$col] : null;
+					};
+
+					$design->about_persona = $_pick($request['AboutPersona'], 'about_persona');
+					$design->about_story = $_pick($request['AboutStory'], 'about_story');
+					$design->color_primary = $_pick($request['ColorPrimary'], 'color_primary');
+					$design->color_accent = $_pick($request['ColorAccent'], 'color_accent');
+					$design->color_secondary = $_pick($request['ColorSecondary'], 'color_secondary');
 					$validOverlays = ['low','med','high'];
-					$design->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : $design->hero_overlay;
-					$design->name_prefix = is_null($request['NamePrefix'])?$design->name_prefix:$request['NamePrefix'];
-					$design->name_suffix = is_null($request['NameSuffix'])?$design->name_suffix:$request['NameSuffix'];
-					$design->suffix_comma = is_null($request['SuffixComma'])?$design->suffix_comma:(int)$request['SuffixComma'];
-					$design->photo_focus_x = is_null($request['PhotoFocusX'])?$design->photo_focus_x:(int)$request['PhotoFocusX'];
-					$design->photo_focus_y = is_null($request['PhotoFocusY'])?$design->photo_focus_y:(int)$request['PhotoFocusY'];
-					$design->photo_focus_size = is_null($request['PhotoFocusSize'])?$design->photo_focus_size:(int)$request['PhotoFocusSize'];
-					$design->show_beltline = is_null($request['ShowBeltline'])?$design->show_beltline:(int)$request['ShowBeltline'];
-					$design->pronunciation_guide = is_null($request['PronunciationGuide'])?$design->pronunciation_guide:$request['PronunciationGuide'];
-					$design->show_mundane_first = is_null($request['ShowMundaneFirst'])?$design->show_mundane_first:(int)$request['ShowMundaneFirst'];
-					$design->show_mundane_last = is_null($request['ShowMundaneLast'])?$design->show_mundane_last:(int)$request['ShowMundaneLast'];
-					$design->show_email = is_null($request['ShowEmail'])?$design->show_email:(int)$request['ShowEmail'];
-					$design->milestone_config = is_null($request['MilestoneConfig'])?$design->milestone_config:$request['MilestoneConfig'];
-					$design->name_font = is_null($request['NameFont'])?$design->name_font:$request['NameFont'];
+					$design->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : ($_designExisted ? $_cur['hero_overlay'] : 'med');
+					$design->name_prefix = $_pick($request['NamePrefix'], 'name_prefix');
+					$design->name_suffix = $_pick($request['NameSuffix'], 'name_suffix');
+					$design->suffix_comma = is_null($request['SuffixComma']) ? ($_designExisted ? (int)$_cur['suffix_comma'] : 0) : (int)$request['SuffixComma'];
+					$design->photo_focus_x = is_null($request['PhotoFocusX']) ? ($_designExisted ? (int)$_cur['photo_focus_x'] : 50) : (int)$request['PhotoFocusX'];
+					$design->photo_focus_y = is_null($request['PhotoFocusY']) ? ($_designExisted ? (int)$_cur['photo_focus_y'] : 50) : (int)$request['PhotoFocusY'];
+					$design->photo_focus_size = is_null($request['PhotoFocusSize']) ? ($_designExisted ? (int)$_cur['photo_focus_size'] : 100) : (int)$request['PhotoFocusSize'];
+					$design->show_beltline = is_null($request['ShowBeltline']) ? ($_designExisted ? (int)$_cur['show_beltline'] : 1) : (int)$request['ShowBeltline'];
+					$design->pronunciation_guide = $_pick($request['PronunciationGuide'], 'pronunciation_guide');
+					$design->show_mundane_first = is_null($request['ShowMundaneFirst']) ? ($_designExisted ? (int)$_cur['show_mundane_first'] : 0) : (int)$request['ShowMundaneFirst'];
+					$design->show_mundane_last = is_null($request['ShowMundaneLast']) ? ($_designExisted ? (int)$_cur['show_mundane_last'] : 0) : (int)$request['ShowMundaneLast'];
+					$design->show_email = is_null($request['ShowEmail']) ? ($_designExisted ? (int)$_cur['show_email'] : 0) : (int)$request['ShowEmail'];
+					$design->milestone_config = $_pick($request['MilestoneConfig'], 'milestone_config');
+					$design->name_font = $_pick($request['NameFont'], 'name_font');
 					$validBeltDisplays = ['white','own','none'];
-					$design->belt_display = (isset($request['BeltDisplay']) && in_array($request['BeltDisplay'], $validBeltDisplays)) ? $request['BeltDisplay'] : $design->belt_display;
+					$design->belt_display = (isset($request['BeltDisplay']) && in_array($request['BeltDisplay'], $validBeltDisplays)) ? $request['BeltDisplay'] : ($_designExisted ? $_cur['belt_display'] : 'white');
 				}
 
 				// reeve or corpora qual changes
@@ -1126,7 +1230,7 @@ class Player extends Ork3 {
 				}
 
 				$this->mundane->save();
-				$this->set_waiver($request);
+				if (array_key_exists('Waivered', $request) && !is_null($request['Waivered'])) $this->set_waiver($request);
 				$this->mundane->save();
 				$this->set_image($request);
 				if ($design !== null) { $design->save(); }
@@ -1149,7 +1253,7 @@ class Player extends Ork3 {
 				$this->mundane->dyslexia_fonts = is_null($request['DyslexiaFonts']) ? $this->mundane->dyslexia_fonts : ($request['DyslexiaFonts'] ? 1 : 0);
 
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
-    				$this->mundane->active = is_null($request['Active']) ? $this->mundane->restricted : ($request['Active']?1:0);
+    				$this->mundane->active = is_null($request['Active']) ? $this->mundane->active : ($request['Active']?1:0);
 				}
 				if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 					$pms = $request['ParkMemberSince'];
@@ -1179,7 +1283,14 @@ class Player extends Ork3 {
 				$_audit_req = $request;
 				$_audit_req['PasswordChanged'] = trimlen($request['Password'] ?? '') > 0 ? 1 : 0;
 				unset($_audit_req['Password']);
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $_audit_req, 'Player', $request['MundaneId'], $player['Player'], $post_player['Player']);
+				if ($this->audit_should_log($_audit_req, $player['Player'], $post_player['Player'])) {
+					list($_audit_req, $_audit_prior, $_audit_post) =
+						$this->audit_redact_profile($_audit_req, $player['Player'], $post_player['Player']);
+					$_audit_req['SelfEdit']    = ($requester_id == $request['MundaneId']) ? 1 : 0;
+					$_audit_req['AdminEdit']   = (!$_audit_req['SelfEdit'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) ? 1 : 0;
+					$_audit_req['OfficerEdit'] = (!$_audit_req['SelfEdit'] && !$_audit_req['AdminEdit'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) ? 1 : 0;
+					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $_audit_req, 'Player', $request['MundaneId'], $_audit_prior, $_audit_post);
+				}
 				return Success($notices);
 			} else {
 				error_log('ORK_DEBUG No Player found.: ' . json_encode(null));
@@ -1193,7 +1304,13 @@ class Player extends Ork3 {
 
 	public function RemoveHeraldry($request) {
 		logtrace("RemoveHeraldry", $request);
-		return Ork3::$Lib->heraldry->RemovePlayerHeraldry($request);
+		$mundane = $this->player_info($request['MundaneId']);
+		$requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$r = Ork3::$Lib->heraldry->RemovePlayerHeraldry($request);
+		if (is_array($r) && (int)($r['Status'] ?? 0) === 0) {
+			$this->audit_media_remove(__FUNCTION__, $request, 'Heraldry', $requester_id, $mundane);
+		}
+		return $r;
 	}
 
 	public function SetHeraldry($request) {
@@ -1207,7 +1324,9 @@ class Player extends Ork3 {
 			$this->mundane->clear();
 			$this->mundane->mundane_id = $request['MundaneId'];
 			if ($this->mundane->find()) {
-				return Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+				$r = Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+				$this->audit_media_upload(__FUNCTION__, $request, 'Heraldry', $requester_id, $mundane);
+				return $r;
 			} else {
 				return InvalidParameter();
 			}
@@ -1363,6 +1482,8 @@ class Player extends Ork3 {
 				if (file_exists($path)) unlink($path);
 				$this->mundane->has_image = 0;
 				$this->mundane->save();
+				$this->reset_photo_focus($request['MundaneId']);
+				$this->audit_media_remove(__FUNCTION__, $request, 'Image', $requester_id, $mundane);
 				return Success();
 			} else {
 				return InvalidParameter();
@@ -1385,6 +1506,8 @@ class Player extends Ork3 {
 			if ($this->mundane->find()) {
 				$r = $this->set_image($request);
 				$this->mundane->save();
+				$this->reset_photo_focus($request['MundaneId']);
+				$this->audit_media_upload(__FUNCTION__, $request, 'Image', $requester_id, $mundane);
 				return $r;
 			} else {
 				return InvalidParameter();
@@ -1406,6 +1529,7 @@ class Player extends Ork3 {
 			if ($this->mundane->find()) {
 				$r = $this->set_waiver($request);
 				$this->mundane->save();
+				$this->audit_media_upload(__FUNCTION__, $request, 'Waiver', $requester_id, $mundane);
 				return $r;
 			} else {
 				return InvalidParameter();
@@ -1413,6 +1537,70 @@ class Player extends Ork3 {
 		} else {
 			return NoAuthorization();
 		}
+	}
+
+	// Tiny audit helper for the file-upload entry points (SetImage, SetWaiver,
+	// and similar) that don't go through UpdatePlayer's diff-based audit path.
+	private function audit_media_upload($fn, $request, $kind, $requester_id, $mundane) {
+		$bytes = isset($request[$kind]) ? strlen((string)$request[$kind]) : 0;
+		if ($bytes <= 0) return; // upload didn't carry payload — nothing to record
+		$payload = [
+			'MundaneId'  => $request['MundaneId'],
+			$kind        => ['uploaded' => true, 'bytes' => $bytes, 'mime' => $request[$kind.'MimeType'] ?? null],
+			'SelfEdit'   => ($requester_id == $request['MundaneId']) ? 1 : 0,
+			'AdminEdit'  => ($requester_id != $request['MundaneId'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) ? 1 : 0,
+			'OfficerEdit'=> ($requester_id != $request['MundaneId'] && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) ? 1 : 0,
+		];
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $payload, 'Player', $request['MundaneId'], null, null);
+	}
+
+	// Photo focus values (x/y/size) are pixel-percentages of the player's photo,
+	// so they're meaningless once the photo is removed or replaced. Reset to
+	// schema defaults whenever the underlying image changes. UPDATE matching
+	// 0 rows is harmless when no design row exists yet.
+	private function reset_photo_focus($mundane_id) {
+		$id = (int)$mundane_id;
+		if ($id <= 0) return;
+		// Clear any leftover bound params from a prior Yapo save — without this,
+		// PDO would try to bind them to this placeholder-free UPDATE and fail
+		// silently (ERRMODE_WARNING), leaving the row unchanged.
+		$this->db->Clear();
+		$this->db->Execute("UPDATE " . DB_PREFIX . "mundane_design SET photo_focus_x = 50, photo_focus_y = 50, photo_focus_size = 100 WHERE mundane_id = $id");
+	}
+
+	// Audit helper for AddSecondToRecommendation / WithdrawSecond. The
+	// requester is the currently-authorized session, the entity is the
+	// recipient of the parent recommendation, and the payload carries the
+	// rec/second ids plus actor flags so admin actions are easy to filter.
+	private function audit_second_change($fn, $payload, $entity_id, $requester_id) {
+		$requester_id = (int)$requester_id;
+		$supporter_id = (int)($payload['SupporterMundaneId'] ?? $requester_id);
+		$payload['SelfAction']    = ($requester_id === $supporter_id) ? 1 : 0;
+		$payload['AdminAction']   = 0;
+		$payload['OfficerAction'] = 0;
+		if (!$payload['SelfAction'] && (int)$entity_id > 0) {
+			if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+				$payload['AdminAction'] = 1;
+			} else {
+				$info = $this->player_info((int)$entity_id);
+				if (!empty($info['ParkId']) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, (int)$info['ParkId'], AUTH_CREATE)) {
+					$payload['OfficerAction'] = 1;
+				}
+			}
+		}
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $payload, 'Player', (int)$entity_id, null, null);
+	}
+
+	// Companion to audit_media_upload for the Remove* entry points.
+	private function audit_media_remove($fn, $request, $kind, $requester_id, $mundane) {
+		$payload = [
+			'MundaneId'  => $request['MundaneId'],
+			$kind        => ['removed' => true],
+			'SelfEdit'   => ($requester_id == $request['MundaneId']) ? 1 : 0,
+			'AdminEdit'  => ($requester_id != $request['MundaneId'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) ? 1 : 0,
+			'OfficerEdit'=> ($requester_id != $request['MundaneId'] && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) ? 1 : 0,
+		];
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $payload, 'Player', $request['MundaneId'], null, null);
 	}
 
 	public function SetBan($request) {
@@ -2187,15 +2375,30 @@ class Player extends Ork3 {
 			if (!$existing->deleted_at) {
 				return InvalidParameter('You have already seconded this recommendation.');
 			}
-			$existing->deleted_at = null;
-			$existing->deleted_by = null;
-			$existing->notes = $notes;
-			$existing->updated_at = date('Y-m-d H:i:s');
-			$existing->save();
+			// Yapo's null-binding doesn't reliably write SQL NULL to TIMESTAMP
+			// columns through PDO::execute(array). Use raw SQL to clear
+			// deleted_at / deleted_by alongside the notes/updated_at update.
+			$_existingId = (int)$existing->recommendation_seconds_id;
+			$this->db->Clear();
+			$this->db->notes = $notes;
+			$this->db->updated_at = date('Y-m-d H:i:s');
+			$this->db->Execute("UPDATE " . DB_PREFIX . "recommendation_seconds
+				SET notes = :notes, updated_at = :updated_at, deleted_at = NULL, deleted_by = NULL
+				WHERE recommendation_seconds_id = $_existingId");
+			$this->db->Clear();
 			if (isset(Ork3::$Lib->ghettocache->memcache)) {
 				Ork3::$Lib->ghettocache->memcache->flush();
 			}
-			return Success($existing->recommendation_seconds_id);
+			$this->audit_second_change(__FUNCTION__, [
+				'RecommendationsId'        => (int)$request['RecommendationsId'],
+				'RecommendationSecondsId'  => $_existingId,
+				'NotesLen'                 => strlen($notes),
+				'Resurrected'              => 1,
+				'AwardId'                  => (int)$awardRec->award_id,
+				'KingdomAwardId'           => (int)$awardRec->kingdomaward_id,
+				'Rank'                     => (int)$awardRec->rank,
+			], (int)$awardRec->mundane_id, $mundane_id);
+			return Success($_existingId);
 		}
 
 		$second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
@@ -2207,6 +2410,15 @@ class Player extends Ork3 {
 		if (isset(Ork3::$Lib->ghettocache->memcache)) {
 			Ork3::$Lib->ghettocache->memcache->flush();
 		}
+		$this->audit_second_change(__FUNCTION__, [
+			'RecommendationsId'        => (int)$request['RecommendationsId'],
+			'RecommendationSecondsId'  => (int)$second->recommendation_seconds_id,
+			'NotesLen'                 => strlen($notes),
+			'Resurrected'              => 0,
+			'AwardId'                  => (int)$awardRec->award_id,
+			'KingdomAwardId'           => (int)$awardRec->kingdomaward_id,
+			'Rank'                     => (int)$awardRec->rank,
+		], (int)$awardRec->mundane_id, $mundane_id);
 		return Success($second->recommendation_seconds_id);
 	}
 
@@ -2259,29 +2471,41 @@ class Player extends Ork3 {
 			return InvalidParameter('Second not found.');
 		}
 
+		// Load parent rec up-front — needed both for the admin-authority check
+		// and for the audit row (recipient's mundane_id).
+		$parent = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$parent->clear();
+		$parent->recommendations_id = $second->recommendations_id;
+		$parent_found = $parent->find();
+
 		$can_withdraw = ((int)$second->supporter_mundane_id === (int)$mundane_id);
-		if (!$can_withdraw) {
-			// Admin path: load the parent rec to find the recipient's park, then check park-level authority.
-			$parent = new yapo($this->db, DB_PREFIX . 'recommendations');
-			$parent->clear();
-			$parent->recommendations_id = $second->recommendations_id;
-			if ($parent->find()) {
-				$recipientInfo = $this->player_info($parent->mundane_id);
-				if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
-					$can_withdraw = true;
-				}
+		if (!$can_withdraw && $parent_found) {
+			$recipientInfo = $this->player_info($parent->mundane_id);
+			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+				$can_withdraw = true;
 			}
 		}
 		if (!$can_withdraw) {
 			return InvalidParameter('Only the supporter or an admin may withdraw a second.');
 		}
 
+		$supporter_id = (int)$second->supporter_mundane_id;
+		$rec_id       = (int)$second->recommendations_id;
+		$second_id    = (int)$second->recommendation_seconds_id;
 		$second->deleted_at = date('Y-m-d H:i:s');
 		$second->deleted_by = $mundane_id;
 		$second->save();
 		if (isset(Ork3::$Lib->ghettocache->memcache)) {
 			Ork3::$Lib->ghettocache->memcache->flush();
 		}
+		$this->audit_second_change(__FUNCTION__, [
+			'RecommendationsId'        => $rec_id,
+			'RecommendationSecondsId'  => $second_id,
+			'SupporterMundaneId'       => $supporter_id,
+			'AwardId'                  => $parent_found ? (int)$parent->award_id : 0,
+			'KingdomAwardId'           => $parent_found ? (int)$parent->kingdomaward_id : 0,
+			'Rank'                     => $parent_found ? (int)$parent->rank : 0,
+		], $parent_found ? (int)$parent->mundane_id : 0, $mundane_id);
 		return Success('Second withdrawn.');
 	}
 

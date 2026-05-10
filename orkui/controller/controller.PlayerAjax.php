@@ -364,9 +364,11 @@ class Controller_PlayerAjax extends Controller {
 			exit;
 
 		} elseif ($action === 'updateprofile') {
-			// Own-profile customization: about, colors, name prefix/suffix, photo focus
+			// Own-profile customization: about, colors, name prefix/suffix, photo focus.
+			// ORK admins may also edit any player's profile (e.g. to remove inappropriate content).
 			$uid = (int)$this->session->user_id;
-			if ($uid !== $player_id) {
+			$_isOrkAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null);
+			if ($uid !== $player_id && !$_isOrkAdmin) {
 				echo json_encode(['status' => 5, 'error' => 'You can only customize your own profile.']);
 				exit;
 			}
@@ -394,6 +396,11 @@ class Controller_PlayerAjax extends Controller {
 				'MilestoneConfig'  => isset($_POST['MilestoneConfig'])  ? $_POST['MilestoneConfig']  : null,
 				'NameFont'         => (isset($_POST['NameFont']) && in_array($_POST['NameFont'], ['','Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'])) ? $_POST['NameFont'] : null,
 					'BeltDisplay'      => (isset($_POST['BeltDisplay']) && in_array($_POST['BeltDisplay'], ['white','own','none'])) ? $_POST['BeltDisplay'] : null,
+					// Administrative fields — UpdatePlayer gates these behind HasAuthority,
+					// so non-officers sending them have no effect.
+					'Active'           => isset($_POST['Active'])          ? (int)$_POST['Active']                                                  : null,
+					'Waivered'         => isset($_POST['Waivered'])        ? (int)$_POST['Waivered']                                                : null,
+					'ParkMemberSince'  => isset($_POST['ParkMemberSince']) ? trim($_POST['ParkMemberSince'])                                        : null,
 			];
 			$r = $this->Player->update_player($fields);
 			echo ($r['Status'] == 0)

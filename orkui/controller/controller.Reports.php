@@ -1158,14 +1158,18 @@ class Controller_Reports extends Controller {
 		unset($pRow);
 
 		// 5. Get knighthood memberships for players in the grid
-		$knightSql = "SELECT ma.mundane_id, a.name AS knight_name
+		// COALESCE(alias.*, a.*) so Custom Titles aliased to a Knight branch
+		// (Knight of the Sword / Flame / etc.) count toward this player's
+		// knighthood memberships.
+		$knightSql = "SELECT ma.mundane_id, COALESCE(alias.name, a.name) AS knight_name
 		              FROM " . DB_PREFIX . "awards ma
 		              JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
 		              JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+		              LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 		              WHERE ma.mundane_id IN ({$mundaneIds})
-		                AND a.peerage = 'Knight'
+		                AND COALESCE(alias.peerage, a.peerage) = 'Knight'
 		                AND (ma.revoked = 0 OR ma.revoked IS NULL)
-		              GROUP BY ma.mundane_id, a.award_id";
+		              GROUP BY ma.mundane_id, COALESCE(alias.award_id, a.award_id)";
 		$knightResult = $DB->DataSet($knightSql);
 		if ($knightResult && $knightResult->Size() > 0) {
 			$knightTypeMap = ['Battle' => 'Battle', 'Sword' => 'Sword', 'Crown' => 'Crown', 'Flame' => 'Flame', 'Serpent' => 'Serpent'];
