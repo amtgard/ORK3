@@ -93,13 +93,26 @@ class ProfanityFilter
 		if (class_exists('Normalizer')) {
 			$n = \Normalizer::normalize($s, \Normalizer::FORM_KD);
 			if (is_string($n)) $s = $n;
+		} elseif (function_exists('iconv')) {
+			// Fallback when intl ext is unavailable: iconv //TRANSLIT folds Latin diacritics
+			// to ASCII (e.g. "fück" -> "fuck"). //IGNORE drops anything untranslatable.
+			$prevLocale = setlocale(LC_CTYPE, '0');
+			setlocale(LC_CTYPE, 'en_US.UTF-8');
+			$n = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+			if (is_string($n) && $n !== '') $s = $n;
+			if ($prevLocale !== false) setlocale(LC_CTYPE, $prevLocale);
 		}
 		$s = preg_replace('/\p{M}+/u', '', $s);
 		$s = strtr($s, self::$LEET_MAP);
-		do {
-			$prev = $s;
-			$s = preg_replace('/(\p{L})[\s.\-_*+]+(?=\p{L})/u', '$1', $s);
-		} while ($s !== $prev);
+		// Collapse runs of single letters separated by separator chars (e.g. "f u c k", "f.u.c.k")
+		// into a single contiguous token. We deliberately do NOT collapse separators between
+		// multi-letter words, so that word boundaries (\b) remain meaningful and we don't turn
+		// "is fucking" into "isfucking" (which would defeat the leading \b in the regex).
+		$s = preg_replace_callback(
+			'/(?<![\p{L}\p{N}])(?:\p{L}[\s.\-_*+]+){1,}\p{L}(?![\p{L}\p{N}])/u',
+			function ($m) { return preg_replace('/[\s.\-_*+]+/u', '', $m[0]); },
+			$s
+		);
 		return $s;
 	}
 
