@@ -7,3 +7,7 @@
 #
 # Format: one whole word per line. Lines starting with '#' or blank are ignored.
 # Edit freely; reload by restarting the request.
+bonner
+ecchi
+titmouse
+twinkie
