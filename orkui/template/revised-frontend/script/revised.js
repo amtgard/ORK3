@@ -6936,6 +6936,19 @@ $(document).ready(function() {
         var overlay = document.getElementById('ev-edit-modal');
         if (overlay) overlay.classList.remove('ev-modal-open');
         document.body.style.overflow = '';
+        // Reset the "Help Me Write…" button so the next open requires confirm
+        // before overwriting existing description content. Otherwise the
+        // data-last-idx attribute persists across modal close, causing the
+        // second click on existing content to silently overwrite.
+        if (overlay) {
+            overlay.querySelectorAll('.ev-help-write-btn').forEach(function(btn) {
+                btn.removeAttribute('data-last-idx');
+                if (btn.dataset.origLabel) {
+                    btn.innerHTML = btn.dataset.origLabel;
+                    delete btn.dataset.origLabel;
+                }
+            });
+        }
     }
 
     window.evOpenEditModal = function() {
@@ -14647,10 +14660,15 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
     });
 
-    function doUpload(blob) {
+    function doUpload(blob, isPng) {
         showStep(stepUploading);
         var fd = new FormData();
-        fd.append('Banner', blob, 'banner.jpg');
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
         fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
         fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
         fetch(UPLOAD_URL, { method: 'POST', body: fd })
@@ -14682,10 +14700,10 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             if (resizeNote) resizeNote.textContent = 'Resizing…';
             resizeImageToLimit(file, BANNER_BYTE_LIMIT, function(blob) {
                 if (resizeNote) resizeNote.textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + ' KB';
-                doUpload(blob);
+                doUpload(blob, isPng);
             }, function(errMsg) { showError(errMsg); }, isPng);
         } else {
-            doUpload(file);
+            doUpload(file, isPng);
         }
     });
 })();
