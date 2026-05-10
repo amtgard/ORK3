@@ -6,9 +6,10 @@
 
 	$eventName   = htmlspecialchars($details['Name'] ?? $info['Name'] ?? 'Event');
 	$hasHeraldry = !empty($details['HasHeraldry']);
-	$heraldryUrl = $hasHeraldry
-		? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eventId))
-		: HTTP_EVENT_HERALDRY . '00000.jpg';
+	$heraldryFile  = $hasHeraldry ? Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eventId)) : '00000.jpg';
+	$heraldryFs    = DIR_EVENT_HERALDRY . $heraldryFile;
+	$heraldryVer   = ($hasHeraldry && file_exists($heraldryFs)) ? '?v=' . filemtime($heraldryFs) : '';
+	$heraldryUrl   = HTTP_EVENT_HERALDRY . $heraldryFile . $heraldryVer;
 
 	$kingdomId   = (int)($info['KingdomId'] ?? 0);
 	$kingdomName = htmlspecialchars($info['KingdomName'] ?? '');
@@ -34,7 +35,7 @@
 				<img id="ec-heraldry-img"
 					src="<?= htmlspecialchars($heraldryUrl) ?>"
 					onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-					alt="<?= $eventName ?> heraldry"
+					alt="<?= $eventName ?> logo"
 					crossorigin="anonymous">
 			</div>
 			<?php if ($eventId > 0): ?>
@@ -42,7 +43,7 @@
 				<i class="fas fa-camera" style="margin-right:4px"></i>Add Image
 			</a>
 			<?php else: ?>
-			<span class="ec-add-image-link ec-add-image-link-disabled" title="Save the event first to add heraldry">
+			<span class="ec-add-image-link ec-add-image-link-disabled" title="Save the event first to add a logo">
 				<i class="fas fa-camera" style="margin-right:4px"></i>Add Image
 			</span>
 			<?php endif; ?>
@@ -138,6 +139,8 @@
 					<option value="Midreign">Midreign</option>
 					<option value="Endreign">Endreign</option>
 					<option value="Crown Qualifications">Crown Qualifications</option>
+					<option value="Day Event">Day Event</option>
+					<option value="Park Raid">Park Raid</option>
 					<option value="Meeting">Meeting</option>
 					<option value="Althing">Althing</option>
 					<option value="Interkingdom Event">Interkingdom Event</option>
@@ -436,11 +439,11 @@ var EvConfig = {
 };
 </script>
 
-<!-- Event Heraldry Upload Modal -->
+<!-- Event Logo Upload Modal -->
 <div class="ev-img-overlay" id="ev-img-overlay">
 	<div class="ev-img-modal">
 		<div class="ev-img-modal-header">
-			<span class="ev-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Event Heraldry</span>
+			<span class="ev-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Event Logo</span>
 			<button class="ev-img-close-btn" id="ev-img-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-select">
@@ -453,7 +456,7 @@ var EvConfig = {
 			<div id="ev-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
 			<div class="ev-img-form-error" id="ev-img-error" style="display:none;"></div>
 			<div style="text-align:center;margin-top:10px">
-				<button class="ev-btn ev-btn-outline" id="ev-img-remove-btn" type="button" style="font-size:12px;padding:4px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Heraldry</button>
+				<button class="ev-btn ev-btn-outline" id="ev-img-remove-btn" type="button" style="font-size:12px;padding:4px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Logo</button>
 			</div>
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-crop" style="display:none;">
