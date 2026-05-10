@@ -16,3 +16,6 @@ escort
 hardcore
 poof
 snatch
+
+# Round 2 — slur batch false-positive correction
+bint
