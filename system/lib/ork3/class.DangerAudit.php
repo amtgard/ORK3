@@ -25,6 +25,10 @@ class Dangeraudit extends Ork3 {
 		if ($eid > 0) {
 			$pk = (int)$this->audit->{$this->audit->primarykey()};
 			if ($pk > 0) {
+				// Clear leftover bind params from the audit save — without this,
+				// PDO would bind them to this placeholder-free UPDATE and fail
+				// silently (ERRMODE_WARNING), leaving entity_id at 0.
+				$this->db->Clear();
 				$this->db->Execute("UPDATE " . DB_PREFIX . "danger_audit SET entity_id = $eid WHERE danger_audit_id = $pk");
 			}
 		}

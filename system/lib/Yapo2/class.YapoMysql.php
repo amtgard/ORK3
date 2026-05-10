@@ -65,10 +65,15 @@ class YapoMysql extends YapoDb {
 		}
 
 		$result = array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
-		self::$schema_cache[$table] = $result;
-		// Only persist when we got a real schema back — never cache an empty Fields array.
-		if (function_exists('apcu_store') && !empty($fields)) {
-			apcu_store('yapo_schema_' . $table, $result, 86400);
+		// Never cache an empty Fields array — in either tier. An empty schema means
+		// DESCRIBE failed (table missing mid-migration, leftover bound params, etc.).
+		// Caching it would poison every subsequent save/find on this table for the
+		// life of the process, with PDO ERRMODE_WARNING swallowing the error.
+		if (!empty($fields)) {
+			self::$schema_cache[$table] = $result;
+			if (function_exists('apcu_store')) {
+				apcu_store('yapo_schema_' . $table, $result, 86400);
+			}
 		}
 		return $result;
 	}
