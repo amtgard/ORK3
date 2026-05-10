@@ -190,7 +190,7 @@ class Controller_Player extends Controller {
 				} else if($r['Status'] == 5) {
 					header( 'Location: '.UIR."Login/login/Player/profile/$id" );
 				} else {
-					$this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
+					$this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
 				}
 			}
 		}

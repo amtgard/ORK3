@@ -75,7 +75,7 @@ class Controller_PlayerAjax extends Controller {
 			if ($r['Status'] == 0) {
 				echo json_encode(['status' => 0, 'mundaneId' => (int)($r['Detail'] ?? 0)]);
 			} else {
-				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 			}
 
 		} else {
@@ -121,7 +121,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'reactivateaward') {
 			$awards_id = (int)($_POST['AwardsId'] ?? 0);
@@ -136,7 +136,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'addnote') {
 			$note     = trim($_POST['Note']         ?? '');
@@ -162,7 +162,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0, 'notesId' => (int)($r['Detail'] ?? 0)])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'deletenote') {
 			$notes_id = (int)($_POST['NotesId'] ?? 0);
@@ -177,7 +177,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'editnote') {
 			$notes_id = (int)($_POST['NotesId']    ?? 0);
@@ -208,7 +208,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'clearnotes') {
 			$r = $this->Player->clear_notes([
@@ -217,7 +217,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'moveplayer') {
 			$dest_park_id = (int)($_POST['ParkId'] ?? 0);
@@ -232,7 +232,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'deleteaward') {
 			$awards_id = (int)($_POST['AwardsId'] ?? 0);
@@ -247,7 +247,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'removeimage') {
 			$r = $this->Player->remove_image([
@@ -256,7 +256,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'removeheraldry') {
 			$r = $this->Player->remove_heraldry([
@@ -265,7 +265,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'revokeallawards') {
 			$revocation = trim($_POST['Revocation'] ?? '');
@@ -280,7 +280,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'reconcileaward') {
 		$awards_id        = (int)($_POST['AwardsId']        ?? 0);
@@ -314,7 +314,7 @@ class Controller_PlayerAjax extends Controller {
 		]);
 		echo ($r['Status'] == 0)
 			? json_encode(['status' => 0])
-			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 	} elseif ($action === 'updateclasses') {
 			$reconcile_raw = $_POST['Reconciled'] ?? [];
@@ -334,7 +334,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'awardranks') {
 			global $DB;
@@ -405,7 +405,7 @@ class Controller_PlayerAjax extends Controller {
 			$r = $this->Player->update_player($fields);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'addmilestone') {
 			$description = trim($_POST['Description'] ?? '');
@@ -428,7 +428,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0, 'milestoneId' => (int)($r['Detail'] ?? 0)])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'updatemilestone') {
 			$milestone_id = (int)($_POST['MilestoneId'] ?? 0);
@@ -449,7 +449,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} elseif ($action === 'deletemilestone') {
 			$milestone_id = (int)($_POST['MilestoneId'] ?? 0);
@@ -464,7 +464,7 @@ class Controller_PlayerAjax extends Controller {
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
@@ -525,7 +525,7 @@ class Controller_PlayerAjax extends Controller {
 		]);
 		echo ($r['Status'] == 0)
 			? json_encode(['status' => 0])
-			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+			: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 		exit;
 	}
 	public function voting_eligible($p = null) {
