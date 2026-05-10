@@ -175,14 +175,14 @@
 .ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
 .ev-checkin-locked { display:flex; align-items:flex-start; gap:10px; background:#fffbeb; border:1px solid #f6e05e; border-radius:7px; padding:11px 14px; margin-bottom:14px; font-size:13px; color:#744210; line-height:1.45; }
 .ev-checkin-locked i { color:#d69e2e; margin-top:1px; flex-shrink:0; }
-.ev-icon-btn { background: #fff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 9px; font-size: 13px; color: #4a5568; cursor: pointer; transition: background .15s, border-color .15s; line-height: 1; }
-.ev-icon-btn:hover { background: #edf2f7; border-color: #cbd5e0; }
+.ev-icon-btn { background: #fff; border: 1px solid var(--ork-border); border-radius: 5px; padding: 5px 9px; font-size: 13px; color: var(--ork-text-body); cursor: pointer; transition: background .15s, border-color .15s; line-height: 1; }
+.ev-icon-btn:hover { background: var(--ork-surface-hover); border-color: #cbd5e0; }
 .ev-modal-btn-delete {
 	background: #fff0f0; border: 1px solid #fc8181; color: #c53030;
 	padding: 8px 14px; border-radius: 5px; font-size: 13px; font-weight: 600;
 	cursor: pointer; transition: background .15s, border-color .15s;
 }
-.ev-modal-btn-delete:hover:not(:disabled) { background: #fed7d7; border-color: #e53e3e; }
+.ev-modal-btn-delete:hover:not(:disabled) { background: #fed7d7; border-color: var(--ork-red-danger); }
 .ev-modal-btn-delete-disabled { opacity: .45; cursor: not-allowed; }
 .ev-del-detail-wrap { position: relative; display: inline-block; }
 .ev-del-detail-tooltip {
@@ -257,20 +257,20 @@
 }
 .ev-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
-	padding: 14px 18px; border-bottom: 1px solid #e2e8f0; background: #f7fafc;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
 }
 .ev-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
-.ev-img-close-btn { background: none; border: none; font-size: 20px; color: #718096; cursor: pointer; padding: 0 4px; }
+.ev-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
 .ev-img-modal-body { padding: 20px 22px; }
 .ev-upload-area {
 	display: flex; flex-direction: column; align-items: center; gap: 8px;
 	border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px 20px;
-	cursor: pointer; color: #4a5568; font-size: 14px; text-align: center;
+	cursor: pointer; color: var(--ork-text-body); font-size: 14px; text-align: center;
 	transition: border-color .15s, background .15s;
 }
 .ev-upload-area:hover { border-color: #4299e1; background: #ebf8ff; }
-.ev-upload-icon { font-size: 32px; color: #a0aec0; }
-.ev-upload-area small { font-size: 12px; color: #a0aec0; }
+.ev-upload-icon { font-size: 32px; color: var(--ork-text-hint); }
+.ev-upload-area small { font-size: 12px; color: var(--ork-text-hint); }
 .ev-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .ev-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
 .ev-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
@@ -2849,11 +2849,11 @@ function evPrintSection(contentHtml, title) {
 	w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + title + '</title><style>' +
 		'body{font-family:Arial,sans-serif;font-size:13px;color:#1a202c;padding:20px}' +
 		'h2{margin:0 0 4px;font-size:16px}' +
-		'.ev-print-sub{font-size:12px;color:#718096;margin:0 0 14px}' +
+		'.ev-print-sub{font-size:12px;color:var(--ork-text-muted);margin:0 0 14px}' +
 		'table{border-collapse:collapse;width:100%}' +
-		'th,td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;font-size:12px}' +
-		'th{background:#f7fafc;font-weight:700}' +
-		'tr:nth-child(even) td{background:#f7fafc}' +
+		'th,td{border:1px solid var(--ork-border);padding:6px 10px;text-align:left;font-size:12px}' +
+		'th{background:var(--ork-surface-light);font-weight:700}' +
+		'tr:nth-child(even) td{background:var(--ork-surface-light)}' +
 		'a{color:inherit;text-decoration:none}' +
 		'@media print{body{padding:0}}' +
 	'</style></head><body>' + contentHtml + '</body></html>');
