@@ -15062,7 +15062,7 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 
     function gid(id) { return document.getElementById(id); }
 
-    var TARGET_W = 1800, TARGET_H = 500;
+    var TARGET_W = 1800, TARGET_H = 240;
 
     var overlay     = gid('ev-banner-overlay');
     var fileInput   = gid('ev-banner-file-input');

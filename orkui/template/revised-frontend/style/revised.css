@@ -4122,7 +4122,7 @@ html[data-theme="dark"] .ev-banner-toggle small { color: var(--ork-text-muted); 
 .ev-banner-position-wrap {
 	position: relative;
 	width: 100%;
-	aspect-ratio: 1800 / 500;
+	aspect-ratio: 1800 / 240;
 	background: #1a202c;
 	border-radius: 6px;
 	overflow: hidden;
