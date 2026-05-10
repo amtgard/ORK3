@@ -617,8 +617,10 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 		<?php endif; ?>
 	></div>
 	<?php if ($canManage): ?>
-	<button type="button" class="ev-banner-edit-btn" onclick="evOpenBannerModal()">
-		<i class="fas fa-image"></i> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>
+	<button type="button" class="ev-banner-edit-btn" onclick="evOpenBannerModal()" aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="ev-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt ev-banner-edit-pencil" aria-hidden="true"></i>
 	</button>
 	<?php endif; ?>
 	<div class="ev-hero-content">
@@ -686,8 +688,8 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 				<i class="fas fa-share-alt"></i> Share
 			</button>
 			<?php if ($CanManageEvent ?? false): ?>
-			<button class="ev-btn ev-btn-outline" type="button" onclick="evOpenEditModal()">
-				<i class="fas fa-pencil-alt"></i> Edit Details
+			<button class="ev-btn ev-btn-outline ev-edit-details-btn" type="button" onclick="evOpenEditModal()" aria-label="Edit Details">
+				<i class="fas fa-pencil-alt"></i><span class="ev-edit-details-label"> Edit Details</span>
 			</button>
 			<?php endif; ?>
 			<?php if ($loggedIn && !$isPastEvent): ?>
@@ -1009,8 +1011,21 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 
 			<?php // ---- Details Tab ---- ?>
 			<div class="ev-tab-panel ev-tab-visible" id="ev-tab-details">
-				<div style="display:flex;gap:20px;align-items:flex-start">
-					<div style="flex:1;min-width:0">
+				<?php
+					// Split the ticket link out of the External Links list so it can
+					// surface as a "Buy Tickets" button inside the Fees card. The
+					// ExternalLinks payload still stores both kinds together.
+					$_ticketLink   = null;
+					$_visibleLinks = [];
+					foreach ($externalLinks as $_el) {
+						if (($_el['Icon'] ?? '') === 'fas fa-ticket-alt') $_ticketLink = $_el;
+						else                                              $_visibleLinks[] = $_el;
+					}
+					$_hasFees  = !empty($eventFees);
+					$_hasLinks = !empty($_visibleLinks);
+				?>
+				<div class="ev-details-row">
+					<div class="ev-details-main">
 						<?php if ($hasDescription): ?>
 							<div class="ev-description kn-description-body"><?= ev_markdown(rawurldecode($description)) ?></div>
 						<?php else: ?>
@@ -1019,39 +1034,31 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 							</div>
 						<?php endif; ?>
 					</div>
-					<?php
-						// Split the ticket link out of the External Links list so it can
-						// surface as a "Buy Tickets" button inside the Fees card. The
-						// ExternalLinks payload still stores both kinds together.
-						$_ticketLink   = null;
-						$_visibleLinks = [];
-						foreach ($externalLinks as $_el) {
-							if (($_el['Icon'] ?? '') === 'fas fa-ticket-alt') $_ticketLink = $_el;
-							else                                              $_visibleLinks[] = $_el;
-						}
-						$_hasFees  = !empty($eventFees);
-						$_hasLinks = !empty($_visibleLinks);
-					?>
 					<?php if ($_hasFees || $_hasLinks): ?>
-					<div style="flex:0 0 240px">
+					<div class="ev-details-side">
 						<?php if ($_hasFees): ?>
-						<div class="ev-card" style="margin-bottom:<?= $_hasLinks ? '14px' : '0' ?>">
-							<h4><i class="fas fa-ticket-alt" style="margin-right:5px"></i>Admission &amp; Fees</h4>
-							<?php foreach ($eventFees as $fee): ?>
-							<div class="ev-detail-row">
-								<span class="ev-detail-label"><?= htmlspecialchars($fee['AdmissionType']) ?></span>
-								<span class="ev-detail-value"><?= (float)$fee['Cost'] == 0 ? '<span style="color:#276749">Free</span>' : '$' . number_format((float)$fee['Cost'], 2) ?></span>
+						<div class="ev-card ev-fees-card ev-details-fees">
+							<h4 class="ev-fees-toggle" role="button" aria-expanded="true" tabindex="0">
+								<span><i class="fas fa-ticket-alt" style="margin-right:5px"></i>Admission &amp; Fees</span>
+								<i class="fas fa-chevron-down ev-fees-chevron" aria-hidden="true"></i>
+							</h4>
+							<div class="ev-fees-body">
+								<?php foreach ($eventFees as $fee): ?>
+								<div class="ev-detail-row">
+									<span class="ev-detail-label"><?= htmlspecialchars($fee['AdmissionType']) ?></span>
+									<span class="ev-detail-value"><?= (float)$fee['Cost'] == 0 ? '<span style="color:#276749">Free</span>' : '$' . number_format((float)$fee['Cost'], 2) ?></span>
+								</div>
+								<?php endforeach; ?>
+								<?php if ($_ticketLink && trim($_ticketLink['Url'] ?? '')): ?>
+								<a href="<?= htmlspecialchars($_ticketLink['Url']) ?>" target="_blank" rel="noopener" class="ev-map-btn ev-buy-tickets-btn" style="margin-top:10px">
+									<i class="fas fa-ticket-alt"></i> <?= htmlspecialchars(trim($_ticketLink['Title'] ?? '') ?: 'Buy Tickets') ?>
+								</a>
+								<?php endif; ?>
 							</div>
-							<?php endforeach; ?>
-							<?php if ($_ticketLink && trim($_ticketLink['Url'] ?? '')): ?>
-							<a href="<?= htmlspecialchars($_ticketLink['Url']) ?>" target="_blank" rel="noopener" class="ev-map-btn ev-buy-tickets-btn" style="margin-top:10px">
-								<i class="fas fa-ticket-alt"></i> <?= htmlspecialchars(trim($_ticketLink['Title'] ?? '') ?: 'Buy Tickets') ?>
-							</a>
-							<?php endif; ?>
 						</div>
 						<?php endif; ?>
 						<?php if ($_hasLinks): ?>
-						<div class="ev-card" style="margin-bottom:0">
+						<div class="ev-card ev-details-links">
 							<h4><i class="fas fa-link" style="margin-right:5px"></i>Links</h4>
 							<?php foreach ($_visibleLinks as $_el): ?>
 								<?php if (trim($_el['Url']) && trim($_el['Title'])): ?>
