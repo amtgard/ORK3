@@ -37,6 +37,7 @@ class YapoMysql extends YapoDb {
 		// poison every subsequent INSERT/UPDATE/find on this table for 24 hours).
 		$this->Clear();
 		$Keys = $this->DataSet("SHOW KEYS IN $table");
+		$this->Clear();
 		$Fields = $this->DataSet("describe $table");
 		$this->Clear();
 
