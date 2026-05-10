@@ -3538,6 +3538,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	font-size: 15px;
 	flex-shrink: 0;
 }
+.pk-schedule-icon.icon-parkday { background: #f0fff4; color: #2f855a; }
 .pk-schedule-icon.icon-fighter { background: #fff5f5; color: #c53030; }
 .pk-schedule-icon.icon-arts    { background: #faf5ff; color: #6b46c1; }
 .pk-schedule-icon.icon-other   { background: #fffbeb; color: #d69e2e; }
@@ -3554,6 +3555,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	background: #ebf8ff;
 	color: #0891b2;
 }
+.pk-schedule-purpose.purpose-parkday { background: #f0fff4; color: #2f855a; }
 .pk-schedule-purpose.purpose-fighter { background: #fff5f5; color: #c53030; }
 .pk-schedule-purpose.purpose-arts    { background: #faf5ff; color: #6b46c1; }
 .pk-schedule-purpose.purpose-other   { background: #fffbeb; color: #d69e2e; }
@@ -5641,6 +5643,31 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 .pk-att-feedback { padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; }
 .pk-att-feedback.pk-att-ok  { background:#f0fff4; border:1px solid #c6f6d5; color:#276749; }
 .pk-att-feedback.pk-att-err { background:#fff5f5; border:1px solid #fed7d7; color:#c53030; }
+
+/* Active-event banner: nudges the user to enter attendance on the event
+   itself when an event is happening at the same scope on the selected date. */
+.pk-att-event-nudge {
+	display:flex; gap:12px; align-items:flex-start;
+	padding:12px 14px; margin-bottom:12px;
+	background:var(--ork-alert-info-bg, #ebf8ff);
+	border:1px solid var(--ork-alert-info-border, #90cdf4);
+	border-left:3px solid var(--ork-alert-info-border, #90cdf4);
+	border-radius:6px;
+	color:var(--ork-alert-info-text, #2a4365);
+	font-size:13px; line-height:1.45;
+}
+.pk-att-event-nudge-icon { font-size:18px; color:var(--ork-alert-info-text, #2b6cb0); flex-shrink:0; margin-top:1px; }
+.pk-att-event-nudge-body { flex:1; min-width:0; }
+.pk-att-event-nudge-text { margin:0 0 8px 0; }
+.pk-att-event-nudge-btn {
+	display:inline-flex; align-items:center; gap:6px;
+	padding:6px 12px; border-radius:6px;
+	background:var(--ork-link, #2b6cb0); color:#fff;
+	font-size:12px; font-weight:600; text-decoration:none;
+	transition:background 0.15s;
+}
+.pk-att-event-nudge-btn:hover { background:var(--ork-link-bright, #3182ce); color:#fff; text-decoration:none; }
+.pk-att-event-nudge-btn i { font-size:11px; }
 .pk-att-section { border:1px solid #e2e8f0; border-radius:8px; margin-bottom:12px; overflow:hidden; }
 .pk-att-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f7fafc; border:none; cursor:pointer; font-size:13px; font-weight:600; color:#4a5568; text-align:left; }
 .pk-att-toggle:hover { background:#edf2f7; }
@@ -7866,10 +7893,12 @@ html[data-theme="dark"] .pk-schedule-time { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pk-schedule-address { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-schedule-desc { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-schedule-icon { background: var(--ork-bg-tertiary); color: #63b3ed; }
+html[data-theme="dark"] .pk-schedule-icon.icon-parkday { background: rgba(47,133,90,0.18); color: #9ae6b4; }
 html[data-theme="dark"] .pk-schedule-icon.icon-fighter { background: rgba(197,48,48,0.15); color: #fc8181; }
 html[data-theme="dark"] .pk-schedule-icon.icon-arts { background: rgba(107,70,193,0.15); color: #b794f4; }
 html[data-theme="dark"] .pk-schedule-icon.icon-other { background: rgba(214,158,46,0.15); color: #f6e05e; }
 html[data-theme="dark"] .pk-schedule-purpose { background: var(--ork-bg-tertiary); color: #63b3ed; }
+html[data-theme="dark"] .pk-schedule-purpose.purpose-parkday { background: rgba(47,133,90,0.18); color: #9ae6b4; }
 html[data-theme="dark"] .pk-schedule-purpose.purpose-fighter { background: rgba(197,48,48,0.15); color: #fc8181; }
 html[data-theme="dark"] .pk-schedule-purpose.purpose-arts { background: rgba(107,70,193,0.15); color: #b794f4; }
 html[data-theme="dark"] .pk-schedule-purpose.purpose-other { background: rgba(214,158,46,0.15); color: #f6e05e; }
@@ -8057,6 +8086,14 @@ html[data-theme="dark"] .pk-att-feedback.pk-att-err {
   border-color: #fc8181;
   color: #feb2b2;
 }
+html[data-theme="dark"] .pk-att-event-nudge {
+  background: var(--ork-alert-info-bg);
+  border-color: var(--ork-alert-info-border);
+  color: var(--ork-alert-info-text);
+}
+html[data-theme="dark"] .pk-att-event-nudge-icon { color: var(--ork-alert-info-text); }
+html[data-theme="dark"] .pk-att-event-nudge-btn { background: #3182ce; }
+html[data-theme="dark"] .pk-att-event-nudge-btn:hover { background: #4299e1; }
 html[data-theme="dark"] .pk-att-added-list li { color: #9ae6b4; }
 html[data-theme="dark"] .pk-att-added-list li.pk-att-prior { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-att-del-btn:hover { background: rgba(197,48,48,0.15); }

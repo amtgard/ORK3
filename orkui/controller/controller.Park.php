@@ -133,7 +133,7 @@ class Controller_Park extends Controller
 			    FROM ork_event_rsvp
 			    GROUP BY event_calendardetail_id
 			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
-			WHERE e.park_id = {$pid}
+			WHERE (e.park_id = {$pid} OR cd.at_park_id = {$pid})
 			ORDER BY cd.event_start, e.name";
 		$DB->Clear();
 	$evtResult    = $DB->DataSet($evtSql);

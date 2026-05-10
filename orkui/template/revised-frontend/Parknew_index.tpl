@@ -141,8 +141,8 @@
 	$_pd_today      = new DateTime(); $_pd_today->setTime(0, 0, 0);
 	$_pd_end        = (clone $_pd_today)->modify('+90 days');
 	$_pd_dayNames   = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-	$_pd_colors     = ['fighter-practice'=>'#e53e3e','arts-day'=>'#805ad5','other'=>'#ed8936'];
-	$_pd_labels     = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
+	$_pd_colors     = ['park-day'=>'#38a169','fighter-practice'=>'#e53e3e','arts-day'=>'#805ad5','other'=>'#ed8936'];
+	$_pd_labels     = ['park-day'=>'Park Day','fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
 	foreach ($parkDayList as $_pd) {
 		$_pdColor   = $_pd_colors[$_pd['Purpose']] ?? '#38a169';
 		$_pdLabel   = $_pd_labels[$_pd['Purpose']] ?? 'Park Day';
@@ -642,10 +642,11 @@
 								default:              $recText = $day['Recurrence'];
 							}
 							switch ($day['Purpose']) {
-								case 'fighter-practice': $purposeLabel = 'Fighter Practice'; $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
-								case 'arts-day':         $purposeLabel = 'A&S Day';       $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
+								case 'park-day':         $purposeLabel = 'Park Day';          $purposeCls = 'purpose-parkday'; $iconCls = 'icon-parkday'; $iconFa = 'fa-shield-alt'; break;
+								case 'fighter-practice': $purposeLabel = 'Fighter Practice';  $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
+								case 'arts-day':         $purposeLabel = 'A&S Day';           $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
 								case 'other':            $purposeLabel = 'Other';             $purposeCls = 'purpose-other';   $iconCls = 'icon-other';   $iconFa = 'fa-star';       break;
-								default:                 $purposeLabel = 'Park Day';          $purposeCls = '';                $iconCls = '';             $iconFa = 'fa-shield-alt';
+								default:                 $purposeLabel = 'Park Day';          $purposeCls = 'purpose-parkday'; $iconCls = 'icon-parkday'; $iconFa = 'fa-shield-alt';
 							}
 							// Day-specific map URL
 							$dayMapUrl = null;
@@ -867,7 +868,7 @@
 									case 'monthly':       $pkDayRec = 'Monthly on the ' . pk_ordinal($pkDay['MonthDay']); break;
 									default:              $pkDayRec = $pkDay['Recurrence'];
 								}
-								$pkPurposeLabels = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
+								$pkPurposeLabels = ['park-day'=>'Park Day','fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
 								$pkDayLabel = $pkPurposeLabels[$pkDay['Purpose']] ?? 'Park Day';
 							?>
 							<tr data-type="park-day" style="display:none">
@@ -1593,6 +1594,14 @@ window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 				</div>
 			</div>
 
+			<div id="pk-att-event-nudge" class="pk-att-event-nudge" style="display:none">
+				<div class="pk-att-event-nudge-icon"><i class="fas fa-info-circle"></i></div>
+				<div class="pk-att-event-nudge-body">
+					<p class="pk-att-event-nudge-text">It looks like <strong id="pk-att-event-nudge-name"></strong> is currently happening. Would you like to capture attendance on that event instead? Using event attendance makes for better and more accurate reporting.</p>
+					<a class="pk-att-event-nudge-btn" id="pk-att-event-nudge-link" href="#">Go To Event <i class="fas fa-arrow-right"></i></a>
+				</div>
+			</div>
+
 			<div class="pk-att-feedback" id="pk-att-feedback" style="display:none"></div>
 
 			<!-- Tab bar -->
@@ -2291,11 +2300,12 @@ tr:hover .pk-copy-link { opacity: 1; }
 			<div class="pk-addday-field">
 				<label>Purpose</label>
 				<div class="pk-seg-group">
-					<button type="button" class="pk-seg-btn pk-seg-active" data-group="purpose" data-val="fighter-practice">Fighter Practice</button>
+					<button type="button" class="pk-seg-btn pk-seg-active" data-group="purpose" data-val="park-day">Park Day</button>
+					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="fighter-practice">Fighter Practice</button>
 					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="arts-day">A&amp;S Day</button>
 					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="other">Other</button>
 				</div>
-				<input type="hidden" id="pk-addday-purpose" value="fighter-practice" />
+				<input type="hidden" id="pk-addday-purpose" value="park-day" />
 			</div>
 
 			<div class="pk-addday-field">
