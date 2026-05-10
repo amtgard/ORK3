@@ -2193,24 +2193,24 @@ var EvConfig = {
 
 		<div class="ev-img-modal-body" id="ev-banner-step-select">
 			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
-				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 500&nbsp;px</strong> (3.6:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
 			<div class="ev-banner-wireframes">
 				<figure class="ev-banner-wireframe ev-banner-wf-desktop">
-					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 500 px</figcaption>
-					<svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-						<rect x="0" y="0" width="320" height="100" fill="#cbd5e0"/>
-						<rect x="0" y="0" width="200" height="100" fill="url(#wfLeftFade)" opacity="0.55"/>
-						<rect x="0" y="68" width="320" height="32" fill="url(#wfBottomFade)" opacity="0.55"/>
-						<rect x="14" y="14" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
-						<rect x="60" y="20" width="120" height="9" rx="1.5" fill="#fff"/>
-						<rect x="60" y="34" width="40" height="6" rx="1.5" fill="#fff" opacity="0.85"/>
-						<rect x="105" y="34" width="34" height="6" rx="1.5" fill="#fff" opacity="0.85"/>
-						<rect x="60" y="76" width="80" height="5" rx="1" fill="#fff" opacity="0.7"/>
-						<text x="246" y="54" text-anchor="middle" font-size="9" fill="#2d3748" font-weight="700">Safe zone</text>
-						<text x="316" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
-						<text x="3"   y="98" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">500px tall</text>
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
 							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
@@ -2284,27 +2284,27 @@ var EvConfig = {
 				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
 			</p>
 			<div class="ev-banner-position-wrap">
-				<canvas id="ev-banner-position-canvas" class="ev-banner-position-canvas" width="1800" height="500"></canvas>
-				<svg class="ev-banner-position-overlay" viewBox="0 0 1800 500" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-					<!-- Faint vignette tint for safe zones -->
-					<rect x="0" y="0" width="900" height="500" fill="url(#posLeftFade)" opacity="0.35"/>
-					<rect x="0" y="320" width="1800" height="180" fill="url(#posBottomFade)" opacity="0.35"/>
-					<!-- Logo placeholder (~110px in real layout → ~165px scaled into 500-tall frame) -->
-					<rect x="60" y="170" width="165" height="165" rx="10" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="3"/>
-					<text x="142" y="262" text-anchor="middle" font-size="22" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+				<canvas id="ev-banner-position-canvas" class="ev-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="ev-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .ev-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
 					<!-- Title bar -->
-					<rect x="255" y="195" width="520" height="32" rx="3" fill="rgba(255,255,255,0.45)"/>
-					<text x="265" y="220" font-size="22" font-weight="700" fill="#1a202c" opacity="0.75">Event Title goes here</text>
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
 					<!-- Badges row -->
-					<rect x="255" y="240" width="110" height="22" rx="11" fill="rgba(72,187,120,0.55)"/>
-					<rect x="375" y="240" width="120" height="22" rx="11" fill="rgba(66,153,225,0.55)"/>
-					<rect x="505" y="240" width="100" height="22" rx="11" fill="rgba(159,122,234,0.55)"/>
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
 					<!-- Crumb -->
-					<rect x="255" y="285" width="280" height="14" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
 					<!-- Mobile-safe band markers: middle ~32% of width -->
-					<line x1="612"  y1="0" x2="612"  y2="500" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
-					<line x1="1188" y1="0" x2="1188" y2="500" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
-					<text x="900" y="22" text-anchor="middle" font-size="14" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
 					<defs>
 						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
