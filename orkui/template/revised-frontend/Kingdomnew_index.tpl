@@ -2010,8 +2010,17 @@ html[data-theme="dark"] .kn-sidebar { background: var(--ork-bg-secondary); borde
 .kn-btn-danger { background: #c53030; color: #fff; border-color: #c53030; }
 html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
 
+/* Royal crowns / copy-link / data-tip — dark mode */
+html[data-theme="dark"] [data-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
+html[data-theme="dark"] .kn-royal-monarch { color: #f6ad55; }
+html[data-theme="dark"] .kn-royal-regent  { color: #cbd5e0; }
+html[data-theme="dark"] .kn-copy-link { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-copy-link:hover { color: #63b3ed; }
+html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+
 /* ============================================================
-   </style>
+</style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
