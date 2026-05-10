@@ -19,6 +19,18 @@
 	$heraldryVer  = ($hasHeraldry && file_exists($heraldryFs)) ? '?v=' . filemtime($heraldryFs) : '';
 	$heraldryUrl  = HTTP_EVENT_HERALDRY . $heraldryFile . $heraldryVer;
 
+	$hasBanner       = !empty($info['HasBanner']);
+	$bannerShowLogo  = !isset($info['BannerShowLogo']) || (int)$info['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($info['BannerVignette']) || (int)$info['BannerVignette'] !== 0;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_EVENT_BANNER, sprintf('%05d', $eventId));
+		$bannerFs   = DIR_EVENT_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_EVENT_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+
 	$kingdomId   = (int)($info['KingdomId'] ?? 0);
 	$kingdomName = htmlspecialchars($info['KingdomName'] ?? '');
 	$parkId      = (int)($info['ParkId']    ?? 0);
@@ -590,14 +602,28 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 </style>
 
 <?php // ---- HERO ---- ?>
-<div class="ev-hero" id="ev-hero">
+<?php
+	$_heroBgUrl = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses = 'ev-hero';
+	if ($bannerUrl)        $_heroClasses .= ' ev-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' ev-hero-vignette';
+	if ($canManage)        $_heroClasses .= ' ev-hero-editable';
+	$_showLogo = !$bannerUrl || $bannerShowLogo;
+?>
+<div class="<?= $_heroClasses ?>" id="ev-hero">
 	<div class="ev-hero-bg"
-		<?php if ($heraldryUrl): ?>
-			style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"
+		<?php if ($_heroBgUrl): ?>
+			style="background-image: url('<?= htmlspecialchars($_heroBgUrl) ?>')"
 		<?php endif; ?>
 	></div>
+	<?php if ($canManage): ?>
+	<button type="button" class="ev-banner-edit-btn" onclick="evOpenBannerModal()">
+		<i class="fas fa-image"></i> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>
+	</button>
+	<?php endif; ?>
 	<div class="ev-hero-content">
 
+		<?php if ($_showLogo): ?>
 		<div class="ev-heraldry-frame<?= $canManage ? ' ev-heraldry-edit-wrap' : '' ?>"<?= $canManage ? ' onclick="evOpenImgModal()" title="Change logo"' : '' ?>>
 			<img id="ev-heraldry-img"
 				src="<?= htmlspecialchars($heraldryUrl) ?>"
@@ -608,6 +634,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 			<div class="ev-heraldry-edit-overlay"><i class="fas fa-camera ev-heraldry-edit-icon"></i></div>
 			<?php endif; ?>
 		</div>
+		<?php endif; ?>
 
 		<div class="ev-hero-info">
 			<h1 class="ev-event-name"><?= $eventName ?></h1>
@@ -2045,6 +2072,9 @@ var EvConfig = {
 	hasLinks:   true,
 	links:      <?= json_encode(array_map(function($l) { return ['Title' => $l['Title'], 'Url' => $l['Url'], 'Icon' => $l['Icon']]; }, $ExternalLinks ?? [])) ?>,
 	linksListId:'ev-links-list',
+	hasBanner:       <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo:  <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette:  <?= $bannerVignette ? 'true' : 'false' ?>,
 };
 </script>
 <?php if ($canManageStaff): ?>
@@ -2148,6 +2178,109 @@ var EvConfig = {
 			<p style="margin-top:12px;color:#718096;">Uploading&hellip;</p>
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+
+<!-- Event Banner Upload Modal -->
+<div class="ev-img-overlay ev-banner-modal" id="ev-banner-overlay">
+	<div class="ev-img-modal" style="width:min(680px, 96vw)">
+		<div class="ev-img-modal-header">
+			<span class="ev-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<button class="ev-img-close-btn" id="ev-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="ev-img-modal-body" id="ev-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
+				Banners are full-bleed across the event header. Aim for a wide image (we recommend ~1600&times;500&nbsp;px). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+
+			<div class="ev-banner-wireframes">
+				<figure class="ev-banner-wireframe ev-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; full width</figcaption>
+					<svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+						<rect x="0" y="0" width="320" height="100" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="200" height="100" fill="url(#wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="68" width="320" height="32" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="14" y="14" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="60" y="20" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="60" y="34" width="40" height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="105" y="34" width="34" height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="60" y="76" width="80" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="246" y="54" text-anchor="middle" font-size="9" fill="#2d3748" font-weight="700">Safe zone</text>
+						<defs>
+							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="ev-banner-wireframe ev-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle third</figcaption>
+					<svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+						<rect x="0" y="0" width="53" height="100" fill="#e2e8f0"/>
+						<rect x="107" y="0" width="53" height="100" fill="#e2e8f0"/>
+						<rect x="53" y="0" width="54" height="100" fill="#cbd5e0"/>
+						<rect x="53" y="0" width="54" height="100" fill="url(#wfMobileFade)" opacity="0.45"/>
+						<rect x="60" y="14" width="28" height="28" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="60" y="50" width="40" height="6" rx="1.5" fill="#fff"/>
+						<rect x="60" y="60" width="34" height="4" rx="1" fill="#fff" opacity="0.85"/>
+						<text x="6"  y="54" font-size="7" fill="#a0aec0">cropped</text>
+						<text x="118" y="54" font-size="7" fill="#a0aec0">cropped</text>
+						<defs>
+							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.6"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="ev-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="ev-banner-config">
+				<label class="ev-banner-toggle">
+					<input type="checkbox" id="ev-banner-show-logo" checked>
+					<span>Show Event Logo on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="ev-banner-toggle">
+					<input type="checkbox" id="ev-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="ev-upload-area" for="ev-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt ev-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="ev-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="ev-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div class="ev-img-form-error" id="ev-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<button class="ev-btn ev-btn-outline" id="ev-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				<?php if ($hasBanner): ?>
+				<button class="ev-btn ev-btn-outline" id="ev-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="ev-img-modal-body" id="ev-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+		</div>
+		<div class="ev-img-modal-body" id="ev-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
 			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
 		</div>

@@ -14553,3 +14553,139 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         fill(textarea, btn);
     };
 })();
+
+// ---- Event Banner upload + config (mirrors heraldry, resizes to 1MB) ----
+(function() {
+    if (typeof EvConfig === 'undefined' || !EvConfig.canManage) return;
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = EvConfig.uir + 'EventAjax/banner/' + EvConfig.eventId + '/update';
+    var REMOVE_URL = EvConfig.uir + 'EventAjax/banner/' + EvConfig.eventId + '/remove';
+    var CONFIG_URL = EvConfig.uir + 'EventAjax/banner/' + EvConfig.eventId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var overlay     = gid('ev-banner-overlay');
+    var fileInput   = gid('ev-banner-file-input');
+    var showLogoCb  = gid('ev-banner-show-logo');
+    var vignetteCb  = gid('ev-banner-vignette');
+    var resizeNote  = gid('ev-banner-resize-notice');
+    var errorEl     = gid('ev-banner-error');
+    var stepSelect  = gid('ev-banner-step-select');
+    var stepUploading = gid('ev-banner-step-uploading');
+    var stepSuccess = gid('ev-banner-step-success');
+    var saveCfgBtn  = gid('ev-banner-save-config-btn');
+    var removeBtn   = gid('ev-banner-remove-btn');
+    var closeBtn    = gid('ev-banner-close-btn');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+    window.evOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!EvConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!EvConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('ev-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.evCloseBannerModal = function() {
+        overlay.classList.remove('ev-open');
+        document.body.style.overflow = '';
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', evCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('ev-open')) evCloseBannerModal();
+    });
+
+    function postConfig(then) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) { then && then(); }
+                else { showError((result && result.error) || 'Save failed.'); }
+            })
+            .catch(function() { showError('Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfig(function() {
+            showStep(stepSuccess);
+            setTimeout(function() { window.location.reload(); }, 900);
+        });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        if (!confirm('Remove the banner image? This cannot be undone.')) return;
+        removeBtn.disabled = true;
+        fetch(REMOVE_URL, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    removeBtn.disabled = false;
+                    showError((result && result.error) || 'Remove failed.');
+                }
+            })
+            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+    });
+
+    function doUpload(blob) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        fd.append('Banner', blob, 'banner.jpg');
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+    }
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        if (file.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(file, BANNER_BYTE_LIMIT, function(blob) {
+                if (resizeNote) resizeNote.textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + ' KB';
+                doUpload(blob);
+            }, function(errMsg) { showError(errMsg); }, isPng);
+        } else {
+            doUpload(file);
+        }
+    });
+})();

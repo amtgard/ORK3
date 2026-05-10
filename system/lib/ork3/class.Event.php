@@ -106,6 +106,21 @@ class Event  extends Ork3 {
 			$response['Name'] = $this->event->name;
 			$response['HasHeraldry'] = $this->event->has_heraldry;
 			$response['HeraldryUrl'] = $this->event->has_heraldry?Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type'=>'Event','Id'=>$request['EventId'])):Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type'=>'Event','Id'=>0));
+			// Banner image fields — read via raw SQL to sidestep any stale Yapo
+			// schema cache (these columns were added late in the event-planning
+			// expansion).
+			global $DB;
+			$DB->Clear();
+			$bRow = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$request['EventId']);
+			if ($bRow && $bRow->Next()) {
+				$response['HasBanner']      = (int)$bRow->has_banner;
+				$response['BannerShowLogo'] = (int)$bRow->banner_show_logo;
+				$response['BannerVignette'] = (int)$bRow->banner_vignette;
+			} else {
+				$response['HasBanner']      = 0;
+				$response['BannerShowLogo'] = 1;
+				$response['BannerVignette'] = 1;
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();

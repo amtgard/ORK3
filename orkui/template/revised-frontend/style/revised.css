@@ -3896,13 +3896,99 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	opacity: 0.14;
 	filter: blur(6px);
 }
+/* Banner image: full-bleed, no blur, no opacity dampening. */
+.ev-hero-has-banner .ev-hero-bg {
+	top: 0; left: 0; right: 0; bottom: 0;
+	opacity: 1;
+	filter: none;
+}
+/* Vignette: radial soft blur + darkening only at the LEFT (logo+badges)
+   and BOTTOM (title+crumb) edges where overlaid text needs contrast.
+   Right ~40% stays clean so the host's banner art isn't smothered.
+   ::before = darkening gradient, ::after = radial blur via backdrop-filter. */
+.ev-hero-has-banner.ev-hero-vignette::before {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	background:
+		linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.38) 18%, rgba(0,0,0,0.05) 38%, rgba(0,0,0,0) 55%),
+		linear-gradient(to top,   rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.20) 30%, rgba(0,0,0,0)  60%);
+}
+.ev-hero-has-banner.ev-hero-vignette::after {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	-webkit-mask-image: radial-gradient(ellipse 70% 75% at 78% 35%, transparent 55%, #000 100%);
+	        mask-image: radial-gradient(ellipse 70% 75% at 78% 35%, transparent 55%, #000 100%);
+	backdrop-filter: blur(7px);
+	-webkit-backdrop-filter: blur(7px);
+}
+/* "Add / Update Banner Image" pill — only visible on hover for users
+   with edit scope. Sits in the top-right corner above the vignette. */
+.ev-banner-edit-btn {
+	position: absolute; top: 12px; right: 12px; z-index: 3;
+	display: inline-flex; align-items: center; gap: 6px;
+	background: rgba(0,0,0,0.55); color: #fff;
+	border: 1px solid rgba(255,255,255,0.30);
+	border-radius: 999px; padding: 6px 12px;
+	font-size: 12px; font-weight: 600; cursor: pointer;
+	opacity: 0; transition: opacity .18s, background .15s, border-color .15s;
+	backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.ev-hero-editable:hover .ev-banner-edit-btn,
+.ev-banner-edit-btn:focus { opacity: 1; outline: none; }
+.ev-banner-edit-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.55); }
+.ev-banner-edit-btn i { font-size: 11px; }
+
+/* ---- Banner upload modal (wireframes + toggles) ---- */
+.ev-banner-wireframes {
+	display: flex; gap: 12px; margin: 8px 0 6px;
+}
+.ev-banner-wireframe {
+	margin: 0; flex: 1 1 0; min-width: 0;
+	border: 1px solid #e2e8f0; border-radius: 6px;
+	background: #fff; overflow: hidden;
+}
+.ev-banner-wireframe figcaption {
+	font-size: 11px; font-weight: 600; color: #4a5568;
+	padding: 6px 10px; background: #f7fafc;
+	border-bottom: 1px solid #e2e8f0;
+	display: flex; align-items: center; gap: 6px;
+}
+.ev-banner-wireframe figcaption i { color: #718096; font-size: 11px; }
+.ev-banner-wireframe svg { display: block; width: 100%; height: auto; }
+.ev-banner-wf-mobile { flex: 0 0 38%; }
+.ev-banner-wf-hint {
+	margin: 0 0 12px; font-size: 12px; color: #718096;
+	display: flex; align-items: flex-start; gap: 6px;
+}
+.ev-banner-wf-hint i { margin-top: 2px; color: #4299e1; }
+.ev-banner-config {
+	display: flex; flex-direction: column; gap: 10px;
+	margin-top: 6px; padding: 10px 12px;
+	background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.ev-banner-toggle {
+	display: grid; grid-template-columns: 18px 1fr; row-gap: 1px; column-gap: 8px;
+	align-items: center; cursor: pointer; user-select: none;
+}
+.ev-banner-toggle input { grid-row: 1 / span 2; align-self: start; margin-top: 3px; cursor: pointer; }
+.ev-banner-toggle span { font-size: 13px; font-weight: 600; color: #2d3748; }
+.ev-banner-toggle small { font-size: 11px; color: #718096; line-height: 1.45; }
+
+html[data-theme="dark"] .ev-banner-wireframe { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-banner-wireframe figcaption { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-banner-wireframe figcaption i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-banner-wf-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-banner-wf-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .ev-banner-config { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-banner-toggle span { color: var(--ork-text); }
+html[data-theme="dark"] .ev-banner-toggle small { color: var(--ork-text-muted); }
 .ev-hero-content {
 	position: relative;
 	display: flex;
 	align-items: center;
 	padding: 24px 30px;
 	gap: 24px;
-	z-index: 1;
+	z-index: 2;
 }
 .ev-heraldry-frame {
 	width: 110px;
