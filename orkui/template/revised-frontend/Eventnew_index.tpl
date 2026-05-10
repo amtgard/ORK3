@@ -331,6 +331,9 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 		</div>
 
 		<div class="ev-hero-actions">
+			<button class="ev-btn ev-btn-white" type="button" id="ev-share-btn" onclick="evShareUrl(this)" title="Copy link to this event">
+				<i class="fas fa-share-alt"></i> Share
+			</button>
 			<a class="ev-btn ev-btn-white"
 				href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdomId ?>&filter=<?= urlencode($info['Name'] ?? '') ?>">
 				<i class="fas fa-list-alt"></i> Attendance Report
@@ -1110,6 +1113,39 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 <?php endif; ?>
 
 <script>
+function evShareUrl(btn) {
+	var url = window.location.href;
+	function flash(label) {
+		var orig = btn.innerHTML;
+		btn.innerHTML = '<i class="fas fa-check"></i> ' + label;
+		btn.disabled = true;
+		setTimeout(function() { btn.innerHTML = orig; btn.disabled = false; }, 1400);
+	}
+	if (navigator.clipboard && navigator.clipboard.writeText) {
+		navigator.clipboard.writeText(url).then(function() { flash('Copied!'); }, function() { evShareFallback(url, btn); });
+	} else {
+		evShareFallback(url, btn);
+	}
+}
+function evShareFallback(url, btn) {
+	// http (non-https) origins and older browsers — use a temporary textarea + execCommand.
+	var ta = document.createElement('textarea');
+	ta.value = url;
+	ta.style.position = 'fixed';
+	ta.style.opacity = '0';
+	document.body.appendChild(ta);
+	ta.select();
+	var ok = false;
+	try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+	document.body.removeChild(ta);
+	var orig = btn.innerHTML;
+	btn.innerHTML = ok
+		? '<i class="fas fa-check"></i> Copied!'
+		: '<i class="fas fa-exclamation-circle"></i> Copy failed';
+	btn.disabled = true;
+	setTimeout(function() { btn.innerHTML = orig; btn.disabled = false; }, 1400);
+}
+
 function evPositionDelTooltip(wrap) {
 	var btn = wrap.querySelector('button');
 	var tip = wrap.querySelector('.ev-del-detail-tooltip');
