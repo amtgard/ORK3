@@ -1204,6 +1204,16 @@ class Player extends Ork3 {
 						return $_designExisted ? $_cur[$col] : null;
 					};
 
+					// Profanity check on free-text profile fields before save.
+					require_once(__DIR__ . '/class.ProfanityFilter.php');
+					$pf = new ProfanityFilter();
+					if (!is_null($request['AboutPersona']) && $pf->containsProfanity($request['AboutPersona'])) {
+						return InvalidParameter('', ProfanityFilter::ERROR_MESSAGE);
+					}
+					if (!is_null($request['AboutStory']) && $pf->containsProfanity($request['AboutStory'])) {
+						return InvalidParameter('', ProfanityFilter::ERROR_MESSAGE);
+					}
+
 					$design->about_persona = $_pick($request['AboutPersona'], 'about_persona');
 					$design->about_story = $_pick($request['AboutStory'], 'about_story');
 					$design->color_primary = $_pick($request['ColorPrimary'], 'color_primary');
