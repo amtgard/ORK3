@@ -3,6 +3,11 @@ ORK3 vendored data attributions
 
 system/lib/ork3/data/profanity-words.txt
   Derived from the LDNOOBW "List of Dirty, Naughty, Obscene, and Otherwise Bad Words".
+  Author: Shutterstock, Inc. and LDNOOBW contributors.
   Source: https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words
+  Pinned commit: 5faf2ba42d7b1c0977169ec3611df25a3c08eb13
   License: Creative Commons Attribution 4.0 International (CC-BY-4.0)
   https://creativecommons.org/licenses/by/4.0/
+  Modifications: filtered to entries >= 3 characters, restricted to ASCII printable
+    characters, lowercased, sorted, deduplicated. See header of vendored file for
+    full provenance.
