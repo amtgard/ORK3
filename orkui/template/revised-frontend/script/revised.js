@@ -8244,6 +8244,41 @@ $(document).ready(function() {
         gid('pk-att-date-display').classList.remove('pk-cal-open');
         gid('pk-att-date-display').setAttribute('aria-expanded', 'false');
     }
+    // Nudge user toward Event-attendance when a real event is active at this
+    // park on the modal's selected date. Filters PkConfig.calEvents (which the
+    // controller already populates with park-owned events plus kingdom events
+    // whose calendar detail has at_park_id matching this park).
+    function pkUpdateEventNudge(dateStr) {
+        var nudge = gid('pk-att-event-nudge');
+        if (!nudge) return;
+        var all = (window.PkConfig && PkConfig.calEvents) || [];
+        var match = null;
+        for (var i = 0; i < all.length; i++) {
+            var e = all[i];
+            if (!e || !e.start || e.type === 'calendar-item') continue;
+            var ext = e.extendedProps || {};
+            if (ext.isDraft) continue;
+            if (!ext.eventId || !ext.detailId) continue;
+            var startDay = String(e.start).slice(0, 10);
+            var endDay   = e.end ? String(e.end).slice(0, 10) : startDay;
+            // FullCalendar's `end` is exclusive (controller adds +1 day for
+            // multi-day events). For single-day events `end` is unset.
+            var inRange = e.end
+                ? (dateStr >= startDay && dateStr < endDay)
+                : (dateStr === startDay);
+            if (inRange) { match = e; break; }
+        }
+        if (match) {
+            var nameEl = gid('pk-att-event-nudge-name');
+            if (nameEl) nameEl.textContent = match.title || 'this event';
+            var link = gid('pk-att-event-nudge-link');
+            if (link && match.url) link.href = match.url;
+            nudge.style.display = '';
+        } else {
+            nudge.style.display = 'none';
+        }
+    }
+
     function pkSetDate(val, cb) {
         gid('pk-att-date').value = val;
         gid('pk-att-date-label').textContent = pkFormatDateDisplay(val);
@@ -8254,6 +8289,7 @@ $(document).ready(function() {
         if (gid('pk-att-panel-recent') && gid('pk-att-panel-recent').style.display !== 'none') {
             pkBuildQuickAddRows();
         }
+        pkUpdateEventNudge(val);
         pkFetchDayEntered(val, cb);
     }
 
@@ -9781,10 +9817,10 @@ function setupPronounPicker(cfg) {
         var descEl = gid('pk-addday-desc');
         if (descEl) descEl.value = '';
         overlay.querySelectorAll('.pk-seg-btn[data-group="purpose"]').forEach(function(btn) {
-            btn.classList.toggle('pk-seg-active', btn.dataset.val === 'fighter-practice');
+            btn.classList.toggle('pk-seg-active', btn.dataset.val === 'park-day');
         });
         var purposeHid = gid('pk-addday-purpose');
-        if (purposeHid) purposeHid.value = 'fighter-practice';
+        if (purposeHid) purposeHid.value = 'park-day';
         overlay.querySelectorAll('.pk-seg-btn[data-group="recurrence"]').forEach(function(btn) {
             btn.classList.toggle('pk-seg-active', btn.dataset.val === 'weekly');
         });
