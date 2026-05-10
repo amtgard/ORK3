@@ -2193,12 +2193,12 @@ var EvConfig = {
 
 		<div class="ev-img-modal-body" id="ev-banner-step-select">
 			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
-				Banners are full-bleed across the event header. Aim for a wide image (we recommend ~1600&times;500&nbsp;px). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 500&nbsp;px</strong> (3.6:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
 			<div class="ev-banner-wireframes">
 				<figure class="ev-banner-wireframe ev-banner-wf-desktop">
-					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; full width</figcaption>
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 500 px</figcaption>
 					<svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="320" height="100" fill="#cbd5e0"/>
 						<rect x="0" y="0" width="200" height="100" fill="url(#wfLeftFade)" opacity="0.55"/>
@@ -2209,6 +2209,8 @@ var EvConfig = {
 						<rect x="105" y="34" width="34" height="6" rx="1.5" fill="#fff" opacity="0.85"/>
 						<rect x="60" y="76" width="80" height="5" rx="1" fill="#fff" opacity="0.7"/>
 						<text x="246" y="54" text-anchor="middle" font-size="9" fill="#2d3748" font-weight="700">Safe zone</text>
+						<text x="316" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="3"   y="98" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">500px tall</text>
 						<defs>
 							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
@@ -2221,7 +2223,7 @@ var EvConfig = {
 				</figure>
 
 				<figure class="ev-banner-wireframe ev-banner-wf-mobile">
-					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle third</figcaption>
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
 					<svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="53" height="100" fill="#e2e8f0"/>
 						<rect x="107" y="0" width="53" height="100" fill="#e2e8f0"/>
@@ -2274,6 +2276,53 @@ var EvConfig = {
 				<?php else: ?>
 				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
 				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="ev-img-modal-body" id="ev-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="ev-banner-position-wrap">
+				<canvas id="ev-banner-position-canvas" class="ev-banner-position-canvas" width="1800" height="500"></canvas>
+				<svg class="ev-banner-position-overlay" viewBox="0 0 1800 500" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones -->
+					<rect x="0" y="0" width="900" height="500" fill="url(#posLeftFade)" opacity="0.35"/>
+					<rect x="0" y="320" width="1800" height="180" fill="url(#posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px in real layout → ~165px scaled into 500-tall frame) -->
+					<rect x="60" y="170" width="165" height="165" rx="10" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="3"/>
+					<text x="142" y="262" text-anchor="middle" font-size="22" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="255" y="195" width="520" height="32" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="265" y="220" font-size="22" font-weight="700" fill="#1a202c" opacity="0.75">Event Title goes here</text>
+					<!-- Badges row -->
+					<rect x="255" y="240" width="110" height="22" rx="11" fill="rgba(72,187,120,0.55)"/>
+					<rect x="375" y="240" width="120" height="22" rx="11" fill="rgba(66,153,225,0.55)"/>
+					<rect x="505" y="240" width="100" height="22" rx="11" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="255" y="285" width="280" height="14" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="500" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="500" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="22" text-anchor="middle" font-size="14" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="ev-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="ev-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="ev-img-form-error" id="ev-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="ev-btn ev-btn-outline" id="ev-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="ev-btn ev-btn-white" id="ev-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
 			</div>
 		</div>
 

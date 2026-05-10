@@ -14577,6 +14577,8 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 
     function gid(id) { return document.getElementById(id); }
 
+    var TARGET_W = 1800, TARGET_H = 500;
+
     var overlay     = gid('ev-banner-overlay');
     var fileInput   = gid('ev-banner-file-input');
     var showLogoCb  = gid('ev-banner-show-logo');
@@ -14584,15 +14586,21 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
     var resizeNote  = gid('ev-banner-resize-notice');
     var errorEl     = gid('ev-banner-error');
     var stepSelect  = gid('ev-banner-step-select');
+    var stepPosition  = gid('ev-banner-step-position');
     var stepUploading = gid('ev-banner-step-uploading');
     var stepSuccess = gid('ev-banner-step-success');
     var saveCfgBtn  = gid('ev-banner-save-config-btn');
     var removeBtn   = gid('ev-banner-remove-btn');
     var closeBtn    = gid('ev-banner-close-btn');
+    var posCanvas       = gid('ev-banner-position-canvas');
+    var posBackBtn      = gid('ev-banner-position-back-btn');
+    var posConfirmBtn   = gid('ev-banner-position-confirm-btn');
+    var posHintText     = gid('ev-banner-position-hint-text');
+    var posErrorEl      = gid('ev-banner-position-error');
     if (!overlay || !fileInput) return;
 
     function showStep(active) {
-        [stepSelect, stepUploading, stepSuccess].forEach(function(el) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
             if (el) el.style.display = (el === active) ? '' : 'none';
         });
     }
@@ -14685,6 +14693,156 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
     }
 
+    // ---- Position step ----
+    // Holds the loaded image + the current cover-scale and offset (in target px).
+    // The image is drawn into a TARGET_W x TARGET_H frame at "cover" scale; the
+    // user drags only along the axis that has overflow.
+    var posState = { img: null, isPng: false, scale: 1, offset: { x: 0, y: 0 }, dragging: false };
+
+    function clampOffset() {
+        var img = posState.img; if (!img) return;
+        var w = img.width * posState.scale;
+        var h = img.height * posState.scale;
+        // If the scaled image is smaller than the target on an axis, lock it
+        // centered there; otherwise clamp so we never reveal blank edges.
+        var minX = Math.min(0, TARGET_W - w), maxX = Math.max(0, TARGET_W - w);
+        var minY = Math.min(0, TARGET_H - h), maxY = Math.max(0, TARGET_H - h);
+        if (w <= TARGET_W) posState.offset.x = (TARGET_W - w) / 2;
+        else               posState.offset.x = Math.max(minX, Math.min(maxX, posState.offset.x));
+        if (h <= TARGET_H) posState.offset.y = (TARGET_H - h) / 2;
+        else               posState.offset.y = Math.max(minY, Math.min(maxY, posState.offset.y));
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var img = posState.img;
+        ctx.drawImage(
+            img,
+            Math.round(posState.offset.x),
+            Math.round(posState.offset.y),
+            Math.round(img.width * posState.scale),
+            Math.round(img.height * posState.scale)
+        );
+    }
+
+    function loadIntoPositionStep(file, isPng) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img = img;
+            posState.isPng = isPng;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            var scaledW = img.width * posState.scale;
+            var scaledH = img.height * posState.scale;
+            posState.offset.x = (TARGET_W - scaledW) / 2;
+            posState.offset.y = (TARGET_H - scaledH) / 2;
+            // Pick the drag-hint copy based on which axis has overflow.
+            if (posHintText) {
+                if (Math.abs(scaledW - TARGET_W) > Math.abs(scaledH - TARGET_H)) {
+                    posHintText.textContent = 'Drag left or right to choose what shows.';
+                } else if (scaledH > TARGET_H + 1) {
+                    posHintText.textContent = 'Drag up or down to choose what shows.';
+                } else {
+                    posHintText.textContent = 'Image already fits — drag to nudge or just confirm.';
+                }
+            }
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startOff;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startOff    = { x: posState.offset.x, y: posState.offset.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            var sx = TARGET_W / rect.width;   // map screen px → target px
+            var sy = TARGET_H / rect.height;
+            posState.offset.x = startOff.x + (p.clientX - startClient.x) * sx;
+            posState.offset.y = startOff.y + (p.clientY - startClient.y) * sy;
+            clampOffset();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        // Render the positioned image into a TARGET_W × TARGET_H canvas, then
+        // hand it through the same byte-budget pipeline as before.
+        var out = document.createElement('canvas');
+        out.width = TARGET_W; out.height = TARGET_H;
+        var ctx = out.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, TARGET_W, TARGET_H);
+        ctx.drawImage(
+            posState.img,
+            Math.round(posState.offset.x),
+            Math.round(posState.offset.y),
+            Math.round(posState.img.width  * posState.scale),
+            Math.round(posState.img.height * posState.scale)
+        );
+        var mime = posState.isPng ? 'image/png'  : 'image/jpeg';
+        var q    = posState.isPng ? 1 : 0.9;
+        out.toBlob(function(blob) {
+            if (!blob) { posConfirmBtn.disabled = false; showPosError('Could not render the cropped image.'); return; }
+            posConfirmBtn.disabled = false;
+            var isPng = posState.isPng;
+            if (blob.size > BANNER_BYTE_LIMIT) {
+                if (resizeNote) resizeNote.textContent = 'Resizing…';
+                resizeImageToLimit(blob, BANNER_BYTE_LIMIT, function(b) {
+                    doUpload(b, isPng);
+                }, function(err) { showPosError(err); }, isPng);
+            } else {
+                doUpload(blob, isPng);
+            }
+        }, mime, q);
+    });
+
     fileInput.addEventListener('change', function() {
         var file = this.files && this.files[0];
         if (!file) return;
@@ -14695,15 +14853,8 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             return;
         }
         clearError();
+        clearPosError();
         var isPng = (file.type === 'image/png' || ext === 'png');
-        if (file.size > BANNER_BYTE_LIMIT) {
-            if (resizeNote) resizeNote.textContent = 'Resizing…';
-            resizeImageToLimit(file, BANNER_BYTE_LIMIT, function(blob) {
-                if (resizeNote) resizeNote.textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + ' KB';
-                doUpload(blob, isPng);
-            }, function(errMsg) { showError(errMsg); }, isPng);
-        } else {
-            doUpload(file, isPng);
-        }
+        loadIntoPositionStep(file, isPng);
     });
 })();
