@@ -5,6 +5,7 @@ class ProfanityFilter
 	const ERROR_MESSAGE = 'Your entry cannot be saved due to inclusion of inappropriate or offensive material. Please update the text provided and try again.';
 
 	private const WORDS_FILE     = 'profanity-words.txt';
+	private const EXTRAS_FILE    = 'profanity-words-extras.txt';
 	private const WHITELIST_FILE = 'profanity-whitelist.txt';
 
 	private static $LEET_MAP = [
@@ -26,6 +27,11 @@ class ProfanityFilter
 				$this->disabled = true;
 				return;
 			}
+			// Merge in our supplemental variant list (fucker, dickhead, etc.).
+			foreach ($this->loadList($dir . self::EXTRAS_FILE) as $w) {
+				$words[] = $w;
+			}
+			$words = array_values(array_unique($words));
 			$this->regex = $this->buildRegex($words);
 			foreach ($this->loadList($dir . self::WHITELIST_FILE) as $w) {
 				$this->whitelist[mb_strtolower($w, 'UTF-8')] = true;

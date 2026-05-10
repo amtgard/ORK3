@@ -1,0 +1,32 @@
+# ORK3 supplemental profanity wordlist.
+# Variants and derivatives that LDNOOBW's en list doesn't include directly.
+# The matcher requires whole-word boundaries on both sides, so 'fucker' /
+# 'fucked' etc. were slipping through the base list ('fuck' is there but
+# doesn't match inside longer words).
+#
+# Add only entries with no legitimate dual meaning. If a word might appear
+# in normal English (e.g. 'assess' contains 'ass'), do NOT add the stem here
+# â the whitelist is the right tool for that direction.
+#
+# Format: one term per line. '#' comments and blank lines ignored.
+
+asshat
+asshats
+bitchier
+bitchy
+bitching
+dickhead
+dickheads
+fucked
+fucker
+fuckers
+fucks
+fuckup
+fuckups
+shitlist
+shitload
+shitter
+shitters
+shittier
+shittiest
+shitting
