@@ -727,6 +727,9 @@ button.ui-button::-moz-focus-inner { border: 0; padding: 0; } /* reset extra pad
 .ui-progressbar { height:2em; text-align: left; overflow: hidden; }
 .ui-progressbar .ui-progressbar-value {margin: -1px; height:100%; }
 
+/* ==========================================================================
+   Application Base — body, html, h1-h6, links, #theme_container
+   ========================================================================== */
 html, body {
     height: 100%;
 }
@@ -771,7 +774,9 @@ p {
 	margin: 0;
 }
 
-/* ===== Global Navigation ===== */
+/* ==========================================================================
+   Global Navigation — #newmenu, breadcrumbs, nav search, avatar dropdown
+   ========================================================================== */
 #newmenu {
     display: flex;
     align-items: center;
@@ -1052,6 +1057,13 @@ a {
 a:hover {
 	text-decoration: underline;
 }
+
+/* ==========================================================================
+   Legacy Application Components — info-container, tables, forms, lightbox
+   Used by default-theme (non-revised) pages: Reports, Attendance, Admin,
+   Search, Unit, ReleaseNotes, etc. Selectors here use the legacy #eee/#ccc
+   gray-scale palette and are deliberately NOT tokenized in this refactor.
+   ========================================================================== */
 .info-container, .heraldry-item {
 	padding: 6px;
 	border: 1px solid #ddd;
