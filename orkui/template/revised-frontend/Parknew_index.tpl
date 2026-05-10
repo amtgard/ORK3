@@ -2470,8 +2470,8 @@ tr:hover .pk-copy-link { opacity: 1; }
 <style>
 .pk-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .pk-mp-toggle-btn {
-	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:6px; font-size:12px; font-weight:600;
-	cursor:pointer; background:#fff; color:#4a5568; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap;
+	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:var(--ork-radius-md); font-size:var(--ork-font-size-sm); font-weight:var(--ork-font-weight-semibold);
+	cursor:pointer; background:#fff; color:var(--ork-text-body); transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap;
 }
 .pk-mp-toggle-btn:hover { border-color:#a0aec0; }
 .pk-mp-toggle-btn.pk-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }

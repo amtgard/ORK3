@@ -548,7 +548,7 @@
 			.kn-sub-pop-row{display:flex;gap:4px;margin-bottom:8px}
 			.kn-sub-url-input{flex:1;font-size:11px;padding:4px 6px;border:1px solid var(--ork-border);border-radius:4px;color:var(--ork-text-body);background:var(--ork-surface-light);min-width:0}
 			.kn-sub-copy-btn{padding:4px 8px;border:1px solid var(--ork-border);border-radius:4px;background:var(--ork-surface-hover);cursor:pointer;color:var(--ork-text-body);font-size:12px}
-			.kn-sub-copy-btn:hover{background:#e2e8f0}
+			.kn-sub-copy-btn:hover{background:var(--ork-border)}
 			.kn-sub-gcal-btn{display:block;text-align:center;background:#4285f4;color:#fff;border-radius:5px;padding:7px 10px;font-size:12px;font-weight:600;text-decoration:none;margin-bottom:2px}
 			.kn-sub-gcal-btn:hover{background:#3367d6;color:#fff}
 			.kn-sub-webcal-btn{display:block;margin-top:6px;font-size:11px;color:var(--ork-text-muted);text-align:center;text-decoration:none}
@@ -2100,7 +2100,7 @@ tr:hover .kn-copy-link { opacity: 1; }
 	padding:4px 8px; border:1px solid var(--ork-border); border-radius:4px;
 	background:var(--ork-surface-hover); cursor:pointer; color:var(--ork-text-body); font-size:12px;
 }
-.kn-sub-copy-btn:hover { background:#e2e8f0; }
+.kn-sub-copy-btn:hover { background:var(--ork-border); }
 .kn-sub-gcal-btn {
 	display:block; text-align:center; background:#4285f4; color:#fff;
 	border-radius:5px; padding:7px 10px; font-size:12px; font-weight:600; text-decoration:none;
