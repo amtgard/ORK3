@@ -13,16 +13,60 @@
 </style>
 
 <style>
-.qt-config-card { background: #fff; border: 1px solid var(--rp-border); border-radius: 8px; padding: 20px 22px; margin-bottom: 20px; }
+/* ── Card shell ────────────────────────────────────────── */
+.qt-config-card { background: #fff; border: 1px solid var(--rp-border); border-radius: 8px; padding: 20px 22px; margin-bottom: 20px; display: flex; flex-direction: column; }
 .qt-config-card h3 { margin: 0 0 6px; font-size: 1.05rem; color: #2d3748; }
 .qt-config-card h3 i { margin-right: 6px; color: #2b6cb0; }
-.qt-stat-row { display: flex; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
+.qt-stat-row { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
 .qt-mini-stat { font-size: 0.82rem; color: var(--rp-text-muted); }
 .qt-mini-stat strong { color: #2b6cb0; font-size: 1rem; }
+
+/* ── Form & sections ───────────────────────────────────── */
+.qt-config-form { display: flex; flex-direction: column; flex: 1; }
+.qt-section { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--rp-border); }
+.qt-section:first-of-type { padding-top: 0; margin-top: 0; border-top: none; }
+.qt-section-header { font-size: 0.7rem; font-weight: 700; color: var(--rp-text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+
+/* ── Form rows ─────────────────────────────────────────── */
 .qt-form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-.qt-form-row label { font-size: 0.82rem; font-weight: 600; color: var(--rp-text-muted); min-width: 140px; text-transform: uppercase; letter-spacing: 0.04em; }
+.qt-form-row:last-child { margin-bottom: 0; }
+.qt-form-row label { font-size: 0.82rem; font-weight: 600; color: var(--rp-text-muted); min-width: 160px; text-transform: uppercase; letter-spacing: 0.04em; }
 .qt-form-row input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
-.qt-save-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.qt-hint-inline { font-size: 0.78rem; color: var(--rp-text-muted); }
+.qt-form-row.qt-stack { align-items: flex-start; }
+.qt-form-row.qt-stack > label { padding-top: 6px; }
+.qt-field-grow { flex: 1; min-width: 0; }
+.qt-text-input { width: 100%; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
+.qt-textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; font-family: inherit; resize: vertical; }
+.qt-help-text { font-size: 0.75rem; color: var(--rp-text-muted); margin-top: 3px; }
+.qt-required { color: #e53e3e; margin-left: 2px; }
+
+/* ── Validity segmented toggle ─────────────────────────── */
+.qt-validity-row { flex-direction: column; align-items: stretch; gap: 8px; }
+.qt-validity-row > label { min-width: 0; }
+.qt-validity-toggle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.qt-segmented { display: inline-flex; border: 1px solid var(--rp-border); border-radius: 4px; overflow: hidden; background: var(--rp-bg-light, #f7fafc); }
+.qt-segmented label.qt-radio-opt { position: relative; cursor: pointer; padding: 5px 12px; font-size: 0.82rem; font-weight: 600; color: var(--rp-text-muted); text-transform: none; letter-spacing: 0; min-width: 0; margin: 0; border-right: 1px solid var(--rp-border); transition: background 0.12s, color 0.12s; }
+.qt-segmented label.qt-radio-opt:last-child { border-right: none; }
+.qt-segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
+.qt-segmented label.qt-radio-opt.qt-active { background: #2b6cb0; color: #fff; }
+.qt-validity-days, .qt-validity-until { padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
+.qt-validity-days { width: 100px; }
+.qt-validity-until { width: 170px; }
+
+/* ── Toggle switch (label .... [switch]) ───────────────── */
+.qt-switch-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.qt-switch-row:last-child { margin-bottom: 0; }
+.qt-switch-row .qt-switch-label { flex: 1; font-size: 0.88rem; font-weight: 600; color: #4a5568; cursor: pointer; }
+.qt-switch { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; flex-shrink: 0; background: #cbd5e0; border-radius: 999px; cursor: pointer; transition: background 0.18s; border: none; outline: none; margin: 0; padding: 0; }
+.qt-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform 0.18s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.qt-switch:checked { background: #2b6cb0; }
+.qt-switch:checked::after { transform: translateX(16px); }
+.qt-switch:focus-visible { box-shadow: 0 0 0 3px rgba(43,108,176,0.25); }
+.qt-switch-help { margin-left: 6px; }
+
+/* ── Save / actions ────────────────────────────────────── */
+.qt-save-row { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--rp-border); }
 .qt-save-btn { padding: 7px 20px; background: #2b6cb0; color: #fff; border: none; border-radius: 4px; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
 .qt-save-btn:hover { background: #2c5282; }
 .qt-saved-msg { font-size: 0.82rem; color: #276749; display: none; }
@@ -32,17 +76,98 @@
 .qt-link-btn-primary:hover { background: #2c5282; }
 .qt-link-btn-ghost { background: transparent; color: #2b6cb0; border: 1px solid #2b6cb0; }
 .qt-link-btn-ghost:hover { background: #ebf4ff; }
+
+/* ── Tooltips (existing pattern) ───────────────────────── */
 .qt-tooltip-wrap { position:relative; display:inline-block; }
 .qt-tooltip-icon { cursor:pointer; color:#718096; font-size:0.82rem; margin-left:4px; }
 .qt-tooltip-box { display:none; position:absolute; left:50%; transform:translateX(-50%); bottom:calc(100% + 6px); width:280px; background:#2d3748; color:#fff; font-size:0.78rem; line-height:1.45; padding:8px 10px; border-radius:5px; z-index:100; pointer-events:none; }
 .qt-tooltip-wrap:hover .qt-tooltip-box, .qt-tooltip-wrap:focus-within .qt-tooltip-box { display:block; }
-.qt-share-row { display:flex; align-items:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--rp-border); }
-.qt-share-row label { font-size:0.85rem; color:#4a5568; font-weight:600; cursor:pointer; }
-.qt-validity-toggle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.qt-radio-opt { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; font-weight: 600; color: #4a5568; cursor: pointer; text-transform: none; letter-spacing: 0; min-width: unset; }
-.qt-validity-days, .qt-validity-until { padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
-.qt-validity-days { width: 80px; }
-.qt-validity-until { width: 150px; }
+
+/* ── Dark mode ─────────────────────────────────────────── */
+html[data-theme="dark"] .qt-nav-link {
+	background: var(--ork-bg-secondary, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+	color: #63b3ed;
+}
+html[data-theme="dark"] .qt-nav-link:hover {
+	background: #4a5568;
+	border-color: #718096;
+	color: #90cdf4;
+}
+html[data-theme="dark"] .qt-config-card {
+	background: var(--ork-card-bg, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+}
+/* fight orkui.css h1-h6 dark pill */
+html[data-theme="dark"] .qt-config-card h3 {
+	background: transparent !important;
+	border: none !important;
+	padding: 0 !important;
+	border-radius: 0 !important;
+	text-shadow: none !important;
+	color: var(--ork-text, #e2e8f0) !important;
+}
+html[data-theme="dark"] .qt-config-card h3 i { color: #63b3ed; }
+html[data-theme="dark"] .qt-mini-stat strong { color: #63b3ed; }
+html[data-theme="dark"] .qt-section-header { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-form-row label,
+html[data-theme="dark"] .qt-switch-row .qt-switch-label,
+html[data-theme="dark"] .qt-segmented label.qt-radio-opt {
+	color: var(--ork-text-secondary, #cbd5e0);
+}
+html[data-theme="dark"] .qt-segmented { background: var(--ork-input-bg, #374151); border-color: var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-segmented label.qt-radio-opt { border-right-color: var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-segmented label.qt-radio-opt.qt-active { background: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .qt-form-row input,
+html[data-theme="dark"] .qt-text-input,
+html[data-theme="dark"] .qt-textarea,
+html[data-theme="dark"] .qt-validity-days,
+html[data-theme="dark"] .qt-validity-until {
+	background: var(--ork-input-bg, #374151);
+	color: var(--ork-text, #e2e8f0);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .qt-form-row input::placeholder,
+html[data-theme="dark"] .qt-text-input::placeholder,
+html[data-theme="dark"] .qt-textarea::placeholder { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-hint-inline,
+html[data-theme="dark"] .qt-help-text { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-section { border-top-color: var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-save-row,
+html[data-theme="dark"] .qt-link-row { border-top-color: var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-switch { background: #4a5568; }
+html[data-theme="dark"] .qt-switch:checked { background: #63b3ed; }
+html[data-theme="dark"] .qt-switch::after { background: #e2e8f0; }
+html[data-theme="dark"] .qt-link-btn-ghost {
+	color: #63b3ed;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .qt-link-btn-ghost:hover { background: #2a4365; color: #90cdf4; }
+html[data-theme="dark"] .qt-saved-msg { color: #9ae6b4; }
+html[data-theme="dark"] .qt-tooltip-icon { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-required { color: #fc8181; }
+/* Test Managers card — autocomplete + manager rows + reset retakes */
+html[data-theme="dark"] #qt-manager-search {
+	background: var(--ork-input-bg, #374151) !important;
+	border-color: var(--ork-input-border, #4a5568) !important;
+	color: var(--ork-text, #e2e8f0) !important;
+}
+html[data-theme="dark"] #qt-manager-search::placeholder { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] #qt-manager-ac-results {
+	background: var(--ork-card-bg, #2d3748) !important;
+	border-color: var(--ork-border, #4a5568) !important;
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .qt-ac-item { border-bottom-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-ac-item:hover { background: #4a5568; }
+html[data-theme="dark"] .qt-manager-row { border-bottom-color: var(--ork-border, #4a5568) !important; }
+html[data-theme="dark"] .qt-reset-retakes-btn {
+	background: #44337a !important;
+	color: #d6bcfa !important;
+}
+/* legacy inline-asterisk fallback for any leftover markup */
+html[data-theme="dark"] .qt-config-form span[style*="color:#e53e3e"] { color: #fc8181 !important; }
+html[data-theme="dark"] #qt-manager-error { color: #fc8181 !important; }
 </style>
 
 <div class="rp-root">
@@ -92,7 +217,7 @@
 		<!-- Main content -->
 		<div class="rp-table-area">
 
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+			<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;">
 			<?php foreach (['reeve' => $ReeveConfig, 'corpora' => $CorporaConfig] as $type => $cfg): ?>
 			<?php
 				$count = ($type === 'reeve') ? $ReeveCount : $CorporaCount;
@@ -106,60 +231,98 @@
 				</div>
 
 				<form class="qt-config-form" data-kingdom="<?= $KingdomId ?>" data-type="<?= $type ?>">
-					<div class="qt-form-row">
-						<label>Questions per test</label>
-						<input type="number" name="QuestionCount" min="1" max="100" value="<?= (int)$cfg['QuestionCount'] ?>">
-					</div>
-					<div class="qt-form-row">
-						<label>Pass % required</label>
-						<input type="number" name="PassPercent" min="1" max="100" value="<?= (int)$cfg['PassPercent'] ?>">
-					</div>
-					<div class="qt-form-row qt-validity-row">
-						<label>Validity</label>
-						<span class="qt-validity-toggle">
-							<label class="qt-radio-opt">
-								<input type="radio" name="ValidityMode" value="days"
-									<?= empty($cfg['ValidUntil']) ? 'checked' : '' ?>>
-								Days from passing
-							</label>
-							<input type="number" name="ValidDays" min="1"
-								value="<?= (int)$cfg['ValidDays'] ?>"
-								class="qt-validity-days"
-								<?= !empty($cfg['ValidUntil']) ? 'disabled style="display:none"' : '' ?>>
-							<label class="qt-radio-opt">
-								<input type="radio" name="ValidityMode" value="until"
-									<?= !empty($cfg['ValidUntil']) ? 'checked' : '' ?>>
-								Until date
-							</label>
-							<input type="date" name="ValidUntil"
-								value="<?= htmlspecialchars($cfg['ValidUntil'] ?? '') ?>"
-								class="qt-validity-until"
-								<?= empty($cfg['ValidUntil']) ? 'disabled style="display:none"' : '' ?>>
-						</span>
-					</div>
-					<div class="qt-form-row">
-						<label>Max retakes</label>
-						<input type="number" name="MaxRetakes" min="0" value="<?= (int)$cfg['MaxRetakes'] ?>">
-						<span style="font-size:0.78rem;color:var(--rp-text-muted);">0 = unlimited</span>
-					</div>
-					<?php if ($type === 'reeve'): ?>
-					<div class="qt-share-row">
-						<input type="checkbox" name="ShareQuestions" id="qt-share-<?= $type ?>" value="1" <?= !empty($cfg['ShareQuestions']) ? 'checked' : '' ?>>
-						<label for="qt-share-<?= $type ?>">Opt-in to share questions</label>
-						<span class="qt-tooltip-wrap">
-							<i class="fas fa-question-circle qt-tooltip-icon"></i>
-							<span class="qt-tooltip-box">By checking this box and saving, you agree to share your active Reeve's questions with other kingdoms and you gain access to the library of questions from other kingdoms. You will still need to add any given question to your database.</span>
-						</span>
-					</div>
-					<?php endif; ?>
-					<div class="qt-form-row" style="align-items:flex-start;">
-						<label style="padding-top:6px;">Instructions</label>
-						<div style="flex:1;min-width:0;">
-							<textarea name="Instructions" rows="4" style="width:100%;padding:5px 8px;border:1px solid var(--rp-border);border-radius:4px;font-size:0.9rem;font-family:inherit;resize:vertical;"
-								placeholder="Optional instructions shown before the test begins."><?= htmlspecialchars($cfg['Instructions'] ?? '') ?></textarea>
-							<div style="font-size:0.75rem;color:var(--rp-text-muted);margin-top:3px;">Shown as the first card when a player begins the test. Line breaks will be preserved.</div>
+
+					<!-- Section: Scoring -->
+					<div class="qt-section">
+						<div class="qt-section-header">Scoring</div>
+						<div class="qt-form-row">
+							<label>Questions per test</label>
+							<input type="number" name="QuestionCount" min="1" max="100" value="<?= (int)$cfg['QuestionCount'] ?>">
+						</div>
+						<div class="qt-form-row">
+							<label>Pass % required</label>
+							<input type="number" name="PassPercent" min="1" max="100" value="<?= (int)$cfg['PassPercent'] ?>">
+						</div>
+						<div class="qt-form-row qt-validity-row">
+							<label>Validity</label>
+							<span class="qt-validity-toggle">
+								<span class="qt-segmented">
+									<label class="qt-radio-opt <?= empty($cfg['ValidUntil']) ? 'qt-active' : '' ?>">
+										<input type="radio" name="ValidityMode" value="days" <?= empty($cfg['ValidUntil']) ? 'checked' : '' ?>>
+										Days from passing
+									</label>
+									<label class="qt-radio-opt <?= !empty($cfg['ValidUntil']) ? 'qt-active' : '' ?>">
+										<input type="radio" name="ValidityMode" value="until" <?= !empty($cfg['ValidUntil']) ? 'checked' : '' ?>>
+										Until date
+									</label>
+								</span>
+								<input type="number" name="ValidDays" min="1"
+									value="<?= (int)$cfg['ValidDays'] ?>"
+									class="qt-validity-days"
+									<?= !empty($cfg['ValidUntil']) ? 'disabled style="display:none"' : '' ?>>
+								<input type="date" name="ValidUntil"
+									value="<?= htmlspecialchars($cfg['ValidUntil'] ?? '') ?>"
+									class="qt-validity-until"
+									<?= empty($cfg['ValidUntil']) ? 'disabled style="display:none"' : '' ?>>
+							</span>
+						</div>
+						<div class="qt-form-row">
+							<label>Max retakes</label>
+							<input type="number" name="MaxRetakes" min="0" value="<?= (int)$cfg['MaxRetakes'] ?>">
+							<span class="qt-hint-inline">0 = unlimited</span>
 						</div>
 					</div>
+
+					<!-- Section: Player experience -->
+					<div class="qt-section">
+						<div class="qt-section-header">Player Experience</div>
+						<div class="qt-switch-row">
+							<label class="qt-switch-label" for="qt-show-correct-<?= $type ?>">
+								Display correct answer on incorrect
+								<span class="qt-tooltip-wrap qt-switch-help">
+									<i class="fas fa-question-circle qt-tooltip-icon"></i>
+									<span class="qt-tooltip-box">When enabled, players who pick the wrong answer will see the correct answer highlighted in green. When disabled, only their incorrect choice is marked.</span>
+								</span>
+							</label>
+							<input type="checkbox" class="qt-switch" name="ShowCorrectOnIncorrect" id="qt-show-correct-<?= $type ?>" value="1" <?= !empty($cfg['ShowCorrectOnIncorrect']) ? 'checked' : '' ?>>
+						</div>
+						<div class="qt-form-row qt-stack">
+							<label>Instructions</label>
+							<div class="qt-field-grow">
+								<textarea name="Instructions" rows="4" class="qt-textarea"
+									placeholder="Optional instructions shown before the test begins."><?= htmlspecialchars($cfg['Instructions'] ?? '') ?></textarea>
+								<div class="qt-help-text">Shown as the first card when a player begins the test. Line breaks will be preserved.</div>
+							</div>
+						</div>
+					</div>
+
+					<?php if ($type === 'reeve'): ?>
+					<!-- Section: Reeve only -->
+					<div class="qt-section">
+						<div class="qt-section-header">Reeve Only</div>
+						<div class="qt-form-row qt-stack">
+							<label>Rules of Play version <span class="qt-required">*</span></label>
+							<div class="qt-field-grow">
+								<input type="text" name="RulesVersion" required maxlength="100"
+									value="<?= htmlspecialchars($cfg['RulesVersion'] ?? '') ?>"
+									placeholder="e.g. 9.0"
+									class="qt-text-input">
+								<div class="qt-help-text">Shown as a footer on every test card: "Based on Amtgard Rules of Play Version <em>{value}</em>".</div>
+							</div>
+						</div>
+						<div class="qt-switch-row">
+							<label class="qt-switch-label" for="qt-share-<?= $type ?>">
+								Opt-in to share questions
+								<span class="qt-tooltip-wrap qt-switch-help">
+									<i class="fas fa-question-circle qt-tooltip-icon"></i>
+									<span class="qt-tooltip-box">By checking this box and saving, you agree to share your active Reeve's questions with other kingdoms and you gain access to the library of questions from other kingdoms. You will still need to add any given question to your database.</span>
+								</span>
+							</label>
+							<input type="checkbox" class="qt-switch" name="ShareQuestions" id="qt-share-<?= $type ?>" value="1" <?= !empty($cfg['ShareQuestions']) ? 'checked' : '' ?>>
+						</div>
+					</div>
+					<?php endif; ?>
+
 					<div class="qt-save-row">
 						<button type="submit" class="qt-save-btn"><i class="fas fa-save"></i> Save Settings</button>
 						<span class="qt-saved-msg"><i class="fas fa-check-circle"></i> Saved</span>
@@ -199,7 +362,7 @@
 						<a href="<?= UIR ?>Player/index/<?= (int)$mgr['MundaneId'] ?>" target="_blank"><?= htmlspecialchars($mgr['Name']) ?></a>
 						<span style="color:var(--rp-text-muted);font-size:0.78rem;">&nbsp;#<?= (int)$mgr['MundaneId'] ?></span>
 					</span>
-					<button class="qt-rm-manager-btn" data-id="<?= (int)$mgr['MundaneId'] ?>" title="Remove" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:1rem;padding:0 4px;">
+					<button class="qt-rm-manager-btn" data-id="<?= (int)$mgr['MundaneId'] ?>" data-tip="Remove" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:1rem;padding:0 4px;">
 						<i class="fas fa-times-circle"></i>
 					</button>
 				</li>
@@ -240,6 +403,12 @@
 					untilInput.style.display = '';  untilInput.disabled  = false;
 					daysInput.style.display  = 'none'; daysInput.disabled = true;
 				}
+				// Update segmented active state
+				form.querySelectorAll('.qt-segmented label.qt-radio-opt').forEach(function(lbl) {
+					var input = lbl.querySelector('input[name="ValidityMode"]');
+					if (input && input.checked) lbl.classList.add('qt-active');
+					else lbl.classList.remove('qt-active');
+				});
 			});
 		});
 
@@ -280,7 +449,7 @@
 				.then(function(r) { return r.json(); })
 				.then(function(j) {
 					if (j.status === 0) {
-						btn.textContent = '\u2713 Done';
+						btn.textContent = '✓ Done';
 						setTimeout(function() { btn.innerHTML = '<i class="fas fa-undo-alt"></i> Reset Retakes'; }, 2000);
 					} else { alert(j.error || 'Error resetting retakes.'); }
 				});
@@ -355,7 +524,7 @@
 				'<a href="<?= UIR ?>Player/index/' + id + '" target="_blank">' + escHtml(name) + '</a>' +
 				'<span style="color:var(--rp-text-muted);font-size:0.78rem;">&nbsp;#' + id + '</span>' +
 			'</span>' +
-			'<button class="qt-rm-manager-btn" data-id="' + id + '" title="Remove" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:1rem;padding:0 4px;">' +
+			'<button class="qt-rm-manager-btn" data-id="' + id + '" data-tip="Remove" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:1rem;padding:0 4px;">' +
 				'<i class="fas fa-times-circle"></i>' +
 			'</button>';
 		return li;

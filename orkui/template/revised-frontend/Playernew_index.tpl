@@ -1356,6 +1356,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<?php endif; ?>
 				</span>
 			</div>
+			<?php if ($isOwnProfile && (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled))): ?>
+			<div style="margin-top:10px;display:flex;justify-content:flex-end;">
+				<button type="button" class="pn-btn pn-btn-sm pn-btn-primary" onclick="pnOpenTestChooser();return false;">
+					<i class="fas fa-play-circle"></i> Take Tests
+				</button>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<!-- Dues -->
@@ -1529,11 +1536,6 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<li data-tab="classes">
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
-				<?php if (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled)): ?>
-				<li data-tab="tests">
-					<i class="fas fa-clipboard-check"></i><span class="pn-tab-label"> Tests</span>
-				</li>
-				<?php endif; ?>
 			</ul>
 			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards') ?></div>
 
@@ -2577,78 +2579,6 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<div class="pn-empty">No class records</div>
 				<?php endif; ?>
 			</div>
-
-			<!-- Tests Tab -->
-			<?php if (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled)): ?>
-			<div class="pn-tab-panel" id="pn-tab-tests" style="display:none">
-				<?php
-					$_qualTypes = array_filter(['reeve' => "Reeve's Test", 'corpora' => 'Corpora Test'], function($k) use ($QualTestReeveEnabled, $QualTestCorporaEnabled) { return ($k === 'reeve') ? !empty($QualTestReeveEnabled) : !empty($QualTestCorporaEnabled); }, ARRAY_FILTER_USE_KEY);
-					$_qualResults = is_array($QualResults ?? null) ? $QualResults : [];
-					$_qualKingdomId = $QualKingdomId ?? 0;
-					$_qualCanManage = $QualCanManage ?? false;
-				?>
-				<?php if ($_qualCanManage): ?>
-				<div class="pn-tab-toolbar">
-					<a class="pn-btn pn-btn-sm pn-btn-secondary" href="<?= UIR ?>QualTest/manage/<?= $_qualKingdomId ?>">
-						<i class="fas fa-cog"></i> Manage Question Bank
-					</a>
-				</div>
-				<?php endif; ?>
-				<div class="pn-qt-cards">
-					<?php foreach ($_qualTypes as $_qtType => $_qtLabel): ?>
-					<?php
-						$_qr        = $_qualResults[$_qtType] ?? null;
-						$_qtPassed  = $_qr && !$_qr['Expired'];
-						$_qtExpired = $_qr && $_qr['Expired'];
-					?>
-					<div class="pn-qt-card" data-type="<?= $_qtType ?>">
-						<div class="pn-qt-card-title"><i class="fas fa-scroll"></i> <?= $_qtLabel ?></div>
-						<?php if ($_qtPassed): ?>
-							<div class="pn-qt-status pn-qt-status-pass">
-								<i class="fas fa-check-circle"></i> Passed
-							</div>
-							<div class="pn-qt-detail">Score: <?= $_qr['ScorePercent'] ?>% &mdash; Expires <?= date('M j, Y', strtotime($_qr['ExpiresAt'])) ?></div>
-						<?php elseif ($_qtExpired): ?>
-							<div class="pn-qt-status pn-qt-status-expired">
-								<i class="fas fa-clock"></i> Expired <?= date('M j, Y', strtotime($_qr['ExpiresAt'])) ?>
-							</div>
-						<?php else: ?>
-							<div class="pn-qt-status pn-qt-status-none">
-								<i class="fas fa-minus-circle"></i> Not taken
-							</div>
-						<?php endif; ?>
-						<?php
-							$_qtConfig     = ($QualConfigs ?? [])[$_qtType] ?? ['MaxRetakes' => 0];
-							$_qtMaxRetakes = (int)$_qtConfig['MaxRetakes'];
-							$_qtRetakes    = (int)(($_qualResults[$_qtType]['RetakeCount'] ?? 0));
-							$_qtBlocked    = $_qtMaxRetakes > 0 && $_qtRetakes >= $_qtMaxRetakes;
-						?>
-						<?php if ($_qtBlocked): ?>
-						<div class="pn-qt-retake-warning">
-							<i class="fas fa-ban"></i> You may not retake this test again. Please reach out to your local monarchy for further instructions.
-						</div>
-						<?php elseif ($isOwnProfile): ?>
-						<button class="pn-btn pn-btn-sm pn-btn-primary pn-qt-take-btn"
-						        data-type="<?= $_qtType ?>"
-						        data-kingdom="<?= $_qualKingdomId ?>"
-						        data-label="<?= htmlspecialchars($_qtLabel) ?>">
-							<i class="fas fa-play-circle"></i> <?= $_qtPassed ? 'Retake Test' : 'Take Test' ?>
-						</button>
-						<?php endif; ?>
-						<?php if ($_qualCanManage): ?>
-						<button class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-reset-retakes-btn"
-						        data-type="<?= $_qtType ?>"
-						        data-kingdom="<?= $_qualKingdomId ?>"
-						        data-player="<?= $QualPlayerId ?? 0 ?>"
-						        style="color:#553c9a;border-color:#d6bcfa;font-size:0.75rem;">
-							<i class="fas fa-undo-alt"></i> Reset Retakes
-						</button>
-						<?php endif; ?>
-					</div>
-					<?php endforeach; ?>
-				</div>
-			</div>
-			<?php endif; ?>
 
 		</div>
 	</div>
@@ -5565,7 +5495,7 @@ pnRenderSparkline();
 <!-- =============================================
      Qualification Test Quiz Modal
      ============================================= -->
-<?php if ($isOwnProfile): ?>
+<?php if ($isOwnProfile && (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled))): ?>
 <style>
 .pn-qt-cards { display: flex; flex-direction: row; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
 .pn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; flex: 1 1 260px; min-width: 220px; }
@@ -5576,10 +5506,41 @@ pnRenderSparkline();
 .pn-qt-status-expired{ color: #b7791f; }
 .pn-qt-status-none   { color: #718096; }
 .pn-qt-detail { font-size: 0.8rem; color: #718096; margin-bottom: 10px; }
+.pn-qt-meta { font-size: 0.78rem; color: #718096; line-height: 1.5; margin-bottom: 10px; }
+.pn-qt-meta strong { color: #2d3748; font-weight: 600; }
 .pn-qt-take-btn { margin-top: 4px; }
 .pn-qt-retake-warning { margin-top: 6px; padding: 7px 10px; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 5px; font-size: 0.8rem; color: #9b2c2c; line-height: 1.4; }
 .pn-qt-retake-warning i { margin-right: 5px; }
 .pn-qt-reset-retakes-btn { margin-top: 4px; }
+/* Chooser modal */
+#pn-qt-chooser-overlay .pn-modal-box { width: 720px; max-width: calc(100vw - 40px); }
+.pn-qt-chooser-prompt { font-size: 0.92rem; color: #4a5568; margin-bottom: 14px; }
+.pn-qt-chooser-empty { padding: 18px; text-align: center; color: #718096; font-size: 0.9rem; }
+
+/* Dark mode — chooser cards */
+html[data-theme="dark"] .pn-qt-card {
+	background: var(--ork-bg-secondary, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-qt-card-title { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-status-pass    { color: #9ae6b4; }
+html[data-theme="dark"] .pn-qt-status-expired { color: #fbd38d; }
+html[data-theme="dark"] .pn-qt-status-none    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-detail,
+html[data-theme="dark"] .pn-qt-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-meta strong { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-retake-warning {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-qt-reset-retakes-btn {
+	background: #44337a !important;
+	border-color: #553c9a !important;
+	color: #d6bcfa !important;
+}
+html[data-theme="dark"] .pn-qt-chooser-prompt { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0aec0); }
 /* Quiz modal */
 #pn-quiz-overlay .pn-modal-box { width: 640px; max-width: calc(100vw - 40px); }
 
@@ -5653,7 +5614,176 @@ pnRenderSparkline();
 .pn-quiz-instructions-meta { font-size: 0.85rem; color: #718096; margin-bottom: 20px; text-align: center; }
 .pn-quiz-instructions-meta strong { color: #2d3748; }
 .pn-quiz-begin-row { text-align: center; }
+
+/* ── Dark mode — quiz modal contents ──────────────────── */
+html[data-theme="dark"] .pn-quiz-progress         { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-score   { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-seg     { background: #4a5568; }
+html[data-theme="dark"] .pn-quiz-q-text {
+	color: var(--ork-text, #e2e8f0);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-quiz-answer-label {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .pn-quiz-answer-radio { border-color: #718096; }
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #4a5568;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #2a4365;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-correct {
+	background: #22543d;
+	border-color: #38a169;
+	color: #9ae6b4;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-wrong {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-fb-correct { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-fb-wrong   { background: #742a2a; color: #feb2b2; }
+/* Result view */
+html[data-theme="dark"] .pn-quiz-result-pass,
+html[data-theme="dark"] .pn-quiz-result-heading-pass { color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-result-fail,
+html[data-theme="dark"] .pn-quiz-result-heading-fail { color: #feb2b2; }
+html[data-theme="dark"] .pn-quiz-result-score     { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-quiz-result-breakdown { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-quiz-result-detail    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-result-expiry-badge { background: #22543d; color: #9ae6b4; }
+/* Instructions / loading / error */
+html[data-theme="dark"] .pn-quiz-loading { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-error-msg {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-instructions-icon { color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-instructions-body {
+	background: #2a4365;
+	border-color: #4299e1;
+	border-left-color: #63b3ed;
+	color: #ebf8ff;
+}
+html[data-theme="dark"] .pn-quiz-instructions-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-text, #e2e8f0); }
+/* Report-question form inside the quiz modal */
+html[data-theme="dark"] #pn-quiz-report-reason {
+	background: var(--ork-input-bg, #374151);
+	border-color: var(--ork-input-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
 </style>
+
+<!-- Test chooser modal -->
+<?php
+	$_qualTypes = array_filter(['reeve' => "Reeve's Test", 'corpora' => 'Corpora Test'], function($k) use ($QualTestReeveEnabled, $QualTestCorporaEnabled) {
+		return ($k === 'reeve') ? !empty($QualTestReeveEnabled) : !empty($QualTestCorporaEnabled);
+	}, ARRAY_FILTER_USE_KEY);
+	$_qualResults   = is_array($QualResults ?? null) ? $QualResults : [];
+	$_qualKingdomId = $QualKingdomId ?? 0;
+	$_qualCanManage = $QualCanManage ?? false;
+?>
+<div class="pn-overlay" id="pn-qt-chooser-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Which test would you like to take?</h3>
+			<button class="pn-modal-close-btn" id="pn-qt-chooser-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<?php if (empty($_qualTypes)): ?>
+			<div class="pn-qt-chooser-empty">No tests are currently enabled for your kingdom.</div>
+			<?php else: ?>
+			<div class="pn-qt-chooser-prompt">Pick a test to begin. Your current status, score, and remaining retakes are listed below.</div>
+			<div class="pn-qt-cards">
+				<?php foreach ($_qualTypes as $_qtType => $_qtLabel): ?>
+				<?php
+					$_qr           = $_qualResults[$_qtType] ?? null;
+					$_qtPassed     = $_qr && empty($_qr['Expired']);
+					$_qtExpired    = $_qr && !empty($_qr['Expired']);
+					$_qtConfig     = ($QualConfigs ?? [])[$_qtType] ?? ['MaxRetakes' => 0];
+					$_qtMaxRetakes = (int)$_qtConfig['MaxRetakes'];
+					$_qtRetakes    = (int)(($_qualResults[$_qtType]['RetakeCount'] ?? 0));
+					$_qtBlocked    = $_qtMaxRetakes > 0 && $_qtRetakes >= $_qtMaxRetakes;
+					$_qtScore      = $_qr ? (int)$_qr['ScorePercent'] : null;
+					$_qtExpires    = $_qr && !empty($_qr['ExpiresAt']) ? date('M j, Y', strtotime($_qr['ExpiresAt'])) : '';
+				?>
+				<div class="pn-qt-card" data-type="<?= $_qtType ?>">
+					<div class="pn-qt-card-title"><i class="fas fa-scroll"></i> <?= $_qtLabel ?></div>
+					<?php if ($_qtPassed): ?>
+						<div class="pn-qt-status pn-qt-status-pass"><i class="fas fa-check-circle"></i> Passed</div>
+						<div class="pn-qt-detail">Score: <?= $_qtScore ?>% &mdash; Expires <?= $_qtExpires ?></div>
+					<?php elseif ($_qtExpired): ?>
+						<div class="pn-qt-status pn-qt-status-expired"><i class="fas fa-clock"></i> Expired<?= $_qtExpires ? ' ' . $_qtExpires : '' ?></div>
+						<?php if ($_qtScore !== null): ?>
+						<div class="pn-qt-detail">Last score: <?= $_qtScore ?>%</div>
+						<?php endif; ?>
+					<?php else: ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not yet taken</div>
+					<?php endif; ?>
+					<div class="pn-qt-meta">
+						<?php if ($_qtMaxRetakes > 0): ?>
+							Retakes used: <strong><?= $_qtRetakes ?> of <?= $_qtMaxRetakes ?></strong>
+						<?php else: ?>
+							Retakes used: <strong><?= $_qtRetakes ?></strong> <span style="color:#a0aec0">(no limit)</span>
+						<?php endif; ?>
+					</div>
+					<?php if ($_qtBlocked): ?>
+					<div class="pn-qt-retake-warning">
+						<i class="fas fa-ban"></i> You may not retake this test again. Please reach out to your local monarchy for further instructions.
+					</div>
+					<?php else: ?>
+					<button class="pn-btn pn-btn-sm pn-btn-primary pn-qt-take-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>">
+						<i class="fas fa-play-circle"></i> <?= $_qtPassed ? 'Retake Test' : 'Take Test' ?>
+					</button>
+					<?php endif; ?>
+					<?php if ($_qualCanManage): ?>
+					<button class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-reset-retakes-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= $QualPlayerId ?? 0 ?>"
+					        style="color:#553c9a;border-color:#d6bcfa;font-size:0.75rem;">
+						<i class="fas fa-undo-alt"></i> Reset Retakes
+					</button>
+					<?php endif; ?>
+				</div>
+				<?php endforeach; ?>
+			</div>
+			<?php endif; ?>
+		</div>
+	</div>
+</div>
+<script>
+function pnOpenTestChooser() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (ov) ov.classList.add('pn-open');
+}
+(function() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (!ov) return;
+	var closeBtn = document.getElementById('pn-qt-chooser-close-btn');
+	if (closeBtn) closeBtn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('pn-open'); });
+	// When a take button is clicked inside the chooser, close the chooser so the quiz modal isn't behind it.
+	ov.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	});
+})();
+</script>
+
 <div class="pn-overlay" id="pn-quiz-overlay">
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">

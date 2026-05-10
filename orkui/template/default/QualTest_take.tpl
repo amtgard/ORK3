@@ -426,6 +426,17 @@
 .qt-nav-btn:hover { background: #2c5282; transform: translateY(-1px); }
 .qt-nav-btn:active { transform: translateY(0); }
 
+/* Card footer (Rules of Play attribution) */
+.qt-card-footer {
+	margin-top: 20px;
+	padding-top: 12px;
+	border-top: 1px solid var(--rp-border);
+	font-size: 0.78rem;
+	color: var(--rp-text-muted);
+	text-align: center;
+	font-style: italic;
+}
+
 /* Report question */
 .qt-report-area { margin-top: 14px; }
 .qt-report-toggle-btn {
@@ -611,6 +622,108 @@
 	.qt-back-link { width: 100%; justify-content: center; }
 	.qt-blocked-msg { margin-left: 0; margin-right: 0; }
 }
+
+/* ── Dark mode ────────────────────────────────────────── */
+html[data-theme="dark"] .qt-overview,
+html[data-theme="dark"] .qt-question-card,
+html[data-theme="dark"] .qt-result-card {
+	background: var(--ork-card-bg, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .qt-overview-header { background: var(--ork-bg-tertiary, #374151); }
+html[data-theme="dark"] .qt-overview-title  { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-stat-chip       { background: var(--ork-bg-tertiary, #374151); border-color: var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-stat-chip-value { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-status-pill-pass    { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .qt-status-pill-expired { background: #744210; color: #fbd38d; }
+html[data-theme="dark"] .qt-status-pill-none    { background: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .qt-status-pill-blocked { background: #742a2a; color: #feb2b2; }
+html[data-theme="dark"] .qt-status-detail strong { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-instructions-box {
+	background: #2a4365;
+	border-color: #4299e1;
+	border-left-color: #63b3ed;
+	color: #ebf8ff;
+}
+html[data-theme="dark"] .qt-instructions-label { color: #90cdf4; }
+html[data-theme="dark"] .qt-expect-blurb {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text-secondary, #cbd5e0);
+}
+html[data-theme="dark"] .qt-expect-blurb-icon { color: #90cdf4; }
+html[data-theme="dark"] .qt-blocked-msg {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .qt-cta-back { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-cta-back:hover { color: #90cdf4; }
+html[data-theme="dark"] .qt-q-text {
+	color: var(--ork-text, #e2e8f0);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .qt-progress-text  { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-progress-score { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-progress-seg   { background: #4a5568; }
+html[data-theme="dark"] .qt-answer-label {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .qt-answer-radio { border-color: #718096; }
+html[data-theme="dark"] .qt-answer-label:hover:not(.qt-ans-disabled):not(.qt-ans-correct):not(.qt-ans-wrong) {
+	background: #4a5568;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .qt-answer-label:hover:not(.qt-ans-disabled):not(.qt-ans-correct):not(.qt-ans-wrong) .qt-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .qt-answer-label.qt-ans-selected:not(.qt-ans-correct):not(.qt-ans-wrong) {
+	background: #2a4365;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .qt-answer-label.qt-ans-selected:not(.qt-ans-correct):not(.qt-ans-wrong) .qt-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .qt-answer-label.qt-ans-selected:not(.qt-ans-correct):not(.qt-ans-wrong) .qt-answer-radio-inner { background: #63b3ed; }
+html[data-theme="dark"] .qt-answer-label.qt-ans-correct {
+	background: #22543d;
+	border-color: #38a169;
+	color: #9ae6b4;
+}
+html[data-theme="dark"] .qt-answer-label.qt-ans-wrong {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .qt-answer-label.qt-ans-wrong .qt-answer-radio { border-color: #fc8181; background: #fc8181; }
+html[data-theme="dark"] .qt-fb-correct { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .qt-fb-wrong   { background: #742a2a; color: #feb2b2; }
+html[data-theme="dark"] .qt-card-footer {
+	color: var(--ork-text-muted, #a0aec0);
+	border-top-color: var(--ork-border, #4a5568);
+}
+/* Result card */
+html[data-theme="dark"] .qt-result-heading { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-result-score   { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-result-breakdown,
+html[data-theme="dark"] .qt-result-detail  { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .qt-result-expiry-badge { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .qt-back-link { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-back-link:hover { color: #90cdf4; }
+/* Inline error context strip from $Error branch */
+html[data-theme="dark"] .rp-context[style*="fed7d7"] {
+	background: #742a2a !important;
+	border-color: #fc8181 !important;
+	color: #feb2b2 !important;
+}
+html[data-theme="dark"] .rp-context[style*="fed7d7"] .rp-context-icon { color: #fc8181 !important; }
+/* Report-question form inside question view */
+html[data-theme="dark"] .qt-report-area button,
+html[data-theme="dark"] .qt-report-toggle-btn { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .qt-report-select {
+	background: var(--ork-input-bg, #374151);
+	border-color: var(--ork-input-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .qt-loading { color: var(--ork-text-muted, #a0aec0); }
 </style>
 
 <div class="rp-root">
@@ -825,6 +938,11 @@
 							<button class="qt-nav-btn" id="qt-next-btn" style="display:none;">Next <i class="fas fa-chevron-right"></i></button>
 							<button class="qt-nav-btn" id="qt-submit-btn" style="display:none;"><i class="fas fa-check"></i> Submit Test</button>
 						</div>
+						<?php if (!empty($Config['RulesVersion'])): ?>
+						<div class="qt-card-footer">
+							Based on Amtgard Rules of Play Version <?= htmlspecialchars($Config['RulesVersion']) ?>
+						</div>
+						<?php endif; ?>
 					</div>
 				</div>
 			</div><!-- /#qt-question-view -->
@@ -1144,7 +1262,11 @@
 				answers[q.QualQuestionId] = selectedId;
 
 				selLabel = answersEl.querySelector('[data-answer-id="' + selectedId + '"]');
-				var okLabel = answersEl.querySelector('[data-answer-id="' + j.correct_answer_id + '"]');
+				// correct_answer_id is only returned when the kingdom has opted into
+				// "Display correct answer on incorrect" (or the player got it right).
+				var okLabel = j.correct_answer_id
+					? answersEl.querySelector('[data-answer-id="' + j.correct_answer_id + '"]')
+					: null;
 
 				if (j.is_correct) {
 					correctCount++;

@@ -55,6 +55,47 @@
 .qt-quick-pill { display: inline-block; padding: 4px 14px; border-radius: 16px; font-size: 0.8rem; font-weight: 600;
                  cursor: pointer; border: 1px solid #cbd5e0; background: #f7fafc; color: #4a5568; transition: all 0.15s; }
 .qt-quick-pill:hover { background: #ebf4ff; border-color: #90cdf4; color: #2b6cb0; }
+
+/* ── Dark mode ────────────────────────────────────────── */
+html[data-theme="dark"] .qt-nav-link {
+	background: var(--ork-bg-secondary, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+	color: #63b3ed;
+}
+html[data-theme="dark"] .qt-nav-link:hover { background: #4a5568; border-color: #718096; color: #90cdf4; }
+html[data-theme="dark"] .qt-form-card {
+	background: var(--ork-card-bg, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .qt-field label,
+html[data-theme="dark"] .qt-answer-row label { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .qt-field input[type=text],
+html[data-theme="dark"] .qt-field textarea {
+	background: var(--ork-input-bg, #374151);
+	border-color: var(--ork-input-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .qt-field input[type=text]::placeholder,
+html[data-theme="dark"] .qt-field textarea::placeholder { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-field textarea:focus,
+html[data-theme="dark"] .qt-field input[type=text]:focus { border-color: #818cf8; }
+html[data-theme="dark"] .qt-remove-btn { color: #fbd38d; }
+html[data-theme="dark"] .qt-remove-btn:hover { color: #f6ad55; }
+html[data-theme="dark"] .qt-add-answer-btn { color: #63b3ed; }
+html[data-theme="dark"] .qt-submit-btn-ghost { color: #63b3ed; border-color: #63b3ed; }
+html[data-theme="dark"] .qt-submit-btn-ghost:hover { background: #2a4365; color: #90cdf4; }
+html[data-theme="dark"] .qt-cancel-btn { background: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .qt-cancel-btn:hover { background: #718096; }
+html[data-theme="dark"] .qt-error-banner { background: #742a2a; border-color: #fc8181; color: #feb2b2; }
+html[data-theme="dark"] .qt-quick-label { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-quick-pill {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text-secondary, #cbd5e0);
+}
+html[data-theme="dark"] .qt-quick-pill:hover { background: #2a4365; border-color: #63b3ed; color: #90cdf4; }
+html[data-theme="dark"] label[for="qt-question-text"] span[style*="color:#e53e3e"],
+html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 !important; }
 </style>
 
 <div class="rp-root">

@@ -138,6 +138,8 @@ class QualTest {
                 'MaxRetakes'    => (int)$rs->max_retakes,
                 'ShareQuestions'=> (int)$rs->share_questions,
                 'Instructions'  => $rs->instructions ?? null,
+                'RulesVersion'  => $rs->rules_version ?? '',
+                'ShowCorrectOnIncorrect' => (int)$rs->show_correct_on_incorrect,
             ];
         }
         return [
@@ -151,13 +153,15 @@ class QualTest {
             'MaxRetakes'    => 0,
             'ShareQuestions'=> 0,
             'Instructions'  => null,
+            'RulesVersion'  => '',
+            'ShowCorrectOnIncorrect' => 0,
         ];
     }
 
     /**
      * Upsert test config for a kingdom+type.
      */
-    public function saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until = null, $max_retakes = 0, $share_questions = 0, $instructions = null) {
+    public function saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until = null, $max_retakes = 0, $share_questions = 0, $instructions = null, $rules_version = null, $show_correct_on_incorrect = 0) {
         $test_type      = $this->sanitizeType($test_type);
         $kingdom_id     = (int)$kingdom_id;
         $question_count = max(1, (int)$question_count);
@@ -178,6 +182,13 @@ class QualTest {
             ? "'" . $this->esc(trim($instructions)) . "'"
             : 'NULL';
 
+        // Rules version is Reeve-only; ignore for other test types.
+        $rv = ($test_type === 'reeve' && $rules_version !== null && trim($rules_version) !== '')
+            ? trim($rules_version)
+            : '';
+        $rv_sql = ($rv !== '') ? "'" . $this->esc($rv) . "'" : 'NULL';
+        $show_correct = $show_correct_on_incorrect ? 1 : 0;
+
         $this->db->Clear();
         $exists = $this->db->DataSet(
             'SELECT qual_config_id FROM ' . DB_PREFIX . 'qual_config
@@ -193,15 +204,17 @@ class QualTest {
                      valid_until    = ' . $until_sql . ',
                      max_retakes    = ' . $max_retakes . ',
                      share_questions= ' . $share_questions . ',
-                     instructions   = ' . $instructions_sql . '
+                     instructions   = ' . $instructions_sql . ',
+                     rules_version  = ' . $rv_sql . ',
+                     show_correct_on_incorrect = ' . $show_correct . '
                  WHERE kingdom_id = ' . $kingdom_id . ' AND test_type = \'' . $test_type . '\''
             );
         } else {
             $this->db->Clear();
             $this->db->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'qual_config
-                 (kingdom_id, test_type, question_count, pass_percent, valid_days, valid_until, max_retakes, share_questions, instructions)
-                 VALUES (' . $kingdom_id . ', \'' . $test_type . '\', ' . $question_count . ', ' . $pass_percent . ', ' . $valid_days . ', ' . $until_sql . ', ' . $max_retakes . ', ' . $share_questions . ', ' . $instructions_sql . ')'
+                 (kingdom_id, test_type, question_count, pass_percent, valid_days, valid_until, max_retakes, share_questions, instructions, rules_version, show_correct_on_incorrect)
+                 VALUES (' . $kingdom_id . ', \'' . $test_type . '\', ' . $question_count . ', ' . $pass_percent . ', ' . $valid_days . ', ' . $until_sql . ', ' . $max_retakes . ', ' . $share_questions . ', ' . $instructions_sql . ', ' . $rv_sql . ', ' . $show_correct . ')'
             );
         }
         return true;

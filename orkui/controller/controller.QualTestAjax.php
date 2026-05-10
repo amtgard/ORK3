@@ -61,8 +61,14 @@ class Controller_QualTestAjax extends Controller {
         $max_retakes     = max(0, (int)($_POST['MaxRetakes']     ?? 0));
         $share_questions = empty($_POST['ShareQuestions']) ? 0 : 1;
         $instructions    = $_POST['Instructions'] ?? null;
+        $rules_version   = trim($_POST['RulesVersion'] ?? '');
+        $show_correct    = empty($_POST['ShowCorrectOnIncorrect']) ? 0 : 1;
 
-        Ork3::$Lib->qualtest->saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until, $max_retakes, $share_questions, $instructions);
+        if ($test_type === 'reeve' && $rules_version === '') {
+            $this->jsonOut(['status' => 1, 'error' => 'Rules of Play version is required for the Reeve\'s Test.']);
+        }
+
+        Ork3::$Lib->qualtest->saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until, $max_retakes, $share_questions, $instructions, $rules_version, $show_correct);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -347,11 +353,19 @@ class Controller_QualTestAjax extends Controller {
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
 
         $correct_answer_id = $correct_map[$question_id];
-        $this->jsonOut([
-            'status'            => 0,
-            'is_correct'        => ($answer_id === $correct_answer_id),
-            'correct_answer_id' => $correct_answer_id,
-        ]);
+        $is_correct = ($answer_id === $correct_answer_id);
+
+        // Only reveal the correct answer when the player got it right, or when the
+        // kingdom has opted into showing correct answers on incorrect submissions.
+        $cfg = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $reveal = $is_correct || !empty($cfg['ShowCorrectOnIncorrect']);
+
+        $out = [
+            'status'     => 0,
+            'is_correct' => $is_correct,
+        ];
+        if ($reveal) $out['correct_answer_id'] = $correct_answer_id;
+        $this->jsonOut($out);
     }
 
     // -----------------------------------------------------------------------
