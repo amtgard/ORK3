@@ -1993,10 +1993,10 @@ window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 
 <!-- Move Player Modal -->
 <style>
-.pk-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.pk-mp-toggle { display:flex; background:var(--ork-surface-hover); border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
 .pk-mp-toggle-btn {
 	flex:1; padding:6px 10px; border:none; border-radius:4px; font-size:12px; font-weight:600;
-	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s;
+	cursor:pointer; background:transparent; color:var(--ork-text-muted); transition:background 0.15s,color 0.15s;
 }
 .pk-mp-toggle-btn.pk-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
 

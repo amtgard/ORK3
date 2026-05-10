@@ -275,8 +275,8 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 /* Attendance player-search scoped autocomplete */
 .ev-att-form .ev-pn-field { position: relative; }
 .ev-att-form #ev-PlayerName-results { position: fixed; top: 0; left: 0; right: auto; width: 320px; max-height: 360px; margin: 0; }
-.ev-ac-section { padding: 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #718096; background: #f7fafc; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
-.ev-ac-empty { padding: 8px 12px; font-size: 13px; color: #a0aec0; cursor: default; }
+.ev-ac-section { padding: 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ork-text-muted); background: var(--ork-surface-light); text-transform: uppercase; border-bottom: 1px solid var(--ork-border); }
+.ev-ac-empty { padding: 8px 12px; font-size: 13px; color: var(--ork-text-hint); cursor: default; }
 html[data-theme="dark"] .ev-ac-section { color: var(--ork-text-muted); background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 </style>
