@@ -4082,9 +4082,12 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		// generic top-of-modal error slot for other failure types.
 		function pnShowProfanityFieldError(fieldName, msg) {
 			var fieldMap = {
-				'Persona':      { fieldId: 'pn-name-core',            tabPanel: 'name'  },
-				'AboutPersona': { fieldId: 'pn-design-about-persona', tabPanel: 'about' },
-				'AboutStory':   { fieldId: 'pn-design-about-story',   tabPanel: 'about' },
+				'Persona':            { fieldId: 'pn-name-core',              tabPanel: 'name'  },
+				'AboutPersona':       { fieldId: 'pn-design-about-persona',   tabPanel: 'about' },
+				'AboutStory':         { fieldId: 'pn-design-about-story',     tabPanel: 'about' },
+				'NamePrefix':         { fieldId: 'pn-name-prefix-custom',     tabPanel: 'name'  },
+				'NameSuffix':         { fieldId: 'pn-name-suffix-custom',     tabPanel: 'name'  },
+				'PronunciationGuide': { fieldId: 'pn-design-pronunciation',   tabPanel: 'name'  },
 			};
 			var spec = fieldMap[fieldName];
 			if (!spec) return false;
@@ -4093,6 +4096,13 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 			if (spec.tabPanel) {
 				var tabBtn = document.querySelector('.pn-design-tab[data-panel="' + spec.tabPanel + '"]');
 				if (tabBtn) tabBtn.click();
+			}
+			// Custom prefix/suffix inputs are hidden when the user picked a canonical
+			// dropdown option — but if the server flagged the field, the offending text
+			// is in that hidden input, so reveal it so the inline error has somewhere
+			// visible to attach.
+			if (fieldEl.style && fieldEl.style.display === 'none') {
+				fieldEl.style.display = '';
 			}
 			var errId = spec.fieldId + '-profanity-err';
 			var err = document.getElementById(errId);
