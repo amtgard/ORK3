@@ -104,6 +104,16 @@
 				</button>
 				<span class="ec-field-hint" style="display:block;margin-top:6px">Leave empty for a free event.</span>
 				<input type="hidden" name="Fees" id="ev-fees-json">
+
+				<div id="ec-ticket-link-block" class="ec-ticket-link-block" style="display:none">
+					<label class="ec-ticket-link-label">
+						<i class="fas fa-ticket-alt"></i>
+						Add Ticket Link?
+						<span class="ec-help-tip" data-ec-tip="If you are offering a mechanism for people to pay fees online, such as through a ticketing website or digital payments (PayPal, Venmo, etc), make it easy to collect fees by adding your link here." aria-label="Help" tabindex="0">?</span>
+					</label>
+					<input type="url" id="ec-ticket-link-url" class="ec-ticket-link-input" placeholder="https://...">
+					<span class="ec-field-hint" style="display:block;margin-top:6px">Optional. Saved alongside External Links below.</span>
+				</div>
 			</div>
 
 			<?php // ---- Section: Event Type ---- ?>
@@ -240,6 +250,64 @@
 <style>
 .ev-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
 html[data-theme="dark"] .ev-fp-title { background: #1a365d; color: #90cdf4; }
+
+.ec-ticket-link-block {
+	margin-top: 14px; padding: 12px 14px;
+	background: #f7fafc; border: 1px dashed #cbd5e0; border-radius: 6px;
+}
+.ec-ticket-link-label {
+	display: flex; align-items: center; gap: 6px;
+	font-size: 12px; font-weight: 600; color: #4a5568;
+	text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px;
+}
+.ec-ticket-link-label i.fa-ticket-alt { color: #2b6cb0; font-size: 13px; }
+.ec-ticket-link-input {
+	width: 100%; padding: 6px 10px; box-sizing: border-box;
+	border: 1px solid #cbd5e0; border-radius: 5px;
+	font-size: 13px; color: #2d3748; background: #fff;
+}
+.ec-ticket-link-input:focus { outline: none; border-color: #4299e1; box-shadow: 0 0 0 2px rgba(66,153,225,.15); }
+.ec-help-tip {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 16px; height: 16px; border-radius: 50%;
+	border: 1px solid #cbd5e0; background: #fff; color: #718096;
+	font-size: 10px; font-weight: 700; line-height: 1;
+	cursor: help; user-select: none; position: relative;
+	text-transform: none; letter-spacing: 0;
+}
+.ec-help-tip:hover, .ec-help-tip:focus { background: #ebf8ff; border-color: #90cdf4; color: #2b6cb0; outline: none; }
+.ec-help-tip[data-ec-tip]::before,
+.ec-help-tip[data-ec-tip]::after {
+	position: absolute; left: 50%; bottom: calc(100% + 4px);
+	pointer-events: none; opacity: 0; transition: opacity .08s;
+}
+.ec-help-tip[data-ec-tip]::after {
+	content: attr(data-ec-tip); transform: translateX(-50%);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 8px 11px; border-radius: 5px; white-space: normal;
+	width: 280px; max-width: 80vw; line-height: 1.4;
+	text-transform: none; letter-spacing: 0; z-index: 900;
+	box-shadow: 0 4px 12px rgba(0,0,0,.18);
+}
+.ec-help-tip[data-ec-tip]::before {
+	content: ''; transform: translateX(-50%) translateY(4px);
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+.ec-help-tip[data-ec-tip]:hover::before,
+.ec-help-tip[data-ec-tip]:hover::after,
+.ec-help-tip[data-ec-tip]:focus::before,
+.ec-help-tip[data-ec-tip]:focus::after { opacity: 1; }
+
+/* Dark mode */
+html[data-theme="dark"] .ec-ticket-link-block { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ec-ticket-link-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ec-ticket-link-label i.fa-ticket-alt { color: #63b3ed; }
+html[data-theme="dark"] .ec-ticket-link-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ec-ticket-link-input:focus { border-color: var(--ork-link-bright); box-shadow: 0 0 0 2px rgba(99,179,237,.18); }
+html[data-theme="dark"] .ec-help-tip { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .ec-help-tip:hover, html[data-theme="dark"] .ec-help-tip:focus { background: var(--ork-bg-secondary); border-color: var(--ork-link-bright); color: var(--ork-link-bright); }
+html[data-theme="dark"] .ec-help-tip[data-ec-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border), 0 4px 12px rgba(0,0,0,.55); }
+html[data-theme="dark"] .ec-help-tip[data-ec-tip]::before { border-top-color: #1a202c; }
 </style>
 <script>
 function ecFpAddTitle(label, calEl) {
@@ -306,6 +374,80 @@ function ecCancelAndReturn(ev, eventId) {
 		.catch(function () {})
 		.finally(function () { window.location.href = EcConfig.returnUrl; });
 }
+
+// ---- Ticket Link shortcut: appears when any fee > 0; mirrors into ExternalLinks ----
+(function() {
+	var TICKET_ICON  = 'fas fa-ticket-alt';
+	var TICKET_TITLE = 'Tickets';
+	var block, ticketInput, feesList, feesJson, linksJson;
+
+	function getJSON(el) {
+		try { return JSON.parse((el && el.value) || '[]'); } catch (e) { return []; }
+	}
+	function hasPositiveFee() {
+		return getJSON(feesJson).some(function(f) { return parseFloat(f.Cost) > 0; });
+	}
+	function findTicketIdx(links) {
+		for (var i = 0; i < links.length; i++) {
+			if (links[i] && links[i].Icon === TICKET_ICON) return i;
+		}
+		return -1;
+	}
+	function syncVisibility() {
+		var show = hasPositiveFee();
+		block.style.display = show ? '' : 'none';
+		if (show && !ticketInput.value) {
+			var idx = findTicketIdx(getJSON(linksJson));
+			if (idx >= 0) ticketInput.value = getJSON(linksJson)[idx].Url || '';
+		}
+	}
+	function upsertTicketLink(url) {
+		var links = getJSON(linksJson);
+		var idx = findTicketIdx(links);
+		url = (url || '').trim();
+		if (url) {
+			if (idx >= 0) {
+				links[idx].Url = url;
+				if (!links[idx].Title) links[idx].Title = TICKET_TITLE;
+			} else {
+				links.push({ Title: TICKET_TITLE, Url: url, Icon: TICKET_ICON });
+			}
+		} else if (idx >= 0) {
+			links.splice(idx, 1);
+		}
+		if (typeof window.evLinksReset === 'function') window.evLinksReset(links);
+		else if (linksJson) linksJson.value = JSON.stringify(links);
+	}
+
+	function init() {
+		block       = document.getElementById('ec-ticket-link-block');
+		ticketInput = document.getElementById('ec-ticket-link-url');
+		feesList    = document.getElementById('ec-fees-list');
+		feesJson    = document.getElementById('ev-fees-json');
+		linksJson   = document.getElementById('ev-links-json');
+		if (!block || !ticketInput || !feesList || !feesJson || !linksJson) return;
+
+		// Initial state — wait a tick so the fees/links IIFEs have populated their JSON inputs
+		setTimeout(syncVisibility, 0);
+
+		// Re-evaluate visibility whenever fees change (input, add, remove)
+		feesList.addEventListener('input', syncVisibility);
+		feesList.addEventListener('click', function(e) {
+			if (e.target.closest('button[data-fees-remove]')) setTimeout(syncVisibility, 0);
+		});
+		var addFeeBtn = document.querySelector('button[onclick*="evFeesAdd"]');
+		if (addFeeBtn) addFeeBtn.addEventListener('click', function() { setTimeout(syncVisibility, 0); });
+
+		// Mirror ticket URL into ExternalLinks
+		ticketInput.addEventListener('input', function() { upsertTicketLink(ticketInput.value); });
+	}
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', init);
+	} else {
+		init();
+	}
+})();
 </script>
 <!-- Markdown Help Modal -->
 <div id="ec-md-help-overlay" onclick="if(event.target===this)this.classList.remove('kn-open')">
