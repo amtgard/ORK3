@@ -31,7 +31,7 @@ if (!DO_SETUP) {
 	$classes = scandir(DIR_SYSTEMLIB);
 	foreach ($classes as $k => $file) {
 		$path_parts = pathinfo($file);
-		if ('php' == $path_parts['extension']) {
+		if ('php' === ($path_parts['extension'] ?? '')) {
 			require_once(DIR_SYSTEMLIB . $path_parts['basename']);
 		}
 	}
@@ -43,13 +43,13 @@ if (!DO_SETUP) {
 	$LIB = new Ork3LibContainer();
 	foreach ($classes as $k => $file) {
 		$path_parts = pathinfo($file);
-		if ('php' == $path_parts['extension']) {
+		if ('php' === ($path_parts['extension'] ?? '')) {
 			require_once(DIR_ORK3 . $path_parts['basename']);
 		}
 	}
 	foreach ($classes as $k => $file) {
 		$path_parts = pathinfo($file);
-		if ('php' == $path_parts['extension']) {
+		if ('php' === ($path_parts['extension'] ?? '')) {
 			$class = explode('.', $path_parts['basename']);
 			$class_name = $class[1];
 			$chad_name = strtolower($class_name);
