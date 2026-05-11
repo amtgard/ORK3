@@ -35,6 +35,29 @@ $of = $wv['officer_prefill'];
 .wv-review .wv-minors-tbl { width: 100%; border-collapse: collapse; }
 .wv-review .wv-minors-tbl th, .wv-review .wv-minors-tbl td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
 .wv-review .wv-minors-tbl thead { background: #f4f4f4; }
+.wv-review .wv-typed-sig { font-family: 'Homemade Apple', cursive; font-size: 22px; }
+
+/* --- Dark mode --- */
+html[data-theme="dark"] .wv-review { background: transparent; color: #e2e8f0; }
+html[data-theme="dark"] .wv-review .wv-section { background: #1f2937; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .wv-review .wv-fact,
+html[data-theme="dark"] .wv-review .wv-fact strong,
+html[data-theme="dark"] .wv-review .wv-dl dt { color: #e2e8f0; }
+html[data-theme="dark"] .wv-review .wv-sig-rendered { background: #fafafa; border-color: #4a5568; color: #111; }
+html[data-theme="dark"] .wv-review .wv-typed-sig { background: #fafafa; color: #111; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+html[data-theme="dark"] .wv-review .wv-verify-form input[type=text],
+html[data-theme="dark"] .wv-review .wv-verify-form textarea,
+html[data-theme="dark"] .wv-review .wv-verify-form select { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .wv-review .wv-verify-form input[disabled] { background: #2d3748; color: #718096; }
+html[data-theme="dark"] .wv-review .wv-verify-form label { color: #cbd5e0; }
+html[data-theme="dark"] .wv-review .wv-approve { background: #38a169; }
+html[data-theme="dark"] .wv-review .wv-reject  { background: #e53e3e; }
+html[data-theme="dark"] .wv-review .wv-verified-box { background: #1c4532; border-color: #38a169; color: #c6f6d5; }
+html[data-theme="dark"] .wv-review .wv-rejected-box { background: #5b2727; border-color: #c53030; color: #fed7d7; }
+html[data-theme="dark"] .wv-review .wv-minors-tbl th,
+html[data-theme="dark"] .wv-review .wv-minors-tbl td { border-color: #4a5568; }
+html[data-theme="dark"] .wv-review .wv-minors-tbl thead { background: #374151; color: #e2e8f0; }
+html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 @media print {
 	.wv-verify-form, .wv-actions, .wv-minor-toggle, body > header, body > nav, body > footer { display: none !important; }
 	.wv-review { max-width: 100%; margin: 0; }
@@ -132,7 +155,7 @@ $of = $wv['officer_prefill'];
 			<dt>Signature</dt>
 			<dd>
 				<?php if (($_sig['WitnessSignatureType'] ?? '') === 'typed'): ?>
-					<span style="font-family:'Homemade Apple', cursive; font-size: 22px;"><?= htmlspecialchars($_sig['WitnessSignatureData'] ?? '') ?></span>
+					<span class="wv-typed-sig"><?= htmlspecialchars($_sig['WitnessSignatureData'] ?? '') ?></span>
 				<?php elseif (($_sig['WitnessSignatureType'] ?? '') === 'drawn'): ?>
 					<em>(drawn signature &mdash; see print view for canvas render)</em>
 				<?php endif; ?>
