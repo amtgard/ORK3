@@ -15076,6 +15076,7 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
     var stepSuccess = gid('ev-banner-step-success');
     var saveCfgBtn  = gid('ev-banner-save-config-btn');
     var removeBtn   = gid('ev-banner-remove-btn');
+    var adjustBtn   = gid('ev-banner-adjust-btn');
     var closeBtn    = gid('ev-banner-close-btn');
     var posCanvas       = gid('ev-banner-position-canvas');
     var posBackBtn      = gid('ev-banner-position-back-btn');
@@ -15134,6 +15135,32 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             showStep(stepSuccess);
             setTimeout(function() { window.location.reload(); }, 900);
         });
+    });
+
+    // "Adjust Image Framing" loads the current banner image back into the
+    // position tool so the user can re-frame and re-save it. The image is
+    // already at 1800×240 so drag overflow will be zero, but the user gets
+    // to see the safe-zone overlay against the saved art and re-confirm.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = EvConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng);
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
     });
 
     if (removeBtn) removeBtn.addEventListener('click', function() {
