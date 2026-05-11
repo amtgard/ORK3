@@ -4045,8 +4045,13 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 .ev-hero-has-banner.ev-hero-vignette::after {
 	content: '';
 	position: absolute; inset: 0; z-index: 1; pointer-events: none;
-	-webkit-mask-image: radial-gradient(ellipse 70% 75% at 78% 35%, transparent 55%, #000 100%);
-	        mask-image: radial-gradient(ellipse 70% 75% at 78% 35%, transparent 55%, #000 100%);
+	/* Blur ellipse sits on the LEFT (where the logo + title + badges live).
+	   It fades to fully clear by x ≈ 40%, so the entire center third
+	   (33%–67%) and the right third are untouched — no blur leaking into
+	   the bottom of the middle band. mask-image: opaque = blur applied,
+	   transparent = no blur. */
+	-webkit-mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
 	backdrop-filter: blur(7px);
 	-webkit-backdrop-filter: blur(7px);
 }
