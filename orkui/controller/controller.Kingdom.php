@@ -543,7 +543,7 @@ class Controller_Kingdom extends Controller {
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 		$this->data['CanAddPark'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, (int)$kingdom_id, AUTH_CREATE);
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 		$this->data['IsOrkAdmin'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 

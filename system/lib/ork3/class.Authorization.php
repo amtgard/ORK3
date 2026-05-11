@@ -692,12 +692,25 @@ class Authorization extends Ork3
 			return false;
 			;
 		}
-		// Is Admin?
+		// Is Ork Admin? Only TRUE global-admin grants — those with no scope
+		// attached (park_id / kingdom_id / unit_id / event_id all zero) —
+		// may short-circuit here. Scoped admin grants must fall through to
+		// the scope-specific check below; otherwise a park admin row would
+		// silently confer system-wide authority on any HasAuthority call,
+		// which is the bug that let multiple compromised park-officer
+		// accounts edit players across other kingdoms.
 		$this->auth->clear();
 		$this->auth->mundane_id = $mundane_id;
 		$this->auth->role = AUTH_ADMIN;
-		if ($this->auth->find() && $this->auth->size() > 0) {
-			return true;
+		if ($this->auth->find()) {
+			do {
+				if ($this->auth->park_id    == 0
+				 && $this->auth->kingdom_id == 0
+				 && $this->auth->unit_id    == 0
+				 && $this->auth->event_id   == 0) {
+					return true;
+				}
+			} while ($this->auth->next());
 		}
 		// Playing shenanigans
 		if (0 == $id)
@@ -714,10 +727,10 @@ class Authorization extends Ork3
 
 		$this->auth->clear();
 		$this->auth->mundane_id = $mundane_id;
-		// Basic check -- does the user have direct access?
-		// NOTE: Admin check here does not check for admin privileges per se, but for whether
-		// 		an Admin Authorization request is avail (Admin == Admin)
-		// 		For elevated privileges (Admin > Park|Kingdom|Event|Unit), the check is handled below
+		// Scope-specific lookup. AUTH_ADMIN is intentionally NOT a case here:
+		// system-wide admin is handled by the all-zero-scope short-circuit
+		// above, and a scoped AUTH_ADMIN request is not meaningful (callers
+		// wanting kingdom-level authority should use AUTH_KINGDOM).
 		switch ($type) {
 			case AUTH_PARK:
 				$this->auth->park_id = $id;
@@ -730,9 +743,6 @@ class Authorization extends Ork3
 				break;
 			case AUTH_UNIT:
 				$this->auth->unit_id = $id;
-				break;
-			case AUTH_ADMIN:
-				$this->auth->role = AUTH_ADMIN;
 				break;
 			default:
 				return false;

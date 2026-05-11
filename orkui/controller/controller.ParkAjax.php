@@ -429,7 +429,7 @@ class Controller_ParkAjax extends Controller {
 
 		if ($action === 'create') {
 			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, $kingdom_id, AUTH_CREATE)) {
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']); exit;
 			}
 			$this->load_model('Park');
