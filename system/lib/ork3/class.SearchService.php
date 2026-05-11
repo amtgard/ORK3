@@ -221,6 +221,8 @@ class SearchService extends Ork3 {
 						'HasBanner'      => isset($d->has_banner) ? (int)$d->has_banner : 0,
 						'BannerShowLogo' => isset($d->banner_show_logo) ? (int)$d->banner_show_logo : 1,
 						'BannerVignette' => isset($d->banner_vignette) ? (int)$d->banner_vignette : 1,
+						'BannerOffsetX'  => isset($d->banner_offset_x) ? (int)$d->banner_offset_x : 50,
+						'BannerOffsetY'  => isset($d->banner_offset_y) ? (int)$d->banner_offset_y : 50,
 						'RsvpGoing' => (int)$d->rsvp_going,
 						'RsvpInterested' => (int)$d->rsvp_interested,
 						'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested,

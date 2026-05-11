@@ -49,6 +49,8 @@ class Model_Event extends Model {
 				$ret['EventInfo'][0]['HasBanner']      = $r['HasBanner']      ?? 0;
 				$ret['EventInfo'][0]['BannerShowLogo'] = $r['BannerShowLogo'] ?? 1;
 				$ret['EventInfo'][0]['BannerVignette'] = $r['BannerVignette'] ?? 1;
+				$ret['EventInfo'][0]['BannerOffsetX']  = $r['BannerOffsetX']  ?? 50;
+				$ret['EventInfo'][0]['BannerOffsetY']  = $r['BannerOffsetY']  ?? 50;
 			}
 
 			return $ret;
