@@ -29,6 +29,35 @@ require_once(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.inc.php');
 .wv-sign .wv-status-ok { color: #060; font-weight: bold; }
 .wv-sign .wv-status-err { color: #a00; font-weight: bold; }
 .wv-sign .wv-notice { padding: 16px; background: #fdd; border: 1px solid #c99; border-radius: 4px; }
+.wv-sign .wv-minor-row { border: 1px solid #eee; padding: 8px; border-radius: 4px; margin-bottom: 8px; }
+.wv-sign .wv-hint { font-size: 12px; color: #666; }
+.wv-sign .wv-signed-date { font-size: 12px; color: #666; margin-top: 6px; }
+
+/* --- Dark mode --- */
+html[data-theme="dark"] .wv-sign { background: transparent; color: #e2e8f0; }
+html[data-theme="dark"] .wv-sign .wv-section { background: #1f2937; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .wv-sign label { color: #cbd5e0; }
+html[data-theme="dark"] .wv-sign input[type=text],
+html[data-theme="dark"] .wv-sign input[type=email],
+html[data-theme="dark"] .wv-sign input[type=date],
+html[data-theme="dark"] .wv-sign input[type=number],
+html[data-theme="dark"] .wv-sign textarea,
+html[data-theme="dark"] .wv-sign select { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .wv-sign input[type=text]:focus,
+html[data-theme="dark"] .wv-sign input[type=email]:focus,
+html[data-theme="dark"] .wv-sign input[type=date]:focus,
+html[data-theme="dark"] .wv-sign textarea:focus,
+html[data-theme="dark"] .wv-sign select:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.2); outline: none; }
+html[data-theme="dark"] .wv-sign input[disabled] { background: #2d3748; color: #718096; }
+html[data-theme="dark"] .wv-sign .wv-minor-toggle { background: #3d2f0f; border-color: #8a6d2e; color: #f5d97a; }
+html[data-theme="dark"] .wv-sign .wv-submit { background: #38a169; }
+html[data-theme="dark"] .wv-sign .wv-status-ok { color: #68d391; }
+html[data-theme="dark"] .wv-sign .wv-status-err { color: #fc8181; }
+html[data-theme="dark"] .wv-sign .wv-notice { background: #5b2727; border-color: #a04545; color: #fed7d7; }
+html[data-theme="dark"] .wv-sign .wv-minor-row { border-color: #4a5568; background: #2d3748; }
+html[data-theme="dark"] .wv-sign .wv-hint,
+html[data-theme="dark"] .wv-sign .wv-signed-date { color: #a0aec0; }
+html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 </style>
 
 <?php if (!$tpl): ?>
@@ -153,7 +182,7 @@ require_once(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.inc.php');
 			</div>
 			<?php $maxMinors = max(1, (int)($tpl['MaxMinors'] ?? 1)); ?>
 			<h3 style="margin-top: 14px;">Minors Covered</h3>
-			<p class="wv-hint" style="font-size:12px; color:#666;">Enter the minor(s) this waiver covers. You may list up to <?= $maxMinors ?>.</p>
+			<p class="wv-hint">Enter the minor(s) this waiver covers. You may list up to <?= $maxMinors ?>.</p>
 			<div id="wvMinorsList" data-max="<?= $maxMinors ?>"></div>
 			<?php if ($maxMinors > 1): ?>
 			<button type="button" id="wvMinorsAdd">+ Add minor</button>
@@ -173,7 +202,7 @@ require_once(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.inc.php');
 		<div class="wv-section">
 			<h2>Signature</h2>
 			<?php wv_render_signature_widget('wvSigMain', 'signature', 'Type your full legal name'); ?>
-			<p style="font-size: 12px; color: #666; margin-top: 6px;">Signed date: <?= date('F j, Y') ?> (auto-recorded)</p>
+			<p class="wv-signed-date">Signed date: <?= date('F j, Y') ?> (auto-recorded)</p>
 		</div>
 
 		<div class="wv-section wv-footer-md"><?= $md($tpl['FooterMarkdown']) ?></div>
@@ -200,7 +229,6 @@ require_once(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.inc.php');
 	function makeMinorRow(idx) {
 		const d = document.createElement('div');
 		d.className = 'wv-minor-row wv-playerhdr';
-		d.style.cssText = 'border:1px solid #eee; padding:8px; border-radius:4px; margin-bottom:8px;';
 		d.innerHTML =
 			'<div><label>Legal first</label><input type="text" class="wv-minor-field" data-k="LegalFirst"></div>' +
 			'<div><label>Legal last</label><input type="text"  class="wv-minor-field" data-k="LegalLast"></div>' +
