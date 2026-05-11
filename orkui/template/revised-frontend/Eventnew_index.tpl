@@ -2085,6 +2085,7 @@ var EvConfig = {
 	hasBanner:       <?= $hasBanner ? 'true' : 'false' ?>,
 	bannerShowLogo:  <?= $bannerShowLogo ? 'true' : 'false' ?>,
 	bannerVignette:  <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerUrl:       <?= json_encode($bannerUrl) ?>,
 };
 </script>
 <?php if ($canManageStaff): ?>
@@ -2290,7 +2291,10 @@ var EvConfig = {
 
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
 				<?php if ($hasBanner): ?>
-				<button class="ev-btn ev-btn-outline" id="ev-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="ev-btn ev-btn-outline" id="ev-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="ev-btn ev-btn-outline" id="ev-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
 				<button class="ev-btn ev-btn-outline" id="ev-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
 				<?php else: ?>
 				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>

@@ -895,9 +895,11 @@ class Controller_EventAjax extends Controller {
 			}
 			$ext  = ($mime === 'image/png') ? 'png' : 'jpg';
 			$base = DIR_EVENT_BANNER . sprintf('%05d', $event_id);
-			// Remove the alternate extension so resolve_image_ext returns the new one.
-			$other = ($ext === 'png') ? 'jpg' : 'png';
-			if (file_exists($base . '.' . $other)) unlink($base . '.' . $other);
+			// Delete any previous banner files (both extensions) before saving
+			// the new one so we never leave the old image behind when the host
+			// switches images. resolve_image_ext picks whichever survives.
+			if (file_exists($base . '.jpg')) @unlink($base . '.jpg');
+			if (file_exists($base . '.png')) @unlink($base . '.png');
 			if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
 				echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
 				exit;
