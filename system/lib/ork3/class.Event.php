@@ -111,15 +111,19 @@ class Event  extends Ork3 {
 			// expansion).
 			global $DB;
 			$DB->Clear();
-			$bRow = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$request['EventId']);
+			$bRow = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$request['EventId']);
 			if ($bRow && $bRow->Next()) {
 				$response['HasBanner']      = (int)$bRow->has_banner;
 				$response['BannerShowLogo'] = (int)$bRow->banner_show_logo;
 				$response['BannerVignette'] = (int)$bRow->banner_vignette;
+				$response['BannerOffsetX']  = (int)$bRow->banner_offset_x;
+				$response['BannerOffsetY']  = (int)$bRow->banner_offset_y;
 			} else {
 				$response['HasBanner']      = 0;
 				$response['BannerShowLogo'] = 1;
 				$response['BannerVignette'] = 1;
+				$response['BannerOffsetX']  = 50;
+				$response['BannerOffsetY']  = 50;
 			}
 			$response['Status'] = Success();
 		} else {

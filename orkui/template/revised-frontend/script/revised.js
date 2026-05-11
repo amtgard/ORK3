@@ -15115,32 +15115,42 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('ev-open')) evCloseBannerModal();
     });
 
-    function postConfig(then) {
+    function postConfigWithOffsets(offX, offY, cb) {
         var fd = new FormData();
         fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
         fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
         fetch(CONFIG_URL, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(result) {
-                if (result && result.status === 0) { then && then(); }
-                else { showError((result && result.error) || 'Save failed.'); }
+                cb(!!(result && result.status === 0), result && result.error);
             })
-            .catch(function() { showError('Request failed.'); });
+            .catch(function() { cb(false, 'Request failed.'); });
     }
 
     if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
         clearError();
         saveCfgBtn.disabled = true;
-        postConfig(function() {
-            showStep(stepSuccess);
-            setTimeout(function() { window.location.reload(); }, 900);
-        });
+        postConfigWithOffsets(
+            (typeof EvConfig.bannerOffsetX === 'number') ? EvConfig.bannerOffsetX : 50,
+            (typeof EvConfig.bannerOffsetY === 'number') ? EvConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
     });
 
-    // "Adjust Image Framing" loads the current banner image back into the
-    // position tool so the user can re-frame and re-save it. The image is
-    // already at 1800×240 so drag overflow will be zero, but the user gets
-    // to see the safe-zone overlay against the saved art and re-confirm.
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
     if (adjustBtn) adjustBtn.addEventListener('click', function() {
         var url = EvConfig.bannerUrl;
         if (!url) { showError('No banner image to adjust.'); return; }
@@ -15155,7 +15165,13 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
                 adjustBtn.disabled = false;
                 var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
                 if (resizeNote) resizeNote.textContent = '';
-                loadIntoPositionStep(blob, isPng);
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof EvConfig.bannerOffsetX === 'number') ? EvConfig.bannerOffsetX : 50,
+                        y: (typeof EvConfig.bannerOffsetY === 'number') ? EvConfig.bannerOffsetY : 50
+                    }
+                });
             })
             .catch(function(err) {
                 adjustBtn.disabled = false;
@@ -15180,7 +15196,7 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
     });
 
-    function doUpload(blob, isPng) {
+    function doUpload(blob, isPng, offX, offY) {
         showStep(stepUploading);
         var fd = new FormData();
         var name = isPng ? 'banner.png' : 'banner.jpg';
@@ -15191,6 +15207,8 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         fd.append('Banner', blob, name);
         fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
         fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
         fetch(UPLOAD_URL, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(result) {
@@ -15206,23 +15224,44 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
     }
 
     // ---- Position step ----
-    // Holds the loaded image + the current cover-scale and offset (in target px).
-    // The image is drawn into a TARGET_W x TARGET_H frame at "cover" scale; the
-    // user drags only along the axis that has overflow.
-    var posState = { img: null, isPng: false, scale: 1, offset: { x: 0, y: 0 }, dragging: false };
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
 
-    function clampOffset() {
-        var img = posState.img; if (!img) return;
-        var w = img.width * posState.scale;
-        var h = img.height * posState.scale;
-        // If the scaled image is smaller than the target on an axis, lock it
-        // centered there; otherwise clamp so we never reveal blank edges.
-        var minX = Math.min(0, TARGET_W - w), maxX = Math.max(0, TARGET_W - w);
-        var minY = Math.min(0, TARGET_H - h), maxY = Math.max(0, TARGET_H - h);
-        if (w <= TARGET_W) posState.offset.x = (TARGET_W - w) / 2;
-        else               posState.offset.x = Math.max(minX, Math.min(maxX, posState.offset.x));
-        if (h <= TARGET_H) posState.offset.y = (TARGET_H - h) / 2;
-        else               posState.offset.y = Math.max(minY, Math.min(maxY, posState.offset.y));
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
     }
 
     function drawPosition() {
@@ -15230,43 +15269,49 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         var ctx = posCanvas.getContext('2d');
         ctx.fillStyle = '#1a202c';
         ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
-        var img = posState.img;
+        var p = pctToPx();
         ctx.drawImage(
-            img,
-            Math.round(posState.offset.x),
-            Math.round(posState.offset.y),
-            Math.round(img.width * posState.scale),
-            Math.round(img.height * posState.scale)
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
         );
     }
 
-    function loadIntoPositionStep(file, isPng) {
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
         var url = URL.createObjectURL(file);
         var img = new Image();
         img.onload = function() {
             URL.revokeObjectURL(url);
-            posState.img = img;
-            posState.isPng = isPng;
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
             // Cover-fit: scale so the image fully covers the target frame.
             var targetAspect = TARGET_W / TARGET_H;
             var imgAspect    = img.width / img.height;
             posState.scale = (imgAspect > targetAspect)
                 ? (TARGET_H / img.height)   // wider than target → scale by height
                 : (TARGET_W / img.width);   // taller than target → scale by width
-            var scaledW = img.width * posState.scale;
-            var scaledH = img.height * posState.scale;
-            posState.offset.x = (TARGET_W - scaledW) / 2;
-            posState.offset.y = (TARGET_H - scaledH) / 2;
-            // Pick the drag-hint copy based on which axis has overflow.
-            if (posHintText) {
-                if (Math.abs(scaledW - TARGET_W) > Math.abs(scaledH - TARGET_H)) {
-                    posHintText.textContent = 'Drag left or right to choose what shows.';
-                } else if (scaledH > TARGET_H + 1) {
-                    posHintText.textContent = 'Drag up or down to choose what shows.';
-                } else {
-                    posHintText.textContent = 'Image already fits — drag to nudge or just confirm.';
-                }
-            }
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
             drawPosition();
             showStep(stepPosition);
         };
@@ -15279,25 +15324,31 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 
     function bindPositionDrag() {
         if (!posCanvas) return;
-        var rect, startClient, startOff;
+        var rect, startClient, startPct;
         function onDown(e) {
             if (!posState.img) return;
             e.preventDefault();
             rect = posCanvas.getBoundingClientRect();
             var p = e.touches ? e.touches[0] : e;
             startClient = { x: p.clientX, y: p.clientY };
-            startOff    = { x: posState.offset.x, y: posState.offset.y };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
             posState.dragging = true;
         }
         function onMove(e) {
             if (!posState.dragging) return;
             e.preventDefault();
             var p = e.touches ? e.touches[0] : e;
-            var sx = TARGET_W / rect.width;   // map screen px → target px
-            var sy = TARGET_H / rect.height;
-            posState.offset.x = startOff.x + (p.clientX - startClient.x) * sx;
-            posState.offset.y = startOff.y + (p.clientY - startClient.y) * sy;
-            clampOffset();
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
             drawPosition();
         }
         function onUp() { posState.dragging = false; }
@@ -15324,35 +15375,38 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         if (!posState.img) return;
         clearPosError();
         posConfirmBtn.disabled = true;
-        // Render the positioned image into a TARGET_W × TARGET_H canvas, then
-        // hand it through the same byte-budget pipeline as before.
-        var out = document.createElement('canvas');
-        out.width = TARGET_W; out.height = TARGET_H;
-        var ctx = out.getContext('2d');
-        ctx.fillStyle = '#1a202c';
-        ctx.fillRect(0, 0, TARGET_W, TARGET_H);
-        ctx.drawImage(
-            posState.img,
-            Math.round(posState.offset.x),
-            Math.round(posState.offset.y),
-            Math.round(posState.img.width  * posState.scale),
-            Math.round(posState.img.height * posState.scale)
-        );
-        var mime = posState.isPng ? 'image/png'  : 'image/jpeg';
-        var q    = posState.isPng ? 1 : 0.9;
-        out.toBlob(function(blob) {
-            if (!blob) { posConfirmBtn.disabled = false; showPosError('Could not render the cropped image.'); return; }
-            posConfirmBtn.disabled = false;
-            var isPng = posState.isPng;
-            if (blob.size > BANNER_BYTE_LIMIT) {
-                if (resizeNote) resizeNote.textContent = 'Resizing…';
-                resizeImageToLimit(blob, BANNER_BYTE_LIMIT, function(b) {
-                    doUpload(b, isPng);
-                }, function(err) { showPosError(err); }, isPng);
-            } else {
-                doUpload(blob, isPng);
-            }
-        }, mime, q);
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
     });
 
     fileInput.addEventListener('change', function() {

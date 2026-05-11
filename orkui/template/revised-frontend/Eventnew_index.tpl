@@ -22,6 +22,8 @@
 	$hasBanner       = !empty($info['HasBanner']);
 	$bannerShowLogo  = !isset($info['BannerShowLogo']) || (int)$info['BannerShowLogo'] !== 0;
 	$bannerVignette  = !isset($info['BannerVignette']) || (int)$info['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($info['BannerOffsetX']) ? max(0, min(100, (int)$info['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($info['BannerOffsetY']) ? max(0, min(100, (int)$info['BannerOffsetY'])) : 50;
 	$bannerUrl       = '';
 	if ($hasBanner) {
 		$bannerFile = Common::resolve_image_ext(DIR_EVENT_BANNER, sprintf('%05d', $eventId));
@@ -609,13 +611,16 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' ev-hero-vignette';
 	if ($canManage)        $_heroClasses .= ' ev-hero-editable';
 	$_showLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = 'background-image: url(\'' . htmlspecialchars($_heroBgUrl) . '\');';
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
 ?>
 <div class="<?= $_heroClasses ?>" id="ev-hero">
-	<div class="ev-hero-bg"
-		<?php if ($_heroBgUrl): ?>
-			style="background-image: url('<?= htmlspecialchars($_heroBgUrl) ?>')"
-		<?php endif; ?>
-	></div>
+	<div class="ev-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
 	<?php if ($canManage): ?>
 	<button type="button" class="ev-banner-edit-btn" onclick="evOpenBannerModal()" aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
 		<i class="fas fa-image"></i>
@@ -2187,6 +2192,8 @@ var EvConfig = {
 	hasBanner:       <?= $hasBanner ? 'true' : 'false' ?>,
 	bannerShowLogo:  <?= $bannerShowLogo ? 'true' : 'false' ?>,
 	bannerVignette:  <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:   <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:   <?= (int)$bannerOffsetY ?>,
 	bannerUrl:       <?= json_encode($bannerUrl) ?>,
 };
 </script>

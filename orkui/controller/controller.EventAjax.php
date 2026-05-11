@@ -847,9 +847,10 @@ class Controller_EventAjax extends Controller {
 
 		if ($action === 'remove') {
 			$DB->Clear();
-			// Reset display toggles to defaults so a future upload starts fresh
-			// instead of inheriting the removed banner's config.
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1 WHERE event_id = ' . $event_id);
+			// Reset display toggles AND framing offsets to defaults so a future
+			// upload starts fresh instead of inheriting the removed banner's
+			// config.
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE event_id = ' . $event_id);
 			$base = DIR_EVENT_BANNER . sprintf('%05d', $event_id);
 			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
 			if (file_exists($base . '.png')) unlink($base . '.png');
@@ -868,8 +869,10 @@ class Controller_EventAjax extends Controller {
 			}
 			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
 			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
+			$offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
 			$DB->Clear();
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ' WHERE event_id = ' . $event_id);
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE event_id = ' . $event_id);
 			$this->_bustEventSearchCache($event_id);
 			echo json_encode(['status' => 0]);
 			exit;
@@ -906,8 +909,10 @@ class Controller_EventAjax extends Controller {
 			}
 			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
 			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
+			$offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
 			$DB->Clear();
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ' WHERE event_id = ' . $event_id);
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE event_id = ' . $event_id);
 			// $DB->Execute() is void; the YapoMysql layer can silently swallow
 			// failures (sql_mode=STRICT etc). Verify the update landed by
 			// re-reading has_banner. If it didn't, roll back the file so we
