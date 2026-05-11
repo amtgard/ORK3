@@ -31,6 +31,29 @@ if (!function_exists('wv_filter_url')) {
 .wv-queue .wv-pager { margin: 12px 0; display: flex; gap: 6px; }
 .wv-queue .wv-pager a, .wv-queue .wv-pager span { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; text-decoration: none; color: #333; font-size: 13px; }
 .wv-queue .wv-pager .wv-current { background: #333; color: #fff; border-color: #333; }
+.wv-queue .wv-row-sub { color: #666; font-size: 12px; }
+.wv-queue .wv-row-minor { color: #a50; font-size: 11px; }
+.wv-queue .wv-empty { text-align: center; padding: 20px; color: #666; }
+
+/* --- Dark mode --- */
+html[data-theme="dark"] .wv-queue { color: #e2e8f0; }
+html[data-theme="dark"] .wv-queue .wv-chip { background: #2d3748; border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .wv-queue .wv-chip.wv-active { background: #a5b4fc; color: #1a202c; border-color: #a5b4fc; }
+html[data-theme="dark"] .wv-queue table { background: #1f2937; }
+html[data-theme="dark"] .wv-queue th { background: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .wv-queue td { color: #e2e8f0; }
+html[data-theme="dark"] .wv-queue th, html[data-theme="dark"] .wv-queue td { border-bottom-color: #4a5568; }
+html[data-theme="dark"] .wv-queue .wv-row-sub { color: #a0aec0; }
+html[data-theme="dark"] .wv-queue .wv-row-minor { color: #f6ad55; }
+html[data-theme="dark"] .wv-queue .wv-empty { color: #a0aec0; }
+html[data-theme="dark"] .wv-queue .wv-badge-pending   { background: #5b4a1a; color: #f6e05e; }
+html[data-theme="dark"] .wv-queue .wv-badge-verified  { background: #1c4532; color: #9ae6b4; }
+html[data-theme="dark"] .wv-queue .wv-badge-rejected  { background: #5b2727; color: #feb2b2; }
+html[data-theme="dark"] .wv-queue .wv-badge-superseded { background: #2d3748; color: #a0aec0; }
+html[data-theme="dark"] .wv-queue .wv-pager a,
+html[data-theme="dark"] .wv-queue .wv-pager span { background: #2d3748; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .wv-queue .wv-pager .wv-current { background: #a5b4fc; color: #1a202c; border-color: #a5b4fc; }
+html[data-theme="dark"] .wv-queue a { color: #a5b4fc; }
 </style>
 <div class="wv-queue">
 	<h1>Digital Waiver Queue &mdash; <?= htmlspecialchars($scope) ?> #<?= (int)$eid ?></h1>
@@ -43,13 +66,13 @@ if (!function_exists('wv_filter_url')) {
 		<thead><tr><th>Player</th><th>Signed</th><th>Status</th><th>Template</th><th></th></tr></thead>
 		<tbody>
 		<?php if (!$sigs): ?>
-			<tr><td colspan="5" style="text-align:center; padding: 20px; color: #666;">No signatures match this filter.</td></tr>
+			<tr><td colspan="5" class="wv-empty">No signatures match this filter.</td></tr>
 		<?php endif; foreach ($sigs as $s): ?>
 			<tr>
 				<td>
 					<strong><?= htmlspecialchars($s['PersonaName'] ?: ($s['MundaneFirst'] . ' ' . $s['MundaneLast'])) ?></strong>
-					<?php if ($s['PersonaName']): ?><br><span style="color: #666; font-size: 12px;"><?= htmlspecialchars($s['MundaneFirst'] . ' ' . $s['MundaneLast']) ?></span><?php endif; ?>
-					<?php if ($s['IsMinor']): ?><br><span style="color: #a50; font-size: 11px;"><em>minor &mdash; rep: <?= htmlspecialchars($s['MinorRepFirst'] . ' ' . $s['MinorRepLast']) ?></em></span><?php endif; ?>
+					<?php if ($s['PersonaName']): ?><br><span class="wv-row-sub"><?= htmlspecialchars($s['MundaneFirst'] . ' ' . $s['MundaneLast']) ?></span><?php endif; ?>
+					<?php if ($s['IsMinor']): ?><br><span class="wv-row-minor"><em>minor &mdash; rep: <?= htmlspecialchars($s['MinorRepFirst'] . ' ' . $s['MinorRepLast']) ?></em></span><?php endif; ?>
 				</td>
 				<td><?= htmlspecialchars($s['SignedAt']) ?></td>
 				<td><span class="wv-badge wv-badge-<?= htmlspecialchars($s['VerificationStatus']) ?>"><?= htmlspecialchars($s['VerificationStatus']) ?></span></td>

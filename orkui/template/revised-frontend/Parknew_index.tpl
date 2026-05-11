@@ -391,10 +391,10 @@
 
 		<!-- Digital Waivers CTA -->
 		<?php $wvActive = $park_info['WaiverActive'] ?? null; if ($wvActive && ($wvActive['Status']['Status'] ?? 1) === 0 && (int)($wvActive['Template']['IsEnabled'] ?? 0) === 1): ?>
-		<div class="pk-card">
+		<div class="pk-card pk-waiver-cta">
 			<h4 style="background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important;"><i class="fas fa-file-signature"></i> Digital Waiver</h4>
-			<p style="margin:0 0 10px 0;color:#4a5568;font-size:13px;">This park has a digital waiver available for players to sign online.</p>
-			<a class="pk-btn" href="<?= UIR ?>Waiver/sign/park/<?= (int)$park_info['ParkInfo']['ParkId'] ?>" style="display:inline-block;padding:6px 14px;background:#2b6cb0;color:#fff;border-radius:4px;text-decoration:none;font-size:13px;">Sign Park Waiver</a>
+			<p class="pk-waiver-cta-msg">This park has a digital waiver available for players to sign online.</p>
+			<a class="pk-btn pk-waiver-cta-btn" href="<?= UIR ?>Waiver/sign/park/<?= (int)$park_info['ParkInfo']['ParkId'] ?>">Sign Park Waiver</a>
 		</div>
 		<?php endif; ?>
 
@@ -1827,6 +1827,14 @@ html[data-theme="dark"] .fc-button { background: var(--ork-bg-secondary); border
 html[data-theme="dark"] .fc-button:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
 html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+
+/* --- Digital Waiver sidebar CTA --- */
+.pk-waiver-cta-msg { margin: 0 0 10px 0; color: #4a5568; font-size: 13px; }
+.pk-waiver-cta-btn { background: #2b6cb0; color: #fff; }
+.pk-waiver-cta-btn:hover { background: #2c5282; color: #fff; }
+html[data-theme="dark"] .pk-waiver-cta-msg { color: var(--ork-text-secondary, #a0aec0); }
+html[data-theme="dark"] .pk-waiver-cta-btn { background: #4c5fa8; color: #fff; }
+html[data-theme="dark"] .pk-waiver-cta-btn:hover { background: #5b6cb9; color: #fff; }
 
 /* ============================================================
    </style>
