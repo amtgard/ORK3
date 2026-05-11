@@ -448,6 +448,40 @@ class Controller_Player extends Controller {
 		);
 		$this->data['IsOrkAdmin'] = ($adminCheck && $adminCheck->Size() > 0);
 
+		// Scoped park/kingdom admin grants — surfaces "untitled" admins. Includes
+		// role='admin' and role='create' because they grant the same effective
+		// power under HasAuthority (both short-circuit to true in the role
+		// switch). Officer-row grants are filtered out so a titled officer
+		// doesn't appear as both Crown and Park Admin. Event and unit grants
+		// are intentionally excluded — they accumulate across the player's
+		// history and clutter the banner without communicating identity.
+		// GROUP BY collapses duplicate grants on the same scope into one badge.
+		$DB->Clear();
+		$adminGrants = $DB->DataSet(
+			"SELECT a.park_id, MAX(p.name) AS park_name,
+			        a.kingdom_id, MAX(k.name) AS kingdom_name
+			 FROM ork_authorization a
+			 LEFT JOIN ork_park    p ON p.park_id    = a.park_id
+			 LEFT JOIN ork_kingdom k ON k.kingdom_id = a.kingdom_id
+			 LEFT JOIN ork_officer o ON o.authorization_id = a.authorization_id
+			 WHERE a.mundane_id = " . (int)$id . "
+			   AND a.role IN ('admin', 'create')
+			   AND (a.park_id > 0 OR a.kingdom_id > 0)
+			   AND o.authorization_id IS NULL
+			 GROUP BY a.park_id, a.kingdom_id"
+		);
+		$_adminBadges = [];
+		if ($adminGrants && $adminGrants->Size() > 0) {
+			do {
+				if ($adminGrants->park_id > 0) {
+					$_adminBadges[] = ['scope' => 'Park',    'id' => (int)$adminGrants->park_id,    'name' => $adminGrants->park_name];
+				} elseif ($adminGrants->kingdom_id > 0) {
+					$_adminBadges[] = ['scope' => 'Kingdom', 'id' => (int)$adminGrants->kingdom_id, 'name' => $adminGrants->kingdom_name];
+				}
+			} while ($adminGrants->Next());
+		}
+		$this->data['AdminGrants'] = $_adminBadges;
+
 		// Attendance loaded async — counts start at 0 and are updated via AJAX
 		$this->data['Stats'] = [
 			'TotalAttendance'   => 0,

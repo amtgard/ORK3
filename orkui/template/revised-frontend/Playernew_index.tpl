@@ -459,6 +459,11 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>
 					<?php endforeach; ?>
 				<?php endif; ?>
+				<?php if (!empty($AdminGrants)): ?>
+					<?php foreach ($AdminGrants as $_g): ?>
+						<span class="pn-badge pn-badge-purple"><i class="fas fa-shield-alt"></i> <?= htmlspecialchars($_g['scope']) ?> Admin: <?= htmlspecialchars($_g['name'] ?: ('#' . $_g['id'])) ?></span>
+					<?php endforeach; ?>
+				<?php endif; ?>
 				<?php if ($IsOrkAdmin): ?>
 					<span class="pn-badge pn-badge-purple"><i class="fas fa-cog"></i> ORK Administrator</span>
 				<?php endif; ?>
