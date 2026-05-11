@@ -714,6 +714,19 @@ class Player extends Ork3 {
 					$request['MundaneId'] = $new_mundane_id;
 					Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
 				}
+
+				// Audit: record who created which player. Captures officer/admin
+				// signup-fuzz attempts that previously had no audit trail.
+				$post_player = $this->GetPlayer(['MundaneId' => $new_mundane_id]);
+				$_audit_req = $request;
+				$_audit_req['PasswordChanged'] = trimlen($request['Password'] ?? '') > 0 ? 1 : 0;
+				unset($_audit_req['Password']);
+				list($_audit_req, , $_audit_post) =
+					$this->audit_redact_profile($_audit_req, [], $post_player['Player'] ?? []);
+				$_audit_req['AdminEdit']   = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT) ? 1 : 0;
+				$_audit_req['OfficerEdit'] = (!$_audit_req['AdminEdit'] && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) ? 1 : 0;
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $_audit_req, 'Player', $new_mundane_id, null, $_audit_post);
+
 				return Success($new_mundane_id);
 			} else {
 				return InvalidParameter();

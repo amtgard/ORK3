@@ -1,5 +1,6 @@
 <?php
 $_actionLabels = [
+	'Player::CreatePlayer'         => 'Player Created',
 	'Player::UpdatePlayer'         => 'Player Updated',
 	'Player::SetImage'             => 'Photo Uploaded',
 	'Player::SetWaiver'            => 'Waiver Uploaded',
@@ -26,6 +27,14 @@ $_actionLabels = [
 	'Park::CreatePark'             => 'Park Created',
 	'Park::MergeParks'             => 'Parks Merged',
 	'Park::TransferPark'           => 'Park Transferred',
+	'Park::SetParkDetails'         => 'Park Details Updated',
+	'Park::SetOfficer'             => 'Officer Assigned',
+	'Park::VacateOfficer'          => 'Officer Vacated',
+	'Park::AddParkDay'             => 'Park Day Added',
+	'Park::EditParkDay'            => 'Park Day Updated',
+	'Park::RemoveParkDay'          => 'Park Day Removed',
+	'Park::RetirePark'             => 'Park Retired',
+	'Park::RestorePark'            => 'Park Restored',
 ];
 
 // ── JSON helpers (defined early — used in batch collector and render functions) ──
@@ -59,8 +68,17 @@ foreach ($AuditRows as $_lr) {
 		foreach (['park_id','at_park_id','ParkId','from_park_id','to_park_id'] as $_k) if (!empty($_d[$_k])) $_parkIds[(int)$_d[$_k]] = true;
 		foreach (['kingdom_id','at_kingdom_id','KingdomId','old_kingdom_id','new_kingdom_id','from_kingdom_id','to_kingdom_id'] as $_k) if (!empty($_d[$_k])) $_kingdomIds[(int)$_d[$_k]] = true;
 		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById','recommended_by_id','SupporterMundaneId','supporter_mundane_id'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
-	// entity_id is usually a mundane_id — collect it too
-	if (!empty($_lr['EntityId'])) $_mundaneIds[(int)$_lr['EntityId']] = true;
+	// Route entity_id into the correct lookup map based on the audit row's
+	// `entity` column. Defaults to mundane when entity is unset (older rows).
+	if (!empty($_lr['EntityId'])) {
+		$_e = (int)$_lr['EntityId'];
+		switch ($_lr['Entity'] ?? 'Player') {
+			case 'Park':    $_parkIds[$_e]    = true; break;
+			case 'Kingdom': $_kingdomIds[$_e] = true; break;
+			case 'Event':   $_eventIds[$_e]   = true; break;
+			default:        $_mundaneIds[$_e] = true; break;
+		}
+	}
 		foreach (['event_id','at_event_id','EventId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_eventIds[(int)$_d[$_k]] = true;
 		foreach (['kingdomaward_id','KingdomAwardId'] as $_k) if (!empty($_d[$_k])) $_kawardIds[(int)$_d[$_k]] = true;
 	}
@@ -153,6 +171,16 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 				: ($_bytes >= 1024 ? number_format($_bytes / 1024, 0) . ' KB' : $_bytes . ' B');
 			$_extra = trim(($_mime ? $_mime : '') . ($_actor && $_actor !== 'self' ? ($_mime ? ', ' : '') . 'by ' . $_actor : ''));
 			return 'Uploaded ' . $_label . ' (' . $_size . ($_extra ? ', ' . $_extra : '') . ')';
+		case 'Player::CreatePlayer':
+			$_persona = $a['Persona']  ?? $p['Persona']  ?? '';
+			$_uname   = $a['UserName'] ?? $a['username'] ?? $p['UserName'] ?? '';
+			$_pid     = (int)($a['park_id'] ?? $a['ParkId'] ?? $p['ParkId'] ?? 0);
+			$_who     = $_persona !== '' ? $_persona : ($_uname !== '' ? $_uname : '(no persona)');
+			$_actor   = !empty($p['AdminEdit']) ? 'admin' : (!empty($p['OfficerEdit']) ? 'officer' : '');
+			$_park    = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : '';
+			return 'Created ' . htmlspecialchars($_who)
+				. ($_park  ? ' in ' . htmlspecialchars($_park) : '')
+				. ($_actor ? ' (by ' . $_actor . ')' : '');
 		case 'Player::UpdatePlayer':
 		case 'Player::update_player':
 			$changed = [];
@@ -283,6 +311,54 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			return 'Transferred ' . htmlspecialchars($parkMap[$_pid] ?? 'park #' . $_pid)
 				. ' from ' . htmlspecialchars($kingdomMap[$_okid] ?? 'kingdom #' . $_okid)
 				. ' to '   . htmlspecialchars($kingdomMap[$_nkid] ?? 'kingdom #' . $_nkid);
+		case 'Park::SetParkDetails':
+			$_pid = (int)($p['ParkId'] ?? $a['park_id'] ?? 0);
+			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : 'park';
+			$_diffFields = ['name','abbreviation','parktitle_id','kingdom_id','active','url','address','city','province','postal_code','directions','description','map_url'];
+			$_changedFields = [];
+			foreach ($_diffFields as $_f) {
+				$_o = $b[$_f] ?? null;
+				$_w = $a[$_f] ?? null;
+				if ((string)$_o !== (string)$_w) $_changedFields[] = $_f;
+			}
+			$_n = count($_changedFields);
+			// When the lone changed field is `active`, surface the state transition
+			// (Retired/Restored) rather than the generic "Updated (1 field)" line.
+			if ($_n === 1 && $_changedFields[0] === 'active') {
+				$_new = $a['active'] ?? '';
+				if      ($_new === 'Active')  $_verb = 'Restored';
+				elseif  ($_new === 'Retired') $_verb = 'Retired';
+				else                          $_verb = 'Set state of';
+				return $_verb . ' ' . htmlspecialchars($_park);
+			}
+			return 'Updated ' . htmlspecialchars($_park) . ($_n ? ' (' . $_n . ' field' . ($_n === 1 ? '' : 's') . ')' : '');
+		case 'Park::SetOfficer':
+			$_pid = (int)($p['ParkId'] ?? $a['ParkId'] ?? 0);
+			$_mid = (int)($p['MundaneId'] ?? $a['MundaneId'] ?? 0);
+			$_role = $p['Role'] ?? $a['Role'] ?? '';
+			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : '';
+			$_who  = $_mid ? ($mundaneMap[$_mid] ?? 'player #' . $_mid) : '';
+			return 'Set ' . htmlspecialchars($_role ?: 'officer') . ($_who ? ' = ' . htmlspecialchars($_who) : '') . ($_park ? ' (' . htmlspecialchars($_park) . ')' : '');
+		case 'Park::VacateOfficer':
+			$_pid = (int)($p['ParkId'] ?? $a['ParkId'] ?? 0);
+			$_role = $p['Role'] ?? $a['Role'] ?? '';
+			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : '';
+			return 'Vacated ' . htmlspecialchars($_role ?: 'officer') . ($_park ? ' (' . htmlspecialchars($_park) . ')' : '');
+		case 'Park::AddParkDay':
+		case 'Park::EditParkDay':
+		case 'Park::RemoveParkDay':
+			$_pid = (int)($p['ParkId'] ?? $a['park_id'] ?? $b['park_id'] ?? 0);
+			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : 'park';
+			$_state = $a ?: $b;
+			$_purpose = $_state['purpose'] ?? '';
+			$_verb = $method === 'Park::AddParkDay' ? 'Added' : ($method === 'Park::RemoveParkDay' ? 'Removed' : 'Updated');
+			return $_verb . ' park day' . ($_purpose ? ' "' . htmlspecialchars($_purpose) . '"' : '') . ' (' . htmlspecialchars($_park) . ')';
+		case 'Park::RetirePark':
+		case 'Park::RestorePark':
+			$_pid = (int)($p['ParkId'] ?? 0);
+			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : 'park';
+			$_verb = $method === 'Park::RetirePark' ? 'Retired' : 'Restored';
+			return $_verb . ' ' . htmlspecialchars($_park);
 		default:
 			return '';
 	}
@@ -666,6 +742,189 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			$html .= '</tbody></table>';
 			return $html;
 
+		case 'Park::SetParkDetails':
+			$_watchFields = [
+				'name'         => 'Name',
+				'abbreviation' => 'Abbreviation',
+				'parktitle_id' => 'Park Title ID',
+				'kingdom_id'   => 'Kingdom',
+				'active'       => 'Status',
+				'url'          => 'URL',
+				'address'      => 'Address',
+				'city'         => 'City',
+				'province'     => 'Province',
+				'postal_code'  => 'Postal Code',
+				'directions'   => 'Directions',
+				'description'  => 'Description',
+				'map_url'      => 'Map URL',
+			];
+			$_hasPrior = !empty($b);
+			$_rows = '';
+			foreach ($_watchFields as $_k => $_label) {
+				$_o = isset($b[$_k]) ? (string)$b[$_k] : null;
+				$_n = isset($a[$_k]) ? (string)$a[$_k] : null;
+				if ($_o === null && $_n === null) continue;
+				$_changed = $_hasPrior && (string)$_o !== (string)$_n;
+				if ($_hasPrior && !$_changed) continue;
+				$_oDisp = ($_o === null || $_o === '') ? '—' : $_o;
+				$_nDisp = ($_n === null || $_n === '') ? '—' : $_n;
+				if ($_k === 'kingdom_id') {
+					$_oDisp = $_o ? ($kingdomMap[(int)$_o] ?? 'kingdom #' . $_o) : '—';
+					$_nDisp = $_n ? ($kingdomMap[(int)$_n] ?? 'kingdom #' . $_n) : '—';
+				}
+				$_rows .= '<tr' . ($_changed ? ' class="al-diff-changed"' : '') . '>'
+				       . '<td class="al-diff-field">' . htmlspecialchars($_label) . '</td>'
+				       . '<td class="' . ($_changed ? 'al-diff-old' : 'al-diff-val') . '">' . htmlspecialchars($_oDisp) . '</td>'
+				       . '<td class="' . ($_changed ? 'al-diff-new' : 'al-diff-val') . '">' . htmlspecialchars($_nDisp) . '</td>'
+				       . '</tr>';
+			}
+			if (!empty($p['Heraldry']) && is_array($p['Heraldry'])) {
+				$_bytes = (int)($p['Heraldry']['bytes'] ?? 0);
+				$_size = $_bytes >= 1024 * 1024
+					? number_format($_bytes / (1024 * 1024), 1) . ' MB'
+					: ($_bytes >= 1024 ? number_format($_bytes / 1024, 0) . ' KB' : $_bytes . ' B');
+				$_rows .= '<tr class="al-diff-changed"><td class="al-diff-field">Heraldry</td><td colspan="2">Uploaded (' . htmlspecialchars($_size) . ')</td></tr>';
+			}
+			if (!$_rows) return '<em style="color:#a0aec0">No tracked fields changed.</em>';
+			return '<table class="al-diff-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>' . $_rows . '</tbody></table>';
+
+		case 'Park::SetOfficer':
+		case 'Park::VacateOfficer':
+			$_pid = (int)($p['ParkId'] ?? $a['ParkId'] ?? 0);
+			$_kid = (int)($p['KingdomId'] ?? $a['KingdomId'] ?? 0);
+			$_mid = (int)($p['MundaneId'] ?? $a['MundaneId'] ?? 0);
+			$_priorMid = (int)($b['MundaneId'] ?? 0);
+			$_role = $p['Role'] ?? $a['Role'] ?? '';
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($method === 'Park::SetOfficer' ? 'Officer Assigned' : 'Officer Vacated') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Role</td><td colspan="2">' . htmlspecialchars($_role ?: '—') . '</td></tr>';
+			if ($_pid) $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $_pid, $parkMap) . '</td></tr>';
+			if ($_kid) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $_kid, $kingdomMap) . '</td></tr>';
+			if ($method === 'Park::SetOfficer') {
+				$html .= '<tr><td class="al-diff-field">Previous Holder</td><td colspan="2">' . ($_priorMid > 0 ? _auditIdLink('player', $_priorMid, $mundaneMap) : '—') . '</td></tr>';
+				$html .= '<tr><td class="al-diff-field">New Holder</td><td colspan="2">' . ($_mid ? _auditIdLink('player', $_mid, $mundaneMap) : '—') . '</td></tr>';
+			} else {
+				$html .= '<tr><td class="al-diff-field">Was Held By</td><td colspan="2">' . ($_priorMid > 0 ? _auditIdLink('player', $_priorMid, $mundaneMap) : '—') . '</td></tr>';
+			}
+			$html .= '</tbody></table>';
+			return $html;
+
+
+		case 'Park::AddParkDay':
+		case 'Park::EditParkDay':
+		case 'Park::RemoveParkDay':
+			$_state = !empty($a) ? $a : $b;
+			$_pid = (int)($_state['park_id'] ?? $p['ParkId'] ?? 0);
+			$_pdid = (int)($_state['parkday_id'] ?? $p['ParkDayId'] ?? 0);
+			$_fields = [
+				'purpose'            => 'Purpose',
+				'recurrence'         => 'Recurrence',
+				'week_of_month'      => 'Week of Month',
+				'week_day'           => 'Week Day',
+				'month_day'          => 'Day of Month',
+				'time'               => 'Time',
+				'description'        => 'Description',
+				'alternate_location' => 'Alternate Location',
+				'online'             => 'Online',
+				'address'            => 'Address',
+				'city'               => 'City',
+			];
+			$_isAdd    = ($method === 'Park::AddParkDay');
+			$_isRemove = ($method === 'Park::RemoveParkDay');
+			$_isDiff   = !$_isAdd && !$_isRemove; // Edit: prior AND post present
+			$_fmt = function($v) {
+				return ($v === null || $v === '' || $v === '0') ? '—' : (string)$v;
+			};
+			$_rows = '';
+			foreach ($_fields as $_k => $_label) {
+				$_o = isset($b[$_k]) ? (string)$b[$_k] : null;
+				$_n = isset($a[$_k]) ? (string)$a[$_k] : null;
+				if ($_isDiff) {
+					if ($_o === null && $_n === null) continue;
+					if ((string)$_o === (string)$_n) continue; // only show changed
+					$_rows .= '<tr class="al-diff-changed">'
+					       . '<td class="al-diff-field">' . htmlspecialchars($_label) . '</td>'
+					       . '<td class="al-diff-old">' . htmlspecialchars($_fmt($_o)) . '</td>'
+					       . '<td class="al-diff-new">' . htmlspecialchars($_fmt($_n)) . '</td>'
+					       . '</tr>';
+				} else {
+					$_v = $_isAdd ? $_n : $_o;
+					if ($_v === null || $_v === '' || $_v === '0') continue; // skip empty
+					$_rows .= '<tr><td class="al-diff-field">' . htmlspecialchars($_label) . '</td>'
+					       . '<td colspan="2">' . htmlspecialchars($_fmt($_v)) . '</td></tr>';
+				}
+			}
+			$_head = '';
+			if ($_pid)  $_head .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $_pid, $parkMap) . '</td></tr>';
+			if ($_pdid) $_head .= '<tr><td class="al-diff-field">Park Day ID</td><td colspan="2">' . (int)$_pdid . '</td></tr>';
+			$_head .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($_isRemove ? 'Removed' : ($_isAdd ? 'Added' : 'Updated')) . '</td></tr>';
+			if (!$_rows && !$_head) return '<em style="color:#a0aec0">No detail available.</em>';
+			$_thead = $_isDiff ? '<thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>' : '';
+			return '<table class="al-diff-table">' . $_thead . '<tbody>' . $_head . $_rows . '</tbody></table>';
+
+		case 'Park::RetirePark':
+		case 'Park::RestorePark':
+			$_pid = (int)($p['ParkId'] ?? 0);
+			$_oldActive = $b['active'] ?? null;
+			$_newActive = $a['active'] ?? ($method === 'Park::RetirePark' ? 'Retired' : 'Active');
+			$html = '<table class="al-diff-table"><tbody>';
+			if ($_pid) $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $_pid, $parkMap) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($method === 'Park::RetirePark' ? 'Retired' : 'Restored') . '</td></tr>';
+			$html .= '<tr class="al-diff-changed">'
+			       . '<td class="al-diff-field">Status</td>'
+			       . '<td class="al-diff-old">' . htmlspecialchars($_oldActive ?? '—') . '</td>'
+			       . '<td class="al-diff-new">' . htmlspecialchars($_newActive) . '</td>'
+			       . '</tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Player::CreatePlayer':
+			$_pick = function($key) use ($a, $p) {
+				if (isset($a[$key]) && $a[$key] !== '' && $a[$key] !== null) return $a[$key];
+				if (isset($p[$key]) && $p[$key] !== '' && $p[$key] !== null) return $p[$key];
+				return null;
+			};
+			$_yn = function($v) {
+				if ($v === null) return '—';
+				return ((int)$v === 1 || $v === '1' || $v === true || $v === 'true') ? 'Yes' : 'No';
+			};
+			$_persona  = $_pick('Persona');
+			$_given    = $_pick('GivenName');
+			$_surname  = $_pick('Surname');
+			$_other    = $_pick('OtherName');
+			$_uname    = $_pick('UserName') ?? $_pick('username');
+			$_email    = $_pick('Email');
+			$_parkId   = (int)($a['ParkId'] ?? $a['park_id'] ?? $p['ParkId'] ?? 0);
+			$_kingId   = (int)($a['KingdomId'] ?? $a['kingdom_id'] ?? $p['KingdomId'] ?? 0);
+			$_active   = $_pick('Active') ?? $_pick('IsActive');
+			$_restr    = $_pick('Restricted');
+			$_waivd    = $_pick('Waivered');
+			$_hasImg   = $_pick('HasImage');
+			$_hasHer   = $_pick('HasHeraldry');
+			$_since    = $_pick('ParkMemberSince');
+			$_pwSet    = ((int)($p['PasswordChanged'] ?? 0) === 1);
+			$_actor    = !empty($p['AdminEdit']) ? 'Admin' : (!empty($p['OfficerEdit']) ? 'Officer' : '—');
+			$html  = '<table class="al-diff-table"><tbody>';
+			if ($_persona !== null) $html .= '<tr><td class="al-diff-field">Persona</td><td colspan="2">' . htmlspecialchars($_persona) . '</td></tr>';
+			$_nameBits = array_filter([$_given, $_surname], function($v) { return $v !== null && $v !== ''; });
+			if ($_nameBits)        $html .= '<tr><td class="al-diff-field">Name</td><td colspan="2">' . htmlspecialchars(implode(' ', $_nameBits)) . '</td></tr>';
+			if ($_other)           $html .= '<tr><td class="al-diff-field">Other Name</td><td colspan="2">' . htmlspecialchars($_other) . '</td></tr>';
+			if ($_uname)           $html .= '<tr><td class="al-diff-field">Username</td><td colspan="2">' . htmlspecialchars($_uname) . '</td></tr>';
+			if ($_email)           $html .= '<tr><td class="al-diff-field">Email</td><td colspan="2">' . htmlspecialchars($_email) . '</td></tr>';
+			if ($_parkId)          $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $_parkId, $parkMap) . '</td></tr>';
+			if ($_kingId)          $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $_kingId, $kingdomMap) . '</td></tr>';
+			if ($_since && $_since !== '0000-00-00')
+				$html .= '<tr><td class="al-diff-field">Member Since</td><td colspan="2">' . htmlspecialchars(date('M j, Y', strtotime($_since))) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Active</td><td colspan="2">' . $_yn($_active) . '</td></tr>';
+			if ($_restr !== null)  $html .= '<tr><td class="al-diff-field">Restricted</td><td colspan="2">' . $_yn($_restr) . '</td></tr>';
+			if ($_waivd !== null)  $html .= '<tr><td class="al-diff-field">Waivered</td><td colspan="2">' . $_yn($_waivd) . '</td></tr>';
+			if ($_hasImg !== null) $html .= '<tr><td class="al-diff-field">Photo Uploaded</td><td colspan="2">' . $_yn($_hasImg) . '</td></tr>';
+			if ($_hasHer !== null) $html .= '<tr><td class="al-diff-field">Heraldry Uploaded</td><td colspan="2">' . $_yn($_hasHer) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Password Set</td><td colspan="2">' . ($_pwSet ? 'Yes' : 'No') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Created By</td><td colspan="2">' . htmlspecialchars($_actor) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
 		case 'Player::SetImage':
 		case 'Player::SetWaiver':
 		case 'Player::SetHeraldry':
@@ -922,7 +1181,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 							<th>Timestamp</th>
 							<th>By Whom</th>
 							<th>Action</th>
-							<th>Player</th>
+							<th>Target</th>
 							<th>Summary</th>
 							<th></th>
 						</tr>
@@ -967,13 +1226,21 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 							<?php
 							// For award actions with EntityId=0 (pre-fix records), fall back to mundane_id from post_state
 							$_displayEntityId = (int)$_r['EntityId'];
+							$_displayEntity   = $_r['Entity'] ?? 'Player';
 							if (!$_displayEntityId && in_array($_mc, ['Player::AddAward','Player::GiveAward','Player::RemoveAward','Player::revoke_award','Player::ReactivateAward','Player::UpdateAward'])) {
 								$_awardState = @json_decode($_r['PostState'], true) ?: (@json_decode($_r['PriorState'], true) ?: []);
 								if (!empty($_awardState['mundane_id'])) $_displayEntityId = (int)$_awardState['mundane_id'];
 							}
+							// Pick the right profile URL + name map based on the audit row's entity type.
+							switch ($_displayEntity) {
+								case 'Park':    $_eMap = $_parkMap;    $_eUrl = UIR . 'Park/profile/';    break;
+								case 'Kingdom': $_eMap = $_kingdomMap; $_eUrl = UIR . 'Kingdom/profile/'; break;
+								case 'Event':   $_eMap = $_eventMap;   $_eUrl = UIR . 'Event/view/';      break;
+								default:        $_eMap = $_mundaneMap; $_eUrl = UIR . 'Player/profile/';  break;
+							}
 							if ($_displayEntityId > 0):
-								$_eName = $_mundaneMap[$_displayEntityId] ?? null; ?>
-							<a href="<?=UIR?>Player/profile/<?=$_displayEntityId?>" style="color:var(--rp-accent)">
+								$_eName = $_eMap[$_displayEntityId] ?? null; ?>
+							<a href="<?=$_eUrl?><?=$_displayEntityId?>" style="color:var(--rp-accent)">
 								<?= $_eName ? htmlspecialchars($_eName) : '#' . $_displayEntityId ?>
 							</a>
 							<?php else: ?>

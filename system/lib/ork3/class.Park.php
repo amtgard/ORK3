@@ -199,6 +199,23 @@ class Park extends Ork3
 			}
 			$this->parkday->location_url = $request[ 'LocationUrl' ];
 			$this->parkday->save();
+			$_audit_req = $request;
+			unset( $_audit_req[ 'Token' ] );
+			Ork3::$Lib->dangeraudit->audit( __CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$request[ 'ParkId' ], null, [
+				'parkday_id'         => (int)$this->parkday->parkday_id,
+				'park_id'            => (int)$this->parkday->park_id,
+				'recurrence'         => $this->parkday->recurrence,
+				'week_of_month'      => $this->parkday->week_of_month,
+				'week_day'           => $this->parkday->week_day,
+				'month_day'          => $this->parkday->month_day,
+				'time'               => $this->parkday->time,
+				'purpose'            => $this->parkday->purpose,
+				'description'        => $this->parkday->description,
+				'alternate_location' => (int)$this->parkday->alternate_location,
+				'online'             => (int)$this->parkday->online,
+				'address'            => $this->parkday->address,
+				'city'               => $this->parkday->city,
+			] );
 		} else {
 			return NoAuthorization();
 		}
@@ -215,6 +232,22 @@ class Park extends Ork3
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT )
 		) {
+			// Snapshot the parkday before mutations so the audit log can show a diff.
+			$_audit_prior = [
+				'parkday_id'         => (int)$this->parkday->parkday_id,
+				'park_id'            => (int)$this->parkday->park_id,
+				'recurrence'         => $this->parkday->recurrence,
+				'week_of_month'      => $this->parkday->week_of_month,
+				'week_day'           => $this->parkday->week_day,
+				'month_day'          => $this->parkday->month_day,
+				'time'               => $this->parkday->time,
+				'purpose'            => $this->parkday->purpose,
+				'description'        => $this->parkday->description,
+				'alternate_location' => (int)$this->parkday->alternate_location,
+				'online'             => (int)$this->parkday->online,
+				'address'            => $this->parkday->address,
+				'city'               => $this->parkday->city,
+			];
 			$this->parkday->recurrence = $request[ 'Recurrence' ];
 			$this->parkday->week_of_month = $request[ 'WeekOfMonth' ];
 			$this->parkday->week_day = $request[ 'WeekDay' ];
@@ -258,6 +291,23 @@ class Park extends Ork3
 			}
 			$this->parkday->location_url = $request[ 'LocationUrl' ];
 			$this->parkday->save();
+			$_audit_req = $request;
+			unset( $_audit_req[ 'Token' ] );
+			Ork3::$Lib->dangeraudit->audit( __CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$park_id, $_audit_prior, [
+				'parkday_id'         => (int)$this->parkday->parkday_id,
+				'park_id'            => (int)$this->parkday->park_id,
+				'recurrence'         => $this->parkday->recurrence,
+				'week_of_month'      => $this->parkday->week_of_month,
+				'week_day'           => $this->parkday->week_day,
+				'month_day'          => $this->parkday->month_day,
+				'time'               => $this->parkday->time,
+				'purpose'            => $this->parkday->purpose,
+				'description'        => $this->parkday->description,
+				'alternate_location' => (int)$this->parkday->alternate_location,
+				'online'             => (int)$this->parkday->online,
+				'address'            => $this->parkday->address,
+				'city'               => $this->parkday->city,
+			] );
 			return Success();
 		} else {
 			return NoAuthorization();
@@ -276,8 +326,20 @@ class Park extends Ork3
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT )
 		) {
+			$_audit_prior = [
+				'parkday_id'         => (int)$this->parkday->parkday_id,
+				'park_id'            => (int)$this->parkday->park_id,
+				'recurrence'         => $this->parkday->recurrence,
+				'week_day'           => $this->parkday->week_day,
+				'time'               => $this->parkday->time,
+				'purpose'            => $this->parkday->purpose,
+				'description'        => $this->parkday->description,
+			];
 			$this->parkday->parkday_id = $request[ 'ParkDayId' ];
 			$this->parkday->delete();
+			$_audit_req = $request;
+			unset( $_audit_req[ 'Token' ] );
+			Ork3::$Lib->dangeraudit->audit( __CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$park_id, $_audit_prior, null );
 			return Success();
 		}
 		return NoAuthorization();
@@ -723,6 +785,22 @@ class Park extends Ork3
 			if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
 				&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
 			) {
+				// Snapshot prior park state for the audit log before any field changes.
+				$_audit_prior = [
+					'name'         => $this->park->name,
+					'abbreviation' => $this->park->abbreviation,
+					'parktitle_id' => (int)$this->park->parktitle_id,
+					'kingdom_id'   => (int)$this->park->kingdom_id,
+					'active'       => $this->park->active,
+					'url'          => $this->park->url,
+					'address'      => $this->park->address,
+					'city'         => $this->park->city,
+					'province'     => $this->park->province,
+					'postal_code'  => $this->park->postal_code,
+					'directions'   => $this->park->directions,
+					'description'  => $this->park->description,
+					'map_url'      => $this->park->map_url,
+				];
 				$this->log->Write( 'Park', $mundane_id, LOG_EDIT, $request );
 				$this->park->modified = date( "Y-m-d H:i:s", time() );
 
@@ -780,6 +858,42 @@ class Park extends Ork3
 					}
 
 					$this->park->save();
+					$_audit_post = [
+						'name'         => $this->park->name,
+						'abbreviation' => $this->park->abbreviation,
+						'parktitle_id' => (int)$this->park->parktitle_id,
+						'kingdom_id'   => (int)$this->park->kingdom_id,
+						'active'       => $this->park->active,
+						'url'          => $this->park->url,
+						'address'      => $this->park->address,
+						'city'         => $this->park->city,
+						'province'     => $this->park->province,
+						'postal_code'  => $this->park->postal_code,
+						'directions'   => $this->park->directions,
+						'description'  => $this->park->description,
+						'map_url'      => $this->park->map_url,
+					];
+					$_audit_req = $request;
+					unset( $_audit_req[ 'Token' ], $_audit_req[ 'GeoCode' ] );
+					$_heraldry_uploaded = !empty( $request[ 'Heraldry' ] );
+					if ( $_heraldry_uploaded ) {
+						$_audit_req[ 'Heraldry' ] = [ 'uploaded' => true, 'bytes' => strlen( (string)$request[ 'Heraldry' ] ) ];
+					} else {
+						unset( $_audit_req[ 'Heraldry' ] );
+					}
+					// Skip the audit row when nothing actually changed. The Kingdom Park
+					// configuration page POSTs SetParkDetails for every park on save,
+					// not just the one the user touched — without this suppression that
+					// produces N rows per click for N parks.
+					$_changed = $_heraldry_uploaded;
+					if ( !$_changed ) {
+						foreach ( $_audit_prior as $_k => $_v ) {
+							if ( (string)( $_audit_post[ $_k ] ?? '' ) !== (string)$_v ) { $_changed = true; break; }
+						}
+					}
+					if ( $_changed ) {
+						Ork3::$Lib->dangeraudit->audit( __CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$this->park->park_id, $_audit_prior, $_audit_post );
+					}
 					$response = Success( $this->park->park_id );
 				} else {
 					$response = InvalidParameter( 'ParkId could not be found.' );
@@ -808,8 +922,31 @@ class Park extends Ork3
 			} else {
 				$kingdomId = $request['KingdomId'];
 			}
+			// Look up the current officer first so we can suppress the audit when
+			// the UI re-submits an unchanged assignment (the Bellhollow form fires
+			// SetOfficer once per role on every save).
+			$_priorOfficer = new yapo( $this->db, DB_PREFIX . 'officer' );
+			$_priorOfficer->clear();
+			$_priorOfficer->park_id = (int)$request[ 'ParkId' ];
+			$_priorOfficer->role    = $request[ 'Role' ];
+			$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
+
 			$c = new Common();
 			$c->set_officer( $kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ] );
+
+			if ( $_priorMundaneId !== (int)$request[ 'MundaneId' ] ) {
+				$_audit_req = $request;
+				unset( $_audit_req[ 'Token' ] );
+				Ork3::$Lib->dangeraudit->audit( __CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$request[ 'ParkId' ],
+					[ 'MundaneId' => $_priorMundaneId, 'Role' => $request[ 'Role' ] ],
+					[
+						'ParkId'    => (int)$request[ 'ParkId' ],
+						'KingdomId' => (int)$kingdomId,
+						'MundaneId' => (int)$request[ 'MundaneId' ],
+						'Role'      => $request[ 'Role' ],
+					]
+				);
+			}
 		} else {
 			$response = NoAuthorization();
 		}
@@ -823,8 +960,27 @@ class Park extends Ork3
 			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
 		) {
 			$kingdomId = $this->GetParkKingdomId( $request[ 'ParkId' ] );
+			$_priorOfficer = new yapo( $this->db, DB_PREFIX . 'officer' );
+			$_priorOfficer->clear();
+			$_priorOfficer->park_id = (int)$request[ 'ParkId' ];
+			$_priorOfficer->role    = $request[ 'Role' ];
+			$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
+
 			$c = new Common();
 			$c->set_officer( $kingdomId, $request[ 'ParkId' ], 0, $request[ 'Role' ] );
+
+			if ( $_priorMundaneId > 0 ) {
+				$_audit_req = $request;
+				unset( $_audit_req[ 'Token' ] );
+				Ork3::$Lib->dangeraudit->audit( __CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$request[ 'ParkId' ],
+					[ 'MundaneId' => $_priorMundaneId, 'Role' => $request[ 'Role' ] ],
+					[
+						'ParkId'    => (int)$request[ 'ParkId' ],
+						'KingdomId' => (int)$kingdomId,
+						'Role'      => $request[ 'Role' ],
+					]
+				);
+			}
 		} else {
 			$response = NoAuthorization();
 		}
@@ -850,9 +1006,15 @@ class Park extends Ork3
 			if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
 				&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_KINGDOM, $this->park->kingdom_id, AUTH_EDIT )
 			) {
+				$_prior_active = $this->park->active;
 				$this->log->Write( 'Park', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request );
 				$this->park->active = $waffle;
 				$this->park->save();
+				$_audit_req = $request;
+				unset( $_audit_req[ 'Token' ] );
+				// Synthetic method name so the audit log distinguishes Retire from Restore.
+				$_call = ( 'Active' == $waffle ) ? ( __CLASS__ . '::RestorePark' ) : ( __CLASS__ . '::RetirePark' );
+				Ork3::$Lib->dangeraudit->audit( $_call, $_audit_req, 'Park', (int)$request[ 'ParkId' ], [ 'active' => $_prior_active ], [ 'active' => $waffle ] );
 				$response = Success();
 			} else {
 				$response = NoAuthorization();
