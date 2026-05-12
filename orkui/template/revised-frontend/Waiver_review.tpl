@@ -1,9 +1,7 @@
 <?php
-require_once(DIR_LIB . 'Parsedown.php');
 $wv = $_wv;
 $sig = $wv['signature'];
 $tpl = $sig['Template'];
-$md = function($t) { return $t ? (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($t) : ''; };
 $token = htmlspecialchars($wv['token']);
 $isOfficer = $wv['is_officer'];
 $isSigner  = $wv['is_signer'];
@@ -67,7 +65,7 @@ html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 	<h1>Digital Waiver &mdash; Signed Record #<?= (int)$sig['SignatureId'] ?></h1>
 	<p><a href="<?= UIR ?>Waiver/printable/<?= (int)$sig['SignatureId'] ?>" target="_blank">Open printable version &rarr;</a></p>
 
-	<div class="wv-section"><?= $md($tpl['HeaderMarkdown'] ?? '') ?></div>
+	<div class="wv-section"><?= $tpl['HeaderHtml'] ?? '' ?></div>
 
 	<div class="wv-section">
 		<h2>Signer</h2>
@@ -164,12 +162,12 @@ html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 	</div>
 	<?php endif; ?>
 
-	<div class="wv-section"><?= $md($tpl['BodyMarkdown'] ?? '') ?></div>
+	<div class="wv-section"><?= $tpl['BodyHtml'] ?? '' ?></div>
 
 	<?php if ($sig['IsMinor']): ?>
 	<div class="wv-section">
 		<h2>Minor Representative</h2>
-		<div><?= $md($tpl['MinorMarkdown'] ?? '') ?></div>
+		<div><?= $tpl['MinorHtml'] ?? '' ?></div>
 		<div class="wv-playerhdr" style="margin-top:10px;">
 			<div class="wv-fact"><strong>Rep Name:</strong> <?= htmlspecialchars($sig['MinorRepFirst'] . ' ' . $sig['MinorRepLast']) ?></div>
 			<div class="wv-fact"><strong>Relationship:</strong> <?= htmlspecialchars($sig['MinorRepRelationship']) ?></div>
@@ -182,7 +180,7 @@ html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 		<div class="wv-sig-rendered" id="wvPlayerSig"></div>
 	</div>
 
-	<div class="wv-section"><?= $md($tpl['FooterMarkdown'] ?? '') ?></div>
+	<div class="wv-section"><?= $tpl['FooterHtml'] ?? '' ?></div>
 
 	<?php if ($canVerify): ?>
 	<div class="wv-section wv-verify-form">

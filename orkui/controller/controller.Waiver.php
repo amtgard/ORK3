@@ -163,6 +163,47 @@ class Controller_Waiver extends Controller {
 		$this->data['_wv'] = ['signature' => $r['Signature']];
 		$this->template = '../revised-frontend/Waiver_print.tpl';
 	}
+
+	// Kingdom admin: live preview of unsaved builder state.
+	// Route: Waiver/preview/{kingdom_id} (POST). Renders the waiver as a player would see it.
+	public function preview($kingdom_id = null) {
+		$kingdom_id = $this->_clean_int($kingdom_id);
+		$_uid = $this->_currentMundaneId();
+		if ($_uid <= 0 || (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
+			&& !Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_EDIT))) {
+			$this->_go('Kingdom/index/' . $kingdom_id);
+			return;
+		}
+		$scope = in_array($_POST['Scope'] ?? '', ['kingdom','park']) ? $_POST['Scope'] : 'kingdom';
+		$cf = $_POST['CustomFieldsJson'] ?? '[]';
+		// Sanitize the same HTML the save endpoint would, so preview matches stored output.
+		$template = [
+			'HeaderHtml'               => $this->Waiver->_sanitize_html((string)($_POST['HeaderHtml'] ?? '')),
+			'BodyHtml'                 => $this->Waiver->_sanitize_html((string)($_POST['BodyHtml']   ?? '')),
+			'FooterHtml'               => $this->Waiver->_sanitize_html((string)($_POST['FooterHtml'] ?? '')),
+			'MinorHtml'                => $this->Waiver->_sanitize_html((string)($_POST['MinorHtml']  ?? '')),
+			'RequiresDob'              => (int)($_POST['RequiresDob']              ?? 0),
+			'RequiresAddress'          => (int)($_POST['RequiresAddress']          ?? 0),
+			'RequiresPhone'            => (int)($_POST['RequiresPhone']            ?? 0),
+			'RequiresEmail'            => (int)($_POST['RequiresEmail']            ?? 0),
+			'RequiresPreferredName'    => (int)($_POST['RequiresPreferredName']    ?? 0),
+			'RequiresGender'           => (int)($_POST['RequiresGender']           ?? 0),
+			'RequiresEmergencyContact' => (int)($_POST['RequiresEmergencyContact'] ?? 0),
+			'RequiresWitness'          => (int)($_POST['RequiresWitness']          ?? 0),
+			'MaxMinors'                => max(1, min(6, (int)($_POST['MaxMinors'] ?? 1))),
+			'CustomFieldsJson'         => is_string($cf) ? $cf : '[]',
+			'Scope'                    => $scope,
+			'Version'                  => 0,
+		];
+		$kingdom_info = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
+		$this->data['_wv'] = [
+			'kingdom_id'   => $kingdom_id,
+			'scope'        => $scope,
+			'template'     => $template,
+			'kingdom_info' => $kingdom_info,
+		];
+		$this->template = '../revised-frontend/Waiver_preview.tpl';
+	}
 }
 
 ?>

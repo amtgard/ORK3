@@ -1,10 +1,8 @@
 <?php
-require_once(DIR_LIB . 'Parsedown.php');
 $wv = $_wv;
 $tpl = $wv['template'];
 $prefill = $wv['prefill'];
 $token = htmlspecialchars($wv['token']);
-$md = function($t) { return $t ? (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($t) : ''; };
 require_once(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.inc.php');
 ?>
 <link href="https://fonts.googleapis.com/css2?family=Homemade+Apple&display=swap" rel="stylesheet">
@@ -68,7 +66,7 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 <?php return; endif; ?>
 
 <div class="wv-sign">
-	<div class="wv-section wv-header-md"><?= $md($tpl['HeaderMarkdown']) ?></div>
+	<div class="wv-section wv-header-md"><?= $tpl['HeaderHtml'] ?></div>
 
 	<form id="wvSignForm">
 		<input type="hidden" name="TemplateId" value="<?= (int)$tpl['TemplateId'] ?>">
@@ -114,7 +112,7 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 		</div>
 		<?php endif; ?>
 
-		<div class="wv-section wv-body-md"><?= $md($tpl['BodyMarkdown']) ?></div>
+		<div class="wv-section wv-body-md"><?= $tpl['BodyHtml'] ?></div>
 
 		<?php
 		$customFields = [];
@@ -173,7 +171,7 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 		</div>
 
 		<div class="wv-section" id="wvMinorBlock" style="display:none;">
-			<div class="wv-minor-md"><?= $md($tpl['MinorMarkdown']) ?></div>
+			<div class="wv-minor-md"><?= $tpl['MinorHtml'] ?></div>
 			<h3 style="margin-top: 10px;">Guardian / Representative</h3>
 			<div class="wv-playerhdr">
 				<div><label>Representative first name</label><input type="text" name="MinorRepFirst"></div>
@@ -205,7 +203,7 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 			<p class="wv-signed-date">Signed date: <?= date('F j, Y') ?> (auto-recorded)</p>
 		</div>
 
-		<div class="wv-section wv-footer-md"><?= $md($tpl['FooterMarkdown']) ?></div>
+		<div class="wv-section wv-footer-md"><?= $tpl['FooterHtml'] ?></div>
 
 		<button type="submit" class="wv-submit">Submit Signed Waiver</button>
 		<span id="wvSubmitStatus"></span>

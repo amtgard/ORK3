@@ -82,10 +82,10 @@ class WaiverTestRunner {
 			'Token'          => $this->token,
 			'KingdomId'      => $this->testKingdomId,
 			'Scope'          => 'kingdom',
-			'HeaderMarkdown' => '# Hdr',
-			'BodyMarkdown'   => 'body',
-			'FooterMarkdown' => 'ftr',
-			'MinorMarkdown'  => 'minor',
+			'HeaderHtml' => '<h1>Hdr</h1>',
+			'BodyHtml'   => 'body',
+			'FooterHtml' => '<p>ftr</p>',
+			'MinorHtml'  => 'minor',
 			'IsEnabled'      => 1,
 		]);
 		$this->assertStatus(0, $r, 'v1 saved');
@@ -96,7 +96,7 @@ class WaiverTestRunner {
 	public function test_save_template_kingdom_bumps_to_v2() {
 		$r1 = $this->waiver->SaveTemplate([
 			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
-			'HeaderMarkdown' => 'v2 hdr', 'BodyMarkdown' => 'v2', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'HeaderHtml' => '<p>v2 hdr</p>', 'BodyHtml' => '<p>v2</p>', 'FooterHtml' => '', 'MinorHtml' => '',
 			'IsEnabled' => 1,
 		]);
 		$this->assertStatus(0, $r1, 'v2 saved');
@@ -117,7 +117,7 @@ class WaiverTestRunner {
 		$r = $this->waiver->SaveTemplate([
 			'Token' => str_repeat('z', 32),  // 32 chars but no mundane owns this token
 			'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
-			'HeaderMarkdown' => '', 'BodyMarkdown' => '', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'HeaderHtml' => '', 'BodyHtml' => '', 'FooterHtml' => '', 'MinorHtml' => '',
 			'IsEnabled' => 1,
 		]);
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected unauth token');
@@ -128,7 +128,7 @@ class WaiverTestRunner {
 	public function test_save_template_rejects_missing_kingdom_id() {
 		$r = $this->waiver->SaveTemplate([
 			'Token' => $this->token, 'KingdomId' => 0, 'Scope' => 'kingdom',
-			'HeaderMarkdown' => '', 'BodyMarkdown' => '', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'HeaderHtml' => '', 'BodyHtml' => '', 'FooterHtml' => '', 'MinorHtml' => '',
 			'IsEnabled' => 1,
 		]);
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected missing KingdomId');
@@ -137,7 +137,7 @@ class WaiverTestRunner {
 	public function test_save_template_rejects_bad_scope() {
 		$r = $this->waiver->SaveTemplate([
 			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'galaxy',
-			'HeaderMarkdown' => '', 'BodyMarkdown' => '', 'FooterMarkdown' => '', 'MinorMarkdown' => '',
+			'HeaderHtml' => '', 'BodyHtml' => '', 'FooterHtml' => '', 'MinorHtml' => '',
 			'IsEnabled' => 1,
 		]);
 		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected bad scope');
@@ -152,7 +152,7 @@ class WaiverTestRunner {
 			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
 		]);
 		$this->assertStatus(0, $r, 'found active');
-		$this->assertEq('v2 hdr', $r['Template']['HeaderMarkdown'] ?? null, 'latest header');
+		$this->assertEq('<p>v2 hdr</p>', $r['Template']['HeaderHtml'] ?? null, 'latest header');
 		$this->assertEq(2, (int)($r['Template']['Version'] ?? 0), 'latest version');
 	}
 
@@ -542,35 +542,36 @@ class WaiverTestRunner {
 	}
 
 	// ============================================================================
-	// Task 1.9: PreviewMarkdown
+	// HTML sanitizer (replaces former PreviewMarkdown — Trix output now stored as HTML)
 	// ============================================================================
 
-	public function test_preview_markdown_renders() {
-		$r = $this->waiver->PreviewMarkdown(['Token' => $this->token, 'Markdown' => '**Hello**']);
-		$this->assertStatus(0, $r, 'rendered');
-		$this->assertTrue(strpos($r['Html'] ?? '', '<strong>') !== false, 'has <strong>');
+	public function test_sanitize_html_strips_script() {
+		$out = $this->waiver->_sanitize_html('<p>hi</p><script>alert(1)</script>');
+		$this->assertTrue(strpos($out, '<script>') === false, 'script tag unwrapped');
+		$this->assertTrue(strpos($out, '<p>hi</p>') !== false, 'safe content preserved');
 	}
 
-	public function test_preview_markdown_too_large() {
-		$r = $this->waiver->PreviewMarkdown(['Token' => $this->token, 'Markdown' => str_repeat('a', 70000)]);
-		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected oversize');
+	public function test_sanitize_html_strips_event_handlers() {
+		$out = $this->waiver->_sanitize_html('<p onclick="alert(1)">hi</p>');
+		$this->assertTrue(strpos($out, 'onclick') === false, 'onclick attribute stripped');
+		$this->assertTrue(strpos($out, '<p>hi</p>') !== false, 'tag content kept');
 	}
 
-	public function test_preview_markdown_rejects_bad_token() {
-		unset($_SESSION['is_authorized_mundane_id']);
-		$r = $this->waiver->PreviewMarkdown(['Token' => str_repeat('z', 32), 'Markdown' => 'hi']);
-		$this->assertTrue(($r['Status']['Status'] ?? 0) !== 0, 'rejected bad token');
-		unset($_SESSION['is_authorized_mundane_id']);
+	public function test_sanitize_html_allows_href_validates_scheme() {
+		$ok  = $this->waiver->_sanitize_html('<a href="https://example.com">x</a>');
+		$this->assertTrue(strpos($ok, 'href="https://example.com"') !== false, 'https href kept');
+		$bad = $this->waiver->_sanitize_html('<a href="javascript:alert(1)">x</a>');
+		$this->assertTrue(strpos($bad, 'javascript:') === false, 'javascript: scheme stripped');
 	}
 
-	public function test_preview_markdown_safe_mode_strips_script() {
-		// Parsedown setSafeMode(true) should neutralise raw HTML/script tags.
-		$r = $this->waiver->PreviewMarkdown([
-			'Token'    => $this->token,
-			'Markdown' => '**yo** <script>alert(1)</script>',
-		]);
-		$this->assertStatus(0, $r, 'rendered safe');
-		$this->assertTrue(strpos($r['Html'] ?? '', '<script>') === false, 'raw <script> neutralised');
+	public function test_sanitize_html_empty_passthrough() {
+		$this->assertEq('', $this->waiver->_sanitize_html(''), 'empty stays empty');
+	}
+
+	public function test_sanitize_html_preserves_lists_and_emphasis() {
+		$out = $this->waiver->_sanitize_html('<ul><li><strong>a</strong></li></ul>');
+		$this->assertTrue(strpos($out, '<ul>') !== false, 'ul kept');
+		$this->assertTrue(strpos($out, '<strong>a</strong>') !== false, 'strong kept');
 	}
 
 	// ============================================================================
@@ -626,7 +627,7 @@ class WaiverTestRunner {
 		$r = $this->waiver->SaveTemplate([
 			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
 			'IsEnabled' => 1,
-			'HeaderMarkdown' => '# H', 'BodyMarkdown' => 'B', 'FooterMarkdown' => 'F', 'MinorMarkdown' => 'M',
+			'HeaderHtml' => '<h1>H</h1>', 'BodyHtml' => '<p>B</p>', 'FooterHtml' => '<p>F</p>', 'MinorHtml' => '<p>M</p>',
 			'RequiresDob' => 1, 'RequiresAddress' => 1, 'RequiresEmergencyContact' => 1,
 			'RequiresWitness' => 1, 'MaxMinors' => 4,
 			'CustomFieldsJson' => $customFields,
