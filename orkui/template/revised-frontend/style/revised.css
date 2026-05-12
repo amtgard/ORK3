@@ -1,3 +1,9 @@
+/* jQuery UI autocomplete dropdowns default to z-index 1, which puts them
+   behind any open modal (modals sit at --z-modal = 1100). Hoist the
+   dropdown above the modal so player-search autocompletes inside Edit
+   Officers, etc. are actually visible. */
+.ui-autocomplete { z-index: 1200; }
+
 /* ===========================
    Dark Mode CSS Custom Properties
    =========================== */

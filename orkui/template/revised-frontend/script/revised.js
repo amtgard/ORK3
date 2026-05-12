@@ -9086,7 +9086,12 @@ function setupPronounPicker(cfg) {
             (function(ni, hi, vb) {
                 $(ni).autocomplete({
                     source: function(req, res) {
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, park_id: PkConfig.parkId, limit: 12 }, function(data) {
+                        // Search all players in the kingdom — do NOT filter by park_id.
+                        // Park officers don't have to already be at this park (the
+                        // Edit Officers flow is the way they get assigned here in
+                        // the first place), and on a freshly-created park with zero
+                        // members, the park-scoped search returns empty for everyone.
+                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, limit: 12 }, function(data) {
                             res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
                         });
                     },

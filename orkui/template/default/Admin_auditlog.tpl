@@ -16,6 +16,7 @@ $_actionLabels = [
 	'Player::DeleteAwardRecommendation' => 'Recommendation Removed',
 	'Player::RevokeDues'           => 'Dues Revoked',
 	'Kingdom::RemoveAward'         => 'Kingdom Award Deleted',
+	'Park::CreatePark'             => 'Park Created',
 	'Park::MergeParks'             => 'Parks Merged',
 	'Park::TransferPark'           => 'Park Transferred',
 ];
@@ -207,6 +208,13 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 		case 'Kingdom::RemoveAward':
 			$name = $b['name'] ?? '';
 			return 'Deleted kingdom award' . ($name ? ': ' . htmlspecialchars($name) : '');
+		case 'Park::CreatePark':
+			$_pid  = (int)($a['park_id']    ?? 0);
+			$_kid  = (int)($a['kingdom_id'] ?? $p['KingdomId'] ?? 0);
+			$_pn   = $a['name']             ?? $p['Name']       ?? '';
+			$_pk   = $_pid ? ($parkMap[$_pid] ?? $_pn ?: ('park #' . $_pid)) : ($_pn ?: 'park');
+			$_kn   = $_kid ? ($kingdomMap[$_kid] ?? 'kingdom #' . $_kid) : '';
+			return 'Created ' . htmlspecialchars($_pk) . ($_kn ? ' in ' . htmlspecialchars($_kn) : '');
 		case 'Park::MergeParks':
 			$_fp = (int)($b['from_park_id'] ?? $p['FromParkId'] ?? 0);
 			$_tp = (int)($b['to_park_id']   ?? $p['ToParkId']   ?? 0);
@@ -542,6 +550,30 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			$html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $b['park_id'] ?? $p['ParkId'] ?? 0, $parkMap) . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">From Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $b['old_kingdom_id'] ?? 0, $kingdomMap) . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">To Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $b['new_kingdom_id'] ?? $p['KingdomId'] ?? 0, $kingdomMap) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Park::CreatePark':
+			$_pid  = (int)($a['park_id']      ?? 0);
+			$_kid  = (int)($a['kingdom_id']   ?? $p['KingdomId']   ?? 0);
+			$_pn   = $a['name']               ?? $p['Name']        ?? '';
+			$_pa   = $a['abbreviation']       ?? $p['Abbreviation'] ?? '';
+			$_ptid = (int)($a['parktitle_id'] ?? $p['ParkTitleId'] ?? 0);
+			$html  = '<table class="al-diff-table"><tbody>';
+			if ($_pid)            $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $_pid, $parkMap) . '</td></tr>';
+			elseif ($_pn)         $html .= '<tr><td class="al-diff-field">Name</td><td colspan="2">' . htmlspecialchars($_pn) . '</td></tr>';
+			if ($_kid)            $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $_kid, $kingdomMap) . '</td></tr>';
+			if ($_pid && $_pn)    $html .= '<tr><td class="al-diff-field">Name</td><td colspan="2">' . htmlspecialchars($_pn) . '</td></tr>';
+			if ($_pa)             $html .= '<tr><td class="al-diff-field">Abbreviation</td><td colspan="2">' . htmlspecialchars($_pa) . '</td></tr>';
+			if ($_ptid)           $html .= '<tr><td class="al-diff-field">Park Title ID</td><td colspan="2">' . $_ptid . '</td></tr>';
+			if (!empty($p['Heraldry'])) {
+				$_meta  = is_array($p['Heraldry']) ? $p['Heraldry'] : [];
+				$_bytes = (int)($_meta['bytes'] ?? (is_string($p['Heraldry']) ? strlen($p['Heraldry']) : 0));
+				$_size  = $_bytes >= 1024 * 1024
+					? number_format($_bytes / (1024 * 1024), 1) . ' MB'
+					: ($_bytes >= 1024 ? number_format($_bytes / 1024, 0) . ' KB' : $_bytes . ' B');
+				$html .= '<tr><td class="al-diff-field">Heraldry</td><td colspan="2">Uploaded' . ($_bytes ? ' (' . htmlspecialchars($_size) . ')' : '') . '</td></tr>';
+			}
 			$html .= '</tbody></table>';
 			return $html;
 
