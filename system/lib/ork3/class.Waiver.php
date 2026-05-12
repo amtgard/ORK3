@@ -57,10 +57,10 @@ class Waiver extends Ork3 {
 		$this->template->version                   = $nextVersion;
 		$this->template->is_active                 = 1;
 		$this->template->is_enabled                = ((int)($request['IsEnabled'] ?? 0)) ? 1 : 0;
-		$this->template->header_markdown           = (string)($request['HeaderMarkdown'] ?? '');
-		$this->template->body_markdown             = (string)($request['BodyMarkdown']   ?? '');
-		$this->template->footer_markdown           = (string)($request['FooterMarkdown'] ?? '');
-		$this->template->minor_markdown            = (string)($request['MinorMarkdown']  ?? '');
+		$this->template->header_html               = $this->_sanitize_html((string)($request['HeaderHtml'] ?? ''));
+		$this->template->body_html                 = $this->_sanitize_html((string)($request['BodyHtml']   ?? ''));
+		$this->template->footer_html               = $this->_sanitize_html((string)($request['FooterHtml'] ?? ''));
+		$this->template->minor_html                = $this->_sanitize_html((string)($request['MinorHtml']  ?? ''));
 		$this->template->requires_dob              = ((int)($request['RequiresDob']              ?? 0)) ? 1 : 0;
 		$this->template->requires_address          = ((int)($request['RequiresAddress']          ?? 0)) ? 1 : 0;
 		$this->template->requires_phone            = ((int)($request['RequiresPhone']            ?? 0)) ? 1 : 0;
@@ -119,10 +119,10 @@ class Waiver extends Ork3 {
 			'Version'                   => (int)$rs->version,
 			'IsActive'                  => (int)$rs->is_active,
 			'IsEnabled'                 => (int)$rs->is_enabled,
-			'HeaderMarkdown'            => $rs->header_markdown,
-			'BodyMarkdown'              => $rs->body_markdown,
-			'FooterMarkdown'            => $rs->footer_markdown,
-			'MinorMarkdown'             => $rs->minor_markdown,
+			'HeaderHtml'                => $rs->header_html,
+			'BodyHtml'                  => $rs->body_html,
+			'FooterHtml'                => $rs->footer_html,
+			'MinorHtml'                 => $rs->minor_html,
 			'RequiresDob'               => (int)($rs->requires_dob ?? 0),
 			'RequiresAddress'           => (int)($rs->requires_address ?? 0),
 			'RequiresPhone'             => (int)($rs->requires_phone ?? 0),
@@ -542,14 +542,80 @@ class Waiver extends Ork3 {
 		return ['Status' => Success()];
 	}
 
-	public function PreviewMarkdown($request) {
-		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
-		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
-		$md = (string)($request['Markdown'] ?? '');
-		if (strlen($md) > 65536) return ['Status' => InvalidParameter('Too large')];
-		require_once(DIR_LIB . 'Parsedown.php');
-		$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($md);
-		return ['Status' => Success(), 'Html' => $html];
+	/**
+	 * Allowlist sanitizer for Trix editor output. Strips any tag, attribute,
+	 * or URL scheme not on the allowlist. Returns sanitized HTML safe for
+	 * direct rendering. Idempotent.
+	 */
+	public function _sanitize_html($html) {
+		$html = (string)$html;
+		if ($html === '') return '';
+		if (strlen($html) > 262144) $html = substr($html, 0, 262144); // hard cap ~256KB
+
+		// Tags Trix emits + a few defensible siblings.
+		$allowedTags = ['p','div','h1','blockquote','ul','ol','li','b','strong','i','em','del','a','br','pre'];
+		$allowedAttrs = ['a' => ['href']];
+
+		$doc = new DOMDocument();
+		libxml_use_internal_errors(true);
+		// Wrap so loadHTML treats fragment as UTF-8 and preserves entities.
+		$wrapped = '<?xml encoding="UTF-8"?><div id="__wv_root__">' . $html . '</div>';
+		$doc->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+		libxml_clear_errors();
+
+		$root = $doc->getElementById('__wv_root__');
+		if (!$root) return '';
+
+		$this->_sanitize_node($root, $allowedTags, $allowedAttrs);
+
+		// Serialize children of root.
+		$out = '';
+		foreach ($root->childNodes as $child) $out .= $doc->saveHTML($child);
+		return trim($out);
+	}
+
+	private function _sanitize_node($node, $allowedTags, $allowedAttrs) {
+		// Walk a snapshot of children since we may mutate.
+		$children = iterator_to_array($node->childNodes);
+		foreach ($children as $child) {
+			if ($child->nodeType === XML_ELEMENT_NODE) {
+				$tag = strtolower($child->nodeName);
+				if (!in_array($tag, $allowedTags, true)) {
+					// Unwrap: replace with text content
+					$this->_unwrap($child);
+					continue;
+				}
+				// Strip non-allowed attributes
+				$keep = $allowedAttrs[$tag] ?? [];
+				$attrs = [];
+				foreach ($child->attributes as $a) $attrs[] = $a->name;
+				foreach ($attrs as $name) {
+					if (!in_array(strtolower($name), $keep, true)) {
+						$child->removeAttribute($name);
+					}
+				}
+				// URL scheme guard for <a href>
+				if ($tag === 'a' && $child->hasAttribute('href')) {
+					$href = trim($child->getAttribute('href'));
+					if (!preg_match('#^(https?:|mailto:)#i', $href)) {
+						$child->removeAttribute('href');
+					}
+				}
+				$this->_sanitize_node($child, $allowedTags, $allowedAttrs);
+			} elseif ($child->nodeType === XML_COMMENT_NODE
+			       || $child->nodeType === XML_PI_NODE
+			       || $child->nodeType === XML_CDATA_SECTION_NODE) {
+				$node->removeChild($child);
+			}
+			// Text nodes pass through unchanged.
+		}
+	}
+
+	private function _unwrap($node) {
+		$parent = $node->parentNode;
+		if (!$parent) return;
+		while ($node->firstChild) $parent->insertBefore($node->firstChild, $node);
+		$parent->removeChild($node);
 	}
 
 }
