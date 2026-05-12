@@ -83,6 +83,11 @@
 
 /* Officer role pill */
 .ap-officer { display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; background:#fef3c7; color:#92400e; letter-spacing:.03em; margin-left:5px; }
+/* Direct-grant pill: same geometry as ap-officer, muted palette */
+.ap-direct  { display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; background:#edf2f7; color:#4a5568; letter-spacing:.03em; margin-left:5px; font-style:italic; }
+/* Direct-grant pill when redundant (mundane also has an officer-derived grant in this scope) */
+.ap-direct.ap-direct-redundant { background:#fef5e7; color:#9a3412; }
+.ap-redundant-hint { display:block; margin-top:3px; font-size:11px; color:#9a3412; font-style:italic; }
 
 /* Delete button */
 .ap-del { background:none; border:1px solid #fed7d7; color:#e53e3e; border-radius:4px; padding:3px 10px; font-size:12px; cursor:pointer; font-family:inherit; }
@@ -164,9 +169,6 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 					<select id="ap-role-select">
 						<option value="create">Create</option>
 						<option value="edit">Edit</option>
-						<?php if ($canGrantAdmin && $type !== 'Event'): ?>
-						<option value="admin">Administrator</option>
-						<?php endif; ?>
 					</select>
 				</div>
 				<button class="ap-btn" id="ap-add-btn" disabled>
@@ -233,16 +235,6 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 					<?php endif; ?>
 				</ul>
 			</div>
-			<?php if ($type !== 'Event'): ?>
-			<div class="ap-role-block">
-				<div class="ap-role-block-title"><span class="ap-role ap-role-admin">Administrator</span></div>
-				<ul>
-					<li>System-wide access — satisfies <em>all</em> authorization checks regardless of scope</li>
-					<li>Not scoped to this <?= strtolower(htmlspecialchars($type)) ?> alone</li>
-					<li>Use sparingly; prefer Create for local admins</li>
-				</ul>
-			</div>
-			<?php endif; ?>
 		</div>
 		<?php if ($type === 'Kingdom'): ?>
 		<p style="margin:10px 0 0;font-size:12px;color:var(--rp-text-muted)"><i class="fas fa-level-up-alt" style="margin-right:4px"></i><strong>Cascade:</strong> Kingdom Create/Edit access automatically satisfies the same check at any park within the kingdom — no separate park grant needed.</p>
@@ -350,6 +342,17 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 				</tr>
 			</thead>
 			<tbody id="ap-kingdom-tbody">
+				<?php
+				// Pre-pass: collect mundane_ids that have an officer-derived grant
+				// in this scope, so we can flag manual grants on the same mundane
+				// as redundant (the officer grant already confers the same powers).
+				$_officerHolders = [];
+				foreach ($auths as $_pa) {
+					if (!empty($_pa['OfficerId']) && (int)$_pa['MundaneId'] > 0) {
+						$_officerHolders[(int)$_pa['MundaneId']] = true;
+					}
+				}
+				?>
 				<?php foreach ($auths as $a): ?>
 				<tr id="ap-row-<?= (int)$a['AuthorizationId'] ?>">
 					<td>
@@ -369,8 +372,12 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 					<td>
 						<?php if (!empty($a['OfficerRole'])): ?>
 							<span class="ap-officer"><?= htmlspecialchars($a['OfficerRole']) ?></span>
-						<?php else: ?>
-							<span style="color:var(--rp-text-hint);font-size:12px">—</span>
+						<?php else:
+							$_redundant = !empty($_officerHolders[(int)$a['MundaneId']]); ?>
+							<span class="ap-direct<?= $_redundant ? ' ap-direct-redundant' : '' ?>" title="<?= $_redundant ? 'This player already has an officer-derived grant in the same scope. Removing this manual grant is safe — the officer grant will continue to confer the same access.' : 'Granted access directly, not through an officer position. The original grantor is not tracked.' ?>">Manually Added<?= $_redundant ? ' (redundant)' : '' ?></span>
+							<?php if ($_redundant): ?>
+								<span class="ap-redundant-hint">Officer grant covers this — safe to remove</span>
+							<?php endif; ?>
 						<?php endif; ?>
 					</td>
 					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">
@@ -427,14 +434,6 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 					<li>Cannot manage park settings, events, awards, or grant permissions</li>
 				</ul>
 			</div>
-			<div class="ap-role-block">
-				<div class="ap-role-block-title"><span class="ap-role ap-role-admin">Administrator</span></div>
-				<ul>
-					<li>System-wide access — satisfies <em>all</em> authorization checks regardless of scope</li>
-					<li>Not scoped to this park alone</li>
-					<li>Use sparingly; prefer Create for local park admins</li>
-				</ul>
-			</div>
 		</div>
 		<p style="margin:10px 0 0;font-size:12px;color:var(--rp-text-muted)"><i class="fas fa-info-circle" style="margin-right:4px"></i>Officers listed here received their access automatically when assigned their officer role — it will be revoked when the role is vacated.</p>
 	</div>
@@ -460,6 +459,16 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 						</a>
 					</td>
 				</tr>
+				<?php
+				// Pre-pass for this park: which mundanes already have an officer
+				// grant in this park? Manual grants on the same mundane are redundant.
+				$_officerHolders = [];
+				foreach ($entries as $_pa) {
+					if (!empty($_pa['OfficerId']) && (int)$_pa['MundaneId'] > 0) {
+						$_officerHolders[(int)$_pa['MundaneId']] = true;
+					}
+				}
+				?>
 				<?php foreach ($entries as $a): ?>
 				<tr id="ap-row-<?= (int)$a['AuthorizationId'] ?>">
 					<td>
@@ -479,8 +488,12 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 					<td>
 						<?php if (!empty($a['OfficerRole'])): ?>
 							<span class="ap-officer"><?= htmlspecialchars($a['OfficerRole']) ?></span>
-						<?php else: ?>
-							<span style="color:var(--rp-text-hint);font-size:12px">—</span>
+						<?php else:
+							$_redundant = !empty($_officerHolders[(int)$a['MundaneId']]); ?>
+							<span class="ap-direct<?= $_redundant ? ' ap-direct-redundant' : '' ?>" title="<?= $_redundant ? 'This player already has an officer-derived grant in the same scope. Removing this manual grant is safe — the officer grant will continue to confer the same access.' : 'Granted access directly, not through an officer position. The original grantor is not tracked.' ?>">Manually Added<?= $_redundant ? ' (redundant)' : '' ?></span>
+							<?php if ($_redundant): ?>
+								<span class="ap-redundant-hint">Officer grant covers this — safe to remove</span>
+							<?php endif; ?>
 						<?php endif; ?>
 					</td>
 					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap">

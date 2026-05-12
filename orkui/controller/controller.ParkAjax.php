@@ -343,11 +343,11 @@ class Controller_ParkAjax extends Controller {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
 			}
 			$mid  = (int)($_POST['MundaneId'] ?? 0);
-			$role = in_array($_POST['Role'] ?? '', ['create','edit','admin']) ? $_POST['Role'] : 'create';
+			// Scoped grants only accept create / edit. The legacy 'admin' role at
+			// park scope is no longer granted from the UI — system-wide admin is
+			// managed on its own page and only ever issued unscoped.
+			$role = in_array($_POST['Role'] ?? '', ['create','edit']) ? $_POST['Role'] : 'create';
 			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Invalid player.']); exit; }
-			if ($role === 'admin' && !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
-				echo json_encode(['status' => 5, 'error' => 'Only a system administrator can grant the Administrator role.']); exit;
-			}
 			global $DB;
 			$DB->Clear();
 			$DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
