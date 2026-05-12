@@ -15,6 +15,7 @@ class Waiver extends Ork3 {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
 		$kingdom_id = (int)($request['KingdomId'] ?? 0);
 		$scope      = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
+		$variant    = in_array($request['Variant'] ?? '', ['a','b']) ? $request['Variant'] : 'a';
 		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 		if ($kingdom_id <= 0) return ['Status' => InvalidParameter('KingdomId required')];
 		if ($scope === null)  return ['Status' => InvalidParameter('Scope invalid')];
@@ -31,9 +32,10 @@ class Waiver extends Ork3 {
 		$this->db->Clear();
 		$this->db->kingdom_id = $kingdom_id;
 		$this->db->scope      = $scope;
+		$this->db->variant    = $variant;
 		$prev = $this->db->DataSet(
 			"SELECT waiver_template_id, version FROM " . DB_PREFIX . "waiver_template
-			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND is_active = 1
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND variant = :variant AND is_active = 1
 			 ORDER BY version DESC LIMIT 1"
 		);
 		$prevId = 0; $prevVersion = 0;
@@ -57,10 +59,33 @@ class Waiver extends Ork3 {
 		$this->template->version                   = $nextVersion;
 		$this->template->is_active                 = 1;
 		$this->template->is_enabled                = ((int)($request['IsEnabled'] ?? 0)) ? 1 : 0;
-		$this->template->header_html               = $this->_sanitize_html((string)($request['HeaderHtml'] ?? ''));
-		$this->template->body_html                 = $this->_sanitize_html((string)($request['BodyHtml']   ?? ''));
-		$this->template->footer_html               = $this->_sanitize_html((string)($request['FooterHtml'] ?? ''));
-		$this->template->minor_html                = $this->_sanitize_html((string)($request['MinorHtml']  ?? ''));
+		$this->template->variant                   = $variant;
+		if ($variant === 'b') {
+			require_once(DIR_LIB . 'Parsedown.php');
+			$pd = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true);
+			$hmd = (string)($request['HeaderMarkdown'] ?? '');
+			$bmd = (string)($request['BodyMarkdown']   ?? '');
+			$fmd = (string)($request['FooterMarkdown'] ?? '');
+			$mmd = (string)($request['MinorMarkdown']  ?? '');
+			$this->template->header_markdown = $hmd;
+			$this->template->body_markdown   = $bmd;
+			$this->template->footer_markdown = $fmd;
+			$this->template->minor_markdown  = $mmd;
+			// Render markdown -> sanitized HTML so sign/review/print pages stay variant-agnostic.
+			$this->template->header_html = $this->_sanitize_html($pd->text($hmd));
+			$this->template->body_html   = $this->_sanitize_html($pd->text($bmd));
+			$this->template->footer_html = $this->_sanitize_html($pd->text($fmd));
+			$this->template->minor_html  = $this->_sanitize_html($pd->text($mmd));
+		} else {
+			$this->template->header_html = $this->_sanitize_html((string)($request['HeaderHtml'] ?? ''));
+			$this->template->body_html   = $this->_sanitize_html((string)($request['BodyHtml']   ?? ''));
+			$this->template->footer_html = $this->_sanitize_html((string)($request['FooterHtml'] ?? ''));
+			$this->template->minor_html  = $this->_sanitize_html((string)($request['MinorHtml']  ?? ''));
+			$this->template->header_markdown = null;
+			$this->template->body_markdown   = null;
+			$this->template->footer_markdown = null;
+			$this->template->minor_markdown  = null;
+		}
 		$this->template->requires_dob              = ((int)($request['RequiresDob']              ?? 0)) ? 1 : 0;
 		$this->template->requires_address          = ((int)($request['RequiresAddress']          ?? 0)) ? 1 : 0;
 		$this->template->requires_phone            = ((int)($request['RequiresPhone']            ?? 0)) ? 1 : 0;
@@ -119,10 +144,15 @@ class Waiver extends Ork3 {
 			'Version'                   => (int)$rs->version,
 			'IsActive'                  => (int)$rs->is_active,
 			'IsEnabled'                 => (int)$rs->is_enabled,
+			'Variant'                   => $rs->variant ?? 'a',
 			'HeaderHtml'                => $rs->header_html,
 			'BodyHtml'                  => $rs->body_html,
 			'FooterHtml'                => $rs->footer_html,
 			'MinorHtml'                 => $rs->minor_html,
+			'HeaderMarkdown'            => $rs->header_markdown,
+			'BodyMarkdown'              => $rs->body_markdown,
+			'FooterMarkdown'            => $rs->footer_markdown,
+			'MinorMarkdown'             => $rs->minor_markdown,
 			'RequiresDob'               => (int)($rs->requires_dob ?? 0),
 			'RequiresAddress'           => (int)($rs->requires_address ?? 0),
 			'RequiresPhone'             => (int)($rs->requires_phone ?? 0),
@@ -140,14 +170,16 @@ class Waiver extends Ork3 {
 	public function GetActiveTemplate($request) {
 		$kingdom_id = (int)($request['KingdomId'] ?? 0);
 		$scope      = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
+		$variant    = in_array($request['Variant'] ?? '', ['a','b']) ? $request['Variant'] : 'a';
 		if ($kingdom_id <= 0 || $scope === null) return ['Status' => InvalidParameter()];
 
 		$this->db->Clear();
 		$this->db->kingdom_id = $kingdom_id;
 		$this->db->scope      = $scope;
+		$this->db->variant    = $variant;
 		$rs = $this->db->DataSet(
 			"SELECT * FROM " . DB_PREFIX . "waiver_template
-			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND is_active = 1 LIMIT 1"
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND variant = :variant AND is_active = 1 LIMIT 1"
 		);
 		if (!$rs || !$rs->Next()) return ['Status' => ProcessingError('Template not found')];
 		return ['Status' => Success(), 'Template' => $this->_shape_template($rs)];

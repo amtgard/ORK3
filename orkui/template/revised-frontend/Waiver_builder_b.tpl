@@ -8,8 +8,6 @@ $kk = $wv['kingdom_template'];
 $pk = $wv['park_template'];
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>revised-frontend/lib/trix/trix.css">
-<script src="<?=HTTP_TEMPLATE?>revised-frontend/lib/trix/trix.umd.min.js"></script>
 <style>
 .wv-builder { max-width: 1200px; margin: 0 auto 20px; padding: 0 16px; }
 .wv-builder h2, .wv-builder h3, .wv-builder h4, .wv-builder h5, .wv-builder h6 { background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important; }
@@ -40,7 +38,7 @@ $pk = $wv['park_template'];
 .wv-builder .wv-status-ok   { color: #060; font-weight: bold; }
 .wv-builder .wv-status-err  { color: #a00; font-weight: bold; }
 
-/* Section sub-tabs (Data Capture / Page Layout / Waiver Body) */
+/* Section sub-tabs */
 .wv-builder .wv-sect-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #ddd; }
 .wv-builder .wv-sect-tab { padding: 8px 16px; cursor: pointer; font-size: 14px; font-weight: 500; color: #666; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .wv-builder .wv-sect-tab.wv-active { color: #2b6cb0; border-bottom-color: #2b6cb0; font-weight: 600; }
@@ -73,15 +71,15 @@ $pk = $wv['park_template'];
 .wv-builder .wv-cfe-row.wv-cfe-has-opts .wv-cfe-options { display: block; }
 .wv-builder .wv-cfe-add { margin-top: 4px; padding: 6px 10px; cursor: pointer; }
 
-/* Trix editor */
-.wv-builder trix-editor { min-height: 160px; max-height: 480px; overflow-y: auto; background: #fff; border: 1px solid #ccc; border-radius: 0 0 4px 4px; padding: 10px 12px; font-size: 14px; line-height: 1.5; }
-.wv-builder trix-editor:empty:before { content: attr(placeholder); color: #aaa; font-style: italic; }
-.wv-builder trix-toolbar { background: #f4f4f4; border: 1px solid #ccc; border-bottom: none; border-radius: 4px 4px 0 0; padding: 4px; }
-.wv-builder trix-toolbar .trix-button { font-size: 13px; }
-/* Hide file-attach button — waivers should never have arbitrary attachments. */
-.wv-builder trix-toolbar .trix-button-group--file-tools,
-.wv-builder trix-editor [data-trix-attachment] { display: none !important; }
-.wv-builder .wv-body-tall trix-editor { min-height: 320px; }
+/* Markdown editor (GH-style toolbar over textarea) */
+.wv-md { border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+.wv-md-toolbar { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 6px; background: #f6f8fa; border-bottom: 1px solid #d1d5da; }
+.wv-md-toolbar .wv-md-btn { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 13px; color: #24292e; min-width: 28px; }
+.wv-md-toolbar .wv-md-btn:hover { background: #e1e4e8; border-color: #d1d5da; }
+.wv-md-toolbar .wv-md-sep { width: 1px; background: #d1d5da; margin: 2px 4px; }
+.wv-md textarea { width: 100%; min-height: 180px; max-height: 480px; padding: 10px 12px; border: none; outline: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.55; resize: vertical; background: #fff; color: #24292e; box-sizing: border-box; }
+.wv-md textarea:focus { background: #fff; }
+.wv-md.wv-md-tall textarea { min-height: 320px; }
 
 /* --- Dark mode --- */
 html[data-theme="dark"] .wv-disclaimer { background: #3d2f0f; border-color: #8a6d2e; border-left-color: #d69e2e; color: #f5d97a; }
@@ -97,8 +95,6 @@ html[data-theme="dark"] .wv-builder .wv-pane { background: #1f2937; border-color
 html[data-theme="dark"] .wv-builder .wv-field > label { color: #e2e8f0; }
 html[data-theme="dark"] .wv-builder input[type=text],
 html[data-theme="dark"] .wv-builder input[type=number] { background: #374151; border-color: #4a5568; color: #e2e8f0; }
-html[data-theme="dark"] .wv-builder input[type=text]:focus,
-html[data-theme="dark"] .wv-builder input[type=number]:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.2); outline: none; }
 html[data-theme="dark"] .wv-builder select { background: #374151; border-color: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .wv-builder .wv-save-bar { background: #2d3748; border-color: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .wv-builder .wv-save-bar button { background: #4a5568; color: #e2e8f0; border-color: #718096; }
@@ -119,14 +115,12 @@ html[data-theme="dark"] .wv-builder .wv-cfe-row .wv-cfe-del { color: #fc8181; }
 html[data-theme="dark"] .wv-builder .wv-cfe-options textarea { background: #1f2937; border-color: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .wv-builder .wv-status-ok { color: #68d391; }
 html[data-theme="dark"] .wv-builder .wv-status-err { color: #fc8181; }
-html[data-theme="dark"] .wv-builder trix-editor { background: #1a202c; border-color: #4a5568; color: #e2e8f0; }
-html[data-theme="dark"] .wv-builder trix-editor:empty:before { color: #718096; }
-html[data-theme="dark"] .wv-builder trix-toolbar { background: #2d3748; border-color: #4a5568; }
-html[data-theme="dark"] .wv-builder trix-toolbar .trix-button { color: #e2e8f0; background: transparent; border-color: #4a5568; }
-html[data-theme="dark"] .wv-builder trix-toolbar .trix-button.trix-active,
-html[data-theme="dark"] .wv-builder trix-toolbar .trix-button:not(:disabled):hover { background: #4a5568; }
-html[data-theme="dark"] .wv-builder trix-toolbar .trix-button--icon::before { filter: invert(0.92); }
-html[data-theme="dark"] .wv-builder trix-editor a { color: #a5b4fc; }
+html[data-theme="dark"] .wv-md { border-color: #4a5568; }
+html[data-theme="dark"] .wv-md-toolbar { background: #2d3748; border-bottom-color: #4a5568; }
+html[data-theme="dark"] .wv-md-toolbar .wv-md-btn { color: #e2e8f0; }
+html[data-theme="dark"] .wv-md-toolbar .wv-md-btn:hover { background: #4a5568; border-color: #4a5568; }
+html[data-theme="dark"] .wv-md-toolbar .wv-md-sep { background: #4a5568; }
+html[data-theme="dark"] .wv-md textarea { background: #1a202c; color: #e2e8f0; }
 </style>
 <div class="wv-root">
 	<div class="rp-root">
@@ -150,7 +144,7 @@ html[data-theme="dark"] .wv-builder trix-editor a { color: #a5b4fc; }
 		</div>
 		<div class="wv-variant-banner" role="status">
 			<i class="fas fa-flask"></i>
-			<div><strong>Variant A &mdash; Rich Text</strong> &middot; Authoring with the Trix WYSIWYG editor. <a href="<?= UIR ?>Waiver/builder/<?= $kingdomId ?>/b">Switch to Markdown variant &rarr;</a></div>
+			<div><strong>Variant B &mdash; Markdown</strong> &middot; Authoring with Markdown syntax and a GitHub-style toolbar. <a href="<?= UIR ?>Waiver/builder/<?= $kingdomId ?>/a">Switch to Rich Text variant &rarr;</a></div>
 		</div>
 		<div class="wv-disclaimer" role="alert">
 			<i class="fas fa-exclamation-triangle"></i>
@@ -168,7 +162,7 @@ html[data-theme="dark"] .wv-builder trix-editor a { color: #a5b4fc; }
 	<div class="wv-pane" data-scope="<?= $scope ?>" style="<?= $scope === 'park' ? 'display:none;' : '' ?>">
 		<form class="wv-form" data-scope="<?= $scope ?>">
 			<input type="hidden" name="Scope" value="<?= $scope ?>">
-			<input type="hidden" name="Variant" value="a">
+			<input type="hidden" name="Variant" value="b">
 			<input type="hidden" name="KingdomId" value="<?= $kingdomId ?>">
 
 			<div class="wv-save-bar">
@@ -188,7 +182,7 @@ html[data-theme="dark"] .wv-builder trix-editor a { color: #a5b4fc; }
 				<div class="wv-sect-tab"            data-sect="body">Waiver Body</div>
 			</div>
 
-			<!-- Data Capture: fields, demographics, max minors, custom fields -->
+			<!-- Data Capture -->
 			<div class="wv-sect-pane wv-active" data-sect="data">
 				<div class="wv-fields-pane">
 					<h3>Fields &amp; Demographics</h3>
@@ -217,12 +211,14 @@ html[data-theme="dark"] .wv-builder trix-editor a { color: #a5b4fc; }
 				</div>
 			</div>
 
-			<!-- Page Layout: header / footer (plus auto-fill notes) -->
+			<!-- Page Layout -->
 			<div class="wv-sect-pane" data-sect="layout">
 				<div class="wv-field">
 					<label>Header (shown on every page)</label>
-					<input id="wv-header-html-<?= $scope ?>" type="hidden" name="HeaderHtml" value="<?= htmlspecialchars($tpl['HeaderHtml'] ?? '', ENT_QUOTES) ?>">
-					<trix-editor input="wv-header-html-<?= $scope ?>" placeholder="Title, organization name, intro&hellip;"></trix-editor>
+					<div class="wv-md">
+						<div class="wv-md-toolbar" data-target="HeaderMarkdown"></div>
+						<textarea name="HeaderMarkdown" placeholder="Title, organization name, intro…"><?= htmlspecialchars($tpl['HeaderMarkdown'] ?? '') ?></textarea>
+					</div>
 				</div>
 				<div class="wv-field">
 					<label>Player Header (fixed &mdash; not editable)</label>
@@ -234,22 +230,28 @@ html[data-theme="dark"] .wv-builder trix-editor a { color: #a5b4fc; }
 				</div>
 				<div class="wv-field">
 					<label>Footer (shown on every page)</label>
-					<input id="wv-footer-html-<?= $scope ?>" type="hidden" name="FooterHtml" value="<?= htmlspecialchars($tpl['FooterHtml'] ?? '', ENT_QUOTES) ?>">
-					<trix-editor input="wv-footer-html-<?= $scope ?>" placeholder="Copyright, page footer, contact info&hellip;"></trix-editor>
+					<div class="wv-md">
+						<div class="wv-md-toolbar" data-target="FooterMarkdown"></div>
+						<textarea name="FooterMarkdown" placeholder="Copyright, page footer, contact info…"><?= htmlspecialchars($tpl['FooterMarkdown'] ?? '') ?></textarea>
+					</div>
 				</div>
 			</div>
 
-			<!-- Waiver Body: main body + minor-representative text -->
+			<!-- Waiver Body -->
 			<div class="wv-sect-pane" data-sect="body">
-				<div class="wv-field wv-body-tall">
+				<div class="wv-field">
 					<label>Waiver Details (the body of the waiver)</label>
-					<input id="wv-body-html-<?= $scope ?>" type="hidden" name="BodyHtml" value="<?= htmlspecialchars($tpl['BodyHtml'] ?? '', ENT_QUOTES) ?>">
-					<trix-editor input="wv-body-html-<?= $scope ?>" placeholder="Assumption of risk, terms, indemnity&hellip;"></trix-editor>
+					<div class="wv-md wv-md-tall">
+						<div class="wv-md-toolbar" data-target="BodyMarkdown"></div>
+						<textarea name="BodyMarkdown" placeholder="Assumption of risk, terms, indemnity…"><?= htmlspecialchars($tpl['BodyMarkdown'] ?? '') ?></textarea>
+					</div>
 				</div>
 				<div class="wv-field">
 					<label>Minor Representative Text (shown when signer marks as minor)</label>
-					<input id="wv-minor-html-<?= $scope ?>" type="hidden" name="MinorHtml" value="<?= htmlspecialchars($tpl['MinorHtml'] ?? '', ENT_QUOTES) ?>">
-					<trix-editor input="wv-minor-html-<?= $scope ?>" placeholder="Guardian acknowledgement, minor-specific terms&hellip;"></trix-editor>
+					<div class="wv-md">
+						<div class="wv-md-toolbar" data-target="MinorMarkdown"></div>
+						<textarea name="MinorMarkdown" placeholder="Guardian acknowledgement, minor-specific terms…"><?= htmlspecialchars($tpl['MinorMarkdown'] ?? '') ?></textarea>
+					</div>
 				</div>
 			</div>
 		</form>
@@ -261,9 +263,112 @@ window.WvBuilderConfig = { token: "<?= $token ?>", kingdomId: <?= $kingdomId ?> 
 </script>
 <script>
 (function(){
-	if (!window.WvBuilderConfig || !window.WvBuilderConfig.token) return; // admin gate
+	if (!window.WvBuilderConfig || !window.WvBuilderConfig.token) return;
 
-	// Scope tabs
+	// --- GH-style markdown toolbar ---
+	// Each .wv-md-toolbar is rendered next to a textarea sibling.
+	const buttons = [
+		{ k: 'heading', t: 'H', title: 'Heading (## )', kind: 'line', prefix: '## ' },
+		{ k: 'bold',    t: 'B', title: 'Bold (Ctrl+B)', kind: 'wrap', wrap: '**' },
+		{ k: 'italic',  t: 'I', title: 'Italic (Ctrl+I)', kind: 'wrap', wrap: '*' },
+		{ k: 'strike',  t: 'S', title: 'Strikethrough', kind: 'wrap', wrap: '~~' },
+		{ k: '_sep' },
+		{ k: 'quote',   t: '❝', title: 'Blockquote', kind: 'line', prefix: '> ' },
+		{ k: 'code',    t: '<>', title: 'Inline code', kind: 'wrap', wrap: '`' },
+		{ k: 'link',    t: '🔗', title: 'Link', kind: 'link' },
+		{ k: '_sep' },
+		{ k: 'ul',      t: '•', title: 'Bulleted list', kind: 'line', prefix: '- ' },
+		{ k: 'ol',      t: '1.', title: 'Numbered list', kind: 'line-num' },
+	];
+	function renderToolbar(bar) {
+		buttons.forEach(b => {
+			if (b.k === '_sep') {
+				const s = document.createElement('span');
+				s.className = 'wv-md-sep';
+				bar.appendChild(s);
+				return;
+			}
+			const btn = document.createElement('button');
+			btn.type = 'button';
+			btn.className = 'wv-md-btn';
+			btn.textContent = b.t;
+			btn.title = b.title;
+			btn.dataset.k = b.k;
+			btn.addEventListener('click', () => applyAction(bar, b));
+			bar.appendChild(btn);
+		});
+	}
+	function getTextarea(bar) {
+		// textarea is the next sibling inside .wv-md container
+		return bar.parentElement.querySelector('textarea');
+	}
+	function getSelection(ta) {
+		return { start: ta.selectionStart, end: ta.selectionEnd, value: ta.value };
+	}
+	function setSelection(ta, start, end) {
+		ta.focus();
+		ta.setSelectionRange(start, end);
+		// Fire input event so any listeners (none today) see the change.
+		ta.dispatchEvent(new Event('input', { bubbles: true }));
+	}
+	function applyWrap(ta, marker) {
+		const { start, end, value } = getSelection(ta);
+		const selected = value.slice(start, end) || 'text';
+		const before = value.slice(0, start);
+		const after  = value.slice(end);
+		ta.value = before + marker + selected + marker + after;
+		setSelection(ta, start + marker.length, start + marker.length + selected.length);
+	}
+	function applyLine(ta, prefix) {
+		let { start, end, value } = getSelection(ta);
+		// Expand selection to whole lines.
+		const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+		const lineEnd   = (value.indexOf('\n', end) === -1) ? value.length : value.indexOf('\n', end);
+		const block = value.slice(lineStart, lineEnd);
+		const newBlock = block.split('\n').map(l => prefix + l).join('\n');
+		ta.value = value.slice(0, lineStart) + newBlock + value.slice(lineEnd);
+		setSelection(ta, lineStart, lineStart + newBlock.length);
+	}
+	function applyLineNum(ta) {
+		let { start, end, value } = getSelection(ta);
+		const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+		const lineEnd   = (value.indexOf('\n', end) === -1) ? value.length : value.indexOf('\n', end);
+		const block = value.slice(lineStart, lineEnd);
+		const newBlock = block.split('\n').map((l, i) => (i + 1) + '. ' + l).join('\n');
+		ta.value = value.slice(0, lineStart) + newBlock + value.slice(lineEnd);
+		setSelection(ta, lineStart, lineStart + newBlock.length);
+	}
+	function applyLink(ta) {
+		const { start, end, value } = getSelection(ta);
+		const selected = value.slice(start, end) || 'link text';
+		const url = window.prompt('Link URL (http/https/mailto):', 'https://');
+		if (!url) return;
+		const replacement = '[' + selected + '](' + url + ')';
+		ta.value = value.slice(0, start) + replacement + value.slice(end);
+		setSelection(ta, start + 1, start + 1 + selected.length);
+	}
+	function applyAction(bar, b) {
+		const ta = getTextarea(bar);
+		if (!ta) return;
+		if (b.kind === 'wrap')      applyWrap(ta, b.wrap);
+		else if (b.kind === 'line') applyLine(ta, b.prefix);
+		else if (b.kind === 'line-num') applyLineNum(ta);
+		else if (b.kind === 'link') applyLink(ta);
+	}
+	document.querySelectorAll('.wv-md-toolbar').forEach(renderToolbar);
+
+	// Keyboard shortcuts on each textarea
+	document.querySelectorAll('.wv-md textarea').forEach(ta => {
+		ta.addEventListener('keydown', (e) => {
+			if (!(e.metaKey || e.ctrlKey)) return;
+			const key = e.key.toLowerCase();
+			if (key === 'b') { e.preventDefault(); applyWrap(ta, '**'); }
+			else if (key === 'i') { e.preventDefault(); applyWrap(ta, '*'); }
+			else if (key === 'k') { e.preventDefault(); applyLink(ta); }
+		});
+	});
+
+	// --- Scope tabs ---
 	const scopeTabs  = document.querySelectorAll('.wv-builder > .wv-tabs > .wv-tab');
 	const scopePanes = document.querySelectorAll('.wv-builder > .wv-pane');
 	scopeTabs.forEach(t => t.addEventListener('click', () => {
@@ -272,7 +377,7 @@ window.WvBuilderConfig = { token: "<?= $token ?>", kingdomId: <?= $kingdomId ?> 
 		scopePanes.forEach(p => p.style.display = (p.dataset.scope === t.dataset.scope) ? '' : 'none');
 	}));
 
-	// Section sub-tabs
+	// --- Section sub-tabs ---
 	document.querySelectorAll('.wv-pane').forEach(pane => {
 		const tabs  = pane.querySelectorAll('.wv-sect-tab');
 		const panes = pane.querySelectorAll('.wv-sect-pane');
@@ -285,7 +390,7 @@ window.WvBuilderConfig = { token: "<?= $token ?>", kingdomId: <?= $kingdomId ?> 
 	});
 
 	document.querySelectorAll('.wv-builder .wv-form').forEach(form => {
-		// Custom Fields Editor
+		// Custom Fields Editor (identical to variant A)
 		const cfe = form.querySelector('.wv-cfe');
 		const cfeHidden = form.querySelector('input[name="CustomFieldsJson"]');
 		const cfeAddBtn = form.querySelector('.wv-cfe-add');
@@ -392,14 +497,14 @@ window.WvBuilderConfig = { token: "<?= $token ?>", kingdomId: <?= $kingdomId ?> 
 			}
 		});
 
-		// View Preview: open new tab via a hidden form post
+		// Preview (POST to variant-B preview route in a new tab)
 		const previewBtn = form.querySelector('.wv-btn-preview');
 		previewBtn.addEventListener('click', () => {
 			syncHidden();
 			const fd = new FormData(form);
 			const ghost = document.createElement('form');
 			ghost.method = 'POST';
-			ghost.action = '<?= UIR ?>Waiver/preview/<?= $kingdomId ?>';
+			ghost.action = '<?= UIR ?>Waiver/preview/<?= $kingdomId ?>/b';
 			ghost.target = '_blank';
 			ghost.style.display = 'none';
 			fd.forEach((v, k) => {
