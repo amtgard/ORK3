@@ -73,10 +73,30 @@ $pk = $wv['park_template'];
 
 /* Markdown editor (GH-style toolbar over textarea) */
 .wv-md { border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
-.wv-md-toolbar { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 6px; background: #f6f8fa; border-bottom: 1px solid #d1d5da; }
-.wv-md-toolbar .wv-md-btn { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 13px; color: #24292e; min-width: 28px; }
+.wv-md-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px 6px; background: #f6f8fa; border-bottom: 1px solid #d1d5da; }
+.wv-md-toolbar .wv-md-btn { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0; cursor: pointer; color: #24292e; height: 28px; min-width: 30px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1; }
 .wv-md-toolbar .wv-md-btn:hover { background: #e1e4e8; border-color: #d1d5da; }
-.wv-md-toolbar .wv-md-sep { width: 1px; background: #d1d5da; margin: 2px 4px; }
+.wv-md-toolbar .wv-md-sep { width: 1px; align-self: stretch; background: #d1d5da; margin: 4px 4px; }
+/* Each button visually mirrors the markdown it produces. */
+.wv-md-toolbar .wv-md-h1     { font-weight: 800; font-size: 17px; }
+.wv-md-toolbar .wv-md-h2     { font-weight: 800; font-size: 14px; }
+.wv-md-toolbar .wv-md-h3     { font-weight: 800; font-size: 12px; }
+.wv-md-toolbar .wv-md-h1 sub,
+.wv-md-toolbar .wv-md-h2 sub,
+.wv-md-toolbar .wv-md-h3 sub { font-size: 0.65em; vertical-align: -0.25em; margin-left: 1px; font-weight: 700; }
+.wv-md-toolbar .wv-md-bold   { font-weight: 900; font-size: 15px; font-family: Georgia, serif; }
+.wv-md-toolbar .wv-md-italic { font-style: italic; font-weight: 700; font-size: 15px; font-family: Georgia, serif; }
+.wv-md-toolbar .wv-md-strike { text-decoration: line-through; font-weight: 700; font-size: 14px; }
+.wv-md-toolbar .wv-md-quote  { font-family: Georgia, serif; font-size: 22px; line-height: 0; padding-top: 6px; }
+.wv-md-toolbar .wv-md-code   { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: -0.5px; padding: 0 4px; }
+.wv-md-toolbar .wv-md-codeblock { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; padding: 0 4px; background: #ececec; }
+.wv-md-toolbar .wv-md-codeblock:hover { background: #d1d5da; }
+.wv-md-toolbar .wv-md-link   { text-decoration: underline; color: #0366d6; font-size: 12px; padding: 0 6px; }
+.wv-md-toolbar .wv-md-image  { font-family: ui-monospace, monospace; font-size: 11px; padding: 0 4px; }
+.wv-md-toolbar .wv-md-ul     { font-size: 18px; line-height: 0.6; padding-bottom: 4px; }
+.wv-md-toolbar .wv-md-ol     { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700; padding: 0 4px; }
+.wv-md-toolbar .wv-md-task   { font-size: 14px; }
+.wv-md-toolbar .wv-md-hr     { font-size: 22px; line-height: 0.4; letter-spacing: -3px; padding: 0 6px; color: #6a737d; }
 .wv-md textarea { width: 100%; min-height: 180px; max-height: 480px; padding: 10px 12px; border: none; outline: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.55; resize: vertical; background: #fff; color: #24292e; box-sizing: border-box; }
 .wv-md textarea:focus { background: #fff; }
 .wv-md.wv-md-tall textarea { min-height: 320px; }
@@ -120,6 +140,10 @@ html[data-theme="dark"] .wv-md-toolbar { background: #2d3748; border-bottom-colo
 html[data-theme="dark"] .wv-md-toolbar .wv-md-btn { color: #e2e8f0; }
 html[data-theme="dark"] .wv-md-toolbar .wv-md-btn:hover { background: #4a5568; border-color: #4a5568; }
 html[data-theme="dark"] .wv-md-toolbar .wv-md-sep { background: #4a5568; }
+html[data-theme="dark"] .wv-md-toolbar .wv-md-link      { color: #a5b4fc; }
+html[data-theme="dark"] .wv-md-toolbar .wv-md-codeblock { background: #1a202c; }
+html[data-theme="dark"] .wv-md-toolbar .wv-md-codeblock:hover { background: #2d3748; }
+html[data-theme="dark"] .wv-md-toolbar .wv-md-hr        { color: #a0aec0; }
 html[data-theme="dark"] .wv-md textarea { background: #1a202c; color: #e2e8f0; }
 </style>
 <div class="wv-root">
@@ -267,18 +291,28 @@ window.WvBuilderConfig = { token: "<?= $token ?>", kingdomId: <?= $kingdomId ?> 
 
 	// --- GH-style markdown toolbar ---
 	// Each .wv-md-toolbar is rendered next to a textarea sibling.
+	// label may be plain text or trusted markup (e.g. "H<sub>1</sub>").
 	const buttons = [
-		{ k: 'heading', t: 'H', title: 'Heading (## )', kind: 'line', prefix: '## ' },
-		{ k: 'bold',    t: 'B', title: 'Bold (Ctrl+B)', kind: 'wrap', wrap: '**' },
-		{ k: 'italic',  t: 'I', title: 'Italic (Ctrl+I)', kind: 'wrap', wrap: '*' },
-		{ k: 'strike',  t: 'S', title: 'Strikethrough', kind: 'wrap', wrap: '~~' },
+		{ k: 'h1',     label: 'H<sub>1</sub>', cls: 'wv-md-h1',     title: 'Heading 1 (# )',     kind: 'line', prefix: '# ' },
+		{ k: 'h2',     label: 'H<sub>2</sub>', cls: 'wv-md-h2',     title: 'Heading 2 (## )',    kind: 'line', prefix: '## ' },
+		{ k: 'h3',     label: 'H<sub>3</sub>', cls: 'wv-md-h3',     title: 'Heading 3 (### )',   kind: 'line', prefix: '### ' },
 		{ k: '_sep' },
-		{ k: 'quote',   t: '❝', title: 'Blockquote', kind: 'line', prefix: '> ' },
-		{ k: 'code',    t: '<>', title: 'Inline code', kind: 'wrap', wrap: '`' },
-		{ k: 'link',    t: '🔗', title: 'Link', kind: 'link' },
+		{ k: 'bold',   label: 'B',     cls: 'wv-md-bold',   title: 'Bold (Ctrl+B)',     kind: 'wrap', wrap: '**' },
+		{ k: 'italic', label: 'I',     cls: 'wv-md-italic', title: 'Italic (Ctrl+I)',   kind: 'wrap', wrap: '*' },
+		{ k: 'strike', label: 'S',     cls: 'wv-md-strike', title: 'Strikethrough',     kind: 'wrap', wrap: '~~' },
 		{ k: '_sep' },
-		{ k: 'ul',      t: '•', title: 'Bulleted list', kind: 'line', prefix: '- ' },
-		{ k: 'ol',      t: '1.', title: 'Numbered list', kind: 'line-num' },
+		{ k: 'quote',  label: '\u201c', cls: 'wv-md-quote',  title: 'Blockquote',        kind: 'line', prefix: '> ' },
+		{ k: 'code',   label: '&lt;/&gt;', cls: 'wv-md-code', title: 'Inline code (\u0060\u0060)', kind: 'wrap', wrap: '\u0060' },
+		{ k: 'codeblk',label: '{ }',   cls: 'wv-md-codeblock', title: 'Code block',     kind: 'block', open: '\u0060\u0060\u0060\n', close: '\n\u0060\u0060\u0060' },
+		{ k: '_sep' },
+		{ k: 'link',   label: 'link',  cls: 'wv-md-link',   title: 'Link (Ctrl+K)',     kind: 'link' },
+		{ k: 'image',  label: 'img',   cls: 'wv-md-image',  title: 'Image',             kind: 'image' },
+		{ k: '_sep' },
+		{ k: 'ul',     label: '\u2022', cls: 'wv-md-ul',     title: 'Bulleted list',     kind: 'line', prefix: '- ' },
+		{ k: 'ol',     label: '1.',    cls: 'wv-md-ol',     title: 'Numbered list',     kind: 'line-num' },
+		{ k: 'task',   label: '\u2610', cls: 'wv-md-task',   title: 'Task list',         kind: 'line', prefix: '- [ ] ' },
+		{ k: '_sep' },
+		{ k: 'hr',     label: '\u2014\u2014', cls: 'wv-md-hr', title: 'Horizontal rule', kind: 'hr' },
 	];
 	function renderToolbar(bar) {
 		buttons.forEach(b => {
@@ -290,8 +324,8 @@ window.WvBuilderConfig = { token: "<?= $token ?>", kingdomId: <?= $kingdomId ?> 
 			}
 			const btn = document.createElement('button');
 			btn.type = 'button';
-			btn.className = 'wv-md-btn';
-			btn.textContent = b.t;
+			btn.className = 'wv-md-btn ' + (b.cls || '');
+			btn.innerHTML = b.label; // trusted: static constants above
 			btn.title = b.title;
 			btn.dataset.k = b.k;
 			btn.addEventListener('click', () => applyAction(bar, b));
@@ -347,13 +381,43 @@ window.WvBuilderConfig = { token: "<?= $token ?>", kingdomId: <?= $kingdomId ?> 
 		ta.value = value.slice(0, start) + replacement + value.slice(end);
 		setSelection(ta, start + 1, start + 1 + selected.length);
 	}
+	function applyBlock(ta, open, close) {
+		const { start, end, value } = getSelection(ta);
+		const selected = value.slice(start, end) || 'code';
+		ta.value = value.slice(0, start) + open + selected + close + value.slice(end);
+		setSelection(ta, start + open.length, start + open.length + selected.length);
+	}
+	function applyImage(ta) {
+		const { start, end, value } = getSelection(ta);
+		const alt = value.slice(start, end) || 'alt text';
+		const url = window.prompt('Image URL (http/https):', 'https://');
+		if (!url) return;
+		const replacement = '![' + alt + '](' + url + ')';
+		ta.value = value.slice(0, start) + replacement + value.slice(end);
+		setSelection(ta, start + 2, start + 2 + alt.length);
+	}
+	function applyHr(ta) {
+		const { start, end, value } = getSelection(ta);
+		// Insert a fenced HR on its own paragraph. Skip extra newlines if already at a blank line.
+		const before = value.slice(0, start);
+		const after  = value.slice(end);
+		const lead   = before.endsWith('\n\n') ? '' : (before.endsWith('\n') || before === '') ? '\n' : '\n\n';
+		const trail  = after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+		const insertion = lead + '---' + trail;
+		ta.value = before + insertion + after;
+		const cursor = start + insertion.length;
+		setSelection(ta, cursor, cursor);
+	}
 	function applyAction(bar, b) {
 		const ta = getTextarea(bar);
 		if (!ta) return;
-		if (b.kind === 'wrap')      applyWrap(ta, b.wrap);
-		else if (b.kind === 'line') applyLine(ta, b.prefix);
+		if (b.kind === 'wrap')          applyWrap(ta, b.wrap);
+		else if (b.kind === 'line')     applyLine(ta, b.prefix);
 		else if (b.kind === 'line-num') applyLineNum(ta);
-		else if (b.kind === 'link') applyLink(ta);
+		else if (b.kind === 'link')     applyLink(ta);
+		else if (b.kind === 'block')    applyBlock(ta, b.open, b.close);
+		else if (b.kind === 'image')    applyImage(ta);
+		else if (b.kind === 'hr')       applyHr(ta);
 	}
 	document.querySelectorAll('.wv-md-toolbar').forEach(renderToolbar);
 
