@@ -39,14 +39,24 @@ class Controller_WaiverAjax extends Controller {
 	public function saveTemplate() {
 		$this->requireLogin();
 		$r = $this->Waiver->SaveTemplate([
-			'Token'          => $this->session->token,
-			'KingdomId'      => (int)($_POST['KingdomId'] ?? 0),
-			'Scope'          => $_POST['Scope'] ?? '',
-			'HeaderMarkdown' => $_POST['HeaderMarkdown'] ?? '',
-			'BodyMarkdown'   => $_POST['BodyMarkdown']   ?? '',
-			'FooterMarkdown' => $_POST['FooterMarkdown'] ?? '',
-			'MinorMarkdown'  => $_POST['MinorMarkdown']  ?? '',
-			'IsEnabled'      => (int)($_POST['IsEnabled'] ?? 0),
+			'Token'                    => $this->session->token,
+			'KingdomId'                => (int)($_POST['KingdomId'] ?? 0),
+			'Scope'                    => $_POST['Scope'] ?? '',
+			'HeaderHtml'               => $_POST['HeaderHtml'] ?? '',
+			'BodyHtml'                 => $_POST['BodyHtml']   ?? '',
+			'FooterHtml'               => $_POST['FooterHtml'] ?? '',
+			'MinorHtml'                => $_POST['MinorHtml']  ?? '',
+			'IsEnabled'                => (int)($_POST['IsEnabled'] ?? 0),
+			'RequiresDob'              => (int)($_POST['RequiresDob']              ?? 0),
+			'RequiresAddress'          => (int)($_POST['RequiresAddress']          ?? 0),
+			'RequiresPhone'            => (int)($_POST['RequiresPhone']            ?? 0),
+			'RequiresEmail'            => (int)($_POST['RequiresEmail']            ?? 0),
+			'RequiresPreferredName'    => (int)($_POST['RequiresPreferredName']    ?? 0),
+			'RequiresGender'           => (int)($_POST['RequiresGender']           ?? 0),
+			'RequiresEmergencyContact' => (int)($_POST['RequiresEmergencyContact'] ?? 0),
+			'RequiresWitness'          => (int)($_POST['RequiresWitness']          ?? 0),
+			'MaxMinors'                => (int)($_POST['MaxMinors'] ?? 1),
+			'CustomFieldsJson'         => $_POST['CustomFieldsJson'] ?? '[]',
 		]);
 		$this->respond($r);
 	}
@@ -57,15 +67,6 @@ class Controller_WaiverAjax extends Controller {
 			'Token'      => $this->session->token,
 			'TemplateId' => (int)($_POST['TemplateId'] ?? 0),
 			'IsEnabled'  => (int)($_POST['IsEnabled']  ?? 0),
-		]);
-		$this->respond($r);
-	}
-
-	public function previewMarkdown() {
-		$this->requireLogin();
-		$r = $this->Waiver->PreviewMarkdown([
-			'Token'    => $this->session->token,
-			'Markdown' => $_POST['Markdown'] ?? '',
 		]);
 		$this->respond($r);
 	}

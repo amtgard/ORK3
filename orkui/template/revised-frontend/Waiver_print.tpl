@@ -1,9 +1,7 @@
 <?php
-require_once(DIR_LIB . 'Parsedown.php');
 $wv = $_wv;
 $sig = $wv['signature'];
 $tpl = $sig['Template'];
-$md = function($t) { return $t ? (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($t) : ''; };
 ?>
 <!doctype html>
 <html><head>
@@ -34,7 +32,7 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 </head>
 <body>
 <div class="wv-p">
-	<header><?= strip_tags($md($tpl['HeaderMarkdown'] ?? ''), '<strong><em>') ?></header>
+	<header><?= strip_tags($tpl['HeaderHtml'] ?? '', '<strong><em><b><i>') ?></header>
 	<h1>Digital Waiver &mdash; Signed Record #<?= (int)$sig['SignatureId'] ?></h1>
 	<div class="wv-p-grid">
 		<div><strong>Legal Name:</strong> <?= htmlspecialchars($sig['MundaneFirst'] . ' ' . $sig['MundaneLast']) ?></div>
@@ -127,10 +125,10 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 	</div>
 	<?php endif; ?>
 
-	<div class="wv-p-section"><?= $md($tpl['BodyMarkdown'] ?? '') ?></div>
+	<div class="wv-p-section"><?= $tpl['BodyHtml'] ?? '' ?></div>
 	<?php if ($sig['IsMinor']): ?>
 	<div class="wv-p-section">
-		<?= $md($tpl['MinorMarkdown'] ?? '') ?>
+		<?= $tpl['MinorHtml'] ?? '' ?>
 		<p><strong>Representative:</strong> <?= htmlspecialchars($sig['MinorRepFirst'] . ' ' . $sig['MinorRepLast']) ?> (<?= htmlspecialchars($sig['MinorRepRelationship']) ?>)</p>
 	</div>
 	<?php endif; ?>
@@ -158,7 +156,7 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 		<?php endif; ?>
 	</div>
 	<?php endif; ?>
-	<footer><?= strip_tags($md($tpl['FooterMarkdown'] ?? ''), '<strong><em>') ?></footer>
+	<footer><?= strip_tags($tpl['FooterHtml'] ?? '', '<strong><em><b><i>') ?></footer>
 </div>
 <script>
 function drawSig(canvasId, dataJson) {
