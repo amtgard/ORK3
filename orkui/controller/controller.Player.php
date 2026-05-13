@@ -264,6 +264,33 @@ class Controller_Player extends Controller {
 	}
 
 	public function profile( $id = null ) {
+		// Digital Waivers: populate sidebar data for own-profile views.
+		// Runs before the rest of profile() so the template sees $_wv_sidebar.
+		$_wv_uid    = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_wv_pid    = (int)(explode('/', $id ?? '')[0] ?? 0);
+		$_wv_isOwn  = ($_wv_uid > 0 && $_wv_uid === $_wv_pid);
+		$this->data['_wv_sidebar'] = ['is_own' => $_wv_isOwn, 'items' => []];
+		if ($_wv_isOwn) {
+			$this->load_model('Waiver');
+			$_wv_kingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
+			$_wv_parkId    = (int)($this->data['Player']['ParkId']    ?? 0);
+			foreach ([['kingdom', $_wv_kingdomId], ['park', $_wv_parkId]] as $_wv_pair) {
+				[$_wv_scope, $_wv_eid] = $_wv_pair;
+				if ($_wv_eid <= 0 || $_wv_kingdomId <= 0) continue;
+				$_wv_r = $this->Waiver->GetActiveTemplate([
+					'KingdomId' => $_wv_kingdomId,
+					'Scope'     => $_wv_scope,
+				]);
+				if (($_wv_r['Status']['Status'] ?? 1) !== 0) continue;
+				if ((int)($_wv_r['Template']['IsEnabled'] ?? 0) !== 1) continue;
+				$this->data['_wv_sidebar']['items'][] = [
+					'scope'       => $_wv_scope,
+					'entity_id'   => $_wv_eid,
+					'template_id' => (int)$_wv_r['Template']['TemplateId'],
+					'version'     => (int)$_wv_r['Template']['Version'],
+				];
+			}
+		}
 		$this->template = '../revised-frontend/Playernew_index.tpl';
 
 		$params    = explode('/', $id ?? '');

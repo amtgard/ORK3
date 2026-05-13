@@ -28,7 +28,9 @@ class Controller_Kingdom extends Controller {
 		if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT)) {
 			$this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 			$this->data['menulist']['admin'] = array(
-					array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
+					array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' ),
+					array( 'url' => UIR.'Waiver/builder/'.(int)$id, 'display' => 'Edit Waivers' ),
+					array( 'url' => UIR.'Waiver/queue/kingdom/'.(int)$id, 'display' => 'Waiver Review Queue' )
 				);
 		}
 		$this->data['menu']['kingdom'] = array( 'url' => UIR.'Kingdom/profile/'.$this->session->kingdom_id, 'display' => $this->session->kingdom_name );
