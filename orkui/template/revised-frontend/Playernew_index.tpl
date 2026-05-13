@@ -1289,7 +1289,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<?php if ($_showRecs): ?><li data-tab="recommendations">
 					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count" id="pn-recs-tab-count"></span>
 				</li><?php endif; ?>
-				<?php if ($canEditAdmin || ($LoggedIn && $isOwnProfile && is_array($Notes) && count($Notes) > 0)): ?>
+				<?php if (($canEditAdmin && !$isOwnProfile) || ($LoggedIn && $isOwnProfile && !empty($HasNotes))): ?>
 				<li data-tab="history">
 					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count" id="pn-notes-tab-count"></span>
 				</li>
@@ -2099,11 +2099,13 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 
 			<!-- Notes Tab -->
 			<div class="pn-tab-panel" id="pn-tab-history" style="display:none">
-				<?php $notesList = is_array($Notes) ? $Notes : array(); ?>
 				<?php if ($isOwnProfile): ?>
 				<div class="pn-notes-infobox">
 					<i class="fas fa-info-circle pn-notes-infobox-icon"></i>
-					<div>This tab contains historically imported notes about your profile from previous versions of the ORK. If these notes are still relevant, such as containing a title or award not listed in the other tabs, reach out to your local Monarch or Prime Minister to reconcile those notes. Once all notes have been reconciled, <a href="#" id="pn-clear-notes-link">click here to close out your notes tab</a>. This cannot be undone.</div>
+					<div>
+						<div id="pn-notes-infobox-has" style="display:<?= !empty($HasNotes) ? '' : 'none' ?>">This tab contains historically imported notes about your profile from previous versions of the ORK. If these notes are still relevant, such as containing a title or award not listed in the other tabs, reach out to your local Monarch or Prime Minister to reconcile those notes. Once all notes have been reconciled, <a href="#" id="pn-clear-notes-link">click here to close out your notes tab</a>. This cannot be undone.</div>
+						<div id="pn-notes-infobox-none" style="display:<?= !empty($HasNotes) ? 'none' : '' ?>">You have no historically imported notes on your profile — there is nothing here to reconcile. This tab is hidden from the public view of your profile and is only visible to you and to your park or kingdom officers.</div>
+					</div>
 				</div>
 				<?php endif; ?>
 				<?php if ($canEditAdmin): ?>
@@ -4436,7 +4438,7 @@ pnRenderSparkline();
 <?php endif; ?>
 
 <!-- Clear Notes Confirm Modal -->
-<div class="pn-overlay" id="pn-clearnotes-overlay" style="display:none">
+<div class="pn-overlay" id="pn-clearnotes-overlay">
 	<div class="pn-modal-box" style="width:440px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#c05621"></i>Close Out Notes Tab</h3>
@@ -5053,6 +5055,12 @@ $(function() {
 			var notes = (r.status === 0) ? (r.notes || []) : [];
 			var countEl = document.getElementById('pn-notes-tab-count');
 			if (countEl) countEl.textContent = '(' + notes.length + ')';
+			// Infobox is PHP-rendered with notes=0 (lazy load), so swap it here once
+			// we know the real count from the AJAX response.
+			var _ihas = document.getElementById('pn-notes-infobox-has');
+			var _inone = document.getElementById('pn-notes-infobox-none');
+			if (_ihas)  _ihas.style.display  = notes.length > 0 ? '' : 'none';
+			if (_inone) _inone.style.display = notes.length > 0 ? 'none' : '';
 			if (!notes.length) { body.innerHTML = '<div class="pn-empty" id="pn-history-empty">No notes</div>'; return; }
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
 			var html = '<table class="pn-table" id="pn-history-table"><thead><tr><th>Note</th><th>Description</th><th>Date</th>'

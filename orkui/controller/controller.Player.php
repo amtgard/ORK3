@@ -402,6 +402,12 @@ class Controller_Player extends Controller {
 		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details']       = $this->Player->fetch_player_details($id);
 		$this->data['Notes']         = [];  // loaded via AJAX on Notes tab click
+		// Count-only check so the Notes tab visibility (and the infobox copy)
+		// can be accurate on initial PHP render without fetching note bodies.
+		global $DB;
+		$DB->Clear();
+		$_nc = $DB->DataSet("SELECT COUNT(*) AS n FROM " . DB_PREFIX . "mundane_note WHERE mundane_id = " . (int)$id);
+		$this->data['HasNotes']      = ($_nc && $_nc->Next()) ? ((int)$_nc->n > 0) : false;
 		$this->data['Dues']          = $this->Player->get_dues($id, 1, true);
 		$this->data['AllDues']       = [];  // loaded via AJAX when dues modal opens
 		$this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1]);
