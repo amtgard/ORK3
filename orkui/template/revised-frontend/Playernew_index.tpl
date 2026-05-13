@@ -213,15 +213,18 @@
 	$_pnColorSecondary = (!empty($Player['ColorSecondary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorSecondary'])) ? $Player['ColorSecondary'] : '';
 	$_pnOverlay = in_array($Player['HeroOverlay'] ?? 'med', ['low','med','high']) ? ($Player['HeroOverlay'] ?? 'med') : 'med';
 	$_pnOverlayOpacity = ['low' => '0.06', 'med' => '0.12', 'high' => '0.22'][$_pnOverlay];
-	$_pnHeroCss = !empty($_pnColorSecondary)
-		? "background: linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
-		: "background-color: $_pnHeroBg";
+	// Express as a single `background` shorthand value (color OR gradient) so the
+	// rule emitted below can be overridden cleanly by the dark-mode rule (also
+	// shorthand) — putting it inline on the element would beat any class selector.
+	$_pnHeroBgValue = !empty($_pnColorSecondary)
+		? "linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
+		: $_pnHeroBg;
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
 	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
 	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
 
 ?>
-<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; }</style>
+<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; }</style>
 <?php
 $_pnNameFont = (!empty($Player['NameFont']) && empty($ViewerBasicFonts) && empty($ViewerDyslexiaFonts)) ? $Player['NameFont'] : '';
 $_pnFontAllowed = ['Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'];
@@ -340,9 +343,9 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 /* ============================================================
    html[data-theme="dark"] overrides
    ============================================================ */
-html[data-theme="dark"] .pn-hero { background-color: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pn-hero { background: var(--ork-bg-secondary); }
 html[data-theme="dark"] .pn-avatar { border-color: rgba(255,255,255,0.2); }
-html[data-theme="dark"] .pn-stat-card { background: var(--ork-card-bg); border-left-color: var(--ork-border); border-right-color: var(--ork-border); border-bottom-color: var(--ork-border); /* border-top intentionally preserved so --pn-accent shows through */ }
+html[data-theme="dark"] .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-stat-number { color: #90cdf4; }
 html[data-theme="dark"] .pn-stat-icon { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-stat-label { color: var(--ork-text-secondary); }
@@ -870,7 +873,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero" style="<?= $_pnHeroCss ?>">
+<div class="pn-hero">
 	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-content">
 		<?php if ($canEditImages): ?>
@@ -1713,15 +1716,20 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
 							}
 						}
+						// Dedup key combines rank AND date so historical rows that were never
+						// reconciled past rank=1 (legitimate distinct earnings on different dates)
+						// each count, while true duplicate rows (same rank, same date from old
+						// imports) still collapse.
+						$rankKey = $rank . '|' . ($a['Date'] ?? '');
 						if (!isset($pnLadderProgress[$aid])) {
 							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank,
-								'RankSet' => $rank > 0 ? [$rank => true] : [], 'UnrankedCount' => $rank === 0 ? 1 : 0, 'HasMaster' => $hasMaster];
+								'RankSet' => $rank > 0 ? [$rankKey => true] : [], 'UnrankedCount' => $rank === 0 ? 1 : 0, 'HasMaster' => $hasMaster];
 						} else {
 							if ($rank > $pnLadderProgress[$aid]['Rank']) {
 								$pnLadderProgress[$aid]['Rank'] = $rank;
 							}
 							if ($rank > 0) {
-								$pnLadderProgress[$aid]['RankSet'][$rank] = true;
+								$pnLadderProgress[$aid]['RankSet'][$rankKey] = true;
 							} else {
 								$pnLadderProgress[$aid]['UnrankedCount']++;
 							}
@@ -1734,7 +1742,10 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					foreach ($pnLadderProgress as $_lpAid => &$lp) {
 						$_lpMax = ($_lpAid === 30) ? 12 : 10;
 						$_effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
-						$lp['Approx'] = $_effectiveCount > $lp['Rank'];
+						// Suppress the "approximate" marker when the player already holds the
+						// corresponding Master title — the M badge is the authoritative signal,
+						// no need to second-guess the breakdown that got them there.
+						$lp['Approx'] = ($_effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
 						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $_effectiveCount));
 					}
 					unset($lp);
