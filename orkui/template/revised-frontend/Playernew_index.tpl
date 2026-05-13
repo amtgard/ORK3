@@ -600,7 +600,8 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-color-col{flex:1;min-width:0}
 .pn-color-input-wrap{display:flex;align-items:center;gap:8px}
 .pn-color-input-wrap input[type="color"]{width:40px;height:34px;border:1px solid #e2e8f0;border-radius:6px;padding:2px;cursor:pointer;background:#fff}
-.pn-color-input-wrap input[type="text"]{width:80px;font-family:monospace;font-size:13px}
+.pn-color-input-wrap input[type="text"]{width:80px;font-family:monospace;font-size:13px;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;box-sizing:border-box;background:#fff;color:#2d3748}
+.pn-color-input-wrap input[type="text"]:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
 .pn-hero-preview{border-radius:8px;padding:16px 20px;color:#fff;margin:12px 0;position:relative;overflow:hidden;min-height:60px}
 .pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
@@ -1252,6 +1253,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					$_msConfig = json_decode($Player['MilestoneConfig'] ?? '', true);
 					if (!is_array($_msConfig)) $_msConfig = [];
 					$_msCompact = !empty($_msConfig['compact_milestones']);
+					$_msNewestFirst = !empty($_msConfig['newest_first']);
 					$_hasMilestones = false;
 					$_visibleMilestones = [];
 					if (is_array($Milestones)) {
@@ -1534,7 +1536,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 								<h3 class="pn-timeline-heading"><i class="fas fa-stream"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Milestones</h3>
 								<?php if (!empty($_visibleMilestones)): ?>
 								<div class="pn-timeline">
-									<?php foreach ($_visibleMilestones as $_idx => $_ms): ?>
+									<?php foreach (($_msNewestFirst ? array_reverse($_visibleMilestones) : $_visibleMilestones) as $_idx => $_ms): ?>
 									<div class="pn-tl-item">
 										<div class="pn-tl-left">
 											<div class="pn-tl-date"><?= date('M j, Y', strtotime($_ms['date'])) ?></div>
@@ -1607,7 +1609,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<?php if ($_renderCompact): ?>
 							<div class="pn-cms-card" id="pn-cms-card">
 								<div class="pn-cms-title"><i class="fas fa-stream"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Milestones</div>
-								<?php foreach ($_visibleMilestones as $_cms): ?>
+								<?php foreach (($_msNewestFirst ? array_reverse($_visibleMilestones) : $_visibleMilestones) as $_cms): ?>
 								<div class="pn-cms-item">
 									<i class="fas <?= htmlspecialchars($_cms['icon']) ?> pn-cms-icon"></i>
 									<div class="pn-cms-line"><strong><?= date('m/y', strtotime($_cms['date'])) ?></strong> &ndash; <?= htmlspecialchars($_cms['description']) ?></div>
@@ -2829,7 +2831,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<button class="pn-design-tab" data-panel="icons"><i class="fas fa-shield-alt"></i> Icons</button>
 			<?php endif; ?>
 		</div>
-		<div class="pn-acct-modal-body" style="max-height:60vh;overflow-y:auto">
+		<div class="pn-acct-modal-body" style="height:60vh;overflow-y:auto">
 			<div class="pn-form-error" id="pn-design-error"></div>
 
 			<!-- Welcome Panel -->
@@ -3166,9 +3168,10 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 
 			<!-- Photo Focus Panel -->
 			<div class="pn-design-panel" id="pn-design-focus">
+				<div style="min-height:calc(60vh - 40px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
 				<?php if ($Player['HasImage'] > 0): ?>
 				<div class="pn-design-hint" style="margin-bottom:10px">Move and resize the circle to set the focus area for your profile photo thumbnail.</div>
-				<div class="pn-focus-canvas-wrap" style="text-align:center">
+				<div class="pn-focus-canvas-wrap">
 					<canvas id="pn-focus-canvas"></canvas>
 				</div>
 				<input type="hidden" id="pn-focus-x" value="<?= $_pnFocusX ?>" />
@@ -3180,6 +3183,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<p>Upload a player photo first, then come back here to set the focus area.</p>
 				</div>
 				<?php endif; ?>
+				</div>
 			</div>
 
 			<!-- Milestones Panel -->
@@ -3190,6 +3194,11 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						Compact Milestones
 					</label>
 					<div class="pn-design-hint" style="margin-top:4px">Move your milestones to a compact sidebar list (icon + mm/yy &ndash; title) instead of the large timeline at the bottom of About.</div>
+					<label class="pn-section-toggle-label" style="margin-top:12px">
+						<input type="checkbox" id="pn-ms-newest-first" style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Show newest first
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Reverse the order so your most recent milestones appear at the top instead of the bottom.</div>
 				</div>
 				<div class="pn-design-hint" style="margin-bottom:14px">Choose which milestone types appear on your timeline. All types are shown by default.</div>
 				<div class="pn-ms-toggle-list" id="pn-ms-toggles">
@@ -4070,6 +4079,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		}
 		var compactEl = gid('pn-ms-compact');
 		msConfig['compact_milestones'] = (compactEl && compactEl.checked) ? 1 : 0;
+		var newestFirstEl = gid('pn-ms-newest-first');
+		msConfig['newest_first'] = (newestFirstEl && newestFirstEl.checked) ? 1 : 0;
 		fd.append('MilestoneConfig', JSON.stringify(msConfig));
 			fd.append('NameFont', pnSelectedFont || '');
 
@@ -4200,6 +4211,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	var cfg = PnConfig.milestoneConfig || {};
 	var compactToggle = document.getElementById('pn-ms-compact');
 	if (compactToggle) compactToggle.checked = !!cfg['compact_milestones'];
+	var newestFirstToggle = document.getElementById('pn-ms-newest-first');
+	if (newestFirstToggle) newestFirstToggle.checked = !!cfg['newest_first'];
 	var toggles = document.querySelectorAll('#pn-ms-toggles input[data-ms-type]');
 	for (var i = 0; i < toggles.length; i++) {
 		var msType = toggles[i].getAttribute('data-ms-type');
@@ -4756,6 +4769,7 @@ $(function() {
 			(function() {
 				var msCfg = PnConfig.milestoneConfig || {};
 				if (msCfg.level6 === 0) return; // disabled in user prefs
+				var newestFirst = msCfg.newest_first === 1;
 				var classList = PnConfig.classList || [];
 				if (!classList.length || !att.length) return;
 
@@ -4849,7 +4863,7 @@ $(function() {
 						var inserted = false;
 						for (var j = 0; j < siblings.length; j++) {
 							var sd = siblings[j].getAttribute('data-tl-date') || '';
-							if (sd && sd > m.date) {
+							if (sd && (newestFirst ? sd < m.date : sd > m.date)) {
 								container.insertBefore(node, siblings[j]);
 								inserted = true;
 								break;
