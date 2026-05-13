@@ -1874,6 +1874,10 @@ html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { bac
 					The <em>Remove</em> player&rsquo;s account will be permanently deleted. All their awards, attendance, officer history, unit memberships, and notes will be transferred to the <em>Keep</em> player. Any attendance on the same date as an existing record will be dropped.
 				</div>
 			</div>
+			<div class="plr-merge-scope-note" style="margin:10px 0 18px;padding:10px 12px;background:#ebf4ff;border-left:3px solid #4299e1;border-radius:4px;font-size:13px;color:var(--ork-text-body)">
+				<i class="fas fa-info-circle" style="margin-right:6px;color:#4299e1"></i>
+				Both players must be members of <strong><?= htmlspecialchars($park_name ?? 'this park') ?></strong>. To merge players across parks or kingdoms, use the kingdom profile&rsquo;s Merge Players tool.
+			</div>
 			<div class="pk-acct-field">
 				<label>Player to Keep <span style="color:#e53e3e">*</span></label>
 				<input type="text" id="pk-merge-keep-name" placeholder="Search for player to keep&hellip;" autocomplete="off">

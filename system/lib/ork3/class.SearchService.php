@@ -296,10 +296,19 @@ class SearchService extends Ork3 {
 
 		$abbrev_match = isset($matches[3]) ? (trimlen($matches[3])==0?$term:$matches[3]) : $term;
 
-		return array( 
-			$abbrev_match, 
-			(is_null($k_id)?$kingdom_id:$k_id), 
-			(is_null($p_id)?$park_id:$p_id) );
+		// If the prefix explicitly redirected to a different kingdom, the
+		// caller's park_id no longer makes sense — Felfrost-in-Nine-Blades
+		// AND-ed with kingdom=GP returns zero rows. Clear the caller's park
+		// scope so the redirect wins cleanly. If the user wanted to keep a
+		// park scope they would have written "KK:PP foo".
+		$overrode_kingdom = !is_null($k_id);
+		$overrode_park    = !is_null($p_id);
+		if ($overrode_kingdom && !$overrode_park) $park_id = null;
+
+		return array(
+			$abbrev_match,
+			$overrode_kingdom ? $k_id : $kingdom_id,
+			$overrode_park    ? $p_id : $park_id );
 	}
   
 	public function Player($type, $search, $limit=15, $kingdom_id = null, $park_id = null, $waivered = null, $token = null, $persona_required = true) {

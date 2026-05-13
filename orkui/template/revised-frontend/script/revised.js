@@ -10695,12 +10695,14 @@ window.pnCloseUnitCreateModal = function() {
                     var seen = {};
                     local.forEach(function(pl) { seen[pl.MundaneId] = true; });
                     var combined = local.concat(global.filter(function(pl) { return !seen[pl.MundaneId]; }));
-                    var localIds = {};
-                    local.forEach(function(pl) { localIds[pl.MundaneId] = true; });
                     var otherId_val = gid(otherId) ? gid(otherId).value : '';
                     results.innerHTML = combined.length
                         ? combined.map(function(pl) {
-                            var isLocal = localIds[pl.MundaneId];
+                            // Trust the player's actual KingdomId — the server's
+                            // magic_search lets a "GP: monkey" prefix override the
+                            // request's kingdom_id filter, so request-list membership
+                            // would mislabel out-of-kingdom hits as local.
+                            var isLocal = String(pl.KingdomId) === String(KnConfig.kingdomId);
                             var sub = isLocal
                                 ? ' <span style="color:#68d391;font-size:11px">&#x2713; Kingdom</span>'
                                 : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
@@ -11229,33 +11231,32 @@ window.pnCloseUnitCreateModal = function() {
             if (term.length < 2) { results.classList.remove('pk-ac-open'); return; }
             clearTimeout(timer);
             timer = setTimeout(function() {
-                var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId });
-                var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 });
-                $.when(scopedReq, globalReq).done(function(sr, gr) {
-                    var local  = sr[0] || [];
-                    var global = gr[0] || [];
-                    var seen = {};
-                    local.forEach(function(pl) { seen[pl.MundaneId] = true; });
-                    var combined = local.concat(global.filter(function(pl) { return !seen[pl.MundaneId]; }));
-                    var localIds = {};
-                    local.forEach(function(pl) { localIds[pl.MundaneId] = true; });
-                    var otherId_val = gid(otherId) ? gid(otherId).value : '';
-                    results.innerHTML = combined.length
-                        ? combined.map(function(pl) {
-                            var isLocal = localIds[pl.MundaneId];
-                            var sub = isLocal
-                                ? ' <span style="color:#68d391;font-size:11px">&#x2713; This Park</span>'
-                                : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
-                            var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
-                            return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
-                                + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
-                                + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                + '>' + escHtml(pl.Persona) + sub + '</div>';
-                        }).join('')
-                        : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                    results.classList.add('pk-ac-open');
-                });
+                // Park-level merge requires both players to be at THIS park
+                // (server-side MergePlayer rejects cross-park merges with
+                // park-scope auth). Pass park_id to the server AND filter
+                // client-side as defense-in-depth: a "kk:" prefix in the search
+                // term invokes SearchService::magic_search which can redirect
+                // the kingdom and clear the park filter, so out-of-park hits
+                // can sneak through. The client filter guarantees same-park
+                // regardless of how the server interpreted the term.
+                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId },
+                    function(data) {
+                        var local = (data || []).filter(function(pl) {
+                            return String(pl.ParkId) === String(PkConfig.parkId);
+                        });
+                        var otherId_val = gid(otherId) ? gid(otherId).value : '';
+                        results.innerHTML = local.length
+                            ? local.map(function(pl) {
+                                var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
+                                return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
+                                    + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
+                                    + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
+                                    + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
+                                    + '>' + escHtml(pl.Persona) + '</div>';
+                            }).join('')
+                            : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players at this park match</div>';
+                        results.classList.add('pk-ac-open');
+                    });
             }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         results.addEventListener('click', function(e) {

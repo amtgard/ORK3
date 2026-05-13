@@ -274,8 +274,12 @@ class Controller_Park extends Controller
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_EDIT);
 		$this->data['CanAdminPark']  = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
+		// Park admins can merge two players who both belong to THIS park.
+		// Cross-park or cross-kingdom merges still need higher rights and are
+		// performed from the kingdom profile. The server-side MergePlayer
+		// enforces this scope; the flag is just for showing the UI button.
 		$this->data['CanMergePlayers'] = $uid > 0
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_CREATE);
+			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
 
 		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
