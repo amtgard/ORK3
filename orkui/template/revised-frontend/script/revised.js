@@ -9696,6 +9696,19 @@ function setupPronounPicker(cfg) {
 
     function gid(id) { return document.getElementById(id); }
 
+    // Toggle the Notes-tab infobox between the "has notes" message (with the
+    // close-out link) and the "no notes" message based on the current tab
+    // count. Called after any add/delete so the message stays in sync without
+    // a page reload.
+    function pnSyncNotesInfobox() {
+        var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
+        var n = tabCount ? (parseInt(tabCount.textContent.replace(/[^0-9]/g, ''), 10) || 0) : 0;
+        var has  = gid('pn-notes-infobox-has');
+        var none = gid('pn-notes-infobox-none');
+        if (has)  has.style.display  = n > 0 ? '' : 'none';
+        if (none) none.style.display = n > 0 ? 'none' : '';
+    }
+
     var editNoteId = 0; // 0 = add mode, >0 = edit mode
 
     window.pnOpenAddNoteModal = function(noteData) {
@@ -9844,6 +9857,7 @@ function setupPronounPicker(cfg) {
                             if (table) table.style.display = '';
                             var emptyState = document.getElementById('pn-history-empty');
                             if (emptyState) emptyState.style.display = 'none';
+                            pnSyncNotesInfobox();
                         }
                     }
                 } else {
@@ -9867,47 +9881,73 @@ function setupPronounPicker(cfg) {
         $(document).on('click', '.pn-note-del-btn', function() {
             var notesId = $(this).data('notes-id');
             var row     = $(this).closest('tr');
-            if (!notesId || !confirm('Delete this note?')) return;
+            if (!notesId) return;
             var self = this;
-            self.disabled = true;
-            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletenote', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'NotesId=' + encodeURIComponent(notesId),
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.status === 0) {
-                    row.fadeOut(300, function() {
-                        row.remove();
-                        var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-                        if (tabCount) {
-                            var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-                            tabCount.textContent = '(' + Math.max(0, n - 1) + ')';
-                        }
-                    });
-                } else {
+            pnConfirm({
+                title: 'Delete Note?',
+                message: 'This note will be permanently removed. This cannot be undone.',
+                confirmText: 'Delete',
+                danger: true,
+            }, function() {
+                self.disabled = true;
+                fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletenote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'NotesId=' + encodeURIComponent(notesId),
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 0) {
+                        row.fadeOut(300, function() {
+                            row.remove();
+                            var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
+                            if (tabCount) {
+                                var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
+                                tabCount.textContent = '(' + Math.max(0, n - 1) + ')';
+                            }
+                            pnSyncNotesInfobox();
+                        });
+                    } else {
+                        self.disabled = false;
+                        pnConfirm({ title: 'Delete Failed', message: data.error || 'Error deleting note.', confirmText: 'OK', danger: false }, function() {});
+                    }
+                })
+                .catch(function() {
                     self.disabled = false;
-                    alert(data.error || 'Error deleting note.');
-                }
-            })
-            .catch(function() { self.disabled = false; alert('Request failed.'); });
+                    pnConfirm({ title: 'Delete Failed', message: 'Request failed. Please try again.', confirmText: 'OK', danger: false }, function() {});
+                });
+            });
         });
 
-        // Clear notes tab confirm modal
+    });
+})();
+
+// ---- Playernew: Clear Notes Tab (owner OR park admin) ----
+// Lives outside the admin-only IIFE above so the close-out flow is available
+// to non-admin players viewing their own profile. The server-side ClearNotes
+// already permits both (owner-self OR park-admin).
+(function() {
+    if (typeof PnConfig === 'undefined') return;
+    var isOwner = PnConfig.loggedInUserId && PnConfig.playerId
+        && parseInt(PnConfig.loggedInUserId, 10) === parseInt(PnConfig.playerId, 10);
+    if (!PnConfig.canEditAdmin && !isOwner) return;
+
+    function gid(id) { return document.getElementById(id); }
+
+    $(document).ready(function() {
         $(document).on('click', '#pn-clear-notes-link', function(e) {
             e.preventDefault();
             var overlay = gid('pn-clearnotes-overlay');
-            if (overlay) { overlay.style.display = ''; }
+            if (overlay) overlay.classList.add('pn-open');
         });
         $(document).on('click', '#pn-clearnotes-close-btn, #pn-clearnotes-cancel', function() {
             var overlay = gid('pn-clearnotes-overlay');
-            if (overlay) { overlay.style.display = 'none'; }
+            if (overlay) overlay.classList.remove('pn-open');
         });
         $(document).on('click', '#pn-clearnotes-overlay', function(e) {
             if ($(e.target).is('#pn-clearnotes-overlay')) {
                 var overlay = gid('pn-clearnotes-overlay');
-                if (overlay) overlay.style.display = 'none';
+                if (overlay) overlay.classList.remove('pn-open');
             }
         });
         $(document).on('click', '#pn-clearnotes-confirm', function() {
@@ -9922,14 +9962,12 @@ function setupPronounPicker(cfg) {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    // Hide overlay, tab panel, and tab li
                     var overlay = gid('pn-clearnotes-overlay');
-                    if (overlay) overlay.style.display = 'none';
+                    if (overlay) overlay.classList.remove('pn-open');
                     var tabPanel = gid('pn-tab-history');
                     if (tabPanel) tabPanel.style.display = 'none';
                     var tabLi = document.querySelector('[data-tab=history]');
                     if (tabLi) tabLi.style.display = 'none';
-                    // Switch to awards tab
                     var awardsLi = document.querySelector('[data-tab=awards]');
                     if (awardsLi) awardsLi.click();
                 } else {
