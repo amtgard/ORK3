@@ -481,8 +481,7 @@ html[data-theme="dark"] .pn-tooltip-trigger .pn-tooltip-text{background:var(--or
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
 .pn-about-main{flex:1;min-width:0;position:relative}
-.pn-about-edit-btn{position:absolute;top:0;right:0;width:30px;height:30px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;color:#4299e1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;opacity:0;transition:opacity 0.15s,background 0.15s,color 0.15s;z-index:5}
-.pn-about-main:has(.pn-about-section:hover) .pn-about-edit-btn,.pn-about-edit-btn:hover,.pn-about-edit-btn:focus{opacity:1}
+.pn-about-edit-btn{position:absolute;top:0;right:0;width:30px;height:30px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;color:#4299e1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:background 0.15s,color 0.15s;z-index:5}
 .pn-about-edit-btn:hover,.pn-about-edit-btn:focus{background:#4299e1;color:#fff;border-color:#4299e1;outline:none}
 html[data-theme="dark"] .pn-about-edit-btn{background:var(--ork-card-bg);border-color:var(--ork-border);color:var(--pn-accent,#63b3ed)}
 html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-about-edit-btn:focus{background:var(--pn-accent,#63b3ed);color:var(--ork-card-bg);border-color:var(--pn-accent,#63b3ed)}
@@ -509,7 +508,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-icons-option-body{flex:1;min-width:0}
 .pn-icons-option-title{font-size:13px;font-weight:600;color:#2d3748;margin-bottom:2px}
 .pn-icons-option-desc{font-size:11px;color:#718096;line-height:1.35}
-@media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-sidebar{flex:none;width:100%}}
+@media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
 /* ===== Milestones Timeline ===== */
 .pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0}
 .pn-timeline-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 20px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;display:flex;align-items:center;gap:8px}
@@ -1499,7 +1498,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<div class="pn-tab-panel" id="pn-tab-about"<?= $_aboutIsDefault ? '' : ' style="display:none"' ?>>
 					<div class="pn-about-layout">
 						<div class="pn-about-main">
-							<?php if ($isOwnProfile && ($_hasAboutPersona || $_hasAboutStory)): ?>
+							<?php if ($isOwnProfile): ?>
 							<button type="button" class="pn-about-edit-btn" id="pn-about-edit-btn" aria-label="Edit About section"><i class="fas fa-pencil-alt"></i></button>
 							<?php endif; ?>
 							<?php if ($_hasAboutPersona): ?>
