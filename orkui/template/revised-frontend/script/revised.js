@@ -8880,7 +8880,7 @@ function setupPronounPicker(cfg) {
                     fb.textContent = msg;
                     fb.style.display = '';
                     fb.className = cls;
-                    fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
                 if (!date) {
                     showFb('Date is required.', 'pn-form-error');
@@ -8958,9 +8958,9 @@ function setupPronounPicker(cfg) {
                         console.log('[EditAward] Response body (first 500 chars):', body.substring(0, 500));
                         saveBtn.disabled = false;
                         if (r.ok) {
-                            if (doReconcile)                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
                             showFb(msg, 'pn-award-edit-success');
-                            setTimeout(function() { location.reload(); }, 900);
+                            setTimeout(function() { location.reload(); }, 1500);
                         } else {
                             showFb('Save failed (server error ' + r.status + ').', 'pn-form-error');
                         }
@@ -8978,7 +8978,15 @@ function setupPronounPicker(cfg) {
         var closeBtn  = gid('pn-edit-award-close-btn');
         if (closeBtn)  closeBtn.addEventListener('click', pnCloseAwardEditModal);
         var overlay = gid('pn-award-edit-overlay');
-        if (overlay) overlay.addEventListener('click', function(e) { if (e.target === this) pnCloseAwardEditModal(); });
+        if (overlay) {
+            // Only close on a click that BOTH started and ended on the overlay.
+            // Without the mousedown gate, drag-selecting text in an input and
+            // releasing outside the input fires a click on the overlay and
+            // closes the modal mid-selection.
+            var overlayDownOnSelf = false;
+            overlay.addEventListener('mousedown', function(e) { overlayDownOnSelf = (e.target === this); });
+            overlay.addEventListener('click', function(e) { if (overlayDownOnSelf && e.target === this) pnCloseAwardEditModal(); });
+        }
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('pn-award-edit-overlay') && gid('pn-award-edit-overlay').classList.contains('pn-open'))
                 pnCloseAwardEditModal();

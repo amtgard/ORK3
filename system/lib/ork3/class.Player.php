@@ -482,8 +482,11 @@ class Player extends Ork3 {
 						'Date' => $r->date,
 						'GivenById' => $r->given_by_id,
 						'Note' => $r->note,
-						'ParkId' => $r->park_id,
-						'KingdomId' => $r->kingdom_id,
+						// "Where given" comes from at_park_id / at_kingdom_id / at_event_id.
+						// The bare park_id/kingdom_id columns store the recipient's home park
+						// at grant time and should NOT round-trip back through the edit modal.
+						'ParkId' => $r->at_park_id,
+						'KingdomId' => $r->at_kingdom_id,
 						'EventId' => $r->at_event_id,
 						'Name' => $r->name,
 						'KingdomAwardName' => $r->kingdom_awardname,
@@ -1880,7 +1883,10 @@ class Player extends Ork3 {
 						return InvalidParameter();
 				}
 
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
+				// Snapshot prior state for audit before any writes; post-state is
+				// captured after the UPDATE so the audit log can render a real diff.
+				$_audit_prior   = $this->get_award($awards);
+				$_audit_mundane = $awards->mundane_id;
 
 				$set_rank       = intval($request['Rank']);
 				$set_date       = $request['Date'] ? date('Y-m-d', strtotime($request['Date'])) : $awards->date;
@@ -1943,6 +1949,16 @@ class Player extends Ork3 {
 				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
 				$this->db->query($sql);
 
+				// Re-fetch post-state and audit prior + post so the audit-log diff renderer
+				// can show what actually changed (not just intent from the request).
+				$_audit_after = $_audit_prior;
+				$awards->clear();
+				$awards->awards_id = $set_awards_id;
+				if ($awards->find()) {
+					$_audit_after = $this->get_award($awards);
+				}
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
+
 				return Success($set_awards_id);
 			} else {
 				return InvalidParamter();
@@ -2004,8 +2020,23 @@ class Player extends Ork3 {
 				$set_note = $request['Note'];
 				$set_awards_id = intval($request['AwardsId']);
 
+				// Snapshot prior state before the write so the audit-log diff renderer
+				// has a real before/after pair for ReconcileAward (shares Player::UpdateAward's
+				// diff case in Admin_auditlog.tpl).
+				$_audit_prior   = $this->get_award($awards);
+				$_audit_mundane = $awards->mundane_id;
+
 				$sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', rank=' . intval($set_rank) . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\', by_whom_id=' . intval($mundane_id) . ' WHERE awards_id=' . intval($set_awards_id);
 				$this->db->query($sql);
+
+				// Re-fetch post-state for the audit diff.
+				$_audit_after = $_audit_prior;
+				$awards->clear();
+				$awards->awards_id = $set_awards_id;
+				if ($awards->find()) {
+					$_audit_after = $this->get_award($awards);
+				}
+				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
 
 				return Success($set_awards_id);
 			} else {

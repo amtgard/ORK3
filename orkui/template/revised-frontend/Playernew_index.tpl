@@ -828,7 +828,7 @@ html[data-theme="dark"] .pn-ms-add-row .pn-ms-field input,
 html[data-theme="dark"] .pn-ms-add-row .pn-ms-field select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .pn-ms-icon-opt { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-ms-icon-opt:hover { background: var(--ork-bg-tertiary); border-color: var(--ork-text-muted); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-ms-icon-opt.pn-ms-icon-active { background: var(--ork-bg-tertiary); /* --pn-accent border + color flow through from light rule */ }
+html[data-theme="dark"] .pn-ms-icon-opt.pn-ms-icon-active { background: var(--ork-bg-tertiary); border-color: var(--pn-accent, #4299e1); color: var(--pn-accent, #4299e1); }
 
 /* Yellow warning banners share an alert-warning palette in dark mode */
 html[data-theme="dark"] .pn-about-visibility-warn,
