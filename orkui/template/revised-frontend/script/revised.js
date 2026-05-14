@@ -208,11 +208,13 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         dropdown.className = 'aw-dropdown';
         dropdown.innerHTML =
             '<div class="aw-dropdown-search-wrap"><i class="fas fa-search"></i>' +
-                '<input type="text" class="aw-dropdown-search" placeholder="Type to filter\u2026"></div>' +
+                '<input type="text" class="aw-dropdown-search" placeholder="Type to filter\u2026">' +
+                '<button type="button" class="aw-dropdown-close" aria-label="Close">&times;</button></div>' +
             '<div class="aw-dropdown-body"></div>';
         document.body.appendChild(dropdown);
         searchInput = dropdown.querySelector('.aw-dropdown-search');
         body = dropdown.querySelector('.aw-dropdown-body');
+        dropdown.querySelector('.aw-dropdown-close').addEventListener('click', function() { closeDropdown(); });
 
         // Close on outside click
         document.addEventListener('mousedown', function(e) {
@@ -322,13 +324,17 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         var vw = window.innerWidth, vh = window.innerHeight;
         var mobile = vw <= 600;
         if (mobile) {
-            dropdown.style.left = '8px';
-            dropdown.style.right = '8px';
-            dropdown.style.width = 'auto';
+            // Fullscreen on mobile so the on-screen keyboard doesn't clip the
+            // results list. visualViewport shrinks when the keyboard opens,
+            // so the dropdown's inset:0 covers exactly the visible area and
+            // the results scroll below the sticky search input.
+            dropdown.style.left = '0';
+            dropdown.style.right = '0';
+            dropdown.style.top = '0';
             dropdown.style.bottom = '0';
-            dropdown.style.top = 'auto';
-            dropdown.style.maxHeight = '55vh';
-            dropdown.style.borderRadius = '10px 10px 0 0';
+            dropdown.style.width = 'auto';
+            dropdown.style.maxHeight = 'none';
+            dropdown.style.borderRadius = '0';
         } else {
             var w = Math.max(rect.width, 320);
             var left = rect.left;
