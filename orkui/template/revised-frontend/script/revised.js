@@ -1386,9 +1386,16 @@ if (PnConfig.recError) {
 
         gid('pn-acct-close-btn').addEventListener('click', pnCloseAccountModal);
         gid('pn-acct-cancel').addEventListener('click', pnCloseAccountModal);
-        gid('pn-acct-overlay').addEventListener('click', function(e) {
-            if (e.target === this) pnCloseAccountModal();
-        });
+        // Only close on a click that BOTH started and ended on the overlay.
+        // Without the mousedown gate, drag-selecting text in an input and
+        // releasing outside the input fires a click on the overlay and
+        // closes the modal mid-selection.
+        (function() {
+            var ov = gid('pn-acct-overlay');
+            var downOnSelf = false;
+            ov.addEventListener('mousedown', function(e) { downOnSelf = (e.target === this); });
+            ov.addEventListener('click', function(e) { if (downOnSelf && e.target === this) pnCloseAccountModal(); });
+        })();
         document.addEventListener('keydown', function(e) {
             if ((e.key === 'Escape' || e.keyCode === 27) && gid('pn-acct-overlay').classList.contains('pn-open'))
                 pnCloseAccountModal();
