@@ -377,16 +377,28 @@ class Controller_PlayerAjax extends Controller {
 			echo json_encode(['status' => 1, 'error' => 'Cannot merge a player with themselves.']);
 			exit;
 		}
-		// Auth: caller must have kingdom-level authority over at least one of the players' kingdoms
+		// Auth: mirror class.Player::MergePlayer's 3-tier check so park admins
+		// aren't rejected here before the server logic runs.
+		//   - cross-kingdom merge          => system-wide AUTH_ADMIN
+		//   - same-kingdom, different park => Kingdom EDIT (Kingdom-level officer)
+		//   - same park                    => Park EDIT (Park-level officer / admin)
 		global $DB;
 		$DB->Clear();
-		$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id IN ({$from_id}, {$to_id})");
-		$authorized = false;
+		$rs = $DB->DataSet("SELECT mundane_id, park_id, kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id IN ({$from_id}, {$to_id})");
+		$rows = [];
 		while ($rs && $rs->Next()) {
-			$kid = (int)$rs->kingdom_id;
-			if ($kid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kid, AUTH_CREATE)) {
-				$authorized = true;
-				break;
+			$rows[(int)$rs->mundane_id] = ['park_id' => (int)$rs->park_id, 'kingdom_id' => (int)$rs->kingdom_id];
+		}
+		$authorized = false;
+		if (isset($rows[$from_id]) && isset($rows[$to_id])) {
+			$fKid = $rows[$from_id]['kingdom_id']; $tKid = $rows[$to_id]['kingdom_id'];
+			$fPid = $rows[$from_id]['park_id'];    $tPid = $rows[$to_id]['park_id'];
+			if ($fKid !== $tKid) {
+				$authorized = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
+			} elseif ($fPid !== $tPid) {
+				$authorized = $tKid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $tKid, AUTH_EDIT);
+			} else {
+				$authorized = $tPid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $tPid, AUTH_EDIT);
 			}
 		}
 		if (!$authorized) {
