@@ -8,8 +8,10 @@ class SearchService extends Ork3 {
 	}
 	
 	public function Unit($name, $limit=15) {
-		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $limit)); 
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
+		// Cache only for very short terms — past 3 chars, the truncated key would
+		// alias longer searches to the shorter prefix's results.
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $limit));
+		if (strlen($name) <= 3 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 30)) !== false)
 			return $cache;
 		
    		$limit = min($limit, 50);
@@ -133,10 +135,10 @@ class SearchService extends Ork3 {
 	}
 	
 	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1, $multi = 0) {
-		$keys = func_get_args();
-		if (count($keys) > 0)
-			$keys[0] = substr($keys[0] ?? '', 0, 4);
-		$key = Ork3::$Lib->ghettocache->key($keys);
+		// Cache key must reflect the FULL search term — historically this truncated
+		// the name to the first 4 chars, so "iron" and "ironclad" collided and the
+		// longer search would return the shorter search's results.
+		$key = Ork3::$Lib->ghettocache->key(func_get_args());
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
 			return $cache;
 
@@ -230,10 +232,11 @@ class SearchService extends Ork3 {
 	
 	public function Kingdom($name, $limit = null) {
 		
-		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $kingdom_id, $limit)); 
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
+		$key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $kingdom_id, $limit));
+		// Only serve cache for short prefixes to avoid the truncation collision.
+		if (strlen($name) <= 3 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false)
 			return $cache;
-		
+
 		$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
 		$kingdom->clear();
 		$kingdom->like('name', "%$name%");

@@ -540,6 +540,15 @@ class Controller_KingdomAjax extends Controller {
 				ORDER BY a.authorization_id DESC LIMIT 1");
 			$authId = 0; $persona = '';
 			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
+			Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
+				'authorization_id' => $authId,
+				'mundane_id'       => $mid,
+				'park_id'          => 0,
+				'kingdom_id'       => (int)$kingdom_id,
+				'event_id'         => 0,
+				'unit_id'          => 0,
+				'role'             => $role,
+			]);
 			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
 		} elseif ($action === 'removeauth') {

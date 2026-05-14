@@ -276,6 +276,15 @@ class Controller_EventAjax extends Controller {
 				ORDER BY a.authorization_id DESC LIMIT 1");
 			$authId = 0; $persona = '';
 			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
+			Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_EVENT, 'Id' => $event_id, 'Role' => $role], 'Player', $mid, null, [
+				'authorization_id' => $authId,
+				'mundane_id'       => $mid,
+				'park_id'          => 0,
+				'kingdom_id'       => 0,
+				'event_id'         => (int)$event_id,
+				'unit_id'          => 0,
+				'role'             => $role,
+			]);
 			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
 		} elseif ($action === 'removeauth') {

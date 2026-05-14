@@ -2036,6 +2036,8 @@ class Controller_Admin extends Controller {
 		$method_filter = trim($this->request->MethodCall ?? '');
 		$bywhom_filter = (int)($this->request->ByWhomId ?? 0);
 		$entity_filter = (int)($this->request->EntityId ?? 0);
+		$entity_type_filter = trim($this->request->EntityType ?? '');
+		if (!in_array($entity_type_filter, ['Player', 'Park', 'Kingdom', 'Event'], true)) $entity_type_filter = '';
 
 		global $DB;
 		$where = "da.modified_at >= '" . mysql_real_escape_string($start) . " 00:00:00'"
@@ -2043,6 +2045,9 @@ class Controller_Admin extends Controller {
 		if ($method_filter) $where .= " AND da.method_call = '" . mysql_real_escape_string($method_filter) . "'";
 		if ($bywhom_filter) $where .= " AND da.by_whom_id = {$bywhom_filter}";
 		if ($entity_filter) $where .= " AND da.entity_id  = {$entity_filter}";
+		// Without the entity-type constraint, a pasted ID like #5 would match
+		// Player #5, Park #5, Kingdom #5, etc. all at once. Scope it.
+		if ($entity_type_filter) $where .= " AND da.entity = '" . mysql_real_escape_string($entity_type_filter) . "'";
 
 		$DB->Clear();
 		$cr = $DB->DataSet("SELECT COUNT(*) AS cnt FROM ork_danger_audit da WHERE {$where}");
@@ -2082,7 +2087,10 @@ class Controller_Admin extends Controller {
 		$DB->Clear();
 		$mr = $DB->DataSet("SELECT DISTINCT method_call FROM ork_danger_audit ORDER BY method_call");
 		$methods = [];
-		if ($mr && $mr->Size() > 0) { do { $methods[] = $mr->method_call; } while ($mr->Next()); }
+		// Yapo's Next() fetches the NEXT row — the result set isn't pre-positioned.
+		// A `do { push; } while (Next())` pattern pushes one stray null at the front
+		// before the first fetch, which surfaces in the dropdown as a blank option.
+		if ($mr) { while ($mr->Next()) { $methods[] = $mr->method_call; } }
 
 		$this->data['AuditRows']    = $rows;
 		$this->data['AuditTotal']   = $total;
@@ -2095,6 +2103,7 @@ class Controller_Admin extends Controller {
 		$this->data['MethodFilter'] = $method_filter;
 		$this->data['ByWhomFilter'] = $bywhom_filter;
 		$this->data['EntityFilter'] = $entity_filter;
+		$this->data['EntityTypeFilter'] = $entity_type_filter;
 		$this->data['page_title']   = 'Audit Log';
 	}
 

@@ -551,7 +551,22 @@ class Authorization extends Ork3
 		$this->auth->clear();
 		$this->auth->authorization_id = $request['AuthorizationId'];
 		if (valid_id($request['AuthorizationId']) && $this->auth->find()) {
+			$_prior = [
+				'authorization_id' => (int)$this->auth->authorization_id,
+				'mundane_id'       => (int)$this->auth->mundane_id,
+				'park_id'          => (int)$this->auth->park_id,
+				'kingdom_id'       => (int)$this->auth->kingdom_id,
+				'event_id'         => (int)$this->auth->event_id,
+				'unit_id'          => (int)$this->auth->unit_id,
+				'role'             => $this->auth->role,
+			];
+			$_audit_req = $request;
+			unset($_audit_req['Token']);
 			$this->log->Write('Authorization', $requester_id, LOG_REMOVE, $request);
+			// Anchor the audit to the affected player so the entry surfaces on
+			// the grantee's audit history. Authority changes are security-relevant
+			// — they should be discoverable from the player's profile audit.
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::RemoveAuthorization', $_audit_req, 'Player', $_prior['mundane_id'], $_prior, null);
 			$this->auth->delete();
 			$response = Success();
 		} else {

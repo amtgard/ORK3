@@ -359,6 +359,15 @@ class Controller_ParkAjax extends Controller {
 				ORDER BY a.authorization_id DESC LIMIT 1");
 			$authId = 0; $persona = '';
 			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
+			Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
+				'authorization_id' => $authId,
+				'mundane_id'       => $mid,
+				'park_id'          => (int)$park_id,
+				'kingdom_id'       => 0,
+				'event_id'         => 0,
+				'unit_id'          => 0,
+				'role'             => $role,
+			]);
 			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
 		} elseif ($action === 'removeauth') {
