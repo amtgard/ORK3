@@ -13,6 +13,7 @@ $_actionLabels = [
 	'Player::revoke_award'         => 'Award Revoked',
 	'Player::ReactivateAward'      => 'Award Reactivated',
 	'Player::UpdateAward'          => 'Award Updated',
+	'Player::ReconcileAward'       => 'Award Reconciled',
 	'Player::MergePlayer'          => 'Players Merged',
 	'Player::MovePlayer'           => 'Player Moved',
 	'Player::SetPlayerSuspension'  => 'Suspension Changed',
@@ -225,6 +226,10 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			return 'Reactivated award' . ($name ? ': ' . htmlspecialchars($name) : '');
 		case 'Player::UpdateAward':
 			return 'Updated award record';
+		case 'Player::ReconcileAward':
+			$_kid = (int)($a['kingdomaward_id'] ?? $b['kingdomaward_id'] ?? 0);
+			$name = $a['KingdomAwardName'] ?? $b['KingdomAwardName'] ?? ($kawardMap[$_kid] ?? '');
+			return 'Reconciled award' . ($name ? ': ' . htmlspecialchars($name) : '');
 		case 'Player::MergePlayer':
 			$from = $b['Persona'] ?? ($p['FromMundaneId'] ? 'player #' . $p['FromMundaneId'] : '');
 			$to   = $a['Persona'] ?? ($p['ToMundaneId']   ? 'player #' . $p['ToMundaneId']   : '');
@@ -445,12 +450,96 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			if (!$rows && !$truncatedNotice) return '<em style="color:#a0aec0">No tracked fields changed.</em>';
 			return '<table class="al-diff-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>' . $truncatedNotice . $rows . '</tbody></table>';
 
+		case 'Player::UpdateAward':
+		case 'Player::ReconcileAward':
+			// Diff renderer: show Before / After for changed fields only.
+			// Legacy entries (logged before these methods captured post-state)
+			// fall back to deriving "after" from the request — that's the user's
+			// intent, not necessarily what the row ended up with, so we label it.
+			$_isLegacy = empty($a);
+			$_after = is_array($a) ? $a : [];
+			if ($_isLegacy && is_array($p)) {
+				$_reqMap = [
+					'Rank'           => 'rank',
+					'Date'           => 'date',
+					'GivenById'      => 'given_by_id',
+					'Note'           => 'note',
+					'CustomName'     => 'custom_name',
+					'AliasAwardId'   => 'alias_award_id',
+					'AwardId'        => 'award_id',
+					'KingdomAwardId' => 'kingdomaward_id',  // ReconcileAward target
+				];
+				foreach ($_reqMap as $_pk => $_sk) {
+					if (array_key_exists($_pk, $p)) $_after[$_sk] = $p[$_pk];
+				}
+				// Approximate the at_* derivation that UpdateAward does from ParkId/KingdomId/EventId.
+				if (!empty($p['EventId'])) {
+					$_after['at_event_id'] = $p['EventId'];
+				} elseif (array_key_exists('ParkId', $p)) {
+					$_after['at_park_id'] = $p['ParkId'];
+				}
+				if (array_key_exists('KingdomId', $p) && empty($p['EventId']) && empty($p['ParkId'])) {
+					$_after['at_kingdom_id'] = $p['KingdomId'];
+				}
+			}
+			$_fieldList = [
+				'rank'            => ['lbl' => 'Rank',          'fmt' => 'int'],
+				'date'            => ['lbl' => 'Date',          'fmt' => 'text'],
+				'given_by_id'     => ['lbl' => 'Given By',      'fmt' => 'player'],
+				'note'            => ['lbl' => 'Note',          'fmt' => 'text'],
+				'custom_name'     => ['lbl' => 'Custom Name',   'fmt' => 'text'],
+				'alias_award_id'  => ['lbl' => 'Alias Award',   'fmt' => 'award_id'],
+				'award_id'        => ['lbl' => 'Award Type',    'fmt' => 'award_id'],
+				'kingdomaward_id' => ['lbl' => 'Kingdom Award', 'fmt' => 'kingdomaward'],
+				'at_park_id'      => ['lbl' => 'At Park',       'fmt' => 'park'],
+				'at_kingdom_id'   => ['lbl' => 'At Kingdom',    'fmt' => 'kingdom'],
+				'at_event_id'     => ['lbl' => 'At Event',      'fmt' => 'event'],
+			];
+			// Treat 0, '', and null as the same "empty" value for diff purposes —
+			// the awards schema uses 0 as "no value" on int columns, and '' on text.
+			$_norm = function($v) {
+				if ($v === null || $v === '' || $v === 0 || $v === '0') return null;
+				return (string)$v;
+			};
+			$_fmt = function($v, $kind) use ($mundaneMap, $parkMap, $kingdomMap, $eventMap, $kawardMap) {
+				if ($v === null || $v === '' || $v === 0 || $v === '0') return '<span style="color:#a0aec0">—</span>';
+				switch ($kind) {
+					case 'int':          return (int)$v;
+					case 'player':       return _auditIdLink('player', $v, $mundaneMap);
+					case 'park':         return _auditIdLink('park', $v, $parkMap);
+					case 'kingdom':      return _auditIdLink('kingdom', $v, $kingdomMap);
+					case 'event':        return _auditIdLink('event', $v, $eventMap);
+					case 'kingdomaward': return htmlspecialchars($kawardMap[(int)$v] ?? ('#' . (int)$v));
+					case 'award_id':     return '#' . (int)$v;
+					default:             return htmlspecialchars((string)$v);
+				}
+			};
+			$_rows = '';
+			foreach ($_fieldList as $_k => $_meta) {
+				$_o = $b[$_k] ?? null;
+				$_n = $_after[$_k] ?? null;
+				if ($_norm($_o) === $_norm($_n)) continue;
+				$_rows .= '<tr class="al-diff-changed">'
+				       . '<td class="al-diff-field">' . htmlspecialchars($_meta['lbl']) . '</td>'
+				       . '<td class="al-diff-old">' . $_fmt($_o, $_meta['fmt']) . '</td>'
+				       . '<td class="al-diff-new">' . $_fmt($_n, $_meta['fmt']) . '</td>'
+				       . '</tr>';
+			}
+			if (!$_rows) return '<em style="color:#a0aec0">No tracked fields changed.</em>';
+			// Header row: award name for context (drawn from prior state)
+			$_awardName = $b['KingdomAwardName'] ?? $a['KingdomAwardName'] ?? null;
+			if (!$_awardName && !empty($b['kingdomaward_id'])) {
+				$_awardName = $kawardMap[(int)$b['kingdomaward_id']] ?? null;
+			}
+			$_headRow = $_awardName ? '<tr><td class="al-diff-field">Award</td><td colspan="2">' . htmlspecialchars($_awardName) . '</td></tr>' : '';
+			$_legacyNote = $_isLegacy ? '<tr><td colspan="3"><em style="color:#a0aec0;font-size:11px">Legacy entry &mdash; post-state was not recorded; the &ldquo;After&rdquo; column shows the values the user requested (intent), not necessarily what was written.</em></td></tr>' : '';
+			return '<table class="al-diff-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>' . $_headRow . $_legacyNote . $_rows . '</tbody></table>';
+
 		case 'Player::AddAward':
 		case 'Player::GiveAward':
 		case 'Player::RemoveAward':
 		case 'Player::revoke_award':
 		case 'Player::ReactivateAward':
-		case 'Player::UpdateAward':
 			$state = $a ?: $b ?: $p;
 			$html  = '<table class="al-diff-table"><tbody>';
 			// Resolve award name: prefer stored KingdomAwardName, fall back to kawardMap lookup
@@ -1227,7 +1316,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 							// For award actions with EntityId=0 (pre-fix records), fall back to mundane_id from post_state
 							$_displayEntityId = (int)$_r['EntityId'];
 							$_displayEntity   = $_r['Entity'] ?? 'Player';
-							if (!$_displayEntityId && in_array($_mc, ['Player::AddAward','Player::GiveAward','Player::RemoveAward','Player::revoke_award','Player::ReactivateAward','Player::UpdateAward'])) {
+							if (!$_displayEntityId && in_array($_mc, ['Player::AddAward','Player::GiveAward','Player::RemoveAward','Player::revoke_award','Player::ReactivateAward','Player::UpdateAward','Player::ReconcileAward'])) {
 								$_awardState = @json_decode($_r['PostState'], true) ?: (@json_decode($_r['PriorState'], true) ?: []);
 								if (!empty($_awardState['mundane_id'])) $_displayEntityId = (int)$_awardState['mundane_id'];
 							}
