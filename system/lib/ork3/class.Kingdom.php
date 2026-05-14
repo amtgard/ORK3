@@ -626,9 +626,31 @@ class Kingdom  extends Ork3 {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
 			if ($mundane['KingdomId'] == $request['KingdomId']) {
+				// Look up prior holder so the audit can show before/after,
+				// and so we can suppress no-op re-saves of the same assignment.
+				$_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
+				$_priorOfficer->clear();
+				$_priorOfficer->kingdom_id = (int)$request['KingdomId'];
+				$_priorOfficer->park_id    = 0;
+				$_priorOfficer->role       = $request['Role'];
+				$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
+
 				$officer = new yapo($this->db, DB_PREFIX . 'officer');
 				$c = new Common();
 				$c->set_officer($request['KingdomId'], 0, $request['MundaneId'], $request['Role']);
+
+				if ($_priorMundaneId !== (int)$request['MundaneId']) {
+					$_audit_req = $request;
+					unset($_audit_req['Token']);
+					Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Kingdom', (int)$request['KingdomId'],
+						['MundaneId' => $_priorMundaneId, 'Role' => $request['Role']],
+						[
+							'KingdomId' => (int)$request['KingdomId'],
+							'MundaneId' => (int)$request['MundaneId'],
+							'Role'      => $request['Role'],
+						]
+					);
+				}
 			} else {
 				return InvalidParameter(null, "The new officer must be a member of this Kingdom.");
 			}
@@ -637,14 +659,33 @@ class Kingdom  extends Ork3 {
 		}
 		return $response;
 	}
-	
+
 	public function VacateOfficer($request) {
 		$response = array();
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		if ($mundane_id > 0) {
 			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+				$_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
+				$_priorOfficer->clear();
+				$_priorOfficer->kingdom_id = (int)$request['KingdomId'];
+				$_priorOfficer->park_id    = 0;
+				$_priorOfficer->role       = $request['Role'];
+				$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
+
 				$c = new Common();
 				$c->set_officer($request['KingdomId'], 0, 0, $request['Role']);
+
+				if ($_priorMundaneId > 0) {
+					$_audit_req = $request;
+					unset($_audit_req['Token']);
+					Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Kingdom', (int)$request['KingdomId'],
+						['MundaneId' => $_priorMundaneId, 'Role' => $request['Role']],
+						[
+							'KingdomId' => (int)$request['KingdomId'],
+							'Role'      => $request['Role'],
+						]
+					);
+				}
 			} else {
 				$response = NoAuthorization();
 			}

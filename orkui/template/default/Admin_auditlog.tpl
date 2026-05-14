@@ -36,6 +36,10 @@ $_actionLabels = [
 	'Park::RemoveParkDay'          => 'Park Day Removed',
 	'Park::RetirePark'             => 'Park Retired',
 	'Park::RestorePark'            => 'Park Restored',
+	'Kingdom::SetOfficer'              => 'Officer Assigned',
+	'Kingdom::VacateOfficer'           => 'Officer Vacated',
+	'Authorization::AddAuthorization'  => 'Permission Granted',
+	'Authorization::RemoveAuthorization'=> 'Permission Revoked',
 ];
 
 // ── JSON helpers (defined early — used in batch collector and render functions) ──
@@ -114,14 +118,42 @@ $DB->Clear(); $_r = $DB->DataSet("SELECT class_id, name FROM ork_class ORDER BY 
 if ($_r && $_r->Size() > 0) do { $_classMap[(int)$_r->class_id] = $_r->name; } while ($_r->Next());
 $DB->Clear();
 
-// Resolve names for current filter player IDs so the picker shows names, not raw numbers
+// Resolve names for the current filter IDs so the picker shows names, not raw numbers.
+// ByWhom is always a player; EntityFilter is resolved against whichever table the
+// EntityType column points at (Player/Park/Kingdom/Event).
 $_filterPlayerNames = [];
-$_filterIds = array_filter([(int)($ByWhomFilter ?? 0), (int)($EntityFilter ?? 0)]);
-if ($_filterIds) {
-	$_ids = implode(',', $_filterIds);
+$_entityFilterName  = '';
+$_bywhomInt = (int)($ByWhomFilter ?? 0);
+$_entityInt = (int)($EntityFilter ?? 0);
+$_entityType = $EntityTypeFilter ?? '';
+// "By Whom" lookup (always a player)
+$_playerIds = $_bywhomInt > 0 ? [$_bywhomInt] : [];
+// "Affected Record" lookup — only treat as a player when scope is Player (or unset)
+if ($_entityInt > 0 && ($_entityType === '' || $_entityType === 'Player')) {
+	$_playerIds[] = $_entityInt;
+}
+if (!empty($_playerIds)) {
+	$_ids = implode(',', array_unique($_playerIds));
 	$DB->Clear(); $_r = $DB->DataSet("SELECT mundane_id, persona FROM ork_mundane WHERE mundane_id IN ($_ids)");
-	if ($_r && $_r->Size() > 0) do { $_filterPlayerNames[(int)$_r->mundane_id] = $_r->persona; } while ($_r->Next());
+	while ($_r && $_r->Next()) { $_filterPlayerNames[(int)$_r->mundane_id] = $_r->persona; }
 	$DB->Clear();
+}
+if ($_entityInt > 0) {
+	if ($_entityType === 'Park') {
+		$DB->Clear();
+		$_r = $DB->DataSet("SELECT name FROM ork_park WHERE park_id = {$_entityInt}");
+		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
+	} elseif ($_entityType === 'Kingdom') {
+		$DB->Clear();
+		$_r = $DB->DataSet("SELECT name FROM ork_kingdom WHERE kingdom_id = {$_entityInt}");
+		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
+	} elseif ($_entityType === 'Event') {
+		$DB->Clear();
+		$_r = $DB->DataSet("SELECT name FROM ork_event WHERE event_id = {$_entityInt}");
+		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
+	} elseif ($_entityType === '' || $_entityType === 'Player') {
+		$_entityFilterName = $_filterPlayerNames[$_entityInt] ?? '';
+	}
 }
 
 // Helper: render an ID cell as "Name (link)" or plain "#id" fallback
@@ -141,7 +173,7 @@ function _auditIdLink($type, $id, $nameMap) {
 }
 
 // Build a one-line summary from the action and stored JSON
-function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMap = [], $kingdomMap = [], $classMap = [], $mundaneMap = []) {
+function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMap = [], $kingdomMap = [], $classMap = [], $mundaneMap = [], $eventMap = []) {
 	$p = _jsonDecode($params, ['ParkId','MundaneId','KingdomId','FromMundaneId','ToMundaneId','SuspendedUntil','ClassId','Credits']);
 	$b = _jsonDecode($prior,  ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','Persona','class_id','date','credits','dues_until','dues_for_life','name']);
 	$a = _jsonDecode($post,   ['ParkId','park_id','KingdomId','MundaneId','mundane_id','Persona']);
@@ -349,6 +381,41 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$_role = $p['Role'] ?? $a['Role'] ?? '';
 			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : '';
 			return 'Vacated ' . htmlspecialchars($_role ?: 'officer') . ($_park ? ' (' . htmlspecialchars($_park) . ')' : '');
+		case 'Kingdom::SetOfficer':
+			$_kid  = (int)($p['KingdomId'] ?? $a['KingdomId'] ?? 0);
+			$_mid  = (int)($p['MundaneId'] ?? $a['MundaneId'] ?? 0);
+			$_role = $p['Role'] ?? $a['Role'] ?? '';
+			$_king = $_kid ? ($kingdomMap[$_kid] ?? 'kingdom #' . $_kid) : '';
+			$_who  = $_mid ? ($mundaneMap[$_mid] ?? 'player #' . $_mid) : '';
+			return 'Set ' . htmlspecialchars($_role ?: 'officer') . ($_who ? ' = ' . htmlspecialchars($_who) : '') . ($_king ? ' (' . htmlspecialchars($_king) . ')' : '');
+		case 'Kingdom::VacateOfficer':
+			$_kid  = (int)($p['KingdomId'] ?? $a['KingdomId'] ?? 0);
+			$_role = $p['Role'] ?? $a['Role'] ?? '';
+			$_king = $_kid ? ($kingdomMap[$_kid] ?? 'kingdom #' . $_kid) : '';
+			return 'Vacated ' . htmlspecialchars($_role ?: 'officer') . ($_king ? ' (' . htmlspecialchars($_king) . ')' : '');
+		case 'Authorization::AddAuthorization':
+		case 'Authorization::RemoveAuthorization':
+			$_state = $a ?: $b ?: $p;
+			$_grantee = (int)($_state['mundane_id'] ?? $_state['MundaneId'] ?? 0);
+			$_role    = $_state['role'] ?? $_state['Role'] ?? '';
+			$_scope   = '';
+			if (!empty($_state['park_id'])) {
+				$_scope = 'park ' . ($parkMap[(int)$_state['park_id']] ?? '#' . (int)$_state['park_id']);
+			} elseif (!empty($_state['kingdom_id'])) {
+				$_scope = 'kingdom ' . ($kingdomMap[(int)$_state['kingdom_id']] ?? '#' . (int)$_state['kingdom_id']);
+			} elseif (!empty($_state['event_id'])) {
+				$_scope = 'event ' . ($eventMap[(int)$_state['event_id']] ?? '#' . (int)$_state['event_id']);
+			} elseif (!empty($_state['unit_id'])) {
+				$_scope = 'unit #' . (int)$_state['unit_id'];
+			} else {
+				// Could also fall back to $p['Type']/$p['Id'] for the request-only form.
+				if (!empty($p['Type']) && !empty($p['Id'])) {
+					$_scope = strtolower($p['Type']) . ' #' . (int)$p['Id'];
+				}
+			}
+			$_verb = $method === 'Authorization::AddAuthorization' ? 'Granted' : 'Revoked';
+			$_who  = $_grantee ? ($mundaneMap[$_grantee] ?? 'player #' . $_grantee) : '';
+			return $_verb . ' ' . htmlspecialchars($_role ?: 'permission') . ($_who ? ' to ' . htmlspecialchars($_who) : '') . ($_scope ? ' (' . htmlspecialchars($_scope) . ')' : '');
 		case 'Park::AddParkDay':
 		case 'Park::EditParkDay':
 		case 'Park::RemoveParkDay':
@@ -879,22 +946,58 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 
 		case 'Park::SetOfficer':
 		case 'Park::VacateOfficer':
+		case 'Kingdom::SetOfficer':
+		case 'Kingdom::VacateOfficer':
+			$_isSet = ($method === 'Park::SetOfficer' || $method === 'Kingdom::SetOfficer');
 			$_pid = (int)($p['ParkId'] ?? $a['ParkId'] ?? 0);
 			$_kid = (int)($p['KingdomId'] ?? $a['KingdomId'] ?? 0);
 			$_mid = (int)($p['MundaneId'] ?? $a['MundaneId'] ?? 0);
 			$_priorMid = (int)($b['MundaneId'] ?? 0);
 			$_role = $p['Role'] ?? $a['Role'] ?? '';
 			$html = '<table class="al-diff-table"><tbody>';
-			$html .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($method === 'Park::SetOfficer' ? 'Officer Assigned' : 'Officer Vacated') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($_isSet ? 'Officer Assigned' : 'Officer Vacated') . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">Role</td><td colspan="2">' . htmlspecialchars($_role ?: '—') . '</td></tr>';
 			if ($_pid) $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">' . _auditIdLink('park', $_pid, $parkMap) . '</td></tr>';
 			if ($_kid) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $_kid, $kingdomMap) . '</td></tr>';
-			if ($method === 'Park::SetOfficer') {
+			if ($_isSet) {
 				$html .= '<tr><td class="al-diff-field">Previous Holder</td><td colspan="2">' . ($_priorMid > 0 ? _auditIdLink('player', $_priorMid, $mundaneMap) : '—') . '</td></tr>';
 				$html .= '<tr><td class="al-diff-field">New Holder</td><td colspan="2">' . ($_mid ? _auditIdLink('player', $_mid, $mundaneMap) : '—') . '</td></tr>';
 			} else {
 				$html .= '<tr><td class="al-diff-field">Was Held By</td><td colspan="2">' . ($_priorMid > 0 ? _auditIdLink('player', $_priorMid, $mundaneMap) : '—') . '</td></tr>';
 			}
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Authorization::AddAuthorization':
+		case 'Authorization::RemoveAuthorization':
+			$_isGrant = ($method === 'Authorization::AddAuthorization');
+			$_state = $_isGrant ? ($a ?: $p) : ($b ?: $p);
+			// Normalize from either schema-style ($a/$b) or request-style ($p)
+			$_grantee = (int)($_state['mundane_id'] ?? $_state['MundaneId'] ?? 0);
+			$_role    = $_state['role']    ?? $_state['Role'] ?? '';
+			$_pid     = (int)($_state['park_id']    ?? 0);
+			$_kid     = (int)($_state['kingdom_id'] ?? 0);
+			$_eid     = (int)($_state['event_id']   ?? 0);
+			$_uid     = (int)($_state['unit_id']    ?? 0);
+			// Request-style fallback (Type + Id)
+			if (!$_pid && !$_kid && !$_eid && !$_uid && !empty($p['Type']) && !empty($p['Id'])) {
+				$_t = strtolower((string)$p['Type']);
+				if     ($_t === 'park')    $_pid = (int)$p['Id'];
+				elseif ($_t === 'kingdom') $_kid = (int)$p['Id'];
+				elseif ($_t === 'event')   $_eid = (int)$p['Id'];
+				elseif ($_t === 'unit')    $_uid = (int)$p['Id'];
+			}
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($_isGrant ? 'Permission Granted' : 'Permission Revoked') . '</td></tr>';
+			if ($_grantee) $html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $_grantee, $mundaneMap) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Role</td><td colspan="2">' . htmlspecialchars($_role ?: '—') . '</td></tr>';
+			if     ($_pid) $html .= '<tr><td class="al-diff-field">Park Scope</td><td colspan="2">'    . _auditIdLink('park',    $_pid, $parkMap)    . '</td></tr>';
+			elseif ($_kid) $html .= '<tr><td class="al-diff-field">Kingdom Scope</td><td colspan="2">' . _auditIdLink('kingdom', $_kid, $kingdomMap) . '</td></tr>';
+			elseif ($_eid) $html .= '<tr><td class="al-diff-field">Event Scope</td><td colspan="2">'   . _auditIdLink('event',   $_eid, $eventMap)   . '</td></tr>';
+			elseif ($_uid) $html .= '<tr><td class="al-diff-field">Unit Scope</td><td colspan="2">#' . $_uid . '</td></tr>';
+			else           $html .= '<tr><td class="al-diff-field">Scope</td><td colspan="2"><em style="color:#a0aec0">Global (unscoped)</em></td></tr>';
+			if (!empty($_state['authorization_id']))
+				$html .= '<tr><td class="al-diff-field">Authorization ID</td><td colspan="2">#' . (int)$_state['authorization_id'] . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
@@ -1060,7 +1163,7 @@ $_page     = (int)$AuditPage;
 $_pages    = (int)$AuditPages;
 
 // Preserve filters in pagination links
-function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity) {
+function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity, $entityType = '') {
 	$q = http_build_query(array_filter([
 		'Route'      => 'Admin/auditlog',
 		'StartDate'  => $start,
@@ -1068,6 +1171,7 @@ function _auditPageUrl($page, $start, $end, $method, $bywhom, $entity) {
 		'MethodCall' => $method,
 		'ByWhomId'   => $bywhom ?: '',
 		'EntityId'   => $entity ?: '',
+		'EntityType' => $entityType ?: '',
 		'Page'       => $page,
 	], function($v) { return $v !== '' && $v !== null; }));
 	return HTTP_UI_REMOTE . 'index.php?' . $q;
@@ -1243,10 +1347,16 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 						<input type="hidden" name="ByWhomId" id="alByWhomId" value="<?=(int)$ByWhomFilter ?: ''?>">
 					</div>
 					<div class="al-form-group">
-						<label>Affected Player</label>
+						<label>Affected Record</label>
+						<select class="al-form-input" name="EntityType" id="alEntityType" style="margin-bottom:6px">
+							<?php $_etf = $EntityTypeFilter ?: 'Player'; ?>
+							<option value="Player"  <?=$_etf==='Player'  ? 'selected' : ''?>>Player</option>
+							<option value="Park"    <?=$_etf==='Park'    ? 'selected' : ''?>>Park</option>
+							<option value="Kingdom" <?=$_etf==='Kingdom' ? 'selected' : ''?>>Kingdom</option>
+						</select>
 						<input class="al-form-input al-player-text" id="alEntityText" type="text" autocomplete="off"
 						       placeholder="Search name or paste ID…"
-						       value="<?=htmlspecialchars($_filterPlayerNames[(int)($EntityFilter??0)] ?? ((int)$EntityFilter ? '#'.(int)$EntityFilter : ''))?>">
+						       value="<?=htmlspecialchars($_entityFilterName !== '' ? $_entityFilterName : ((int)$EntityFilter ? '#'.(int)$EntityFilter : ''))?>">
 						<input type="hidden" name="EntityId" id="alEntityId" value="<?=(int)$EntityFilter ?: ''?>">
 					</div>
 					<button type="submit" class="al-btn-run">Run</button>
@@ -1280,7 +1390,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 						if (empty($_r['MethodCall'])) continue;
 						$_mc      = $_r['MethodCall'];
 						$_label   = $_actionLabels[$_mc] ?? $_mc;
-						$_summary = _auditSummary($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_kawardMap, $_parkMap, $_kingdomMap, $_classMap, $_mundaneMap);
+						$_summary = _auditSummary($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_kawardMap, $_parkMap, $_kingdomMap, $_classMap, $_mundaneMap, $_eventMap);
 
 						// Badge CSS class
 						if (strpos($_mc, 'UpdatePlayer') !== false) $_bc = 'al-badge-update';
@@ -1371,7 +1481,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 					if ($_prev !== null && $_pg - $_prev > 1): ?>
 					<span style="color:var(--rp-text-muted)">…</span>
 					<?php endif;
-					$_pUrl = _auditPageUrl($_pg, $StartDate, $EndDate, $MethodFilter, $ByWhomFilter, $EntityFilter);
+					$_pUrl = _auditPageUrl($_pg, $StartDate, $EndDate, $MethodFilter, $ByWhomFilter, $EntityFilter, $EntityTypeFilter ?? '');
 				?>
 				<a href="<?=$_pUrl?>" class="al-page-link <?=$_pg === $_page ? 'al-page-active' : ''?>"><?=$_pg?></a>
 				<?php $_prev = $_pg; endforeach; ?>
@@ -1394,51 +1504,117 @@ function alToggle(id, btn) {
 	btn.querySelector('i').className = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
 }
 
-function alInitPlayerPicker(textId, hiddenId) {
+// Scope-aware autocomplete: same input box drives different search endpoints
+// based on a sibling <select> (or the implicit 'Player' default when no select
+// is associated). Each scope contributes (source endpoint, item formatter, id picker).
+var AL_SCOPES = {
+	Player: {
+		source: function(term, cb) {
+			$.getJSON('../orkservice/Search/SearchService.php', {
+				Action: 'Search/Player', type: 'all', search: term, limit: 8
+			}, function(data) {
+				cb($.map(data || [], function(v) {
+					return { label: v.Persona + ' (' + v.KAbbr + ':' + v.PAbbr + ')', value: v.MundaneId, display: v.Persona };
+				}));
+			});
+		}
+	},
+	Park: {
+		source: function(term, cb) {
+			$.getJSON('../orkservice/Search/SearchService.php', {
+				Action: 'Search/Park', name: term, limit: 8
+			}, function(data) {
+				cb($.map(data || [], function(v) {
+					return { label: v.Name + (v.KingdomName ? ' — ' + v.KingdomName : ''), value: v.ParkId, display: v.Name };
+				}));
+			});
+		}
+	},
+	Kingdom: {
+		source: function(term, cb) {
+			$.getJSON('../orkservice/Search/SearchService.php', {
+				Action: 'Search/Kingdom', name: term, limit: 8
+			}, function(data) {
+				cb($.map(data || [], function(v) {
+					return { label: v.Name, value: v.KingdomId, display: v.Name };
+				}));
+			});
+		}
+	},
+	Event: {
+		source: function(term, cb) {
+			// multi=1 returns one row per past occurrence (calendar detail) so the
+			// user can see when each instance ran. Filtering still keys on EventId,
+			// so picking any occurrence of the same event filters the same rows —
+			// but having the date in the label is the disambiguation cue.
+			$.getJSON('../orkservice/Search/SearchService.php', {
+				Action: 'Search/Event', name: term, limit: 8, multi: 1
+			}, function(data) {
+				var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+				cb($.map(data || [], function(v) {
+					var ctx = v.ParkName || v.KingdomName || '';
+					var when = '';
+					if (v.NextDate) {
+						var m = String(v.NextDate).match(/^(\d{4})-(\d{2})/);
+						if (m) when = monthNames[parseInt(m[2], 10) - 1] + ' ' + m[1];
+					}
+					var label = v.Name + (when ? ' (' + when + ')' : '') + (ctx ? ' — ' + ctx : '');
+					return { label: label, value: v.EventId, display: v.Name + (when ? ' (' + when + ')' : '') };
+				}));
+			});
+		}
+	}
+};
+
+function alInitPicker(textId, hiddenId, scopeFn) {
 	var $txt = $('#' + textId), $hid = $('#' + hiddenId);
+	scopeFn = scopeFn || function() { return 'Player'; };
 
 	$txt.autocomplete({
 		source: function(req, resp) {
-			$.getJSON('../orkservice/Search/SearchService.php', {
-				Action: 'Search/Player', type: 'all', search: req.term, limit: 8
-			}, function(data) {
-				var items = [];
-				$.each(data || [], function(i, v) {
-					items.push({ label: v.Persona + ' (' + v.KAbbr + ':' + v.PAbbr + ')', value: v.MundaneId, persona: v.Persona });
-				});
-				resp(items);
-			});
+			var spec = AL_SCOPES[scopeFn()] || AL_SCOPES.Player;
+			if (!spec.source) { resp([]); return; }
+			spec.source(req.term, function(items) { resp(items); });
 		},
 		minLength: 2,
 		focus: function(e, ui) { return false; },
-		select: function(e, ui) { $txt.val(ui.item.persona); $hid.val(ui.item.value); return false; }
+		select: function(e, ui) { $txt.val(ui.item.display); $hid.val(ui.item.value); return false; }
 	});
 
-	function resolveById(id) {
-		$.getJSON('<?=UIR?>PlayerAjax/player/' + id + '/info', function(data) {
-			if (data && data.status === 0) {
-				$txt.val(data.Persona);
-				$hid.val(data.MundaneId);
-			} else {
-				$hid.val(id); // keep the number as-is
-			}
-		}).fail(function() { $hid.val(id); });
+	// Reconcile hidden ID from text: numeric → copy in, blank → clear.
+	// 'input' covers typing, paste, cut, undo — fires after the value is settled,
+	// so we don't need the historical setTimeout(100) hack.
+	function reconcile() {
+		var v = $txt.val().trim();
+		if (v === '') { $hid.val(''); return; }
+		if (/^\d+$/.test(v) && parseInt(v) > 0) $hid.val(parseInt(v));
 	}
-
-	$txt.on('paste', function() {
-		setTimeout(function() {
-			var v = $txt.val().trim();
-			if (/^\d+$/.test(v) && parseInt(v) > 0) resolveById(parseInt(v));
-		}, 100);
-	});
-
-	$txt.on('input', function() {
-		if ($txt.val().trim() === '') $hid.val('');
-	});
+	$txt.on('input', reconcile);
+	// Run once on init so a pasted value that's already in the field at page
+	// load (browser autofill, back-button restore) populates the hidden ID.
+	reconcile();
 }
 
 $(function() {
-	alInitPlayerPicker('alByWhomText', 'alByWhomId');
-	alInitPlayerPicker('alEntityText', 'alEntityId');
+	// "By Whom" is always a player (who performed the audited action).
+	alInitPicker('alByWhomText', 'alByWhomId');
+	// "Affected Record" picks scope from the EntityType select sibling.
+	alInitPicker('alEntityText', 'alEntityId', function() { return $('#alEntityType').val() || 'Player'; });
+	// When scope changes, clear the text + hidden so we don't carry a stale ID across scopes.
+	$('#alEntityType').on('change', function() {
+		$('#alEntityText').val('').autocomplete('close');
+		$('#alEntityId').val('');
+	});
+	// Submit safety net: if the user pastes an ID and hits Enter before
+	// the input handler has had a chance to fire, copy the numeric text
+	// into the hidden ID inputs before the form submits.
+	$('#alByWhomText').closest('form').on('submit', function() {
+		$('#alByWhomText, #alEntityText').each(function() {
+			var $t = $(this);
+			var $h = $('#' + $t.attr('id').replace('Text', 'Id'));
+			var v = $t.val().trim();
+			if (/^\d+$/.test(v) && parseInt(v) > 0 && !$h.val()) $h.val(parseInt(v));
+		});
+	});
 });
 </script>
