@@ -11,7 +11,11 @@ CREATE TABLE IF NOT EXISTS `ork_player_milestones` (
   PRIMARY KEY (`milestone_id`),
   KEY `mundane_id` (`mundane_id`),
   KEY `milestone_date` (`milestone_date`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `ork_player_milestones`
+  ADD CONSTRAINT `fk_milestones_mundane`
+    FOREIGN KEY (`mundane_id`) REFERENCES `ork_mundane` (`mundane_id`) ON DELETE CASCADE;
 
 ALTER TABLE `ork_mundane`
   ADD COLUMN `milestone_config` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;
