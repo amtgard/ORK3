@@ -6881,6 +6881,9 @@ p {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 500;
+    /* Override the parent button's tight line-height: 1 so descenders
+       (g, j, p, q, y) aren't clipped at the bottom by overflow:hidden. */
+    line-height: 1.4;
 }
 .nav-chevron {
     font-size: 10px;
