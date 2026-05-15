@@ -20,6 +20,7 @@ $_actionLabels = [
 	'Player::RemoveNote'           => 'Note Deleted',
 	'Attendance::SetAttendance'    => 'Attendance Modified',
 	'Attendance::RemoveAttendance' => 'Attendance Removed',
+	'Player::AddAwardRecommendation'    => 'Recommendation Created',
 	'Player::DeleteAwardRecommendation' => 'Recommendation Removed',
 	'Player::AddSecondToRecommendation' => 'Recommendation Seconded',
 	'Player::WithdrawSecond'            => 'Second Withdrawn',
@@ -290,6 +291,12 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			// Fallback for old records without prior state
 			$until = $p['SuspendedUntil'] ?? '';
 			return ($until || !empty($p['Suspension'])) ? 'Suspended' . ($until ? ' until ' . htmlspecialchars($until) : '') : 'Suspension changed';
+		case 'Player::AddAwardRecommendation':
+			$_kid = (int)($a['kingdomaward_id'] ?? $p['KingdomAwardId'] ?? 0);
+			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
+			$_rk  = (int)($a['rank'] ?? $p['Rank'] ?? 0);
+			$rank = $_rk > 0 ? ' rank ' . $_rk : '';
+			return 'Added recommendation' . ($name ? ': ' . htmlspecialchars($name . $rank) : '');
 		case 'Player::DeleteAwardRecommendation':
 			$_kid = (int)($b['kingdomaward_id'] ?? 0);
 			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
@@ -736,6 +743,32 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			}
 			if (!empty($p['MundaneId']))
 				$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $p['MundaneId'], $mundaneMap) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Player::AddAwardRecommendation':
+			$html = '<table class="al-diff-table"><tbody>';
+			$_kid = (int)($a['kingdomaward_id'] ?? $p['KingdomAwardId'] ?? 0);
+			$_awardName = $kawardMap[$_kid] ?? null;
+			if ($_awardName)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2">' . htmlspecialchars($_awardName) . '</td></tr>';
+			elseif ($_kid)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2"><em style="color:#a0aec0">Unknown award #' . $_kid . '</em></td></tr>';
+			$_rk = (int)($a['rank'] ?? $p['Rank'] ?? 0);
+			if ($_rk > 0)
+				$html .= '<tr><td class="al-diff-field">Rank</td><td colspan="2">' . $_rk . '</td></tr>';
+			$_recipientId = (int)($a['mundane_id'] ?? $p['MundaneId'] ?? 0);
+			if ($_recipientId)
+				$html .= '<tr><td class="al-diff-field">Recipient</td><td colspan="2">' . _auditIdLink('player', $_recipientId, $mundaneMap) . '</td></tr>';
+			$_recById = (int)($a['recommended_by_id'] ?? 0);
+			if ($_recById)
+				$html .= '<tr><td class="al-diff-field">Recommended By</td><td colspan="2">' . _auditIdLink('player', $_recById, $mundaneMap) . '</td></tr>';
+			$_date = $a['date_recommended'] ?? '';
+			if ($_date)
+				$html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($_date) . '</td></tr>';
+			$_reason = $a['reason'] ?? $p['Reason'] ?? '';
+			if ($_reason !== '')
+				$html .= '<tr><td class="al-diff-field">Reason</td><td colspan="2">' . nl2br(htmlspecialchars($_reason)) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
