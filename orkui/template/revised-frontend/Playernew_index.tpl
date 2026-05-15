@@ -182,10 +182,10 @@
 		if (empty($Player['Waivered']))
 			$_maAlerts[] = ['type'=>'info','icon'=>'fa-file-signature','msg'=>'No waiver on file at your park.'];
 		if ($passwordExpired)
-			$_maAlerts[] = ['type'=>'danger','icon'=>'fa-key','msg'=>'Your password has expired.'];
+			$_maAlerts[] = ['type'=>'danger','icon'=>'fa-key','msg'=>'Your password has expired.','actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		elseif ($passwordSoon) {
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
-			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . "."];
+			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		}
 		// Level helpers
 		function _ma_level($credits) {
@@ -254,6 +254,8 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .pna-alert{display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-radius:6px;font-size:12.5px;line-height:1.4}
 .pna-alert i{flex-shrink:0;margin-top:2px}
+.pna-alert-action{color:inherit;font-weight:600;text-decoration:underline;cursor:pointer;margin-left:4px}
+.pna-alert-action:hover{text-decoration:none}
 .pna-alert-warning{background:#fffbeb;border:1px solid #f6e05e;color:#744210}
 .pna-alert-danger{background:#fff5f5;border:1px solid #fc8181;color:#742a2a}
 .pna-alert-info{background:#ebf8ff;border:1px solid #90cdf4;color:#2a4365}
@@ -1350,7 +1352,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<div class="pna-alerts">
 					<?php foreach ($_maAlerts as $_al): ?>
 					<div class="pna-alert pna-alert-<?= $_al['type'] ?>">
-						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?></span>
+						<i class="fas <?= $_al['icon'] ?>"></i><span><?= $_al['msg'] ?><?php if (!empty($_al['actionLabel'])): ?> <a class="pna-alert-action" href="#" onclick="<?= htmlspecialchars($_al['actionOnclick']) ?>"><?= htmlspecialchars($_al['actionLabel']) ?></a><?php endif; ?></span>
 					</div>
 					<?php endforeach; ?>
 				</div>
