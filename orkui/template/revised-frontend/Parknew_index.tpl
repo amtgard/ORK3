@@ -2144,9 +2144,10 @@ initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
 <?php if (!empty($IsLoggedIn)): ?>
 <script>
 window.OrkRsCfg = {
-	uir:    '<?= UIR ?>',
-	userId: <?= (int)$this->__session->user_id ?>,
-	reload: function() { location.reload(); }
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { location.reload(); }
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>

@@ -693,7 +693,14 @@ class Controller_PlayerAjax extends Controller {
 			'RecommendationsId' => $rec_id,
 			'Notes' => $notes,
 		]);
-		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
+		$persona = '';
+		if ((int)($r['Status'] ?? 1) === 0) {
+			global $DB;
+			$DB->Clear();
+			$rs = $DB->DataSet("SELECT persona FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . (int)$this->session->user_id . " LIMIT 1");
+			if ($rs && $rs->Next()) $persona = (string)$rs->persona;
+		}
+		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '', 'supporter_persona' => $persona]);
 		exit;
 	}
 
