@@ -5937,22 +5937,14 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pk-rec-has-tip::after { content:attr(title); position:absolute; bottom:calc(100% + 5px); left:50%; transform:translateX(-50%); background:#2d3748; color:#fff; font-size:11px; font-weight:600; white-space:nowrap; padding:3px 8px; border-radius:4px; pointer-events:none; opacity:0; transition:opacity 0s; z-index:var(--z-tooltip, 500); }
 .pk-rec-has-tip::before { content:''; position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#2d3748; pointer-events:none; opacity:0; transition:opacity 0s; z-index:var(--z-tooltip, 500); }
 .pk-rec-has-tip:hover::after, .pk-rec-has-tip:hover::before { opacity:1; }
-.pk-rec-expand-btn { background: none; border: none; color: var(--pk-accent-mid, #0e7490); font-size: 12px; cursor: pointer; padding: 0 2px; }
+.pk-rec-expand-btn { background: none; border: none; color: var(--pk-accent-mid, #0e7490); font-size: 12px; cursor: pointer; padding: 0 4px; touch-action: manipulation; -webkit-tap-highlight-color: rgba(66,153,225,0.25); }
 .pk-rec-expand-btn:hover { text-decoration: underline; }
-/* On desktop, always show full notes — truncation is mobile-only */
-@media (min-width: 769px) {
-    .pk-rec-notes-ellipsis { display: none !important; }
-    .pk-rec-notes-full { display: inline !important; }
-}
 @media (max-width: 768px) {
 	.pk-recs-table th[data-short] { font-size: 0; }
 	.pk-recs-table th[data-short]::after { content: attr(data-short); font-size: 11px; }
 	.pk-rec-actions { white-space: normal; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
 	.pk-rec-actions button { margin-right: 0; }
-	.pk-rec-notes-ellipsis, .pk-rec-notes-full { display: inline; }
-}
-@media (min-width: 769px) {
-	.pk-rec-expand-btn { display: none; }
+	.pk-rec-expand-btn { padding: 2px 6px; min-height: 24px; }
 }
 
 /* ---- Tournament table delete button ---- */
