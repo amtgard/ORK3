@@ -2336,28 +2336,6 @@ class Player extends Ork3 {
 			$awardRec->recommended_by_id = $mundane_id;
 			$awardRec->reason = $request['Reason'];
 			$awardRec->save();
-
-			$_audit_req = $request;
-			unset($_audit_req['Token']);
-			$_post = [
-				'recommendations_id' => (int)$awardRec->recommendations_id,
-				'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
-				'award_id'           => (int)$awardRec->award_id,
-				'mundane_id'         => (int)$awardRec->mundane_id,
-				'rank'               => (int)$awardRec->rank,
-				'recommended_by_id'  => (int)$awardRec->recommended_by_id,
-				'date_recommended'   => $awardRec->date_recommended,
-				'reason'             => $awardRec->reason,
-			];
-			Ork3::$Lib->dangeraudit->audit(
-				__CLASS__ . '::' . __FUNCTION__,
-				$_audit_req,
-				'Player',
-				(int)$request['MundaneId'],
-				null,
-				$_post
-			);
-
 			$this->bust_player_award_recs_cache($request['MundaneId']);
 			return Success('Recommendation Added!');
 		} else {
