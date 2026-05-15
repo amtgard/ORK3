@@ -215,8 +215,11 @@
 	}
 	$_pnAccent = (!empty($Player['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorAccent'])) ? $Player['ColorAccent'] : '#4299e1';
 	$_pnColorSecondary = (!empty($Player['ColorSecondary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorSecondary'])) ? $Player['ColorSecondary'] : '';
-	$_pnOverlay = in_array($Player['HeroOverlay'] ?? 'med', ['low','med','high']) ? ($Player['HeroOverlay'] ?? 'med') : 'med';
-	$_pnOverlayOpacity = ['low' => '0.06', 'med' => '0.12', 'high' => '0.22'][$_pnOverlay];
+	$_pnOverlay = in_array($Player['HeroOverlay'] ?? 'med', ['low','med','high','vignette']) ? ($Player['HeroOverlay'] ?? 'med') : 'med';
+	// Opacity for the flat-blur layer. Unused in vignette mode (which renders
+	// its own two-layer composition with per-layer opacities).
+	$_pnOverlayOpacity = ['low' => '0.06', 'med' => '0.12', 'high' => '0.22', 'vignette' => '0.12'][$_pnOverlay];
+	$_pnOverlayIsVignette = ($_pnOverlay === 'vignette');
 	// Single `background` shorthand value (color OR gradient).
 	$_pnHeroBgValue = !empty($_pnColorSecondary)
 		? "linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
@@ -731,8 +734,8 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-dm-hint strong{color:#1a365d}
 @media(max-width:600px){
 .pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.pn-name-parts{flex-direction:column;gap:8px;align-items:stretch}
-.pn-name-comma-sep{align-self:flex-start;padding-bottom:0}
+.pn-name-part{flex:0 0 100%;min-width:0}
+.pn-name-core{flex:1 1 0;min-width:0}
 .pn-color-row{flex-direction:column;gap:8px}
 }
 
@@ -897,7 +900,12 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
      ZONE 1: Profile Hero Header
      ============================================= -->
 <div class="pn-hero">
+<?php if ($_pnOverlayIsVignette): ?>
+	<div class="pn-hero-bg pn-hero-bg-vignette-base" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+	<div class="pn-hero-bg-vignette-sharp" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php else: ?>
 	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php endif; ?>
 	<div class="pn-hero-content">
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
@@ -3140,6 +3148,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<button class="pn-overlay-btn<?= $_pnOverlay === 'low' ? ' pn-active' : '' ?>" data-overlay="low">Low</button>
 					<button class="pn-overlay-btn<?= $_pnOverlay === 'med' ? ' pn-active' : '' ?>" data-overlay="med">Medium</button>
 					<button class="pn-overlay-btn<?= $_pnOverlay === 'high' ? ' pn-active' : '' ?>" data-overlay="high">High</button>
+					<button class="pn-overlay-btn<?= $_pnOverlay === 'vignette' ? ' pn-active' : '' ?>" data-overlay="vignette">Vignette</button>
 				</div>
 				<input type="hidden" id="pn-hero-overlay" value="<?= $_pnOverlay ?>" />
 				<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-color-reset" style="margin-top:12px"><i class="fas fa-undo"></i> Reset to Default</button>
