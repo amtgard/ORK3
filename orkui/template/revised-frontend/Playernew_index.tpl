@@ -592,7 +592,8 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-cms-line strong{color:#718096;font-weight:500;margin-right:2px}
 /* ===== Design My Profile Modal ===== */
 .pn-design-tabs-wrap{position:relative}
-.pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0}
+.pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0;scrollbar-width:none;-ms-overflow-style:none}
+.pn-design-tabs::-webkit-scrollbar{display:none}
 .pn-design-tabs-chev{display:none;position:absolute;top:0;bottom:2px;width:36px;align-items:center;justify-content:center;border:none;cursor:pointer;color:#4a5568;font-size:13px;padding:0;z-index:2}
 .pn-design-tabs-chev.pn-show{display:flex}
 .pn-design-tabs-chev-left{left:0;background:linear-gradient(to right,#fff 55%,rgba(255,255,255,0))}
