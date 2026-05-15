@@ -173,6 +173,66 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 	var secCancel   = gid('rs-second-cancel');    if (secCancel)   secCancel.addEventListener('click', closeSecondModal);
 	if (secOverlay) secOverlay.addEventListener('click', function(e) { if (e.target === secOverlay) closeSecondModal(); });
 
+	function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+	function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+	function buildOwnSecondHtml(secondId, notes, supPersona) {
+		var supLink = '<a class="rs-supporter" href="' + Cfg.uir + 'Player/profile/' + parseInt(Cfg.userId) + '">' + escHtml(supPersona || 'You') + '</a>';
+		var notesPart;
+		if (notes && notes.length > 0) {
+			var inner;
+			if (notes.length > 50) {
+				inner = '<span class="pk-rec-notes-short">' + escHtml(notes.substring(0, 50))
+					+ '<span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span>'
+					+ '<span class="pk-rec-notes-full" style="display:none">' + escHtml(notes.substring(50)) + ' <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span>'
+					+ '</span>';
+			} else {
+				inner = escHtml(notes);
+			}
+			notesPart = '<span class="rs-notes">&mdash; "' + inner + '"</span>';
+		} else {
+			notesPart = '<span class="rs-notes-empty">&mdash; (no comment)</span>';
+		}
+		var actions = '<button class="rs-second-edit" data-sid="' + parseInt(secondId) + '" data-notes="' + escAttr(notes) + '" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button>'
+			+ '<button class="rs-second-withdraw" data-sid="' + parseInt(secondId) + '" data-supporter="' + escAttr(supPersona || '') + '" data-rstip="Withdraw your second"><i class="fas fa-times"></i></button>';
+		return '<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i>' + supLink + notesPart + ' <span class="rs-second-actions">' + actions + '</span></div>';
+	}
+
+	function patchSecondAdded(recId, secondId, notes, supPersona) {
+		var row = document.querySelector('tr[data-rec-id="' + parseInt(recId) + '"]');
+		if (!row) return false;
+		var seconds = row.querySelector('.rs-seconds');
+		if (!seconds) {
+			var notesCell = row.querySelector('.pk-rec-notes');
+			if (!notesCell) return false;
+			seconds = document.createElement('div');
+			seconds.className = 'rs-seconds';
+			notesCell.appendChild(seconds);
+		}
+		var holder = document.createElement('div');
+		holder.innerHTML = buildOwnSecondHtml(secondId, notes, supPersona);
+		seconds.appendChild(holder.firstChild);
+
+		var actionsCell = row.querySelector('.pk-rec-actions');
+		var badge = actionsCell ? actionsCell.querySelector('.rs-seconds-badge') : null;
+		if (badge) {
+			var prior = parseInt((badge.textContent.match(/\d+/) || ['0'])[0], 10);
+			var next = prior + 1;
+			badge.innerHTML = '<i class="fas fa-thumbs-up"></i>' + next;
+			badge.setAttribute('data-rstip', next + ' supporting ' + (next === 1 ? 'second' : 'seconds'));
+		} else if (actionsCell) {
+			var b = document.createElement('span');
+			b.className = 'rs-seconds-badge';
+			b.setAttribute('data-rstip', '1 supporting second');
+			b.innerHTML = '<i class="fas fa-thumbs-up"></i>1';
+			actionsCell.insertBefore(b, actionsCell.firstChild);
+		}
+
+		var addBtn = row.querySelector('.rs-action-btn[data-rec="' + parseInt(recId) + '"]');
+		if (addBtn) addBtn.style.display = 'none';
+		return true;
+	}
+
 	var secSubmit = gid('rs-second-submit');
 	if (secSubmit) secSubmit.addEventListener('click', function() {
 		var notes = secNotes.value || '';
@@ -182,7 +242,18 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 		secSubmit.disabled = true;
 		jQuery.post(url, payload, function(r) {
 			secSubmit.disabled = false;
-			if (r.status === 0) { closeSecondModal(); reload(); }
+			if (r.status === 0) {
+				if (secMode.kind === 'add') {
+					var newSid = parseInt(r.detail, 10) || 0;
+					var supPersona = r.supporter_persona || Cfg.userPersona || '';
+					var patched = newSid > 0 && patchSecondAdded(secMode.recId, newSid, notes, supPersona);
+					closeSecondModal();
+					if (!patched) reload();
+				} else {
+					closeSecondModal();
+					reload();
+				}
+			}
 			else { secErr.textContent = (r.error || 'Error') + (r.detail ? ': ' + r.detail : ''); secErr.style.display = 'block'; }
 		}, 'json').fail(function() {
 			secSubmit.disabled = false;

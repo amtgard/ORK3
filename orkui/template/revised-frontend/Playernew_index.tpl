@@ -3469,9 +3469,10 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <?php if ($LoggedIn): ?>
 <script>
 window.OrkRsCfg = {
-	uir:    '<?= UIR ?>',
-	userId: <?= (int)$this->__session->user_id ?>,
-	reload: function() { if (typeof window.pnReloadRecs === 'function') window.pnReloadRecs(); else location.reload(); }
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { if (typeof window.pnReloadRecs === 'function') window.pnReloadRecs(); else location.reload(); }
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
@@ -5342,12 +5343,12 @@ $(function() {
 					reasonCell += '</div>';
 				}
 
-				html += '<tr>'
+				html += '<tr data-rec-id="' + recId + '">'
 					+ '<td>' + esc(rec.AwardName) + '</td>'
 					+ '<td class="pn-col-numeric">' + rank + '</td>'
 					+ '<td class="pn-col-nowrap">' + esc(rec.DateRecommended) + '</td>'
 					+ '<td><a href="' + PnConfig.uir + 'Player/profile/' + parseInt(rec.RecommendedById) + '">' + esc(rec.RecommendedByName) + '</a></td>'
-					+ '<td>' + reasonCell + '</td>';
+					+ '<td class="pk-rec-notes">' + reasonCell + '</td>';
 				if (hasActions) {
 					var actions = '';
 					if (secCount > 0) {

@@ -2423,10 +2423,11 @@ initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
 <?php if (!empty($IsLoggedIn)): ?>
 <script>
 window.OrkRsCfg = {
-	url: null,  /* unused */
-	uir:    '<?= UIR ?>',
-	userId: <?= (int)$this->__session->user_id ?>,
-	reload: function() { location.reload(); }
+	url:         null,  /* unused */
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { location.reload(); }
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
