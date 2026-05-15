@@ -5279,6 +5279,14 @@ $(function() {
 			var hasActions = PnConfig.loggedInUserId > 0;
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
 			var attr = function(s) { return esc(s).replace(/"/g, '&quot;'); };
+			var truncNotes = function(s) {
+				var txt = s || '';
+				if (txt.length <= 50) return esc(txt);
+				return '<span class="pk-rec-notes-short">' + esc(txt.substring(0, 50))
+					+ '<span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span>'
+					+ '<span class="pk-rec-notes-full" style="display:none">' + esc(txt.substring(50)) + ' <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span>'
+					+ '</span>';
+			};
 			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
 				+ '<th>Award</th><th>Rank</th><th>Date</th><th>Sent By</th><th>Reason</th>'
 				+ (hasActions ? '<th style="white-space:nowrap;width:1%">Actions</th>' : '')
@@ -5302,7 +5310,7 @@ $(function() {
 					rec.Seconds.forEach(function(s) {
 						var supLink = '<a class="rs-supporter" href="' + PnConfig.uir + 'Player/profile/' + parseInt(s.SupporterMundaneId) + '">' + esc(s.SupporterName) + '</a>';
 						var notesPart = (s.Notes && s.Notes.length > 0)
-							? '<span class="rs-notes">&mdash; "' + esc(s.Notes) + '"</span>'
+							? '<span class="rs-notes">&mdash; "' + truncNotes(s.Notes) + '"</span>'
 							: '<span class="rs-notes-empty">&mdash; (no comment)</span>';
 						// Edit (pencil) is supporter-only — server gates EditSecondNotes that way.
 						// Withdraw mirrors recommendation-delete: supporter OR anyone with

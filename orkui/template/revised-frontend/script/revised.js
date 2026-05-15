@@ -6235,14 +6235,6 @@ $(document).ready(function() {
             try { window.pkGiveFromRec(JSON.parse(grantBtn.getAttribute('data-rec') || '{}')); } catch(ex) {}
             return;
         }
-        var expandBtn = e.target.closest ? e.target.closest('.pk-rec-expand-btn') : null;
-        if (expandBtn && expandBtn.closest('.pk-rec-notes')) {
-            var notesCell = expandBtn.closest('.pk-rec-notes');
-            var isCollapse = expandBtn.classList.contains('pk-rec-collapse-btn');
-            notesCell.querySelector('.pk-rec-notes-ellipsis').style.display = isCollapse ? '' : 'none';
-            notesCell.querySelector('.pk-rec-notes-full').style.display     = isCollapse ? 'none' : '';
-            return;
-        }
         var dimBtn = e.target.closest ? e.target.closest('.pk-rec-dismiss-btn') : null;
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
@@ -6383,6 +6375,25 @@ $(document).ready(function() {
         });
     });
 })();
+
+(function() {
+    if (window.__pkRecExpandBound) return;
+    window.__pkRecExpandBound = true;
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest ? e.target.closest('.pk-rec-expand-btn') : null;
+        if (!btn) return;
+        var short = btn.closest('.pk-rec-notes-short');
+        if (!short) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var isCollapse = btn.classList.contains('pk-rec-collapse-btn');
+        var ell  = short.querySelector('.pk-rec-notes-ellipsis');
+        var full = short.querySelector('.pk-rec-notes-full');
+        if (ell)  ell.style.display  = isCollapse ? '' : 'none';
+        if (full) full.style.display = isCollapse ? 'none' : '';
+    });
+})();
+
 (function() {
     if (typeof PkConfig === 'undefined') return;
     if (!document.getElementById('pk-rec-overlay')) return;
