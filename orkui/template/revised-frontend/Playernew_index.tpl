@@ -1435,6 +1435,35 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						</div>
 						<?php endif; ?>
 
+						<!-- Recent Titles (100 days) -->
+						<?php
+						$_maRecTitle = array_values(array_filter($_maDash_awd, function($a) use ($_ma60awd) {
+							return !empty($a['IsTitle']) && !empty($a['Date']) && $a['Date'] >= $_ma60awd;
+						}));
+						usort($_maRecTitle, function($a, $b) {
+							$nameA = trimlen($a['CustomAwardName'] ?? '') > 0 ? $a['CustomAwardName'] : (trimlen($a['KingdomAwardName'] ?? '') > 0 ? $a['KingdomAwardName'] : ($a['Name'] ?? ''));
+							$nameB = trimlen($b['CustomAwardName'] ?? '') > 0 ? $b['CustomAwardName'] : (trimlen($b['KingdomAwardName'] ?? '') > 0 ? $b['KingdomAwardName'] : ($b['Name'] ?? ''));
+							$nameCmp = strcmp($nameA, $nameB);
+							if ($nameCmp !== 0) return $nameCmp;
+							return (int)($b['Rank'] ?? 0) - (int)($a['Rank'] ?? 0);
+						});
+						$_maRecTitle = array_slice($_maRecTitle, 0, 5);
+						?>
+						<?php if (!empty($_maRecTitle)): ?>
+						<div class="pna-card">
+							<div class="pna-card-title"><i class="fas fa-crown"></i> Recent Titles <a class="pna-card-more" href="#" onclick="pnActivateTab('titles');return false;">All <?= $Stats['TotalTitles'] ?> &rarr;</a></div>
+							<div class="pna-congrats-banner"><i class="fas fa-trophy"></i> Congratulations on your recent titles!</div>
+							<?php foreach ($_maRecTitle as $_tw): ?>
+							<div class="pna-feed-row">
+								<span class="pna-feed-date"><?= date('M j, Y', strtotime($_tw['Date'])) ?></span>
+								<?php $_twName = trimlen($_tw['CustomAwardName'] ?? '') > 0 ? $_tw['CustomAwardName'] : (trimlen($_tw['KingdomAwardName'] ?? '') > 0 ? $_tw['KingdomAwardName'] : ($_tw['Name'] ?? '—')); ?>
+								<span class="pna-feed-label"><?= htmlspecialchars($_twName) ?><?php if (valid_id($_tw['Rank'] ?? 0)): ?> <span class="pna-feed-rank"><?= (int)$_tw['Rank'] ?></span><?php endif; ?></span>
+								<?php if (!empty($_tw['GivenBy'])): ?><span class="pna-feed-sub">by <?= htmlspecialchars($_tw['GivenBy']) ?></span><?php endif; ?>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						<?php endif; ?>
+
 						<!-- Upcoming Events: two-column -->
 						<?php if (!empty($UpcomingRsvps) || !empty($KingdomEvents)): ?>
 						<div class="pna-card">
