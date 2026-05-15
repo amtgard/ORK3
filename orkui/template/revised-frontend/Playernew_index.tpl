@@ -731,7 +731,8 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-dm-hint strong{color:#1a365d}
 @media(max-width:600px){
 .pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.pn-name-parts{flex-direction:column;gap:8px}
+.pn-name-parts{flex-direction:column;gap:8px;align-items:stretch}
+.pn-name-comma-sep{align-self:flex-start;padding-bottom:0}
 .pn-color-row{flex-direction:column;gap:8px}
 }
 
