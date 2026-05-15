@@ -172,13 +172,14 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 	var secCloseBtn = gid('rs-second-close-btn'); if (secCloseBtn) secCloseBtn.addEventListener('click', closeSecondModal);
 	var secCancel   = gid('rs-second-cancel');    if (secCancel)   secCancel.addEventListener('click', closeSecondModal);
 	if (secOverlay) secOverlay.addEventListener('click', function(e) { if (e.target === secOverlay) closeSecondModal(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && secOverlay && secOverlay.classList.contains('pn-open')) closeSecondModal();
+	});
 
 	function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 	function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
-	function buildOwnSecondHtml(secondId, notes, supPersona) {
-		var supLink = '<a class="rs-supporter" href="' + Cfg.uir + 'Player/profile/' + parseInt(Cfg.userId) + '">' + escHtml(supPersona || 'You') + '</a>';
-		var notesPart;
+	function buildNotesSpanHtml(notes) {
 		if (notes && notes.length > 0) {
 			var inner;
 			if (notes.length > 50) {
@@ -189,13 +190,31 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 			} else {
 				inner = escHtml(notes);
 			}
-			notesPart = '<span class="rs-notes">&mdash; "' + inner + '"</span>';
-		} else {
-			notesPart = '<span class="rs-notes-empty">&mdash; (no comment)</span>';
+			return '<span class="rs-notes">&mdash; "' + inner + '"</span>';
 		}
+		return '<span class="rs-notes-empty">&mdash; (no comment)</span>';
+	}
+
+	function buildOwnSecondHtml(secondId, notes, supPersona) {
+		var supLink = '<a class="rs-supporter" href="' + Cfg.uir + 'Player/profile/' + parseInt(Cfg.userId) + '">' + escHtml(supPersona || 'You') + '</a>';
+		var notesPart = buildNotesSpanHtml(notes);
 		var actions = '<button class="rs-second-edit" data-sid="' + parseInt(secondId) + '" data-notes="' + escAttr(notes) + '" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button>'
 			+ '<button class="rs-second-withdraw" data-sid="' + parseInt(secondId) + '" data-supporter="' + escAttr(supPersona || '') + '" data-rstip="Withdraw your second"><i class="fas fa-times"></i></button>';
 		return '<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i>' + supLink + notesPart + ' <span class="rs-second-actions">' + actions + '</span></div>';
+	}
+
+	function patchSecondNotesEdited(secondId, newNotes) {
+		var editBtn = document.querySelector('.rs-second-edit[data-sid="' + parseInt(secondId) + '"]');
+		if (!editBtn) return false;
+		var secondEl = editBtn.closest('.rs-second');
+		if (!secondEl) return false;
+		var oldNotes = secondEl.querySelector('.rs-notes, .rs-notes-empty');
+		if (!oldNotes) return false;
+		var holder = document.createElement('div');
+		holder.innerHTML = buildNotesSpanHtml(newNotes);
+		secondEl.replaceChild(holder.firstChild, oldNotes);
+		editBtn.setAttribute('data-notes', newNotes || '');
+		return true;
 	}
 
 	function patchSecondAdded(recId, secondId, notes, supPersona) {
@@ -233,6 +252,39 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 		return true;
 	}
 
+	function patchSecondWithdrawn(secondId, wasMine) {
+		var withdrawBtn = document.querySelector('.rs-second-withdraw[data-sid="' + parseInt(secondId) + '"]');
+		if (!withdrawBtn) return false;
+		var secondEl = withdrawBtn.closest('.rs-second');
+		if (!secondEl) return false;
+		var row = withdrawBtn.closest('tr[data-rec-id]');
+		var secondsContainer = secondEl.parentNode;
+		secondEl.parentNode.removeChild(secondEl);
+		if (secondsContainer && secondsContainer.classList.contains('rs-seconds') && !secondsContainer.querySelector('.rs-second')) {
+			secondsContainer.parentNode.removeChild(secondsContainer);
+		}
+		if (row) {
+			var actionsCell = row.querySelector('.pk-rec-actions');
+			var badge = actionsCell ? actionsCell.querySelector('.rs-seconds-badge') : null;
+			if (badge) {
+				var prior = parseInt((badge.textContent.match(/\d+/) || ['0'])[0], 10);
+				var next = Math.max(0, prior - 1);
+				if (next === 0) {
+					badge.parentNode.removeChild(badge);
+				} else {
+					badge.innerHTML = '<i class="fas fa-thumbs-up"></i>' + next;
+					badge.setAttribute('data-rstip', next + ' supporting ' + (next === 1 ? 'second' : 'seconds'));
+				}
+			}
+			if (wasMine) {
+				var recId = row.getAttribute('data-rec-id');
+				var addBtn = row.querySelector('.rs-action-btn[data-rec="' + parseInt(recId) + '"]');
+				if (addBtn) addBtn.style.display = '';
+			}
+		}
+		return true;
+	}
+
 	var secSubmit = gid('rs-second-submit');
 	if (secSubmit) secSubmit.addEventListener('click', function() {
 		var notes = secNotes.value || '';
@@ -250,8 +302,9 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 					closeSecondModal();
 					if (!patched) reload();
 				} else {
+					var patched = patchSecondNotesEdited(secMode.secondId, notes);
 					closeSecondModal();
-					reload();
+					if (!patched) reload();
 				}
 			}
 			else { secErr.textContent = (r.error || 'Error') + (r.detail ? ': ' + r.detail : ''); secErr.style.display = 'block'; }
@@ -289,6 +342,9 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 	var erCloseBtn = gid('rs-edit-reason-close-btn'); if (erCloseBtn) erCloseBtn.addEventListener('click', closeEditReason);
 	var erCancel   = gid('rs-edit-reason-cancel');    if (erCancel)   erCancel.addEventListener('click', closeEditReason);
 	if (erOverlay) erOverlay.addEventListener('click', function(e) { if (e.target === erOverlay) closeEditReason(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && erOverlay && erOverlay.classList.contains('pn-open')) closeEditReason();
+	});
 
 	var erSubmit = gid('rs-edit-reason-submit');
 	if (erSubmit) erSubmit.addEventListener('click', function() {
@@ -340,7 +396,10 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 			btn.disabled = true;
 			jQuery.post(Cfg.uir + 'PlayerAjax/withdraw_second/' + sid, {}, function(r) {
 				btn.disabled = false;
-				if (r.status === 0) { reload(); }
+				if (r.status === 0) {
+					var patched = patchSecondWithdrawn(sid, isMine);
+					if (!patched) reload();
+				}
 				else { alert((r.error || 'Error') + (r.detail ? ': ' + r.detail : '')); }
 			}, 'json').fail(function() {
 				btn.disabled = false;
