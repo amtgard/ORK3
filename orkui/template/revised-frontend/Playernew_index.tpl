@@ -3304,6 +3304,13 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 									<div class="pn-ms-icon-opt" data-icon="fa-fist-raised" title="Fist"><i class="fas fa-fist-raised"></i></div>
 									<div class="pn-ms-icon-opt" data-icon="fa-music" title="Music"><i class="fas fa-music"></i></div>
 									<div class="pn-ms-icon-opt" data-icon="fa-paint-brush" title="Paint"><i class="fas fa-paint-brush"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-door-open" title="Door"><i class="fas fa-door-open"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-shield-alt" title="Shield"><i class="fas fa-shield-alt"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-gem" title="Gem"><i class="fas fa-gem"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-crown" title="Crown"><i class="fas fa-crown"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-landmark" title="Landmark"><i class="fas fa-landmark"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-handshake" title="Handshake"><i class="fas fa-handshake"></i></div>
+									<div class="pn-ms-icon-opt" data-icon="fa-hand-holding-heart" title="Hand &amp; Heart"><i class="fas fa-hand-holding-heart"></i></div>
 								</div>
 							</div>
 							<button class="pn-ms-add-btn" id="pn-ms-add-btn"><i class="fas fa-plus"></i> Add</button>
