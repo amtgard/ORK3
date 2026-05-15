@@ -1411,7 +1411,11 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						$_maRecAwd = array_values(array_filter($_maDash_awd, function($a) use ($_ma60awd) {
 							return !$a['IsTitle'] && !empty($a['Date']) && $a['Date'] >= $_ma60awd;
 						}));
+						// Sort by date desc (most recent first), then name, then rank — this is
+						// a "Recent" feed so date should dominate ordering.
 						usort($_maRecAwd, function($a, $b) {
+							$dateCmp = strcmp($b['Date'] ?? '', $a['Date'] ?? '');
+							if ($dateCmp !== 0) return $dateCmp;
 							$nameA = trimlen($a['CustomAwardName'] ?? '') > 0 ? $a['CustomAwardName'] : (trimlen($a['KingdomAwardName'] ?? '') > 0 ? $a['KingdomAwardName'] : ($a['Name'] ?? ''));
 							$nameB = trimlen($b['CustomAwardName'] ?? '') > 0 ? $b['CustomAwardName'] : (trimlen($b['KingdomAwardName'] ?? '') > 0 ? $b['KingdomAwardName'] : ($b['Name'] ?? ''));
 							$nameCmp = strcmp($nameA, $nameB);
@@ -1441,6 +1445,8 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							return !empty($a['IsTitle']) && !empty($a['Date']) && $a['Date'] >= $_ma60awd;
 						}));
 						usort($_maRecTitle, function($a, $b) {
+							$dateCmp = strcmp($b['Date'] ?? '', $a['Date'] ?? '');
+							if ($dateCmp !== 0) return $dateCmp;
 							$nameA = trimlen($a['CustomAwardName'] ?? '') > 0 ? $a['CustomAwardName'] : (trimlen($a['KingdomAwardName'] ?? '') > 0 ? $a['KingdomAwardName'] : ($a['Name'] ?? ''));
 							$nameB = trimlen($b['CustomAwardName'] ?? '') > 0 ? $b['CustomAwardName'] : (trimlen($b['KingdomAwardName'] ?? '') > 0 ? $b['KingdomAwardName'] : ($b['Name'] ?? ''));
 							$nameCmp = strcmp($nameA, $nameB);
