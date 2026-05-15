@@ -4396,6 +4396,11 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	var customData = PnConfig.customMilestones || [];
 	function renderCustomList() {
 		if (!customList) return;
+		var newestFirst = !!(newestFirstToggle && newestFirstToggle.checked);
+		customData.sort(function(a, b) {
+			var ad = a.MilestoneDate || '', bd = b.MilestoneDate || '';
+			return newestFirst ? bd.localeCompare(ad) : ad.localeCompare(bd);
+		});
 		if (customData.length === 0) {
 			customList.innerHTML = '<div style="font-size:12px;color:#a0aec0;padding:8px 0">No custom milestones yet.</div>';
 			return;
@@ -4419,6 +4424,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		customList.innerHTML = html;
 	}
 	renderCustomList();
+	if (newestFirstToggle) newestFirstToggle.addEventListener('change', renderCustomList);
 
 	// Icon grid selection
 	var iconGrid = document.getElementById('pn-ms-icon-grid');
