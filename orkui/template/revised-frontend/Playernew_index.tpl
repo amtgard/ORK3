@@ -589,7 +589,13 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-cms-line{flex:1;min-width:0;color:#4a5568;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pn-cms-line strong{color:#718096;font-weight:500;margin-right:2px}
 /* ===== Design My Profile Modal ===== */
+.pn-design-tabs-wrap{position:relative}
 .pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0}
+.pn-design-tabs-chev{display:none;position:absolute;top:0;bottom:2px;width:36px;align-items:center;justify-content:center;border:none;cursor:pointer;color:#4a5568;font-size:13px;padding:0;z-index:2}
+.pn-design-tabs-chev.pn-show{display:flex}
+.pn-design-tabs-chev-left{left:0;background:linear-gradient(to right,#fff 55%,rgba(255,255,255,0))}
+.pn-design-tabs-chev-right{right:0;background:linear-gradient(to left,#fff 55%,rgba(255,255,255,0))}
+.pn-design-tabs-chev:hover{color:var(--pn-accent,#4299e1)}
 .pn-design-tab{padding:10px 18px;font-size:13px;font-weight:600;color:#718096;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap}
 .pn-design-tab:hover{color:#2d3748}
 .pn-design-tab.pn-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
@@ -771,6 +777,10 @@ html[data-theme="dark"] .pn-tl-empty { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-design-tabs { border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-design-tab { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-design-tab:hover { color: var(--ork-text); }
+html[data-theme="dark"] .pn-design-tabs-chev { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-design-tabs-chev-left { background: linear-gradient(to right, var(--ork-card-bg) 55%, rgba(0,0,0,0)); }
+html[data-theme="dark"] .pn-design-tabs-chev-right { background: linear-gradient(to left, var(--ork-card-bg) 55%, rgba(0,0,0,0)); }
+html[data-theme="dark"] .pn-design-tabs-chev:hover { color: var(--pn-accent, #4299e1); }
 
 /* Design My Profile — field chrome */
 html[data-theme="dark"] .pn-design-field label { color: var(--ork-text-secondary); }
@@ -2874,16 +2884,20 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<h3 class="pn-modal-title"><i class="fas fa-palette pn-modal-title-icon"></i>Design My Profile</h3>
 			<button class="pn-modal-close-btn" id="pn-design-close-btn" aria-label="Close">&times;</button>
 		</div>
-		<div class="pn-design-tabs">
-			<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-hand-sparkles"></i> Welcome</button>
-			<button class="pn-design-tab" data-panel="about"><i class="fas fa-scroll"></i> About</button>
-			<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
-			<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
-			<button class="pn-design-tab" data-panel="focus"><i class="fas fa-crosshairs"></i> Photo Focus</button>
-			<button class="pn-design-tab" data-panel="milestones"><i class="fas fa-stream"></i> Milestones</button>
-			<?php if ($isKnight): ?>
-			<button class="pn-design-tab" data-panel="icons"><i class="fas fa-shield-alt"></i> Icons</button>
-			<?php endif; ?>
+		<div class="pn-design-tabs-wrap">
+			<button type="button" class="pn-design-tabs-chev pn-design-tabs-chev-left" id="pn-design-tabs-chev-left" aria-label="Scroll tabs left" tabindex="-1"><i class="fas fa-chevron-left"></i></button>
+			<div class="pn-design-tabs" id="pn-design-tabs">
+				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-hand-sparkles"></i> Welcome</button>
+				<button class="pn-design-tab" data-panel="about"><i class="fas fa-scroll"></i> About</button>
+				<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
+				<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
+				<button class="pn-design-tab" data-panel="focus"><i class="fas fa-crosshairs"></i> Photo Focus</button>
+				<button class="pn-design-tab" data-panel="milestones"><i class="fas fa-stream"></i> Milestones</button>
+				<?php if ($isKnight): ?>
+				<button class="pn-design-tab" data-panel="icons"><i class="fas fa-shield-alt"></i> Icons</button>
+				<?php endif; ?>
+			</div>
+			<button type="button" class="pn-design-tabs-chev pn-design-tabs-chev-right" id="pn-design-tabs-chev-right" aria-label="Scroll tabs right" tabindex="-1"><i class="fas fa-chevron-right"></i></button>
 		</div>
 		<div class="pn-acct-modal-body" style="height:60vh;overflow-y:auto">
 			<div class="pn-form-error" id="pn-design-error"></div>
@@ -3635,6 +3649,9 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		gid('pn-design-overlay').classList.add('pn-open');
 		document.body.style.overflow = 'hidden';
 		initFocusTool();
+		if (typeof window.pnUpdateDesignTabIndicators === 'function') {
+			setTimeout(window.pnUpdateDesignTabIndicators, 50);
+		}
 	};
 	function closeDesign() {
 		gid('pn-design-overlay').classList.remove('pn-open');
@@ -3667,6 +3684,30 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	document.querySelectorAll('.pn-design-tab').forEach(function(tab) {
 		tab.addEventListener('click', function() { pnSwitchDesignPanel(tab.dataset.panel); });
 	});
+
+	// Mobile scroll indicators on the tab row
+	(function() {
+		var tabs = gid('pn-design-tabs');
+		var left = gid('pn-design-tabs-chev-left');
+		var right = gid('pn-design-tabs-chev-right');
+		if (!tabs || !left || !right) return;
+		function update() {
+			var mobile = window.matchMedia('(max-width:600px)').matches;
+			if (!mobile) {
+				left.classList.remove('pn-show');
+				right.classList.remove('pn-show');
+				return;
+			}
+			left.classList.toggle('pn-show', tabs.scrollLeft > 0);
+			right.classList.toggle('pn-show', tabs.scrollLeft + tabs.clientWidth < tabs.scrollWidth - 1);
+		}
+		tabs.addEventListener('scroll', update, { passive: true });
+		window.addEventListener('resize', update);
+		left.addEventListener('click', function() { tabs.scrollBy({ left: -Math.round(tabs.clientWidth * 0.7), behavior: 'smooth' }); });
+		right.addEventListener('click', function() { tabs.scrollBy({ left: Math.round(tabs.clientWidth * 0.7), behavior: 'smooth' }); });
+		window.pnUpdateDesignTabIndicators = update;
+		update();
+	})();
 
 	// About-tab edit pencil — open Design modal focused on the About panel
 	var aboutEditBtn = gid('pn-about-edit-btn');
