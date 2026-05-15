@@ -3017,7 +3017,8 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<button type="button" class="pn-md-quick-btn" data-quickadd="findmelinks" data-target-field="persona"><i class="fas fa-share-alt"></i> Find Me Links</button>
 						</div>
 					</div>
-					<textarea id="pn-design-about-persona" placeholder="Ex. Hi there! I'm an archer in the Northern Kingdom who loves brewing mead and singing bardic songs. You can find me in the Barony of..."><?= htmlspecialchars($Player['AboutPersona'] ?? '') ?></textarea>
+					<textarea id="pn-design-about-persona" maxlength="10000" placeholder="Ex. Hi there! I'm an archer in the Northern Kingdom who loves brewing mead and singing bardic songs. You can find me in the Barony of..."><?= htmlspecialchars($Player['AboutPersona'] ?? '') ?></textarea>
+					<span class="pn-char-count" id="pn-design-about-persona-charcount" style="display:none"></span>
 					<div class="pn-md-preview" id="pn-design-about-persona-preview" style="display:none"></div>
 					<div class="pn-design-hint">Supports <strong>Markdown</strong> <button type="button" class="kn-md-help-btn" onclick="document.getElementById('pn-md-help-overlay').classList.add('kn-open')" title="Markdown reference">?</button>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
 				</div>
@@ -3033,7 +3034,8 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<button type="button" class="pn-md-quick-btn" data-quickadd="signaturequote" data-target-field="story"><i class="fas fa-quote-left"></i> Signature Quote</button>
 						</div>
 					</div>
-					<textarea id="pn-design-about-story" placeholder="Ex. Feywild the Brewer has been traveling the realms looking for the Amulet of Fireballs. After his village was destroyed in a rock giant stampede..."><?= htmlspecialchars($Player['AboutStory'] ?? '') ?></textarea>
+					<textarea id="pn-design-about-story" maxlength="10000" placeholder="Ex. Feywild the Brewer has been traveling the realms looking for the Amulet of Fireballs. After his village was destroyed in a rock giant stampede..."><?= htmlspecialchars($Player['AboutStory'] ?? '') ?></textarea>
+					<span class="pn-char-count" id="pn-design-about-story-charcount" style="display:none"></span>
 					<div class="pn-md-preview" id="pn-design-about-story-preview" style="display:none"></div>
 					<div class="pn-design-hint">Supports <strong>Markdown</strong> <button type="button" class="kn-md-help-btn" onclick="document.getElementById('pn-md-help-overlay').classList.add('kn-open')" title="Markdown reference">?</button>: **bold**, *italic*, [links](url), ## headings, lists, etc.</div>
 				</div>
@@ -4081,6 +4083,39 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		window.addEventListener('touchend', onUp);
 	}
 
+	// About-section character limit + counter (counter only shows at >= 9,000 chars).
+	(function() {
+		var ABOUT_FIELDS = [
+			{ id: 'pn-design-about-persona', cid: 'pn-design-about-persona-charcount' },
+			{ id: 'pn-design-about-story',   cid: 'pn-design-about-story-charcount' }
+		];
+		var ABOUT_LIMIT = 10000;
+		var ABOUT_SHOW_AT = 9000;
+		ABOUT_FIELDS.forEach(function(f) {
+			var ta = gid(f.id);
+			var cc = gid(f.cid);
+			if (!ta || !cc) return;
+			function update() {
+				var n = ta.value.length;
+				if (n < ABOUT_SHOW_AT) {
+					cc.style.display = 'none';
+					cc.classList.remove('pn-char-warn');
+					return;
+				}
+				cc.style.display = '';
+				if (n > ABOUT_LIMIT) {
+					cc.textContent = (n - ABOUT_LIMIT).toLocaleString() + ' characters over the 10,000-character limit';
+					cc.classList.add('pn-char-warn');
+				} else {
+					cc.textContent = (ABOUT_LIMIT - n).toLocaleString() + ' characters remaining';
+					cc.classList.remove('pn-char-warn');
+				}
+			}
+			ta.addEventListener('input', update);
+			update();
+		});
+	})();
+
 	// Save
 	gid('pn-design-save').addEventListener('click', function() {
 		var btn = this;
@@ -4101,6 +4136,23 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		if (!coreName) {
 			errEl.textContent = 'Core name is required.';
 			errEl.style.display = '';
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			return;
+		}
+		var ABOUT_SAVE_LIMIT = 10000;
+		var aboutPersonaVal = gid('pn-design-about-persona').value;
+		var aboutStoryVal   = gid('pn-design-about-story').value;
+		if (aboutPersonaVal.length > ABOUT_SAVE_LIMIT) {
+			pnShowProfanityFieldError('AboutPersona',
+				'Your About section is limited to ' + ABOUT_SAVE_LIMIT.toLocaleString() + ' characters. It is currently ' + aboutPersonaVal.length.toLocaleString() + ' characters — trim it before saving.');
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			return;
+		}
+		if (aboutStoryVal.length > ABOUT_SAVE_LIMIT) {
+			pnShowProfanityFieldError('AboutStory',
+				'Your My Story section is limited to ' + ABOUT_SAVE_LIMIT.toLocaleString() + ' characters. It is currently ' + aboutStoryVal.length.toLocaleString() + ' characters — trim it before saving.');
 			btn.disabled = false;
 			btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
 			return;
