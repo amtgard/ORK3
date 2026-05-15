@@ -1,8 +1,8 @@
 /* jQuery UI autocomplete dropdowns default to z-index 1, which puts them
-   behind any open modal (modals sit at --z-modal = 1100). Hoist the
-   dropdown above the modal so player-search autocompletes inside Edit
-   Officers, etc. are actually visible. */
-.ui-autocomplete { z-index: 1200; }
+   behind any open modal. Modals sit at --z-modal = 10100 (above the fixed
+   top nav at 9999); the dropdown needs to be above the modal so
+   player-search autocompletes inside Edit Officers, etc. are visible. */
+.ui-autocomplete { z-index: 10150; }
 
 /* ===========================
    Dark Mode CSS Custom Properties
@@ -1572,13 +1572,15 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 	--pk-accent:     hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 29%));
 	--pk-accent-mid: hsl(calc(var(--pk-hue) + 35), 65%, var(--ork-accent-mid-lightness, 37%));
 	--pk-btn-txt:    hsl(var(--pk-hue), var(--pk-sat), var(--ork-btn-txt-lightness, 16%));
-	/* Z-Index Scale */
+	/* Z-Index Scale — modal layers sit above the fixed top nav (#newmenu, z:9999).
+	   Without this, on short viewports the modal vertically centers into the
+	   nav band and the nav (which renders later in the cascade) covers it. */
 	--z-dropdown: 300;
 	--z-tooltip: 500;
-	--z-modal-backdrop: 1040;
-	--z-modal: 1100;
-	--z-modal-top: 1200;
-	--z-help-overlay: 1300;
+	--z-modal-backdrop: 10040;
+	--z-modal: 10100;
+	--z-modal-top: 10200;
+	--z-help-overlay: 10300;
 	--ev-accent: #0891b2;
 }
 
@@ -2722,7 +2724,7 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 	position: fixed;
 	inset: 0;
 	background: rgba(0,0,0,0.5);
-	z-index: 1100;
+	z-index: 10100;
 	align-items: center;
 	justify-content: center;
 	padding: 20px;
@@ -3778,7 +3780,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	position: fixed;
 	inset: 0;
 	background: rgba(0,0,0,0.5);
-	z-index: 1100;
+	z-index: 10100;
 	align-items: center;
 	justify-content: center;
 	padding: 20px;
