@@ -548,18 +548,38 @@ class Authorization extends Ork3
 	public function remove_auth_h($request)
 	{
 		logtrace('remove_auth_h', $request);
+		$_auth_id = (int)$request['AuthorizationId'];
+		if (!valid_id($_auth_id)) {
+			return ProcessingError();
+		}
+
+		// Fresh raw SELECT for the audit snapshot. Reading via the shared
+		// $this->auth yapo object here produced rows with mundane_id=0 in
+		// prod (probably state pollution from RemoveAuthorization's own
+		// find() + the HasAuthority chain that runs before this point —
+		// next()/clear()/find() over the same yapo can leave the active
+		// record set in an unexpected position). Going straight to the DB
+		// for the audit data sidesteps all of that.
+		global $DB;
+		$DB->Clear();
+		$_priorRs = $DB->DataSet("SELECT mundane_id, park_id, kingdom_id, event_id, unit_id, role FROM " . DB_PREFIX . "authorization WHERE authorization_id = " . $_auth_id . " LIMIT 1");
+		if (!$_priorRs || !$_priorRs->Next()) {
+			return ProcessingError();
+		}
+		$_prior = [
+			'authorization_id' => $_auth_id,
+			'mundane_id'       => (int)$_priorRs->mundane_id,
+			'park_id'          => (int)$_priorRs->park_id,
+			'kingdom_id'       => (int)$_priorRs->kingdom_id,
+			'event_id'         => (int)$_priorRs->event_id,
+			'unit_id'          => (int)$_priorRs->unit_id,
+			'role'             => $_priorRs->role,
+		];
+		$DB->Clear();
+
 		$this->auth->clear();
-		$this->auth->authorization_id = $request['AuthorizationId'];
-		if (valid_id($request['AuthorizationId']) && $this->auth->find()) {
-			$_prior = [
-				'authorization_id' => (int)$this->auth->authorization_id,
-				'mundane_id'       => (int)$this->auth->mundane_id,
-				'park_id'          => (int)$this->auth->park_id,
-				'kingdom_id'       => (int)$this->auth->kingdom_id,
-				'event_id'         => (int)$this->auth->event_id,
-				'unit_id'          => (int)$this->auth->unit_id,
-				'role'             => $this->auth->role,
-			];
+		$this->auth->authorization_id = $_auth_id;
+		if ($this->auth->find()) {
 			$_audit_req = $request;
 			unset($_audit_req['Token']);
 			$this->log->Write('Authorization', $requester_id, LOG_REMOVE, $request);
