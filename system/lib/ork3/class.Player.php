@@ -2412,6 +2412,66 @@ class Player extends Ork3 {
 		}
 	}
 
+	public function RestoreAwardRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		if (!valid_id($request['RecommendationsId']))
+			return InvalidParameter('There was a problem with the request.');
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $request['RecommendationsId'];
+		if (!$awardRec->find())
+			return InvalidParameter('There was a problem with the request.');
+
+		$recipientInfo = $this->player_info($awardRec->mundane_id);
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+			return NoAuthorization();
+		}
+
+		if (empty($awardRec->deleted_at)) {
+			return Success('Already Active');
+		}
+
+		$prior_rec = [
+			'recommendations_id' => (int)$awardRec->recommendations_id,
+			'mundane_id'         => (int)$awardRec->mundane_id,
+			'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
+			'award_id'           => (int)$awardRec->award_id,
+			'rank'               => (int)$awardRec->rank,
+			'recommended_by_id'  => (int)$awardRec->recommended_by_id,
+			'date_recommended'   => $awardRec->date_recommended,
+			'reason'             => $awardRec->reason,
+			'deleted_at'         => $awardRec->deleted_at,
+			'deleted_by'         => (int)$awardRec->deleted_by,
+		];
+		$priorDeletedAt = $awardRec->deleted_at;
+		$priorDeletedBy = (int)$awardRec->deleted_by;
+
+		// Yapo's null-binding doesn't reliably emit SQL NULL on TIMESTAMP columns; use a raw UPDATE.
+		$this->db->Clear();
+		$this->db->Execute(
+			"UPDATE " . DB_PREFIX . "recommendations SET deleted_at = NULL, deleted_by = NULL WHERE recommendations_id = " . (int)$awardRec->recommendations_id
+		);
+
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+
+		// Cascade restore only the seconds that were soft-deleted in the same operation
+		// (matched by deleted_at + deleted_by). Seconds individually withdrawn before or
+		// after the parent's deletion stay deleted.
+		$this->db->Clear();
+		$this->db->Execute(
+			"UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = NULL, deleted_by = NULL
+			 WHERE recommendations_id = " . (int)$awardRec->recommendations_id . "
+			   AND deleted_at = '" . addslashes($priorDeletedAt) . "'
+			   AND deleted_by = " . $priorDeletedBy
+		);
+
+		$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+		return Success('Recommendation Restored!');
+	}
+
 
 	/**
 	 * Add a "second" (supporting endorsement) to an existing award recommendation.

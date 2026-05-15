@@ -673,6 +673,91 @@ class Report  extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
 	}
 
+	public function DeletedAwardRecommendations($request) {
+		$key = Ork3::$Lib->ghettocache->key([
+			'KingdomId' => (int)($request['KingdomId'] ?? 0),
+			'ParkId'    => (int)($request['ParkId']    ?? 0),
+			'PlayerId'  => (int)($request['PlayerId']  ?? 0),
+			'Deleted'   => 1,
+		]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
+
+		$location_clause = '';
+		if (valid_id($request['KingdomId'])) {
+			$location_clause = " AND m.kingdom_id = " . (int)$request['KingdomId'];
+		}
+		if (valid_id($request['ParkId'])) {
+			$location_clause = " AND m.park_id = " . (int)$request['ParkId'];
+		}
+		if (valid_id($request['PlayerId'])) {
+			$location_clause = " AND recs.mundane_id = " . (int)$request['PlayerId'];
+		}
+
+		$sql = "select
+			a.peerage, ifnull(ka.name, a.name) as award_name,
+			m.persona,
+			recs.date_recommended,
+			m.mundane_id,
+			m.park_id,
+			m.kingdom_id,
+			p.name as park_name,
+			k.name as kingdom_name,
+			recs.rank,
+			rbi.mundane_id as recommended_by_id, rbi.persona as recommended_by_persona,
+			recs.recommendations_id,
+			recs.award_id,
+			recs.reason,
+			recs.mask_giver,
+			recs.deleted_at,
+			recs.deleted_by,
+			dm.persona as deleted_by_persona,
+			ka.award_id as ka_award_id,
+			ka.kingdomaward_id as ka_kaward_id
+			FROM " . DB_PREFIX . "recommendations recs
+			LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = recs.kingdomaward_id
+			LEFT JOIN " . DB_PREFIX . "award a on a.award_id = ka.award_id
+			LEFT join " . DB_PREFIX . "mundane m on m.mundane_id = recs.mundane_id
+			LEFT join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = recs.recommended_by_id
+			LEFT join " . DB_PREFIX . "mundane dm on dm.mundane_id = recs.deleted_by
+			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
+			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
+			WHERE recs.deleted_at IS NOT NULL $location_clause
+			order by recs.deleted_at DESC";
+		$this->db->Clear();
+		$r = $this->db->query($sql);
+		$response = ['AwardRecommendations' => []];
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$response['AwardRecommendations'][] = [
+					'RecommendationsId' => (int)$r->recommendations_id,
+					'MundaneId'         => (int)$r->mundane_id,
+					'Persona'           => $r->persona,
+					'DateRecommended'   => $r->date_recommended,
+					'Rank'              => (int)$r->rank,
+					'AwardName'         => $r->award_name,
+					'Reason'            => $r->reason,
+					'RecommendedByName' => $r->recommended_by_persona,
+					'RecommendedById'   => (int)$r->recommended_by_id,
+					'MaskGiver'         => (int)$r->mask_giver,
+					'KingdomAwardId'    => (int)$r->ka_kaward_id,
+					'AwardId'           => (int)($r->ka_award_id ?: $r->award_id),
+					'ParkId'            => (int)$r->park_id,
+					'KingdomId'         => (int)$r->kingdom_id,
+					'ParkName'          => $r->park_name,
+					'KingdomName'       => $r->kingdom_name,
+					'DeletedAt'         => $r->deleted_at,
+					'DeletedById'       => (int)$r->deleted_by,
+					'DeletedByName'     => $r->deleted_by_persona,
+				];
+			}
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = Success();
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+	}
+
 	public function Guilds($request) {
 		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";

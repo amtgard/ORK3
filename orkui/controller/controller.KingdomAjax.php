@@ -433,6 +433,31 @@ class Controller_KingdomAjax extends Controller {
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+		} elseif ($action === 'deletedrecommendations') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
+			}
+			$this->load_model('Reports');
+			$recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
+			echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
+
+		} elseif ($action === 'restorerecommendation') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
+			}
+			$this->load_model('Player');
+			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
+			$r = $this->Player->restore_player_recommendation([
+				'Token'             => $this->session->token,
+				'RecommendationsId' => $rec_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
 		} elseif ($action === 'geteventtemplates') {
 			global $DB;
 			$kid = $kingdom_id;

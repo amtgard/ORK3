@@ -197,6 +197,10 @@ class Model_Player extends Model {
 		return $this->Player->DeleteAwardRecommendation($request);
 	}
 
+	function restore_player_recommendation($request) {
+		return $this->Player->RestoreAwardRecommendation($request);
+	}
+
 	function remove_heraldry($request) {
 		return $this->Player->RemoveHeraldry($request);
 	}

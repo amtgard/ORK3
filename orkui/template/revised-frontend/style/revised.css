@@ -5974,6 +5974,41 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 	.pk-rec-expand-btn { padding: 2px 6px; min-height: 24px; }
 }
 
+/* ---- Deleted Recommendations panel (Park + Kingdom recs tab) ---- */
+.pk-deleted-recs { margin-top: 18px; border: 1px solid var(--ork-border); border-radius: 8px; background: var(--ork-card-bg); }
+.pk-deleted-recs-toggle {
+	width: 100%; display: flex; align-items: center; gap: 8px;
+	padding: 10px 14px; background: transparent; border: none; cursor: pointer;
+	font-size: 13px; font-weight: 600; color: var(--ork-text-secondary);
+	border-radius: 8px; text-align: left;
+}
+.pk-deleted-recs-toggle:hover { background: rgba(0,0,0,0.03); color: var(--ork-text); }
+html[data-theme="dark"] .pk-deleted-recs-toggle:hover { background: rgba(255,255,255,0.05); }
+.pk-deleted-recs-caret { display: inline-block; transition: transform 0.15s ease; font-size: 10px; color: var(--ork-text-muted); }
+.pk-deleted-recs.pk-deleted-open .pk-deleted-recs-caret { transform: rotate(90deg); }
+.pk-deleted-recs-count {
+	display: inline-block; min-width: 22px; padding: 1px 7px; border-radius: 11px;
+	background: var(--ork-border); color: var(--ork-text-secondary);
+	font-size: 11px; font-weight: 700; text-align: center; line-height: 1.5;
+}
+.pk-deleted-recs-body { padding: 4px 14px 14px; border-top: 1px solid var(--ork-border); }
+.pk-deleted-recs-loading, .pk-deleted-recs-empty { padding: 14px; text-align: center; color: var(--ork-text-muted); font-size: 13px; }
+.pk-deleted-recs-table-wrap { overflow-x: auto; }
+.pk-deleted-recs-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--ork-card-bg); }
+.pk-deleted-recs-table th { padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ork-text-muted); border-bottom: 2px solid var(--ork-border); background: transparent; white-space: nowrap; }
+.pk-deleted-recs-table td { padding: 8px 10px; vertical-align: middle; color: var(--ork-text); border-bottom: 1px solid var(--ork-border); }
+.pk-deleted-recs-table tbody tr:last-child td { border-bottom: none; }
+.pk-deleted-recs-table td a { color: var(--pk-accent-mid, #2b6cb0); text-decoration: none; }
+.pk-deleted-recs-table td a:hover { text-decoration: underline; }
+.pk-deleted-recs-table .pk-deleted-restore-btn {
+	font-size: 12px; padding: 4px 10px; border-radius: 4px;
+	background: none; border: 1px solid var(--ork-border-dark); color: var(--ork-text-secondary); cursor: pointer; white-space: nowrap;
+}
+.pk-deleted-recs-table .pk-deleted-restore-btn:hover { background: rgba(43,108,176,0.08); border-color: var(--pk-accent-mid, #2b6cb0); color: var(--pk-accent-mid, #2b6cb0); }
+.pk-deleted-recs-table .pk-deleted-restore-btn.pk-deleted-restore-confirm { background: #fff5f5; border-color: #fc8181; color: #c53030; font-weight: 600; }
+html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-deleted-restore-confirm { background: rgba(252,129,129,0.12); border-color: #fc8181; color: #fed7d7; }
+.pk-deleted-recs-table tr.pk-deleted-restored { transition: opacity 0.5s ease; opacity: 0; }
+
 /* ---- Tournament table delete button ---- */
 .kn-tournament-del-btn { background:none; border:none; color:#a0aec0; font-size:16px; line-height:1; cursor:pointer; padding:2px 6px; border-radius:4px; transition:color 0.15s,background 0.15s; }
 .kn-tournament-del-btn:hover { color:#c53030; background:#fff5f5; }
