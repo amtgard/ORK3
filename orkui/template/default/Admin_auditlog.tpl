@@ -65,7 +65,7 @@ function _jsonDecode($json, $fallbackKeys = []) {
 // Collect all IDs from the 50 rendered rows upfront, then resolve
 // in three IN queries so the page never issues per-row DB calls.
 global $DB;
-$_parkIds = []; $_kingdomIds = []; $_mundaneIds = []; $_eventIds = []; $_kawardIds = [];
+$_parkIds = []; $_kingdomIds = []; $_mundaneIds = []; $_eventIds = []; $_kawardIds = []; $_unitIds = [];
 foreach ($AuditRows as $_lr) {
 	foreach ([$_lr['Parameters'], $_lr['PriorState'], $_lr['PostState']] as $_js) {
 		$_d = @json_decode($_js, true);
@@ -86,9 +86,10 @@ foreach ($AuditRows as $_lr) {
 	}
 		foreach (['event_id','at_event_id','EventId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_eventIds[(int)$_d[$_k]] = true;
 		foreach (['kingdomaward_id','KingdomAwardId'] as $_k) if (!empty($_d[$_k])) $_kawardIds[(int)$_d[$_k]] = true;
+		foreach (['unit_id','UnitId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_unitIds[(int)$_d[$_k]] = true;
 	}
 }
-$_parkMap = []; $_kingdomMap = []; $_mundaneMap = []; $_eventMap = []; $_kawardMap = []; $_classMap = [];
+$_parkMap = []; $_kingdomMap = []; $_mundaneMap = []; $_eventMap = []; $_kawardMap = []; $_classMap = []; $_unitMap = [];
 if ($_parkIds) {
 	$_ids = implode(',', array_keys($_parkIds));
 	$DB->Clear(); $_r = $DB->DataSet("SELECT park_id, name FROM ork_park WHERE park_id IN ($_ids)");
@@ -113,6 +114,11 @@ if ($_kawardIds) {
 	$_ids = implode(',', array_keys($_kawardIds));
 	$DB->Clear(); $_r = $DB->DataSet("SELECT kingdomaward_id, name FROM ork_kingdomaward WHERE kingdomaward_id IN ($_ids)");
 	if ($_r && $_r->Size() > 0) do { $_kawardMap[(int)$_r->kingdomaward_id] = $_r->name; } while ($_r->Next());
+}
+if ($_unitIds) {
+	$_ids = implode(',', array_keys($_unitIds));
+	$DB->Clear(); $_r = $DB->DataSet("SELECT unit_id, name FROM ork_unit WHERE unit_id IN ($_ids)");
+	if ($_r && $_r->Size() > 0) do { $_unitMap[(int)$_r->unit_id] = $_r->name; } while ($_r->Next());
 }
 $DB->Clear(); $_r = $DB->DataSet("SELECT class_id, name FROM ork_class ORDER BY class_id");
 if ($_r && $_r->Size() > 0) do { $_classMap[(int)$_r->class_id] = $_r->name; } while ($_r->Next());
@@ -173,7 +179,7 @@ function _auditIdLink($type, $id, $nameMap) {
 }
 
 // Build a one-line summary from the action and stored JSON
-function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMap = [], $kingdomMap = [], $classMap = [], $mundaneMap = [], $eventMap = []) {
+function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMap = [], $kingdomMap = [], $classMap = [], $mundaneMap = [], $eventMap = [], $unitMap = []) {
 	$p = _jsonDecode($params, ['ParkId','MundaneId','KingdomId','FromMundaneId','ToMundaneId','SuspendedUntil','ClassId','Credits']);
 	$b = _jsonDecode($prior,  ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','Persona','class_id','date','credits','dues_until','dues_for_life','name']);
 	$a = _jsonDecode($post,   ['ParkId','park_id','KingdomId','MundaneId','mundane_id','Persona']);
@@ -398,23 +404,29 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$_state = $a ?: $b ?: $p;
 			$_grantee = (int)($_state['mundane_id'] ?? $_state['MundaneId'] ?? 0);
 			$_role    = $_state['role'] ?? $_state['Role'] ?? '';
-			$_scope   = '';
+			$_verb    = $method === 'Authorization::AddAuthorization' ? 'Granted' : 'Revoked';
+			$_who     = $_grantee ? ($mundaneMap[$_grantee] ?? 'player #' . $_grantee) : '';
+			// Unit-scoped permissions: role is always 'create' which means "Manager" of the unit.
+			// Render with the role's user-facing label and the unit name.
+			if (!empty($_state['unit_id'])) {
+				$_uid = (int)$_state['unit_id'];
+				$_unit = $unitMap[$_uid] ?? ('unit #' . $_uid);
+				$_preposition = $method === 'Authorization::AddAuthorization' ? ' to ' : ' from ';
+				return $_verb . ' Manager' . ($_who ? $_preposition . htmlspecialchars($_who) : '') . ' in ' . htmlspecialchars($_unit);
+			}
+			$_scope = '';
 			if (!empty($_state['park_id'])) {
 				$_scope = 'park ' . ($parkMap[(int)$_state['park_id']] ?? '#' . (int)$_state['park_id']);
 			} elseif (!empty($_state['kingdom_id'])) {
 				$_scope = 'kingdom ' . ($kingdomMap[(int)$_state['kingdom_id']] ?? '#' . (int)$_state['kingdom_id']);
 			} elseif (!empty($_state['event_id'])) {
 				$_scope = 'event ' . ($eventMap[(int)$_state['event_id']] ?? '#' . (int)$_state['event_id']);
-			} elseif (!empty($_state['unit_id'])) {
-				$_scope = 'unit #' . (int)$_state['unit_id'];
 			} else {
 				// Could also fall back to $p['Type']/$p['Id'] for the request-only form.
 				if (!empty($p['Type']) && !empty($p['Id'])) {
 					$_scope = strtolower($p['Type']) . ' #' . (int)$p['Id'];
 				}
 			}
-			$_verb = $method === 'Authorization::AddAuthorization' ? 'Granted' : 'Revoked';
-			$_who  = $_grantee ? ($mundaneMap[$_grantee] ?? 'player #' . $_grantee) : '';
 			return $_verb . ' ' . htmlspecialchars($_role ?: 'permission') . ($_who ? ' to ' . htmlspecialchars($_who) : '') . ($_scope ? ' (' . htmlspecialchars($_scope) . ')' : '');
 		case 'Park::AddParkDay':
 		case 'Park::EditParkDay':
@@ -437,7 +449,7 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 }
 
 // Build detailed diff / detail HTML for the expand panel
-function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $mundaneMap, $eventMap, $kawardMap = [], $classMap = []) {
+function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $mundaneMap, $eventMap, $kawardMap = [], $classMap = [], $unitMap = []) {
 	$p = _jsonDecode($params, ['ParkId','MundaneId','KingdomId','FromMundaneId','ToMundaneId','SuspendedUntil','SuspendedById','ClassId','Credits','Date']);
 	$b = _jsonDecode($prior,  ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','Persona','class_id','date','credits','dues_until','dues_for_life','name','kingdomaward_id','given_by','given_by_id','at_park_id','at_kingdom_id','at_event_id','SuspendedById']);
 	$a = _jsonDecode($post,   ['ParkId','park_id','KingdomId','MundaneId','mundane_id','Persona','kingdomaward_id']);
@@ -990,11 +1002,13 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			$html = '<table class="al-diff-table"><tbody>';
 			$html .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($_isGrant ? 'Permission Granted' : 'Permission Revoked') . '</td></tr>';
 			if ($_grantee) $html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', $_grantee, $mundaneMap) . '</td></tr>';
-			$html .= '<tr><td class="al-diff-field">Role</td><td colspan="2">' . htmlspecialchars($_role ?: '—') . '</td></tr>';
+			// For unit scope, 'create' role == "Manager" in user-facing terms.
+			$_roleLabel = ($_uid && $_role === 'create') ? 'Manager' : ($_role ?: '—');
+			$html .= '<tr><td class="al-diff-field">Role</td><td colspan="2">' . htmlspecialchars($_roleLabel) . '</td></tr>';
 			if     ($_pid) $html .= '<tr><td class="al-diff-field">Park Scope</td><td colspan="2">'    . _auditIdLink('park',    $_pid, $parkMap)    . '</td></tr>';
 			elseif ($_kid) $html .= '<tr><td class="al-diff-field">Kingdom Scope</td><td colspan="2">' . _auditIdLink('kingdom', $_kid, $kingdomMap) . '</td></tr>';
 			elseif ($_eid) $html .= '<tr><td class="al-diff-field">Event Scope</td><td colspan="2">'   . _auditIdLink('event',   $_eid, $eventMap)   . '</td></tr>';
-			elseif ($_uid) $html .= '<tr><td class="al-diff-field">Unit Scope</td><td colspan="2">#' . $_uid . '</td></tr>';
+			elseif ($_uid) $html .= '<tr><td class="al-diff-field">Unit</td><td colspan="2">' . htmlspecialchars($unitMap[$_uid] ?? ('unit #' . $_uid)) . '</td></tr>';
 			else           $html .= '<tr><td class="al-diff-field">Scope</td><td colspan="2"><em style="color:#a0aec0">Global (unscoped)</em></td></tr>';
 			if (!empty($_state['authorization_id']))
 				$html .= '<tr><td class="al-diff-field">Authorization ID</td><td colspan="2">#' . (int)$_state['authorization_id'] . '</td></tr>';
@@ -1390,7 +1404,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 						if (empty($_r['MethodCall'])) continue;
 						$_mc      = $_r['MethodCall'];
 						$_label   = $_actionLabels[$_mc] ?? $_mc;
-						$_summary = _auditSummary($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_kawardMap, $_parkMap, $_kingdomMap, $_classMap, $_mundaneMap, $_eventMap);
+						$_summary = _auditSummary($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_kawardMap, $_parkMap, $_kingdomMap, $_classMap, $_mundaneMap, $_eventMap, $_unitMap);
 
 						// Badge CSS class
 						if (strpos($_mc, 'UpdatePlayer') !== false) $_bc = 'al-badge-update';
@@ -1457,7 +1471,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 					</tr>
 					<tr id="<?=$_detailId?>" style="display:none">
 						<td colspan="6">
-							<?=_auditDetail($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_parkMap, $_kingdomMap, $_mundaneMap, $_eventMap, $_kawardMap, $_classMap)?>
+							<?=_auditDetail($_mc, $_r['Parameters'], $_r['PriorState'], $_r['PostState'], $_parkMap, $_kingdomMap, $_mundaneMap, $_eventMap, $_kawardMap, $_classMap, $_unitMap)?>
 							<div style="margin-top:8px;font-size:11px;color:var(--rp-text-hint)">
 								audit id: <?=(int)$_r['Id']?>
 							</div>

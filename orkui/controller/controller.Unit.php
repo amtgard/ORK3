@@ -124,23 +124,40 @@ class Controller_Unit extends Controller {
 				echo json_encode(array('ok' => $r2['Status'] == 0));
 				exit;
 			case 'addauth':
+					$_grantee_mid = (int)$this->request->MundaneId;
 					$r = $this->Unit->add_unit_auth(array(
 						'Token'     => $this->session->token,
 						'Role'      => AUTH_CREATE,
 						'Type'      => AUTH_UNIT,
 						'Id'        => $unit_id_int,
-						'MundaneId' => (int)$this->request->MundaneId,
+						'MundaneId' => $_grantee_mid,
 					));
 					if ($r['Status'] == 0) {
 						// Also add as a Member if not already on the roster
 						$this->Unit->add_unit_member(array(
 							'Token'     => $this->session->token,
 							'UnitId'    => $unit_id_int,
-							'MundaneId' => (int)$this->request->MundaneId,
+							'MundaneId' => $_grantee_mid,
 							'Role'      => 'Member',
 							'Title'     => '',
 							'Active'    => 'Active',
 						));
+						// Unit addauth goes through the proper Authorization API path
+						// (not raw INSERT like Park/Kingdom/Event addauth controllers),
+						// so the audit call lives here to mirror the pattern used by
+						// the raw-INSERT paths. Anchored to the grantee so the entry
+						// shows on the affected player's audit history.
+						Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization',
+							['MundaneId' => $_grantee_mid, 'Type' => AUTH_UNIT, 'Id' => $unit_id_int, 'Role' => AUTH_CREATE],
+							'Player', $_grantee_mid, null, [
+								'authorization_id' => (int)($r['Detail'] ?? 0),
+								'mundane_id'       => $_grantee_mid,
+								'park_id'          => 0,
+								'kingdom_id'       => 0,
+								'event_id'         => 0,
+								'unit_id'          => $unit_id_int,
+								'role'             => AUTH_CREATE,
+							]);
 					}
 					break;
 				case 'deleteauth':
