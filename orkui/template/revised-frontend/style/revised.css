@@ -960,6 +960,7 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity 0.2s ease;
+	overscroll-behavior: contain;
 }
 .pn-overlay.pn-open {
 	opacity: 1;
@@ -1014,7 +1015,11 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 	transition: background 0.15s, color 0.15s;
 }
 .pn-modal-close-btn:hover { background: #f7fafc; color: #4a5568; }
-.pn-modal-body { padding: 20px; }
+.pn-modal-body {
+	padding: 20px;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+}
 .pn-confirm-message { margin: 0; font-size: 14px; color: #4a5568; }
 .pn-modal-footer {
 	padding: 14px 20px;
@@ -1210,6 +1215,8 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 	padding: 20px;
 	max-height: calc(80vh - 120px);
 	overflow-y: auto;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
 }
 
 /* ---- Editable image — corner edit button ---- */
