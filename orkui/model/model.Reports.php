@@ -47,6 +47,14 @@ class Model_Reports extends Model {
 		return false;
 	}
 
+	function deleted_recommended_awards($request) {
+		$r = $this->Report->DeletedAwardRecommendations($request);
+		if (isset($r['Status']['Status']) && $r['Status']['Status'] == 0) {
+			return $r['AwardRecommendations'];
+		}
+		return [];
+	}
+
 	function custom_awards($request) {
 		$r = $this->Report->CustomAwards($request);
 		if ($r['Status']['Status'] == 0) {

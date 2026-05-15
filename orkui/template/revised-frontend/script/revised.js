@@ -12253,3 +12253,187 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
         box.classList.remove('esc-visible');
     });
 };
+
+/* ===========================================================
+ * Deleted Recommendations panel (Park + Kingdom Recs tabs)
+ * =========================================================== */
+(function () {
+    function escHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function fmtDt(s) {
+        if (!s) return '';
+        // Strip seconds for compactness, leave the date+time visible.
+        return String(s).replace(/:\d{2}$/, '');
+    }
+    function uirBase() {
+        if (typeof PkConfig !== 'undefined' && PkConfig.uir) return PkConfig.uir;
+        if (typeof KnConfig !== 'undefined' && KnConfig.uir) return KnConfig.uir;
+        return '/orkui/';
+    }
+
+    function renderRows(tbody, recs) {
+        var html = '';
+        for (var i = 0; i < recs.length; i++) {
+            var r = recs[i];
+            var rid = parseInt(r.RecommendationsId, 10) || 0;
+            var rank = parseInt(r.Rank, 10) > 0 ? parseInt(r.Rank, 10) : '&mdash;';
+            var notes = r.Reason ? escHtml(r.Reason) : '&mdash;';
+            var recBy = r.RecommendedById
+                ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.RecommendedById, 10) + '">' + escHtml(r.RecommendedByName || '') + '</a>'
+                : '&mdash;';
+            var delBy = r.DeletedById
+                ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
+                : '&mdash;';
+            html += '<tr data-rec-id="' + rid + '">'
+                + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
+                + '<td>' + escHtml(r.AwardName || '') + '</td>'
+                + '<td>' + rank + '</td>'
+                + '<td>' + notes + '</td>'
+                + '<td>' + escHtml(r.DateRecommended || '') + '</td>'
+                + '<td>' + recBy + '</td>'
+                + '<td>' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
+                + '<td>' + delBy + '</td>'
+                + '<td style="text-align:right;white-space:nowrap"><button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '"><i class="fas fa-undo"></i> Restore</button></td>'
+                + '</tr>';
+        }
+        tbody.innerHTML = html;
+    }
+
+    function loadDeleted(panel, fetchUrl, onRendered) {
+        var loading = panel.querySelector('.pk-deleted-recs-loading');
+        var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+        var wrap    = panel.querySelector('.pk-deleted-recs-table-wrap');
+        var tbody   = panel.querySelector('tbody');
+        var countEl = panel.querySelector('.pk-deleted-recs-count');
+
+        if (loading) loading.style.display = '';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (wrap)    wrap.style.display = 'none';
+
+        fetch(fetchUrl, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (loading) loading.style.display = 'none';
+                if (d.status !== 0) {
+                    if (emptyEl) { emptyEl.textContent = d.error || 'Failed to load.'; emptyEl.style.display = ''; }
+                    return;
+                }
+                var recs = Array.isArray(d.recommendations) ? d.recommendations : [];
+                if (countEl) {
+                    countEl.textContent = recs.length;
+                    countEl.style.display = recs.length > 0 ? '' : 'none';
+                }
+                if (recs.length === 0) {
+                    if (emptyEl) emptyEl.style.display = '';
+                    return;
+                }
+                renderRows(tbody, recs);
+                if (wrap) wrap.style.display = '';
+                panel.dataset.loaded = '1';
+                if (onRendered) onRendered();
+            })
+            .catch(function () {
+                if (loading) loading.style.display = 'none';
+                if (emptyEl) { emptyEl.textContent = 'Network error.'; emptyEl.style.display = ''; }
+            });
+    }
+
+    function wirePanel(panelId, listUrl, restoreUrl) {
+        var panel = document.getElementById(panelId);
+        if (!panel) return;
+        var toggle = panel.querySelector('.pk-deleted-recs-toggle');
+        var body   = panel.querySelector('.pk-deleted-recs-body');
+        if (!toggle || !body) return;
+
+        toggle.addEventListener('click', function () {
+            var open = panel.classList.toggle('pk-deleted-open');
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
+            if (lbl) lbl.textContent = open ? 'Hide Deleted Recommendations' : 'Show Deleted Recommendations';
+            body.style.display = open ? '' : 'none';
+            if (open && panel.dataset.loaded !== '1') {
+                loadDeleted(panel, listUrl);
+            }
+        });
+
+        panel.addEventListener('click', function (e) {
+            var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;
+            if (!btn || !panel.contains(btn)) return;
+            if (!btn.dataset.confirm) {
+                btn.dataset.confirm = '1';
+                var origHtml = btn.innerHTML;
+                btn._origHtml = origHtml;
+                btn.innerHTML = 'Click again to confirm';
+                btn.classList.add('pk-deleted-restore-confirm');
+                btn._confirmTimer = setTimeout(function () {
+                    btn.dataset.confirm = '';
+                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
+                    btn.classList.remove('pk-deleted-restore-confirm');
+                }, 4000);
+                return;
+            }
+            clearTimeout(btn._confirmTimer);
+            btn.dataset.confirm = '';
+            btn.disabled = true;
+            var recId = btn.getAttribute('data-rec-id');
+            var fd = new FormData();
+            fd.append('RecommendationsId', recId);
+            fetch(restoreUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.status !== 0) {
+                        alert(d.error || 'Failed to restore.');
+                        btn.disabled = false;
+                        btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
+                        btn.classList.remove('pk-deleted-restore-confirm');
+                        return;
+                    }
+                    var row = btn.closest('tr');
+                    if (row) {
+                        row.classList.add('pk-deleted-restored');
+                        setTimeout(function () {
+                            row.parentNode && row.parentNode.removeChild(row);
+                            var countEl = panel.querySelector('.pk-deleted-recs-count');
+                            var tbody   = panel.querySelector('tbody');
+                            var remaining = tbody ? tbody.querySelectorAll('tr').length : 0;
+                            if (countEl) {
+                                countEl.textContent = remaining;
+                                countEl.style.display = remaining > 0 ? '' : 'none';
+                            }
+                            if (remaining === 0) {
+                                var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
+                                var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+                                if (wrap)    wrap.style.display = 'none';
+                                if (emptyEl) emptyEl.style.display = '';
+                            }
+                        }, 500);
+                    }
+                })
+                .catch(function () {
+                    alert('Network error.');
+                    btn.disabled = false;
+                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
+                    btn.classList.remove('pk-deleted-restore-confirm');
+                });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof PkConfig !== 'undefined' && PkConfig.parkId) {
+            wirePanel(
+                'pk-deleted-recs',
+                PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deletedrecommendations',
+                PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/restorerecommendation'
+            );
+        }
+        if (typeof KnConfig !== 'undefined' && KnConfig.kingdomId) {
+            wirePanel(
+                'kn-deleted-recs',
+                KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deletedrecommendations',
+                KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/restorerecommendation'
+            );
+        }
+    });
+})();

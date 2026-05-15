@@ -837,6 +837,37 @@
 				</table>
 			</div>
 			<?php endif; ?>
+			<?php if ($CanManageKingdom ?? false): ?>
+			<div class="pk-deleted-recs" id="kn-deleted-recs" data-loaded="0">
+				<button type="button" class="pk-deleted-recs-toggle" id="kn-deleted-recs-toggle" aria-expanded="false">
+					<span class="pk-deleted-recs-caret">&#9654;</span>
+					<span class="pk-deleted-recs-toggle-label">Show Deleted Recommendations</span>
+					<span class="pk-deleted-recs-count" id="kn-deleted-recs-count" style="display:none">0</span>
+				</button>
+				<div class="pk-deleted-recs-body" id="kn-deleted-recs-body" style="display:none">
+					<div class="pk-deleted-recs-loading" id="kn-deleted-recs-loading">Loading&hellip;</div>
+					<div class="pk-deleted-recs-empty" id="kn-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
+					<div class="pk-deleted-recs-table-wrap" id="kn-deleted-recs-table-wrap" style="display:none">
+						<table class="pk-deleted-recs-table">
+							<thead>
+								<tr>
+									<th>Player</th>
+									<th>Award</th>
+									<th>Rank</th>
+									<th>Notes</th>
+									<th>Date Rec.</th>
+									<th>Recommended By</th>
+									<th>Deleted At</th>
+									<th>Deleted By</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody id="kn-deleted-recs-tbody"></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
 		</div>
 		<?php endif; ?>
 
