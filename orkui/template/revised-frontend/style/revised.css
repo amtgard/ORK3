@@ -180,6 +180,26 @@ html[data-theme="dark"] .pk-btn-white {
 	opacity: var(--pn-overlay-opacity, 0.12);
 	filter: blur(6px);
 }
+/* Vignette mode: two-layer composition with complementary radial masks.
+   Base layer (heavy 6px blur, 12% opacity from --pn-overlay-opacity) is
+   masked OFF at the center 1/3 and fades in toward the edges. Sharp layer
+   (1px blur, 30% opacity) is masked ON at the center 1/3 and fades out
+   toward the edges. Center reads at ~30% with light blur; edges read at
+   ~12% with heavy blur; the midband crossfades smoothly. */
+.pn-hero-bg-vignette-base {
+	-webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0) 20%, rgba(0,0,0,1) 60%);
+	mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0) 20%, rgba(0,0,0,1) 60%);
+}
+.pn-hero-bg-vignette-sharp {
+	position: absolute;
+	top: -10px; left: -10px; right: -10px; bottom: -10px;
+	background-size: cover;
+	background-position: center;
+	opacity: 0.30;
+	filter: blur(1px);
+	-webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 60%);
+	mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 60%);
+}
 .pn-hero-content {
 	position: relative;
 	display: flex;

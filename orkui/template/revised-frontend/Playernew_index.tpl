@@ -805,6 +805,7 @@ html[data-theme="dark"] .pn-color-input-wrap input[type="text"] { background: va
 /* Overlay-strength buttons (heraldry + gradient) */
 html[data-theme="dark"] .pn-overlay-btn { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-overlay-btn:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-overlay-btn.pn-active { background: var(--pn-accent, #4299e1); border-color: var(--pn-accent, #4299e1); color: #fff; }
 
 /* Name builder — comma toggle + constructed preview */
 html[data-theme="dark"] .pn-comma-toggle { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
