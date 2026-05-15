@@ -5992,7 +5992,11 @@ html[data-theme="dark"] .pk-deleted-recs-toggle:hover { background: rgba(255,255
 	font-size: 11px; font-weight: 700; text-align: center; line-height: 1.5;
 }
 .pk-deleted-recs-body { padding: 4px 14px 14px; border-top: 1px solid var(--ork-border); }
-.pk-deleted-recs-loading, .pk-deleted-recs-empty { padding: 14px; text-align: center; color: var(--ork-text-muted); font-size: 13px; }
+.pk-deleted-recs-loading, .pk-deleted-recs-empty, .pk-deleted-recs-no-match { padding: 14px; text-align: center; color: var(--ork-text-muted); font-size: 13px; }
+.pk-deleted-recs-search-wrap { position: relative; max-width: 320px; margin: 10px 0; }
+.pk-deleted-recs-search-wrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ork-text-muted); font-size: 13px; pointer-events: none; }
+.pk-deleted-recs-search { width: 100%; padding: 7px 10px 7px 32px; border: 1px solid var(--ork-border); border-radius: 6px; font-size: 13px; color: var(--ork-text); background: var(--ork-card-bg); box-sizing: border-box; outline: none; transition: border-color 0.15s; }
+.pk-deleted-recs-search:focus { border-color: #90cdf4; }
 .pk-deleted-recs-table-wrap { overflow-x: auto; }
 .pk-deleted-recs-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--ork-card-bg); }
 .pk-deleted-recs-table th { padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ork-text-muted); border-bottom: 2px solid var(--ork-border); background: transparent; white-space: nowrap; }

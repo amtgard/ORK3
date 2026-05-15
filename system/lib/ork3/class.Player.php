@@ -2408,7 +2408,10 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 
-		if (empty($awardRec->deleted_at)) {
+		// Truthy check, not empty()/isset(): the Yapo wrapper class has no __isset,
+		// so isset() and empty() report false even when __get returns a valid value.
+		// Direct truthy evaluation goes through __get and reads the real column value.
+		if (!$awardRec->deleted_at) {
 			return Success('Already Active');
 		}
 

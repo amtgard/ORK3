@@ -21,6 +21,7 @@ $_actionLabels = [
 	'Attendance::SetAttendance'    => 'Attendance Modified',
 	'Attendance::RemoveAttendance' => 'Attendance Removed',
 	'Player::DeleteAwardRecommendation' => 'Recommendation Removed',
+	'Player::RestoreAwardRecommendation' => 'Recommendation Restored',
 	'Player::AddSecondToRecommendation' => 'Recommendation Seconded',
 	'Player::WithdrawSecond'            => 'Second Withdrawn',
 	'Player::RevokeDues'           => 'Dues Revoked',
@@ -295,6 +296,11 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
 			$rank = !empty($b['rank']) && $b['rank'] > 0 ? ' rank ' . (int)$b['rank'] : '';
 			return 'Removed recommendation' . ($name ? ': ' . htmlspecialchars($name . $rank) : '');
+		case 'Player::RestoreAwardRecommendation':
+			$_kid = (int)($b['kingdomaward_id'] ?? 0);
+			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
+			$rank = !empty($b['rank']) && $b['rank'] > 0 ? ' rank ' . (int)$b['rank'] : '';
+			return 'Restored recommendation' . ($name ? ': ' . htmlspecialchars($name . $rank) : '');
 		case 'Player::AddSecondToRecommendation':
 			$_kid = (int)($p['KingdomAwardId'] ?? 0);
 			$name = $kawardMap[$_kid] ?? ($_kid ? 'award #' . $_kid : '');
@@ -757,6 +763,31 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 				$html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($b['date_recommended']) . '</td></tr>';
 			if (!empty($b['reason']))
 				$html .= '<tr><td class="al-diff-field">Reason</td><td colspan="2">' . htmlspecialchars($b['reason']) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Player::RestoreAwardRecommendation':
+			$html = '<table class="al-diff-table"><tbody>';
+			$_kid = (int)($b['kingdomaward_id'] ?? 0);
+			$_awardName = $kawardMap[$_kid] ?? null;
+			if ($_awardName)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2">' . htmlspecialchars($_awardName) . '</td></tr>';
+			elseif ($_kid)
+				$html .= '<tr><td class="al-diff-field">Award</td><td colspan="2"><em style="color:#a0aec0">Unknown award #' . $_kid . '</em></td></tr>';
+			if (!empty($b['rank']) && $b['rank'] > 0)
+				$html .= '<tr><td class="al-diff-field">Rank</td><td colspan="2">' . (int)$b['rank'] . '</td></tr>';
+			if (!empty($b['mundane_id']))
+				$html .= '<tr><td class="al-diff-field">Recipient</td><td colspan="2">' . _auditIdLink('player', $b['mundane_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($b['recommended_by_id']))
+				$html .= '<tr><td class="al-diff-field">Recommended By</td><td colspan="2">' . _auditIdLink('player', $b['recommended_by_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($b['date_recommended']))
+				$html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($b['date_recommended']) . '</td></tr>';
+			if (!empty($b['reason']))
+				$html .= '<tr><td class="al-diff-field">Reason</td><td colspan="2">' . htmlspecialchars($b['reason']) . '</td></tr>';
+			if (!empty($b['deleted_by']))
+				$html .= '<tr><td class="al-diff-field">Previously Deleted By</td><td colspan="2">' . _auditIdLink('player', $b['deleted_by'], $mundaneMap) . '</td></tr>';
+			if (!empty($b['deleted_at']))
+				$html .= '<tr><td class="al-diff-field">Previously Deleted At</td><td colspan="2">' . htmlspecialchars($b['deleted_at']) . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
