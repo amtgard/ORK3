@@ -12286,7 +12286,14 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
             var delBy = r.DeletedById
                 ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
                 : '&mdash;';
-            html += '<tr data-rec-id="' + rid + '">'
+            var searchKey = [
+                r.Persona || '',
+                r.AwardName || '',
+                r.Reason || '',
+                r.RecommendedByName || '',
+                r.DeletedByName || ''
+            ].join(' ').toLowerCase();
+            html += '<tr data-rec-id="' + rid + '" data-search="' + escHtml(searchKey) + '">'
                 + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
                 + '<td>' + escHtml(r.AwardName || '') + '</td>'
                 + '<td>' + rank + '</td>'
@@ -12331,6 +12338,8 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
                 }
                 renderRows(tbody, recs);
                 if (wrap) wrap.style.display = '';
+                var searchWrap = panel.querySelector('.pk-deleted-recs-search-wrap');
+                if (searchWrap) searchWrap.style.display = recs.length > 5 ? '' : 'none';
                 panel.dataset.loaded = '1';
                 if (onRendered) onRendered();
             })
@@ -12357,6 +12366,25 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
                 loadDeleted(panel, listUrl);
             }
         });
+
+        var searchInput = panel.querySelector('.pk-deleted-recs-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                var q = this.value.trim().toLowerCase();
+                var tbody = panel.querySelector('tbody');
+                if (!tbody) return;
+                var rows = tbody.querySelectorAll('tr');
+                var visible = 0;
+                for (var i = 0; i < rows.length; i++) {
+                    var key = rows[i].getAttribute('data-search') || '';
+                    var match = !q || key.indexOf(q) !== -1;
+                    rows[i].style.display = match ? '' : 'none';
+                    if (match) visible++;
+                }
+                var noMatch = panel.querySelector('.pk-deleted-recs-no-match');
+                if (noMatch) noMatch.style.display = (q && visible === 0) ? '' : 'none';
+            });
+        }
 
         panel.addEventListener('click', function (e) {
             var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;

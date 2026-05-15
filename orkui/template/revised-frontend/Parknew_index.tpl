@@ -1127,6 +1127,11 @@
 					<div class="pk-deleted-recs-body" id="pk-deleted-recs-body" style="display:none">
 						<div class="pk-deleted-recs-loading" id="pk-deleted-recs-loading">Loading&hellip;</div>
 						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
+						<div class="pk-deleted-recs-search-wrap" style="display:none">
+							<i class="fas fa-search"></i>
+							<input type="text" class="pk-deleted-recs-search" placeholder="Search player, award, notes, or actor&hellip;" autocomplete="off">
+						</div>
+						<div class="pk-deleted-recs-no-match" style="display:none">No deleted recommendations match your search.</div>
 						<div class="pk-deleted-recs-table-wrap" id="pk-deleted-recs-table-wrap" style="display:none">
 							<table class="pk-deleted-recs-table">
 								<thead>
