@@ -1244,7 +1244,7 @@ class Player extends Ork3 {
 					$design->color_primary = $_pick($request['ColorPrimary'], 'color_primary');
 					$design->color_accent = $_pick($request['ColorAccent'], 'color_accent');
 					$design->color_secondary = $_pick($request['ColorSecondary'], 'color_secondary');
-					$validOverlays = ['low','med','high'];
+					$validOverlays = ['low','med','high','vignette'];
 					$design->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : ($_designExisted ? $_cur['hero_overlay'] : 'med');
 					$design->name_prefix = $_pick($request['NamePrefix'], 'name_prefix');
 					$design->name_suffix = $_pick($request['NameSuffix'], 'name_suffix');
