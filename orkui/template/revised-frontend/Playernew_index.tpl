@@ -208,23 +208,33 @@
 
 <?php
 	$_pnHeroBg = $isSuspended ? '#9b2c2c' : '#2c5282';
-	if (!$isSuspended && !empty($Player['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorPrimary'])) $_pnHeroBg = $Player['ColorPrimary'];
+	$_pnIsCustomPrimary = false;
+	if (!$isSuspended && !empty($Player['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorPrimary'])) {
+		$_pnHeroBg = $Player['ColorPrimary'];
+		$_pnIsCustomPrimary = true;
+	}
 	$_pnAccent = (!empty($Player['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorAccent'])) ? $Player['ColorAccent'] : '#4299e1';
 	$_pnColorSecondary = (!empty($Player['ColorSecondary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorSecondary'])) ? $Player['ColorSecondary'] : '';
 	$_pnOverlay = in_array($Player['HeroOverlay'] ?? 'med', ['low','med','high']) ? ($Player['HeroOverlay'] ?? 'med') : 'med';
 	$_pnOverlayOpacity = ['low' => '0.06', 'med' => '0.12', 'high' => '0.22'][$_pnOverlay];
-	// Express as a single `background` shorthand value (color OR gradient) so the
-	// rule emitted below can be overridden cleanly by the dark-mode rule (also
-	// shorthand) — putting it inline on the element would beat any class selector.
+	// Single `background` shorthand value (color OR gradient).
 	$_pnHeroBgValue = !empty($_pnColorSecondary)
 		? "linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
 		: $_pnHeroBg;
+	// In dark mode, respect user customization (primary color and/or gradient) so
+	// the value the player picked in the design modal preview is what they see on
+	// the rendered hero. Fall back to --ork-bg-secondary only when the player has
+	// not customized, so default uncustomized heroes still auto-darken. Suspended
+	// state forces the red signal in both modes.
+	$_pnHeroBgValueDark = ($isSuspended || $_pnIsCustomPrimary || !empty($_pnColorSecondary))
+		? $_pnHeroBgValue
+		: 'var(--ork-bg-secondary)';
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
 	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
 	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
 
 ?>
-<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; }</style>
+<style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; } html[data-theme="dark"] .pn-hero { background: <?= $_pnHeroBgValueDark ?>; }</style>
 <?php
 $_pnNameFont = (!empty($Player['NameFont']) && empty($ViewerBasicFonts) && empty($ViewerDyslexiaFonts)) ? $Player['NameFont'] : '';
 $_pnFontAllowed = ['Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'];
@@ -343,7 +353,6 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 /* ============================================================
    html[data-theme="dark"] overrides
    ============================================================ */
-html[data-theme="dark"] .pn-hero { background: var(--ork-bg-secondary); }
 html[data-theme="dark"] .pn-avatar { border-color: rgba(255,255,255,0.2); }
 html[data-theme="dark"] .pn-stat-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-stat-number { color: #90cdf4; }
