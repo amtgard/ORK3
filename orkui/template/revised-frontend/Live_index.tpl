@@ -409,6 +409,33 @@
 		}
 	}
 
+	// Gold flash on the park/event marker when a new player signs in there.
+	// Restored after FLASH_MS to the default park-green or event-orange palette.
+	const FLASH_MS = 4000;
+	const PARK_DEFAULT  = [{color:'rgba(72,187,120,0.5)',fillColor:'#48bb78'},{color:'rgba(72,187,120,0.8)',fillColor:'#48bb78'},{color:'#48bb78',fillColor:'#48bb78'}];
+	const EVENT_DEFAULT = [{color:'rgba(237,137,54,0.5)',fillColor:'#ed8936'},{color:'rgba(237,137,54,0.8)',fillColor:'#ed8936'},{color:'#ed8936',fillColor:'#ed8936'}];
+	const FLASH_STYLE   = [{color:'rgba(214,158,46,0.55)',fillColor:'#f6e05e'},{color:'rgba(214,158,46,0.85)',fillColor:'#f6e05e'},{color:'#d69e2e',fillColor:'#f6e05e'}];
+	const flashTimers = {};
+	function flashNewPlayerMarker(pid, eid) {
+		const isEvent = !!eid;
+		const layer = isEvent ? eventLayers[eid] : parkLayers[pid];
+		if (!layer) return;
+		const key = (isEvent ? 'e' : 'p') + (isEvent ? eid : pid);
+		const rings = [layer.outer, layer.middle, layer.inner];
+		rings.forEach((r, i) => r.setStyle(FLASH_STYLE[i]));
+		rings[2].bringToFront();
+		if (flashTimers[key]) clearTimeout(flashTimers[key]);
+		flashTimers[key] = setTimeout(() => {
+			const def = isEvent ? EVENT_DEFAULT : PARK_DEFAULT;
+			// Layer may have been pruned by a stats refresh in the meantime.
+			const cur = isEvent ? eventLayers[eid] : parkLayers[pid];
+			if (cur) {
+				[cur.outer, cur.middle, cur.inner].forEach((r, i) => r.setStyle(def[i]));
+			}
+			delete flashTimers[key];
+		}, FLASH_MS);
+	}
+
 	// --- Recent poll w/ jitter-buffered ticker --------------------------
 	// First poll: render the backlog immediately (no animation) so the user
 	// arrives at a populated ticker, not an empty one that floods over 10s.
@@ -495,6 +522,7 @@
 				toast.textContent = `🎉 New player at ${pname}!`;
 				toasts.appendChild(toast);
 				setTimeout(() => toast.remove(), 4000);
+				flashNewPlayerMarker(isEvent ? null : pid, isEvent ? eid : null);
 			}
 		} else {
 			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target}</span>`;
