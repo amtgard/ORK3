@@ -2372,7 +2372,7 @@ class Controller_Admin extends Controller {
 			}
 
 			global $DB;
-			$wanted = ['Slow_queries','Threads_connected','Threads_running','Questions','Uptime','Max_used_connections','Connections','Com_select','Com_insert','Com_update','Com_delete','Com_show_fields','Com_show_keys'];
+			$wanted = ['Slow_queries','Threads_connected','Threads_running','Questions','Uptime','Max_used_connections','Connections','Com_select','Com_insert','Com_update','Com_delete','Com_show_fields','Com_show_keys','Innodb_row_lock_current_waits','Innodb_row_lock_waits','Innodb_row_lock_time'];
 			$DB->Clear();
 			$rs = $DB->DataSet("SHOW GLOBAL STATUS WHERE Variable_name IN ('" . implode("','", $wanted) . "')");
 			$db_status = [];

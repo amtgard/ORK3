@@ -341,9 +341,18 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		var connected = parseInt(db['Threads_connected']    || 0, 10);
 		var slow      = parseInt(db['Slow_queries']         || 0, 10);
 		var maxConn   = parseInt(db['Max_used_connections'] || 0, 10);
+		var lockNow   = parseInt(db['Innodb_row_lock_current_waits'] || 0, 10);
+		var lockSum   = parseInt(db['Innodb_row_lock_waits']         || 0, 10);
+		var lockMs    = parseInt(db['Innodb_row_lock_time']          || 0, 10);
 		var uptime    = parseInt(db['Uptime'] || 0, 10);
 		var h = Math.floor(uptime/3600), m = Math.floor((uptime%3600)/60);
 		var uptimeStr = h + 'h ' + m + 'm';
+
+		// Compact human-readable wait time: ms < 1s, s < 60s, then m + s.
+		var lockTimeStr;
+		if (lockMs < 1000)        lockTimeStr = lockMs + ' ms';
+		else if (lockMs < 60000)  lockTimeStr = (lockMs / 1000).toFixed(1) + ' s';
+		else                      lockTimeStr = Math.floor(lockMs / 60000) + 'm ' + Math.floor((lockMs % 60000) / 1000) + 's';
 
 		document.getElementById('sh-db-metrics').innerHTML =
 			metric('DB Statements / sec', qps, '') +
@@ -353,6 +362,9 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			metric('Threads Running', running, running > 3 ? 'warn' : '') +
 			metric('Threads Connected', connected, '') +
 			metric('Slow Queries (total)', slow, slow > 0 ? 'warn' : '') +
+			metric('Row Lock Waits (now)',   lockNow, lockNow > 0 ? 'warn' : '') +
+			metric('Row Lock Waits (total)', lockSum.toLocaleString(), '') +
+			metric('Row Lock Time (total)',  lockTimeStr, '') +
 			metric('Peak Connections', maxConn, '') +
 			metric('DB Uptime', uptimeStr, '');
 	}
@@ -412,26 +424,37 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 
 	/* ── Threshold event log ───────────────────────── */
 	var alertLog = [];
-	var threshState = { workersFull: false, queueFull: false, threadsHigh: false };
+	var threshState = { workersFull: false, queueFull: false, threadsHigh: false, rowLockWaiting: false };
+	var prevLockWaits = null;   // cumulative Innodb_row_lock_waits, last poll
 
 	function checkThresholds(fpm, db, procs, workers) {
 		var active  = fpm ? (fpm['active processes'] || 0) : 0;
 		var total   = fpm ? (fpm['total processes']  || 0) : 0;
 		var queue   = fpm ? (fpm['listen queue']     || 0) : 0;
 		var threads = db  ? parseInt(db['Threads_running'] || 0, 10) : 0;
+		var lockNow = db  ? parseInt(db['Innodb_row_lock_current_waits'] || 0, 10) : 0;
+		var lockSum = db  ? parseInt(db['Innodb_row_lock_waits']         || 0, 10) : 0;
 
-		var workersFull  = total > 0 && active >= total;
-		var queueFull    = queue > 0;
-		var threadsHigh  = threads > 3;
+		var workersFull    = total > 0 && active >= total;
+		var queueFull      = queue > 0;
+		var threadsHigh    = threads > 3;
+		var rowLockWaiting = lockNow > 0;
+		// Catch fast transient waits that completed within a poll interval:
+		// cumulative waits went up since last poll, even if current is back to 0.
+		var newLockSince   = (prevLockWaits !== null && lockSum > prevLockWaits) ? (lockSum - prevLockWaits) : 0;
 
 		var fired = [];
-		if (workersFull && !threshState.workersFull) fired.push('Workers full (' + active + '/' + total + ')');
-		if (queueFull   && !threshState.queueFull)   fired.push('Listen queue: ' + queue);
-		if (threadsHigh && !threshState.threadsHigh) fired.push('Threads running: ' + threads);
+		if (workersFull    && !threshState.workersFull)    fired.push('Workers full (' + active + '/' + total + ')');
+		if (queueFull      && !threshState.queueFull)      fired.push('Listen queue: ' + queue);
+		if (threadsHigh    && !threshState.threadsHigh)    fired.push('Threads running: ' + threads);
+		if (rowLockWaiting && !threshState.rowLockWaiting) fired.push('Row lock waits pending: ' + lockNow);
+		else if (!rowLockWaiting && newLockSince > 0)      fired.push('Row lock waits (transient): ' + newLockSince);
 
-		threshState.workersFull = workersFull;
-		threshState.queueFull   = queueFull;
-		threshState.threadsHigh = threadsHigh;
+		threshState.workersFull    = workersFull;
+		threshState.queueFull      = queueFull;
+		threshState.threadsHigh    = threadsHigh;
+		threshState.rowLockWaiting = rowLockWaiting;
+		prevLockWaits              = lockSum;
 
 		if (!fired.length) return;
 
