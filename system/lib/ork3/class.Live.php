@@ -43,6 +43,10 @@ class Live extends Ork3 {
 		$cutoff_3h  = date('Y-m-d H:i:s', time() -  3 * 3600);
 		$cutoff_30m = date('Y-m-d H:i:s', time() -      1800);
 		$now        = date('Y-m-d H:i:s');
+		// Pre-filter on the indexed `date` column to avoid scanning 3M+ rows.
+		// `entered_at` has no index; `date` does, so we narrow to the last two
+		// calendar days first and then re-filter precisely by entered_at.
+		$date_floor = date('Y-m-d', time() - 24 * 3600);
 
 		$response = array(
 			'now'       => $now,
@@ -61,7 +65,7 @@ class Live extends Ork3 {
 			SUM(CASE WHEN entered_at >= '" . $cutoff_3h  . "' THEN 1 ELSE 0 END) AS h3_count,
 			SUM(CASE WHEN entered_at >= '" . $cutoff_30m . "' THEN 1 ELSE 0 END) AS m30_count
 		FROM " . DB_PREFIX . "attendance
-		WHERE entered_at >= '" . $cutoff_24h . "'
+		WHERE date >= '" . $date_floor . "' AND entered_at >= '" . $cutoff_24h . "'
 		GROUP BY park_id, event_id";
 
 		$rs = $this->db->DataSet($sql);
@@ -200,11 +204,13 @@ class Live extends Ork3 {
 		$cutoff_24h = date('Y-m-d H:i:s', time() - 24 * 3600);
 		$now        = date('Y-m-d H:i:s');
 		$limit      = (int)self::RECENT_LIMIT;
+		// Pre-filter on the indexed `date` column (entered_at has no index).
+		$date_floor = date('Y-m-d', time() - 24 * 3600);
 
 		$rs = $this->db->DataSet("
 			SELECT entered_at, park_id, event_id, event_calendardetail_id, mundane_id
 			FROM " . DB_PREFIX . "attendance
-			WHERE entered_at >= '" . $cutoff_24h . "'
+			WHERE date >= '" . $date_floor . "' AND entered_at >= '" . $cutoff_24h . "'
 			ORDER BY entered_at DESC
 			LIMIT $limit");
 
