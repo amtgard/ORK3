@@ -11659,21 +11659,27 @@ window.pnCloseUnitCreateModal = function() {
     });
 
     $(document).on('click', '.pn-att-del-btn', function() {
-        var attId    = this.dataset.attId;
+        var attId     = this.dataset.attId;
         var mundaneId = this.dataset.mundaneId || '';
-        var btn   = this;
-        if (!confirm('Delete this attendance record?')) return;
-        btn.disabled = true;
-        $.post(BASE_URL + attId + '/delete', { MundaneId: mundaneId }, function(r) {
-            btn.disabled = false;
-            if (r && r.status === 0) {
-                location.reload();
-            } else {
-                alert((r && r.error) ? r.error : 'Delete failed.');
-            }
-        }, 'json').fail(function() {
-            btn.disabled = false;
-            alert('Request failed. Please try again.');
+        var btn       = this;
+        pnConfirm({
+            title:       'Delete Attendance',
+            message:     'Delete this attendance record?',
+            confirmText: 'Delete',
+            danger:      true
+        }, function() {
+            btn.disabled = true;
+            $.post(BASE_URL + attId + '/delete', { MundaneId: mundaneId }, function(r) {
+                btn.disabled = false;
+                if (r && r.status === 0) {
+                    location.reload();
+                } else {
+                    alert((r && r.error) ? r.error : 'Delete failed.');
+                }
+            }, 'json').fail(function() {
+                btn.disabled = false;
+                alert('Request failed. Please try again.');
+            });
         });
     });
 })();
