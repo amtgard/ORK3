@@ -488,7 +488,7 @@
 		row.className = 'lv-t-row' + (animate ? ' enter' : '') + (isFirst ? ' first-ever' : '');
 		const timeStr = fmtClockShort(iso);
 		if (isFirst) {
-			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg"><span class="lv-t-celebrate">🎉 New player at ${iconSpan} ${target}!</span></span>`;
+			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target} <span class="lv-t-celebrate">🎉 New player</span></span>`;
 			if (animate) {
 				const toast = document.createElement('div');
 				toast.className = 'lv-toast';
