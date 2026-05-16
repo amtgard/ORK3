@@ -90,7 +90,27 @@ class Model_Unit extends Model {
 				'Authorizations' => $this->Report->GetAuthorizations(array ( 'Type' => AUTH_UNIT, 'Id' => $unit_id, 'Token' => $this->session->token ))
 			);
 	}
-	
+
+	function set_unit_design($request) {
+		return $this->Unit->SetUnitDesign($request);
+	}
+
+	function get_unit_milestones($unit_id) {
+		return $this->Unit->GetUnitMilestones(array('UnitId' => $unit_id));
+	}
+
+	function get_derived_unit_milestones($unit_id) {
+		return $this->Unit->GetDerivedUnitMilestones(array('UnitId' => $unit_id));
+	}
+
+	function add_unit_milestone($request) {
+		return $this->Unit->AddUnitMilestone($request);
+	}
+
+	function delete_unit_milestone($request) {
+		return $this->Unit->DeleteUnitMilestone($request);
+	}
+
 }
 
 ?>

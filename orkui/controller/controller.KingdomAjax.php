@@ -634,6 +634,56 @@ class Controller_KingdomAjax extends Controller {
 				? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
 				: json_encode(['status' => 0, 'taken' => false]);
 
+		} elseif ($action === 'savedesign') {
+			$this->load_model('Kingdom');
+			$payload = ['Token' => $this->session->token, 'KingdomId' => $kingdom_id];
+			foreach (['AboutText','OurHistory','ColorPrimary','ColorAccent','ColorSecondary','HeroOverlay','NameFont','MilestoneConfig','Tagline','SocialLinks','Announcement','AnnouncementUntil','MonarchReignStarted','RegentReignStarted','ReignLore'] as $f) {
+				if (array_key_exists($f, $_POST)) $payload[$f] = (string)$_POST[$f];
+			}
+			$r = $this->Kingdom->set_kingdom_design($payload);
+			require_once(DIR_LIB . 'ork3/class.ProfanityFilter.php');
+			$_isProf = ($r['Status'] != 0 && ($r['Error'] ?? '') === ProfanityFilter::ERROR_MESSAGE);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: ($_isProf
+					? json_encode(['status' => $r['Status'], 'error' => $r['Error'], 'field' => $r['Detail'] ?? ''])
+					: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': '), 'field' => $r['Detail'] ?? '']));
+
+		} elseif ($action === 'addmilestone') {
+			$this->load_model('Kingdom');
+			$description = trim($_POST['Description']   ?? '');
+			$icon        = trim($_POST['Icon']          ?? 'fa-star');
+			$msDate      = trim($_POST['MilestoneDate'] ?? '');
+			if (!strlen($description)) { echo json_encode(['status' => 1, 'error' => 'Description is required.', 'field' => '']); exit; }
+			if (!strlen($msDate) || !strtotime($msDate)) { echo json_encode(['status' => 1, 'error' => 'A valid date is required.', 'field' => '']); exit; }
+			$r = $this->Kingdom->add_kingdom_milestone([
+				'Token'         => $this->session->token,
+				'KingdomId'     => $kingdom_id,
+				'Icon'          => $icon,
+				'Description'   => $description,
+				'MilestoneDate' => $msDate,
+			]);
+			require_once(DIR_LIB . 'ork3/class.ProfanityFilter.php');
+			$_isProf = ($r['Status'] != 0 && ($r['Error'] ?? '') === ProfanityFilter::ERROR_MESSAGE);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'milestoneId' => (int)($r['Detail'] ?? 0)])
+				: ($_isProf
+					? json_encode(['status' => $r['Status'], 'error' => $r['Error'], 'field' => $r['Detail'] ?? ''])
+					: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': '), 'field' => $r['Detail'] ?? '']));
+
+		} elseif ($action === 'deletemilestone') {
+			$this->load_model('Kingdom');
+			$milestone_id = (int)($_POST['MilestoneId'] ?? 0);
+			if (!valid_id($milestone_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid milestone ID.', 'field' => '']); exit; }
+			$r = $this->Kingdom->delete_kingdom_milestone([
+				'Token'       => $this->session->token,
+				'KingdomId'   => $kingdom_id,
+				'MilestoneId' => $milestone_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0])
+				: json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': '), 'field' => '']);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

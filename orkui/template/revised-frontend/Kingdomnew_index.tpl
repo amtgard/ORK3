@@ -60,14 +60,475 @@
 			'desc'     => kn_map_markdown($p['Description'] ?? ''),
 		];
 	}
+
+	// --- Kingdom Design (header, About, Milestones customization) -------------------
+	$_kInfo         = $kingdom_info['Info']['KingdomInfo'] ?? [];
+	$aboutText      = (string)($_kInfo['AboutText']  ?? '');
+	$ourHistoryText = (string)($_kInfo['OurHistory'] ?? '');
+	$_knLegacyDesc  = (string)($_kInfo['Description'] ?? '');
+	if (trim($aboutText) === '') { $aboutText = $_knLegacyDesc; }
+
+	$knColorPrimary   = trim((string)($_kInfo['ColorPrimary']   ?? ''));
+	$knColorAccent    = trim((string)($_kInfo['ColorAccent']    ?? ''));
+	$knColorSecondary = trim((string)($_kInfo['ColorSecondary'] ?? ''));
+	$knOverlay        = strtolower(trim((string)($_kInfo['HeroOverlay'] ?? 'med')));
+	if (!in_array($knOverlay, ['low','med','high','vignette'], true)) $knOverlay = 'med';
+	$knNameFont       = trim((string)($_kInfo['NameFont'] ?? ''));
+	$knMilestoneCfg   = [];
+	if (!empty($_kInfo['MilestoneConfig'])) {
+		$_mc = json_decode($_kInfo['MilestoneConfig'], true);
+		if (is_array($_mc)) $knMilestoneCfg = $_mc;
+	}
+	$knMsVisible = function($type) use ($knMilestoneCfg) {
+		if (!array_key_exists($type, $knMilestoneCfg)) return true;
+		return !empty($knMilestoneCfg[$type]);
+	};
+	$knMsNewestFirst = !empty($knMilestoneCfg['newest_first']);
+
+	$knAllMilestones     = is_array($Milestones ?? null) ? $Milestones : [];
+	$knVisibleMilestones = [];
+	foreach ($knAllMilestones as $_knms) {
+		$_t = $_knms['Type'] ?? 'custom';
+		if ($knMsVisible($_t)) $knVisibleMilestones[] = $_knms;
+	}
+	if ($knMsNewestFirst) $knVisibleMilestones = array_reverse($knVisibleMilestones);
+	$knHasMilestones = count($knVisibleMilestones) > 0;
+
+	$knHeroFontCss    = $knNameFont !== '' ? ("'" . str_replace("'", '', $knNameFont) . "'") : '';
+	$knOverlayOpacity = ['low' => 0.06, 'med' => 0.13, 'high' => 0.28, 'vignette' => 0.45][$knOverlay] ?? 0.13;
+
+	// --- Phase 2 extras: tagline, social links, announcement, reign banner ---
+	$knTagline         = trim((string)($_kInfo['Tagline'] ?? ''));
+	$_knSocialRaw      = trim((string)($_kInfo['SocialLinks'] ?? ''));
+	$knSocialLinks     = [];
+	if ($_knSocialRaw !== '') {
+		$_dec = json_decode($_knSocialRaw, true);
+		if (is_array($_dec)) $knSocialLinks = $_dec;
+	}
+	$KN_SOCIAL_PLATFORMS = [
+		'discord'   => ['label' => 'Discord',   'icon' => 'fab fa-discord',   'bg' => '#5865f2', 'placeholder' => 'https://discord.gg/...'],
+		'facebook'  => ['label' => 'Facebook',  'icon' => 'fab fa-facebook',  'bg' => '#1877f2', 'placeholder' => 'https://facebook.com/...'],
+		'instagram' => ['label' => 'Instagram', 'icon' => 'fab fa-instagram', 'bg' => 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', 'placeholder' => 'https://instagram.com/...'],
+		'threads'   => ['label' => 'Threads',   'icon' => 'fab fa-threads',   'bg' => '#000000', 'placeholder' => 'https://threads.net/...'],
+		'bluesky'   => ['label' => 'Bluesky',   'icon' => 'fas fa-cloud',     'bg' => '#1185fe', 'placeholder' => 'https://bsky.app/...'],
+		'twitter'   => ['label' => 'X',         'icon' => 'fab fa-x-twitter', 'bg' => '#000000', 'placeholder' => 'https://x.com/...'],
+		'youtube'   => ['label' => 'YouTube',   'icon' => 'fab fa-youtube',   'bg' => '#ff0000', 'placeholder' => 'https://youtube.com/...'],
+		'amtwiki'   => ['label' => 'AmtWiki',   'icon' => 'fas fa-book',      'bg' => '#6b7280', 'placeholder' => 'https://amtwiki.net/...'],
+	];
+	$knVisibleSocials = [];
+	foreach ($KN_SOCIAL_PLATFORMS as $_slug => $_meta) {
+		$_u = trim((string)($knSocialLinks[$_slug] ?? ''));
+		if ($_u !== '') $knVisibleSocials[$_slug] = $_u;
+	}
+
+	$knAnnouncement       = trim((string)($_kInfo['Announcement'] ?? ''));
+	$knAnnouncementUntil  = trim((string)($_kInfo['AnnouncementUntil'] ?? ''));
+	$knShowAnnouncement   = false;
+	if ($knAnnouncement !== '') {
+		if ($knAnnouncementUntil === '' || $knAnnouncementUntil === '0000-00-00') {
+			$knShowAnnouncement = true;
+		} else {
+			$knShowAnnouncement = (strtotime($knAnnouncementUntil) !== false && strtotime($knAnnouncementUntil) >= strtotime(date('Y-m-d')));
+		}
+	}
+
+	$knMonarchReignStarted = trim((string)($_kInfo['MonarchReignStarted'] ?? ''));
+	$knRegentReignStarted  = trim((string)($_kInfo['RegentReignStarted']  ?? ''));
+	$knReignLore           = (string)($_kInfo['ReignLore'] ?? '');
+	$knHasReignContent     = ($monarch && !empty($monarch['MundaneId'])) || ($regent && !empty($regent['MundaneId'])) || trim($knReignLore) !== '';
+
+	if (!function_exists('kn_reign_avatar_url')) {
+		function kn_reign_avatar_url($mundaneId): string {
+			if ((int)$mundaneId <= 0) return '';
+			return HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', (int)$mundaneId));
+		}
+	}
+
+	if (!function_exists('kn_markdown')) {
+		function kn_markdown(string $text): string {
+			$html = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($text);
+			return preg_replace('/<img[^>]*>/i', '', $html);
+		}
+	}
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
+<?php if ($knNameFont !== ''): ?>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=<?= rawurlencode($knNameFont) ?>&display=swap">
+<?php endif; ?>
+
+<style>
+/* --- Kingdom Design: hero customization ------------------------------------- */
+<?php if ($knColorPrimary): ?>
+.kn-hero {
+	background-color: <?= htmlspecialchars($knColorPrimary) ?> !important;
+<?php if ($knColorSecondary && $knColorSecondary !== $knColorPrimary): ?>
+	background: linear-gradient(135deg, <?= htmlspecialchars($knColorPrimary) ?>, <?= htmlspecialchars($knColorSecondary) ?>) !important;
+<?php endif; ?>
+}
+html[data-theme="dark"] .kn-hero {
+	background-color: <?= htmlspecialchars($knColorPrimary) ?> !important;
+<?php if ($knColorSecondary && $knColorSecondary !== $knColorPrimary): ?>
+	background: linear-gradient(135deg, <?= htmlspecialchars($knColorPrimary) ?>, <?= htmlspecialchars($knColorSecondary) ?>) !important;
+<?php endif; ?>
+	filter: brightness(0.85);
+}
+<?php endif; ?>
+<?php if ($knColorAccent): ?>
+:root { --kn-accent: <?= htmlspecialchars($knColorAccent) ?>; }
+.kn-tab-nav li.kn-tab-active { color: <?= htmlspecialchars($knColorAccent) ?> !important; border-bottom-color: <?= htmlspecialchars($knColorAccent) ?> !important; }
+html[data-theme="dark"] .kn-tab-nav li.kn-tab-active { color: <?= htmlspecialchars($knColorAccent) ?> !important; border-bottom-color: <?= htmlspecialchars($knColorAccent) ?> !important; }
+.kn-stat-card { position: relative; }
+.kn-stat-card::before {
+	content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+	background: <?= htmlspecialchars($knColorAccent) ?>;
+	border-top-left-radius: 8px; border-top-right-radius: 8px;
+}
+.kn-parent-kingdom-link a i { color: <?= htmlspecialchars($knColorAccent) ?>; }
+.kn-link-list .kn-link-icon i { color: <?= htmlspecialchars($knColorAccent) ?>; }
+<?php endif; ?>
+.kn-hero-bg { opacity: <?= $knOverlayOpacity ?> !important; }
+<?php if ($knOverlay === 'vignette'): ?>
+.kn-hero-bg {
+	-webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.95) 38%, rgba(0,0,0,0) 78%);
+	        mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.95) 38%, rgba(0,0,0,0) 78%);
+}
+<?php endif; ?>
+<?php if ($knNameFont !== '' && $knHeroFontCss !== ''): ?>
+.kn-kingdom-name { font-family: <?= $knHeroFontCss ?>, 'Cinzel', serif !important; letter-spacing: 0.02em; }
+<?php endif; ?>
+
+/* --- Kingdom Design: About markdown body + Our History + Milestones --------- */
+.kn-about-text { line-height: 1.6; }
+.kn-about-text h1, .kn-about-text h2, .kn-about-text h3, .kn-about-text h4 {
+	margin-top: 1.1em; margin-bottom: 0.4em;
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.kn-about-section-head {
+	display: flex; align-items: center; justify-content: space-between;
+	gap: 8px; margin-bottom: 6px;
+}
+.kn-about-edit-btn {
+	background: transparent; border: 1px solid transparent; color: #a0aec0;
+	padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+	display: inline-flex; align-items: center; gap: 4px;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.kn-about-edit-btn:hover { background: rgba(49,130,206,0.08); color: #2b6cb0; border-color: rgba(49,130,206,0.25); }
+html[data-theme="dark"] .kn-about-edit-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-about-edit-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-link); border-color: var(--ork-border); }
+.kn-about-edit-btn[data-tip] { position: relative; }
+.kn-about-edit-btn[data-tip]::after {
+	content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); right: 0;
+	background: #2d3748; color: #fff; font-size: 11px; font-style: italic; white-space: nowrap;
+	padding: 4px 10px; border-radius: 4px; pointer-events: none; opacity: 0;
+	transition: opacity 0s; z-index: 500;
+}
+.kn-about-edit-btn[data-tip]:hover::after { opacity: 1; transition-delay: 0.4s; }
+html[data-theme="dark"] .kn-about-edit-btn[data-tip]::after { background: var(--ork-bg-tertiary); color: var(--ork-text); border: 1px solid var(--ork-border); }
+
+/* Our History — visually distinct from About */
+.kn-history-card .kn-bare-heading i.kn-history-icon { color: #a0aec0; }
+.kn-history-body { line-height: 1.6; }
+.kn-history-body h1, .kn-history-body h2, .kn-history-body h3, .kn-history-body h4 {
+	margin-top: 1.1em; margin-bottom: 0.4em;
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+
+/* Milestones timeline (mirrors player .pn-timeline-* / park .pk-timeline-*) */
+.kn-timeline-heading {
+	font-size: 13px; font-weight: 700; color: #4a5568;
+	text-transform: uppercase; letter-spacing: 0.5px;
+	margin: 0 0 14px 0;
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+	display: flex; align-items: center; gap: 8px;
+}
+html[data-theme="dark"] .kn-timeline-heading { color: var(--ork-text-secondary); }
+.kn-timeline { position: relative; padding-left: 32px; }
+.kn-timeline::before {
+	content: ''; position: absolute; left: 11px; top: 4px; bottom: 4px; width: 2px;
+	background: linear-gradient(to bottom, #cbd5e0, #cbd5e0 60%, transparent);
+}
+html[data-theme="dark"] .kn-timeline::before { background: linear-gradient(to bottom, var(--ork-border), var(--ork-border) 60%, transparent); }
+.kn-timeline-row {
+	position: relative; display: flex; align-items: center; gap: 12px;
+	margin-bottom: 14px; min-height: 24px;
+}
+.kn-timeline-dot {
+	position: absolute; left: -25px; top: 50%; transform: translateY(-50%);
+	width: 24px; height: 24px; border-radius: 50%;
+	background: #ebf8ff; color: #2b6cb0; display: flex; align-items: center; justify-content: center;
+	font-size: 11px; border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e0;
+}
+.kn-timeline-row.kn-ms-derived .kn-timeline-dot { background: #faf5ff; color: #6b46c1; box-shadow: 0 0 0 1px #d6bcfa; }
+html[data-theme="dark"] .kn-timeline-dot { background: var(--ork-bg-tertiary); color: var(--ork-link); border-color: var(--ork-card-bg); box-shadow: 0 0 0 1px var(--ork-border); }
+.kn-timeline-content {
+	flex: 1; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+	font-size: 13px;
+}
+.kn-timeline-date { color: #718096; font-size: 11px; font-weight: 600; min-width: 80px; }
+html[data-theme="dark"] .kn-timeline-date { color: var(--ork-text-muted); }
+.kn-timeline-desc { color: #2d3748; }
+html[data-theme="dark"] .kn-timeline-desc { color: var(--ork-text); }
+.kn-timeline-row.kn-ms-derived .kn-timeline-desc { color: #553c9a; }
+html[data-theme="dark"] .kn-timeline-row.kn-ms-derived .kn-timeline-desc { color: hsl(265, 60%, 75%); }
+.kn-timeline-empty {
+	font-size: 12px; color: #a0aec0; font-style: italic;
+	padding: 10px 0;
+}
+
+/* --- Kingdom About Tab: in-tab layout for About/History/Milestones/Meta ----- */
+.kn-about-grid { display: block; }
+.kn-about-section {
+	background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+	padding: 16px 18px; margin-bottom: 14px;
+}
+html[data-theme="dark"] .kn-about-section {
+	background: var(--ork-card-bg, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+.kn-about-label {
+	font-size: 13px; font-weight: 700; color: #4a5568;
+	text-transform: uppercase; letter-spacing: 0.5px;
+	display: flex; align-items: center;
+}
+html[data-theme="dark"] .kn-about-label { color: var(--ork-text-secondary); }
+
+/* Section variants get a soft dashed top divider when stacked */
+.kn-history-section { margin-top: 14px; }
+.kn-timeline-section { margin-top: 14px; }
+
+/* Meta row (website / parent kingdom) */
+.kn-about-meta { padding: 12px 18px; }
+.kn-about-meta-row {
+	display: flex; align-items: center; gap: 8px;
+	font-size: 13px; color: #4a5568; padding: 4px 0;
+}
+.kn-about-meta-row i { color: #a0aec0; width: 16px; text-align: center; }
+.kn-about-meta-row a { color: #2b6cb0; text-decoration: none; }
+.kn-about-meta-row a:hover { text-decoration: underline; }
+html[data-theme="dark"] .kn-about-meta-row { color: var(--ork-text); }
+html[data-theme="dark"] .kn-about-meta-row i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-about-meta-row a { color: var(--ork-link); }
+
+/* --- Phase 2: tagline ---------------------------------------------------- */
+.kn-tagline {
+	margin: 4px 0 6px 0;
+	font-size: 15px;
+	font-style: italic;
+	color: #e2e8f0;
+	text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+	line-height: 1.35;
+	max-width: 60ch;
+}
+
+/* --- Phase 2: announcement banner --------------------------------------- */
+.kn-announce {
+	background: linear-gradient(90deg, #fef3c7, #fde68a);
+	border-bottom: 2px solid #f59e0b;
+	color: #78350f;
+	padding: 10px 18px;
+	display: flex; align-items: center; gap: 12px;
+	font-size: 14px; line-height: 1.4;
+}
+.kn-announce i.kn-announce-icon {
+	font-size: 18px; color: #b45309; flex-shrink: 0;
+}
+.kn-announce-body { flex: 1; }
+.kn-announce-body strong { color: #78350f; margin-right: 6px; }
+.kn-announce-until { font-size: 11px; color: #92400e; opacity: 0.85; white-space: nowrap; }
+html[data-theme="dark"] .kn-announce {
+	background: linear-gradient(90deg, rgba(245,158,11,0.22), rgba(245,158,11,0.32));
+	border-bottom-color: #d97706;
+	color: #fde68a;
+}
+html[data-theme="dark"] .kn-announce i.kn-announce-icon { color: #fbbf24; }
+html[data-theme="dark"] .kn-announce-body strong { color: #fef3c7; }
+html[data-theme="dark"] .kn-announce-until { color: #fbbf24; }
+
+/* --- Phase 2: Connect (sidebar) — flat accent pills --------------------- */
+.kn-connect-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
+html[data-theme="dark"] .kn-connect-block { border-top-color: var(--ork-border); }
+.kn-connect-subhead {
+	display: flex; align-items: center; justify-content: space-between;
+	font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+	color: #718096; font-weight: 600; margin-bottom: 8px;
+}
+html[data-theme="dark"] .kn-connect-subhead { color: var(--ork-text-muted); }
+.kn-connect-subhead i { margin-right: 4px; opacity: 0.6; }
+.kn-connect-edit {
+	background: transparent; border: 0; cursor: pointer; color: #a0aec0; font-size: 11px; padding: 2px 6px; border-radius: 4px;
+}
+.kn-connect-edit:hover { background: rgba(49,130,206,0.08); color: #2b6cb0; }
+html[data-theme="dark"] .kn-connect-edit:hover { background: var(--ork-bg-tertiary); color: var(--ork-link); }
+.kn-connect-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.kn-connect-pill {
+	width: 34px; height: 34px; border-radius: 50%;
+	display: inline-flex; align-items: center; justify-content: center;
+	color: #fff !important; text-decoration: none !important;
+	font-size: 14px; line-height: 1;
+	background: var(--kn-accent, #2b6cb0);
+	transition: transform 0.12s, box-shadow 0.12s;
+	position: relative;
+}
+.kn-connect-pill:hover { transform: scale(1.08); box-shadow: 0 3px 10px rgba(0,0,0,0.18); }
+.kn-connect-pill[data-tip]::after {
+	content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+	background: #2d3748; color: #fff; font-size: 11px; white-space: nowrap;
+	padding: 3px 8px; border-radius: 4px; pointer-events: none; opacity: 0;
+	transition: opacity 0.12s; z-index: 600;
+}
+.kn-connect-pill[data-tip]:hover::after { opacity: 1; transition-delay: 0.3s; }
+html[data-theme="dark"] .kn-connect-pill[data-tip]::after {
+	background: var(--ork-bg-tertiary); color: var(--ork-text); border: 1px solid var(--ork-border);
+}
+.kn-connect-empty {
+	display: inline-flex; font-size: 11px; color: #a0aec0; text-decoration: none;
+	padding: 4px 8px; border: 1px dashed #cbd5e0; border-radius: 999px;
+}
+.kn-connect-empty:hover { color: #2b6cb0; border-color: #2b6cb0; }
+html[data-theme="dark"] .kn-connect-empty { color: var(--ork-text-muted); border-color: var(--ork-border); }
+
+/* --- Phase 2: reign banner ---------------------------------------------- */
+.kn-reign-banner {
+	background: linear-gradient(135deg, #faf089 0%, #f6ad55 60%, #c05621 100%);
+	border: 1px solid #b7791f; border-radius: 10px;
+	padding: 14px 16px; margin-bottom: 14px;
+	color: #1a202c;
+	position: relative; overflow: hidden;
+}
+.kn-reign-banner::before {
+	content: ''; position: absolute; inset: 0;
+	background: radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 60%);
+	pointer-events: none;
+}
+.kn-reign-head {
+	display: flex; align-items: center; gap: 8px;
+	font-size: 12px; font-weight: 700;
+	text-transform: uppercase; letter-spacing: 0.6px;
+	color: #744210;
+	margin-bottom: 10px;
+	position: relative;
+}
+.kn-reign-head i { color: #b7791f; font-size: 14px; }
+.kn-reign-grid {
+	display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+	position: relative;
+}
+@media (max-width: 640px) { .kn-reign-grid { grid-template-columns: 1fr; } }
+.kn-reign-card {
+	display: flex; align-items: center; gap: 12px;
+	background: rgba(255,255,255,0.78);
+	border: 1px solid rgba(116, 66, 16, 0.25);
+	border-radius: 8px;
+	padding: 10px 12px;
+	text-decoration: none;
+	color: #2d3748;
+	transition: background 0.15s, transform 0.12s;
+}
+.kn-reign-card:hover { background: rgba(255,255,255,0.92); transform: translateY(-1px); }
+.kn-reign-avatar {
+	width: 64px; height: 64px; border-radius: 50%;
+	object-fit: cover; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+	background: #cbd5e0; flex-shrink: 0;
+}
+.kn-reign-card-body { flex: 1; min-width: 0; }
+.kn-reign-role {
+	font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+	color: #744210; opacity: 0.85;
+}
+.kn-reign-name {
+	font-size: 15px; font-weight: 600; color: #1a202c;
+	line-height: 1.2; margin-top: 2px;
+	white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kn-reign-since {
+	font-size: 11px; color: #5c4309; opacity: 0.8; margin-top: 3px;
+}
+.kn-reign-lore {
+	margin-top: 12px; position: relative;
+	background: rgba(255,255,255,0.65);
+	border-left: 3px solid #b7791f;
+	padding: 8px 12px;
+	border-radius: 4px;
+	font-size: 13px; color: #2d3748;
+}
+.kn-reign-empty {
+	position: relative;
+	font-size: 12px; color: #5c4309; font-style: italic;
+	padding: 6px 0;
+}
+html[data-theme="dark"] .kn-reign-banner {
+	background: linear-gradient(135deg, #744210 0%, #7c2d12 60%, #4a1d0f 100%);
+	border-color: #b7791f;
+	color: #fef3c7;
+}
+html[data-theme="dark"] .kn-reign-head { color: #fbbf24; }
+html[data-theme="dark"] .kn-reign-head i { color: #fbd38d; }
+html[data-theme="dark"] .kn-reign-card {
+	background: rgba(26, 32, 44, 0.65);
+	border-color: rgba(251, 191, 36, 0.3);
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .kn-reign-card:hover { background: rgba(26, 32, 44, 0.85); }
+html[data-theme="dark"] .kn-reign-role { color: #fbd38d; }
+html[data-theme="dark"] .kn-reign-name { color: var(--ork-text); }
+html[data-theme="dark"] .kn-reign-since { color: #fbbf24; opacity: 0.85; }
+html[data-theme="dark"] .kn-reign-lore {
+	background: rgba(26, 32, 44, 0.55);
+	color: var(--ork-text);
+	border-left-color: #fbbf24;
+}
+html[data-theme="dark"] .kn-reign-empty { color: #fbd38d; }
+
+/* --- Phase 2: design modal extras (social inputs etc.) ------------------ */
+.kn-dm-social-row {
+	display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center;
+	padding: 5px 0; border-bottom: 1px solid #edf2f7;
+}
+.kn-dm-social-row:last-child { border-bottom: none; }
+html[data-theme="dark"] .kn-dm-social-row { border-bottom-color: var(--ork-border); }
+.kn-dm-social-label {
+	display: flex; align-items: center; gap: 6px;
+	font-size: 12px; font-weight: 600; color: #4a5568;
+}
+html[data-theme="dark"] .kn-dm-social-label { color: var(--ork-text-secondary); }
+.kn-dm-social-icon-chip {
+	width: 22px; height: 22px; border-radius: 50%;
+	display: inline-flex; align-items: center; justify-content: center;
+	color: #fff; font-size: 11px;
+}
+.kn-dm-social-row input[type="url"] {
+	width: 100%; padding: 6px 8px; font-size: 12px;
+	border: 1px solid #cbd5e0; border-radius: 4px;
+	background: #fff; color: #2d3748;
+}
+html[data-theme="dark"] .kn-dm-social-row input[type="url"] {
+	background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text);
+}
+
+.kn-dm-counter {
+	font-size: 11px; color: #718096; text-align: right; margin-top: 4px;
+}
+html[data-theme="dark"] .kn-dm-counter { color: var(--ork-text-muted); }
+.kn-dm-counter.kn-over { color: #c53030; font-weight: 600; }
+</style>
+
 <!-- =============================================
      ZONE 1: Hero Header
      ============================================= -->
+<?php if ($knShowAnnouncement): ?>
+<div class="kn-announce" role="status">
+	<i class="fas fa-bullhorn kn-announce-icon"></i>
+	<div class="kn-announce-body"><strong>Announcement:</strong><?= htmlspecialchars($knAnnouncement) ?></div>
+	<?php if ($knAnnouncementUntil !== '' && $knAnnouncementUntil !== '0000-00-00'): ?>
+	<div class="kn-announce-until">Until <?= date('M j, Y', strtotime($knAnnouncementUntil)) ?></div>
+	<?php endif; ?>
+</div>
+<?php endif; ?>
 <div class="kn-hero">
 	<div class="kn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="kn-hero-content">
@@ -95,6 +556,9 @@
 			</div>
 			<?php endif; ?>
 			<h1 class="kn-kingdom-name"><?= htmlspecialchars($kingdom_name) ?></h1>
+			<?php if ($knTagline !== ''): ?>
+			<div class="kn-tagline"><?= htmlspecialchars($knTagline) ?></div>
+			<?php endif; ?>
 			<div class="kn-badges">
 				<span class="kn-badge kn-badge-green">
 					<i class="fas fa-shield-alt"></i> <?= $entityLabel ?>
@@ -123,6 +587,9 @@
 				<i class="fas fa-map"></i> Map
 			</a>
 			<?php if ($CanManageKingdom ?? false): ?>
+			<button class="kn-btn kn-btn-outline" onclick="knOpenDesignModal()">
+				<i class="fas fa-palette"></i> Design
+			</button>
 			<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
 				<i class="fas fa-cog"></i> Admin
 			</button>
@@ -197,19 +664,6 @@
 		</div>
 		<?php endif; ?>
 
-		<?php
-			$_knDescription = $kingdom_info['Info']['KingdomInfo']['Description'] ?? '';
-		?>
-		<?php if (!empty($_knDescription)): ?>
-		<div class="kn-card kn-description-card">
-			<h4 class="kn-bare-heading"><i class="fas fa-info-circle"></i> About</h4>
-			<div class="kn-description-body"><?= preg_replace('/<img[^>]*>/i', '', (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($_knDescription)) ?></div>
-			<?php if (!empty($kingdom_info['Info']['KingdomInfo']['Url'] ?? '')): ?>
-			<a class="kn-description-url" href="<?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?>" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:4px;font-size:11px"></i><?= htmlspecialchars($kingdom_info['Info']['KingdomInfo']['Url']) ?></a>
-			<?php endif; ?>
-		</div>
-		<?php endif; ?>
-
 		<!-- Quick Links -->
 		<div class="kn-card">
 			<h4 class="kn-bare-heading"><i class="fas fa-link"></i> Quick Links</h4>
@@ -237,6 +691,29 @@
 					<a href="<?= UIR ?>Search/event&KingdomId=<?= $kingdom_id ?>">Find Events</a>
 				</li>
 			</ul>
+			<?php if (!empty($knVisibleSocials) || ($CanManageKingdom ?? false)): ?>
+			<div class="kn-connect-block">
+				<div class="kn-connect-subhead">
+					<span><i class="fas fa-share-alt"></i> Connect</span>
+					<?php if ($CanManageKingdom ?? false): ?>
+					<button class="kn-connect-edit" type="button" onclick="knOpenDesignModal('about')" data-tip="Edit social links"><i class="fas fa-pencil-alt"></i></button>
+					<?php endif; ?>
+				</div>
+				<?php if (!empty($knVisibleSocials)): ?>
+				<div class="kn-connect-pills">
+					<?php foreach ($knVisibleSocials as $_slug => $_url):
+						$_meta = $KN_SOCIAL_PLATFORMS[$_slug];
+					?>
+					<a class="kn-connect-pill" href="<?= htmlspecialchars($_url) ?>" target="_blank" rel="noopener noreferrer" data-tip="<?= htmlspecialchars($_meta['label']) ?>">
+						<i class="<?= $_meta['icon'] ?>"></i>
+					</a>
+					<?php endforeach; ?>
+				</div>
+				<?php elseif ($CanManageKingdom ?? false): ?>
+				<a href="#" class="kn-connect-empty" onclick="event.preventDefault();knOpenDesignModal('about')">+ Add</a>
+				<?php endif; ?>
+			</div>
+			<?php endif; ?>
 		</div>
 
 	</div>
@@ -245,7 +722,10 @@
 	<div class="kn-main">
 		<div class="kn-tabs">
 			<ul class="kn-tab-nav">
-				<li class="kn-tab-active" data-kntab="parks">
+				<li class="kn-tab-active" data-kntab="about">
+					<i class="fas fa-info-circle"></i><span class="kn-tab-label"> About</span>
+				</li>
+				<li data-kntab="parks">
 					<i class="fas fa-map-marker-alt"></i><span class="kn-tab-label"> Parks</span>
 					<span class="kn-tab-count">(<?= count($parkList) ?>)</span>
 				</li>
@@ -283,10 +763,169 @@
 				</li>
 				<?php endif; ?>
 			</ul>
-			<div class="kn-active-tab-label" id="kn-active-tab-label">Parks</div>
+			<div class="kn-active-tab-label" id="kn-active-tab-label">About</div>
+
+			<!-- About Tab -->
+			<div class="kn-tab-panel" id="kn-tab-about">
+				<?php if ($knHasReignContent || ($CanManageKingdom ?? false)): ?>
+				<?php if ($knHasReignContent): ?>
+				<div class="kn-reign-banner">
+					<div class="kn-reign-head">
+						<i class="fas fa-crown"></i>
+						<span>Current Reign</span>
+						<?php if ($CanManageKingdom ?? false): ?>
+						<button class="kn-about-edit-btn" type="button" onclick="knOpenDesignModal('header')" data-tip="Edit Reign" style="margin-left:auto;background:transparent;border:0;color:#744210;cursor:pointer;font-size:11px">
+							<i class="fas fa-pencil-alt"></i> Edit
+						</button>
+						<?php endif; ?>
+					</div>
+					<?php $_hasReignCard = ($monarch && !empty($monarch['MundaneId'])) || ($regent && !empty($regent['MundaneId'])); ?>
+					<?php if ($_hasReignCard): ?>
+					<div class="kn-reign-grid">
+						<?php if ($monarch && !empty($monarch['MundaneId']) && $monarch['MundaneId'] > 0):
+							$_mImg = kn_reign_avatar_url($monarch['MundaneId']);
+							$_mInitial = htmlspecialchars(strtoupper(mb_substr($monarch['Persona'] ?? '?', 0, 1)));
+						?>
+						<a href="<?= UIR ?>Player/profile/<?= (int)$monarch['MundaneId'] ?>" class="kn-reign-card">
+							<img src="<?= htmlspecialchars($_mImg) ?>" alt="" class="kn-reign-avatar" onerror="this.onerror=null;this.src='<?= HTTP_PLAYER_HERALDRY ?>000000.jpg'">
+							<div class="kn-reign-card-body">
+								<div class="kn-reign-role">Monarch</div>
+								<div class="kn-reign-name"><?= htmlspecialchars($monarch['Persona']) ?></div>
+								<?php if ($knMonarchReignStarted !== '' && $knMonarchReignStarted !== '0000-00-00' && strtotime($knMonarchReignStarted)): ?>
+								<div class="kn-reign-since">Since <?= date('M Y', strtotime($knMonarchReignStarted)) ?></div>
+								<?php endif; ?>
+							</div>
+						</a>
+						<?php endif; ?>
+						<?php if ($regent && !empty($regent['MundaneId']) && $regent['MundaneId'] > 0):
+							$_rImg = kn_reign_avatar_url($regent['MundaneId']);
+						?>
+						<a href="<?= UIR ?>Player/profile/<?= (int)$regent['MundaneId'] ?>" class="kn-reign-card">
+							<img src="<?= htmlspecialchars($_rImg) ?>" alt="" class="kn-reign-avatar" onerror="this.onerror=null;this.src='<?= HTTP_PLAYER_HERALDRY ?>000000.jpg'">
+							<div class="kn-reign-card-body">
+								<div class="kn-reign-role">Regent</div>
+								<div class="kn-reign-name"><?= htmlspecialchars($regent['Persona']) ?></div>
+								<?php if ($knRegentReignStarted !== '' && $knRegentReignStarted !== '0000-00-00' && strtotime($knRegentReignStarted)): ?>
+								<div class="kn-reign-since">Since <?= date('M Y', strtotime($knRegentReignStarted)) ?></div>
+								<?php endif; ?>
+							</div>
+						</a>
+						<?php endif; ?>
+					</div>
+					<?php endif; ?>
+					<?php if (trim($knReignLore) !== ''): ?>
+					<div class="kn-reign-lore kn-description-body"><?= kn_markdown($knReignLore) ?></div>
+					<?php endif; ?>
+				</div>
+				<?php elseif ($CanManageKingdom ?? false): ?>
+				<div class="kn-reign-banner">
+					<div class="kn-reign-head"><i class="fas fa-crown"></i><span>Current Reign</span></div>
+					<div class="kn-reign-empty">
+						Showcase the current Monarch &amp; Regent. <a href="#" onclick="event.preventDefault();knOpenDesignModal('header')" style="color:#744210;text-decoration:underline">Set reign-start dates</a> or add lore.
+					</div>
+				</div>
+				<?php endif; ?>
+				<?php endif; ?>
+
+				<div class="kn-about-grid">
+					<?php if (!empty($aboutText) || ($CanManageKingdom ?? false)): ?>
+					<div class="kn-about-section">
+						<div class="kn-about-section-head">
+							<div class="kn-about-label">About</div>
+							<?php if ($CanManageKingdom ?? false): ?>
+							<button class="kn-about-edit-btn" type="button" onclick="knOpenDesignModal('about')" data-tip="Edit About">
+								<i class="fas fa-pencil-alt"></i> Edit
+							</button>
+							<?php endif; ?>
+						</div>
+						<?php if (!empty($aboutText)): ?>
+						<div class="kn-about-text kn-description-body"><?= kn_markdown($aboutText) ?></div>
+						<?php elseif ($CanManageKingdom ?? false): ?>
+						<div class="kn-empty" style="text-align:left;font-size:13px;color:#a0aec0">
+							No About content yet. <a href="#" onclick="event.preventDefault();knOpenDesignModal('about')">Add some</a> to introduce <?= htmlspecialchars($kingdom_name) ?> to visitors.
+						</div>
+						<?php endif; ?>
+					</div>
+					<?php endif; ?>
+				</div>
+
+				<?php if (!empty($ourHistoryText) || ($CanManageKingdom ?? false)): ?>
+				<div class="kn-about-section kn-history-section">
+					<div class="kn-about-section-head">
+						<div class="kn-about-label"><i class="fas fa-scroll" style="margin-right:6px;color:#a0aec0"></i>Our History</div>
+						<?php if ($CanManageKingdom ?? false): ?>
+						<button class="kn-about-edit-btn" type="button" onclick="knOpenDesignModal('about')" data-tip="Edit Our History">
+							<i class="fas fa-pencil-alt"></i> Edit
+						</button>
+						<?php endif; ?>
+					</div>
+					<?php if (!empty($ourHistoryText)): ?>
+					<div class="kn-about-text kn-description-body"><?= kn_markdown($ourHistoryText) ?></div>
+					<?php elseif ($CanManageKingdom ?? false): ?>
+					<div class="kn-empty" style="text-align:left;font-size:13px;color:#a0aec0">
+						Share the founding story, past officers, or notable moments. <a href="#" onclick="event.preventDefault();knOpenDesignModal('about')">Add Our History</a>.
+					</div>
+					<?php endif; ?>
+				</div>
+				<?php endif; ?>
+
+				<?php
+					$_knWebsiteUrl = trim((string)($_kInfo['Url'] ?? ''));
+					$_knParentId   = (int)($_kInfo['ParentKingdomId'] ?? ($ParentKingdomId ?? 0));
+					$_knParentName = trim((string)($ParentKingdomName ?? ''));
+				?>
+				<?php if ($_knWebsiteUrl !== '' || $_knParentId > 0): ?>
+				<div class="kn-about-section kn-about-meta">
+					<?php if ($_knWebsiteUrl !== ''): ?>
+					<div class="kn-about-meta-row">
+						<i class="fas fa-globe"></i>
+						<a href="<?= htmlspecialchars($_knWebsiteUrl) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($_knWebsiteUrl) ?></a>
+					</div>
+					<?php endif; ?>
+					<?php if ($_knParentId > 0): ?>
+					<div class="kn-about-meta-row">
+						<i class="fas fa-chess-rook"></i>
+						<a href="<?= UIR ?>Kingdom/profile/<?= $_knParentId ?>"><?= htmlspecialchars($_knParentName !== '' ? $_knParentName : 'Parent kingdom') ?></a>
+					</div>
+					<?php endif; ?>
+				</div>
+				<?php endif; ?>
+
+				<?php if ($knHasMilestones || ($CanManageKingdom ?? false)): ?>
+				<div class="kn-about-section kn-timeline-section">
+					<div class="kn-about-section-head">
+						<h3 class="kn-timeline-heading"><i class="fas fa-stream"></i> Milestones</h3>
+						<?php if ($CanManageKingdom ?? false): ?>
+						<button class="kn-about-edit-btn" type="button" onclick="knOpenDesignModal('milestones')" data-tip="Manage milestones">
+							<i class="fas fa-pencil-alt"></i> Manage
+						</button>
+						<?php endif; ?>
+					</div>
+					<?php if ($knHasMilestones): ?>
+					<div class="kn-timeline">
+						<?php foreach ($knVisibleMilestones as $_knms): ?>
+						<div class="kn-timeline-row<?= !empty($_knms['IsDerived']) ? ' kn-ms-derived' : '' ?>">
+							<div class="kn-timeline-dot">
+								<i class="fas <?= htmlspecialchars(preg_replace('/[^a-z0-9-]/','', (string)($_knms['Icon'] ?? 'fa-star')) ?: 'fa-star') ?>"></i>
+							</div>
+							<div class="kn-timeline-content">
+								<span class="kn-timeline-date"><?= !empty($_knms['MilestoneDate']) && $_knms['MilestoneDate'] !== '0000-00-00' ? date('M j, Y', strtotime($_knms['MilestoneDate'])) : '' ?></span>
+								<span class="kn-timeline-desc"><?= htmlspecialchars((string)($_knms['Description'] ?? '')) ?></span>
+							</div>
+						</div>
+						<?php endforeach; ?>
+					</div>
+					<?php elseif ($CanManageKingdom ?? false): ?>
+					<div class="kn-timeline-empty">
+						No milestones yet. <a href="#" onclick="event.preventDefault();knOpenDesignModal('milestones')">Add the first one</a> — founding date, charter dates, notable events.
+					</div>
+					<?php endif; ?>
+				</div>
+				<?php endif; ?>
+			</div><!-- /kn-tab-about -->
 
 			<!-- Parks Tab -->
-			<div class="kn-tab-panel" id="kn-tab-parks">
+			<div class="kn-tab-panel" id="kn-tab-parks" style="display:none">
 				<?php
 					// Pre-sort alphabetically so tiles match default list order
 					usort($parkList, function($a, $b) { return strcmp($a['ParkName'], $b['ParkName']); });
@@ -2431,4 +3070,858 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
+
+<?php if ($CanManageKingdom ?? false): ?>
+<!-- =============================================
+     Kingdom Design Modal
+     ============================================= -->
+<style>
+/* --- Kingdom Design Modal: scoped styles (kn-dm-*) ----------------------------- */
+.kn-dm-overlay {
+	position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 10000;
+	display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.kn-dm-overlay.kn-open { display: flex; }
+.kn-dm-modal {
+	background: #fff; border-radius: 10px; width: 720px; max-width: calc(100vw - 40px);
+	max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+	box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .kn-dm-modal { background: var(--ork-card-bg); color: var(--ork-text); }
+.kn-dm-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 14px 18px; border-bottom: 1px solid #e2e8f0;
+}
+html[data-theme="dark"] .kn-dm-header { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+.kn-dm-title {
+	margin: 0; font-size: 16px; font-weight: 700; color: #2d3748;
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+	display: inline-flex; align-items: center; gap: 8px;
+}
+html[data-theme="dark"] .kn-dm-title { color: var(--ork-text); }
+.kn-dm-close {
+	background: transparent; border: 0; font-size: 22px; cursor: pointer; color: #718096;
+	width: 32px; height: 32px; border-radius: 6px;
+}
+.kn-dm-close:hover { background: #f7fafc; color: #2d3748; }
+html[data-theme="dark"] .kn-dm-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-dm-close:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.kn-dm-tabs {
+	display: flex; gap: 4px; padding: 8px 18px 0 18px; border-bottom: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+html[data-theme="dark"] .kn-dm-tabs { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+.kn-dm-tab {
+	background: transparent; border: 1px solid transparent; border-bottom: none;
+	padding: 8px 14px; font-size: 13px; font-weight: 600; color: #718096; cursor: pointer;
+	border-radius: 6px 6px 0 0; display: inline-flex; align-items: center; gap: 6px;
+}
+.kn-dm-tab.kn-active {
+	background: #fff; color: #2b6cb0; border-color: #e2e8f0; border-bottom: 1px solid #fff;
+	margin-bottom: -1px;
+}
+html[data-theme="dark"] .kn-dm-tab { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-dm-tab.kn-active {
+	background: var(--ork-card-bg); color: var(--ork-link); border-color: var(--ork-border);
+	border-bottom-color: var(--ork-card-bg);
+}
+.kn-dm-body { padding: 18px; overflow-y: auto; flex: 1; }
+.kn-dm-panel { display: none; }
+.kn-dm-panel.kn-active { display: block; }
+.kn-dm-error {
+	display: none; background: #fff5f5; border: 1px solid #fc8181; color: #9b2c2c;
+	border-radius: 6px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px;
+}
+html[data-theme="dark"] .kn-dm-error { background: rgba(252,129,129,0.1); color: #fc8181; }
+.kn-dm-field { margin-bottom: 14px; }
+.kn-dm-field label {
+	display: block; font-size: 12px; font-weight: 700; color: #4a5568;
+	text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px;
+}
+html[data-theme="dark"] .kn-dm-field label { color: var(--ork-text-secondary); }
+.kn-dm-field input[type="text"],
+.kn-dm-field input[type="date"],
+.kn-dm-field textarea,
+.kn-dm-field select {
+	width: 100%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px;
+	font-size: 14px; color: #2d3748; box-sizing: border-box; background: #fff;
+	font-family: inherit;
+}
+html[data-theme="dark"] .kn-dm-field input,
+html[data-theme="dark"] .kn-dm-field textarea,
+html[data-theme="dark"] .kn-dm-field select {
+	background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+.kn-dm-field textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
+.kn-dm-hint { font-size: 12px; color: #718096; margin-top: 4px; }
+html[data-theme="dark"] .kn-dm-hint { color: var(--ork-text-muted); }
+.kn-dm-footer {
+	border-top: 1px solid #e2e8f0; padding: 12px 18px;
+	display: flex; justify-content: flex-end; gap: 8px; background: #f7fafc;
+}
+html[data-theme="dark"] .kn-dm-footer { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+.kn-dm-btn {
+	padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px;
+	border: 1px solid #cbd5e0; background: #fff; color: #2d3748; cursor: pointer;
+	display: inline-flex; align-items: center; gap: 6px;
+}
+html[data-theme="dark"] .kn-dm-btn { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text); }
+.kn-dm-btn-primary { background: #3182ce; color: #fff; border-color: #3182ce; }
+.kn-dm-btn-primary:hover { background: #2c5282; border-color: #2c5282; }
+.kn-dm-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.kn-dm-preset-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+.kn-dm-swatch {
+	height: 40px; border-radius: 6px; cursor: pointer; border: 2px solid transparent;
+	box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset;
+}
+.kn-dm-swatch.kn-selected { border-color: #2b6cb0; transform: scale(1.06); box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2b6cb0; }
+html[data-theme="dark"] .kn-dm-swatch.kn-selected { box-shadow: 0 0 0 2px var(--ork-card-bg), 0 0 0 4px var(--ork-link); }
+.kn-dm-color-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.kn-dm-color-col { flex: 1; min-width: 180px; }
+.kn-dm-color-input { display: flex; align-items: center; gap: 6px; }
+.kn-dm-color-input input[type="color"] {
+	width: 38px; height: 36px; border: 1px solid #cbd5e0; border-radius: 6px;
+	padding: 0; background: transparent; cursor: pointer;
+}
+.kn-dm-color-input input[type="text"] { flex: 1; }
+.kn-dm-overlay-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.kn-dm-overlay-btn {
+	flex: 1; min-width: 80px; padding: 8px 10px; font-size: 12px; font-weight: 600;
+	border: 1px solid #cbd5e0; border-radius: 6px; background: #fff; color: #4a5568; cursor: pointer;
+}
+.kn-dm-overlay-btn.kn-active { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+html[data-theme="dark"] .kn-dm-overlay-btn { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-dm-overlay-btn.kn-active { background: var(--ork-link); color: var(--ork-bg-secondary); border-color: var(--ork-link); }
+
+.kn-dm-font-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.kn-dm-font-card {
+	border: 1px solid #cbd5e0; border-radius: 8px; padding: 10px 8px; cursor: pointer;
+	text-align: center; background: #fff;
+}
+.kn-dm-font-card.kn-active { border-color: #2b6cb0; background: #ebf8ff; box-shadow: 0 0 0 1px #2b6cb0; }
+html[data-theme="dark"] .kn-dm-font-card { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-dm-font-card.kn-active { background: rgba(43,108,176,0.15); border-color: var(--ork-link); box-shadow: 0 0 0 1px var(--ork-link); }
+.kn-dm-font-sample { font-size: 19px; font-weight: 600; color: #2d3748; line-height: 1.2; margin-bottom: 4px; }
+html[data-theme="dark"] .kn-dm-font-sample { color: var(--ork-text); }
+.kn-dm-font-label { font-size: 11px; color: #718096; }
+html[data-theme="dark"] .kn-dm-font-label { color: var(--ork-text-muted); }
+
+.kn-dm-md-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.kn-dm-md-toggle { display: inline-flex; background: #edf2f7; border-radius: 6px; padding: 3px; gap: 3px; }
+.kn-dm-md-toggle button {
+	background: transparent; border: 0; padding: 5px 10px; font-size: 12px; font-weight: 600;
+	cursor: pointer; border-radius: 4px; color: #718096;
+}
+.kn-dm-md-toggle button.kn-active { background: #fff; color: #2b6cb0; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+html[data-theme="dark"] .kn-dm-md-toggle { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-dm-md-toggle button.kn-active { background: var(--ork-card-bg); color: var(--ork-link); }
+.kn-dm-md-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.kn-dm-md-quick-btn {
+	background: #fff; border: 1px solid #cbd5e0; color: #4a5568;
+	padding: 5px 10px; border-radius: 14px; font-size: 11px; font-weight: 600;
+	cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+}
+.kn-dm-md-quick-btn:hover { background: #ebf8ff; color: #2b6cb0; border-color: #90cdf4; }
+html[data-theme="dark"] .kn-dm-md-quick-btn { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-dm-md-quick-btn:hover { background: var(--ork-bg-secondary); color: var(--ork-link); border-color: var(--ork-link); }
+.kn-dm-md-preview {
+	border: 1px solid #cbd5e0; border-radius: 6px; padding: 12px 14px;
+	min-height: 140px; background: #fafafa; font-size: 14px; line-height: 1.55; color: #2d3748;
+}
+html[data-theme="dark"] .kn-dm-md-preview { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+.kn-dm-md-preview h1, .kn-dm-md-preview h2, .kn-dm-md-preview h3, .kn-dm-md-preview h4 {
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+	margin-top: 0.9em; margin-bottom: 0.3em;
+}
+
+.kn-dm-ms-toggles { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 14px; }
+.kn-dm-ms-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #4a5568; }
+html[data-theme="dark"] .kn-dm-ms-toggle { color: var(--ork-text-secondary); }
+.kn-dm-ms-list { border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 12px; max-height: 200px; overflow-y: auto; }
+html[data-theme="dark"] .kn-dm-ms-list { border-color: var(--ork-border); background: var(--ork-bg-secondary); }
+.kn-dm-ms-row {
+	display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #edf2f7;
+	font-size: 13px;
+}
+html[data-theme="dark"] .kn-dm-ms-row { border-color: var(--ork-border); }
+.kn-dm-ms-row:last-child { border-bottom: none; }
+.kn-dm-ms-row > i { color: #2b6cb0; width: 18px; text-align: center; }
+.kn-dm-ms-row .kn-dm-ms-desc { flex: 1; color: #2d3748; }
+html[data-theme="dark"] .kn-dm-ms-row .kn-dm-ms-desc { color: var(--ork-text); }
+.kn-dm-ms-row .kn-dm-ms-date { color: #718096; font-size: 11px; min-width: 90px; }
+html[data-theme="dark"] .kn-dm-ms-row .kn-dm-ms-date { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-dm-ms-row > i { color: var(--ork-link); }
+html[data-theme="dark"] .kn-dm-ms-row button { color: #fc8181; }
+html[data-theme="dark"] .kn-dm-ms-row button:hover { background: var(--ork-bg-tertiary); }
+.kn-dm-ms-row button {
+	background: transparent; border: 0; color: #e53e3e; cursor: pointer; padding: 4px 6px;
+}
+.kn-dm-ms-row button[data-tip] { position: relative; }
+.kn-dm-ms-row button[data-tip]::after {
+	content: attr(data-tip); position: absolute; bottom: calc(100% + 4px); right: 0;
+	background: #2d3748; color: #fff; font-size: 11px; white-space: nowrap;
+	padding: 3px 8px; border-radius: 4px; pointer-events: none; opacity: 0;
+	transition: opacity 0.12s; z-index: 600;
+}
+.kn-dm-ms-row button[data-tip]:hover::after { opacity: 1; transition-delay: 0.3s; }
+html[data-theme="dark"] .kn-dm-ms-row button[data-tip]::after {
+	background: var(--ork-bg-tertiary); color: var(--ork-text); border: 1px solid var(--ork-border);
+}
+.kn-dm-ms-add { display: grid; grid-template-columns: 1fr 140px 90px; gap: 8px; align-items: end; }
+@media (max-width: 600px) { .kn-dm-ms-add { grid-template-columns: 1fr; } }
+.kn-dm-ms-icons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.kn-dm-ms-icon-opt {
+	width: 28px; height: 28px; border: 1px solid #cbd5e0; border-radius: 6px;
+	display: flex; align-items: center; justify-content: center; cursor: pointer;
+	background: #fff; color: #4a5568;
+}
+.kn-dm-ms-icon-opt.kn-active { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+html[data-theme="dark"] .kn-dm-ms-icon-opt { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-dm-ms-icon-opt.kn-active { background: var(--ork-link); color: var(--ork-bg-secondary); border-color: var(--ork-link); }
+</style>
+
+<div class="kn-dm-overlay" id="kn-dm-overlay">
+	<div class="kn-dm-modal">
+		<div class="kn-dm-header">
+			<h3 class="kn-dm-title"><i class="fas fa-palette"></i>Design <?= htmlspecialchars($kingdom_name) ?></h3>
+			<button class="kn-dm-close" id="kn-dm-close" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-dm-tabs">
+			<button class="kn-dm-tab kn-active" data-kntab-dm="header"><i class="fas fa-image"></i> Header</button>
+			<button class="kn-dm-tab" data-kntab-dm="about"><i class="fas fa-scroll"></i> About</button>
+			<button class="kn-dm-tab" data-kntab-dm="milestones"><i class="fas fa-stream"></i> Milestones</button>
+		</div>
+		<div class="kn-dm-body">
+			<div class="kn-dm-error" id="kn-dm-error"></div>
+
+			<div class="kn-dm-panel kn-active" id="kn-dm-panel-header">
+				<div class="kn-dm-hint" style="margin-bottom:12px"><i class="fas fa-moon" style="margin-right:6px"></i><strong>Dark mode viewers</strong> see your hero with a slight darkening filter so colors stay readable. Preview both themes with the moon icon in the site header before saving.</div>
+
+				<div class="kn-dm-field">
+					<label>Color Presets</label>
+					<div class="kn-dm-preset-grid" id="kn-dm-presets">
+						<div class="kn-dm-swatch" data-primary="#2c5282" data-accent="#4299e1" style="background:#2c5282"></div>
+						<div class="kn-dm-swatch" data-primary="#276749" data-accent="#48bb78" style="background:#276749"></div>
+						<div class="kn-dm-swatch" data-primary="#9b2c2c" data-accent="#fc8181" style="background:#9b2c2c"></div>
+						<div class="kn-dm-swatch" data-primary="#553c9a" data-accent="#9f7aea" style="background:#553c9a"></div>
+						<div class="kn-dm-swatch" data-primary="#975a16" data-accent="#ecc94b" style="background:#975a16"></div>
+						<div class="kn-dm-swatch" data-primary="#2d3748" data-accent="#a0aec0" style="background:#2d3748"></div>
+						<div class="kn-dm-swatch" data-primary="#285e61" data-accent="#38b2ac" style="background:#285e61"></div>
+						<div class="kn-dm-swatch" data-primary="#744210" data-accent="#ed8936" style="background:#744210"></div>
+					</div>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Gradient Presets</label>
+					<div class="kn-dm-preset-grid" id="kn-dm-gradient-presets">
+						<div class="kn-dm-swatch" data-primary="#1a365d" data-accent="#4299e1" data-secondary="#553c9a" style="background:linear-gradient(135deg,#1a365d,#553c9a)"></div>
+						<div class="kn-dm-swatch" data-primary="#1a4731" data-accent="#48bb78" data-secondary="#2c5282" style="background:linear-gradient(135deg,#1a4731,#2c5282)"></div>
+						<div class="kn-dm-swatch" data-primary="#742a2a" data-accent="#fc8181" data-secondary="#975a16" style="background:linear-gradient(135deg,#742a2a,#975a16)"></div>
+						<div class="kn-dm-swatch" data-primary="#44337a" data-accent="#d6bcfa" data-secondary="#97266d" style="background:linear-gradient(135deg,#44337a,#97266d)"></div>
+						<div class="kn-dm-swatch" data-primary="#234e52" data-accent="#38b2ac" data-secondary="#276749" style="background:linear-gradient(135deg,#234e52,#276749)"></div>
+						<div class="kn-dm-swatch" data-primary="#2c5282" data-accent="#4299e1" data-secondary="#285e61" style="background:linear-gradient(135deg,#2c5282,#285e61)"></div>
+						<div class="kn-dm-swatch" data-primary="#744210" data-accent="#ecc94b" data-secondary="#9b2c2c" style="background:linear-gradient(135deg,#744210,#9b2c2c)"></div>
+						<div class="kn-dm-swatch" data-primary="#1a202c" data-accent="#a0aec0" data-secondary="#2d3748" style="background:linear-gradient(135deg,#1a202c,#2d3748)"></div>
+					</div>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Custom Colors</label>
+					<div class="kn-dm-color-row">
+						<div class="kn-dm-color-col">
+							<div class="kn-dm-hint" style="margin-bottom:4px">Primary (hero background)</div>
+							<div class="kn-dm-color-input">
+								<input type="color" id="kn-dm-color-primary" value="<?= htmlspecialchars($knColorPrimary ?: '#2c5282') ?>" />
+								<input type="text" id="kn-dm-color-primary-hex" value="<?= htmlspecialchars($knColorPrimary ?: '#2c5282') ?>" maxlength="7" />
+							</div>
+						</div>
+						<div class="kn-dm-color-col">
+							<div class="kn-dm-hint" style="margin-bottom:4px">Accent (links &amp; tabs)</div>
+							<div class="kn-dm-color-input">
+								<input type="color" id="kn-dm-color-accent" value="<?= htmlspecialchars($knColorAccent ?: '#4299e1') ?>" />
+								<input type="text" id="kn-dm-color-accent-hex" value="<?= htmlspecialchars($knColorAccent ?: '#4299e1') ?>" maxlength="7" />
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Gradient (Optional)</label>
+					<div class="kn-dm-color-row">
+						<div class="kn-dm-color-col">
+							<div class="kn-dm-hint" style="margin-bottom:4px">Secondary color</div>
+							<div class="kn-dm-color-input">
+								<input type="color" id="kn-dm-color-secondary" value="<?= htmlspecialchars($knColorSecondary ?: ($knColorPrimary ?: '#2c5282')) ?>" />
+								<input type="text" id="kn-dm-color-secondary-hex" value="<?= htmlspecialchars($knColorSecondary) ?>" maxlength="7" placeholder="None" />
+							</div>
+						</div>
+						<div class="kn-dm-color-col" style="display:flex;align-items:center;padding-top:18px">
+							<label style="text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;color:#4a5568;font-size:13px;margin-bottom:0">
+								<input type="checkbox" id="kn-dm-gradient-enabled" <?= $knColorSecondary !== '' ? 'checked' : '' ?> />
+								Enable gradient
+							</label>
+						</div>
+					</div>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Heraldry Overlay Strength</label>
+					<div class="kn-dm-hint" style="margin-bottom:6px">Controls how much the kingdom heraldry shows through the hero background.</div>
+					<div class="kn-dm-overlay-btns">
+						<button type="button" class="kn-dm-overlay-btn<?= $knOverlay === 'low' ? ' kn-active' : '' ?>" data-overlay="low">Low</button>
+						<button type="button" class="kn-dm-overlay-btn<?= $knOverlay === 'med' ? ' kn-active' : '' ?>" data-overlay="med">Medium</button>
+						<button type="button" class="kn-dm-overlay-btn<?= $knOverlay === 'high' ? ' kn-active' : '' ?>" data-overlay="high">High</button>
+						<button type="button" class="kn-dm-overlay-btn<?= $knOverlay === 'vignette' ? ' kn-active' : '' ?>" data-overlay="vignette">Vignette</button>
+					</div>
+					<input type="hidden" id="kn-dm-hero-overlay" value="<?= htmlspecialchars($knOverlay) ?>" />
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Name Font</label>
+					<div class="kn-dm-hint" style="margin-bottom:6px">A decorative font for the kingdom name in the hero. Viewers with accessibility fonts enabled will see their preferred font instead.</div>
+					<div class="kn-dm-font-picker" id="kn-dm-font-picker"></div>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Tagline</label>
+					<div class="kn-dm-hint" style="margin-bottom:6px">A short one-liner that appears under the kingdom name in the hero. 160 characters max.</div>
+					<input type="text" id="kn-dm-tagline" maxlength="160" value="<?= htmlspecialchars($knTagline) ?>" placeholder="e.g. Honor, Glory, and the Sound of Sword on Shield." style="width:100%;padding:8px 10px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px" />
+					<div class="kn-dm-counter" id="kn-dm-tagline-counter">0 / 160</div>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Announcement Banner</label>
+					<div class="kn-dm-hint" style="margin-bottom:6px">A short amber banner that appears above the hero. Use for upcoming events, weather cancellations, or kingdom news. 280 characters max.</div>
+					<textarea id="kn-dm-announcement" maxlength="280" placeholder="e.g. Crown List sign-ups close Friday at midnight. RSVP on the events page!" style="width:100%;padding:8px 10px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px;min-height:60px;resize:vertical"><?= htmlspecialchars($knAnnouncement) ?></textarea>
+					<div class="kn-dm-counter" id="kn-dm-announcement-counter">0 / 280</div>
+					<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+						<label style="font-size:12px;color:#4a5568;text-transform:none;letter-spacing:0;margin-bottom:0">Show until (optional):</label>
+						<input type="date" id="kn-dm-announcement-until" value="<?= htmlspecialchars(($knAnnouncementUntil !== '' && $knAnnouncementUntil !== '0000-00-00') ? $knAnnouncementUntil : '') ?>" style="padding:5px 8px;font-size:12px;border:1px solid #cbd5e0;border-radius:4px" />
+						<button type="button" id="kn-dm-announcement-clear" style="background:transparent;border:0;color:#718096;font-size:11px;cursor:pointer;text-decoration:underline">Clear date</button>
+					</div>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Reign Banner</label>
+					<div class="kn-dm-hint" style="margin-bottom:8px">Personae are derived from current Monarch &amp; Regent on the Officers list. Set reign-start dates and add optional lore (Markdown supported, 2,000 char max).</div>
+					<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+						<div>
+							<label style="font-size:11px;color:#4a5568;text-transform:none;letter-spacing:0">Monarch reign started</label>
+							<input type="date" id="kn-dm-monarch-reign" value="<?= htmlspecialchars(($knMonarchReignStarted !== '' && $knMonarchReignStarted !== '0000-00-00') ? $knMonarchReignStarted : '') ?>" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid #cbd5e0;border-radius:4px" />
+						</div>
+						<div>
+							<label style="font-size:11px;color:#4a5568;text-transform:none;letter-spacing:0">Regent reign started</label>
+							<input type="date" id="kn-dm-regent-reign" value="<?= htmlspecialchars(($knRegentReignStarted !== '' && $knRegentReignStarted !== '0000-00-00') ? $knRegentReignStarted : '') ?>" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid #cbd5e0;border-radius:4px" />
+						</div>
+					</div>
+					<div class="kn-dm-md-toolbar">
+						<label style="margin-bottom:0;font-size:11px;text-transform:none;letter-spacing:0;color:#4a5568">Reign Lore (optional, Markdown)</label>
+						<div class="kn-dm-md-toggle">
+							<button type="button" class="kn-active" data-knmd-target="edit" data-knmd-field="reign">Write</button>
+							<button type="button" data-knmd-target="preview" data-knmd-field="reign">Preview</button>
+						</div>
+					</div>
+					<textarea id="kn-dm-reign-text" maxlength="2000" placeholder="e.g. Their Royal Majesties were crowned at Spring Coronation after a hard-fought Crown List..." style="width:100%;min-height:120px"><?= htmlspecialchars($knReignLore) ?></textarea>
+					<div class="kn-dm-md-preview" id="kn-dm-reign-preview" style="display:none"></div>
+					<div class="kn-dm-counter" id="kn-dm-reign-counter">0 / 2,000</div>
+				</div>
+			</div>
+
+			<div class="kn-dm-panel" id="kn-dm-panel-about">
+				<div class="kn-dm-field">
+					<label>Social Links</label>
+					<div class="kn-dm-hint" style="margin-bottom:8px">Add any platforms your kingdom uses. Empty fields aren't shown. We'll add <code>https://</code> automatically if you omit it.</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:#5865f2"><i class="fab fa-discord"></i></span>Discord</div>
+						<input type="url" data-knsoc="discord" placeholder="https://discord.gg/..." value="<?= htmlspecialchars((string)($knSocialLinks['discord'] ?? '')) ?>" maxlength="500" />
+					</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:#1877f2"><i class="fab fa-facebook"></i></span>Facebook</div>
+						<input type="url" data-knsoc="facebook" placeholder="https://facebook.com/..." value="<?= htmlspecialchars((string)($knSocialLinks['facebook'] ?? '')) ?>" maxlength="500" />
+					</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:linear-gradient(135deg,#f09433,#dc2743,#bc1888)"><i class="fab fa-instagram"></i></span>Instagram</div>
+						<input type="url" data-knsoc="instagram" placeholder="https://instagram.com/..." value="<?= htmlspecialchars((string)($knSocialLinks['instagram'] ?? '')) ?>" maxlength="500" />
+					</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:#000"><i class="fab fa-threads"></i></span>Threads</div>
+						<input type="url" data-knsoc="threads" placeholder="https://threads.net/..." value="<?= htmlspecialchars((string)($knSocialLinks['threads'] ?? '')) ?>" maxlength="500" />
+					</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:#1185fe"><i class="fas fa-cloud"></i></span>Bluesky</div>
+						<input type="url" data-knsoc="bluesky" placeholder="https://bsky.app/..." value="<?= htmlspecialchars((string)($knSocialLinks['bluesky'] ?? '')) ?>" maxlength="500" />
+					</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:#000"><i class="fab fa-x-twitter"></i></span>X</div>
+						<input type="url" data-knsoc="twitter" placeholder="https://x.com/..." value="<?= htmlspecialchars((string)($knSocialLinks['twitter'] ?? '')) ?>" maxlength="500" />
+					</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:#ff0000"><i class="fab fa-youtube"></i></span>YouTube</div>
+						<input type="url" data-knsoc="youtube" placeholder="https://youtube.com/..." value="<?= htmlspecialchars((string)($knSocialLinks['youtube'] ?? '')) ?>" maxlength="500" />
+					</div>
+					<div class="kn-dm-social-row">
+						<div class="kn-dm-social-label"><span class="kn-dm-social-icon-chip" style="background:#6b7280"><i class="fas fa-book"></i></span>AmtWiki</div>
+						<input type="url" data-knsoc="amtwiki" placeholder="https://amtwiki.net/..." value="<?= htmlspecialchars((string)($knSocialLinks['amtwiki'] ?? '')) ?>" maxlength="500" />
+					</div>
+				</div>
+
+				<div class="kn-dm-hint" style="margin-bottom:14px"><i class="fas fa-info-circle" style="margin-right:6px"></i>Both fields below support <strong>Markdown</strong>. Use <em>About</em> for a current snapshot of the kingdom; use <em>Our History</em> for the founding story, past reigns, and notable moments.</div>
+
+				<div class="kn-dm-field">
+					<div class="kn-dm-md-toolbar">
+						<label style="margin-bottom:0">About <?= htmlspecialchars($kingdom_name) ?></label>
+						<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+							<div class="kn-dm-md-toggle">
+								<button type="button" class="kn-active" data-knmd-target="edit" data-knmd-field="about">Write</button>
+								<button type="button" data-knmd-target="preview" data-knmd-field="about">Preview</button>
+							</div>
+							<div class="kn-dm-md-quick">
+								<button type="button" class="kn-dm-md-quick-btn" data-knquick="newbies" data-knfield="about"><i class="fas fa-hand-sparkles"></i> New Player Welcome</button>
+								<button type="button" class="kn-dm-md-quick-btn" data-knquick="vibe" data-knfield="about"><i class="fas fa-fire"></i> Kingdom Vibe</button>
+								<button type="button" class="kn-dm-md-quick-btn" data-knquick="findus" data-knfield="about"><i class="fas fa-map-marker-alt"></i> Where We Play</button>
+							</div>
+						</div>
+					</div>
+					<textarea id="kn-dm-about-text" maxlength="10000" placeholder="Welcome to the kingdom... (Markdown supported)"><?= htmlspecialchars($aboutText) ?></textarea>
+					<div class="kn-dm-md-preview" id="kn-dm-about-preview" style="display:none"></div>
+				</div>
+
+				<div class="kn-dm-field">
+					<div class="kn-dm-md-toolbar">
+						<label style="margin-bottom:0">Our History</label>
+						<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+							<div class="kn-dm-md-toggle">
+								<button type="button" class="kn-active" data-knmd-target="edit" data-knmd-field="history">Write</button>
+								<button type="button" data-knmd-target="preview" data-knmd-field="history">Preview</button>
+							</div>
+							<div class="kn-dm-md-quick">
+								<button type="button" class="kn-dm-md-quick-btn" data-knquick="founding" data-knfield="history"><i class="fas fa-flag"></i> Founding</button>
+								<button type="button" class="kn-dm-md-quick-btn" data-knquick="charter" data-knfield="history"><i class="fas fa-chess-rook"></i> Charter</button>
+								<button type="button" class="kn-dm-md-quick-btn" data-knquick="pastmonarchs" data-knfield="history"><i class="fas fa-crown"></i> Past Monarchs</button>
+							</div>
+						</div>
+					</div>
+					<textarea id="kn-dm-history-text" maxlength="10000" placeholder="The kingdom was founded in... (Markdown supported)"><?= htmlspecialchars($ourHistoryText) ?></textarea>
+					<div class="kn-dm-md-preview" id="kn-dm-history-preview" style="display:none"></div>
+				</div>
+			</div>
+
+			<div class="kn-dm-panel" id="kn-dm-panel-milestones">
+				<div class="kn-dm-hint" style="margin-bottom:10px">Milestones appear in the sidebar in date order. Some are derived from attendance data (first sign-in, count thresholds); the rest are custom entries you add below.</div>
+
+				<div class="kn-dm-field">
+					<label>Visible Milestone Types</label>
+					<div class="kn-dm-ms-toggles" id="kn-dm-ms-toggles">
+						<label class="kn-dm-ms-toggle"><input type="checkbox" data-knms-type="first_attendance" <?= $knMsVisible('first_attendance') ? 'checked' : '' ?> /> <i class="fas fa-door-open"></i> First Attendance</label>
+						<label class="kn-dm-ms-toggle"><input type="checkbox" data-knms-type="attendance_count" <?= $knMsVisible('attendance_count') ? 'checked' : '' ?> /> <i class="fas fa-clipboard-list"></i> Attendance Crossings</label>
+						<label class="kn-dm-ms-toggle"><input type="checkbox" data-knms-type="distinct_members" <?= $knMsVisible('distinct_members') ? 'checked' : '' ?> /> <i class="fas fa-users"></i> Member Crossings</label>
+						<label class="kn-dm-ms-toggle"><input type="checkbox" data-knms-type="custom" <?= $knMsVisible('custom') ? 'checked' : '' ?> /> <i class="fas fa-pen"></i> Custom Milestones</label>
+					</div>
+					<label class="kn-dm-ms-toggle" style="margin-top:4px">
+						<input type="checkbox" id="kn-dm-ms-newest-first" <?= $knMsNewestFirst ? 'checked' : '' ?> />
+						Show newest first
+					</label>
+				</div>
+
+				<div class="kn-dm-field">
+					<label>Custom Milestones</label>
+					<div class="kn-dm-ms-list" id="kn-dm-ms-list"></div>
+					<div class="kn-dm-ms-add">
+						<div>
+							<input type="text" id="kn-dm-ms-add-desc" placeholder="What happened?" maxlength="500" />
+						</div>
+						<div>
+							<input type="date" id="kn-dm-ms-add-date" />
+						</div>
+						<div>
+							<button type="button" class="kn-dm-btn kn-dm-btn-primary" id="kn-dm-ms-add-btn" style="width:100%"><i class="fas fa-plus"></i> Add</button>
+						</div>
+					</div>
+					<div class="kn-dm-ms-icons" id="kn-dm-ms-icons" style="margin-top:8px">
+						<?php $_knIcons = ['fa-star','fa-trophy','fa-flag','fa-chess-rook','fa-crown','fa-medal','fa-shield-alt','fa-fire','fa-bolt','fa-scroll','fa-campground','fa-map-marker-alt','fa-users','fa-dragon','fa-hammer','fa-heart']; ?>
+						<?php foreach ($_knIcons as $_ic): ?>
+						<div class="kn-dm-ms-icon-opt<?= $_ic === 'fa-star' ? ' kn-active' : '' ?>" data-icon="<?= htmlspecialchars($_ic) ?>"><i class="fas <?= htmlspecialchars($_ic) ?>"></i></div>
+						<?php endforeach; ?>
+					</div>
+					<div class="kn-dm-hint" id="kn-dm-ms-add-err" style="color:#c53030;display:none;margin-top:6px"></div>
+				</div>
+			</div>
+		</div>
+		<div class="kn-dm-footer">
+			<button class="kn-dm-btn" id="kn-dm-cancel">Cancel</button>
+			<button class="kn-dm-btn kn-dm-btn-primary" id="kn-dm-save"><i class="fas fa-save"></i> Save Changes</button>
+		</div>
+	</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script>
+(function() {
+	var KINGDOM_ID = <?= (int)$kingdom_id ?>;
+	var BASE_UIR = '<?= UIR ?>';
+	var KN_FONTS = [
+		{ key:'', label:'Default', family:'inherit' },
+		{ key:'Cinzel', label:'Cinzel', family:'Cinzel' },
+		{ key:'Cinzel Decorative', label:'Cinzel Deco', family:"'Cinzel Decorative'" },
+		{ key:'IM Fell English', label:'IM Fell English', family:"'IM Fell English'" },
+		{ key:'UnifrakturMaguntia', label:'Unifraktur', family:'UnifrakturMaguntia' },
+		{ key:'Metamorphous', label:'Metamorphous', family:'Metamorphous' },
+		{ key:'Uncial Antiqua', label:'Uncial Antiqua', family:"'Uncial Antiqua'" },
+		{ key:'Pirata One', label:'Pirata One', family:"'Pirata One'" },
+		{ key:'Almendra', label:'Almendra', family:'Almendra' },
+		{ key:'Pinyon Script', label:'Pinyon Script', family:"'Pinyon Script'" },
+		{ key:'Great Vibes', label:'Great Vibes', family:"'Great Vibes'" }
+	];
+	var KN_QUICKS = {
+		newbies: 'New players welcome! Every park in the kingdom keeps loaner gear on hand and our experienced fighters love teaching the ropes. Find a park near you on the Map tab.',
+		vibe:    "## The Vibe\n\nFamily-friendly, hard-hitting, and warm. Whether you swing a sword, paint a banner, or sing a song around the fire, there's a place for you here.",
+		findus:  "## Where We Play\n\nWe have parks across the kingdom — check the **Map** tab to find your nearest one. Visit a park day, an event, or both.",
+		founding:"## Founding\n\nThe kingdom was founded in **YYYY** by a group of players meeting at _location_. It was first chartered under _circumstances_.",
+		charter: "## Charter History\n\n- **YYYY** — Chartered as a Shire under Kingdom of _parent_\n- **YYYY** — Elevated to a Principality\n- **YYYY** — Elevated to a full Kingdom\n_(Edit dates and lines as appropriate)_",
+		pastmonarchs:"## Past Monarchs & Regents\n\n- **YYYY–YYYY** — _Persona_ (Monarch), _Persona_ (Regent)\n- **YYYY–YYYY** — _Persona_ (Monarch), _Persona_ (Regent)"
+	};
+	var INITIAL_CUSTOM_MS = <?php
+		$customOnly = array_values(array_filter($knAllMilestones, function($m){ return empty($m['IsDerived']); }));
+		echo json_encode(array_map(function($m){
+			return [
+				'MilestoneId'   => (int)$m['MilestoneId'],
+				'Icon'          => $m['Icon'],
+				'Description'   => $m['Description'],
+				'MilestoneDate' => $m['MilestoneDate'],
+			];
+		}, $customOnly));
+	?>;
+	var knSelectedFont = <?= json_encode($knNameFont) ?>;
+	var knSelectedIcon = 'fa-star';
+	var customMs = INITIAL_CUSTOM_MS.slice();
+
+	function gid(id) { return document.getElementById(id); }
+	function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]; }); }
+
+	window.knOpenDesignModal = function(panel) {
+		gid('kn-dm-overlay').classList.add('kn-open');
+		document.body.style.overflow = 'hidden';
+		if (panel) knSwitchDmPanel(panel);
+		renderCustomMsList();
+	};
+	function close() {
+		gid('kn-dm-overlay').classList.remove('kn-open');
+		document.body.style.overflow = '';
+	}
+	gid('kn-dm-close').addEventListener('click', close);
+	gid('kn-dm-cancel').addEventListener('click', close);
+	gid('kn-dm-overlay').addEventListener('click', function(e) {
+		if (e.target === this) close();
+	});
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && gid('kn-dm-overlay').classList.contains('kn-open')) close();
+	});
+
+	function knSwitchDmPanel(name) {
+		document.querySelectorAll('.kn-dm-tab').forEach(function(t) { t.classList.remove('kn-active'); });
+		document.querySelectorAll('.kn-dm-panel').forEach(function(p) { p.classList.remove('kn-active'); });
+		var tab = document.querySelector('.kn-dm-tab[data-kntab-dm="' + name + '"]');
+		var panel = gid('kn-dm-panel-' + name);
+		if (tab) tab.classList.add('kn-active');
+		if (panel) panel.classList.add('kn-active');
+	}
+	document.querySelectorAll('.kn-dm-tab').forEach(function(t) {
+		t.addEventListener('click', function() { knSwitchDmPanel(t.dataset.kntabDm); });
+	});
+
+	var swatches = document.querySelectorAll('.kn-dm-swatch');
+	swatches.forEach(function(sw) {
+		sw.addEventListener('click', function() {
+			swatches.forEach(function(s) { s.classList.remove('kn-selected'); });
+			sw.classList.add('kn-selected');
+			gid('kn-dm-color-primary').value     = sw.dataset.primary;
+			gid('kn-dm-color-primary-hex').value = sw.dataset.primary;
+			gid('kn-dm-color-accent').value      = sw.dataset.accent;
+			gid('kn-dm-color-accent-hex').value  = sw.dataset.accent;
+			if (sw.dataset.secondary) {
+				gid('kn-dm-color-secondary').value     = sw.dataset.secondary;
+				gid('kn-dm-color-secondary-hex').value = sw.dataset.secondary;
+				gid('kn-dm-gradient-enabled').checked  = true;
+			} else {
+				gid('kn-dm-color-secondary-hex').value = '';
+				gid('kn-dm-gradient-enabled').checked  = false;
+			}
+		});
+	});
+	function syncHex(colorId, hexId) {
+		gid(colorId).addEventListener('input', function() { gid(hexId).value = this.value; });
+		gid(hexId).addEventListener('input', function() {
+			if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid(colorId).value = this.value; }
+		});
+	}
+	syncHex('kn-dm-color-primary',   'kn-dm-color-primary-hex');
+	syncHex('kn-dm-color-accent',    'kn-dm-color-accent-hex');
+	syncHex('kn-dm-color-secondary', 'kn-dm-color-secondary-hex');
+
+	document.querySelectorAll('.kn-dm-overlay-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			document.querySelectorAll('.kn-dm-overlay-btn').forEach(function(b) { b.classList.remove('kn-active'); });
+			btn.classList.add('kn-active');
+			gid('kn-dm-hero-overlay').value = btn.dataset.overlay;
+		});
+	});
+
+	function knLoadFont(key) {
+		if (!key) return;
+		if (document.querySelector('link[data-kn-font="' + key + '"]')) return;
+		var link = document.createElement('link');
+		link.rel = 'stylesheet';
+		link.href = 'https://fonts.googleapis.com/css2?family=' + key.replace(/ /g, '+') + '&display=swap';
+		link.setAttribute('data-kn-font', key);
+		document.head.appendChild(link);
+	}
+	function knRenderFontPicker() {
+		var container = gid('kn-dm-font-picker');
+		var sample = <?= json_encode($kingdom_name) ?>;
+		var html = '';
+		for (var i = 0; i < KN_FONTS.length; i++) {
+			var f = KN_FONTS[i];
+			var active = f.key === knSelectedFont;
+			html += '<div class="kn-dm-font-card' + (active ? ' kn-active' : '') + '" data-font-key="' + esc(f.key) + '">'
+				 +    '<div class="kn-dm-font-sample" style="font-family:' + f.family + '">' + esc(sample) + '</div>'
+				 +    '<div class="kn-dm-font-label">' + esc(f.label) + '</div>'
+				 + '</div>';
+			knLoadFont(f.key);
+		}
+		container.innerHTML = html;
+		container.addEventListener('click', function(e) {
+			var card = e.target.closest('.kn-dm-font-card');
+			if (!card) return;
+			knSelectedFont = card.dataset.fontKey;
+			container.querySelectorAll('.kn-dm-font-card').forEach(function(c) {
+				c.classList.toggle('kn-active', c === card);
+			});
+		});
+	}
+	knRenderFontPicker();
+
+	function knBindCounter(taId, counterId, limit, formatted) {
+		var ta = gid(taId); var c = gid(counterId);
+		if (!ta || !c) return;
+		function upd() {
+			var n = (ta.value || '').length;
+			c.textContent = n + ' / ' + (formatted || limit);
+			c.classList.toggle('kn-over', n > limit);
+		}
+		ta.addEventListener('input', upd);
+		upd();
+	}
+	knBindCounter('kn-dm-tagline',       'kn-dm-tagline-counter',       160);
+	knBindCounter('kn-dm-announcement',  'kn-dm-announcement-counter',  280);
+	knBindCounter('kn-dm-reign-text',    'kn-dm-reign-counter',         2000, '2,000');
+	var _knAnClear = gid('kn-dm-announcement-clear');
+	if (_knAnClear) _knAnClear.addEventListener('click', function() { gid('kn-dm-announcement-until').value = ''; });
+
+	function knTaIdForField(field) {
+		if (field === 'about')   return 'kn-dm-about-text';
+		if (field === 'history') return 'kn-dm-history-text';
+		if (field === 'reign')   return 'kn-dm-reign-text';
+		return 'kn-dm-' + field + '-text';
+	}
+
+	document.querySelectorAll('[data-knmd-target]').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var field  = btn.dataset.knmdField;
+			var target = btn.dataset.knmdTarget;
+			var ta     = gid(knTaIdForField(field));
+			var pv     = gid('kn-dm-' + field + '-preview');
+			btn.parentElement.querySelectorAll('button').forEach(function(b) { b.classList.remove('kn-active'); });
+			btn.classList.add('kn-active');
+			if (target === 'preview') {
+				ta.style.display = 'none';
+				pv.style.display = '';
+				if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+					pv.innerHTML = DOMPurify.sanitize(marked.parse(ta.value || ''));
+				} else {
+					pv.textContent = ta.value;
+				}
+			} else {
+				ta.style.display = '';
+				pv.style.display = 'none';
+			}
+		});
+	});
+
+	document.querySelectorAll('[data-knquick]').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var key   = btn.dataset.knquick;
+			var field = btn.dataset.knfield;
+			var ta    = gid('kn-dm-' + (field === 'about' ? 'about-text' : 'history-text'));
+			if (!ta) return;
+			var writeBtn = document.querySelector('[data-knmd-field="' + field + '"][data-knmd-target="edit"]');
+			if (writeBtn && !writeBtn.classList.contains('kn-active')) writeBtn.click();
+			var snippet = KN_QUICKS[key] || '';
+			if (!snippet) return;
+			var existing = ta.value;
+			var sep = existing.length === 0 ? '' : (existing.endsWith('\n\n') ? '' : (existing.endsWith('\n') ? '\n' : '\n\n'));
+			ta.value = existing + sep + snippet;
+			ta.focus();
+			ta.setSelectionRange(ta.value.length, ta.value.length);
+		});
+	});
+
+	function renderCustomMsList() {
+		var list = gid('kn-dm-ms-list');
+		if (!list) return;
+		var newestFirst = gid('kn-dm-ms-newest-first').checked;
+		customMs.sort(function(a, b) {
+			var ad = a.MilestoneDate || '', bd = b.MilestoneDate || '';
+			return newestFirst ? bd.localeCompare(ad) : ad.localeCompare(bd);
+		});
+		if (customMs.length === 0) {
+			list.innerHTML = '<div style="padding:14px;font-size:12px;color:#a0aec0">No custom milestones yet.</div>';
+			return;
+		}
+		var html = '';
+		for (var i = 0; i < customMs.length; i++) {
+			var m = customMs[i];
+			var dateStr = m.MilestoneDate || '';
+			if (dateStr && dateStr !== '0000-00-00') {
+				var d = new Date(dateStr + 'T00:00:00');
+				if (!isNaN(d.getTime())) dateStr = d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+			}
+			var icon = (m.Icon || 'fa-star').replace(/[^a-z0-9-]/g, '');
+			html += '<div class="kn-dm-ms-row" data-ms-id="' + m.MilestoneId + '">'
+				 +    '<i class="fas ' + icon + '"></i>'
+				 +    '<span class="kn-dm-ms-desc">' + esc(m.Description) + '</span>'
+				 +    '<span class="kn-dm-ms-date">' + dateStr + '</span>'
+				 +    '<button type="button" data-tip="Delete" onclick="knDeleteKingdomMilestone(' + m.MilestoneId + ')"><i class="fas fa-trash"></i></button>'
+				 + '</div>';
+		}
+		list.innerHTML = html;
+	}
+	gid('kn-dm-ms-newest-first').addEventListener('change', renderCustomMsList);
+
+	var iconGrid = gid('kn-dm-ms-icons');
+	iconGrid.addEventListener('click', function(e) {
+		var opt = e.target.closest('.kn-dm-ms-icon-opt');
+		if (!opt) return;
+		iconGrid.querySelectorAll('.kn-dm-ms-icon-opt').forEach(function(o) { o.classList.remove('kn-active'); });
+		opt.classList.add('kn-active');
+		knSelectedIcon = opt.dataset.icon;
+	});
+
+	gid('kn-dm-ms-add-btn').addEventListener('click', function() {
+		var desc = gid('kn-dm-ms-add-desc').value.trim();
+		var date = gid('kn-dm-ms-add-date').value;
+		var err  = gid('kn-dm-ms-add-err');
+		err.style.display = 'none';
+		if (!desc) { err.textContent = 'Description is required.'; err.style.display = ''; return; }
+		if (!date) { err.textContent = 'Date is required.'; err.style.display = ''; return; }
+		var btn = this; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+		var fd = new FormData();
+		fd.append('Description', desc);
+		fd.append('MilestoneDate', date);
+		fd.append('Icon', knSelectedIcon);
+		fetch(BASE_UIR + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/addmilestone', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(result) {
+				if (result && result.status === 0) {
+					customMs.push({
+						MilestoneId: result.milestoneId,
+						Icon: knSelectedIcon,
+						Description: desc,
+						MilestoneDate: date
+					});
+					renderCustomMsList();
+					gid('kn-dm-ms-add-desc').value = '';
+					gid('kn-dm-ms-add-date').value = '';
+					iconGrid.querySelectorAll('.kn-dm-ms-icon-opt').forEach(function(o) { o.classList.remove('kn-active'); });
+					iconGrid.querySelector('[data-icon="fa-star"]').classList.add('kn-active');
+					knSelectedIcon = 'fa-star';
+				} else {
+					err.textContent = (result && result.error) || 'Failed to add milestone.';
+					err.style.display = '';
+				}
+			})
+			.catch(function() {
+				err.textContent = 'Request failed.';
+				err.style.display = '';
+			})
+			.finally(function() {
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-plus"></i> Add';
+			});
+	});
+
+	window.knDeleteKingdomMilestone = function(id) {
+		if (!confirm('Delete this milestone?')) return;
+		var fd = new FormData();
+		fd.append('MilestoneId', id);
+		fetch(BASE_UIR + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/deletemilestone', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(result) {
+				if (result && result.status === 0) {
+					customMs = customMs.filter(function(m) { return m.MilestoneId !== id; });
+					renderCustomMsList();
+				} else {
+					alert((result && result.error) || 'Failed to delete milestone.');
+				}
+			})
+			.catch(function() { alert('Request failed.'); });
+	};
+
+	gid('kn-dm-save').addEventListener('click', function() {
+		var btn = this; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+		var errEl = gid('kn-dm-error'); errEl.style.display = 'none';
+		var fd = new FormData();
+		fd.append('AboutText', gid('kn-dm-about-text').value);
+		fd.append('OurHistory', gid('kn-dm-history-text').value);
+		fd.append('ColorPrimary', gid('kn-dm-color-primary').value);
+		fd.append('ColorAccent', gid('kn-dm-color-accent').value);
+		fd.append('ColorSecondary', gid('kn-dm-gradient-enabled').checked ? gid('kn-dm-color-secondary').value : '');
+		fd.append('HeroOverlay', gid('kn-dm-hero-overlay').value);
+		fd.append('NameFont', knSelectedFont || '');
+		var msConfig = {};
+		document.querySelectorAll('#kn-dm-ms-toggles input[data-knms-type]').forEach(function(t) {
+			msConfig[t.dataset.knmsType] = t.checked ? 1 : 0;
+		});
+		msConfig['newest_first'] = gid('kn-dm-ms-newest-first').checked ? 1 : 0;
+		fd.append('MilestoneConfig', JSON.stringify(msConfig));
+
+		fd.append('Tagline', gid('kn-dm-tagline').value);
+		fd.append('Announcement', gid('kn-dm-announcement').value);
+		fd.append('AnnouncementUntil', gid('kn-dm-announcement-until').value);
+		fd.append('MonarchReignStarted', gid('kn-dm-monarch-reign').value);
+		fd.append('RegentReignStarted', gid('kn-dm-regent-reign').value);
+		fd.append('ReignLore', gid('kn-dm-reign-text').value);
+
+		var socialPayload = {};
+		document.querySelectorAll('[data-knsoc]').forEach(function(inp) {
+			var v = (inp.value || '').trim();
+			if (v) socialPayload[inp.dataset.knsoc] = v;
+		});
+		fd.append('SocialLinks', JSON.stringify(socialPayload));
+
+		fetch(BASE_UIR + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/savedesign', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(result) {
+				if (result && result.status === 0) {
+					window.location.reload();
+				} else {
+					errEl.textContent = (result && result.error) || 'Save failed.';
+					errEl.style.display = 'block';
+					btn.disabled = false;
+					btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+				}
+			})
+			.catch(function(e) {
+				errEl.textContent = 'Request failed: ' + e.message;
+				errEl.style.display = 'block';
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+			});
+	});
+
+	renderCustomMsList();
+})();
+</script>
 <?php endif; ?>

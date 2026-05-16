@@ -281,6 +281,26 @@ class Controller_Park extends Controller
 		$this->data['CanMergePlayers'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
 
+		// Custom + derived milestones, merged into one timeline-ready array.
+		$_custom  = $this->Park->get_park_milestones((int)$park_id);
+		$_derived = $this->Park->get_derived_park_milestones((int)$park_id);
+		$milestones = [];
+		foreach (($_custom['Milestones'] ?? []) as $m) {
+			$milestones[] = [
+				'MilestoneId'   => (int)$m['MilestoneId'],
+				'Type'          => 'custom',
+				'Icon'          => $m['Icon'],
+				'Description'   => $m['Description'],
+				'MilestoneDate' => $m['MilestoneDate'],
+				'IsDerived'     => false,
+			];
+		}
+		foreach (($_derived['Milestones'] ?? []) as $m) {
+			$milestones[] = $m + ['MilestoneId' => 0, 'IsDerived' => true];
+		}
+		usort($milestones, function($a, $b) { return strcmp($a['MilestoneDate'], $b['MilestoneDate']); });
+		$this->data['Milestones'] = $milestones;
+
 		$knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
 		$recsPublic = isset($knConfigs['AwardRecsPublic'])
 			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']

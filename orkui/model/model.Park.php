@@ -89,7 +89,27 @@ class Model_Park extends Model {
 	function get_park_parkdays($park_id) {
 		return $this->Park->GetParkDays(array('ParkId'=>$park_id));
 	}
-	
+
+	function set_park_design($request) {
+		return $this->Park->SetParkDesign($request);
+	}
+
+	function get_park_milestones($park_id) {
+		return $this->Park->GetParkMilestones(array('ParkId' => $park_id));
+	}
+
+	function get_derived_park_milestones($park_id) {
+		return $this->Park->GetDerivedParkMilestones(array('ParkId' => $park_id));
+	}
+
+	function add_park_milestone($request) {
+		return $this->Park->AddParkMilestone($request);
+	}
+
+	function delete_park_milestone($request) {
+		return $this->Park->DeleteParkMilestone($request);
+	}
+
 }
 
 

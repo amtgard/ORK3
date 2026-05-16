@@ -127,6 +127,26 @@ class Model_Kingdom extends Model {
 		return $this->Heraldry->RemoveKingdomHeraldry($request);
 	}
 
+	function set_kingdom_design($request) {
+		return $this->Kingdom->SetKingdomDesign($request);
+	}
+
+	function get_kingdom_milestones($kingdom_id) {
+		return $this->Kingdom->GetKingdomMilestones(array('KingdomId' => $kingdom_id));
+	}
+
+	function get_derived_kingdom_milestones($kingdom_id) {
+		return $this->Kingdom->GetDerivedKingdomMilestones(array('KingdomId' => $kingdom_id));
+	}
+
+	function add_kingdom_milestone($request) {
+		return $this->Kingdom->AddKingdomMilestone($request);
+	}
+
+	function delete_kingdom_milestone($request) {
+		return $this->Kingdom->DeleteKingdomMilestone($request);
+	}
+
 }
 
 ?>

@@ -639,6 +639,26 @@ class Controller_Kingdom extends Controller {
 		$this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
 		$this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
 		$this->data['IcsUrl'] = UIR . 'Kingdom/ics/' . $kingdom_id;
+
+		// Custom + derived milestones, merged into one timeline-ready array.
+		$_custom  = $this->Kingdom->get_kingdom_milestones((int)$kingdom_id);
+		$_derived = $this->Kingdom->get_derived_kingdom_milestones((int)$kingdom_id);
+		$milestones = [];
+		foreach (($_custom['Milestones'] ?? []) as $m) {
+			$milestones[] = [
+				'MilestoneId'   => (int)$m['MilestoneId'],
+				'Type'          => 'custom',
+				'Icon'          => $m['Icon'],
+				'Description'   => $m['Description'],
+				'MilestoneDate' => $m['MilestoneDate'],
+				'IsDerived'     => false,
+			];
+		}
+		foreach (($_derived['Milestones'] ?? []) as $m) {
+			$milestones[] = $m + ['MilestoneId' => 0, 'IsDerived' => true];
+		}
+		usort($milestones, function($a, $b) { return strcmp($a['MilestoneDate'], $b['MilestoneDate']); });
+		$this->data['Milestones'] = $milestones;
 	}
 
 	// ------------------------------------------------------------------ ICS helpers

@@ -497,6 +497,34 @@ class Park extends Ork3
 			$response[ 'Description' ] = stripslashes( nl2br( $this->park->description ) );
 			$response[ 'GoogleGeocode' ] = $this->park->google_geocode;
 			$response[ 'Location' ] = $this->park->location;
+			// --- Park design (1:1 supplemental, always-present row) ---
+			$this->db->Clear();
+			$design = new yapo( $this->db, DB_PREFIX . 'park_design' );
+			$design->clear();
+			$design->park_id = $this->park->park_id;
+			if ( !$design->find() ) {
+				// Defensive: seed missing row (migration backfills, but new parks pre-seed code may not yet exist on a fresh prod DB)
+				$design->clear();
+				$design->park_id     = $this->park->park_id;
+				$design->hero_overlay = 'med';
+				$design->save();
+				$design->clear();
+				$this->db->Clear();
+				$design->park_id = $this->park->park_id;
+				$design->find();
+			}
+			$response[ 'AboutText' ]       = (string)$design->about_text;
+			$response[ 'OurHistory' ]      = (string)$design->our_history;
+			$response[ 'ColorPrimary' ]    = $design->color_primary;
+			$response[ 'ColorAccent' ]     = $design->color_accent;
+			$response[ 'ColorSecondary' ]  = $design->color_secondary;
+			$response[ 'HeroOverlay' ]     = $design->hero_overlay ?: 'med';
+			$response[ 'NameFont' ]          = $design->name_font;
+			$response[ 'MilestoneConfig' ]   = $design->milestone_config;
+			$response[ 'Tagline' ]           = (string)$design->tagline;
+			$response[ 'SocialLinks' ]       = (string)$design->social_links;
+			$response[ 'Announcement' ]      = (string)$design->announcement;
+			$response[ 'AnnouncementUntil' ] = $design->announcement_until;
 		} else {
 			$response[ 'Status' ] = InvalidParameter();
 		}
@@ -744,6 +772,13 @@ class Park extends Ork3
 			$this->park->directions     = '';
 			$this->park->save();
 			$new_park_id = (int)$this->park->park_id;
+			// Always-present design row so reads don't need PHP-side defaults.
+			$this->db->Clear();
+			$_design_seed = new yapo( $this->db, DB_PREFIX . 'park_design' );
+			$_design_seed->clear();
+			$_design_seed->park_id      = $new_park_id;
+			$_design_seed->hero_overlay = 'med';
+			$_design_seed->save();
 			$t = new Treasury();
 			$t->create_accounts( $mundane_id, 'park', $new_park_id, $request[ 'KingdomId' ] );
 			$c = new Common();
@@ -894,6 +929,16 @@ class Park extends Ork3
 					if ( $_changed ) {
 						Ork3::$Lib->dangeraudit->audit( __CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$this->park->park_id, $_audit_prior, $_audit_post );
 					}
+					if ( isset( $request[ 'Description' ] ) && trim( (string)$request[ 'Description' ] ) !== '' ) {
+						$this->db->Clear();
+						$_design_sync = new yapo( $this->db, DB_PREFIX . 'park_design' );
+						$_design_sync->clear();
+						$_design_sync->park_id = (int)$this->park->park_id;
+						if ( $_design_sync->find() && trim( (string)$_design_sync->about_text ) !== '' ) {
+							$_design_sync->about_text = (string)$request[ 'Description' ];
+							$_design_sync->save();
+						}
+					}
 					$response = Success( $this->park->park_id );
 				} else {
 					$response = InvalidParameter( 'ParkId could not be found.' );
@@ -1023,5 +1068,304 @@ class Park extends Ork3
 			$response = InvalidParameter( NULL, 'Problem processing request.' );
 		}
 		return $response;
+	}
+
+	/**
+	 * Save park profile design (header colors/font/overlay, about + our history markdown,
+	 * milestone visibility config). Uses the same AUTH_PARK/AUTH_EDIT gate as SetParkDetails.
+	 * Updates only the fields present in $request — callers can save one tab at a time.
+	 */
+	public function SetParkDesign( $request )
+	{
+		$park_id = (int)( $request[ 'ParkId' ] ?? 0 );
+		if ( $park_id <= 0 ) return InvalidParameter( 'ParkId is required.' );
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] );
+		if ( !( $mundane_id > 0 ) || !Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT ) ) {
+			return NoAuthorization();
+		}
+		require_once( __DIR__ . '/class.ProfanityFilter.php' );
+		$pf = new ProfanityFilter();
+		foreach ( [ 'AboutText' => 'AboutText', 'OurHistory' => 'OurHistory', 'Tagline' => 'Tagline', 'Announcement' => 'Announcement' ] as $field => $label ) {
+			if ( isset( $request[ $field ] ) && trim( (string)$request[ $field ] ) !== '' ) {
+				if ( $pf->containsProfanity( (string)$request[ $field ] ) ) {
+					return InvalidParameter( $label, ProfanityFilter::ERROR_MESSAGE );
+				}
+			}
+		}
+		$this->db->Clear();
+		$design = new yapo( $this->db, DB_PREFIX . 'park_design' );
+		$design->clear();
+		$design->park_id = $park_id;
+		if ( !$design->find() ) {
+			$design->clear();
+			$design->park_id      = $park_id;
+			$design->hero_overlay = 'med';
+			$design->save();
+			$design->clear();
+			$this->db->Clear();
+			$design->park_id = $park_id;
+			$design->find();
+		}
+		$ABOUT_LIMIT = 10000;
+		foreach ( [ 'AboutText' => 'about_text', 'OurHistory' => 'our_history' ] as $req => $col ) {
+			if ( isset( $request[ $req ] ) ) {
+				$v = (string)$request[ $req ];
+				if ( strlen( $v ) > $ABOUT_LIMIT ) {
+					return InvalidParameter( $req . ' is limited to ' . number_format( $ABOUT_LIMIT ) . ' characters.' );
+				}
+				$design->$col = $v;
+			}
+		}
+		$hexCols = [ 'ColorPrimary' => 'color_primary', 'ColorAccent' => 'color_accent', 'ColorSecondary' => 'color_secondary' ];
+		foreach ( $hexCols as $req => $col ) {
+			if ( !array_key_exists( $req, $request ) ) continue;
+			$v = trim( (string)$request[ $req ] );
+			if ( $v === '' ) { $design->$col = null; continue; }
+			if ( !preg_match( '/^#[0-9a-fA-F]{6}$/', $v ) ) {
+				return InvalidParameter( $req . ' must be a 6-digit hex color (e.g. #2c5282).' );
+			}
+			$design->$col = strtolower( $v );
+		}
+		if ( array_key_exists( 'HeroOverlay', $request ) ) {
+			$ho = strtolower( trim( (string)$request[ 'HeroOverlay' ] ) );
+			if ( !in_array( $ho, [ 'low', 'med', 'high', 'vignette' ], true ) ) $ho = 'med';
+			$design->hero_overlay = $ho;
+		}
+		if ( array_key_exists( 'NameFont', $request ) ) {
+			$nf = trim( (string)$request[ 'NameFont' ] );
+			if ( $nf !== '' && !preg_match( '/^[A-Za-z0-9 ]{1,100}$/', $nf ) ) {
+				return InvalidParameter( 'Font name contains unexpected characters.' );
+			}
+			$design->name_font = $nf === '' ? null : $nf;
+		}
+		if ( array_key_exists( 'MilestoneConfig', $request ) ) {
+			$mc = (string)$request[ 'MilestoneConfig' ];
+			if ( $mc !== '' ) {
+				$decoded = json_decode( $mc, true );
+				if ( !is_array( $decoded ) ) {
+					return InvalidParameter( 'Milestone config must be valid JSON.' );
+				}
+			}
+			$design->milestone_config = $mc === '' ? null : $mc;
+		}
+		if ( array_key_exists( 'Tagline', $request ) ) {
+			$tg = trim( (string)$request[ 'Tagline' ] );
+			if ( strlen( $tg ) > 160 ) {
+				return InvalidParameter( 'Tagline is limited to 160 characters.' );
+			}
+			$design->tagline = $tg === '' ? null : $tg;
+		}
+		if ( array_key_exists( 'SocialLinks', $request ) ) {
+			$sl = trim( (string)$request[ 'SocialLinks' ] );
+			if ( $sl === '' ) {
+				$design->social_links = null;
+			} else {
+				$decoded = json_decode( $sl, true );
+				if ( !is_array( $decoded ) ) {
+					return InvalidParameter( 'Social links must be valid JSON.' );
+				}
+				$clean = [ ];
+				foreach ( $decoded as $platform => $url ) {
+					$url = trim( (string)$url );
+					if ( $url === '' ) continue;
+					if ( preg_match( '#^http://#i', $url ) ) {
+						$url = 'https://' . substr( $url, 7 );
+					} elseif ( !preg_match( '#^https://#i', $url ) ) {
+						$url = 'https://' . ltrim( $url, '/' );
+					}
+					if ( strlen( $url ) > 500 ) {
+						return InvalidParameter( 'Social link for ' . $platform . ' must be 500 characters or fewer.' );
+					}
+					$clean[ (string)$platform ] = $url;
+				}
+				$design->social_links = empty( $clean ) ? null : json_encode( $clean );
+			}
+		}
+		if ( array_key_exists( 'Announcement', $request ) ) {
+			$an = trim( (string)$request[ 'Announcement' ] );
+			if ( strlen( $an ) > 280 ) {
+				return InvalidParameter( 'Announcement is limited to 280 characters.' );
+			}
+			$design->announcement = $an === '' ? null : $an;
+		}
+		if ( array_key_exists( 'AnnouncementUntil', $request ) ) {
+			$au = trim( (string)$request[ 'AnnouncementUntil' ] );
+			if ( $au === '' ) {
+				$design->announcement_until = null;
+			} else {
+				$ts = strtotime( $au );
+				if ( $ts === false ) {
+					return InvalidParameter( 'Announcement "Show until" must be a valid date.' );
+				}
+				$design->announcement_until = date( 'Y-m-d', $ts );
+			}
+		}
+		$design->save();
+		return Success( $park_id );
+	}
+
+	/**
+	 * Custom (officer-authored) park milestones. Stored rows; mirrors GetCustomMilestones on Player.
+	 */
+	public function GetParkMilestones( $request )
+	{
+		$park_id = (int)( $request[ 'ParkId' ] ?? 0 );
+		if ( $park_id <= 0 ) return InvalidParameter( 'ParkId is required.' );
+		$this->db->Clear();
+		$ms = new yapo( $this->db, DB_PREFIX . 'park_milestones' );
+		$ms->clear();
+		$ms->park_id = $park_id;
+		$rows = [ ];
+		if ( $ms->find() ) {
+			do {
+				$rows[] = [
+					'MilestoneId'   => (int)$ms->milestone_id,
+					'ParkId'        => (int)$ms->park_id,
+					'Icon'          => $ms->icon,
+					'Description'   => $ms->description,
+					'MilestoneDate' => $ms->milestone_date,
+				];
+			} while ( $ms->next() );
+		}
+		return [ 'Status' => Success(), 'Milestones' => $rows ];
+	}
+
+	public function AddParkMilestone( $request )
+	{
+		$park_id = (int)( $request[ 'ParkId' ] ?? 0 );
+		if ( $park_id <= 0 ) return InvalidParameter( 'ParkId is required.' );
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] );
+		if ( !( $mundane_id > 0 ) || !Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT ) ) {
+			return NoAuthorization();
+		}
+		require_once( __DIR__ . '/class.ProfanityFilter.php' );
+		$pf = new ProfanityFilter();
+		$desc = trim( (string)( $request[ 'Description' ] ?? '' ) );
+		if ( $desc === '' ) return InvalidParameter( 'Description is required.' );
+		if ( strlen( $desc ) > 500 ) $desc = substr( $desc, 0, 500 );
+		if ( $pf->containsProfanity( $desc ) ) {
+			return InvalidParameter( 'Description', ProfanityFilter::ERROR_MESSAGE );
+		}
+		$dateRaw = trim( (string)( $request[ 'MilestoneDate' ] ?? '' ) );
+		if ( $dateRaw === '' ) return InvalidParameter( 'Date is required.' );
+		$ts = strtotime( $dateRaw );
+		if ( $ts === false ) return InvalidParameter( 'Invalid date.' );
+		$icon = trim( (string)( $request[ 'Icon' ] ?? 'fa-star' ) );
+		if ( !preg_match( '/^fa-[a-z0-9-]+$/', $icon ) ) $icon = 'fa-star';
+		$this->db->Clear();
+		$ms = new yapo( $this->db, DB_PREFIX . 'park_milestones' );
+		$ms->clear();
+		$ms->park_id        = $park_id;
+		$ms->icon           = $icon;
+		$ms->description    = $desc;
+		$ms->milestone_date = date( 'Y-m-d', $ts );
+		$ms->save();
+		return Success( (int)$ms->milestone_id );
+	}
+
+	public function DeleteParkMilestone( $request )
+	{
+		$park_id      = (int)( $request[ 'ParkId' ]      ?? 0 );
+		$milestone_id = (int)( $request[ 'MilestoneId' ] ?? 0 );
+		if ( $park_id <= 0 || $milestone_id <= 0 ) return InvalidParameter( 'ParkId and MilestoneId required.' );
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] );
+		if ( !( $mundane_id > 0 ) || !Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT ) ) {
+			return NoAuthorization();
+		}
+		$this->db->Clear();
+		$ms = new yapo( $this->db, DB_PREFIX . 'park_milestones' );
+		$ms->clear();
+		$ms->milestone_id = $milestone_id;
+		$ms->park_id      = $park_id;
+		if ( !$ms->find() ) return InvalidParameter( 'Milestone not found.' );
+		$ms->delete();
+		return Success();
+	}
+
+	/**
+	 * Derived milestones — computed from attendance data, not stored. These
+	 * are appended into the same timeline as custom milestones. Each derived
+	 * entry has a stable `Type` so visibility toggles in milestone_config can
+	 * include/exclude entire categories.
+	 */
+	public function GetDerivedParkMilestones( $request )
+	{
+		$park_id = (int)( is_array( $request ) ? ( $request[ 'ParkId' ] ?? 0 ) : $request );
+		if ( $park_id <= 0 ) return [ 'Status' => InvalidParameter( 'ParkId is required.' ), 'Milestones' => [ ] ];
+		$key = Ork3::$Lib->ghettocache->key( [ 'ParkId' => $park_id ] );
+		if ( ( $cache = Ork3::$Lib->ghettocache->get( __CLASS__ . '.' . __FUNCTION__, $key, 300 ) ) !== false )
+			return $cache;
+		$out = [ ];
+		// 1) First recorded attendance at this park (floor at 1988 to filter junk dates).
+		$this->db->Clear();
+		$r = $this->db->query( "SELECT MIN(date) AS first_date FROM " . DB_PREFIX . "attendance WHERE park_id = $park_id AND date >= '1988-01-01'" );
+		if ( $r !== false && $r->size() > 0 ) {
+			$r->next();
+			$fd = $r->first_date;
+			if ( $fd && $fd !== '0000-00-00' ) {
+				$out[] = [
+					'Type'          => 'first_attendance',
+					'Icon'          => 'fa-door-open',
+					'Description'   => 'First recorded attendance at the park',
+					'MilestoneDate' => $fd,
+					'IsDerived'     => true,
+				];
+			}
+		}
+		// 2) Attendance count crossings — 1000, 5000, 10000, 25000, 50000, 100000.
+		$this->db->Clear();
+		$r = $this->db->query( "SELECT COUNT(*) AS total FROM " . DB_PREFIX . "attendance WHERE park_id = $park_id" );
+		$total = 0;
+		if ( $r !== false && $r->size() > 0 ) { $r->next(); $total = (int)$r->total; }
+		$thresholds = [ 1000, 5000, 10000, 25000, 50000, 100000 ];
+		foreach ( $thresholds as $n ) {
+			if ( $total < $n ) break;
+			// Date of the Nth recorded attendance (chronological order).
+			$this->db->Clear();
+			$offset = $n - 1;
+			$rr = $this->db->query( "SELECT date FROM " . DB_PREFIX . "attendance WHERE park_id = $park_id AND date >= '1988-01-01' ORDER BY date ASC LIMIT 1 OFFSET $offset" );
+			if ( $rr !== false && $rr->size() > 0 ) {
+				$rr->next();
+				$d = $rr->date;
+				if ( $d && $d !== '0000-00-00' ) {
+					$out[] = [
+						'Type'          => 'attendance_count',
+						'Icon'          => 'fa-clipboard-list',
+						'Description'   => number_format( $n ) . 'th attendance recorded',
+						'MilestoneDate' => $d,
+						'IsDerived'     => true,
+					];
+				}
+			}
+		}
+		// 3) Distinct-member crossings — 50, 100, 250, 500, 1000.
+		$this->db->Clear();
+		$r = $this->db->query( "SELECT COUNT(DISTINCT mundane_id) AS members FROM " . DB_PREFIX . "attendance WHERE park_id = $park_id" );
+		$members = 0;
+		if ( $r !== false && $r->size() > 0 ) { $r->next(); $members = (int)$r->members; }
+		$memberThresholds = [ 50, 100, 250, 500, 1000 ];
+		foreach ( $memberThresholds as $n ) {
+			if ( $members < $n ) break;
+			// Date the Nth distinct member first showed up — earliest 'first attendance' across all members,
+			// then take the Nth one in chronological order of first-attendance.
+			$this->db->Clear();
+			$offset = $n - 1;
+			$rr = $this->db->query( "SELECT MIN(date) AS first_date FROM " . DB_PREFIX . "attendance WHERE park_id = $park_id AND date >= '1988-01-01' GROUP BY mundane_id ORDER BY first_date ASC LIMIT 1 OFFSET $offset" );
+			if ( $rr !== false && $rr->size() > 0 ) {
+				$rr->next();
+				$d = $rr->first_date;
+				if ( $d && $d !== '0000-00-00' ) {
+					$out[] = [
+						'Type'          => 'distinct_members',
+						'Icon'          => 'fa-users',
+						'Description'   => number_format( $n ) . 'th distinct member attended',
+						'MilestoneDate' => $d,
+						'IsDerived'     => true,
+					];
+				}
+			}
+		}
+		$response = [ 'Status' => Success(), 'Milestones' => $out ];
+		return Ork3::$Lib->ghettocache->cache( __CLASS__ . '.' . __FUNCTION__, $key, $response );
 	}
 }
