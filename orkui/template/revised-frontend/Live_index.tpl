@@ -4,11 +4,17 @@
 
 <style>
 /* ============ Live attendance ============ */
+/* Break out of #theme_container's 95% / 1600px / padding constraints — this
+   dashboard wants the full viewport so the 360px sidebar never gets pushed
+   off the right edge on mid-width windows. */
+#theme_container { width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
 .lv-layout {
 	display: grid;
 	grid-template-columns: 1fr 360px;
 	grid-template-rows: auto 1fr auto;
 	height: 100vh; /* JS overrides at runtime to (innerHeight - layout.top) so it never spills below */
+	width: 100%;
+	box-sizing: border-box;
 	background: var(--ork-bg);
 	color: var(--ork-text);
 	overflow: hidden;
