@@ -280,15 +280,28 @@
 		tileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
 	}
 
-	// Fit the layout exactly between the top nav and the viewport bottom —
-	// avoids guessing nav height and prevents the legend slipping below.
+	// Fit the layout exactly between the top nav and the site footer so the
+	// legal/trademark line is always visible without scrolling. The footer is
+	// rendered after this script in the document, so look it up lazily and
+	// re-run on DOMContentLoaded once it exists.
 	const layoutEl = document.querySelector('.lv-layout');
 	function fitLayout() {
 		const top = layoutEl.getBoundingClientRect().top + window.scrollY;
-		layoutEl.style.height = (window.innerHeight - top) + 'px';
+		const footerEl = document.querySelector('footer');
+		let footerArea = 0;
+		if (footerEl) {
+			const r  = footerEl.getBoundingClientRect();
+			const mt = parseInt(getComputedStyle(footerEl).marginTop) || 0;
+			footerArea = r.height + mt;
+		}
+		layoutEl.style.height = (window.innerHeight - top - footerArea) + 'px';
 		if (map) setTimeout(() => map.invalidateSize(), 50);
 	}
 	fitLayout();
+	if (document.readyState !== 'complete') {
+		window.addEventListener('DOMContentLoaded', fitLayout);
+		window.addEventListener('load',             fitLayout);
+	}
 	window.addEventListener('resize', fitLayout);
 
 	whenReady(() => {
