@@ -385,25 +385,46 @@
 	}
 
 	// --- Recent poll w/ jitter-buffered ticker --------------------------
+	// First poll: render the backlog immediately (no animation) so the user
+	// arrives at a populated ticker, not an empty one that floods over 10s.
+	// Subsequent polls: only the genuinely new signins flow through the
+	// jitter buffer, paced over RECENT_POLL_MS so the feed feels alive.
 	let pendingSignins = [];
 	let drainTimer = null;
+	let firstRecentPoll = true;
 
 	async function pollRecent() {
 		try {
 			const r = await fetch(ORK_BASE + 'Live/recent', { credentials: 'same-origin' });
 			const d = await r.json();
 			if (d.status !== 0) return;
+			const signins = d.signins || [];
+			if (signins.length === 0) return;
+
+			if (firstRecentPoll) {
+				// Newest-first from server; render oldest-first so newest ends up on top
+				for (let i = signins.length - 1; i >= 0; i--) {
+					pushTicker(signins[i], { animate: false });
+				}
+				lastSigninTs = signins[0][0];
+				firstRecentPoll = false;
+				return;
+			}
+
 			const fresh = [];
-			for (let i = (d.signins || []).length - 1; i >= 0; i--) {
-				const s = d.signins[i];
-				if (s[0] > lastSigninTs) fresh.push(s);
+			for (let i = signins.length - 1; i >= 0; i--) {
+				if (signins[i][0] > lastSigninTs) fresh.push(signins[i]);
 			}
-			if (fresh.length > 0) {
-				lastSigninTs = d.signins[0][0];
-				// Append in chronological order (oldest first)
-				fresh.forEach(s => pendingSignins.push(s));
-				startDrain();
+			if (fresh.length === 0) return;
+			lastSigninTs = signins[0][0];
+
+			// At low arrival rates, just push them in; no point pacing 1-2 events.
+			if (fresh.length <= 2) {
+				fresh.forEach(s => pushTicker(s));
+				return;
 			}
+			fresh.forEach(s => pendingSignins.push(s));
+			startDrain();
 		} catch (e) {
 			console.error('Live/recent poll failed', e);
 		}
@@ -411,11 +432,10 @@
 
 	function startDrain() {
 		if (drainTimer) return;
-		// Spread out the buffered signins evenly across RECENT_POLL_MS
 		const tick = () => {
 			if (pendingSignins.length === 0) { drainTimer = null; return; }
 			const batch = pendingSignins.length;
-			const interval = Math.max(150, Math.floor((RECENT_POLL_MS - 1000) / Math.max(1, batch)));
+			const interval = Math.max(200, Math.floor((RECENT_POLL_MS - 1000) / Math.max(1, batch)));
 			const s = pendingSignins.shift();
 			pushTicker(s);
 			drainTimer = setTimeout(tick, interval);
@@ -423,7 +443,8 @@
 		tick();
 	}
 
-	function pushTicker(s) {
+	function pushTicker(s, opts) {
+		const animate = !opts || opts.animate !== false;
 		const [iso, pid, eid, cdid, isFirst] = s;
 		const isEvent = (pid === 0 && eid && eventsMeta[eid]);
 		const pname  = isEvent ? eventsMeta[eid].name : (parksMeta[pid] ? parksMeta[pid].name : ('Park #' + pid));
@@ -433,15 +454,17 @@
 			: `class="lv-t-park" data-pid="${pid}"`;
 		const target = `<span ${linkAttrs}>${pname}</span>`;
 		const row = document.createElement('div');
-		row.className = 'lv-t-row enter' + (isFirst ? ' first-ever' : '');
+		row.className = 'lv-t-row' + (animate ? ' enter' : '') + (isFirst ? ' first-ever' : '');
 		const timeStr = fmtClockShort(iso);
 		if (isFirst) {
 			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg"><span class="lv-t-celebrate">🎉 First sign-in ever at ${icon} ${target}!</span></span>`;
-			const toast = document.createElement('div');
-			toast.className = 'lv-toast';
-			toast.textContent = `🎉 First sign-in ever at ${pname}!`;
-			toasts.appendChild(toast);
-			setTimeout(() => toast.remove(), 4000);
+			if (animate) {
+				const toast = document.createElement('div');
+				toast.className = 'lv-toast';
+				toast.textContent = `🎉 First sign-in ever at ${pname}!`;
+				toasts.appendChild(toast);
+				setTimeout(() => toast.remove(), 4000);
+			}
 		} else {
 			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${icon} ${target}</span>`;
 		}
