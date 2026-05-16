@@ -636,6 +636,11 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 				<i class="fas fa-user"></i> Search Players
 			</a>
 <?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Live">
+				<i class="fas fa-broadcast-tower"></i> Live Attendance
+			</a>
+<?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
 			<a class="hm-find-item" href="<?= UIR ?>Unit/unitlist">
 				<i class="fas fa-users"></i> Companies &amp; Households
 			</a>
