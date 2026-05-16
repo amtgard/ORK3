@@ -287,7 +287,7 @@ class Live extends Ork3 {
 			$is_first = isset($first_ever[$s['mundane_id']]) && $first_ever[$s['mundane_id']] === $s['entered_at'] ? 1 : 0;
 			// Compact tuple, mundane_id omitted on the wire (private)
 			$out[] = array(
-				str_replace(' ', 'T', $s['entered_at']),
+				gmdate('Y-m-d\TH:i:s\Z', strtotime($s['entered_at'])),
 				$s['park_id'],
 				$s['event_id'],
 				$s['cdid'],
