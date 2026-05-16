@@ -230,6 +230,29 @@
 		return (8 + Math.log2(n + 1) * 4.5) * zoomScale;
 	}
 
+	// Walks ticker rows that fell back to "Park #N" / generic event labels
+	// (because they rendered before metadata arrived) and rewrites them.
+	function relabelUnresolvedTicker() {
+		const rows = ticker.querySelectorAll('.lv-t-row .lv-t-park');
+		rows.forEach(span => {
+			const pid = span.dataset.pid;
+			const eid = span.dataset.eid;
+			let realName = null, realIcon = null;
+			if (pid && parksMeta[pid]) {
+				realName = parksMeta[pid].name;
+				realIcon = TIER_ICON[parksMeta[pid].title] || '📍';
+			} else if (eid && eventsMeta[eid]) {
+				realName = eventsMeta[eid].name;
+				realIcon = '📅';
+			}
+			if (!realName || span.textContent === realName) return;
+			span.textContent = realName;
+			const row = span.closest('.lv-t-row');
+			const iconEl = row && row.querySelector('.lv-t-icon');
+			if (iconEl) iconEl.textContent = realIcon;
+		});
+	}
+
 	function fmtClockShort(iso) {
 		const d = new Date(iso);
 		return isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined, { hour12: false, hour: '2-digit', minute: '2-digit' });
@@ -271,8 +294,9 @@
 		// Swap tiles when user toggles the theme via the nav button
 		new MutationObserver(applyMapTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-		pollStats();
-		pollRecent();
+		// Sequence first poll: stats first so parksMeta/eventsMeta is populated
+		// BEFORE we render the recent backlog (otherwise rows show as "Park #N").
+		pollStats().then(() => pollRecent());
 		setInterval(pollStats, STATS_POLL_MS);
 		setInterval(pollRecent, RECENT_POLL_MS);
 	});
@@ -291,6 +315,7 @@
 			signinCountEl.textContent = Object.values(parksMeta).reduce((s, p) => s + (p.day || 0), 0) +
 			                            Object.values(eventsMeta).reduce((s, e) => s + (e.day || 0), 0);
 			refreshFocusedStats();
+			relabelUnresolvedTicker();
 		} catch (e) {
 			console.error('Live/stats poll failed', e);
 		}
@@ -452,12 +477,13 @@
 		const linkAttrs = isEvent
 			? `class="lv-t-park" data-eid="${eid}" data-cdid="${cdid || ''}"`
 			: `class="lv-t-park" data-pid="${pid}"`;
+		const iconSpan = `<span class="lv-t-icon">${icon}</span>`;
 		const target = `<span ${linkAttrs}>${pname}</span>`;
 		const row = document.createElement('div');
 		row.className = 'lv-t-row' + (animate ? ' enter' : '') + (isFirst ? ' first-ever' : '');
 		const timeStr = fmtClockShort(iso);
 		if (isFirst) {
-			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg"><span class="lv-t-celebrate">🎉 First sign-in ever at ${icon} ${target}!</span></span>`;
+			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg"><span class="lv-t-celebrate">🎉 First sign-in ever at ${iconSpan} ${target}!</span></span>`;
 			if (animate) {
 				const toast = document.createElement('div');
 				toast.className = 'lv-toast';
@@ -466,7 +492,7 @@
 				setTimeout(() => toast.remove(), 4000);
 			}
 		} else {
-			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${icon} ${target}</span>`;
+			row.innerHTML = `<span class="lv-t-time">${timeStr}</span><span class="lv-t-msg">${iconSpan} ${target}</span>`;
 		}
 		ticker.insertBefore(row, ticker.firstChild);
 		while (ticker.childNodes.length > 80) ticker.removeChild(ticker.lastChild);
