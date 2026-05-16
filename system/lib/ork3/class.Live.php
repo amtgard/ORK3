@@ -182,8 +182,14 @@ class Live extends Ork3 {
 	 * Returns:
 	 *   {
 	 *     now:      'YYYY-MM-DD HH:MM:SS',
-	 *     signins:  [ [ iso_time, park_id, event_id, calendar_detail_id, is_first_ever ], ... ]   // newest-first
+	 *     signins:  [ [ iso_time, park_id, event_id, calendar_detail_id, is_first_ever ], ... ],
+	 *     parks:    { <park_id>:  { name, title } },     // for any park appearing in signins
+	 *     events:   { <event_id>: { name } }              // for any event appearing in signins
 	 *   }
+	 *
+	 * Parks/events maps included so the ticker can resolve names immediately
+	 * even when /Live/stats (30s cache) hasn't refreshed to include a newly-
+	 * active park yet.
 	 */
 	public function recent() {
 		$key = Ork3::$Lib->ghettocache->key(array('recent'));
@@ -204,6 +210,8 @@ class Live extends Ork3 {
 
 		$signins = array();
 		$mundane_ids = array();
+		$park_ids    = array();
+		$event_ids   = array();
 		if ($rs && $rs->Size() > 0) {
 			while ($rs->Next()) {
 				$signins[] = array(
@@ -214,6 +222,8 @@ class Live extends Ork3 {
 					'mundane_id' => (int)$rs->mundane_id,
 				);
 				$mundane_ids[(int)$rs->mundane_id] = 1;
+				if ((int)$rs->park_id > 0)  $park_ids[(int)$rs->park_id]   = 1;
+				if ((int)$rs->event_id > 0) $event_ids[(int)$rs->event_id] = 1;
 			}
 		}
 
@@ -235,6 +245,37 @@ class Live extends Ork3 {
 			}
 		}
 
+		// Minimal park/event metadata so the ticker can resolve names even when
+		// /Live/stats hasn't refreshed yet to include a newly-active park.
+		$parks_dict  = array();
+		$events_dict = array();
+		if (!empty($park_ids)) {
+			$ids_sql = implode(',', array_keys($park_ids));
+			$rs = $this->db->DataSet("
+				SELECT p.park_id, p.name, pt.title
+				FROM " . DB_PREFIX . "park p
+				LEFT JOIN " . DB_PREFIX . "parktitle pt ON pt.parktitle_id = p.parktitle_id
+				WHERE p.park_id IN ($ids_sql)");
+			if ($rs && $rs->Size() > 0) {
+				while ($rs->Next()) {
+					$parks_dict[(int)$rs->park_id] = array(
+						'name'  => $rs->name,
+						'title' => $rs->title,
+					);
+				}
+			}
+		}
+		if (!empty($event_ids)) {
+			$ids_sql = implode(',', array_keys($event_ids));
+			$rs = $this->db->DataSet("
+				SELECT event_id, name FROM " . DB_PREFIX . "event WHERE event_id IN ($ids_sql)");
+			if ($rs && $rs->Size() > 0) {
+				while ($rs->Next()) {
+					$events_dict[(int)$rs->event_id] = array('name' => $rs->name);
+				}
+			}
+		}
+
 		$out = array();
 		foreach ($signins as $s) {
 			$is_first = isset($first_ever[$s['mundane_id']]) && $first_ever[$s['mundane_id']] === $s['entered_at'] ? 1 : 0;
@@ -251,6 +292,8 @@ class Live extends Ork3 {
 		$response = array(
 			'now'     => $now,
 			'signins' => $out,
+			'parks'   => $parks_dict,
+			'events'  => $events_dict,
 		);
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.recent', $key, $response);
 	}

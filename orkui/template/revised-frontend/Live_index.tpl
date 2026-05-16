@@ -423,6 +423,11 @@
 			const r = await fetch(ORK_BASE + 'Live/recent', { credentials: 'same-origin' });
 			const d = await r.json();
 			if (d.status !== 0) return;
+			// Merge minimal park/event metadata from this response into our
+			// running cache. Lets us resolve names for newly-active parks
+			// before the next /Live/stats refresh.
+			if (d.parks)  for (const pid in d.parks)  if (!parksMeta[pid])  parksMeta[pid]  = d.parks[pid];
+			if (d.events) for (const eid in d.events) if (!eventsMeta[eid]) eventsMeta[eid] = d.events[eid];
 			const signins = d.signins || [];
 			if (signins.length === 0) return;
 
