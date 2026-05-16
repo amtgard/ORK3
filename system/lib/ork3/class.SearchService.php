@@ -358,8 +358,12 @@ class SearchService extends Ork3 {
 				break;
 			default:
 				$zztop = $searchtokens[0] . '*';
-				$s = "match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)
-				and (`username` like '%" . mysql_real_escape_string($search) . "%'
+				// MATCH-AGAINST is the fast path (fulltext index), but it tokenizes
+				// on underscores — so e.g. `lord_kismet_shenchu` is one token and
+				// `kis*` won't prefix-match it. OR with the LIKE clauses so
+				// substring hits succeed even when fulltext misses.
+				$s = "(match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)
+				or `username` like '%" . mysql_real_escape_string($search) . "%'
 				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%'
 				or " . $_rg_open . "`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%'" . $_rg_close . ")";
 			break;
