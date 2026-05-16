@@ -2216,22 +2216,21 @@ class Report  extends Ork3 {
 				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
 			FROM " . DB_PREFIX . "park p
 			LEFT JOIN (
-				-- New players: global first sign-in is in range.
-				SELECT fd.mundane_id, MIN(a2.park_id) AS first_park_id
-				FROM (
-					SELECT mundane_id, MIN(date) AS min_date
-					FROM " . DB_PREFIX . "attendance
-					WHERE mundane_id > 0
-					GROUP BY mundane_id
-				) fd
-				INNER JOIN " . DB_PREFIX . "attendance a2
-					ON a2.mundane_id = fd.mundane_id
-					AND a2.date = fd.min_date
-					AND a2.mundane_id > 0
-					AND a2.park_id > 0
-				WHERE fd.min_date >= '$start_date'
-				  AND fd.min_date <= '$end_date'
-				GROUP BY fd.mundane_id
+				-- New players: first sign-in is in range AND no earlier sign-in exists.
+				-- NOT EXISTS uses the mundane_id index on a_pre; avoids a full-table MIN() scan.
+				SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id
+				FROM " . DB_PREFIX . "attendance a_in
+				WHERE a_in.mundane_id > 0
+				  AND a_in.park_id > 0
+				  AND a_in.date >= '$start_date'
+				  AND a_in.date <= '$end_date'
+				  AND NOT EXISTS (
+				      SELECT 1 FROM " . DB_PREFIX . "attendance a_pre
+				      WHERE a_pre.mundane_id = a_in.mundane_id
+				        AND a_pre.date < '$start_date'
+				      LIMIT 1
+				  )
+				GROUP BY a_in.mundane_id
 			) np ON np.first_park_id = p.park_id
 			LEFT JOIN (
 				-- Count visits in range per new player (within kingdom/park scope).
@@ -2285,24 +2284,22 @@ class Report  extends Ork3 {
 					vc.visit_count AS visits_in_period,
 					ls.last_signin_date
 				FROM (
-					SELECT fd.mundane_id, fd.min_date AS first_signin_date, MIN(a2.park_id) AS first_park_id
-					FROM (
-						SELECT mundane_id, MIN(date) AS min_date
-						FROM " . DB_PREFIX . "attendance
-						WHERE mundane_id > 0
-						GROUP BY mundane_id
-					) fd
-					INNER JOIN " . DB_PREFIX . "attendance a2
-						ON a2.mundane_id = fd.mundane_id
-						AND a2.date = fd.min_date
-						AND a2.mundane_id > 0
-						AND a2.park_id > 0
-					INNER JOIN " . DB_PREFIX . "park fp ON fp.park_id = a2.park_id
+					SELECT a_in.mundane_id, MIN(a_in.date) AS first_signin_date, MIN(a_in.park_id) AS first_park_id
+					FROM " . DB_PREFIX . "attendance a_in
+					INNER JOIN " . DB_PREFIX . "park fp ON fp.park_id = a_in.park_id
 					LEFT JOIN " . DB_PREFIX . "kingdom pk ON pk.kingdom_id = fp.kingdom_id
-					WHERE fd.min_date >= '$start_date'
-					  AND fd.min_date <= '$end_date'
+					WHERE a_in.mundane_id > 0
+					  AND a_in.park_id > 0
+					  AND a_in.date >= '$start_date'
+					  AND a_in.date <= '$end_date'
+					  AND NOT EXISTS (
+					      SELECT 1 FROM " . DB_PREFIX . "attendance a_pre
+					      WHERE a_pre.mundane_id = a_in.mundane_id
+					        AND a_pre.date < '$start_date'
+					      LIMIT 1
+					  )
 					  $scope_where
-					GROUP BY fd.mundane_id, fd.min_date
+					GROUP BY a_in.mundane_id
 				) np
 				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = np.first_park_id
 				INNER JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = np.mundane_id
@@ -2319,6 +2316,7 @@ class Report  extends Ork3 {
 					SELECT mundane_id, MAX(date) AS last_signin_date
 					FROM " . DB_PREFIX . "attendance
 					WHERE mundane_id > 0
+					  AND date >= '$start_date'
 					GROUP BY mundane_id
 				) ls ON ls.mundane_id = np.mundane_id
 				ORDER BY p.name, m.persona";
@@ -2360,23 +2358,22 @@ class Report  extends Ork3 {
 				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
 			FROM " . DB_PREFIX . "kingdom k
 			LEFT JOIN (
-				-- New players: global first sign-in is in range, attributed to the kingdom of their first park.
-				SELECT fd.mundane_id, p.kingdom_id AS first_kingdom_id
-				FROM (
-					SELECT mundane_id, MIN(date) AS min_date
-					FROM " . DB_PREFIX . "attendance
-					WHERE mundane_id > 0
-					GROUP BY mundane_id
-				) fd
-				INNER JOIN " . DB_PREFIX . "attendance a2
-					ON a2.mundane_id = fd.mundane_id
-					AND a2.date = fd.min_date
-					AND a2.mundane_id > 0
-					AND a2.park_id > 0
-				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a2.park_id
-				WHERE fd.min_date >= '$start_date'
-				  AND fd.min_date <= '$end_date'
-				GROUP BY fd.mundane_id
+				-- New players: first sign-in is in range AND no earlier sign-in exists.
+				-- NOT EXISTS uses the mundane_id index on a_pre; avoids a full-table MIN() scan.
+				SELECT a_in.mundane_id, p.kingdom_id AS first_kingdom_id
+				FROM " . DB_PREFIX . "attendance a_in
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a_in.park_id
+				WHERE a_in.mundane_id > 0
+				  AND a_in.park_id > 0
+				  AND a_in.date >= '$start_date'
+				  AND a_in.date <= '$end_date'
+				  AND NOT EXISTS (
+				      SELECT 1 FROM " . DB_PREFIX . "attendance a_pre
+				      WHERE a_pre.mundane_id = a_in.mundane_id
+				        AND a_pre.date < '$start_date'
+				      LIMIT 1
+				  )
+				GROUP BY a_in.mundane_id
 			) np ON np.first_kingdom_id = k.kingdom_id
 			LEFT JOIN (
 				-- Count visits in range per new player per kingdom.
