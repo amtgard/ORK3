@@ -805,6 +805,9 @@ class Report  extends Ork3 {
 	}
 
 	public function UnitSummary($request) {
+		$cache_key = Ork3::$Lib->ghettocache->key($request);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false)
+			return $cache;
 		$has_mundane = valid_id($request['MundaneId']);
 		if ($has_mundane) $mid = (int)$request['MundaneId'];
 		if (valid_id($request['KingdomId'])) $kingdom = " and m.kingdom_id = '$request[KingdomId]'";
@@ -875,7 +878,7 @@ class Report  extends Ork3 {
 				);
 			}
 		}
-		return $response;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cache_key, $response);
 	}
 
 	public function AttendanceSummary($request) {
