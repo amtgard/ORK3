@@ -2803,6 +2803,9 @@ class Player extends Ork3 {
 	}
 
 	public function get_latest_attendance_date($mundane_id) {
+		$key = Ork3::$Lib->ghettocache->key(array((int)$mundane_id));
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
 		$sql = "select max(date) as latest_date from " . DB_PREFIX . "attendance where mundane_id = " . (int)$mundane_id;
 		$r = $this->db->query($sql);
 		if ($r === false || $r->size() == 0) {
@@ -2810,12 +2813,16 @@ class Player extends Ork3 {
 		}
 		$r->next();
 		$date = $r->latest_date;
-		return $date ? date('Y-m-d', strtotime($date)) : null;
+		$out = $date ? date('Y-m-d', strtotime($date)) : null;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
 	}
 
 	// Earliest valid attendance credit date — floors at 1988-01-01 (Amtgard's
 	// founding year) to filter out corrupt/zero dates from legacy imports.
 	public function get_earliest_attendance_date($mundane_id) {
+		$key = Ork3::$Lib->ghettocache->key(array((int)$mundane_id));
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
 		$sql = "select min(date) as earliest_date from " . DB_PREFIX . "attendance
 		        where mundane_id = " . (int)$mundane_id . "
 		          and date is not null
@@ -2826,7 +2833,8 @@ class Player extends Ork3 {
 		}
 		$r->next();
 		$date = $r->earliest_date;
-		return $date ? date('Y-m-d', strtotime($date)) : null;
+		$out = $date ? date('Y-m-d', strtotime($date)) : null;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
 	}
 
 	// Earliest valid attendance credit date at a specific park — used as a
@@ -2835,6 +2843,9 @@ class Player extends Ork3 {
 		if (!(int)$mundane_id || !(int)$park_id) {
 			return null;
 		}
+		$key = Ork3::$Lib->ghettocache->key(array((int)$mundane_id, (int)$park_id));
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $cache;
 		$sql = "select min(date) as earliest_date from " . DB_PREFIX . "attendance
 		        where mundane_id = " . (int)$mundane_id . "
 		          and park_id = " . (int)$park_id . "
@@ -2846,7 +2857,8 @@ class Player extends Ork3 {
 		}
 		$r->next();
 		$date = $r->earliest_date;
-		return $date ? date('Y-m-d', strtotime($date)) : null;
+		$out = $date ? date('Y-m-d', strtotime($date)) : null;
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
 	}
 
 }
