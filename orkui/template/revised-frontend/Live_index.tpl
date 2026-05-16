@@ -8,7 +8,7 @@
 	display: grid;
 	grid-template-columns: 1fr 360px;
 	grid-template-rows: auto 1fr auto;
-	height: calc(100vh - 60px);   /* leave room for top nav */
+	height: 100vh; /* JS overrides at runtime to (innerHeight - layout.top) so it never spills below */
 	background: var(--ork-bg);
 	color: var(--ork-text);
 	overflow: hidden;
@@ -69,7 +69,7 @@
 .lv-park-info { display: none; }
 .lv-park-info.open { display: block; }
 .lv-pi-head { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
-.lv-pi-head h3 { margin: 0; font-size: 14px; flex: 1; color: var(--ork-text); }
+.lv-pi-head h3 { margin: 0; font-size: 14px; flex: 1; color: var(--ork-text); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .lv-pi-actions { display: flex; gap: 4px; }
 .lv-pi-btn { background: var(--ork-bg-secondary); border: 1px solid var(--ork-border); color: var(--ork-text-muted); cursor: pointer; padding: 3px 7px; font-size: 12px; border-radius: 4px; text-decoration: none; line-height: 1; display: inline-flex; align-items: center; gap: 5px; font-family: inherit; }
 .lv-pi-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
@@ -251,8 +251,20 @@
 		tileLayer = L.tileLayer(url, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
 	}
 
+	// Fit the layout exactly between the top nav and the viewport bottom —
+	// avoids guessing nav height and prevents the legend slipping below.
+	const layoutEl = document.querySelector('.lv-layout');
+	function fitLayout() {
+		const top = layoutEl.getBoundingClientRect().top + window.scrollY;
+		layoutEl.style.height = (window.innerHeight - top) + 'px';
+		if (map) setTimeout(() => map.invalidateSize(), 50);
+	}
+	fitLayout();
+	window.addEventListener('resize', fitLayout);
+
 	whenReady(() => {
 		map = L.map('lv-map', { zoomControl: true, attributionControl: false }).setView([39.5, -98.35], 4);
+		fitLayout();
 		applyMapTheme();
 		map.on('zoomend', applyCircles);
 
