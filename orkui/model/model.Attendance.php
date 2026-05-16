@@ -16,7 +16,11 @@ class Model_Attendance extends Model {
 	
 	function add_attendance($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits) {
 		logtrace("Model_Attendance->add_attendance()", array($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits));
-		return $this->Attendance->AddAttendance(array('Token'=>$token, 'Date'=>$date, 'ParkId'=>$park_id, 'EventCalendarDetailId'=>$detail_id, 'MundaneId'=>$mundane_id, 'ClassId'=>$class_id, 'Credits'=>$credits));
+		$r = $this->Attendance->AddAttendance(array('Token'=>$token, 'Date'=>$date, 'ParkId'=>$park_id, 'EventCalendarDetailId'=>$detail_id, 'MundaneId'=>$mundane_id, 'ClassId'=>$class_id, 'Credits'=>$credits));
+		if (isset($r['Status']) && $r['Status'] == 0 && $mundane_id) {
+			$this->bust_player_attendance_caches($mundane_id);
+		}
+		return $r;
 	}
 	
 	function update_attendance($token, $attendance_id, $date, $credits, $class_id, $mundane_id) {
@@ -29,8 +33,7 @@ class Model_Attendance extends Model {
 			'ClassId'      => $class_id,
 		));
 		if ($r['Status'] == 0 && $mundane_id) {
-			$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-			Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
+			$this->bust_player_attendance_caches($mundane_id);
 		}
 		return $r;
 	}
@@ -43,10 +46,25 @@ class Model_Attendance extends Model {
 	function delete_attendance($token, $attendance_id, $mundane_id = null) {
 		$r = $this->Attendance->RemoveAttendance(array('Token'=>$token, 'AttendanceId' => $attendance_id ));
 		if ($r['Status'] == 0 && $mundane_id) {
-			$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-			Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
+			$this->bust_player_attendance_caches($mundane_id);
 		}
 		return $r;
+	}
+
+	// Bust every cache that holds a player's attendance shape: the attendance
+	// list, the awards/classes bundle (Class credits change when attendance is
+	// reconciled), and the first/last sign-in date caches surfaced on the
+	// profile header.
+	private function bust_player_attendance_caches($mundane_id) {
+		$mid = (int)$mundane_id;
+		if ($mid <= 0) return;
+		$cache = Ork3::$Lib->ghettocache;
+		$assocKey = $cache->key(['MundaneId' => $mid]);
+		$idKey    = $cache->key(array($mid));
+		$cache->bust('Model_Player.fetch_player_details',    $assocKey);
+		$cache->bust('Model_Player.fetch_player_attendance', $assocKey);
+		$cache->bust('Player.get_latest_attendance_date',    $idKey);
+		$cache->bust('Player.get_earliest_attendance_date',  $idKey);
 	}
 	
 	function get_attendance_for_date($park_id, $date) {
