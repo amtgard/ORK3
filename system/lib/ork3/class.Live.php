@@ -16,8 +16,8 @@
  */
 class Live extends Ork3 {
 
-	const CACHE_TTL_STATS  = 30;   // seconds
-	const CACHE_TTL_RECENT = 10;   // ticker can poll faster than the stats panel
+	const CACHE_TTL_STATS  = 60;   // seconds; matches the client poll interval
+	const CACHE_TTL_RECENT = 20;   // ticker polls faster than the stats panel
 	const RECENT_LIMIT     = 50;
 
 	public function __construct() {

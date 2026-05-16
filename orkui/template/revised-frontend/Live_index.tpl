@@ -189,8 +189,8 @@
 		setTimeout(() => whenReady(fn), 50);
 	}
 
-	const STATS_POLL_MS  = 30000;
-	const RECENT_POLL_MS = 10000;
+	const STATS_POLL_MS  = 60000;
+	const RECENT_POLL_MS = 20000;
 	const ORK_BASE       = '<?= UIR ?>';
 	const TIER_ICON = {
 		'Outpost': '⛺', 'Freehold': '⛺', 'Burg': '⛺',
