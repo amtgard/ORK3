@@ -2814,17 +2814,18 @@ function knEscapeAttr(s) {
 }
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
-<!-- kn-banner-modal (ported from event) -->
+<?php if ($knCanManageBanner): ?>
+<!-- kn-banner-modal -->
 <div class="kn-img-overlay kn-banner-modal" id="kn-banner-overlay">
 	<div class="kn-img-modal" style="width:min(680px, 96vw)">
 		<div class="kn-img-modal-header">
-			<span class="kn-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<span class="kn-img-modal-title" id="kn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
 			<button class="kn-img-close-btn" id="kn-banner-close-btn" aria-label="Close">&times;</button>
 		</div>
 
 		<div class="kn-img-modal-body" id="kn-banner-step-select">
 			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
-				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+				Banners are full-bleed across the kingdom header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
 			<div class="kn-banner-wireframes">
@@ -2916,7 +2917,7 @@ function knEscapeAttr(s) {
 				</div>
 				<button class="kn-btn kn-btn-outline" id="kn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
 				<?php else: ?>
-				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<span class="kn-field-hint">Upload a banner first to unlock the display toggles.</span>
 				<?php endif; ?>
 			</div>
 		</div>
@@ -2936,7 +2937,7 @@ function knEscapeAttr(s) {
 					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
 					<!-- Title bar -->
 					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
-					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Kingdom Name goes here</text>
 					<!-- Badges row -->
 					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
 					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
@@ -2978,6 +2979,7 @@ function knEscapeAttr(s) {
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
