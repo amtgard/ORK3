@@ -3,6 +3,20 @@
 	$parkInfo    = $park_info['ParkInfo']     ?? [];
 	$heraldryUrl = $park_info['Heraldry']['Url'] ?? '';
 	$hasHeraldry = !empty($parkInfo['HasHeraldry']);
+	$hasBanner       = !empty($parkInfo['HasBanner']);
+	$bannerShowLogo  = !isset($parkInfo['BannerShowLogo']) || (int)$parkInfo['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($parkInfo['BannerVignette']) || (int)$parkInfo['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($parkInfo['BannerOffsetX']) ? max(0, min(100, (int)$parkInfo['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($parkInfo['BannerOffsetY']) ? max(0, min(100, (int)$parkInfo['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PARK_BANNER, sprintf('%05d', (int)($parkInfo['ParkId'] ?? 0)));
+		$bannerFs   = DIR_PARK_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PARK_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+	$pkCanManageBanner = !empty($CanManagePark);
 	$parkTitle   = trim($parkInfo['ParkTitle']   ?? '');
 	$description = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Description'] ?? ''));
 	$directions  = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Directions']  ?? ''));
@@ -228,8 +242,24 @@
 <!-- =============================================
      ZONE 1: Hero Header
      ============================================= -->
-<div class="pk-hero<?= $parkIsInactive ? ' pk-hero--inactive' : '' ?>">
-	<div class="pk-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php
+	$_heroBgUrl    = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses  = 'pk-hero';
+	if ($parkIsInactive)              $_heroClasses .= ' pk-hero--inactive';
+	if ($bannerUrl)                    $_heroClasses .= ' pk-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pk-hero-vignette';
+	if ($pkCanManageBanner)            $_heroClasses .= ' pk-hero-editable';
+	$_pkShowLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pk-hero">
+	<div class="pk-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
 	<div class="pk-hero-content">
 
 		<!-- Heraldry -->
