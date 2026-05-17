@@ -25,6 +25,26 @@
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 	$imageUrl = $Player['HasImage'] > 0 ? $Player['Image'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 
+	$hasBanner       = !empty($Player['HasBanner']);
+	$bannerShowLogo  = !isset($Player['BannerShowLogo']) || (int)$Player['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($Player['BannerVignette']) || (int)$Player['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($Player['BannerOffsetX']) ? max(0, min(100, (int)$Player['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($Player['BannerOffsetY']) ? max(0, min(100, (int)$Player['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PLAYER_BANNER, sprintf('%06d', (int)$Player['MundaneId']));
+		$bannerFs   = DIR_PLAYER_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PLAYER_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+	// Banner edit scope: self OR park officer OR kingdom officer OR admin.
+	$pnCanManageBanner =
+		   $isOwnProfile
+		|| $canEditAdmin
+		|| (!empty($Player['KingdomId']) && isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, (int)$Player['KingdomId'], AUTH_EDIT))
+		|| (isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, null, null));
+
 	$knightAwardIds = array(17, 18, 19, 20, 245);
 	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
 	$beltImageMap = array(
@@ -900,8 +920,24 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero">
-<?php if ($_pnOverlayIsVignette): ?>
+<?php
+	$_heroBgUrl   = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses = 'pn-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' pn-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pn-hero-vignette';
+	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pn-hero">
+<?php if ($bannerUrl): ?>
+	<div class="pn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+<?php elseif ($_pnOverlayIsVignette): ?>
 	<div class="pn-hero-bg pn-hero-bg-vignette-base" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-bg-vignette-sharp" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 <?php else: ?>
