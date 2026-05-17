@@ -140,6 +140,8 @@ class StateOfAmtgard {
 		if ($cached !== false && $cached !== null) return $cached;
 
 		$DB->Clear();
+		// Order is finalized in PHP (see usort below) — the SQL ORDER BY is
+		// just a deterministic tiebreaker if the sort keys collide.
 		$rs = $DB->DataSet(
 			"SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE active = 'Active' ORDER BY name"
 		);
@@ -154,8 +156,36 @@ class StateOfAmtgard {
 			}
 		}
 
+		// Sort by the kingdom's "core" name — strip leading "The " and
+		// title prefixes ("Kingdom of [the]", "Empire of [the]",
+		// "Freeholds of [the]", "Principality of [the]") so e.g.
+		// "The Kingdom of Blackspire" sorts under B, not T.
+		usort($kingdoms, function ($a, $b) {
+			return strcasecmp(
+				self::kingdomSortKey($a['kingdom_name']),
+				self::kingdomSortKey($b['kingdom_name'])
+			);
+		});
+
 		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getActiveKingdoms', $cacheKey, $kingdoms);
 		return $kingdoms;
+	}
+
+	/**
+	 * Return the "core" portion of a kingdom name for display-sort purposes.
+	 * Strips leading "The " and common title prefixes so the filter dropdown
+	 * sorts by the distinguishing word (Blackspire / Iron Mountains / etc.)
+	 * instead of every entry clumping under "T".
+	 */
+	private static function kingdomSortKey(string $name): string
+	{
+		$core = preg_replace('/^the\s+/i', '', $name);
+		$core = preg_replace(
+			'/^(kingdom|empire|freeholds?|principality)\s+of\s+(the\s+)?/i',
+			'',
+			$core
+		);
+		return trim($core);
 	}
 
     public function getClassSignIns(string $start, string $end, array $kingdom_ids): array
