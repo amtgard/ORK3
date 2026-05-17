@@ -220,12 +220,12 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			</div>
 		</div>
 
-		<!-- Active Queries Panel -->
-		<div class="sh-panel">
-			<div class="sh-panel-hdr"><i class="fas fa-terminal"></i> Active Queries</div>
-			<div class="sh-panel-body" id="sh-procs"></div>
-		</div>
+	</div>
 
+	<!-- Active Queries Panel — full width below the 3-up grid -->
+	<div class="sh-panel" style="margin-bottom:16px">
+		<div class="sh-panel-hdr"><i class="fas fa-terminal"></i> Active Queries</div>
+		<div class="sh-panel-body" id="sh-procs"></div>
 	</div>
 
 	<!-- Active Workers Panel -->
@@ -296,6 +296,7 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 	var prevDeletes   = null;
 	var prevShowFields = null;
 	var prevShowKeys   = null;
+	var prevAccepted  = null;
 	var prevPollTime  = null;
 
 	/* ── Render FPM panel ───────────────────────────── */
@@ -313,6 +314,14 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		var slow    = (fpm['slow requests']     || 0);
 		var conn    = (fpm['accepted conn']     || 0);
 		var startSince = parseInt(fpm['start since'] || 0, 10);
+		// Requests/sec from accepted-conn delta. Uses prevPollTime which renderDb
+		// updates at the end of its own pass; on the very first poll the rate is '—'.
+		var rps = '—';
+		if (prevAccepted !== null && prevPollTime !== null) {
+			var dtFpm = (Date.now() - prevPollTime) / 1000;
+			if (dtFpm > 0) rps = ((conn - prevAccepted) / dtFpm).toFixed(1);
+		}
+		prevAccepted = conn;
 		// FPM master uptime; reset when the container/pool restarts.
 		var d = Math.floor(startSince / 86400);
 		var h = Math.floor((startSince % 86400) / 3600);
@@ -335,6 +344,7 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			metric('Listen Queue', queue, queueClass) +
 			metric('Max Children Reached', maxHit, maxClass) +
 			metric('Slow Requests', slow, slowClass) +
+			metric('Requests / sec', rps, '') +
 			metric('Total Accepted', conn.toLocaleString(), '') +
 			metric('FPM Uptime', fpmUptimeStr, '');
 	}
