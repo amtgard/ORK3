@@ -38,12 +38,7 @@
 			$bannerUrl = HTTP_PLAYER_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
 		}
 	}
-	// Banner edit scope: self OR park officer OR kingdom officer OR admin.
-	$pnCanManageBanner =
-		   $isOwnProfile
-		|| $canEditAdmin
-		|| (!empty($Player['KingdomId']) && isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, (int)$Player['KingdomId'], AUTH_EDIT))
-		|| (isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, null, null));
+
 
 	$knightAwardIds = array(17, 18, 19, 20, 245);
 	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
@@ -87,6 +82,19 @@
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
 	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
+	// Banner edit scope: self OR park officer OR kingdom officer OR admin.
+	$pnCanManageBanner =
+		   $isOwnProfile
+		|| $canEditAdmin
+		|| (
+			   !empty($Player['KingdomId'])
+			&& isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, (int)$Player['KingdomId'], AUTH_EDIT)
+		   )
+		|| (
+			   isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, null, null)
+		   );
 	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
