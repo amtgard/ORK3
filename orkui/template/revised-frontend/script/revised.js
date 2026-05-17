@@ -16413,6 +16413,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
 // ── Park banner ─────────────────────────────────── //
 (function() {
     if (typeof PkBannerConfig === 'undefined' || !PkBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.pkOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!PkBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!PkBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('pk-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.pkCloseBannerModal = function() {
+        overlay.classList.remove('pk-open');
+        document.body.style.overflow = '';
+    };
+
     var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
     var UPLOAD_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/update';
     var REMOVE_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/remove';
@@ -16451,21 +16469,6 @@ window.evSetEventStatus = function(eventId, status, btn) {
     function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
     function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
 
-    window.pkOpenBannerModal = function() {
-        if (fileInput) fileInput.value = '';
-        if (resizeNote) resizeNote.textContent = '';
-        clearError();
-        // Reset toggles to current persisted config
-        if (showLogoCb) showLogoCb.checked = !!PkBannerConfig.bannerShowLogo;
-        if (vignetteCb) vignetteCb.checked = !!PkBannerConfig.bannerVignette;
-        showStep(stepSelect);
-        overlay.classList.add('pk-open');
-        document.body.style.overflow = 'hidden';
-    };
-    window.pkCloseBannerModal = function() {
-        overlay.classList.remove('pk-open');
-        document.body.style.overflow = '';
-    };
 
     if (closeBtn) closeBtn.addEventListener('click', pkCloseBannerModal);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) pkCloseBannerModal(); });
@@ -16787,6 +16790,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
 // ── Kingdom banner ─────────────────────────────────── //
 (function() {
     if (typeof KnBannerConfig === 'undefined' || !KnBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.knOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!KnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!KnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('kn-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.knCloseBannerModal = function() {
+        overlay.classList.remove('kn-open');
+        document.body.style.overflow = '';
+    };
+
     var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
     var UPLOAD_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/update';
     var REMOVE_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/remove';
@@ -16825,21 +16846,6 @@ window.evSetEventStatus = function(eventId, status, btn) {
     function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
     function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
 
-    window.knOpenBannerModal = function() {
-        if (fileInput) fileInput.value = '';
-        if (resizeNote) resizeNote.textContent = '';
-        clearError();
-        // Reset toggles to current persisted config
-        if (showLogoCb) showLogoCb.checked = !!KnBannerConfig.bannerShowLogo;
-        if (vignetteCb) vignetteCb.checked = !!KnBannerConfig.bannerVignette;
-        showStep(stepSelect);
-        overlay.classList.add('kn-open');
-        document.body.style.overflow = 'hidden';
-    };
-    window.knCloseBannerModal = function() {
-        overlay.classList.remove('kn-open');
-        document.body.style.overflow = '';
-    };
 
     if (closeBtn) closeBtn.addEventListener('click', knCloseBannerModal);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) knCloseBannerModal(); });
@@ -17161,6 +17167,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
 // ── Player banner ─────────────────────────────────── //
 (function() {
     if (typeof PnBannerConfig === 'undefined' || !PnBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.pnOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!PnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!PnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('pn-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.pnCloseBannerModal = function() {
+        overlay.classList.remove('pn-open');
+        document.body.style.overflow = '';
+    };
+
     var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
     var UPLOAD_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/update';
     var REMOVE_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/remove';
@@ -17199,21 +17223,6 @@ window.evSetEventStatus = function(eventId, status, btn) {
     function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
     function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
 
-    window.pnOpenBannerModal = function() {
-        if (fileInput) fileInput.value = '';
-        if (resizeNote) resizeNote.textContent = '';
-        clearError();
-        // Reset toggles to current persisted config
-        if (showLogoCb) showLogoCb.checked = !!PnBannerConfig.bannerShowLogo;
-        if (vignetteCb) vignetteCb.checked = !!PnBannerConfig.bannerVignette;
-        showStep(stepSelect);
-        overlay.classList.add('pn-open');
-        document.body.style.overflow = 'hidden';
-    };
-    window.pnCloseBannerModal = function() {
-        overlay.classList.remove('pn-open');
-        document.body.style.overflow = '';
-    };
 
     if (closeBtn) closeBtn.addEventListener('click', pnCloseBannerModal);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) pnCloseBannerModal(); });
@@ -17535,6 +17544,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
 // ── Unit banner ─────────────────────────────────── //
 (function() {
     if (typeof UnBannerConfig === 'undefined' || !UnBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.unOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!UnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!UnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('un-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.unCloseBannerModal = function() {
+        overlay.classList.remove('un-open');
+        document.body.style.overflow = '';
+    };
+
     var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
     var UPLOAD_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/update';
     var REMOVE_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/remove';
@@ -17573,21 +17600,6 @@ window.evSetEventStatus = function(eventId, status, btn) {
     function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
     function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
 
-    window.unOpenBannerModal = function() {
-        if (fileInput) fileInput.value = '';
-        if (resizeNote) resizeNote.textContent = '';
-        clearError();
-        // Reset toggles to current persisted config
-        if (showLogoCb) showLogoCb.checked = !!UnBannerConfig.bannerShowLogo;
-        if (vignetteCb) vignetteCb.checked = !!UnBannerConfig.bannerVignette;
-        showStep(stepSelect);
-        overlay.classList.add('un-open');
-        document.body.style.overflow = 'hidden';
-    };
-    window.unCloseBannerModal = function() {
-        overlay.classList.remove('un-open');
-        document.body.style.overflow = '';
-    };
 
     if (closeBtn) closeBtn.addEventListener('click', unCloseBannerModal);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) unCloseBannerModal(); });
