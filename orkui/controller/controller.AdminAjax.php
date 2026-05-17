@@ -94,10 +94,35 @@ class Controller_AdminAjax extends Controller {
 			echo json_encode(['error' => 'Not logged in.']); exit;
 		}
 		// stateofamtgard endpoints are open to all logged-in users
-		$start = preg_replace('/[^0-9\-]/', '', $_GET['start'] ?? date('Y') . '-01-01');
-		$end   = preg_replace('/[^0-9\-]/', '', $_GET['end']   ?? date('Y') . '-12-31');
+
+		// Strict YYYY-MM-DD validation: regex strips junk, then DateTime parses
+		// and round-trips to reject impossible dates (e.g. 2026-02-30, 99999-99-99).
+		$validate_date = function($val, $fallback) {
+			$val = preg_replace('/[^0-9\-]/', '', $val ?? '');
+			if ($val === '') return $fallback;
+			$dt = DateTime::createFromFormat('Y-m-d', $val);
+			if ($dt === false || $dt->format('Y-m-d') !== $val) return false;
+			return $val;
+		};
+		$start = $validate_date($_GET['start'] ?? null, date('Y') . '-01-01');
+		$end   = $validate_date($_GET['end']   ?? null, date('Y') . '-12-31');
+		if ($start === false || $end === false) {
+			http_response_code(400);
+			echo json_encode(['error' => 'Invalid date format. Expected YYYY-MM-DD.']);
+			exit;
+		}
+		if ($start > $end) {
+			http_response_code(400);
+			echo json_encode(['error' => 'Start date must be on or before end date.']);
+			exit;
+		}
+
 		$raw_kingdoms = isset($_GET['kingdoms']) && is_array($_GET['kingdoms']) ? $_GET['kingdoms'] : [];
-		$kingdom_ids = array_values(array_filter(array_map('intval', $raw_kingdoms)));
+		// Reject 0/negative and absurd IDs (real kingdom_ids fit well under 100000).
+		$kingdom_ids = array_values(array_filter(
+			array_map('intval', $raw_kingdoms),
+			fn($id) => $id > 0 && $id < 100000
+		));
 
 		$sor = Ork3::$Lib->stateofamtgard;
 		switch (trim($section ?? '')) {
@@ -116,14 +141,11 @@ class Controller_AdminAjax extends Controller {
 			case 'cohorts':
 				echo json_encode(['cohorts' => $sor->getPlayerCohorts($start, $end, $kingdom_ids)]);
 				break;
-			case 'classtrends':
-				echo json_encode(['classtrends' => $sor->getClassTrends($start, $end, $kingdom_ids)]);
-				break;
-			case 'monthly':
-				echo json_encode(['monthly' => $sor->getMonthlyBreakdown($start, $end, $kingdom_ids)]);
-				break;
 			case 'longevity':
 				echo json_encode(['longevity' => $sor->getPlayerLongevity($start, $end, $kingdom_ids)]);
+				break;
+			case 'awards':
+				echo json_encode(['awards' => $sor->getAwardGrants($start, $end, $kingdom_ids)]);
 				break;
 			default:
 				echo json_encode(['error' => 'Unknown section.']);

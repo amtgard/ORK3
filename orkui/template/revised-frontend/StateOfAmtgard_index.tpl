@@ -48,8 +48,9 @@ $defaultEnd   = $prevYear . '-12-31';
         <?php endforeach; ?>
       </select>
       <div class="sor-filter-kingdom-actions">
-        <button type="button" class="sor-btn-sm" onclick="sorSelectAll()">Select All</button>
-        <button type="button" class="sor-btn-sm" onclick="sorClearAll()">Clear All</button>
+        <button type="button" id="sor-btn-select-all" class="sor-btn-sm">Select All</button>
+        <button type="button" id="sor-btn-select-all-except-freeholds" class="sor-btn-sm">Select All Except Freeholds</button>
+        <button type="button" id="sor-btn-clear-all" class="sor-btn-sm">Clear All</button>
       </div>
     </div>
   </div>
@@ -61,11 +62,51 @@ $defaultEnd   = $prevYear . '-12-31';
   </div>
 </div>
 
+<!-- Kingdom multi-select helpers — isolated script so any error in the
+     main orchestrator IIFE cannot prevent these buttons from working. -->
+<script>
+(function () {
+	function sorKingdomSelect(predicate) {
+		var sel = document.getElementById('sor-kingdoms');
+		if (!sel) return;
+		for (var i = 0; i < sel.options.length; i++) {
+			sel.options[i].selected = predicate(sel.options[i]);
+		}
+	}
+	window.sorSelectAll = function () { sorKingdomSelect(function () { return true; }); };
+	window.sorClearAll  = function () { sorKingdomSelect(function () { return false; }); };
+	window.sorSelectAllExceptFreeholds = function () {
+		sorKingdomSelect(function (opt) {
+			return opt.text.toLowerCase().indexOf('freeholds') === -1;
+		});
+	};
+	var bind = function (id, fn) {
+		var el = document.getElementById(id);
+		if (el) el.addEventListener('click', fn);
+	};
+	bind('sor-btn-select-all',                  window.sorSelectAll);
+	bind('sor-btn-select-all-except-freeholds', window.sorSelectAllExceptFreeholds);
+	bind('sor-btn-clear-all',                   window.sorClearAll);
+}());
+</script>
+
 <!-- REPORT SECTIONS (hidden until generated) -->
 <div id="sor-report" style="display:none">
 
   <!-- Executive Scorecard (populated after all sections load) -->
   <div id="sor-scorecard" style="display:none"></div>
+
+  <!-- Table of Contents -->
+  <nav id="sor-toc" class="sor-toc" aria-label="Report sections">
+    <div class="sor-toc-title"><i class="fas fa-list" style="margin-right:6px"></i>Sections</div>
+    <ul class="sor-toc-list">
+      <li><a href="#sor-section-players"><i class="fas fa-users"></i>Player Statistics</a></li>
+      <li><a href="#sor-section-kingdoms"><i class="fas fa-crown"></i>Sign-Ins by Kingdom</a></li>
+      <li><a href="#sor-section-classes"><i class="fas fa-graduation-cap"></i>Sign-Ins by Class</a></li>
+      <li><a href="#sor-section-parks"><i class="fas fa-map-marker-alt"></i>Parks Analysis</a></li>
+      <li><a href="#sor-section-awards"><i class="fas fa-medal"></i>Award Grants</a></li>
+    </ul>
+  </nav>
 
   <!-- Players section -->
   <div class="sor-report-section">
@@ -160,6 +201,7 @@ $defaultEnd   = $prevYear . '-12-31';
 
   </div><!-- /sor-players-content -->
 </div><!-- /sor-section-players -->
+    <div class="sor-back-to-top"><a href="#sor-toc"><i class="fas fa-arrow-up"></i> Back to Top</a></div>
   </div>
 
   <!-- Kingdoms section -->
@@ -233,6 +275,7 @@ $defaultEnd   = $prevYear . '-12-31';
   </div>
 
 </div><!-- /sor-section-kingdoms -->
+    <div class="sor-back-to-top"><a href="#sor-toc"><i class="fas fa-arrow-up"></i> Back to Top</a></div>
   </div>
 
   <!-- Classes section -->
@@ -293,6 +336,7 @@ $defaultEnd   = $prevYear . '-12-31';
 
 </div>
 <!-- ===== END SECTION ===== -->
+    <div class="sor-back-to-top"><a href="#sor-toc"><i class="fas fa-arrow-up"></i> Back to Top</a></div>
   </div>
 
   <!-- Parks section -->
@@ -382,7 +426,119 @@ $defaultEnd   = $prevYear . '-12-31';
 
   </div><!-- /sor-parks-content -->
 </div><!-- /sor-section-parks -->
+    <div class="sor-back-to-top"><a href="#sor-toc"><i class="fas fa-arrow-up"></i> Back to Top</a></div>
   </div>
+
+  <!-- Award Grants section -->
+  <div class="sor-report-section">
+    <div class="sor-section-divider">
+      <h2 class="sor-section-heading"><i class="fas fa-medal" style="margin-right:8px"></i>Award Grants</h2>
+    </div>
+<div id="sor-section-awards" class="sor-section">
+
+  <!-- Section header -->
+  <div class="sor-section-header">
+    <span class="sor-section-subtitle" id="sor-awards-period">Newly granted Knights, Paragons, and Masters in the selected period.</span>
+  </div>
+
+  <!-- Loading skeleton -->
+  <div class="sor-skeleton" id="sor-awards-skeleton">
+    <div class="sor-skeleton-row">
+      <div class="sor-skeleton-card"></div>
+      <div class="sor-skeleton-card"></div>
+      <div class="sor-skeleton-card"></div>
+    </div>
+    <div class="sor-skeleton-bar sor-awards-skeleton-chart"></div>
+    <div class="sor-awards-skeleton-charts">
+      <div class="sor-skeleton-chart sor-awards-skeleton-pie"></div>
+      <div class="sor-skeleton-chart sor-awards-skeleton-pie"></div>
+      <div class="sor-skeleton-chart sor-awards-skeleton-pie"></div>
+    </div>
+    <div class="sor-skeleton-row" style="width:96%"></div>
+    <div class="sor-skeleton-row" style="width:90%"></div>
+    <div class="sor-skeleton-row" style="width:93%"></div>
+  </div>
+
+  <!-- Rendered content -->
+  <div id="sor-awards-content" style="display:none">
+
+    <!-- 0. Data accuracy note -->
+    <div class="sor-awards-data-note" role="note">
+      <i class="fas fa-info-circle sor-awards-data-note-icon" aria-hidden="true"></i>
+      <span><strong>Note:</strong> This data is dependent on accurate recording of awards. Older awards applied as custom titles, etc. will not be counted and should be reconciled.</span>
+    </div>
+
+    <!-- 1. KPI summary row -->
+    <div class="sor-awards-kpi-row" id="sor-awards-kpi-row"></div>
+
+    <!-- 1b. 10-year peerage grant trend -->
+    <div class="sor-chart-card sor-awards-chart-card sor-awards-trend-card" id="sor-awards-trend-card">
+      <div id="sor-awards-trend-chart" class="sor-awards-trend-chart"></div>
+    </div>
+
+    <!-- 2. Four pie charts in a 2x2 grid -->
+    <div class="sor-awards-charts-row">
+      <div class="sor-chart-card sor-awards-chart-card">
+        <div class="sor-awards-chart-title">Overall Peerage Split</div>
+        <div class="sor-awards-chart-sub" id="sor-awards-overall-sub">&mdash;</div>
+        <div id="sor-awards-overall-chart" class="sor-awards-pie"></div>
+      </div>
+      <div class="sor-chart-card sor-awards-chart-card">
+        <div class="sor-awards-chart-title">Knights</div>
+        <div class="sor-awards-chart-sub" id="sor-awards-knights-sub">&mdash;</div>
+        <div id="sor-awards-knights-chart" class="sor-awards-pie"></div>
+      </div>
+      <div class="sor-chart-card sor-awards-chart-card">
+        <div class="sor-awards-chart-title">Paragons</div>
+        <div class="sor-awards-chart-sub" id="sor-awards-paragons-sub">&mdash;</div>
+        <div id="sor-awards-paragons-chart" class="sor-awards-pie"></div>
+      </div>
+      <div class="sor-chart-card sor-awards-chart-card">
+        <div class="sor-awards-chart-title">Masters</div>
+        <div class="sor-awards-chart-sub" id="sor-awards-masters-sub">&mdash;</div>
+        <div id="sor-awards-masters-chart" class="sor-awards-pie"></div>
+      </div>
+    </div>
+
+    <!-- 3. Top kingdoms table -->
+    <div class="sor-awards-table-wrap">
+      <div class="sor-awards-table-title">Top Kingdoms by Peerage Grants</div>
+      <table class="sor-table sor-awards-table" id="sor-awards-kingdoms-table">
+        <thead>
+          <tr>
+            <th style="text-align:left">Kingdom</th>
+            <th style="text-align:right;width:80px">Knights</th>
+            <th style="text-align:right;width:90px">Paragons</th>
+            <th style="text-align:right;width:80px">Masters</th>
+            <th style="text-align:right;width:70px">Total</th>
+          </tr>
+        </thead>
+        <tbody id="sor-awards-kingdoms-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- 4. Recent grants table -->
+    <div class="sor-awards-table-wrap" style="margin-top:24px">
+      <div class="sor-awards-table-title">Recent Notable Grants</div>
+      <table class="sor-table sor-awards-table" id="sor-awards-recent-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;width:110px">Date</th>
+            <th style="text-align:left">Recipient</th>
+            <th style="text-align:left">Award</th>
+            <th style="text-align:left;width:90px">Peerage</th>
+            <th style="text-align:left">Kingdom</th>
+          </tr>
+        </thead>
+        <tbody id="sor-awards-recent-tbody"></tbody>
+      </table>
+    </div>
+
+  </div><!-- /sor-awards-content -->
+</div><!-- /sor-section-awards -->
+    <div class="sor-back-to-top"><a href="#sor-toc"><i class="fas fa-arrow-up"></i> Back to Top</a></div>
+  </div>
+
 
 </div><!-- /sor-report -->
 
@@ -390,6 +546,90 @@ $defaultEnd   = $prevYear . '-12-31';
      STYLES
      ============================================================ -->
 <style>
+/* ---- Table of Contents ---- */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
+.sor-toc {
+  background: var(--ork-card-bg, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  padding: 14px 18px;
+  margin-bottom: 24px;
+}
+.sor-toc-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4a5568;
+  margin-bottom: 10px;
+}
+.sor-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sor-toc-list li {
+  margin: 0;
+}
+.sor-toc-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  color: #2d3748;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.sor-toc-list a:hover {
+  background: #edf2f7;
+  border-color: #c0392b;
+  color: #c0392b;
+  transform: translateY(-1px);
+}
+.sor-toc-list a i {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+/* ---- Back to Top ---- */
+.sor-back-to-top {
+  text-align: right;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+.sor-back-to-top a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #718096;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.sor-back-to-top a:hover {
+  color: #c0392b;
+  background: #f7fafc;
+}
+.sor-back-to-top a i {
+  font-size: 0.75rem;
+}
+
 /* ---- Filter Card ---- */
 .sor-filter-card {
   background: #fff;
@@ -465,6 +705,16 @@ $defaultEnd   = $prevYear . '-12-31';
 .sor-filter-kingdoms select:focus {
   border-color: #c0392b;
   background: #fff;
+}
+
+/* Setting custom backgrounds on <option> disables the browser's native
+   selection highlight, so we paint it ourselves. The linear-gradient hack
+   wins over the option's flat background-color in Chromium/WebKit. */
+.sor-filter-kingdoms select option:checked,
+.sor-filter-kingdoms select option:checked:hover {
+  background: linear-gradient(0deg, #c0392b 0%, #c0392b 100%) !important;
+  color: #fff !important;
+  font-weight: 600;
 }
 
 .sor-filter-kingdom-actions {
@@ -1851,6 +2101,10 @@ $defaultEnd   = $prevYear . '-12-31';
   /* Print-only header */
   #sor-print-header { display: block !important; }
 
+  /* Hide navigation chrome (TOC + back-to-top links) */
+  .sor-toc,
+  .sor-back-to-top { display: none !important; }
+
   /* Hide screen-only controls */
   .sor-filter-card { display: none !important; }
 
@@ -1950,6 +2204,681 @@ $defaultEnd   = $prevYear . '-12-31';
     text-shadow: none !important;
   }
 }
+</style>
+
+<style>
+/* ================================================================
+   DARK MODE OVERRIDES  — keyed off html[data-theme="dark"]
+   These rules apply ONLY in dark mode; light mode is untouched.
+   Inherits ORK3 vars from revised.css (--ork-card-bg, --ork-text, etc).
+   ================================================================ */
+
+/* ---- Filter Card ---- */
+html[data-theme="dark"] .sor-filter-card {
+  background: var(--ork-card-bg);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+html[data-theme="dark"] .sor-filter-heading {
+  color: var(--ork-text);
+  border-bottom-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .sor-filter-group label {
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-filter-group input[type="date"],
+html[data-theme="dark"] .sor-filter-kingdoms select {
+  background: var(--ork-input-bg);
+  border-color: var(--ork-input-border);
+  color: var(--ork-text);
+  color-scheme: dark;
+}
+html[data-theme="dark"] .sor-filter-group input[type="date"]:focus,
+html[data-theme="dark"] .sor-filter-kingdoms select:focus {
+  background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .sor-filter-kingdoms select option {
+  background: var(--ork-input-bg);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-filter-kingdoms select option:checked,
+html[data-theme="dark"] .sor-filter-kingdoms select option:checked:hover {
+  background: linear-gradient(0deg, #e74c3c 0%, #e74c3c 100%) !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] .sor-btn-sm {
+  background: var(--ork-bg-tertiary);
+  border-color: var(--ork-border);
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-btn-sm:hover {
+  background: var(--ork-bg-secondary);
+}
+html[data-theme="dark"] .sor-btn-generate:disabled {
+  background: var(--ork-bg-tertiary);
+  color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .sor-help-text {
+  color: var(--ork-text-muted);
+}
+
+/* ---- Section heading colors ---- */
+html[data-theme="dark"] .sor-section-heading {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-toc {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-toc-title {
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-toc-list a {
+  background: var(--ork-bg, #1e2329);
+  border-color: var(--ork-border);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-toc-list a:hover {
+  background: var(--ork-card-bg);
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+html[data-theme="dark"] .sor-back-to-top {
+  border-top-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-back-to-top a {
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-back-to-top a:hover {
+  color: #e74c3c;
+  background: var(--ork-card-bg);
+}
+html[data-theme="dark"] .sor-section {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-section-subtitle {
+  color: var(--ork-text-muted);
+}
+
+/* ---- Executive Scorecard / KPI cards ---- */
+html[data-theme="dark"] .sor-kpi-card {
+  background: var(--ork-card-bg);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-kpi-label {
+  color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .sor-kpi-sub {
+  color: var(--ork-text-lighter);
+}
+
+/* ---- Cohort funnel wrap ---- */
+html[data-theme="dark"] .sor-players-funnel-wrap {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+}
+
+/* ---- Parks net/health chart cards ---- */
+html[data-theme="dark"] #sor-parks-net-chart,
+html[data-theme="dark"] #sor-parks-health-chart {
+  background: var(--ork-card-bg);
+}
+
+/* ---- Diversity Index Card ---- */
+html[data-theme="dark"] .sor-diversity-card {
+  background: var(--ork-bg-secondary);
+  border-color: var(--ork-border);
+  color: var(--ork-text);
+}
+
+/* ---- Kingdoms table (.sor-table) ---- */
+html[data-theme="dark"] .sor-table {
+  background: var(--ork-card-bg);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-table tbody tr {
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-table tbody tr:nth-child(odd) {
+  background: var(--ork-card-bg);
+}
+html[data-theme="dark"] .sor-table tbody tr:nth-child(even) {
+  background: var(--ork-bg-secondary);
+}
+html[data-theme="dark"] .sor-table tbody tr:hover {
+  background: var(--ork-bg-tertiary) !important;
+}
+/* Medal rows: darken the soft pastel gradients for readability */
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-1 {
+  background: linear-gradient(90deg, #5a4500, #6b5200) !important;
+  color: #fff8dc;
+}
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-2 {
+  background: linear-gradient(90deg, #2d3748, #374151) !important;
+}
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-3 {
+  background: linear-gradient(90deg, #6b3a1e, #7b4520) !important;
+  color: #fde8df;
+}
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-1:hover {
+  background: #7a5e00 !important;
+}
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-2:hover {
+  background: #455067 !important;
+}
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-3:hover {
+  background: #8a4a22 !important;
+}
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-4,
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-5 {
+  background: linear-gradient(90deg, #1e3a52, #234a68) !important;
+  color: #d1ecf8;
+}
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-4:hover,
+html[data-theme="dark"] .sor-table tbody tr.sor-rank-5:hover {
+  background: #2a557a !important;
+}
+html[data-theme="dark"] .sor-rank-badge {
+  background: var(--ork-bg-tertiary);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-pct-bar-track {
+  background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .sor-count-cell {
+  color: var(--ork-text-secondary);
+}
+
+/* ---- Chart card (.sor-chart-card) ---- */
+html[data-theme="dark"] .sor-chart-card {
+  background: var(--ork-card-bg);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+
+/* ---- Class table (.sor-class-table) ---- */
+html[data-theme="dark"] .sor-class-table {
+  background: var(--ork-card-bg);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-class-table caption {
+  color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .sor-class-table tbody tr {
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-class-table tbody tr:hover {
+  background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .sor-class-table tbody td {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-class-table .sor-rank-badge {
+  background: var(--ork-bg-tertiary);
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-pct-bar-bg {
+  background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .sor-pct-label {
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-chart-title {
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] #sor-classes-chart {
+  background: var(--ork-card-bg);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-note,
+html[data-theme="dark"] .sor-table-label {
+  color: var(--ork-text-muted);
+}
+
+/* ---- Parks stat cards ---- */
+html[data-theme="dark"] .sor-parks-stat-card {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-parks-stat-card .sor-parks-stat-value {
+  /* Default cyan stays visible; brighten for dark bg */
+  color: #4fb3c6;
+}
+html[data-theme="dark"] .sor-parks-stat-card.sor-parks-stat-new .sor-parks-stat-value {
+  color: #68d391;
+}
+html[data-theme="dark"] .sor-parks-stat-card.sor-parks-stat-lost .sor-parks-stat-value {
+  color: #fc8181;
+}
+html[data-theme="dark"] .sor-parks-stat-card.sor-parks-stat-risk .sor-parks-stat-value {
+  color: #f6ad55;
+}
+html[data-theme="dark"] .sor-parks-stat-card .sor-parks-stat-label {
+  color: var(--ork-text-muted);
+}
+
+/* ---- Parks narrative ---- */
+html[data-theme="dark"] .sor-parks-narrative p {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-parks-narrative strong {
+  color: #4fb3c6;
+}
+
+/* ---- Parks expandable lists ---- */
+html[data-theme="dark"] .sor-parks-expandable {
+  border-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-parks-expandable-header {
+  background: var(--ork-bg-secondary);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-parks-expandable-header:hover {
+  background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .sor-parks-expandable-header .sor-parks-expand-icon {
+  color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .sor-parks-expandable-body {
+  background: var(--ork-card-bg);
+}
+html[data-theme="dark"] .sor-parks-kingdom-label {
+  color: var(--ork-text-secondary);
+  border-bottom-color: var(--ork-border);
+}
+/* Pills: darken pastel backgrounds */
+html[data-theme="dark"] .sor-parks-pill-new {
+  background: #22543d;
+  color: #9ae6b4;
+  border-color: #2f855a;
+}
+html[data-theme="dark"] .sor-parks-pill-lost {
+  background: #742a2a;
+  color: #feb2b2;
+  border-color: #c53030;
+}
+
+/* ---- At-risk alert ---- */
+html[data-theme="dark"] .sor-parks-alert {
+  background: #4a3a10;
+  border-color: #b7791f;
+  border-left-color: #f6ad55;
+}
+html[data-theme="dark"] .sor-parks-alert-title,
+html[data-theme="dark"] .sor-parks-alert-subtitle {
+  color: #fbd38d;
+}
+html[data-theme="dark"] .sor-parks-risk-table th {
+  color: #fbd38d;
+  border-bottom-color: #b7791f !important;
+}
+html[data-theme="dark"] .sor-parks-risk-table td {
+  color: #fef3c7;
+  border-bottom-color: #6b5523;
+}
+html[data-theme="dark"] .sor-parks-risk-high {
+  background: #742a2a;
+  color: #fed7d7;
+}
+html[data-theme="dark"] .sor-parks-risk-med {
+  background: #7b341e;
+  color: #fbd38d;
+}
+
+/* ---- Parks kingdom table ---- */
+html[data-theme="dark"] .sor-parks-table-wrap {
+  border-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-parks-table tbody tr:nth-child(even) {
+  background: var(--ork-bg-secondary);
+}
+html[data-theme="dark"] .sor-parks-table tbody tr:hover {
+  background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .sor-parks-table td {
+  color: var(--ork-text);
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-parks-ratio-good {
+  color: #68d391;
+}
+html[data-theme="dark"] .sor-parks-ratio-bad {
+  color: #fc8181;
+}
+html[data-theme="dark"] .sor-parks-ratio-neutral {
+  color: var(--ork-text-muted);
+}
+
+/* ---- Parks chart ---- */
+html[data-theme="dark"] .sor-parks-chart-title {
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-parks-chart-outer {
+  background: var(--ork-card-bg);
+  border-color: var(--ork-border);
+}
+
+/* ---- Skeleton loaders (all variants) ---- */
+html[data-theme="dark"] .sor-skeleton-header,
+html[data-theme="dark"] .sor-skeleton-row,
+html[data-theme="dark"] .sor-skeleton-chart {
+  background: linear-gradient(90deg, #2d3748 25%, #374151 50%, #2d3748 75%);
+  background-size: 400% 100%;
+}
+html[data-theme="dark"] .sor-skeleton-bar,
+html[data-theme="dark"] .sor-parks-skeleton-card,
+html[data-theme="dark"] .sor-parks-skeleton-text,
+html[data-theme="dark"] .sor-parks-skeleton-table,
+html[data-theme="dark"] .sor-parks-skeleton-chart {
+  background: linear-gradient(90deg, #2d3748 25%, #374151 50%, #2d3748 75%);
+  background-size: 200% 100%;
+}
+
+/* ---- Players stat cards ---- */
+html[data-theme="dark"] .sor-players-card {
+  background: var(--ork-card-bg);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-players-card:hover {
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+html[data-theme="dark"] .sor-players-card-value {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-players-card-label {
+  color: var(--ork-text-muted);
+}
+
+/* ---- Players prose cols ---- */
+html[data-theme="dark"] .sor-players-prose-col {
+  background: var(--ork-card-bg);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-players-prose-col h4 {
+  color: var(--ork-text);
+  border-bottom-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .sor-players-prose-col strong {
+  color: var(--ork-text);
+}
+
+/* ---- Normal-player callout ---- */
+html[data-theme="dark"] .sor-players-normal-callout {
+  background: #4a3a10;
+  border-left-color: #f6ad55;
+  color: #fbd38d;
+}
+html[data-theme="dark"] .sor-players-normal-callout strong {
+  color: #fbd38d;
+}
+
+/* ---- Players chart wrap & title ---- */
+html[data-theme="dark"] .sor-players-chart-wrap {
+  background: var(--ork-card-bg);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-players-chart-title {
+  color: var(--ork-text);
+  border-bottom-color: var(--ork-border) !important;
+}
+
+/* ---- 10-year toggle button (already dark navy in light mode; keep but tune hover) ---- */
+html[data-theme="dark"] .sor-players-tenyear-toggle {
+  background: var(--ork-bg-tertiary);
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-players-tenyear-toggle:hover {
+  background: var(--ork-bg-secondary);
+}
+
+/* ---- Longevity chart wrap & legend ---- */
+html[data-theme="dark"] #sor-longevity-chart {
+  background: var(--ork-card-bg);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-lon-legend-item {
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-lon-label {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-lon-count {
+  color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .sor-lon-pct {
+  color: var(--ork-link-bright);
+}
+
+/* ============================================================
+   Award Grants Section
+   ============================================================ */
+.sor-awards-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.sor-awards-charts-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 28px;
+}
+.sor-awards-chart-card {
+  padding: 16px 14px 12px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sor-awards-chart-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d3748;
+  text-align: center;
+  margin: 0 0 2px;
+}
+.sor-awards-chart-sub {
+  text-align: center;
+  font-size: 0.78rem;
+  color: #718096;
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+.sor-awards-pie {
+  height: 440px;
+  min-height: 380px;
+  width: 100%;
+}
+.sor-awards-table-wrap {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  padding: 14px 16px 16px;
+  overflow-x: auto;
+}
+.sor-awards-table-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 10px;
+  letter-spacing: 0.02em;
+}
+.sor-awards-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  box-shadow: none;
+}
+.sor-awards-table thead th {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #4a5568;
+  padding: 8px 10px;
+  border-bottom: 2px solid #e2e8f0;
+  background: transparent;
+}
+.sor-awards-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 0.88rem;
+  color: #2d3748;
+  vertical-align: middle;
+}
+.sor-awards-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+.sor-awards-table tbody tr:hover {
+  background: #edf2f7;
+}
+.sor-awards-recipient-link {
+  color: #2980b9;
+  text-decoration: none;
+  font-weight: 600;
+}
+.sor-awards-recipient-link:hover {
+  text-decoration: underline;
+}
+.sor-awards-peerage-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sor-awards-peerage-knight  { background: #fde2dc; color: #9c2a1a; }
+.sor-awards-peerage-paragon { background: #e7e0f5; color: #553c9a; }
+.sor-awards-peerage-master  { background: #d6ecf3; color: #1b5a73; }
+
+.sor-awards-skeleton-charts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 14px 0;
+}
+.sor-awards-skeleton-pie {
+  height: 260px;
+}
+.sor-awards-skeleton-chart {
+  height: 280px;
+  margin: 12px 0 14px;
+  border-radius: 8px;
+}
+
+/* ---- Data accuracy note ---- */
+.sor-awards-data-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  background: var(--ork-info-bg, #eef5fb);
+  border: 1px solid var(--ork-border, #cfe2f3);
+  border-left: 3px solid #2980b9;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ork-text-secondary, #4a5568);
+}
+.sor-awards-data-note-icon {
+  color: #2980b9;
+  font-size: 0.95rem;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.sor-awards-data-note strong {
+  color: var(--ork-text, #2d3748);
+  font-weight: 700;
+}
+
+/* ---- 10-year trend chart ---- */
+.sor-awards-trend-card {
+  margin-bottom: 24px;
+  padding: 14px 14px 10px;
+}
+.sor-awards-trend-chart {
+  width: 100%;
+  height: 320px;
+  min-height: 280px;
+}
+
+@media (max-width: 900px) {
+  .sor-awards-kpi-row,
+  .sor-awards-charts-row,
+  .sor-awards-skeleton-charts {
+    grid-template-columns: 1fr;
+  }
+  .sor-awards-pie {
+    height: 280px;
+  }
+}
+
+/* ---- Dark mode overrides ---- */
+html[data-theme="dark"] #sor-section-awards .sor-section-subtitle,
+html[data-theme="dark"] .sor-awards-chart-sub {
+  color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .sor-awards-data-note {
+  background: rgba(41, 128, 185, 0.10);
+  border-color: var(--ork-border);
+  border-left-color: #4aa3d9;
+  color: var(--ork-text-secondary);
+}
+html[data-theme="dark"] .sor-awards-data-note-icon {
+  color: #4aa3d9;
+}
+html[data-theme="dark"] .sor-awards-data-note strong {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-awards-chart-card,
+html[data-theme="dark"] .sor-awards-table-wrap {
+  background: var(--ork-card-bg);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .sor-awards-chart-title,
+html[data-theme="dark"] .sor-awards-table-title {
+  color: var(--ork-text);
+}
+html[data-theme="dark"] .sor-awards-table thead th {
+  color: var(--ork-text-secondary);
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-awards-table tbody td {
+  color: var(--ork-text);
+  border-bottom-color: var(--ork-border);
+}
+html[data-theme="dark"] .sor-awards-table tbody tr:nth-child(even) {
+  background: var(--ork-bg-secondary);
+}
+html[data-theme="dark"] .sor-awards-table tbody tr:hover {
+  background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .sor-awards-recipient-link {
+  color: var(--ork-link, #4fb3c6);
+}
+html[data-theme="dark"] .sor-awards-recipient-link:hover {
+  color: var(--ork-link-bright, #7fd4e6);
+}
+html[data-theme="dark"] .sor-awards-peerage-knight {
+  background: #5a2a20; color: #fed7d7;
+}
+html[data-theme="dark"] .sor-awards-peerage-paragon {
+  background: #3c2f5e; color: #d6bcfa;
+}
+html[data-theme="dark"] .sor-awards-peerage-master {
+  background: #1e3a4d; color: #bee3f0;
+}
+html[data-theme="dark"] .sor-awards-skeleton-pie {
+  background: linear-gradient(90deg, #2d3748 25%, #374151 50%, #2d3748 75%);
+  background-size: 400% 100%;
+}
+
 </style>
 
 <!-- ============================================================
@@ -2137,6 +3066,7 @@ $defaultEnd   = $prevYear . '-12-31';
 
     // Highcharts v3 API (same as v4/v5 for these features)
     if (typeof Highcharts !== 'undefined') {
+      window.sorDestroyChart('sor-kingdoms-chart');
       new Highcharts.Chart({
         chart: {
           renderTo:        'sor-kingdoms-chart',
@@ -2154,28 +3084,28 @@ $defaultEnd   = $prevYear . '-12-31';
         xAxis: {
           categories: categories,
           labels: {
-            style:  { fontSize: '11px', color: '#4a5568' },
+            style:  { fontSize: '11px', color: window.sorThemeColor('--ork-text-secondary', '#4a5568') },
             reserveSpace: true
           },
-          lineColor:  '#e2e8f0',
-          tickColor:  '#e2e8f0'
+          lineColor:  window.sorThemeColor('--ork-border', '#e2e8f0'),
+          tickColor:  window.sorThemeColor('--ork-border', '#e2e8f0')
         },
 
         yAxis: {
           title: {
             text:  '% of Total Sign-Ins',
-            style: { color: '#718096', fontSize: '11px' }
+            style: { color: window.sorThemeColor('--ork-text-muted', '#718096'), fontSize: '11px' }
           },
           labels: {
             formatter: function () { return this.value + '%'; },
-            style:     { fontSize: '11px', color: '#718096' }
+            style:     { fontSize: '11px', color: window.sorThemeColor('--ork-text-muted', '#718096') }
           },
-          gridLineColor: '#edf2f7',
+          gridLineColor: window.sorThemeColor('--ork-border', '#edf2f7'),
           min: 0
         },
 
         legend: { enabled: true, align: "center", verticalAlign: "bottom",
-                  itemStyle: { fontWeight: "600", fontSize: "12px", color: "#2d3748" } },
+                  itemStyle: { fontWeight: "600", fontSize: "12px", color: window.sorThemeColor('--ork-text', '#2d3748') } },
 
         tooltip: {
           formatter: function () {
@@ -2303,6 +3233,12 @@ $defaultEnd   = $prevYear . '-12-31';
    * data.classes = array of class objects (sorted by rank ascending from server,
    * but we sort defensively here too).
    */
+  // FIX B: local HTML-escape helper for innerHTML concatenation in this IIFE
+  function esc(s) {
+    if (s == null) return "";
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
   window.renderSorClasses = function (data) {
     var classes = (data && data.classes) ? data.classes.slice() : [];
 
@@ -2350,7 +3286,7 @@ $defaultEnd   = $prevYear . '-12-31';
         + "<td>"
           + "<span class=\'sor-class-name-cell\'>"
             + "<span class=\'sor-class-dot\' style=\'background:" + color + "\'></span>"
-            + "<span>" + c.class_name + "</span>"
+            + "<span>" + esc(c.class_name) + "</span>"
             + warnHtml
           + "</span>"
         + "</td>"
@@ -2412,13 +3348,14 @@ $defaultEnd   = $prevYear . '-12-31';
     if (typeof Highcharts === 'undefined') {
       document.getElementById('sor-classes-chart').innerHTML = '<p style="color:#999;padding:20px">Chart unavailable.</p>';
     } else {
+    window.sorDestroyChart('sor-classes-chart');
     new Highcharts.Chart({
       chart: {
         renderTo: "sor-classes-chart",
         type: "bar",
         height: Math.max(300, chartCategories.length * 28 + 80),
         style: { fontFamily: "inherit" },
-        backgroundColor: "#ffffff",
+        backgroundColor: "transparent",
         margin: [10, 80, 20, 130]
       },
       title: { text: null },
@@ -2796,13 +3733,14 @@ $defaultEnd   = $prevYear . '-12-31';
     var minWidth = Math.max(600, categories.length * 60);
     container.style.width = minWidth + 'px';
 
+    window.sorDestroyChart('sor-parks-chart-container');
     new Highcharts.Chart({
 
       chart: {
         renderTo: 'sor-parks-chart-container',
         type: 'column',
         height: 350,
-        backgroundColor: '#ffffff',
+        backgroundColor: 'transparent',
         style: { fontFamily: 'inherit' },
         marginBottom: 90
       },
@@ -2819,7 +3757,7 @@ $defaultEnd   = $prevYear . '-12-31';
         categories: categories,
         labels: {
           rotation: -45,
-          style: { fontSize: '11px', color: '#555' },
+          style: { fontSize: '11px', color: window.sorThemeColor('--ork-text-secondary', '#555') },
           align: 'right'
         },
         crosshair: { color: 'rgba(44,95,110,0.1)' }
@@ -2829,10 +3767,10 @@ $defaultEnd   = $prevYear . '-12-31';
         allowDecimals: false,
         title: {
           text: 'Number of Parks',
-          style: { fontSize: '11px', color: '#666' }
+          style: { fontSize: '11px', color: window.sorThemeColor('--ork-text-muted', '#666') }
         },
-        gridLineColor: '#f0f0f0',
-        labels: { style: { fontSize: '11px', color: '#666' } }
+        gridLineColor: window.sorThemeColor('--ork-border', '#f0f0f0'),
+        labels: { style: { fontSize: '11px', color: window.sorThemeColor('--ork-text-muted', '#666') } }
       },
       tooltip: {
         shared: true,
@@ -2877,13 +3815,14 @@ $defaultEnd   = $prevYear . '-12-31';
       var net = (newMap[kd] || 0) - (lostMap[kd] || 0);
       return { y: net, color: net > 0 ? '#27ae60' : (net < 0 ? '#c0392b' : '#aaa') };
     });
+    window.sorDestroyChart('sor-parks-net-chart');
     new Highcharts.Chart({
 
-      chart: { renderTo: 'sor-parks-net-chart', type: 'column', height: 220, backgroundColor: '#fff', style: { fontFamily: 'inherit' } },
+      chart: { renderTo: 'sor-parks-net-chart', type: 'column', height: 220, backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
       title:   { text: null }, credits: { enabled: false }, legend: { enabled: false },
       xAxis: { categories: kds, labels: { rotation: -45, style: { fontSize: '10px' }, align: 'right' } },
       yAxis:   { title: { text: 'Net (New − Lost)' }, allowDecimals: false,
-                 plotLines: [{ value: 0, color: '#2d3748', width: 1.5, zIndex: 4 }] },
+                 plotLines: [{ value: 0, color: window.sorThemeColor('--ork-text', '#2d3748'), width: 1.5, zIndex: 4 }] },
       tooltip: { backgroundColor: '#1a1a2e', borderColor: '#c0392b', style: { color: '#fff' },
                  formatter: function () {
                    return '<b>' + this.x + '</b><br/>Net: <b>' + (this.y >= 0 ? '+' : '') + this.y + '</b>';
@@ -2911,10 +3850,11 @@ $defaultEnd   = $prevYear . '-12-31';
     var cats   = sorted.map(function (r) { return r.kingdom_name || ''; });
     var actD   = sorted.map(function (r) { return +(r.active_parks  || 0); });
     var retD   = sorted.map(function (r) { return +(r.retired_parks || 0); });
+    window.sorDestroyChart('sor-parks-health-chart');
     new Highcharts.Chart({
 
       chart: { renderTo: 'sor-parks-health-chart', type: 'bar', height: Math.max(320, cats.length * 22 + 100),
-               backgroundColor: '#fff', style: { fontFamily: 'inherit' } },
+               backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
       title: { text: null }, credits: { enabled: false },
       legend: { enabled: true, align: 'right', verticalAlign: 'top' },
       xAxis: { categories: cats, labels: { style: { fontSize: '11px' } } },
@@ -2944,6 +3884,21 @@ $defaultEnd   = $prevYear . '-12-31';
   /* ------------------------------------------------------------------ */
   /* Utility: HTML-escape                                                 */
   /* ------------------------------------------------------------------ */
+  // FIX D: destroy any existing Highcharts instance rendered into the given container
+  // before re-rendering, so repeated 'Generate Report' clicks don't stack charts.
+  function sorDestroyChart(containerId) {
+    if (typeof Highcharts === 'undefined' || !Highcharts.charts) return;
+    for (var i = 0; i < Highcharts.charts.length; i++) {
+      var c = Highcharts.charts[i];
+      if (c && c.renderTo && c.renderTo.id === containerId) {
+        try { c.destroy(); } catch (e) { /* swallow */ }
+      }
+    }
+    var el = document.getElementById(containerId);
+    if (el) el.innerHTML = '';
+  }
+  window.sorDestroyChart = sorDestroyChart;
+
   function sorEsc(str) {
     if (str == null) { return ''; }
     return String(str)
@@ -3080,13 +4035,14 @@ $defaultEnd   = $prevYear . '-12-31';
     var chartValuesNorm = trend.map(function (r) { return normYearMap[r.year] || 0; });
 
     if (typeof Highcharts !== 'undefined') {
+      window.sorDestroyChart('sor-players-chart');
       new Highcharts.Chart({
         chart: {
           renderTo: "sor-players-chart",
           type: "line",
           height: 300,
           style: { fontFamily: "inherit" },
-          backgroundColor: "#fff",
+          backgroundColor: "transparent",
           plotBorderColor: "#e0e0e0",
           spacingTop: 10,
           spacingBottom: 10
@@ -3149,7 +4105,7 @@ $defaultEnd   = $prevYear . '-12-31';
         },
         legend: {
           enabled: true,
-          itemStyle: { fontSize: '11px', fontWeight: '600', color: '#555' }
+          itemStyle: { fontSize: '11px', fontWeight: '600', color: window.sorThemeColor('--ork-text-secondary', '#555') }
         },
         series: [
           { name: "Annual Sign-Ins", type: "areaspline", yAxis: 0, data: chartValues,
@@ -3233,6 +4189,7 @@ $defaultEnd   = $prevYear . '-12-31';
       { name: 'New Players',           y: newP,  color: '#f39c12' }
     ];
     var maxV = allP || 1;
+    window.sorDestroyChart('sor-players-funnel-chart');
     new Highcharts.Chart({
 
       chart: { renderTo: 'sor-players-funnel-chart', type: 'bar', height: 140, backgroundColor: 'transparent',
@@ -3253,7 +4210,7 @@ $defaultEnd   = $prevYear . '-12-31';
             var pct = maxV > 0 ? ' (' + ((this.y / maxV) * 100).toFixed(0) + '%)' : '';
             return this.y.toLocaleString('en-US') + pct;
           },
-          style: { fontSize: '11px', fontWeight: '600', textShadow: 'none', color: '#333' } } } },
+          style: { fontSize: '11px', fontWeight: '600', textShadow: 'none', color: window.sorThemeColor('--ork-text', '#333') } } } },
       series: [{ name: 'Players', data: funnelData.map(function (d) { return { y: d.y, color: d.color }; }) }]
     });
   };
@@ -3331,12 +4288,13 @@ $defaultEnd   = $prevYear . '-12-31';
 
     // Draw pie chart (Highcharts v3 API)
     if (typeof Highcharts !== 'undefined') {
+      window.sorDestroyChart('sor-longevity-chart');
       new Highcharts.Chart({
         chart: {
           renderTo: 'sor-longevity-chart',
           type: 'pie',
           height: 320,
-          backgroundColor: '#fff',
+          backgroundColor: 'transparent',
           style: { fontFamily: 'inherit' }
         },
         title:   { text: null },
@@ -3365,7 +4323,7 @@ $defaultEnd   = $prevYear . '-12-31';
                 var pct = total > 0 ? ((this.y / total) * 100).toFixed(1) : '0';
                 return '<b>' + this.point.name + '</b><br/>' + pct + '%';
               },
-              style: { fontSize: '11px', fontWeight: '600', textShadow: 'none', color: '#333' }
+              style: { fontSize: '11px', fontWeight: '600', textShadow: 'none', color: window.sorThemeColor('--ork-text', '#333') }
             }
           }
         },
@@ -3384,6 +4342,45 @@ $defaultEnd   = $prevYear . '-12-31';
 <script>
 (function () {
   'use strict';
+
+  // FIX C: Apply a theme-aware Highcharts default that reads ORK3's CSS vars
+  // (`--ork-text*`, `--ork-border`) so chart axes/labels/legend render correctly
+  // in both light mode and `html[data-theme="dark"]`. Each chart sets
+  // `backgroundColor: 'transparent'` so it inherits the surrounding card surface.
+  // The report is fully re-generated on click, so reading vars once at setOptions
+  // time is sufficient — no live-toggle re-render needed.
+  window.sorThemeColor = function (varName, fallback) {
+    try {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      return v || fallback;
+    } catch (e) { return fallback; }
+  };
+
+  // HTML-escape helper. Two sibling IIFEs define their own local sorEsc, but
+  // this orchestrator IIFE (where renderSorAwards lives) was missing one —
+  // calling `sorEsc(...)` inside the awards renderer threw a ReferenceError.
+  function sorEsc(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  if (typeof Highcharts !== 'undefined' && !window._sorChartThemeApplied) {
+    var _axis   = window.sorThemeColor('--ork-text-secondary', '#4a5568');
+    var _label  = window.sorThemeColor('--ork-text-muted',     '#718096');
+    var _border = window.sorThemeColor('--ork-border',         '#e2e8f0');
+    Highcharts.setOptions({
+      chart: { backgroundColor: 'transparent' },
+      xAxis: { lineColor: _border, tickColor: _border,
+               labels: { style: { color: _label } } },
+      yAxis: { gridLineColor: _border,
+               labels: { style: { color: _label } } },
+      legend: { itemStyle:      { color: _axis },
+                itemHoverStyle: { color: window.sorThemeColor('--ork-text', '#2d3748') } }
+    });
+    window._sorChartThemeApplied = true;
+  }
 
   var SOR_BASE_URL = '<?= UIR ?>AdminAjax/stateofamtgard/';
 
@@ -3410,7 +4407,8 @@ $defaultEnd   = $prevYear . '-12-31';
      Status helpers
   ---------------------------------------------------------------- */
   var _sorDone     = 0;
-  var _sorTotal    = 6;
+  var _sorTotal    = 0; // FIX F: self-incremented in sorFetch, reset to 0 in sorGenerate
+  var _sorTimeoutHandle = null; // FIX G: cancelable timeout for hung fetches
   window._sorPayloads = {}; var _sorPayloads = window._sorPayloads;
 
   function sorSetStatus(msg, cls) {
@@ -3424,6 +4422,8 @@ $defaultEnd   = $prevYear . '-12-31';
     _sorDone++;
     sorSetStatus('Loading… ' + _sorDone + '/' + _sorTotal + ' complete');
     if (_sorDone >= _sorTotal) {
+      // FIX G: report finished naturally — cancel the timeout fallback
+      if (_sorTimeoutHandle) { clearTimeout(_sorTimeoutHandle); _sorTimeoutHandle = null; }
       sorSetStatus('Report complete.', 'sor-status-ok');
       var btn = document.getElementById('sor-generate-btn');
       if (btn) btn.disabled = false;
@@ -3435,6 +4435,12 @@ $defaultEnd   = $prevYear . '-12-31';
      Fetch one section
   ---------------------------------------------------------------- */
   function sorFetch(section, qs, renderFn) {
+    _sorTotal++; // FIX F: self-counting total so it stays in sync with actual fetch count
+    // UIR resolves to `.../index.php?Route=` (query-param routing), so the
+    // section already sits inside the Route value and additional params must
+    // be appended with `&`, not a fresh `?` — using `?` here puts a literal
+    // `?` inside the Route value, the section won't match, and $_GET['start']
+    // never populates.
     fetch(SOR_BASE_URL + section + '&' + qs, {credentials: 'same-origin'})
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -3488,6 +4494,8 @@ $defaultEnd   = $prevYear . '-12-31';
 
     // Reset counters and show report container
     _sorDone = 0;
+    _sorTotal = 0; // FIX F: reset, then sorFetch() increments it each call
+    if (_sorTimeoutHandle) { clearTimeout(_sorTimeoutHandle); _sorTimeoutHandle = null; } // FIX G
     window._sorPayloads = {}; _sorPayloads = window._sorPayloads;
     var scEl = document.getElementById('sor-scorecard');
     if (scEl) scEl.style.display = 'none';
@@ -3500,9 +4508,9 @@ $defaultEnd   = $prevYear . '-12-31';
 
     // Ensure all skeleton loaders are visible and content is hidden
     // T-7: Use explicit IDs instead of attribute selector (avoids matching unrelated skeletons)
-    var sorSkeletonIds = ['sor-players-skeleton','sor-kingdoms-skeleton','sor-classes-skeleton','sor-parks-skeleton'];
+    var sorSkeletonIds = ['sor-players-skeleton','sor-kingdoms-skeleton','sor-classes-skeleton','sor-parks-skeleton','sor-awards-skeleton'];
     for (var k = 0; k < sorSkeletonIds.length; k++) { var el = document.getElementById(sorSkeletonIds[k]); if(el) el.style.display = ''; }
-    var contents = ['sor-players-content','sor-kingdoms-content','sor-classes-content','sor-parks-content'];
+    var contents = ['sor-players-content','sor-kingdoms-content','sor-classes-content','sor-parks-content','sor-awards-content'];
     for (var c = 0; c < contents.length; c++) {
       var el = document.getElementById(contents[c]);
       if (el) el.style.display = 'none';
@@ -3533,13 +4541,25 @@ $defaultEnd   = $prevYear . '-12-31';
       printMeta.textContent = 'Period: ' + start + '—' + end + '  •  Kingdoms: ' + kdLabel;
     }
 
-    // Fire 5 parallel requests
+    // Fire 6 parallel requests
     sorFetch('players',  qs, window.renderSorPlayers);
     sorFetch('kingdoms', qs, window.renderSorKingdoms);
     sorFetch('classes',  qs, window.renderSorClasses);
     sorFetch('parks',    qs, window.renderSorParks);
     sorFetch('cohorts',  qs, window.renderSorCohorts);
     sorFetch('longevity', qs, window.renderSorLongevity);
+    sorFetch('awards',   qs, window.renderSorAwards);
+
+    // FIX G: 30-second timeout fallback. If any fetch hangs, force-finish the report
+    // with partial data and re-enable the Generate button so the user isn't stuck on Loading.
+    _sorTimeoutHandle = setTimeout(function () {
+      _sorTimeoutHandle = null;
+      if (_sorDone >= _sorTotal) return; // already finished
+      sorSetStatus('Some sections timed out — partial data shown.', 'sor-status-error');
+      var btn = document.getElementById('sor-generate-btn');
+      if (btn) btn.disabled = false;
+      try { sorRenderScorecard(); } catch (e) { /* swallow */ }
+    }, 30000);
   };
 
   /* ----------------------------------------------------------------
@@ -3591,20 +4611,410 @@ $defaultEnd   = $prevYear . '-12-31';
     if (typeof sorDrawFunnelChart === 'function') sorDrawFunnelChart();
   }
 
+
   /* ----------------------------------------------------------------
-     Select / Clear All kingdoms
+     Award Grants — render function (called by sorFetch('awards'))
   ---------------------------------------------------------------- */
-  window.sorSelectAll = function () {
-    var sel = document.getElementById('sor-kingdoms');
-    if (!sel) return;
-    for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = true;
+  // Overall split — matches trend chart palette so Knight/Paragon/Master
+  // hold the same color across charts.
+  var SOR_AWARDS_OVERALL_COLORS = ['#c0392b', '#2980b9', '#7d3c98'];
+
+  var SOR_AWARDS_KNIGHT_COLORS = [
+    '#c0392b', '#d4a017', '#27ae60', '#2980b9', '#7d3c98'
+  ];
+  var SOR_AWARDS_MASTER_COLORS = [
+    '#c0392b', '#e67e22', '#d4a017', '#27ae60', '#16a085',
+    '#2980b9', '#5d3fd3', '#8e44ad', '#7f8c8d'
+  ];
+  var SOR_AWARDS_PARAGON_COLORS = [
+    '#c0392b', '#d35400', '#e67e22', '#f39c12', '#d4a017',
+    '#a3b117', '#27ae60', '#16a085', '#1abc9c', '#2980b9',
+    '#3498db', '#5d3fd3', '#7d3c98', '#8e44ad', '#c44569',
+    '#922b21', '#4a5568'
+  ];
+
+  function sorAwardsFmtDate(iso) {
+    if (!iso) return '';
+    /* Accepts "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" */
+    var s = String(iso).slice(0, 10);
+    var parts = s.split('-');
+    if (parts.length !== 3) return sorEsc(iso);
+    var y = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    var d = parseInt(parts[2], 10);
+    if (!y || !m || !d) return sorEsc(iso);
+    var months = ['Jan','Feb','Mar','Apr','May','Jun',
+                  'Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[m - 1] + ' ' + d + ', ' + y;
+  }
+
+  function sorAwardsPeeragePill(tier) {
+    var t = String(tier || '').toLowerCase();
+    var cls = 'sor-awards-peerage-master';
+    if (t.indexOf('knight') === 0)  cls = 'sor-awards-peerage-knight';
+    else if (t.indexOf('paragon') === 0) cls = 'sor-awards-peerage-paragon';
+    return '<span class="sor-awards-peerage-pill ' + cls + '">' + sorEsc(tier || '') + '</span>';
+  }
+
+  function sorAwardsRenderKpis(totals) {
+    var k = parseInt(totals && totals.knights,  10) || 0;
+    var p = parseInt(totals && totals.paragons, 10) || 0;
+    var m = parseInt(totals && totals.masters,  10) || 0;
+    function kpi(label, value, accent, icon) {
+      return '<div class="sor-kpi-card" style="border-top-color:' + accent + '">' +
+               '<span class="sor-kpi-icon">' + icon + '</span>' +
+               '<span class="sor-kpi-value" style="color:' + accent + '">' + value.toLocaleString('en-US') + '</span>' +
+               '<span class="sor-kpi-label">' + label + '</span>' +
+             '</div>';
+    }
+    document.getElementById('sor-awards-kpi-row').innerHTML =
+      kpi('Total Knights Granted',  k, '#c0392b', '&#9876;') +
+      kpi('Total Paragons Granted', p, '#7d3c98', '&#127942;') +
+      kpi('Total Masters Granted',  m, '#2980b9', '&#127891;');
+
+    var ks = document.getElementById('sor-awards-knights-sub');
+    var ps = document.getElementById('sor-awards-paragons-sub');
+    var ms = document.getElementById('sor-awards-masters-sub');
+    if (ks) ks.textContent = k.toLocaleString('en-US') + ' total';
+    if (ps) ps.textContent = p.toLocaleString('en-US') + ' total';
+    if (ms) ms.textContent = m.toLocaleString('en-US') + ' total';
+  }
+
+  /* Strip the peerage prefix so labels stay legible in tightly packed pies
+     ("Knight of the Sword" → "Sword", "Paragon Wizard" → "Wizard",
+     "Master Rose" → "Rose"). Names without a known prefix (Battlemaster,
+     Warlord) are returned unchanged. */
+  function sorAwardsShortName(name) {
+    return String(name || '').replace(/^(Knight of the |Knight of |Master |Paragon )/i, '');
+  }
+
+  function sorAwardsDrawPie(containerId, rows, palette, seriesName) {
+    if (typeof Highcharts === 'undefined') return;
+    window.sorDestroyChart(containerId);
+
+    /* Drop zero-count slices for clarity. Strip peerage prefix so labels fit. */
+    var data = (rows || [])
+      .filter(function (r) { return parseInt(r.count, 10) > 0; })
+      .map(function (r) {
+        var full = String(r.name || '');
+        return {
+          name:     sorAwardsShortName(full),
+          fullName: full,
+          y:        parseInt(r.count, 10) || 0
+        };
+      });
+
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    if (!data.length) {
+      container.innerHTML =
+        '<p style="color:#999;padding:40px 12px;text-align:center;font-size:0.85rem">' +
+          'No grants in this period.' +
+        '</p>';
+      return;
+    }
+
+    var textColor      = window.sorThemeColor('--ork-text',           '#2d3748');
+    var textSecondary  = window.sorThemeColor('--ork-text-secondary', '#4a5568');
+
+    new Highcharts.Chart({
+      chart: {
+        renderTo:        containerId,
+        type:            'pie',
+        backgroundColor: 'transparent',
+        style:           { fontFamily: 'inherit' },
+        animation:       { duration: 550 },
+        // Reserve horizontal room so connector legs + labels stay inside the
+        // card (otherwise labels like "Battlemaster: 57" get cropped).
+        marginLeft:      95,
+        marginRight:     95,
+        spacingTop:      10,
+        spacingBottom:   10
+      },
+      title:    { text: null },
+      subtitle: { text: null },
+      credits:  { enabled: false },
+      exporting: { enabled: false },
+      colors:    palette,
+
+      tooltip: {
+        useHTML:         false,
+        backgroundColor: 'rgba(26,26,26,0.88)',
+        style:           { color: '#fff' },
+        borderWidth:     0,
+        shadow:          false,
+        formatter: function () {
+          return '<b>' + (this.point.fullName || this.point.name) + '</b><br/>' +
+                 this.y.toLocaleString('en-US') + ' (' +
+                 this.percentage.toFixed(1) + '%)';
+        }
+      },
+
+      plotOptions: {
+        pie: {
+          allowPointSelect: false,
+          cursor:           'pointer',
+          borderWidth:      1,
+          borderColor:      window.sorThemeColor('--ork-card-bg', '#ffffff'),
+          // Reasonable pie size — cards are wider in the 2×2 layout so we
+          // can afford a larger pie and still keep the gutters clean.
+          size:             '72%',
+          dataLabels: {
+            enabled:        true,
+            useHTML:        false,
+            distance:       22,
+            connectorWidth: 1,
+            connectorPadding: 6,
+            softConnector:  true,
+            // Allow labels to render even if they would otherwise be clipped
+            // — Highcharts auto-vertical-stacks them via softConnector.
+            crop:           false,
+            overflow:       'allow',
+            // Align the label horizontally to the chart's left/right edge so
+            // every label on a side starts at the same x — this prevents the
+            // staggered cutoff seen with the default radial placement.
+            alignTo:        'connectors',
+            formatter: function () {
+              if (this.percentage < 2) return null;
+              return this.point.name + ': ' + this.y;
+            },
+            style: {
+              fontSize:   '13px',
+              fontWeight: '600',
+              color:      textSecondary,
+              textShadow: 'none'
+            }
+          },
+          showInLegend: false
+        }
+      },
+
+      series: [{
+        name: seriesName,
+        data: data
+      }]
+    });
+  }
+
+  function sorAwardsDrawTrend(trend) {
+    var card      = document.getElementById('sor-awards-trend-card');
+    var container = document.getElementById('sor-awards-trend-chart');
+    if (!card || !container) return;
+
+    // Hide if missing, empty, or entirely zero
+    var hasData = Array.isArray(trend) && trend.length > 0;
+    if (hasData) {
+      var anyNonZero = false;
+      for (var i = 0; i < trend.length; i++) {
+        var t = trend[i] || {};
+        if ((parseInt(t.knights, 10) || 0) +
+            (parseInt(t.masters, 10) || 0) +
+            (parseInt(t.paragons, 10) || 0) > 0) {
+          anyNonZero = true;
+          break;
+        }
+      }
+      hasData = anyNonZero;
+    }
+    if (!hasData) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+
+    if (typeof Highcharts === 'undefined') return;
+
+    var years    = [];
+    var knights  = [];
+    var masters  = [];
+    var paragons = [];
+    for (var j = 0; j < trend.length; j++) {
+      var row = trend[j] || {};
+      years.push(parseInt(row.year, 10) || 0);
+      knights.push(parseInt(row.knights, 10) || 0);
+      masters.push(parseInt(row.masters, 10) || 0);
+      paragons.push(parseInt(row.paragons, 10) || 0);
+    }
+    var startYear = years[0];
+    var endYear   = years[years.length - 1];
+
+    var textColor      = window.sorThemeColor('--ork-text',           '#2d3748');
+    var textSecondary  = window.sorThemeColor('--ork-text-secondary', '#4a5568');
+    var textMuted      = window.sorThemeColor('--ork-text-muted',     '#718096');
+    var borderColor    = window.sorThemeColor('--ork-border',         '#e2e8f0');
+
+    window.sorDestroyChart('sor-awards-trend-chart');
+    new Highcharts.Chart({
+      chart: {
+        renderTo:        'sor-awards-trend-chart',
+        type:            'spline',
+        backgroundColor: 'transparent',
+        style:           { fontFamily: 'inherit' },
+        animation:       { duration: 600 },
+        spacingTop:      8,
+        spacingBottom:   4
+      },
+      title: {
+        text: '10-Year Peerage Grant Trends',
+        style: { fontSize: '0.95rem', fontWeight: '700', color: textColor }
+      },
+      subtitle: {
+        text: startYear + '–' + endYear,
+        style: { fontSize: '0.78rem', color: textMuted, letterSpacing: '0.02em' }
+      },
+      credits:   { enabled: false },
+      exporting: { enabled: false },
+
+      xAxis: {
+        categories: years.map(function (y) { return String(y); }),
+        labels: {
+          style: { fontSize: '11px', color: textSecondary }
+        },
+        lineColor: borderColor,
+        tickColor: borderColor
+      },
+      yAxis: {
+        min: 0,
+        allowDecimals: false,
+        title: {
+          text: 'Grants',
+          style: { fontSize: '11px', color: textMuted }
+        },
+        labels: {
+          style: { fontSize: '11px', color: textMuted }
+        },
+        gridLineColor: borderColor
+      },
+
+      legend: {
+        align: 'center',
+        verticalAlign: 'bottom',
+        layout: 'horizontal',
+        itemStyle: { fontSize: '12px', fontWeight: '600', color: textSecondary },
+        itemHoverStyle: { color: textColor }
+      },
+
+      tooltip: {
+        shared: true,
+        useHTML: false,
+        backgroundColor: 'rgba(26,26,26,0.88)',
+        style:           { color: '#fff', fontSize: '12px' },
+        borderWidth:     0,
+        shadow:          false,
+        headerFormat: '<b>Year {point.key}</b><br/>',
+        pointFormat:  '{series.name}: <b>{point.y}</b><br/>'
+      },
+
+      plotOptions: {
+        series: {
+          marker: { enabled: true, radius: 3, symbol: 'circle' },
+          lineWidth: 2,
+          states: { hover: { lineWidth: 3 } }
+        }
+      },
+
+      series: [
+        { name: 'Knights',  data: knights,  color: '#c0392b' },
+        { name: 'Masters',  data: masters,  color: '#7d3c98' },
+        { name: 'Paragons', data: paragons, color: '#2980b9' }
+      ]
+    });
+  }
+
+  function sorAwardsRenderKingdomsTable(rows) {
+    var tbody = document.getElementById('sor-awards-kingdoms-tbody');
+    if (!tbody) return;
+    rows = rows || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:18px">No peerage grants in this period.</td></tr>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      html += '<tr>' +
+                '<td>' + sorEsc(r.kingdom_name || '') + '</td>' +
+                '<td style="text-align:right">' + (parseInt(r.knights,  10) || 0).toLocaleString('en-US') + '</td>' +
+                '<td style="text-align:right">' + (parseInt(r.paragons, 10) || 0).toLocaleString('en-US') + '</td>' +
+                '<td style="text-align:right">' + (parseInt(r.masters,  10) || 0).toLocaleString('en-US') + '</td>' +
+                '<td style="text-align:right"><strong>' + (parseInt(r.total, 10) || 0).toLocaleString('en-US') + '</strong></td>' +
+              '</tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
+  function sorAwardsRenderRecentTable(rows) {
+    var tbody = document.getElementById('sor-awards-recent-tbody');
+    if (!tbody) return;
+    rows = rows || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:18px">No recent grants.</td></tr>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var recipient = sorEsc(r.player_name || '');
+      if (r.mundane_id) {
+        recipient = '<a class="sor-awards-recipient-link" href="<?= UIR ?>Player/index/' +
+                    encodeURIComponent(r.mundane_id) + '">' + recipient + '</a>';
+      }
+      html += '<tr>' +
+                '<td>' + sorAwardsFmtDate(r.date) + '</td>' +
+                '<td>' + recipient + '</td>' +
+                '<td>' + sorEsc(r.award_name || '') + '</td>' +
+                '<td>' + sorAwardsPeeragePill(r.peerage || '') + '</td>' +
+                '<td>' + sorEsc(r.kingdom_name || '') + '</td>' +
+              '</tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
+  window.renderSorAwards = function (data) {
+    var skeleton = document.getElementById('sor-awards-skeleton');
+    var content  = document.getElementById('sor-awards-content');
+    function showError(msg) {
+      if (skeleton) skeleton.style.display = 'none';
+      if (content)  content.style.display  = '';
+      var row = document.getElementById('sor-awards-kpi-row');
+      if (row) row.innerHTML = '<p style="color:#c0392b;padding:20px">' + msg + '</p>';
+    }
+    if (!data || !data.awards) { showError('Error loading awards data.'); return; }
+    var a = data.awards;
+
+    /* Show content before charts so Highcharts can measure container dimensions */
+    if (skeleton) skeleton.style.display = 'none';
+    if (content)  content.style.display  = '';
+
+    try {
+      sorAwardsRenderKpis(a.totals || {});
+      sorAwardsDrawTrend(a.ten_year_trend || []);
+      /* Synthesize an overall-split "pie rows" payload from the totals. */
+      var t = a.totals || {};
+      var overallRows = [
+        { name: 'Knights',  count: parseInt(t.knights,  10) || 0 },
+        { name: 'Paragons', count: parseInt(t.paragons, 10) || 0 },
+        { name: 'Masters',  count: parseInt(t.masters,  10) || 0 }
+      ];
+      var overallTotal = overallRows.reduce(function (s, r) { return s + r.count; }, 0);
+      var overallSub = document.getElementById('sor-awards-overall-sub');
+      if (overallSub) overallSub.textContent = overallTotal.toLocaleString('en-US') + ' total';
+      sorAwardsDrawPie('sor-awards-overall-chart',  overallRows,        SOR_AWARDS_OVERALL_COLORS, 'Peerage');
+      sorAwardsDrawPie('sor-awards-knights-chart',  a.knights  || [], SOR_AWARDS_KNIGHT_COLORS,  'Knights');
+      sorAwardsDrawPie('sor-awards-paragons-chart', a.paragons || [], SOR_AWARDS_PARAGON_COLORS, 'Paragons');
+      sorAwardsDrawPie('sor-awards-masters-chart',  a.masters  || [], SOR_AWARDS_MASTER_COLORS,  'Masters');
+      sorAwardsRenderKingdomsTable(a.top_kingdoms || []);
+      sorAwardsRenderRecentTable(a.recent || []);
+    } catch (e) {
+      showError('Awards render error: ' + (e && e.message ? e.message : String(e)));
+      return;
+    }
   };
 
-  window.sorClearAll = function () {
-    var sel = document.getElementById('sor-kingdoms');
-    if (!sel) return;
-    for (var i = 0; i < sel.options.length; i++) sel.options[i].selected = false;
-  };
+
+  // Kingdom multi-select handlers (sorSelectAll / sorClearAll /
+  // sorSelectAllExceptFreeholds) live in the standalone <script> block
+  // right after the filter card, so they survive errors in this IIFE.
 
 }());
 </script>

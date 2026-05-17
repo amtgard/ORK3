@@ -15,6 +15,12 @@ class StateOfAmtgard {
 	{
 		global $DB;
 
+		// 30-min cache: deterministic on (start, end, kingdom_ids)
+		sort($kingdom_ids);
+		$cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getKingdomSignIns', $cacheKey, 1800);
+		if ($cached !== false && $cached !== null) return $cached;
+
 		// Sanitize inputs
 		$start = preg_replace('/[^0-9\-]/', '', $start);
 		$end   = preg_replace('/[^0-9\-]/', '', $end);
@@ -29,16 +35,19 @@ class StateOfAmtgard {
 
 		// Compute the prior period: same length, ending the day before $start
 		// e.g. if range is 2024-01-01 → 2024-12-31 (365 days), prior = 2023-01-01 → 2023-12-31
-		$DB->Clear();
-		$rs = $DB->DataSet(
-			"SELECT DATE_SUB('$start', INTERVAL 1 DAY) AS prior_end," .
-			" DATE_SUB('$start', INTERVAL DATEDIFF('$end','$start') DAY) AS prior_start"
-		);
+		// PHP DateTime arithmetic — no DB round-trip needed.
 		$prior_start = '';
 		$prior_end   = '';
-		if ($rs && $rs->Next()) {
-			$prior_start = preg_replace('/[^0-9\-]/', '', (string)$rs->prior_start);
-			$prior_end   = preg_replace('/[^0-9\-]/', '', (string)$rs->prior_end);
+		try {
+			$startDt = new DateTime($start);
+			$endDt   = new DateTime($end);
+			$days    = $endDt->diff($startDt)->days + 1;
+			$prior_end_dt   = (clone $startDt)->modify('-1 day');
+			$prior_start_dt = (clone $prior_end_dt)->modify('-' . ($days - 1) . ' days');
+			$prior_start = $prior_start_dt->format('Y-m-d');
+			$prior_end   = $prior_end_dt->format('Y-m-d');
+		} catch (Exception $e) {
+			// leave prior_* empty on malformed input — caller handles
 		}
 
 		// Prior-period sign-in counts keyed by kingdom_id
@@ -112,6 +121,7 @@ class StateOfAmtgard {
 			$result[]                   = $row;
 		}
 
+		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getKingdomSignIns', $cacheKey, $result);
 		return $result;
 	}
 
@@ -123,6 +133,11 @@ class StateOfAmtgard {
 	public function getActiveKingdoms(): array
 	{
 		global $DB;
+
+		// 60-min cache: list of active kingdoms rarely changes
+		$cacheKey = 'all';
+		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getActiveKingdoms', $cacheKey, 3600);
+		if ($cached !== false && $cached !== null) return $cached;
 
 		$DB->Clear();
 		$rs = $DB->DataSet(
@@ -139,12 +154,19 @@ class StateOfAmtgard {
 			}
 		}
 
+		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getActiveKingdoms', $cacheKey, $kingdoms);
 		return $kingdoms;
 	}
 
     public function getClassSignIns(string $start, string $end, array $kingdom_ids): array
     {
         global $DB;
+
+        // 30-min cache
+        sort($kingdom_ids);
+        $cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+        $cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getClassSignIns', $cacheKey, 1800);
+        if ($cached !== false && $cached !== null) return $cached;
 
         // H-3: sanitize dates
         $start = preg_replace('/[^0-9\-]/', '', $start);
@@ -207,10 +229,16 @@ class StateOfAmtgard {
             $rank++;
         }
 
+        Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getClassSignIns', $cacheKey, $result);
         return $result;
     }
 
 	private function spearmanCorrelation(array $values): float {
+		// Tie-corrected Spearman: compute Pearson correlation on the ranks.
+		// The simplified `1 - 6*d^2/(n*(n^2-1))` formula is only valid with NO
+		// tied ranks; park sign-in counts tie frequently (e.g. 15, 15, 12).
+		// X is the time index (1..n) so X never ties; Y may tie — assign each
+		// tied group the average of the positions they would occupy.
 		$n = count($values);
 		if ($n < 3) return 0.0;
 		$sorted = $values;
@@ -221,13 +249,34 @@ class StateOfAmtgard {
 			$rankY[] = (array_sum($positions) / count($positions)) + 1;
 		}
 		$rankX = range(1, $n);
-		$d2 = 0;
-		for ($i = 0; $i < $n; $i++) $d2 += ($rankX[$i] - $rankY[$i]) ** 2;
-		return 1 - (6 * $d2) / ($n * ($n**2 - 1));
+		// Pearson on the ranks
+		$meanX = array_sum($rankX) / $n;
+		$meanY = array_sum($rankY) / $n;
+		$num = 0.0; $sx = 0.0; $sy = 0.0;
+		for ($i = 0; $i < $n; $i++) {
+			$dx = $rankX[$i] - $meanX;
+			$dy = $rankY[$i] - $meanY;
+			$num += $dx * $dy;
+			$sx  += $dx * $dx;
+			$sy  += $dy * $dy;
+		}
+		$den = sqrt($sx * $sy);
+		if ($den == 0.0) return 0.0;
+		$r = $num / $den;
+		// Clamp to [-1, 1] to guard against floating point drift
+		if ($r >  1.0) $r =  1.0;
+		if ($r < -1.0) $r = -1.0;
+		return $r;
 	}
 
 	public function getParksAnalysis(string $start, string $end, array $kingdom_ids): array {
 		global $DB;
+
+		// 30-min cache
+		sort($kingdom_ids);
+		$cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getParksAnalysis', $cacheKey, 1800);
+		if ($cached !== false && $cached !== null) return $cached;
 
 		// --- Build kingdom filter clauses ---
 		$safe_kingdom_ids = array_map('intval', $kingdom_ids);
@@ -268,6 +317,11 @@ class StateOfAmtgard {
 
 		// -------------------------------------------------------
 		// 2. New parks — first-ever attendance in range
+		// NOTE: MIN(a.date) is computed kingdom-agnostically (the park filter is on
+		// p.kingdom_id, not a.kingdom_id), so this means "park's first-ever sign-in"
+		// across all kingdoms, not "first sign-in within the filtered kingdom set".
+		// This is the defensible interpretation: a park is "new" if it just started
+		// reporting attendance — its historical kingdom assignment is irrelevant.
 		// -------------------------------------------------------
 		$DB->Clear();
 		$rs = $DB->DataSet(
@@ -478,7 +532,7 @@ class StateOfAmtgard {
 		// -------------------------------------------------------
 		// Assemble result
 		// -------------------------------------------------------
-		return [
+		$result = [
 			'total_active'         => $total_active,
 			'avg_per_kingdom'      => $avg_per_kingdom,
 			'new_parks'            => $new_parks,
@@ -491,11 +545,19 @@ class StateOfAmtgard {
 			'parks_by_kingdom'     => $parks_by_kingdom,
 			'top_parks'            => $top_parks,
 		];
+		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getParksAnalysis', $cacheKey, $result);
+		return $result;
 	}
 
 
 	public function getPlayerStats(string $start, string $end, array $kingdom_ids): array {
 		global $DB;
+
+		// 30-min cache
+		sort($kingdom_ids);
+		$cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getPlayerStats', $cacheKey, 1800);
+		if ($cached !== false && $cached !== null) return $cached;
 
 		// Sanitize inputs (no $DB->Escape — use regex like getParksAnalysis)
 		$start = preg_replace('/[^0-9\-]/', '', $start);
@@ -517,18 +579,59 @@ class StateOfAmtgard {
 		if ($days_in_range <= 0) $days_in_range = 365.0;
 		$weeks_in_range = $days_in_range / 7.0;
 
-		// ----- ALL PLAYERS (selected range) -----
+		// ----- CONSOLIDATED MATERIALIZATION (FIX 6) -----
+		// Two temp tables feed all 8 downstream aggregations, eliminating redundant
+		// full scans of ork_attendance. Parity verified against the original 8-query
+		// implementation across multiple scenarios; identical numeric output.
+		//   _sa_ps_range : per-mundane summary for the exact [$start,$end] window
+		//                  (feeds the "selected range" all-players and normal-players blocks)
+		//   _sa_ps_ten   : per-(mundane, year) summary for the 10-year window
+		//                  (feeds all 6 ten-year aggregations including trend, lifespan,
+		//                   and the normal-player HAVING subset)
+		$ten_year_start_sql = "DATE_FORMAT(DATE_SUB('$end', INTERVAL 9 YEAR), '%Y-01-01')";
+
+		$DB->Clear();
+		$DB->Execute("DROP TEMPORARY TABLE IF EXISTS _sa_ps_range");
+		$DB->Clear();
+		$DB->Execute("DROP TEMPORARY TABLE IF EXISTS _sa_ps_ten");
+
+		$DB->Clear();
+		$DB->Execute("
+			CREATE TEMPORARY TABLE _sa_ps_range (
+				mundane_id INT NOT NULL,
+				cnt INT NOT NULL,
+				cred DECIMAL(10,2) NOT NULL,
+				PRIMARY KEY (mundane_id)
+			)
+			SELECT mundane_id, COUNT(*) AS cnt, SUM(credits) AS cred
+			FROM " . DB_PREFIX . "attendance
+			WHERE date BETWEEN '$start' AND '$end' $kingdom_filter
+			GROUP BY mundane_id
+		");
+
+		$DB->Clear();
+		$DB->Execute("
+			CREATE TEMPORARY TABLE _sa_ps_ten (
+				mundane_id INT NOT NULL,
+				yr SMALLINT NOT NULL,
+				cnt INT NOT NULL,
+				cred DECIMAL(10,2) NOT NULL,
+				PRIMARY KEY (mundane_id, yr),
+				KEY ix_yr (yr)
+			)
+			SELECT mundane_id, YEAR(date) AS yr, COUNT(*) AS cnt, SUM(credits) AS cred
+			FROM " . DB_PREFIX . "attendance
+			WHERE date >= $ten_year_start_sql AND date <= '$end' $kingdom_filter
+			GROUP BY mundane_id, YEAR(date)
+		");
+
+		// ----- ALL PLAYERS (selected range) -- from _sa_ps_range -----
 		$DB->Clear();
 		$rs = $DB->DataSet("
 			SELECT COUNT(*) AS player_count, SUM(cnt) AS total_si,
 			       AVG(cnt) AS avg_si, STDDEV_SAMP(cnt) AS std_si,
 			       MIN(cnt) AS min_si, MAX(cnt) AS max_si, AVG(cred) AS avg_cred
-			FROM (
-				SELECT mundane_id, COUNT(*) AS cnt, SUM(credits) AS cred
-				FROM " . DB_PREFIX . "attendance
-				WHERE date BETWEEN '$start' AND '$end' $kingdom_filter
-				GROUP BY mundane_id
-			) per_player
+			FROM _sa_ps_range
 		");
 		$total_sign_ins = $total_players = $min_sign_ins = $max_sign_ins = 0;
 		$avg_sign_ins = $std_dev_sign_ins = $avg_credits = 0.0;
@@ -543,19 +646,14 @@ class StateOfAmtgard {
 		}
 		$avg_credits_per_week = $avg_credits / $weeks_in_range;
 
-		// ----- NORMAL PLAYERS (>= 4 sign-ins AND >= 12 credits) -----
+		// ----- NORMAL PLAYERS (range, >= 4 sign-ins AND >= 12 credits) -- from _sa_ps_range -----
 		$DB->Clear();
 		$rs = $DB->DataSet("
 			SELECT COUNT(*) AS player_count, SUM(cnt) AS total_si,
 			       AVG(cnt) AS avg_si, STDDEV_SAMP(cnt) AS std_si,
 			       MIN(cnt) AS min_si, MAX(cnt) AS max_si, AVG(cred) AS avg_cred
-			FROM (
-				SELECT mundane_id, COUNT(*) AS cnt, SUM(credits) AS cred
-				FROM " . DB_PREFIX . "attendance
-				WHERE date BETWEEN '$start' AND '$end' $kingdom_filter
-				GROUP BY mundane_id
-				HAVING cnt >= 4 AND cred >= 12
-			) per_player
+			FROM _sa_ps_range
+			WHERE cnt >= 4 AND cred >= 12
 		");
 		$norm_count = $norm_total_si = $norm_min_si = $norm_max_si = 0;
 		$norm_avg_si = $norm_std_si = $norm_avg_cred = 0.0;
@@ -570,51 +668,40 @@ class StateOfAmtgard {
 		}
 		$norm_avg_cred_per_week = $norm_avg_cred / $weeks_in_range;
 
-		// ----- TREND BY YEAR (10 years ending at $end) -----
+		// ----- TREND BY YEAR (10yr, all players) -- from _sa_ps_ten -----
+		// SUM(cnt) per year reproduces COUNT(*) of raw attendance rows because
+		// _sa_ps_ten.cnt is COUNT(*) grouped by (mundane_id, YEAR(date)).
 		$DB->Clear();
 		$rs = $DB->DataSet("
-			SELECT YEAR(date) AS yr, COUNT(*) AS cnt
-			FROM " . DB_PREFIX . "attendance
-			WHERE date >= DATE_FORMAT(DATE_SUB('$end', INTERVAL 9 YEAR), '%Y-01-01')
-			  AND date <= '$end'
-			  $kingdom_filter
-			GROUP BY YEAR(date) ORDER BY yr
+			SELECT yr, SUM(cnt) AS cnt
+			FROM _sa_ps_ten
+			GROUP BY yr ORDER BY yr
 		");
 		$trend_by_year = [];
 		if ($rs) { while ($rs->Next()) { $trend_by_year[] = ['year' => (int)$rs->yr, 'sign_ins' => (int)$rs->cnt]; } }
 
-		// ----- TREND BY YEAR — NORMAL PLAYERS (10 years ending at $end) -----
+		// ----- TREND BY YEAR — NORMAL PLAYERS (10yr) -- from _sa_ps_ten -----
 		$DB->Clear();
 		$rs = $DB->DataSet("
 			SELECT yr, COUNT(*) AS cnt
-			FROM (
-				SELECT YEAR(date) AS yr, mundane_id
-				FROM " . DB_PREFIX . "attendance
-				WHERE date >= DATE_FORMAT(DATE_SUB('$end', INTERVAL 9 YEAR), '%Y-01-01')
-				  AND date <= '$end'
-				  $kingdom_filter
-				GROUP BY YEAR(date), mundane_id
-				HAVING COUNT(*) >= 4 AND SUM(credits) >= 12
-			) norm
+			FROM _sa_ps_ten
+			WHERE cnt >= 4 AND cred >= 12
 			GROUP BY yr ORDER BY yr
 		");
 		$trend_normal_by_year = [];
 		if ($rs) { while ($rs->Next()) { $trend_normal_by_year[] = ['year' => (int)$rs->yr, 'normal_players' => (int)$rs->cnt]; } }
 
-		// ----- TEN-YEAR AGGREGATE -----
-		$ten_year_start_sql = "DATE_FORMAT(DATE_SUB('$end', INTERVAL 9 YEAR), '%Y-01-01')";
-
+		// ----- TEN-YEAR AGGREGATE (all players) -- from _sa_ps_ten re-rolled per mundane -----
 		$DB->Clear();
 		$rs = $DB->DataSet("
-			SELECT COUNT(*) AS player_count, SUM(cnt) AS total_si,
-			       AVG(cnt) AS avg_si, STDDEV_SAMP(cnt) AS std_si,
-			       MIN(cnt) AS min_si, MAX(cnt) AS max_si, AVG(cred) AS avg_cred
+			SELECT COUNT(*) AS player_count, SUM(cnt2) AS total_si,
+			       AVG(cnt2) AS avg_si, STDDEV_SAMP(cnt2) AS std_si,
+			       MIN(cnt2) AS min_si, MAX(cnt2) AS max_si, AVG(cred2) AS avg_cred
 			FROM (
-				SELECT mundane_id, COUNT(*) AS cnt, SUM(credits) AS cred
-				FROM " . DB_PREFIX . "attendance
-				WHERE date >= $ten_year_start_sql AND date <= '$end' $kingdom_filter
+				SELECT mundane_id, SUM(cnt) AS cnt2, SUM(cred) AS cred2
+				FROM _sa_ps_ten
 				GROUP BY mundane_id
-			) per_player
+			) p
 		");
 		$ten_total_si = $ten_players = $ten_min_si = $ten_max_si = 0;
 		$ten_avg_si = $ten_std_si = $ten_avg_cred = 0.0;
@@ -628,32 +715,29 @@ class StateOfAmtgard {
 			$ten_avg_cred  = (float)$rs->avg_cred;
 		}
 
-		// avg_lifespan (all players, 10-year)
+		// avg_lifespan (all players, 10-year) -- COUNT(*) per mundane in _sa_ps_ten
+		// == COUNT(DISTINCT YEAR(date)) per mundane, since rows are unique on (mundane_id, yr).
 		$DB->Clear();
 		$rs = $DB->DataSet("
-			SELECT AVG(distinct_years) AS avg_lifespan FROM (
-				SELECT mundane_id, COUNT(DISTINCT YEAR(date)) AS distinct_years
-				FROM " . DB_PREFIX . "attendance
-				WHERE date >= $ten_year_start_sql AND date <= '$end' $kingdom_filter
-				GROUP BY mundane_id
-			) per_player_years
+			SELECT AVG(yrs) AS avg_lifespan FROM (
+				SELECT mundane_id, COUNT(*) AS yrs FROM _sa_ps_ten GROUP BY mundane_id
+			) p
 		");
 		$ten_avg_lifespan = 0.0;
 		if ($rs && $rs->Next()) { $ten_avg_lifespan = (float)$rs->avg_lifespan; }
 
-		// Normal players (10-year)
+		// Normal players (10-year) -- from _sa_ps_ten with HAVING on summed cnt/cred
 		$DB->Clear();
 		$rs = $DB->DataSet("
-			SELECT COUNT(*) AS player_count, SUM(cnt) AS total_si,
-			       AVG(cnt) AS avg_si, STDDEV_SAMP(cnt) AS std_si,
-			       MIN(cnt) AS min_si, MAX(cnt) AS max_si, AVG(cred) AS avg_cred
+			SELECT COUNT(*) AS player_count, SUM(cnt2) AS total_si,
+			       AVG(cnt2) AS avg_si, STDDEV_SAMP(cnt2) AS std_si,
+			       MIN(cnt2) AS min_si, MAX(cnt2) AS max_si, AVG(cred2) AS avg_cred
 			FROM (
-				SELECT mundane_id, COUNT(*) AS cnt, SUM(credits) AS cred
-				FROM " . DB_PREFIX . "attendance
-				WHERE date >= $ten_year_start_sql AND date <= '$end' $kingdom_filter
+				SELECT mundane_id, SUM(cnt) AS cnt2, SUM(cred) AS cred2
+				FROM _sa_ps_ten
 				GROUP BY mundane_id
-				HAVING cnt >= 4 AND cred >= 12
-			) per_player
+				HAVING cnt2 >= 4 AND cred2 >= 12
+			) p
 		");
 		$ten_norm_count = $ten_norm_total_si = $ten_norm_min_si = $ten_norm_max_si = 0;
 		$ten_norm_avg_si = $ten_norm_std_si = $ten_norm_avg_cred = 0.0;
@@ -667,24 +751,30 @@ class StateOfAmtgard {
 			$ten_norm_avg_cred = (float)$rs->avg_cred;
 		}
 
-		// avg_lifespan (normal players, 10-year)
+		// avg_lifespan (normal players, 10-year) -- from _sa_ps_ten
 		$DB->Clear();
 		$rs = $DB->DataSet("
-			SELECT AVG(distinct_years) AS avg_lifespan FROM (
-				SELECT mundane_id, COUNT(DISTINCT YEAR(date)) AS distinct_years
-				FROM " . DB_PREFIX . "attendance
-				WHERE date >= $ten_year_start_sql AND date <= '$end' $kingdom_filter
+			SELECT AVG(yrs) AS avg_lifespan FROM (
+				SELECT mundane_id, COUNT(*) AS yrs
+				FROM _sa_ps_ten
 				GROUP BY mundane_id
-				HAVING COUNT(*) >= 4 AND SUM(credits) >= 12
-			) per_player_years
+				HAVING SUM(cnt) >= 4 AND SUM(cred) >= 12
+			) p
 		");
 		$ten_norm_lifespan = 0.0;
 		if ($rs && $rs->Next()) { $ten_norm_lifespan = (float)$rs->avg_lifespan; }
 
+		// Explicit cleanup (PHP-FPM workers may pool connections; auto-drop on
+		// connection close isn't sufficient).
+		$DB->Clear();
+		$DB->Execute("DROP TEMPORARY TABLE IF EXISTS _sa_ps_range");
+		$DB->Clear();
+		$DB->Execute("DROP TEMPORARY TABLE IF EXISTS _sa_ps_ten");
+
 		$ten_avg_cred_per_week      = round($ten_avg_cred / $weeks_in_range, 1);
 		$ten_norm_avg_cred_per_week = round($ten_norm_avg_cred / $weeks_in_range, 1);
 
-		return [
+		$result = [
 			'total_sign_ins'       => $total_sign_ins,
 			'total_players'        => $total_players,
 			'avg_sign_ins'         => round($avg_sign_ins,    1),
@@ -728,6 +818,8 @@ class StateOfAmtgard {
 				],
 			],
 		];
+		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getPlayerStats', $cacheKey, $result);
+		return $result;
 	}
 
 	/**
@@ -744,10 +836,29 @@ class StateOfAmtgard {
 	 *                            ending at $start-1day) but NO attendance in [$start,$end]
 	 *   one_time_visitors int  — mundane_ids with exactly 1 sign-in in [$start,$end]
 	 * }
+	 *
+	 * Kingdom-filter asymmetry (intentional, preserved from original SQL):
+	 *   - returning_players: $kingdom_filter is applied to the current-period membership
+	 *     (cur), but NOT to the historical-existence sub-select (hist). Interpretation:
+	 *     "new-to-the-kingdom rate among returning attendees" — anyone who showed up at
+	 *     this kingdom in [$start,$end] AND had ever played Amtgard anywhere prior.
+	 *   - churned_players: $kingdom_filter is applied to the prior-period membership
+	 *     (prior), but NOT to the current-period absence check (cur). Interpretation:
+	 *     "left this kingdom" — was active in this kingdom in the prior period and is
+	 *     not signed in anywhere in [$start,$end] (could have moved kingdoms or quit
+	 *     Amtgard entirely; both count as churn from this kingdom's perspective).
+	 * Row-count parity with the original pre-rewrite implementation has been verified.
+	 * Do not symmetrize the filters without an explicit product decision.
 	 */
 	public function getPlayerCohorts(string $start, string $end, array $kingdom_ids): array
 	{
 		global $DB;
+
+		// 30-min cache
+		sort($kingdom_ids);
+		$cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getPlayerCohorts', $cacheKey, 1800);
+		if ($cached !== false && $cached !== null) return $cached;
 
 		$start = preg_replace('/[^0-9\-]/', '', $start);
 		$end   = preg_replace('/[^0-9\-]/', '', $end);
@@ -761,16 +872,19 @@ class StateOfAmtgard {
 		}
 
 		// Compute prior-period boundaries (same length, ending the day before $start)
-		$DB->Clear();
-		$rs = $DB->DataSet(
-			"SELECT DATE_SUB('$start', INTERVAL 1 DAY) AS prior_end," .
-			" DATE_SUB('$start', INTERVAL DATEDIFF('$end','$start') DAY) AS prior_start"
-		);
+		// PHP DateTime arithmetic — no DB round-trip needed.
 		$prior_start = '';
 		$prior_end   = '';
-		if ($rs && $rs->Next()) {
-			$prior_start = preg_replace('/[^0-9\-]/', '', (string)$rs->prior_start);
-			$prior_end   = preg_replace('/[^0-9\-]/', '', (string)$rs->prior_end);
+		try {
+			$startDt = new DateTime($start);
+			$endDt   = new DateTime($end);
+			$days    = $endDt->diff($startDt)->days + 1;
+			$prior_end_dt   = (clone $startDt)->modify('-1 day');
+			$prior_start_dt = (clone $prior_end_dt)->modify('-' . ($days - 1) . ' days');
+			$prior_start = $prior_start_dt->format('Y-m-d');
+			$prior_end   = $prior_end_dt->format('Y-m-d');
+		} catch (Exception $e) {
+			// leave prior_* empty on malformed input
 		}
 
 		// ── new_players ──────────────────────────────────────────────────────────
@@ -792,17 +906,21 @@ class StateOfAmtgard {
 
 		// ── returning_players ────────────────────────────────────────────────────
 		// Players with at least one sign-in in [$start,$end] AND at least one before $start.
+		// Rewritten as a set-based INNER JOIN of two distinct-mundane-id derived sets
+		// instead of a correlated EXISTS subquery (per-row probe).
 		$DB->Clear();
 		$rs = $DB->DataSet(
-			"SELECT COUNT(DISTINCT cur.mundane_id) AS cnt" .
-			" FROM " . DB_PREFIX . "attendance cur" .
-			" WHERE cur.date BETWEEN '$start' AND '$end'" .
-			$kingdom_filter .
-			"   AND EXISTS (" .
-			"     SELECT 1 FROM " . DB_PREFIX . "attendance prev" .
-			"     WHERE prev.mundane_id = cur.mundane_id" .
-			"       AND prev.date < '$start'" .
-			"   )"
+			"SELECT COUNT(*) AS cnt FROM (" .
+			"  SELECT DISTINCT cur.mundane_id" .
+			"  FROM " . DB_PREFIX . "attendance cur" .
+			"  WHERE cur.date BETWEEN '$start' AND '$end'" .
+			   $kingdom_filter .
+			") cur" .
+			" INNER JOIN (" .
+			"  SELECT DISTINCT mundane_id" .
+			"  FROM " . DB_PREFIX . "attendance" .
+			"  WHERE date < '$start'" .
+			") hist ON hist.mundane_id = cur.mundane_id"
 		);
 		$returning_players = 0;
 		if ($rs && $rs->Next()) { $returning_players = (int)$rs->cnt; }
@@ -810,19 +928,24 @@ class StateOfAmtgard {
 		// ── churned_players ──────────────────────────────────────────────────────
 		// Players who appeared in the prior period but have NO record in [$start,$end].
 		// Only meaningful if we have a valid prior period.
+		// Rewritten as a set-based LEFT JOIN ... IS NULL anti-join instead of a
+		// correlated NOT EXISTS subquery (per-row probe).
 		$churned_players = 0;
 		if ($prior_start !== '' && $prior_end !== '') {
 			$DB->Clear();
 			$rs = $DB->DataSet(
-				"SELECT COUNT(DISTINCT prior.mundane_id) AS cnt" .
-				" FROM " . DB_PREFIX . "attendance prior" .
-				" WHERE prior.date BETWEEN '$prior_start' AND '$prior_end'" .
-				$kingdom_filter .
-				"   AND NOT EXISTS (" .
-				"     SELECT 1 FROM " . DB_PREFIX . "attendance cur" .
-				"     WHERE cur.mundane_id = prior.mundane_id" .
-				"       AND cur.date BETWEEN '$start' AND '$end'" .
-				"   )"
+				"SELECT COUNT(*) AS cnt FROM (" .
+				"  SELECT DISTINCT prior.mundane_id" .
+				"  FROM " . DB_PREFIX . "attendance prior" .
+				"  WHERE prior.date BETWEEN '$prior_start' AND '$prior_end'" .
+				   $kingdom_filter .
+				") prior" .
+				" LEFT JOIN (" .
+				"  SELECT DISTINCT cur.mundane_id" .
+				"  FROM " . DB_PREFIX . "attendance cur" .
+				"  WHERE cur.date BETWEEN '$start' AND '$end'" .
+				") cur ON cur.mundane_id = prior.mundane_id" .
+				" WHERE cur.mundane_id IS NULL"
 			);
 			if ($rs && $rs->Next()) { $churned_players = (int)$rs->cnt; }
 		}
@@ -843,157 +966,24 @@ class StateOfAmtgard {
 		$one_time_visitors = 0;
 		if ($rs && $rs->Next()) { $one_time_visitors = (int)$rs->cnt; }
 
-		return [
+		$result = [
 			'new_players'       => $new_players,
 			'returning_players' => $returning_players,
 			'churned_players'   => $churned_players,
 			'one_time_visitors' => $one_time_visitors,
 		];
-	}
-
-	/**
-	 * Returns per-class sign-in counts per year for the 5 years ending at $end,
-	 * formatted for a multi-series chart.
-	 *
-	 * @param string $start       Start date (used only to constrain kingdoms; actual year
-	 *                             window is always 5 years ending at $end)
-	 * @param string $end         End date (YYYY-MM-DD)
-	 * @param array  $kingdom_ids Optional list of integer kingdom IDs to filter by.
-	 * @return array {
-	 *   years  int[]   — e.g. [2020, 2021, 2022, 2023, 2024]
-	 *   series array[] — each element: { class_name: string, data: int[] }
-	 *                    data is parallel to years; 0 for years with no sign-ins
-	 * }
-	 */
-	public function getClassTrends(string $start, string $end, array $kingdom_ids): array
-	{
-		global $DB;
-
-		$end = preg_replace('/[^0-9\-]/', '', $end);
-
-		$kingdom_filter = '';
-		if (!empty($kingdom_ids)) {
-			$safe_ids = array_filter(array_map('intval', $kingdom_ids), fn($id) => $id > 0);
-			if (!empty($safe_ids)) {
-				$kingdom_filter = ' AND a.kingdom_id IN (' . implode(',', $safe_ids) . ')';
-			}
-		}
-		if (empty($kingdom_filter)) {
-			$kingdom_filter = " AND a.kingdom_id IN (SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE active = 'Active')";
-		}
-
-		// Determine the 5 calendar years ending with the year of $end
-		$end_year   = (int)date('Y', strtotime($end));
-		$start_year = $end_year - 4;
-		$years      = range($start_year, $end_year);
-		$trend_start = $start_year . '-01-01';
-
-		// Fetch counts: one row per (class, year)
-		$DB->Clear();
-		$rs = $DB->DataSet(
-			"SELECT c.class_id, c.name AS class_name," .
-			" YEAR(a.date) AS yr, COUNT(*) AS sign_in_count" .
-			" FROM " . DB_PREFIX . "attendance a" .
-			" INNER JOIN " . DB_PREFIX . "class c ON c.class_id = a.class_id" .
-			" WHERE c.active = 1" .
-			"   AND a.date BETWEEN '$trend_start' AND '$end'" .
-			$kingdom_filter .
-			" GROUP BY c.class_id, c.name, YEAR(a.date)" .
-			" ORDER BY c.name, yr"
-		);
-
-		// Build a map: class_name => [ year => count ]
-		$class_map = [];
-		if ($rs) {
-			while ($rs->Next()) {
-				$cname = (string)$rs->class_name;
-				$yr    = (int)$rs->yr;
-				if (!isset($class_map[$cname])) { $class_map[$cname] = []; }
-				$class_map[$cname][$yr] = (int)$rs->sign_in_count;
-			}
-		}
-
-		// Convert to parallel-array series format
-		$series = [];
-		foreach ($class_map as $cname => $yr_counts) {
-			$data = [];
-			foreach ($years as $yr) {
-				$data[] = $yr_counts[$yr] ?? 0;
-			}
-			$series[] = [
-				'class_name' => $cname,
-				'data'       => $data,
-			];
-		}
-
-		return [
-			'years'  => $years,
-			'series' => $series,
-		];
-	}
-
-	/**
-	 * Returns sign-in totals grouped by calendar month across the date range,
-	 * ordered chronologically.
-	 *
-	 * @param string $start       Start date (YYYY-MM-DD)
-	 * @param string $end         End date (YYYY-MM-DD)
-	 * @param array  $kingdom_ids Optional list of integer kingdom IDs to filter by.
-	 * @return array[] Each element: { year, month, sign_ins, players }
-	 *   year     int — calendar year
-	 *   month    int — calendar month (1–12)
-	 *   sign_ins int — total attendance rows
-	 *   players  int — distinct mundane_ids with at least one sign-in that month
-	 */
-	public function getMonthlyBreakdown(string $start, string $end, array $kingdom_ids): array
-	{
-		global $DB;
-
-		$start = preg_replace('/[^0-9\-]/', '', $start);
-		$end   = preg_replace('/[^0-9\-]/', '', $end);
-
-		$kingdom_filter = '';
-		if (!empty($kingdom_ids)) {
-			$safe_ids = array_filter(array_map('intval', $kingdom_ids), fn($id) => $id > 0);
-			if (!empty($safe_ids)) {
-				$kingdom_filter = ' AND kingdom_id IN (' . implode(',', $safe_ids) . ')';
-			}
-		}
-		if (empty($kingdom_filter)) {
-			$kingdom_filter = " AND kingdom_id IN (SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE active = 'Active')";
-		}
-
-		$DB->Clear();
-		$rs = $DB->DataSet(
-			"SELECT" .
-			"  YEAR(date)              AS yr," .
-			"  MONTH(date)             AS mo," .
-			"  COUNT(*)                AS sign_ins," .
-			"  COUNT(DISTINCT mundane_id) AS players" .
-			" FROM " . DB_PREFIX . "attendance" .
-			" WHERE date BETWEEN '$start' AND '$end'" .
-			$kingdom_filter .
-			" GROUP BY YEAR(date), MONTH(date)" .
-			" ORDER BY yr ASC, mo ASC"
-		);
-
-		$result = [];
-		if ($rs) {
-			while ($rs->Next()) {
-				$result[] = [
-					'year'     => (int)$rs->yr,
-					'month'    => (int)$rs->mo,
-					'sign_ins' => (int)$rs->sign_ins,
-					'players'  => (int)$rs->players,
-				];
-			}
-		}
-
+		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getPlayerCohorts', $cacheKey, $result);
 		return $result;
 	}
 
 	public function getPlayerLongevity(string $start, string $end, array $kingdom_ids): array {
 		global $DB;
+
+		// 30-min cache
+		sort($kingdom_ids);
+		$cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getPlayerLongevity', $cacheKey, 1800);
+		if ($cached !== false && $cached !== null) return $cached;
 
 		$safe_start = preg_replace('/[^0-9\-]/', '', $start);
 		$safe_end   = preg_replace('/[^0-9\-]/', '', $end);
@@ -1048,6 +1038,241 @@ class StateOfAmtgard {
 		for ($j = $CAP; $j <= $max_bucket; $j++) $ten_plus += ($raw[$j] ?? 0);
 		$result[] = ['label' => '10+ yrs', 'count' => $ten_plus];
 
+		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getPlayerLongevity', $cacheKey, $result);
+		return $result;
+	}
+
+
+	public function getAwardGrants(string $start, string $end, array $kingdom_ids): array
+	{
+		global $DB;
+
+		// 30-min cache: deterministic on (start, end, kingdom_ids)
+		sort($kingdom_ids);
+		$cacheKey = md5($start . '|' . $end . '|' . implode(',', $kingdom_ids));
+		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getAwardGrants', $cacheKey, 1800);
+		if ($cached !== false && $cached !== null) return $cached;
+
+		// Sanitize inputs
+		$safe_start = preg_replace('/[^0-9\-]/', '', $start);
+		$safe_end   = preg_replace('/[^0-9\-]/', '', $end);
+
+		// Build optional kingdom filter on the recipient kingdom (aw.kingdom_id).
+		// Note: aw.kingdom_id is NULLABLE; rows with NULL kingdom_id are excluded
+		// whenever any kingdom filter is active (including the implicit "active kingdoms"
+		// fallback below). This matches the convention used in getClassSignIns.
+		$kingdom_filter = '';
+		if (!empty($kingdom_ids)) {
+			$safe_ids = array_filter(array_map('intval', $kingdom_ids), fn($id) => $id > 0);
+			if (!empty($safe_ids)) {
+				$kingdom_filter = ' AND aw.kingdom_id IN (' . implode(',', $safe_ids) . ')';
+			}
+		}
+
+		// Definitive ordered award lists for zero-padding the pie-chart buckets.
+		// Pulled fresh from ork_award so we don't hardcode the names (only the IDs).
+		$peerage_award_ids = [
+			'Knight'  => [17, 18, 19, 20, 245],
+			'Master'  => [1, 2, 3, 4, 5, 6, 12, 240, 244],
+			'Paragon' => [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 241, 242],
+		];
+		$all_ids = array_merge(
+			$peerage_award_ids['Knight'],
+			$peerage_award_ids['Master'],
+			$peerage_award_ids['Paragon']
+		);
+
+		// ── 1. Name lookup + zero-bucket scaffold ───────────────────────────────
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT award_id, name, peerage" .
+			" FROM " . DB_PREFIX . "award" .
+			" WHERE award_id IN (" . implode(',', $all_ids) . ")"
+		);
+		$award_meta = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$award_meta[(int)$rs->award_id] = [
+					'name'    => (string)$rs->name,
+					'peerage' => (string)$rs->peerage,
+				];
+			}
+		}
+
+		// ── 2. Counts per award in window ───────────────────────────────────────
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT a.award_id, a.name, a.peerage, COUNT(*) AS cnt" .
+			" FROM " . DB_PREFIX . "awards aw" .
+			" JOIN " . DB_PREFIX . "award a ON a.award_id = aw.award_id" .
+			" WHERE a.peerage IN ('Knight','Master','Paragon')" .
+			"   AND aw.revoked = 0" .
+			"   AND aw.date BETWEEN '" . $safe_start . "' AND '" . $safe_end . "'" .
+			$kingdom_filter .
+			" GROUP BY a.award_id, a.name, a.peerage"
+		);
+		$counts_by_id = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$counts_by_id[(int)$rs->award_id] = (int)$rs->cnt;
+			}
+		}
+
+		// Build zero-padded buckets in award_id ASC order
+		$buckets = ['knights' => [], 'masters' => [], 'paragons' => []];
+		$totals  = ['knights' => 0, 'masters' => 0, 'paragons' => 0];
+		$bucket_for = ['Knight' => 'knights', 'Master' => 'masters', 'Paragon' => 'paragons'];
+		foreach ($peerage_award_ids as $peerage => $ids) {
+			$key = $bucket_for[$peerage];
+			foreach ($ids as $aid) {
+				$cnt = $counts_by_id[$aid] ?? 0;
+				$name = $award_meta[$aid]['name'] ?? ('Award ' . $aid);
+				$buckets[$key][] = [
+					'award_id' => $aid,
+					'name'     => $name,
+					'count'    => $cnt,
+				];
+				$totals[$key] += $cnt;
+			}
+		}
+
+		// ── 3. Top kingdoms by total peerage grants ─────────────────────────────
+		// aw.kingdom_id is NULLABLE → grants with no recipient-kingdom are excluded
+		// from this breakdown (we have no kingdom to attribute them to).
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT aw.kingdom_id, k.name AS kingdom_name," .
+			"  SUM(CASE WHEN a.peerage = 'Knight'  THEN 1 ELSE 0 END) AS knights," .
+			"  SUM(CASE WHEN a.peerage = 'Master'  THEN 1 ELSE 0 END) AS masters," .
+			"  SUM(CASE WHEN a.peerage = 'Paragon' THEN 1 ELSE 0 END) AS paragons," .
+			"  COUNT(*) AS total" .
+			" FROM " . DB_PREFIX . "awards aw" .
+			" JOIN " . DB_PREFIX . "award a ON a.award_id = aw.award_id" .
+			" JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = aw.kingdom_id" .
+			" WHERE a.peerage IN ('Knight','Master','Paragon')" .
+			"   AND aw.revoked = 0" .
+			"   AND aw.kingdom_id IS NOT NULL" .
+			"   AND aw.date BETWEEN '" . $safe_start . "' AND '" . $safe_end . "'" .
+			$kingdom_filter .
+			" GROUP BY aw.kingdom_id, k.name" .
+			" ORDER BY total DESC" .
+			" LIMIT 10"
+		);
+		$top_kingdoms = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$top_kingdoms[] = [
+					'kingdom_id'   => (int)$rs->kingdom_id,
+					'kingdom_name' => (string)$rs->kingdom_name,
+					'knights'      => (int)$rs->knights,
+					'masters'      => (int)$rs->masters,
+					'paragons'     => (int)$rs->paragons,
+					'total'        => (int)$rs->total,
+				];
+			}
+		}
+
+		// ── 4. Recent grants — newest 15 in the window ──────────────────────────
+		// Player display name: "Persona (Given Surname)" when persona present,
+		// else "Given Surname". Matches the common ORK rendering convention.
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT aw.date, aw.mundane_id, aw.kingdom_id," .
+			"  m.persona, m.given_name, m.surname," .
+			"  a.name AS award_name, a.peerage," .
+			"  k.name AS kingdom_name" .
+			" FROM " . DB_PREFIX . "awards aw" .
+			" JOIN " . DB_PREFIX . "award a ON a.award_id = aw.award_id" .
+			" LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = aw.mundane_id" .
+			" LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = aw.kingdom_id" .
+			" WHERE a.peerage IN ('Knight','Master','Paragon')" .
+			"   AND aw.revoked = 0" .
+			"   AND aw.date BETWEEN '" . $safe_start . "' AND '" . $safe_end . "'" .
+			$kingdom_filter .
+			" ORDER BY aw.date DESC, aw.awards_id DESC" .
+			" LIMIT 15"
+		);
+		$recent = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$persona = trim((string)$rs->persona);
+				$given   = trim((string)$rs->given_name);
+				$sur     = trim((string)$rs->surname);
+				$mundane = trim($given . ' ' . $sur);
+				if ($persona !== '' && $mundane !== '') {
+					$player_name = $persona . ' (' . $mundane . ')';
+				} elseif ($persona !== '') {
+					$player_name = $persona;
+				} else {
+					$player_name = $mundane !== '' ? $mundane : 'Unknown';
+				}
+				$recent[] = [
+					'date'         => (string)$rs->date,
+					'mundane_id'   => (int)$rs->mundane_id,
+					'player_name'  => $player_name,
+					'award_name'   => (string)$rs->award_name,
+					'peerage'      => (string)$rs->peerage,
+					'kingdom_id'   => $rs->kingdom_id !== null ? (int)$rs->kingdom_id : null,
+					'kingdom_name' => $rs->kingdom_name !== null ? (string)$rs->kingdom_name : null,
+				];
+			}
+		}
+
+		// ── 5. Ten-year trend of peerage grants per calendar year ──────────────
+		// NOTE: This trend is FIXED to a rolling 10-year window ending at $end's
+		// calendar year and intentionally IGNORES $start. The report uses the
+		// $start..$end window for "this period" stats above, but the trend chart
+		// is meant to always show a full 10-year context regardless of the
+		// selected period length. $kingdom_filter still applies so the trend
+		// scopes to the same kingdoms as the rest of the report.
+		$end_dt          = new \DateTime($safe_end);
+		$end_year        = (int)$end_dt->format('Y');
+		$start_year      = $end_year - 9;
+		$ten_year_start  = $start_year . '-01-01';
+		$ten_year_end    = $safe_end;
+
+		$DB->Clear();
+		$rs = $DB->DataSet(
+			"SELECT YEAR(aw.date) AS yr, a.peerage, COUNT(*) AS cnt" .
+			" FROM " . DB_PREFIX . "awards aw" .
+			" JOIN " . DB_PREFIX . "award a ON a.award_id = aw.award_id" .
+			" WHERE a.peerage IN ('Knight','Master','Paragon')" .
+			"   AND aw.revoked = 0" .
+			"   AND aw.date BETWEEN '" . $ten_year_start . "' AND '" . $ten_year_end . "'" .
+			$kingdom_filter .
+			" GROUP BY YEAR(aw.date), a.peerage" .
+			" ORDER BY yr, a.peerage"
+		);
+		$trend_pivot = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$yr  = (int)$rs->yr;
+				$pee = (string)$rs->peerage;
+				$trend_pivot[$yr][$pee] = (int)$rs->cnt;
+			}
+		}
+		// Zero-pad every (year, peerage) so the line chart has continuous data
+		$ten_year_trend = [];
+		for ($y = $start_year; $y <= $end_year; $y++) {
+			$ten_year_trend[] = [
+				'year'     => $y,
+				'knights'  => (int)($trend_pivot[$y]['Knight']  ?? 0),
+				'masters'  => (int)($trend_pivot[$y]['Master']  ?? 0),
+				'paragons' => (int)($trend_pivot[$y]['Paragon'] ?? 0),
+			];
+		}
+
+		$result = [
+			'knights'        => $buckets['knights'],
+			'masters'        => $buckets['masters'],
+			'paragons'       => $buckets['paragons'],
+			'totals'         => $totals,
+			'top_kingdoms'   => $top_kingdoms,
+			'recent'         => $recent,
+			'ten_year_trend' => $ten_year_trend,
+		];
+
+		Ork3::$Lib->ghettocache->cache('StateOfAmtgard.getAwardGrants', $cacheKey, $result);
 		return $result;
 	}
 
