@@ -481,6 +481,16 @@ class Park extends Ork3
 			$response[ 'ParkName' ] = $this->park->name;
 			$response[ 'Abbreviation' ] = $this->park->abbreviation;
 			$response[ 'HasHeraldry' ] = $this->park->has_heraldry;
+			global $DB;
+			$DB->Clear();
+			$_bn = $DB->DataSet("SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_park WHERE park_id = " . (int)$request['ParkId']);
+			if ($_bn && $_bn->Next()) {
+				$response['HasBanner']      = (int)$_bn->has_banner;
+				$response['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+				$response['BannerVignette'] = (int)$_bn->banner_vignette;
+				$response['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+				$response['BannerOffsetY']  = (int)$_bn->banner_offset_y;
+			}
 			$response[ 'ParkTitleId' ] = $this->park->parktitle_id;
 			$parktitle = new yapo( $this->db, DB_PREFIX . 'parktitle' );
 			$parktitle->parktitle_id = $this->park->parktitle_id;
