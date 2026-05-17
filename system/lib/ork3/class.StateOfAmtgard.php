@@ -134,8 +134,10 @@ class StateOfAmtgard {
 	{
 		global $DB;
 
-		// 60-min cache: list of active kingdoms rarely changes
-		$cacheKey = 'all';
+		// 60-min cache: list of active kingdoms rarely changes.
+		// Suffix bumps when the sort/shape changes so old entries are bypassed
+		// without needing a memcache flush.
+		$cacheKey = 'all_v2';
 		$cached = Ork3::$Lib->ghettocache->get('StateOfAmtgard.getActiveKingdoms', $cacheKey, 3600);
 		if ($cached !== false && $cached !== null) return $cached;
 
@@ -173,19 +175,22 @@ class StateOfAmtgard {
 
 	/**
 	 * Return the "core" portion of a kingdom name for display-sort purposes.
-	 * Strips leading "The " and common title prefixes so the filter dropdown
-	 * sorts by the distinguishing word (Blackspire / Iron Mountains / etc.)
-	 * instead of every entry clumping under "T".
+	 * Matches the tokenized skip-list approach used by the homepage kingdom
+	 * list in orkui/template/default/default.tpl — every word in the skip
+	 * list is dropped wherever it appears (not just at the start), so
+	 * "The Kingdom of Blackspire" → "blackspire" and "Kingdom of the
+	 * Desert Winds" → "desert winds". Keeping the same algorithm app-wide
+	 * means the filter dropdown order matches what users already see on
+	 * the homepage.
 	 */
 	private static function kingdomSortKey(string $name): string
 	{
-		$core = preg_replace('/^the\s+/i', '', $name);
-		$core = preg_replace(
-			'/^(kingdom|empire|freeholds?|principality)\s+of\s+(the\s+)?/i',
-			'',
-			$core
-		);
-		return trim($core);
+		$words = preg_split('/\s+/', trim($name));
+		$skip  = ['the', 'kingdom', 'empire', 'of'];
+		$filtered = array_filter($words, function ($w) use ($skip) {
+			return !in_array(strtolower($w), $skip, true);
+		});
+		return strtolower(implode(' ', array_values($filtered)));
 	}
 
     public function getClassSignIns(string $start, string $end, array $kingdom_ids): array
