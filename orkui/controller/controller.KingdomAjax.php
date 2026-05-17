@@ -1125,6 +1125,11 @@ class Controller_KingdomAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
 				exit;
 			}
+			// I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
+			if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
+				exit;
+			}
 			// I5 fix: server-side file size check (JS resize can be bypassed via curl).
 			if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
 				echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);

@@ -2819,12 +2819,12 @@ function knEscapeAttr(s) {
 <div class="kn-img-overlay kn-banner-modal" id="kn-banner-overlay">
 	<div class="kn-img-modal" style="width:min(680px, 96vw)">
 		<div class="kn-img-modal-header">
-			<span class="kn-img-modal-title" id="kn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+			<span class="kn-img-modal-title" id="kn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
 			<button class="kn-img-close-btn" id="kn-banner-close-btn" aria-label="Close">&times;</button>
 		</div>
 
 		<div class="kn-img-modal-body" id="kn-banner-step-select">
-			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
 				Banners are full-bleed across the kingdom header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
@@ -2906,7 +2906,7 @@ function knEscapeAttr(s) {
 				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
 			</label>
 			<input type="file" id="kn-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
-			<div id="kn-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div id="kn-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
 			<div class="kn-img-form-error" id="kn-banner-error" style="display:none;"></div>
 
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
@@ -2917,13 +2917,13 @@ function knEscapeAttr(s) {
 				</div>
 				<button class="kn-btn kn-btn-outline" id="kn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
 				<?php else: ?>
-				<span class="kn-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<span class="kn-field-hint">Upload an image to enable banner display settings.</span>
 				<?php endif; ?>
 			</div>
 		</div>
 
 		<div class="kn-img-modal-body" id="kn-banner-step-position" style="display:none;">
-			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
 				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
 			</p>
 			<div class="kn-banner-position-wrap">
@@ -2971,7 +2971,7 @@ function knEscapeAttr(s) {
 
 		<div class="kn-img-modal-body" id="kn-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
-			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+			<p style="margin-top:12px;">Uploading…</p>
 		</div>
 		<div class="kn-img-modal-body" id="kn-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
