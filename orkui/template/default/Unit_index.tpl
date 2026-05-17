@@ -1652,7 +1652,7 @@ html[data-theme="dark"] .un-retire-note {
 			<div class="un-banner-config">
 				<label class="un-banner-toggle">
 					<input type="checkbox" id="un-banner-show-logo" checked>
-					<span>Show Event Logo on Left</span>
+					<span>Show Unit Heraldry on Left</span>
 					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
 				</label>
 				<label class="un-banner-toggle">

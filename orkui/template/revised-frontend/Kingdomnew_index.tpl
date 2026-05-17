@@ -2963,7 +2963,7 @@ window.OrkRsCfg = {
 			<div class="kn-banner-config">
 				<label class="kn-banner-toggle">
 					<input type="checkbox" id="kn-banner-show-logo" checked>
-					<span>Show Event Logo on Left</span>
+					<span>Show Kingdom Heraldry on Left</span>
 					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
 				</label>
 				<label class="kn-banner-toggle">
