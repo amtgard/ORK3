@@ -826,7 +826,6 @@
 												<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
 											<?php endif; ?>
 											<?php if ($isDraft): ?><span class="pk-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?><?= htmlspecialchars($event['Name']) ?>
-											<?php if (!empty($event['Weather']['high_f'])): ?><span class="pk-wx-pill" data-tip="<?= htmlspecialchars($event['Weather']['label']) ?>"><?= $event['Weather']['icon'] ?> <?= (int)$event['Weather']['high_f'] ?>°/<?= (int)$event['Weather']['low_f'] ?>°</span><?php endif; ?>
 										</div>
 									</td>
 									<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
@@ -1912,15 +1911,11 @@ window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 					<a class="evpv-name" id="evpv-name" href="#"></a>
 					<div class="evpv-meta-row">
 						<span class="evpv-meta-date"><i class="far fa-calendar-alt"></i> <span id="evpv-date"></span></span>
-						<span class="evpv-solar-icon" id="evpv-solar" style="display:none" data-tip=""><i class="fas fa-sun"></i></span>
 					</div>
 					<div class="evpv-meta-row">
 						<span class="evpv-meta-time" id="evpv-time-row"><i class="far fa-clock"></i> <span id="evpv-time"></span></span>
 						<span class="evpv-meta-park" id="evpv-park-row" style="display:none"><i class="fas fa-tree"></i> <span id="evpv-park"></span></span>
 					</div>
-				</div>
-				<div class="evpv-wx-wrap" id="evpv-wx-wrap" style="display:none">
-					<span class="ev-weather-badge" id="evpv-wx" data-tip=""></span>
 				</div>
 			</div>
 			<div class="evpv-description" id="evpv-description" style="display:none"></div>

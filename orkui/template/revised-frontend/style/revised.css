@@ -4386,9 +4386,8 @@ html[data-theme="dark"] .ev-banner-position-hint i { color: var(--ork-link-brigh
 	gap: 6px;
 	margin-bottom: 8px;
 }
-/* Unified pill geometry — every hero pill (badge + weather) sits on the same grid. */
-.ev-badge,
-.ev-weather-badge {
+/* Unified pill geometry — every hero pill sits on the same grid. */
+.ev-badge {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
@@ -4912,7 +4911,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 	.ev-owner-sep { display: none; }
 	.ev-owner-inline > i.fa-layer-group { display: none; }
 	.ev-badges { gap: 4px; margin-bottom: 4px; }
-	.ev-badge, .ev-weather-badge { font-size: 10px; padding: 0 8px; height: 20px; gap: 4px; }
+	.ev-badge { font-size: 10px; padding: 0 8px; height: 20px; gap: 4px; }
 	.ev-badge i { font-size: 9px; }
 	.ev-hero-actions {
 		grid-column: 2;
@@ -9452,7 +9451,7 @@ html[data-theme="dark"] a.kn-prinz-head:hover .kn-prinz-extlink {
 }
 
 /* ============================================================
- * Calendar Enhancements R2: Officer-only, Drafts, RSVP, Map, Weather, Sunrise
+ * Calendar Enhancements R2: Officer-only, Drafts, RSVP, Map
  * ============================================================ */
 
 /* Officer-only calendar items (kingdom + park) */
@@ -9480,44 +9479,8 @@ html[data-theme="dark"] .pk-draft-pill { background: #7c2d12; color: #ffedd5; }
 .kn-row-draft, .pk-row-draft { opacity: 0.62; }
 .kn-row-draft:hover, .pk-row-draft:hover { opacity: 0.92; }
 
-/* Weather pill on rows */
-.kn-wx-pill, .pk-wx-pill {
-	display: inline-block; background: #ebf8ff; color: #2c5282;
-	font-size: 10px; font-weight: 600; padding: 1px 6px;
-	border-radius: 3px; margin-left: 6px; white-space: nowrap;
-}
-html[data-theme="dark"] .kn-wx-pill,
-html[data-theme="dark"] .pk-wx-pill { background: rgba(66,153,225,0.18); color: #90cdf4; }
 
-/* Solar (sunrise/sunset) icon — sits inside the date pill, properly aligned */
-.ev-badge .ev-solar-icon {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	margin-left: 4px;
-	color: #d69e2e;
-	font-size: 10px;
-	cursor: help;
-	line-height: 1;
-}
-html[data-theme="dark"] .ev-badge .ev-solar-icon { color: #f6ad55; }
 
-/* Weather badge — same pill geometry as .ev-badge (set in main block above), distinct color */
-.ev-weather-badge {
-	background: rgba(99, 179, 237, 0.20);
-	color: #2c5282;
-	border: 1px solid rgba(66, 153, 225, 0.34);
-	font-variant-numeric: tabular-nums;
-	letter-spacing: 0;
-	padding: 0 10px;          /* compensate for the 1px border */
-	height: 24px;
-}
-.ev-weather-icon { font-size: 13px; line-height: 1; }
-html[data-theme="dark"] .ev-weather-badge {
-	background: rgba(99, 179, 237, 0.18);
-	color: #bee3f8;
-	border-color: rgba(99, 179, 237, 0.36);
-}
 
 /* Draft banner + toggle on event detail */
 .ev-draft-banner {
@@ -9595,20 +9558,15 @@ html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #
 .ev-map-popover-name { display: block; font-size: 14px; font-weight: 700; color: #2b6cb0; text-decoration: none; margin-bottom: 4px; }
 .ev-map-popover-name:hover { text-decoration: underline; }
 .ev-map-popover-meta { color: #718096; font-size: 11px; margin-bottom: 6px; }
-.ev-map-popover-wx { color: #2c5282; font-size: 11px; margin-bottom: 6px; }
 .ev-map-popover-rsvp { margin-top: 6px; }
 
 /* Generic data-tip CSS tooltip (light, dark-mode aware) */
 .kn-officer-pill[data-tip], .pk-officer-pill[data-tip],
-.kn-draft-pill[data-tip], .pk-draft-pill[data-tip],
-.kn-wx-pill[data-tip], .pk-wx-pill[data-tip],
-.ev-solar-icon[data-tip], .ev-weather-badge[data-tip] {
+.kn-draft-pill[data-tip], .pk-draft-pill[data-tip] {
 	position: relative;
 }
 .kn-officer-pill[data-tip]:hover::after, .pk-officer-pill[data-tip]:hover::after,
-.kn-draft-pill[data-tip]:hover::after, .pk-draft-pill[data-tip]:hover::after,
-.kn-wx-pill[data-tip]:hover::after, .pk-wx-pill[data-tip]:hover::after,
-.ev-solar-icon[data-tip]:hover::after, .ev-weather-badge[data-tip]:hover::after {
+.kn-draft-pill[data-tip]:hover::after, .pk-draft-pill[data-tip]:hover::after {
 	content: attr(data-tip);
 	position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
 	background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
@@ -9690,7 +9648,7 @@ html[data-theme="dark"] .pk-emod-draft-btn { background: #2d3748; color: #fde68a
 	flex-shrink: 0;
 }
 
-/* Action row: RSVP on the left, weather chip pinned right. */
+/* Action row: RSVP. */
 .ev-map-popover-action {
 	display: flex;
 	align-items: center;
@@ -9704,25 +9662,6 @@ html[data-theme="dark"] .pk-emod-draft-btn { background: #2d3748; color: #fde68a
 	flex-wrap: wrap;
 	min-height: 28px;
 }
-.ev-map-popover-wx-wrap { flex-shrink: 0; }
-
-/* Weather chip — refined two-part layout (icon · temp range). */
-.ev-map-popover-wx {
-	display: inline-flex; align-items: center; gap: 6px;
-	color: #2c5282;
-	background: rgba(66, 153, 225, 0.12);
-	border: 1px solid rgba(66, 153, 225, 0.18);
-	border-radius: 999px;
-	padding: 3px 10px 3px 8px;
-	font-size: 11px;
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	white-space: nowrap;
-	line-height: 1.2;
-}
-.ev-map-popover-wx-icon { font-size: 13px; line-height: 1; }
-.ev-map-popover-wx-temp { letter-spacing: 0.01em; }
-.ev-map-popover-wx-sep  { opacity: 0.45; margin: 0 2px; font-weight: 500; }
 
 /* RSVP counts (label-aware now: "5 going · 2 interested" or hidden when both 0) */
 .ev-rsvp-counts {
@@ -9749,11 +9688,6 @@ html[data-theme="dark"] .ev-map-popover-name          { color: #90cdf4; }
 html[data-theme="dark"] .ev-map-popover-name:hover    { color: #bee3f8; }
 html[data-theme="dark"] .ev-map-popover-meta          { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .ev-map-popover-meta-park     { color: var(--ork-text-secondary, #cbd5e0); }
-html[data-theme="dark"] .ev-map-popover-wx {
-	color: #bee3f8;
-	background: rgba(99, 179, 237, 0.14);
-	border-color: rgba(99, 179, 237, 0.28);
-}
 html[data-theme="dark"] .ev-map-popover-isdraft       { border-left-color: #d97706; }
 html[data-theme="dark"] .ev-rsvp-counts               { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .ev-rsvp-count-going          { color: #68d391; }
@@ -10109,7 +10043,7 @@ html[data-theme="dark"] .pk-emod-input::placeholder {
 
 .evpv-body { padding: 18px 20px 14px; }
 
-/* Hero row: heraldry thumb · name+meta · weather chip pinned right */
+/* Hero row: heraldry thumb · name+meta */
 .evpv-hero {
 	display: flex;
 	align-items: flex-start;
@@ -10149,13 +10083,6 @@ html[data-theme="dark"] .pk-emod-input::placeholder {
 }
 .evpv-meta-row i { color: #a0aec0; margin-right: 5px; }
 .evpv-meta-park   { color: #4a5568; font-weight: 600; }
-.evpv-solar-icon {
-	color: #d69e2e;
-	font-size: 11px;
-	cursor: help;
-	margin-left: -4px;
-}
-.evpv-wx-wrap { flex-shrink: 0; align-self: center; }
 
 /* Description excerpt block — same style as kn-ci-description but bigger */
 .evpv-description {
@@ -10236,7 +10163,6 @@ html[data-theme="dark"] .evpv-name:hover { color: #bee3f8; }
 html[data-theme="dark"] .evpv-meta-row { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .evpv-meta-row i { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .evpv-meta-park { color: var(--ork-text-secondary, #cbd5e0); }
-html[data-theme="dark"] .evpv-solar-icon { color: #f6ad55; }
 
 html[data-theme="dark"] .evpv-description {
 	background: var(--ork-bg-tertiary, #2d3748);
@@ -10259,5 +10185,4 @@ html[data-theme="dark"] .evpv-cta:hover { background: #2f855a; }
 	.evpv-hero { gap: 10px; }
 	.evpv-heraldry { width: 52px; height: 52px; }
 	.evpv-name { font-size: 16px; }
-	.evpv-wx-wrap { display: none; } /* fold weather under name on small screens */
 }

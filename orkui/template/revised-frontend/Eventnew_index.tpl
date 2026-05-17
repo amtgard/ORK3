@@ -162,12 +162,10 @@
 	$checkinOpen      = !$isUpcoming || !$checkinOpenTs || time() >= $checkinOpenTs;
 	$checkinOpenLabel = $checkinOpenTs ? date('D, M j, Y \\a\\t g:i A T', $checkinOpenTs) : '';
 
-	// Calendar-enhancements R2: status / weather / solar
+	// Calendar-enhancements R2: status
 	$evtStatus       = $EventStatus      ?? 'published';
 	$evtIsDraft      = ($evtStatus === 'draft');
 	$evtCanEditStat  = !empty($EventCanEditStatus);
-	$evtWeather      = $EventWeather     ?? null;
-	$evtSolar        = $EventSolar       ?? null;
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -686,15 +684,6 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 				<?php if ($dateBadgeText): ?>
 				<span class="ev-badge <?= $isUpcoming ? 'ev-badge-green' : 'ev-badge-gray' ?>">
 					<i class="fas fa-calendar-alt"></i> <?= htmlspecialchars($dateBadgeText) ?>
-					<?php if ($evtSolar): ?>
-						<span class="ev-solar-icon" data-tip="Sunrise <?= htmlspecialchars($evtSolar['sunrise']) ?>&#10;Sunset <?= htmlspecialchars($evtSolar['sunset']) ?><?php if (!empty($evtSolar['twilight_start']) && !empty($evtSolar['twilight_end'])): ?>&#10;Twilight <?= htmlspecialchars($evtSolar['twilight_start']) ?> – <?= htmlspecialchars($evtSolar['twilight_end']) ?><?php endif; ?>"><i class="fas fa-sun"></i></span>
-					<?php endif; ?>
-				</span>
-				<?php endif; ?>
-				<?php if ($evtWeather && $evtWeather['high_f'] !== null): ?>
-				<span class="ev-weather-badge" data-tip="<?= htmlspecialchars($evtWeather['label']) ?>">
-					<span class="ev-weather-icon"><?= $evtWeather['icon'] ?></span>
-					H <?= (int)$evtWeather['high_f'] ?>°  L <?= (int)$evtWeather['low_f'] ?>°
 				</span>
 				<?php endif; ?>
 				<?php if (!$isOngoing): ?>

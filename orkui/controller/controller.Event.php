@@ -586,43 +586,6 @@ class Controller_Event extends Controller {
 			$this->data['DraftBlocked'] = true;
 		}
 
-		// Resolve event coords (event Location JSON → at_park park lat/lng) for weather + sunrise.
-		$_lat = null; $_lng = null;
-		if (!empty($cd['Location'])) {
-			$_loc = @json_decode(stripslashes((string)$cd['Location']));
-			if ($_loc) {
-				$_pt = isset($_loc->location) ? $_loc->location
-					: (isset($_loc->bounds->northeast) ? $_loc->bounds->northeast : null);
-				if ($_pt && is_numeric($_pt->lat ?? null) && is_numeric($_pt->lng ?? null)) {
-					$_lat = (float)$_pt->lat; $_lng = (float)$_pt->lng;
-				}
-			}
-		}
-		if ($_lat === null && !empty($this->data['AtParkLocation'])) {
-			$_loc = @json_decode(stripslashes((string)$this->data['AtParkLocation']));
-			if ($_loc) {
-				$_pt = isset($_loc->location) ? $_loc->location
-					: (isset($_loc->bounds->northeast) ? $_loc->bounds->northeast : null);
-				if ($_pt && is_numeric($_pt->lat ?? null) && is_numeric($_pt->lng ?? null)) {
-					$_lat = (float)$_pt->lat; $_lng = (float)$_pt->lng;
-				}
-			}
-		}
-		// Weather (start day, within 16-day window).
-		if ($_lat !== null && !empty($cd['EventStart'])) {
-			$_dayStr = date('Y-m-d', strtotime($cd['EventStart']));
-			$wx = Ork3::$Lib->weather->GetForecast($_lat, $_lng, $_dayStr);
-			$this->data['EventWeather'] = $wx;
-		}
-		// Sunrise / sunset (for the event start date).
-		if ($_lat !== null && !empty($cd['EventStart'])) {
-			$_dayStr = date('Y-m-d', strtotime($cd['EventStart']));
-			$_solar  = SolarTimes::ForDate($_lat, $_lng, $_dayStr);
-			if ($_solar) $this->data['EventSolar'] = $_solar;
-		}
-		$this->data['EventCoordsLat'] = $_lat;
-		$this->data['EventCoordsLng'] = $_lng;
-
 		$this->data['RsvpCount']     = $this->Event->get_rsvp_count($detail_id);
 		$this->data['UserAttending'] = $uid > 0 ? $this->Event->get_rsvp($detail_id, $uid) : false;
 		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];

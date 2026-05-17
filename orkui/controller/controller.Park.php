@@ -200,10 +200,9 @@ class Controller_Park extends Controller
 			return strcmp($a['NextDate'] ?? '', $b['NextDate'] ?? '');
 		});
 
-		// Resolve event coords (event Location JSON → at_park park lat/lng → host park lat/lng) and attach weather + map locations.
+		// Resolve event coords (event Location JSON → at_park park lat/lng → host park lat/lng) and build map locations.
 		$nowStamp        = time();
 		$horizonStamp    = $nowStamp + (90 * 86400);
-		$weatherWindow   = $nowStamp + (16 * 86400);
 		$pkEventMapLocs  = [];
 		$pkMapNoLocCount = 0;
 		foreach ($eventSummary as &$_evt) {
@@ -243,10 +242,6 @@ class Controller_Park extends Controller
 				}
 			}
 
-			if ($lat !== null && $startTs >= ($nowStamp - 86400) && $startTs <= $weatherWindow) {
-				$wx = Ork3::$Lib->weather->GetForecast($lat, $lng, date('Y-m-d', $startTs));
-				if ($wx) $_evt['Weather'] = $wx;
-			}
 
 			if ($lat !== null && $startTs >= ($nowStamp - 86400)) {
 				$pkEventMapLocs[] = [
@@ -261,7 +256,6 @@ class Controller_Park extends Controller
 					'my_rsvp'                 => $_evt['MyRsvp'] ?? '',
 					'going'                   => (int)($_evt['RsvpGoing'] ?? 0),
 					'interested'              => (int)($_evt['RsvpInterested'] ?? 0),
-					'weather'                 => $_evt['Weather'] ?? null,
 					'is_draft'                => (($_evt['Status'] ?? 'published') === 'draft'),
 				];
 			} elseif ($lat === null && $startTs <= $horizonStamp && $startTs >= ($nowStamp - 86400)) {
