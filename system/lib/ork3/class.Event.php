@@ -237,6 +237,63 @@ class Event  extends Ork3 {
 		}
 	}
 
+	public function GetActiveEventsAtScope($request) {
+		// Returns published events whose [event_start, event_end] range covers
+		// the given Date, scoped to a park or kingdom. "Scope" semantics:
+		//   - park scope: events where ork_event.park_id = scope_id, OR events
+		//     whose calendar detail is hosted at this park (cd.at_park_id = scope_id).
+		//   - kingdom scope: kingdom-level events (ork_event.kingdom_id = scope_id
+		//     AND ork_event.park_id = 0). Park-owned events at parks within the
+		//     kingdom are not surfaced here; the caller queries park scope for those.
+		// Ordered by event_start ASC. Drafts excluded.
+		$scope    = strtolower((string)($request['Scope'] ?? ''));
+		$scopeId  = (int)($request['ScopeId'] ?? 0);
+		$date     = (string)($request['Date'] ?? '');
+		if (!$scopeId || !$date || !in_array($scope, ['park','kingdom'], true)) {
+			return ['Status' => InvalidParameter(), 'Events' => []];
+		}
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+			return ['Status' => InvalidParameter(), 'Events' => []];
+		}
+		$dStart = $date . ' 00:00:00';
+		$dEnd   = $date . ' 23:59:59';
+		if ($scope === 'park') {
+			$where = "(e.park_id = {$scopeId} OR cd.at_park_id = {$scopeId})";
+		} else {
+			$where = "e.kingdom_id = {$scopeId} AND e.park_id = 0";
+		}
+		$sql = "
+			SELECT e.event_id, e.name, e.has_heraldry, e.status,
+			       cd.event_calendardetail_id, cd.event_start, cd.event_end, cd.at_park_id
+			FROM ork_event e
+			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			WHERE {$where}
+			  AND COALESCE(e.status, 'published') = 'published'
+			  AND cd.event_start <= '{$dEnd}'
+			  AND cd.event_end   >= '{$dStart}'
+			ORDER BY cd.event_start ASC, e.event_id ASC";
+		$this->db->Clear();
+		$rs = $this->db->DataSet($sql);
+		$events = [];
+		if ($rs && $rs->Size() > 0) {
+			do {
+				$eid = (int)$rs->event_id;
+				if ($eid) {
+					$events[] = [
+						'EventId'              => $eid,
+						'Name'                 => (string)$rs->name,
+						'EventStart'           => (string)$rs->event_start,
+						'EventEnd'             => (string)$rs->event_end,
+						'EventCalendarDetailId'=> (int)$rs->event_calendardetail_id,
+						'AtParkId'             => (int)$rs->at_park_id,
+						'HasHeraldry'          => (int)$rs->has_heraldry,
+					];
+				}
+			} while ($rs->Next());
+		}
+		return ['Status' => Success(), 'Events' => $events];
+	}
+
 	public function SetCurrent($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		

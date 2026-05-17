@@ -92,14 +92,14 @@
 .rc-real-badge  { display: inline-flex; align-items: center; gap: 4px; background: #fff;
                   border: 1px solid #90cdf4; border-radius: 10px; padding: 1px 8px;
                   font-size: 11px; color: #2b6cb0; margin-left: 8px; font-weight: 400; }
-.rc-no-badge    { color: #a0aec0; border-color: #e2e8f0; background: transparent; }
+.rc-no-badge    { color: var(--ork-text-hint); border-color: var(--ork-border); background: transparent; }
 
 /* Inline inputs */
 .rc-table input[type="text"],
 .rc-table input[type="number"],
 .rc-table input[type="date"],
 .rc-table select {
-	padding: 5px 7px; border: 1.5px solid #e2e8f0; border-radius: 5px;
+	padding: 5px 7px; border: 1.5px solid var(--ork-border); border-radius: 5px;
 	font-size: 12px; background: #fff; color: #2d3748; width: 100%;
 	box-sizing: border-box; transition: border-color .15s;
 }
@@ -114,19 +114,19 @@
 /* Autocomplete */
 .rc-search-wrap   { position: relative; min-width: 130px; }
 .rc-ac-results    { position: absolute; left: 0; right: 0; top: 100%; z-index: 200;
-                    background: #fff; border: 1px solid #e2e8f0; border-top: none;
+                    background: #fff; border: 1px solid var(--ork-border); border-top: none;
                     border-radius: 0 0 6px 6px; max-height: 180px; overflow-y: auto;
                     box-shadow: 0 4px 12px rgba(0,0,0,.08); display: none; }
 .rc-ac-item       { padding: 6px 10px; cursor: pointer; font-size: 12px; color: #2d3748; }
 .rc-ac-item:hover { background: #ebf8ff; }
-.rc-ac-item-sub   { font-size: 11px; color: #a0aec0; }
+.rc-ac-item-sub   { font-size: 11px; color: var(--ork-text-hint); }
 
 /* Row states */
 .rc-row-done td        { opacity: .55; }
 .rc-row-done input,
 .rc-row-done select    { pointer-events: none; }
 .rc-status-done        { color: #38a169; font-weight: 600; font-size: 12px; white-space: nowrap; }
-.rc-status-skip        { color: #a0aec0; font-size: 12px; white-space: nowrap; }
+.rc-status-skip        { color: var(--ork-text-hint); font-size: 12px; white-space: nowrap; }
 .rc-row-error td       { background: #fff5f5 !important; }
 .rc-row-errmsg         { color: #c53030; font-size: 11px; margin-top: 2px; }
 
