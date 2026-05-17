@@ -641,6 +641,11 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 			</a>
 <?php endif; ?>
 <?php if (!empty($LoggedIn)): ?>
+			<a class="hm-find-item" href="<?= UIR ?>Weather">
+				<i class="fas fa-cloud-sun"></i> Weather Forecast
+			</a>
+<?php endif; ?>
+<?php if (!empty($LoggedIn)): ?>
 			<a class="hm-find-item" href="<?= UIR ?>Unit/unitlist">
 				<i class="fas fa-users"></i> Companies &amp; Households
 			</a>

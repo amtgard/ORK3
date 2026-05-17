@@ -402,6 +402,18 @@ html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 				<i class="fas fa-calendar-day rp-header-icon"></i>
 				<h1 class="rp-header-title">Park Attendance &mdash; <?=htmlspecialchars($AttendanceDate)?></h1>
 			</div>
+			<?php
+				// Only attempt historic weather when the park has coords AND
+				// the date is far enough in the past for Open-Meteo's ERA5
+				// archive to have published (~5-day lag). Coords resolution
+				// falls back to the location-JSON blob when the scalar lat/lng
+				// columns aren't backfilled.
+				$_wxCutoff   = date('Y-m-d', strtotime('-5 days'));
+				$_wxEligible = ($pid > 0
+					&& Ork3::$Lib->weather->park_has_coords($pid)
+					&& $AttendanceDate < $_wxCutoff
+					&& $AttendanceDate >= '1940-01-01');
+			?>
 			<div class="rp-header-scope">
 <?php if ($pname) : ?>
 				<a class="rp-scope-chip" href="<?=UIR.'Park/profile/'.$pid?>">
@@ -447,6 +459,14 @@ html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 			<div class="rp-stat-number"><?=count($class_counts)?></div>
 			<div class="rp-stat-label">Classes Played</div>
 		</div>
+		<?php if ($_wxEligible): ?>
+		<div class="rp-stat-card" id="att-wx-card"
+		     data-park="<?=(int)$pid?>" data-date="<?=htmlspecialchars($AttendanceDate)?>">
+			<div class="rp-stat-icon" id="att-wx-icon"><i class="fas fa-cloud-sun" style="opacity:.4"></i></div>
+			<div class="rp-stat-number" id="att-wx-temps" style="font-size:1.1rem;padding-top:3px;opacity:.5">—</div>
+			<div class="rp-stat-label" id="att-wx-meta"><em style="opacity:.6">loading historical…</em></div>
+		</div>
+		<?php endif; ?>
 	</div>
 
 	<!-- ── Body: form sidebar + main content ────────────── -->
@@ -1018,5 +1038,58 @@ $(function() {
 		});
 	});
 <?php endif; ?>
+
+	// Lazy-fill the historic weather card for this attendance day. Cache
+	// hits (memcache) come back almost instantly; cache misses make one
+	// ~500ms call to Open-Meteo's archive endpoint. The card starts hidden
+	// and reveals itself when data arrives so it doesn't render an empty
+	// placeholder if the archive has nothing.
+	(function() {
+		var card = document.getElementById('att-wx-card');
+		if (!card) return;
+		var pid = card.dataset.park;
+		var date = card.dataset.date;
+		if (!pid || !date) return;
+		function wxIcon(c) {
+			if (c === 0)                          return '☀️';
+			if (c === 1)                          return '🌤️';
+			if (c === 2)                          return '⛅';
+			if (c === 3)                          return '☁️';
+			if (c === 45 || c === 48)             return '🌫️';
+			if (c >= 51 && c <= 57)               return '🌦️';
+			if (c >= 61 && c <= 67)               return '🌧️';
+			if (c >= 71 && c <= 77)               return '❄️';
+			if (c >= 80 && c <= 82)               return '🌦️';
+			if (c === 85 || c === 86)             return '🌨️';
+			if (c >= 95 && c <= 99)               return '⛈️';
+			return '🌡️';
+		}
+		function showUnavailable() {
+			document.getElementById('att-wx-icon').innerHTML = '<i class="fas fa-cloud-sun" style="opacity:.35"></i>';
+			document.getElementById('att-wx-temps').innerHTML = '<span style="opacity:.55;font-size:12px;font-weight:400">unavailable</span>';
+			document.getElementById('att-wx-meta').innerHTML  = 'Historical';
+		}
+		fetch('<?=UIR?>AttendanceAjax/park/' + pid + '/weather/' + date, { credentials: 'same-origin' })
+			.then(function(r) { return r.json(); })
+			.then(function(d) {
+				if (!d || d.status !== 0 || !d.weather || d.weather.hi_f == null) { showUnavailable(); return; }
+				var w = d.weather;
+				var hi  = Math.round(w.hi_f), hiC = Math.round((w.hi_f - 32) * 5 / 9);
+				var lo  = w.lo_f != null ? Math.round(w.lo_f) : null;
+				var loC = w.lo_f != null ? Math.round((w.lo_f - 32) * 5 / 9) : null;
+				document.getElementById('att-wx-icon').textContent = wxIcon(w.code);
+				document.getElementById('att-wx-temps').style.opacity = '';
+				document.getElementById('att-wx-temps').innerHTML  = hi + '/' + hiC + '°' +
+					(lo != null ? '<div style="font-size:11px;color:var(--ork-text-muted,#718096);font-weight:400;margin-top:1px">L ' + lo + '/' + loC + '°</div>' : '');
+				var metaParts = ['Historical'];
+				if (w.precip_inches != null && w.precip_inches >= 0.1) {
+					var mm = Math.round(w.precip_inches * 25.4);
+					metaParts.push(w.precip_inches.toFixed(2) + '" / ' + mm + ' mm rain');
+				}
+				document.getElementById('att-wx-meta').innerHTML = metaParts.join(' · ') +
+					' <a href="https://open-meteo.com/" target="_blank" rel="noopener" title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com" style="margin-left:4px;opacity:.55;text-decoration:none;font-size:10px">ⓘ</a>';
+			})
+			.catch(showUnavailable);
+	})();
 });
 </script>
