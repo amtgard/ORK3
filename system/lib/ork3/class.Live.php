@@ -125,6 +125,22 @@ class Live extends Ork3 {
 					$response['parks'][$pid]['lng']        = (float)$rs->longitude;
 				}
 			}
+
+			// Per-park weather (compact). One DB read; at most one upstream
+			// fetch shared across all parks if the cache is stale.
+			$wx_rows = Ork3::$Lib->weather->for_parks($park_ids);
+			foreach ($wx_rows as $pid => $wx) {
+				if (!isset($response['parks'][$pid])) continue;
+				$response['parks'][$pid]['weather'] = array(
+					'temp_f'     => $wx['current_temp_f'],
+					'code'       => $wx['current_code'],
+					'is_day'     => $wx['current_is_day'],
+					'wind_mph'   => $wx['current_wind_mph'],
+					'hi_f'       => $wx['today_high_f'],
+					'lo_f'       => $wx['today_low_f'],
+					'precip_pct' => $wx['today_precip_pct'],
+				);
+			}
 		}
 
 		// Hydrate event metadata + resolve coords (own → at_park → none)

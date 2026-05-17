@@ -46,6 +46,30 @@ class Weather extends Ork3 {
 	}
 
 	/**
+	 * Batch variant — one query for a list of park IDs. Returns an assoc
+	 * keyed by park_id. If any returned row is missing or older than
+	 * STALE_MIN, triggers ONE refresh and re-reads. Caller pays at most one
+	 * Open-Meteo round trip regardless of how many parks they ask about.
+	 */
+	public function for_parks(array $park_ids) {
+		$ids = array_filter(array_map('intval', $park_ids), function($i) { return $i > 0; });
+		if (empty($ids)) return array();
+		$rows = $this->read_rows($ids);
+		$threshold = time() - self::STALE_MIN * 60;
+		$stale = (count($rows) !== count($ids));
+		if (!$stale) {
+			foreach ($rows as $r) {
+				if (strtotime($r['fetched_at']) < $threshold) { $stale = true; break; }
+			}
+		}
+		if ($stale) {
+			$this->refresh_all_active_parks();
+			$rows = $this->read_rows($ids);
+		}
+		return $rows;
+	}
+
+	/**
 	 * Bulk refresh: one HTTP call to Open-Meteo for every active park's
 	 * coords, then upsert each park's row. Safe to call from cron OR from a
 	 * lazy fallback (callers shouldn't notice the difference beyond latency).
@@ -147,21 +171,32 @@ class Weather extends Ork3 {
 	}
 
 	private function read_row($park_id) {
-		$rs = $this->db->query("SELECT * FROM " . DB_PREFIX . "park_weather WHERE park_id = " . (int)$park_id . " LIMIT 1");
-		if (!$rs || $rs->size() === 0) return null;
-		$rs->next();
-		return array(
-			'park_id'          => (int)$rs->park_id,
-			'fetched_at'       => $rs->fetched_at,
-			'current_temp_f'   => $rs->current_temp_f   !== null ? (float)$rs->current_temp_f : null,
-			'current_code'     => $rs->current_code     !== null ? (int)$rs->current_code     : null,
-			'current_is_day'   => $rs->current_is_day   !== null ? (int)$rs->current_is_day   : null,
-			'current_wind_mph' => $rs->current_wind_mph !== null ? (float)$rs->current_wind_mph : null,
-			'today_high_f'     => $rs->today_high_f     !== null ? (float)$rs->today_high_f   : null,
-			'today_low_f'      => $rs->today_low_f      !== null ? (float)$rs->today_low_f    : null,
-			'today_precip_pct' => $rs->today_precip_pct !== null ? (int)$rs->today_precip_pct : null,
-			'forecast_json'    => $rs->forecast_json,
-		);
+		$rows = $this->read_rows(array((int)$park_id));
+		return $rows[(int)$park_id] ?? null;
+	}
+
+	private function read_rows(array $park_ids) {
+		$ids_sql = implode(',', array_map('intval', $park_ids));
+		if ($ids_sql === '') return array();
+		$rs = $this->db->query("SELECT * FROM " . DB_PREFIX . "park_weather WHERE park_id IN ($ids_sql)");
+		$out = array();
+		if ($rs && $rs->size() > 0) {
+			while ($rs->next()) {
+				$out[(int)$rs->park_id] = array(
+					'park_id'          => (int)$rs->park_id,
+					'fetched_at'       => $rs->fetched_at,
+					'current_temp_f'   => $rs->current_temp_f   !== null ? (float)$rs->current_temp_f : null,
+					'current_code'     => $rs->current_code     !== null ? (int)$rs->current_code     : null,
+					'current_is_day'   => $rs->current_is_day   !== null ? (int)$rs->current_is_day   : null,
+					'current_wind_mph' => $rs->current_wind_mph !== null ? (float)$rs->current_wind_mph : null,
+					'today_high_f'     => $rs->today_high_f     !== null ? (float)$rs->today_high_f   : null,
+					'today_low_f'      => $rs->today_low_f      !== null ? (float)$rs->today_low_f    : null,
+					'today_precip_pct' => $rs->today_precip_pct !== null ? (int)$rs->today_precip_pct : null,
+					'forecast_json'    => $rs->forecast_json,
+				);
+			}
+		}
+		return $out;
 	}
 
 	private function upsert_row($park_id, $fetched_at, $fields) {
