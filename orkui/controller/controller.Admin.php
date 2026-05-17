@@ -2395,6 +2395,70 @@ class Controller_Admin extends Controller {
 
 			echo json_encode(['status' => 0, 'fpm' => $fpm_data, 'workers' => $fpm_workers, 'db' => $db_status, 'processes' => $processes]);
 
+		} elseif ($action === 'serverhealth_fs_check') {
+			// On-demand filesystem check — not part of the 2s poll so the shell call
+			// and OS reads are bounded by user clicks.
+			$out = ['status' => 0];
+			$total = @disk_total_space('/');
+			$free  = @disk_free_space('/');
+			if ($total && $free !== false) {
+				$out['disk'] = [
+					'total'    => (int)$total,
+					'free'     => (int)$free,
+					'used_pct' => round(($total - $free) / $total * 100, 1),
+				];
+			}
+			$df = @shell_exec('df -i / 2>/dev/null | tail -n 1');
+			if ($df) {
+				$cols = preg_split('/\s+/', trim($df));
+				// Expected: filesystem inodes_total inodes_used inodes_free use% mount
+				if (count($cols) >= 5 && is_numeric($cols[1])) {
+					$out['inodes'] = [
+						'total'    => (int)$cols[1],
+						'used'     => (int)$cols[2],
+						'free'     => (int)$cols[3],
+						'used_pct' => (float)rtrim($cols[4], '%'),
+					];
+				}
+			}
+			echo json_encode($out);
+
+		} elseif ($action === 'serverhealth_memcache_check') {
+			$out = ['status' => 0];
+			if (class_exists('Memcached')) {
+				$m = new Memcached();
+				$m->addServer('localhost', 11211);
+				$stats = @$m->getStats();
+				if (is_array($stats) && !empty($stats)) {
+					$first = reset($stats);
+					$out['memcache'] = [
+						'bytes'          => (int)($first['bytes']          ?? 0),
+						'limit_maxbytes' => (int)($first['limit_maxbytes'] ?? 0),
+						'curr_items'     => (int)($first['curr_items']     ?? 0),
+						'evictions'      => (int)($first['evictions']      ?? 0),
+						'get_hits'       => (int)($first['get_hits']       ?? 0),
+						'get_misses'     => (int)($first['get_misses']     ?? 0),
+					];
+				}
+			}
+			echo json_encode($out);
+
+		} elseif ($action === 'serverhealth_opcache_check') {
+			$out = ['status' => 0];
+			if (function_exists('opcache_get_status')) {
+				$st = @opcache_get_status(false);
+				if (is_array($st)) {
+					$out['opcache'] = [
+						'memory_used'   => (int)($st['memory_usage']['used_memory']     ?? 0),
+						'memory_total'  => (int)(($st['memory_usage']['used_memory']    ?? 0) + ($st['memory_usage']['free_memory'] ?? 0) + ($st['memory_usage']['wasted_memory'] ?? 0)),
+						'memory_wasted' => (int)($st['memory_usage']['wasted_memory']   ?? 0),
+						'scripts'       => (int)($st['opcache_statistics']['num_cached_scripts'] ?? 0),
+						'hit_rate'      => (float)($st['opcache_statistics']['opcache_hit_rate'] ?? 0),
+					];
+				}
+			}
+			echo json_encode($out);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

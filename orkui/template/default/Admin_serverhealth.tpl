@@ -127,6 +127,21 @@ html[data-theme="dark"] .sh-al-user  { color: #718096; }
 html[data-theme="dark"] .sh-al-sql   { color: #a0aec0; }
 html[data-theme="dark"] .sh-al-none  { color: #718096; }
 
+/* Optional filesystem check */
+.sh-fs-btn { font-size: 0.78rem; padding: 6px 14px; border: 1px solid var(--rp-border, #d1d5db); border-radius: 4px; background: var(--rp-bg-secondary, #f3f4f6); cursor: pointer; color: var(--rp-text, #111827); display: inline-flex; align-items: center; gap: 6px; }
+.sh-fs-btn:hover:not(:disabled) { background: var(--rp-bg, #fff); }
+.sh-fs-btn:disabled { opacity: 0.6; cursor: wait; }
+.sh-fs-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--rp-border, #e5e7eb); font-size: 0.85rem; }
+.sh-fs-row:last-child { border-bottom: none; }
+.sh-fs-row.warn  > span:last-child { color: #b45309; font-weight: 600; }
+.sh-fs-row.alert > span:last-child { color: #b91c1c; font-weight: 700; }
+.sh-fs-checked { font-size: 0.7rem; color: var(--rp-text-muted, #9ca3af); margin-top: 8px; font-style: italic; }
+#sh-fs-result { margin-top: 12px; }
+html[data-theme="dark"] .sh-fs-btn { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .sh-fs-btn:hover:not(:disabled) { background: #4a5568; }
+html[data-theme="dark"] .sh-fs-row { border-color: #4a5568; }
+html[data-theme="dark"] .sh-fs-checked { color: #718096; }
+
 <?php if (!empty($ShowLoadTest)): ?>
 /* Load test (dev only) */
 .sh-lt-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
@@ -188,6 +203,21 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		<div class="sh-panel">
 			<div class="sh-panel-hdr"><i class="fas fa-database"></i> Database</div>
 			<div class="sh-panel-body" id="sh-db-metrics"></div>
+		</div>
+
+		<!-- Optional Checks -->
+		<div class="sh-panel">
+			<div class="sh-panel-hdr"><i class="fas fa-toolbox"></i> Optional Checks <span class="sh-al-subtitle">on demand</span></div>
+			<div class="sh-panel-body">
+				<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+					<button class="sh-fs-btn" id="sh-fs-btn"><i class="fas fa-hdd"></i> Check Filesystem</button>
+					<button class="sh-fs-btn" id="sh-memcache-btn"><i class="fas fa-database"></i> Check Memcache</button>
+					<button class="sh-fs-btn" id="sh-opcache-btn"><i class="fab fa-php"></i> Check OPcache</button>
+				</div>
+				<div id="sh-fs-result"></div>
+				<div id="sh-memcache-result"></div>
+				<div id="sh-opcache-result"></div>
+			</div>
 		</div>
 
 		<!-- Active Queries Panel -->
@@ -282,6 +312,13 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		var maxHit  = (fpm['max children reached'] || 0);
 		var slow    = (fpm['slow requests']     || 0);
 		var conn    = (fpm['accepted conn']     || 0);
+		var startSince = parseInt(fpm['start since'] || 0, 10);
+		// FPM master uptime; reset when the container/pool restarts.
+		var d = Math.floor(startSince / 86400);
+		var h = Math.floor((startSince % 86400) / 3600);
+		var m = Math.floor((startSince % 3600) / 60);
+		var fpmUptimeStr = d > 0 ? (d + 'd ' + h + 'h ' + m + 'm')
+		                  : (h + 'h ' + m + 'm');
 
 		var wHtml = '';
 		for (var i = 0; i < total; i++) {
@@ -298,7 +335,8 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			metric('Listen Queue', queue, queueClass) +
 			metric('Max Children Reached', maxHit, maxClass) +
 			metric('Slow Requests', slow, slowClass) +
-			metric('Total Accepted', conn.toLocaleString(), '');
+			metric('Total Accepted', conn.toLocaleString(), '') +
+			metric('FPM Uptime', fpmUptimeStr, '');
 	}
 
 	/* ── Render DB panel ────────────────────────────── */
@@ -546,6 +584,112 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 	}
 	poll();
 	setInterval(poll, 2000);
+
+	/* ── Optional filesystem check (on-demand) ───────── */
+	function renderFsRow(label, value, cls) {
+		return '<div class="sh-fs-row ' + (cls || '') + '"><span>' + label + '</span><span>' + value + '</span></div>';
+	}
+	function fmtBytes(n) {
+		if (!n) return '—';
+		if (n >= 1099511627776) return (n / 1099511627776).toFixed(1) + ' TB';
+		if (n >= 1073741824)    return (n / 1073741824).toFixed(1) + ' GB';
+		if (n >= 1048576)       return (n / 1048576).toFixed(1) + ' MB';
+		return n + ' B';
+	}
+	function fmtCount(n) {
+		if (!n) return '—';
+		if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+		if (n >= 1000)    return (n / 1000).toFixed(0) + 'k';
+		return String(n);
+	}
+	function wireCheckBtn(opts) {
+		var btn    = document.getElementById(opts.btnId);
+		var result = document.getElementById(opts.resultId);
+		if (!btn || !result) return;
+		btn.addEventListener('click', function() {
+			btn.disabled  = true;
+			btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+			fetch(UIR + 'Admin/ajax/' + opts.action, { credentials: 'same-origin' })
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+					if (!d || d.status !== 0) { result.innerHTML = '<div class="sh-empty">Check failed</div>'; return; }
+					var html = opts.render(d) || '<div class="sh-empty">No data available</div>';
+					html += '<div class="sh-fs-checked">Checked ' + new Date().toLocaleString() + '</div>';
+					result.innerHTML = html;
+				})
+				.catch(function() {
+					result.innerHTML = '<div class="sh-empty">Request failed</div>';
+				})
+				.finally(function() {
+					btn.disabled  = false;
+					btn.innerHTML = '<i class="fas fa-sync"></i> ' + opts.label;
+				});
+		});
+	}
+
+	wireCheckBtn({
+		btnId:    'sh-fs-btn',
+		resultId: 'sh-fs-result',
+		action:   'serverhealth_fs_check',
+		label:    'Check Filesystem',
+		render:   function(d) {
+			var html = '';
+			if (d.disk) {
+				var p = d.disk.used_pct;
+				var cls = p >= 90 ? 'alert' : (p >= 80 ? 'warn' : '');
+				html += renderFsRow('Disk usage', p + '% (' + fmtBytes(d.disk.total - d.disk.free) + ' / ' + fmtBytes(d.disk.total) + ')', cls);
+			}
+			if (d.inodes) {
+				var p = d.inodes.used_pct;
+				var cls = p >= 90 ? 'alert' : (p >= 80 ? 'warn' : '');
+				html += renderFsRow('Inode usage', p + '% (' + fmtCount(d.inodes.used) + ' / ' + fmtCount(d.inodes.total) + ')', cls);
+			}
+			return html;
+		},
+	});
+
+	wireCheckBtn({
+		btnId:    'sh-memcache-btn',
+		resultId: 'sh-memcache-result',
+		action:   'serverhealth_memcache_check',
+		label:    'Check Memcache',
+		render:   function(d) {
+			if (!d.memcache) return '';
+			var m = d.memcache;
+			var html = '';
+			var sizePct = m.limit_maxbytes ? Math.round(m.bytes / m.limit_maxbytes * 100 * 10) / 10 : 0;
+			var sizeCls = sizePct >= 90 ? 'alert' : (sizePct >= 75 ? 'warn' : '');
+			html += renderFsRow('Memory used', sizePct + '% (' + fmtBytes(m.bytes) + ' / ' + fmtBytes(m.limit_maxbytes) + ')', sizeCls);
+			var totalGets = (m.get_hits || 0) + (m.get_misses || 0);
+			var hitRate = totalGets ? Math.round((m.get_hits / totalGets) * 1000) / 10 : 0;
+			html += renderFsRow('Hit rate', totalGets ? (hitRate + '%') : '— (no reads yet)', '');
+			html += renderFsRow('Items cached', fmtCount(m.curr_items), '');
+			var evCls = (m.evictions > 0) ? 'warn' : '';
+			html += renderFsRow('Evictions (lifetime)', fmtCount(m.evictions), evCls);
+			return html;
+		},
+	});
+
+	wireCheckBtn({
+		btnId:    'sh-opcache-btn',
+		resultId: 'sh-opcache-result',
+		action:   'serverhealth_opcache_check',
+		label:    'Check OPcache',
+		render:   function(d) {
+			if (!d.opcache) return '';
+			var o = d.opcache;
+			var html = '';
+			var memPct = o.memory_total ? Math.round(o.memory_used / o.memory_total * 100 * 10) / 10 : 0;
+			var memCls = memPct >= 90 ? 'alert' : (memPct >= 75 ? 'warn' : '');
+			html += renderFsRow('Memory used', memPct + '% (' + fmtBytes(o.memory_used) + ' / ' + fmtBytes(o.memory_total) + ')', memCls);
+			var wastedPct = o.memory_total ? Math.round(o.memory_wasted / o.memory_total * 100 * 10) / 10 : 0;
+			var wastedCls = wastedPct >= 20 ? 'warn' : '';
+			html += renderFsRow('Wasted memory', wastedPct + '% (' + fmtBytes(o.memory_wasted) + ')', wastedCls);
+			html += renderFsRow('Cached scripts', fmtCount(o.scripts), '');
+			html += renderFsRow('Hit rate', (Math.round(o.hit_rate * 10) / 10) + '%', '');
+			return html;
+		},
+	});
 
 <?php if (!empty($ShowLoadTest)): ?>
 	/* ── Load tester (dev only) ─────────────────────── */
