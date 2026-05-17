@@ -750,4 +750,131 @@ class Controller_PlayerAjax extends Controller {
 		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
 		exit;
 	}
+
+	public function banner($p = null) {
+		header('Content-Type: application/json');
+
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+
+		$params            = explode('/', $p ?? '');
+		$mundane_id_target = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+		$action            = $params[1] ?? '';
+
+		if (!valid_id($mundane_id_target)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid Player ID.']);
+			exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+
+		// Load player's park/kingdom for officer auth lookup.
+		global $DB;
+		$DB->Clear();
+		$_pInfo = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . $mundane_id_target);
+		if (!$_pInfo || !$_pInfo->Next()) {
+			echo json_encode(['status' => 1, 'error' => 'Player not found.']);
+			exit;
+		}
+		$_parkId    = (int)$_pInfo->park_id;
+		$_kingdomId = (int)$_pInfo->kingdom_id;
+
+		$canEdit = $uid > 0 && (
+			   $uid === $mundane_id_target
+			|| ($_parkId    && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK,    $_parkId,    AUTH_EDIT))
+			|| ($_kingdomId && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $_kingdomId, AUTH_EDIT))
+			|| Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)
+		);
+		if (!$canEdit) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized to edit this player.']);
+			exit;
+		}
+
+		if ($action === 'remove') {
+			$DB->Clear();
+			// Reset display toggles AND framing offsets to defaults so a future
+			// upload starts fresh instead of inheriting the removed banner's
+			// config.
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE mundane_id = ' . $mundane_id_target);
+			$base = DIR_PLAYER_BANNER . sprintf('%06d', $mundane_id_target);
+			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
+			if (file_exists($base . '.png')) unlink($base . '.png');
+			echo json_encode(['status' => 0]);
+			exit;
+		}
+
+		if ($action === 'config') {
+			// Refuse silent no-ops: config only meaningful with a banner present.
+			$DB->Clear();
+			$row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+			if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
+				echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
+				exit;
+			}
+			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
+			$offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+			$DB->Clear();
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
+			echo json_encode(['status' => 0]);
+			exit;
+		}
+
+		if ($action === 'update') {
+			if (empty($_FILES['Banner']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
+				exit;
+			}
+			$tmp  = $_FILES['Banner']['tmp_name'];
+			$mime = $_FILES['Banner']['type'] ?? 'image/jpeg';
+			// JPEG and PNG only: resolve_image_ext returns .jpg or .png and the
+			// rest of the pipeline (storage filename, frontend cache-bust, banner
+			// modal accept attribute) only knows those two. GIFs would land as
+			// .jpg on disk with corrupt bytes.
+			if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
+				echo json_encode(['status' => 1, 'error' => 'Unsupported image type. Use JPG or PNG.']);
+				exit;
+			}
+			if (!is_dir(DIR_PLAYER_BANNER)) {
+				@mkdir(DIR_PLAYER_BANNER, 0775, true);
+			}
+			$ext  = ($mime === 'image/png') ? 'png' : 'jpg';
+			$base = DIR_PLAYER_BANNER . sprintf('%06d', $mundane_id_target);
+			// Delete any previous banner files (both extensions) before saving
+			// the new one so we never leave the old image behind when the host
+			// switches images. resolve_image_ext picks whichever survives.
+			if (file_exists($base . '.jpg')) @unlink($base . '.jpg');
+			if (file_exists($base . '.png')) @unlink($base . '.png');
+			if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
+				echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
+				exit;
+			}
+			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
+			$offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+			$DB->Clear();
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
+			// $DB->Execute() is void; the YapoMysql layer can silently swallow
+			// failures (sql_mode=STRICT etc). Verify the update landed by
+			// re-reading has_banner. If it didn't, roll back the file so we
+			// don't leave an orphan whose flag is still 0.
+			$DB->Clear();
+			$verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+			if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
+				@unlink($base . '.' . $ext);
+				echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
+				exit;
+			}
+			echo json_encode(['status' => 0]);
+			exit;
+		}
+
+		echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
+		exit;
+	}
+
 }
