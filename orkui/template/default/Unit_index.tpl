@@ -25,6 +25,21 @@ foreach ($_members as $_m) {
 }
 
 $_can_edit   = !empty($CanEdit);
+
+$hasBanner       = !empty($_unit['HasBanner']);
+$bannerShowLogo  = !isset($_unit['BannerShowLogo']) || (int)$_unit['BannerShowLogo'] !== 0;
+$bannerVignette  = !isset($_unit['BannerVignette']) || (int)$_unit['BannerVignette'] !== 0;
+$bannerOffsetX   = isset($_unit['BannerOffsetX']) ? max(0, min(100, (int)$_unit['BannerOffsetX'])) : 50;
+$bannerOffsetY   = isset($_unit['BannerOffsetY']) ? max(0, min(100, (int)$_unit['BannerOffsetY'])) : 50;
+$bannerUrl       = '';
+if ($hasBanner) {
+	$bannerFile = Common::resolve_image_ext(DIR_UNIT_BANNER, sprintf('%05d', $_unit_id));
+	$bannerFs   = DIR_UNIT_BANNER . $bannerFile;
+	if (file_exists($bannerFs)) {
+		$bannerUrl = HTTP_UNIT_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+	}
+}
+$unCanManageBanner = !empty($_can_edit);
 $_err        = $SaveError ?? '';
 $_base_url   = UIR . "Unit/index/$_unit_id";
 
@@ -325,8 +340,23 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 <?php endif; ?>
 
 <!-- ── Hero ─────────────────────────────────────────────── -->
-<div class="un-hero">
-	<div class="un-hero-bg" style="background-image:url('<?=htmlspecialchars($_hero_src)?>')"></div>
+<?php
+	$_heroBgUrl    = $bannerUrl ?: $_hero_src;
+	$_heroClasses  = 'un-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' un-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' un-hero-vignette';
+	if ($unCanManageBanner)            $_heroClasses .= ' un-hero-editable';
+	$_unShowLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="un-hero">
+	<div class="un-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
 	<div class="un-hero-content">
 
 		<!-- Heraldry -->
