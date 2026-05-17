@@ -842,11 +842,29 @@ class Report  extends Ork3 {
 			$active_only_where = $active_only ?? '';
 		}
 
+		// Lightweight skips the four per-row attendance/unit_mundane correlated
+		// subqueries (TotalMemberCount, LastActivityDate, ActiveMemberCount,
+		// LeaderNames) for callers that only render Name/Type/UnitId/UnitMundaneId
+		// — Player profile + Admin player. The Unit List and Search pages still
+		// need the full projection.
+		$lightweight = !empty($request['Lightweight']);
+		if ($lightweight) {
+			$total_member_count_expr  = 'null';
+			$last_activity_date_expr  = 'null';
+			$active_member_count_expr = 'null';
+			$leader_names_expr        = 'null';
+		} else {
+			$total_member_count_expr  = "(select count(*) from " . DB_PREFIX . "unit_mundane um2 where um2.unit_id = u.unit_id)";
+			$last_activity_date_expr  = "(select max(a.date) from " . DB_PREFIX . "attendance a join " . DB_PREFIX . "unit_mundane um3 on um3.mundane_id = a.mundane_id where um3.unit_id = u.unit_id $activity_scope)";
+			$active_member_count_expr = "(select count(distinct um4.mundane_id) from " . DB_PREFIX . "unit_mundane um4 join " . DB_PREFIX . "attendance a4 on a4.mundane_id = um4.mundane_id where um4.unit_id = u.unit_id and a4.date >= date_sub(curdate(), interval 1 year))";
+			$leader_names_expr        = "(select group_concat(m5.persona order by m5.persona separator ', ') from " . DB_PREFIX . "unit_mundane um5 join " . DB_PREFIX . "mundane m5 on m5.mundane_id = um5.mundane_id where um5.unit_id = u.unit_id and um5.role in ('captain','lord') and um5.active = 'Active')";
+		}
+
 		$sql = "select u.*, m.*, u.has_heraldry, count(um.mundane_id) as member_count,
-					(select count(*) from " . DB_PREFIX . "unit_mundane um2 where um2.unit_id = u.unit_id) as total_member_count,
-					(select max(a.date) from " . DB_PREFIX . "attendance a join " . DB_PREFIX . "unit_mundane um3 on um3.mundane_id = a.mundane_id where um3.unit_id = u.unit_id $activity_scope) as last_activity_date,
-					(select count(distinct um4.mundane_id) from " . DB_PREFIX . "unit_mundane um4 join " . DB_PREFIX . "attendance a4 on a4.mundane_id = um4.mundane_id where um4.unit_id = u.unit_id and a4.date >= date_sub(curdate(), interval 1 year)) as active_member_count,
-					(select group_concat(m5.persona order by m5.persona separator ', ') from " . DB_PREFIX . "unit_mundane um5 join " . DB_PREFIX . "mundane m5 on m5.mundane_id = um5.mundane_id where um5.unit_id = u.unit_id and um5.role in ('captain','lord') and um5.active = 'Active') as leader_names,
+					$total_member_count_expr as total_member_count,
+					$last_activity_date_expr as last_activity_date,
+					$active_member_count_expr as active_member_count,
+					$leader_names_expr as leader_names,
 					um.unit_mundane_id
 					from " . DB_PREFIX . "unit u
 						$um_join
