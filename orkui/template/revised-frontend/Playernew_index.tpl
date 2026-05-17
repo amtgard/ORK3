@@ -272,6 +272,7 @@
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
 	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
 	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
+	$_pnShowLogo = !$bannerUrl || $bannerShowLogo;
 
 ?>
 <style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; } html[data-theme="dark"] .pn-hero { background: <?= $_pnHeroBgValueDark ?>; }</style>
@@ -1035,6 +1036,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 	</button>
 	<?php endif; ?>
 	<div class="pn-hero-content">
+		<?php if ($_pnShowLogo): ?>
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
@@ -1044,6 +1046,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 		<div class="pn-avatar">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 		</div>
+		<?php endif; ?>
 		<?php endif; ?>
 		<div class="pn-hero-info">
 			<?php

@@ -272,6 +272,7 @@
 	<div class="pk-hero-content">
 
 		<!-- Heraldry -->
+		<?php if ($_pkShowLogo): ?>
 		<div class="pk-hero-left">
 			<?php $displayHeraldryUrl = $hasHeraldry ? $heraldryUrl : HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 			<div class="pk-heraldry-frame<?= !empty($CanAdminPark) ? ' pk-heraldry-editable' : '' ?>">
@@ -287,6 +288,7 @@
 				<?php endif; ?>
 			</div>
 		</div>
+		<?php endif; ?>
 
 		<!-- Name / title / officers -->
 		<div class="pk-hero-center">
