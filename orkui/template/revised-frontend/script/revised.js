@@ -2262,7 +2262,7 @@ if (typeof KnConfig !== 'undefined') {
 var knMapLoaded = false;
 var knCalLoaded = false;
 var knCalendar  = null;
-var knFilters   = { 'kingdom-event': true, 'park-event': true, 'park-day': false };
+var knFilters   = { 'kingdom-event': true, 'park-event': true, 'calendar-item': true, 'park-day': false };
 var knCalCache  = {}; // raw events keyed by "startISO|endISO" — avoids re-fetching on filter toggle
 
 function orkIsDarkMode() {
@@ -2348,8 +2348,9 @@ function knRenderCalendar() {
             if (raw) {
                 // Re-apply filter from cache — no HTTP request needed
                 successCallback(raw.filter(function(e) {
-                    if (e.type === 'park-day') return knFilters['park-day'];
-                    if (e.type === 'park-event') return knFilters['park-event'];
+                    if (e.type === 'park-day')      return knFilters['park-day'];
+                    if (e.type === 'park-event')    return knFilters['park-event'];
+                    if (e.type === 'calendar-item') return knFilters['calendar-item'];
                     return knFilters['kingdom-event'];
                 }));
                 return;
@@ -2359,8 +2360,9 @@ function knRenderCalendar() {
                     if (data && data.status === 0) {
                         knCalCache[cacheKey] = data.events || [];
                         successCallback((data.events || []).filter(function(e) {
-                            if (e.type === 'park-day') return knFilters['park-day'];
-                            if (e.type === 'park-event') return knFilters['park-event'];
+                            if (e.type === 'park-day')      return knFilters['park-day'];
+                            if (e.type === 'park-event')    return knFilters['park-event'];
+                            if (e.type === 'calendar-item') return knFilters['calendar-item'];
                             return knFilters['kingdom-event'];
                         }));
                     } else {
@@ -2371,6 +2373,9 @@ function knRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
+            var xp = info.event.extendedProps || {};
+            if (xp.calendarItemId) { knShowCalendarItemOverlay(xp.calendarItemId); return; }
+            if (xp.eventId) { window.evpvOpen(xp.eventId, xp.detailId || 0); return; }
             if (info.event.url) window.location.href = info.event.url;
         },
         eventDidMount: function(info) {
@@ -3578,14 +3583,94 @@ $(document).ready(function() {
         el.textContent = msg; el.style.display = '';
     }
 
+    var CI_CREATE_URL = KnConfig.uir + 'CalendarItemAjax/create';
+    var CI_UPDATE_URL = KnConfig.uir + 'CalendarItemAjax/update';
+    var CI_DELETE_URL = KnConfig.uir + 'CalendarItemAjax/delete';
+    var CI_GET_URL    = KnConfig.uir + 'CalendarItemAjax/get/';
+    var RSVP_SET_URL  = KnConfig.uir + 'EventRsvpAjax/set';
+    var RSVP_OFF_URL  = KnConfig.uir + 'EventRsvpAjax/withdraw';
+    var knCiEditingId = 0; // 0 = create mode; >0 = editing existing item
+    var knCiFlatStart = null, knCiFlatEnd = null;
+
+    function knCiResetForm(presetDate) {
+        document.getElementById('kn-ci-park-name').value = '';
+        document.getElementById('kn-ci-park-id').value   = '';
+        document.getElementById('kn-ci-description').value = '';
+        document.getElementById('kn-ci-allday').checked = false;
+        var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = false;
+        var loc = document.getElementById('kn-ci-locals-only');  if (loc) loc.checked = false;
+        knCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    function knCiRebuildPickers(startVal, endVal, allDay) {
+        if (knCiFlatStart) { knCiFlatStart.destroy(); knCiFlatStart = null; }
+        if (knCiFlatEnd)   { knCiFlatEnd.destroy();   knCiFlatEnd   = null; }
+        var fmt = allDay ? 'Y-m-d' : 'Y-m-d H:i';
+        var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        knCiFlatStart = flatpickr('#kn-ci-start', Object.assign({}, opts, {
+            onChange: function(sel) {
+                if (!sel[0] || !knCiFlatEnd) return;
+                if (!knCiFlatEnd.selectedDates[0] || knCiFlatEnd.selectedDates[0] < sel[0]) {
+                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
+                    knCiFlatEnd.setDate(end, true);
+                }
+            }
+        }));
+        knCiFlatEnd = flatpickr('#kn-ci-end', opts);
+        if (startVal) knCiFlatStart.setDate(startVal, true);
+        if (endVal)   knCiFlatEnd.setDate(endVal, true);
+    }
+
+    function knGetModalType() {
+        var r = document.querySelector('input[name="kn-emod-type"]:checked');
+        return r ? r.value : 'event';
+    }
+
+    function knApplyModalType() {
+        var t = knGetModalType();
+        var isCi = (t === 'calendar-item');
+        document.querySelectorAll('.kn-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
+        document.querySelectorAll('.kn-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        if (dbtn) dbtn.style.display = isCi ? 'none' : '';
+        document.getElementById('kn-emod-go-label').textContent = isCi ? (knCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
+        var title = document.getElementById('kn-emod-title');
+        title.innerHTML = isCi
+            ? '<i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>' + (knCiEditingId > 0 ? 'Edit Calendar Item' : 'New Calendar Item')
+            : '<i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event';
+        knUpdateGoBtn();
+        if (isCi && !knCiFlatStart) {
+            var presetDate = document.getElementById('kn-event-modal').dataset.presetDate || '';
+            knCiResetForm(presetDate);
+        }
+    }
+
+    function knUpdateGoBtn() {
+        var t = knGetModalType();
+        var ok;
+        if (t === 'calendar-item') {
+            ok = !!document.getElementById('kn-event-name').value.trim()
+              && !!document.getElementById('kn-ci-start').value
+              && !!document.getElementById('kn-ci-end').value;
+        } else {
+            ok = !!document.getElementById('kn-event-name').value.trim();
+        }
+        document.getElementById('kn-emod-go-btn').disabled = !ok;
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        if (dbtn) dbtn.disabled = !ok;
+    }
+
     window.knOpenEventModal = function(dateStr) {
         var modal = document.getElementById('kn-event-modal');
         modal.dataset.presetDate = dateStr || '';
+        knCiEditingId = 0;
+        // Default to Amtgard Event on fresh open.
+        var typeRadios = document.querySelectorAll('input[name="kn-emod-type"]');
+        typeRadios.forEach(function(r) { r.disabled = false; r.checked = (r.value === 'event'); });
         document.getElementById('kn-event-name').value     = '';
         document.getElementById('kn-event-park-name').value = '';
         document.getElementById('kn-event-park-id').value   = '';
         document.getElementById('kn-emod-feedback').style.display = 'none';
-        document.getElementById('kn-emod-go-btn').disabled  = true;
         var dateRow  = document.getElementById('kn-emod-date-row');
         var dateText = document.getElementById('kn-emod-date-text');
         if (dateRow && dateText) {
@@ -3597,6 +3682,8 @@ $(document).ready(function() {
                 dateRow.style.display = 'none';
             }
         }
+        knCiResetForm(dateStr || '');
+        knApplyModalType();
         modal.classList.add('kn-emod-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { document.getElementById('kn-event-name').focus(); }, 50);
@@ -3607,13 +3694,16 @@ $(document).ready(function() {
         document.body.style.overflow = '';
     };
 
-    window.knCreateEvent = function() {
+    window.knCreateEvent = function(statusOverride) {
+        if (knGetModalType() === 'calendar-item') return knSubmitCalendarItem();
         var name   = document.getElementById('kn-event-name').value.trim();
         var parkId = parseInt(document.getElementById('kn-event-park-id').value) || 0;
         if (!name) return;
         var btn = document.getElementById('kn-emod-go-btn');
-        btn.disabled = true;
-        $.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId },
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        btn.disabled = true; if (dbtn) dbtn.disabled = true;
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        $.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId, Status: status },
             function(r) {
                 if (r && r.status === 0) {
                     var presetDate = document.getElementById('kn-event-modal').dataset.presetDate || '';
@@ -3623,39 +3713,183 @@ $(document).ready(function() {
                     window.location.href = url;
                 } else {
                     knEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
-                    btn.disabled = false;
+                    btn.disabled = false; if (dbtn) dbtn.disabled = false;
                 }
             }, 'json'
-        ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+        ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
+    };
+
+    function knSubmitCalendarItem() {
+        var name    = document.getElementById('kn-event-name').value.trim();
+        var allDay  = document.getElementById('kn-ci-allday').checked ? 1 : 0;
+        var start   = document.getElementById('kn-ci-start').value;
+        var end     = document.getElementById('kn-ci-end').value;
+        var desc    = document.getElementById('kn-ci-description').value;
+        var parkId  = parseInt(document.getElementById('kn-ci-park-id').value) || 0;
+        if (!name || !start || !end) return;
+
+        var btn = document.getElementById('kn-emod-go-btn');
+        btn.disabled = true;
+
+        var officerOnly = document.getElementById('kn-ci-officer-only');
+        var localsOnly  = document.getElementById('kn-ci-locals-only');
+        var payload = {
+            Name: name, Description: desc, AllDay: allDay,
+            EventStart: start, EventEnd: end,
+            KingdomId: KnConfig.kingdomId, ParkId: parkId,
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0
+        };
+        var url = CI_CREATE_URL;
+        if (knCiEditingId > 0) { payload.CalendarItemId = knCiEditingId; url = CI_UPDATE_URL; }
+
+        $.post(url, payload, function(r) {
+            if (r && r.status === 0) {
+                knCloseEventModal();
+                knCalCache = {}; // bust cached raw events so the new item appears
+                if (knCalendar) knCalendar.refetchEvents();
+                // List view rows are rendered server-side; reload so they appear in the list.
+                setTimeout(function() { window.location.reload(); }, 150);
+            } else {
+                knEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
+                btn.disabled = false;
+            }
+        }, 'json').fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+    }
+
+    // ---- View / edit / delete overlay ----
+    var knCiCurrent = null;
+
+    window.knShowCalendarItemOverlay = function(id) {
+        $.getJSON(CI_GET_URL + id, function(r) {
+            if (!r || r.status !== 0) { alert((r && r.error) || 'Calendar item not found.'); return; }
+            knCiCurrent = r;
+            document.getElementById('kn-ci-view-name').textContent = r.Name || '';
+            document.getElementById('kn-ci-view-when').textContent = knCiFormatWhen(r);
+            document.getElementById('kn-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item')
+                + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '')
+                + (r.IsLocalsOnly  == 1 ? ' &middot; <span style="color:#0d9488"><i class="fas fa-map-marker-alt"></i> Locals-only</span>' : '');
+            var descEl = document.getElementById('kn-ci-view-desc');
+            descEl.textContent = r.Description || '';
+            descEl.style.display = r.Description ? '' : 'none';
+            document.getElementById('kn-ci-edit-btn').style.display   = r.CanEdit ? '' : 'none';
+            document.getElementById('kn-ci-delete-btn').style.display = r.CanEdit ? '' : 'none';
+            document.getElementById('kn-ci-overlay').classList.add('kn-ci-open');
+            document.body.style.overflow = 'hidden';
+        }).fail(function() { alert('Failed to load calendar item.'); });
+    };
+
+    window.knCloseCalendarItemOverlay = function() {
+        document.getElementById('kn-ci-overlay').classList.remove('kn-ci-open');
+        document.body.style.overflow = '';
+    };
+
+    function knCiFormatWhen(r) {
+        var s = r.EventStart || '';
+        var e = r.EventEnd   || s;
+        var sd = s.substring(0, 10), ed = e.substring(0, 10);
+        var sdObj = new Date(sd + 'T00:00:00');
+        var edObj = new Date(ed + 'T00:00:00');
+        var fmt = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
+        if (r.AllDay == 1 || r.AllDay === true) {
+            return (sd === ed)
+                ? 'All day · ' + sdObj.toLocaleDateString(undefined, fmt)
+                : 'All day · ' + sdObj.toLocaleDateString(undefined, fmt) + ' → ' + edObj.toLocaleDateString(undefined, fmt);
+        }
+        var tfmt = { hour: 'numeric', minute: '2-digit' };
+        var startStr = new Date(s.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        var endStr   = new Date(e.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        return (sd === ed)
+            ? startStr + ' → ' + new Date(e.replace(' ', 'T')).toLocaleTimeString(undefined, tfmt)
+            : startStr + ' → ' + endStr;
+    }
+
+    window.knEditCalendarItem = function() {
+        if (!knCiCurrent) return;
+        knCloseCalendarItemOverlay();
+        var modal = document.getElementById('kn-event-modal');
+        modal.dataset.presetDate = '';
+        knCiEditingId = knCiCurrent.CalendarItemId;
+        document.querySelectorAll('input[name="kn-emod-type"]').forEach(function(r) {
+            r.checked = (r.value === 'calendar-item');
+            r.disabled = true; // cannot switch type when editing an existing item
+        });
+        document.getElementById('kn-event-name').value = knCiCurrent.Name || '';
+        document.getElementById('kn-ci-description').value = knCiCurrent.Description || '';
+        document.getElementById('kn-ci-allday').checked = (knCiCurrent.AllDay == 1);
+        var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = (knCiCurrent.IsOfficerOnly == 1);
+        var loc = document.getElementById('kn-ci-locals-only');  if (loc) loc.checked = (knCiCurrent.IsLocalsOnly == 1);
+        document.getElementById('kn-ci-park-id').value = knCiCurrent.ParkId || '';
+        document.getElementById('kn-ci-park-name').value = ''; // user can re-select if they want to change
+        document.getElementById('kn-emod-feedback').style.display = 'none';
+        document.getElementById('kn-emod-date-row').style.display = 'none';
+        var sVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventStart.substring(0, 10) : knCiCurrent.EventStart.replace(' ', 'T').substring(0, 16).replace('T', ' ');
+        var eVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventEnd.substring(0, 10)   : knCiCurrent.EventEnd.replace(' ', 'T').substring(0, 16).replace('T', ' ');
+        knCiRebuildPickers(sVal, eVal, (knCiCurrent.AllDay == 1));
+        knApplyModalType();
+        modal.classList.add('kn-emod-open');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.knDeleteCalendarItem = function() {
+        if (!knCiCurrent) return;
+        if (!confirm('Delete this calendar item? This cannot be undone.')) return;
+        $.post(CI_DELETE_URL, { CalendarItemId: knCiCurrent.CalendarItemId }, function(r) {
+            if (r && r.status === 0) {
+                knCloseCalendarItemOverlay();
+                window.location.reload();
+            } else {
+                alert((r && r.error) || 'Failed to delete calendar item.');
+            }
+        }, 'json').fail(function() { alert('Request failed.'); });
     };
 
     $(document).ready(function() {
-        $('#kn-event-name').on('input', function() {
-            document.getElementById('kn-emod-go-btn').disabled = !this.value.trim();
-        }).on('keydown', function(e) {
+        $('#kn-event-name, #kn-ci-start, #kn-ci-end').on('input change', function() { knUpdateGoBtn(); });
+        $('#kn-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('kn-emod-go-btn').disabled) knCreateEvent();
         });
-
-        $('#kn-event-park-name').autocomplete({
-            source: function(req, res) {
-                $.getJSON(KnConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Park', name: req.term, kingdom_id: KnConfig.kingdomId, limit: 8 },
-                    function(data) { res($.map(data || [], function(v) { return { label: v.Name, value: v.ParkId }; })); }
-                );
-            },
-            focus:  function(e, ui) { $('#kn-event-park-name').val(ui.item.label); return false; },
-            select: function(e, ui) { $('#kn-event-park-name').val(ui.item.label); $('#kn-event-park-id').val(ui.item.value); return false; },
-            change: function(e, ui) { if (!ui.item) $('#kn-event-park-id').val(''); return false; },
-            delay: 250, minLength: 2
+        $(document).on('change', 'input[name="kn-emod-type"]', knApplyModalType);
+        $('#kn-ci-allday').on('change', function() {
+            var allDay  = this.checked;
+            var curS    = document.getElementById('kn-ci-start').value;
+            var curE    = document.getElementById('kn-ci-end').value;
+            // Reset to just the date portion when toggling to all-day.
+            knCiRebuildPickers(curS ? curS.substring(0, 10) : '', curE ? curE.substring(0, 10) : '', allDay);
+            knUpdateGoBtn();
         });
+
+        function knWireParkAutocomplete(inputSel, hiddenSel) {
+            $(inputSel).autocomplete({
+                source: function(req, res) {
+                    $.getJSON(KnConfig.httpService + 'Search/SearchService.php',
+                        { Action: 'Search/Park', name: req.term, kingdom_id: KnConfig.kingdomId, limit: 8 },
+                        function(data) { res($.map(data || [], function(v) { return { label: v.Name, value: v.ParkId }; })); }
+                    );
+                },
+                focus:  function(e, ui) { $(inputSel).val(ui.item.label); return false; },
+                select: function(e, ui) { $(inputSel).val(ui.item.label); $(hiddenSel).val(ui.item.value); return false; },
+                change: function(e, ui) { if (!ui.item) $(hiddenSel).val(''); return false; },
+                delay: 250, minLength: 2
+            });
+        }
+        knWireParkAutocomplete('#kn-event-park-name', '#kn-event-park-id');
+        knWireParkAutocomplete('#kn-ci-park-name',    '#kn-ci-park-id');
 
         var knEvtOverlay = document.getElementById('kn-event-modal');
         if (knEvtOverlay) {
             knEvtOverlay.addEventListener('click', function(e) { if (e.target === this) knCloseEventModal(); });
         }
+        var knCiOverlayEl = document.getElementById('kn-ci-overlay');
+        if (knCiOverlayEl) {
+            knCiOverlayEl.addEventListener('click', function(e) { if (e.target === this) knCloseCalendarItemOverlay(); });
+        }
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && document.getElementById('kn-event-modal') &&
-                document.getElementById('kn-event-modal').classList.contains('kn-emod-open')) knCloseEventModal();
+            if (e.key !== 'Escape') return;
+            var m = document.getElementById('kn-event-modal');
+            if (m && m.classList.contains('kn-emod-open')) { knCloseEventModal(); return; }
+            var o = document.getElementById('kn-ci-overlay');
+            if (o && o.classList.contains('kn-ci-open')) { knCloseCalendarItemOverlay(); }
         });
     });
 })();
@@ -5420,7 +5654,7 @@ var pkCalEvents;
 if (typeof PkConfig !== 'undefined') { pkCalEvents = PkConfig.calEvents; }
 var pkCalParkDays = [];
 if (typeof PkConfig !== 'undefined' && PkConfig.calParkDays) { pkCalParkDays = PkConfig.calParkDays; }
-var pkFilters   = { 'event': true, 'park-day': false };
+var pkFilters   = { 'event': true, 'calendar-item': true, 'park-day': false };
 var pkCalLoaded = false;
 var pkCalendar  = null;
 
@@ -5474,14 +5708,17 @@ function pkRenderCalendar() {
         height: 'auto',
         events: function(fetchInfo, successCallback) {
             var combined = [];
-            if (pkFilters['event']) {
-                pkCalEvents.forEach(function(e) {
-                    var ev = { title: e.title, start: e.start, color: e.color };
-                    if (e.url) ev.url = e.url;
-                    if (e.end) ev.end = e.end;
-                    combined.push(ev);
-                });
-            }
+            pkCalEvents.forEach(function(e) {
+                var isCi = (e.type === 'calendar-item');
+                if (isCi  && !pkFilters['calendar-item']) return;
+                if (!isCi && !pkFilters['event'])         return;
+                var ev = { title: e.title, start: e.start, color: e.color };
+                if (e.url)    ev.url    = e.url;
+                if (e.end)    ev.end    = e.end;
+                if (e.allDay !== undefined) ev.allDay = e.allDay;
+                if (e.extendedProps) ev.extendedProps = e.extendedProps;
+                combined.push(ev);
+            });
             if (pkFilters['park-day']) {
                 pkCalParkDays.forEach(function(e) {
                     combined.push({ title: e.title, start: e.start, color: e.color });
@@ -5491,6 +5728,9 @@ function pkRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
+            var xp = info.event.extendedProps || {};
+            if (xp.calendarItemId) { pkShowCalendarItemOverlay(xp.calendarItemId); return; }
+            if (xp.eventId) { window.evpvOpen(xp.eventId, xp.detailId || 0); return; }
             if (info.event.url) window.location.href = info.event.url;
         },
         dayCellDidMount: function(info) {
@@ -6598,20 +6838,90 @@ $(document).ready(function() {
 (function() {
     if (typeof PkConfig === 'undefined') return;
 
-    var CREATE_URL  = PkConfig.uir + 'EventAjax/create';
+    var CREATE_URL    = PkConfig.uir + 'EventAjax/create';
+    var CI_CREATE_URL = PkConfig.uir + 'CalendarItemAjax/create';
+    var CI_UPDATE_URL = PkConfig.uir + 'CalendarItemAjax/update';
+    var CI_DELETE_URL = PkConfig.uir + 'CalendarItemAjax/delete';
+    var CI_GET_URL    = PkConfig.uir + 'CalendarItemAjax/get/';
+
+    var pkCiEditingId = 0;
+    var pkCiFlatStart = null, pkCiFlatEnd = null;
+    var pkCiCurrent   = null;
 
     function pkEvFeedback(msg) {
         var el = document.getElementById('pk-emod-feedback');
         el.textContent = msg; el.style.display = '';
     }
 
+    function pkCiRebuildPickers(startVal, endVal, allDay) {
+        if (pkCiFlatStart) { pkCiFlatStart.destroy(); pkCiFlatStart = null; }
+        if (pkCiFlatEnd)   { pkCiFlatEnd.destroy();   pkCiFlatEnd   = null; }
+        var fmt  = allDay ? 'Y-m-d' : 'Y-m-d H:i';
+        var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        pkCiFlatStart = flatpickr('#pk-ci-start', Object.assign({}, opts, {
+            onChange: function(sel) {
+                if (!sel[0] || !pkCiFlatEnd) return;
+                if (!pkCiFlatEnd.selectedDates[0] || pkCiFlatEnd.selectedDates[0] < sel[0]) {
+                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
+                    pkCiFlatEnd.setDate(end, true);
+                }
+            }
+        }));
+        pkCiFlatEnd = flatpickr('#pk-ci-end', opts);
+        if (startVal) pkCiFlatStart.setDate(startVal, true);
+        if (endVal)   pkCiFlatEnd.setDate(endVal, true);
+    }
+
+    function pkCiResetForm(presetDate) {
+        document.getElementById('pk-ci-description').value = '';
+        document.getElementById('pk-ci-allday').checked = false;
+        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = false;
+        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = false;
+        pkCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    function pkGetModalType() {
+        var r = document.querySelector('input[name="pk-emod-type"]:checked');
+        return r ? r.value : 'event';
+    }
+
+    function pkApplyModalType() {
+        var t = pkGetModalType();
+        var isCi = (t === 'calendar-item');
+        document.querySelectorAll('.pk-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
+        document.querySelectorAll('.pk-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        if (dbtn) dbtn.style.display = isCi ? 'none' : '';
+        document.getElementById('pk-emod-go-label').textContent = isCi ? (pkCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
+        var title = document.getElementById('pk-emod-title');
+        title.innerHTML = isCi
+            ? '<i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>' + (pkCiEditingId > 0 ? 'Edit Calendar Item' : 'New Calendar Item')
+            : '<i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event';
+        pkUpdateGoBtn();
+    }
+
+    function pkUpdateGoBtn() {
+        var t = pkGetModalType();
+        var ok;
+        if (t === 'calendar-item') {
+            ok = !!document.getElementById('pk-event-name').value.trim()
+              && !!document.getElementById('pk-ci-start').value
+              && !!document.getElementById('pk-ci-end').value;
+        } else {
+            ok = !!document.getElementById('pk-event-name').value.trim();
+        }
+        document.getElementById('pk-emod-go-btn').disabled = !ok;
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        if (dbtn) dbtn.disabled = !ok;
+    }
+
     window.pkOpenEventModal = function(dateStr) {
         var modal = document.getElementById('pk-event-modal');
         modal.dataset.presetDate = dateStr || '';
+        pkCiEditingId = 0;
+        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) { r.disabled = false; r.checked = (r.value === 'event'); });
         document.getElementById('pk-event-name').value = '';
         document.getElementById('pk-emod-feedback').style.display = 'none';
-        document.getElementById('pk-emod-go-btn').disabled = true;
-        // Show date hint when opened from a calendar cell
         var dateRow  = document.getElementById('pk-emod-date-row');
         var dateText = document.getElementById('pk-emod-date-text');
         if (dateRow && dateText) {
@@ -6623,6 +6933,8 @@ $(document).ready(function() {
                 dateRow.style.display = 'none';
             }
         }
+        pkCiResetForm(dateStr || '');
+        pkApplyModalType();
         modal.classList.add('pk-emod-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { document.getElementById('pk-event-name').focus(); }, 50);
@@ -6633,12 +6945,15 @@ $(document).ready(function() {
         document.body.style.overflow = '';
     };
 
-    window.pkCreateEvent = function() {
+    window.pkCreateEvent = function(statusOverride) {
+        if (pkGetModalType() === 'calendar-item') return pkSubmitCalendarItem();
         var name = document.getElementById('pk-event-name').value.trim();
         if (!name) return;
         var btn = document.getElementById('pk-emod-go-btn');
-        btn.disabled = true;
-        $.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId },
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        btn.disabled = true; if (dbtn) dbtn.disabled = true;
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        $.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId, Status: status },
             function(r) {
                 if (r && r.status === 0) {
                     var presetDate = document.getElementById('pk-event-modal').dataset.presetDate || '';
@@ -6647,26 +6962,158 @@ $(document).ready(function() {
                     window.location.href = url;
                 } else {
                     pkEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
-                    btn.disabled = false;
+                    btn.disabled = false; if (dbtn) dbtn.disabled = false;
                 }
             }, 'json'
-        ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+        ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
+    };
+
+    function pkSubmitCalendarItem() {
+        var name   = document.getElementById('pk-event-name').value.trim();
+        var allDay = document.getElementById('pk-ci-allday').checked ? 1 : 0;
+        var start  = document.getElementById('pk-ci-start').value;
+        var end    = document.getElementById('pk-ci-end').value;
+        var desc   = document.getElementById('pk-ci-description').value;
+        if (!name || !start || !end) return;
+
+        var btn = document.getElementById('pk-emod-go-btn');
+        btn.disabled = true;
+
+        var officerOnly = document.getElementById('pk-ci-officer-only');
+        var localsOnly  = document.getElementById('pk-ci-locals-only');
+        var payload = {
+            Name: name, Description: desc, AllDay: allDay,
+            EventStart: start, EventEnd: end,
+            KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0
+        };
+        var url = CI_CREATE_URL;
+        if (pkCiEditingId > 0) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
+
+        $.post(url, payload, function(r) {
+            if (r && r.status === 0) {
+                pkCloseEventModal();
+                setTimeout(function() { window.location.reload(); }, 150);
+            } else {
+                pkEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
+                btn.disabled = false;
+            }
+        }, 'json').fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+    }
+
+    // ---- View / edit / delete overlay ----
+    window.pkShowCalendarItemOverlay = function(id) {
+        $.getJSON(CI_GET_URL + id, function(r) {
+            if (!r || r.status !== 0) { alert((r && r.error) || 'Calendar item not found.'); return; }
+            pkCiCurrent = r;
+            document.getElementById('pk-ci-view-name').textContent = r.Name || '';
+            document.getElementById('pk-ci-view-when').textContent = pkCiFormatWhen(r);
+            document.getElementById('pk-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item')
+                + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '')
+                + (r.IsLocalsOnly  == 1 ? ' &middot; <span style="color:#0d9488"><i class="fas fa-map-marker-alt"></i> Locals-only</span>' : '');
+            var descEl = document.getElementById('pk-ci-view-desc');
+            descEl.textContent = r.Description || '';
+            descEl.style.display = r.Description ? '' : 'none';
+            document.getElementById('pk-ci-edit-btn').style.display   = r.CanEdit ? '' : 'none';
+            document.getElementById('pk-ci-delete-btn').style.display = r.CanEdit ? '' : 'none';
+            document.getElementById('pk-ci-overlay').classList.add('pk-ci-open');
+            document.body.style.overflow = 'hidden';
+        }).fail(function() { alert('Failed to load calendar item.'); });
+    };
+
+    window.pkCloseCalendarItemOverlay = function() {
+        document.getElementById('pk-ci-overlay').classList.remove('pk-ci-open');
+        document.body.style.overflow = '';
+    };
+
+    function pkCiFormatWhen(r) {
+        var s = r.EventStart || '';
+        var e = r.EventEnd   || s;
+        var sd = s.substring(0, 10), ed = e.substring(0, 10);
+        var sdObj = new Date(sd + 'T00:00:00');
+        var edObj = new Date(ed + 'T00:00:00');
+        var fmt = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
+        if (r.AllDay == 1 || r.AllDay === true) {
+            return (sd === ed)
+                ? 'All day · ' + sdObj.toLocaleDateString(undefined, fmt)
+                : 'All day · ' + sdObj.toLocaleDateString(undefined, fmt) + ' → ' + edObj.toLocaleDateString(undefined, fmt);
+        }
+        var tfmt = { hour: 'numeric', minute: '2-digit' };
+        var startStr = new Date(s.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        var endStr   = new Date(e.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        return (sd === ed)
+            ? startStr + ' → ' + new Date(e.replace(' ', 'T')).toLocaleTimeString(undefined, tfmt)
+            : startStr + ' → ' + endStr;
+    }
+
+    window.pkEditCalendarItem = function() {
+        if (!pkCiCurrent) return;
+        pkCloseCalendarItemOverlay();
+        var modal = document.getElementById('pk-event-modal');
+        if (!modal) { alert('You do not have permission to edit this item.'); return; }
+        modal.dataset.presetDate = '';
+        pkCiEditingId = pkCiCurrent.CalendarItemId;
+        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) {
+            r.checked = (r.value === 'calendar-item');
+            r.disabled = true;
+        });
+        document.getElementById('pk-event-name').value = pkCiCurrent.Name || '';
+        document.getElementById('pk-ci-description').value = pkCiCurrent.Description || '';
+        document.getElementById('pk-ci-allday').checked = (pkCiCurrent.AllDay == 1);
+        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = (pkCiCurrent.IsOfficerOnly == 1);
+        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = (pkCiCurrent.IsLocalsOnly  == 1);
+        document.getElementById('pk-emod-feedback').style.display = 'none';
+        document.getElementById('pk-emod-date-row').style.display = 'none';
+        var sVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventStart.substring(0, 10) : pkCiCurrent.EventStart.substring(0, 16).replace('T', ' ');
+        var eVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventEnd.substring(0, 10)   : pkCiCurrent.EventEnd.substring(0, 16).replace('T', ' ');
+        pkCiRebuildPickers(sVal, eVal, (pkCiCurrent.AllDay == 1));
+        pkApplyModalType();
+        modal.classList.add('pk-emod-open');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.pkDeleteCalendarItem = function() {
+        if (!pkCiCurrent) return;
+        if (!confirm('Delete this calendar item? This cannot be undone.')) return;
+        $.post(CI_DELETE_URL, { CalendarItemId: pkCiCurrent.CalendarItemId }, function(r) {
+            if (r && r.status === 0) {
+                pkCloseCalendarItemOverlay();
+                window.location.reload();
+            } else {
+                alert((r && r.error) || 'Failed to delete calendar item.');
+            }
+        }, 'json').fail(function() { alert('Request failed.'); });
     };
 
     $(document).ready(function() {
-        $('#pk-event-name').on('input', function() {
-            document.getElementById('pk-emod-go-btn').disabled = !this.value.trim();
-        }).on('keydown', function(e) {
+        $('#pk-event-name, #pk-ci-start, #pk-ci-end').on('input change', function() { pkUpdateGoBtn(); });
+        $('#pk-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('pk-emod-go-btn').disabled) pkCreateEvent();
+        });
+        $(document).on('change', 'input[name="pk-emod-type"]', pkApplyModalType);
+        $('#pk-ci-allday').on('change', function() {
+            var allDay = this.checked;
+            var curS = document.getElementById('pk-ci-start').value;
+            var curE = document.getElementById('pk-ci-end').value;
+            pkCiRebuildPickers(curS ? curS.substring(0, 10) : '', curE ? curE.substring(0, 10) : '', allDay);
+            pkUpdateGoBtn();
         });
 
         var pkEvtOverlay = document.getElementById('pk-event-modal');
         if (pkEvtOverlay) {
             pkEvtOverlay.addEventListener('click', function(e) { if (e.target === this) pkCloseEventModal(); });
         }
+        var pkCiOverlayEl = document.getElementById('pk-ci-overlay');
+        if (pkCiOverlayEl) {
+            pkCiOverlayEl.addEventListener('click', function(e) { if (e.target === this) pkCloseCalendarItemOverlay(); });
+        }
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && document.getElementById('pk-event-modal') &&
-                document.getElementById('pk-event-modal').classList.contains('pk-emod-open')) pkCloseEventModal();
+            if (e.key !== 'Escape') return;
+            var m = document.getElementById('pk-event-modal');
+            if (m && m.classList.contains('pk-emod-open')) { pkCloseEventModal(); return; }
+            var o = document.getElementById('pk-ci-overlay');
+            if (o && o.classList.contains('pk-ci-open')) { pkCloseCalendarItemOverlay(); }
         });
     });
 })();
@@ -8674,6 +9121,41 @@ $(document).ready(function() {
         gid('pk-att-date-display').classList.remove('pk-cal-open');
         gid('pk-att-date-display').setAttribute('aria-expanded', 'false');
     }
+    // Nudge user toward Event-attendance when a real event is active at this
+    // park on the modal's selected date. Filters PkConfig.calEvents (which the
+    // controller already populates with park-owned events plus kingdom events
+    // whose calendar detail has at_park_id matching this park).
+    function pkUpdateEventNudge(dateStr) {
+        var nudge = gid('pk-att-event-nudge');
+        if (!nudge) return;
+        var all = (window.PkConfig && PkConfig.calEvents) || [];
+        var match = null;
+        for (var i = 0; i < all.length; i++) {
+            var e = all[i];
+            if (!e || !e.start || e.type === 'calendar-item') continue;
+            var ext = e.extendedProps || {};
+            if (ext.isDraft) continue;
+            if (!ext.eventId || !ext.detailId) continue;
+            var startDay = String(e.start).slice(0, 10);
+            var endDay   = e.end ? String(e.end).slice(0, 10) : startDay;
+            // FullCalendar's `end` is exclusive (controller adds +1 day for
+            // multi-day events). For single-day events `end` is unset.
+            var inRange = e.end
+                ? (dateStr >= startDay && dateStr < endDay)
+                : (dateStr === startDay);
+            if (inRange) { match = e; break; }
+        }
+        if (match) {
+            var nameEl = gid('pk-att-event-nudge-name');
+            if (nameEl) nameEl.textContent = match.title || 'this event';
+            var link = gid('pk-att-event-nudge-link');
+            if (link && match.url) link.href = match.url;
+            nudge.style.display = '';
+        } else {
+            nudge.style.display = 'none';
+        }
+    }
+
     function pkSetDate(val, cb) {
         gid('pk-att-date').value = val;
         gid('pk-att-date-label').textContent = pkFormatDateDisplay(val);
@@ -8684,6 +9166,7 @@ $(document).ready(function() {
         if (gid('pk-att-panel-recent') && gid('pk-att-panel-recent').style.display !== 'none') {
             pkBuildQuickAddRows();
         }
+        pkUpdateEventNudge(val);
         pkFetchDayEntered(val, cb);
     }
 
@@ -10952,10 +11435,10 @@ function setupPronounPicker(cfg) {
         var descEl = gid('pk-addday-desc');
         if (descEl) descEl.value = '';
         overlay.querySelectorAll('.pk-seg-btn[data-group="purpose"]').forEach(function(btn) {
-            btn.classList.toggle('pk-seg-active', btn.dataset.val === 'fighter-practice');
+            btn.classList.toggle('pk-seg-active', btn.dataset.val === 'park-day');
         });
         var purposeHid = gid('pk-addday-purpose');
-        if (purposeHid) purposeHid.value = 'fighter-practice';
+        if (purposeHid) purposeHid.value = 'park-day';
         overlay.querySelectorAll('.pk-seg-btn[data-group="recurrence"]').forEach(function(btn) {
             btn.classList.toggle('pk-seg-active', btn.dataset.val === 'weekly');
         });
@@ -14962,4 +15445,473 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
     else bind();
+})();
+
+// =============================================================================
+// Calendar Enhancements R2: RSVP dropdowns, Map view, Event status setter
+// Works on both Kingdomnew (kn-*) and Parknew (pk-*) surfaces.
+// =============================================================================
+(function() {
+    var Cfg = (typeof KnConfig !== 'undefined') ? KnConfig
+            : (typeof PkConfig !== 'undefined') ? PkConfig : null;
+    if (!Cfg) return;
+    var UIR = Cfg.uir;
+
+    // Reachable from event detail page directly.
+    window.evSetEventStatus = function(eventId, status, btn) {
+        if (btn) btn.disabled = true;
+        $.post(UIR + 'EventAjax/set_status', { EventId: eventId, Status: status }, function(r) {
+            if (r && r.status === 0) {
+                window.location.reload();
+            } else {
+                alert((r && r.error) || 'Failed to set event status.');
+                if (btn) btn.disabled = false;
+            }
+        }, 'json').fail(function() { alert('Request failed.'); if (btn) btn.disabled = false; });
+    };
+
+    // ---- RSVP component (portal-based menu — escapes Google Maps InfoWindow clipping) ----
+    var RSVP_LABELS = {
+        '':           { html: 'RSVP <i class="fas fa-caret-down"></i>',                                cls: 'rsvp-none' },
+        'going':      { html: '<i class="fas fa-check-circle"></i> Going <i class="fas fa-caret-down"></i>',   cls: 'rsvp-going' },
+        'interested': { html: '<i class="fas fa-star"></i> Interested <i class="fas fa-caret-down"></i>',      cls: 'rsvp-interested' }
+    };
+
+    function renderRsvpButton(span, prefix) {
+        var detailId    = parseInt(span.getAttribute('data-detail') || '0', 10);
+        var goingCnt    = parseInt(span.getAttribute('data-going') || '0', 10);
+        var interestCnt = parseInt(span.getAttribute('data-interested') || '0', 10);
+        var mine        = span.getAttribute('data-mine') || '';
+        if (!detailId) return;
+
+        var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
+        // No inline menu — opened menu lives in a single body-attached portal element.
+        // Counts: hide entirely when both 0; otherwise label inline.
+        var countsHtml = '';
+        if (goingCnt > 0 || interestCnt > 0) {
+            var parts = [];
+            if (goingCnt    > 0) parts.push('<span class="ev-rsvp-count-going">'    + goingCnt    + ' going</span>');
+            if (interestCnt > 0) parts.push('<span class="ev-rsvp-count-interest">' + interestCnt + ' interested</span>');
+            countsHtml = '<span class="ev-rsvp-counts">' + parts.join('<span class="ev-rsvp-count-sep">·</span>') + '</span>';
+        }
+        span.innerHTML = ''
+            + '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>'
+            + countsHtml;
+    }
+
+    // ---- Single shared portal menu (lazy-init) ----
+    var rsvpPortal       = null;
+    var rsvpActiveWrap   = null;
+    var rsvpActivePrefix = null;
+
+    function ensureRsvpPortal() {
+        if (rsvpPortal) return rsvpPortal;
+        rsvpPortal = document.createElement('div');
+        rsvpPortal.className = 'ev-rsvp-portal';
+        rsvpPortal.setAttribute('role', 'menu');
+        rsvpPortal.innerHTML = ''
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-mi-going"    data-rsvp="going"      role="menuitem"><i class="fas fa-check-circle"></i> Going</button>'
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-mi-interest" data-rsvp="interested" role="menuitem"><i class="fas fa-star"></i> Interested</button>'
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-withdraw"    data-rsvp=""           role="menuitem"><i class="fas fa-times"></i> Withdraw RSVP</button>';
+        document.body.appendChild(rsvpPortal);
+        rsvpPortal.addEventListener('click', function(e) {
+            var item = e.target.closest('.ev-rsvp-menu-item');
+            if (!item || item.disabled) return;
+            e.stopPropagation();
+            if (rsvpActiveWrap) commitRsvp(rsvpActiveWrap, rsvpActivePrefix, item.getAttribute('data-rsvp') || '');
+            closeRsvpPortal();
+        });
+        return rsvpPortal;
+    }
+
+    function openRsvpPortal(wrap, prefix) {
+        var portal = ensureRsvpPortal();
+        rsvpActiveWrap   = wrap;
+        rsvpActivePrefix = prefix;
+
+        var mine = wrap.getAttribute('data-mine') || '';
+        portal.querySelector('.ev-rsvp-withdraw').disabled = !mine;
+        portal.classList.toggle('ev-rsvp-mine-going',      mine === 'going');
+        portal.classList.toggle('ev-rsvp-mine-interested', mine === 'interested');
+
+        var btn = wrap.querySelector('.ev-rsvp-btn');
+        if (!btn) return;
+        var r = btn.getBoundingClientRect();
+        // Render hidden first to measure, then position with overflow guards.
+        portal.style.visibility = 'hidden';
+        portal.classList.add('ev-rsvp-portal-open');
+        var pw = portal.offsetWidth  || 180;
+        var ph = portal.offsetHeight || 120;
+        var top  = r.bottom + 6;
+        if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+        var left = Math.min(Math.max(8, r.left), window.innerWidth - pw - 8);
+        portal.style.top  = top  + 'px';
+        portal.style.left = left + 'px';
+        portal.style.visibility = '';
+    }
+
+    function closeRsvpPortal() {
+        if (rsvpPortal) rsvpPortal.classList.remove('ev-rsvp-portal-open', 'ev-rsvp-mine-going', 'ev-rsvp-mine-interested');
+        rsvpActiveWrap   = null;
+        rsvpActivePrefix = null;
+    }
+
+    function commitRsvp(wrap, prefix, status) {
+        var detailId = parseInt(wrap.getAttribute('data-detail') || '0', 10);
+        var url = status ? (UIR + 'EventRsvpAjax/set') : (UIR + 'EventRsvpAjax/withdraw');
+        var payload = { EventCalendarDetailId: detailId };
+        if (status) payload.Status = status;
+        wrap.classList.add('ev-rsvp-busy');
+        $.post(url, payload, function(r) {
+            wrap.classList.remove('ev-rsvp-busy');
+            if (r && r.status === 0) {
+                wrap.setAttribute('data-mine',       r.my_status || '');
+                wrap.setAttribute('data-going',      r.going_count || 0);
+                wrap.setAttribute('data-interested', r.interested_count || 0);
+                renderRsvpButton(wrap, prefix);
+            } else {
+                alert((r && r.error) || 'Failed to update RSVP.');
+            }
+        }, 'json').fail(function() {
+            wrap.classList.remove('ev-rsvp-busy');
+            alert('Request failed.');
+        });
+    }
+
+    function wireRsvp(prefix) {
+        document.querySelectorAll('.' + prefix + '-rsvp-wrap').forEach(function(span) {
+            renderRsvpButton(span, prefix);
+        });
+        document.body.addEventListener('click', function(e) {
+            var btn = e.target.closest('.ev-rsvp-btn');
+            if (btn) {
+                e.stopPropagation();
+                if (!Cfg.loggedIn) { window.location.href = UIR + 'Account/login'; return; }
+                var wrap = btn.closest('.' + prefix + '-rsvp-wrap');
+                if (!wrap) return;
+                if (rsvpActiveWrap === wrap) closeRsvpPortal();
+                else openRsvpPortal(wrap, prefix);
+            } else if (!e.target.closest('.ev-rsvp-portal')) {
+                closeRsvpPortal();
+            }
+        });
+    }
+
+    // Expose renderRsvpButton + ensure both prefixes' click delegates are active
+    // (so the event-preview overlay can render via either context).
+    window.renderRsvpButton = renderRsvpButton;
+    if (typeof KnConfig !== 'undefined') wireRsvp('kn');
+    if (typeof PkConfig !== 'undefined') wireRsvp('pk');
+
+    // Close portal on scroll/resize/escape — relevant inside scrollable map containers and InfoWindows.
+    window.addEventListener('scroll',  closeRsvpPortal, true);
+    window.addEventListener('resize',  closeRsvpPortal);
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeRsvpPortal();
+    });
+
+    // ---- Events Map view (lazy Google Maps) ----
+    var GMAPS_API_KEY = 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8'; // mirrors knInitMap's key
+    var gmapsLoading  = false;
+    var gmapsReady    = (typeof google !== 'undefined' && google.maps && google.maps.Map);
+
+    function ensureGoogleMaps(cb) {
+        if (gmapsReady) return cb();
+        if (gmapsLoading) {
+            window.addEventListener('orkGmapsReady', cb, { once: true });
+            return;
+        }
+        gmapsLoading = true;
+        window.__orkGmapsCb = function() {
+            gmapsReady = true;
+            window.dispatchEvent(new Event('orkGmapsReady'));
+            cb();
+        };
+        var s = document.createElement('script');
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly';
+        s.async = true; s.defer = true;
+        document.head.appendChild(s);
+    }
+
+    function popoverHtml(loc) {
+        var rsvpHtml = loc.event_calendardetail_id
+            ? '<span class="kn-rsvp-wrap" data-detail="' + loc.event_calendardetail_id
+              + '" data-going="' + (loc.going || 0)
+              + '" data-interested="' + (loc.interested || 0)
+              + '" data-mine="' + (loc.my_rsvp || '') + '"></span>'
+            : '';
+        var metaParts = [
+            '<span class="ev-map-popover-meta-date">' + escapeHtml(loc.date_label || loc.date) + '</span>'
+        ];
+        if (loc.park_name) {
+            metaParts.push('<span class="ev-map-popover-meta-dot"></span><span class="ev-map-popover-meta-park">' + escapeHtml(loc.park_name) + '</span>');
+        }
+        return ''
+            + '<div class="ev-map-popover' + (loc.is_draft ? ' ev-map-popover-isdraft' : '') + '">'
+                + '<div class="ev-map-popover-head">'
+                    + '<a class="ev-map-popover-name" href="' + UIR + 'Event/detail/' + loc.event_id + '/' + (loc.event_calendardetail_id || '') + '">'
+                        + escapeHtml(loc.name)
+                    + '</a>'
+                    + (loc.is_draft ? '<span class="kn-draft-pill ev-map-popover-draft">DRAFT</span>' : '')
+                + '</div>'
+                + '<div class="ev-map-popover-meta">' + metaParts.join('') + '</div>'
+                + '<div class="ev-map-popover-action">'
+                    + '<div class="ev-map-popover-rsvp">' + rsvpHtml + '</div>'
+                + '</div>'
+            + '</div>';
+    }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+    }
+
+    function buildEventMap(prefix, locations) {
+        var elId = prefix + '-events-map';
+        var el = document.getElementById(elId);
+        if (!el) return;
+        if (!locations || !locations.length) {
+            el.innerHTML = '<div style="padding:32px;text-align:center;color:#a0aec0">No upcoming events with map locations.</div>';
+            return;
+        }
+        var bounds = new google.maps.LatLngBounds();
+        var map = new google.maps.Map(el, {
+            zoom: 4, center: { lat: locations[0].lat, lng: locations[0].lng },
+            mapTypeControl: false, streetViewControl: false, fullscreenControl: false
+        });
+        var infow = new google.maps.InfoWindow();
+        locations.forEach(function(loc) {
+            var pos = { lat: parseFloat(loc.lat), lng: parseFloat(loc.lng) };
+            bounds.extend(pos);
+            var m = new google.maps.Marker({
+                position: pos, map: map, title: loc.name,
+                icon: {
+                    path: 'M -10,-3 L -3,-3 0,-12 3,-3 10,-3 4,3 6,12 0,7 -6,12 -4,3 z',
+                    fillColor: loc.is_draft ? '#a0aec0' : '#dd6b20', fillOpacity: 1,
+                    strokeColor: '#fff', strokeWeight: 1, scale: 1.4
+                }
+            });
+            m.addListener('click', function() {
+                infow.setContent(popoverHtml(loc));
+                infow.open(map, m);
+                // Re-render RSVP button inside the freshly opened InfoWindow.
+                setTimeout(function() {
+                    document.querySelectorAll('.gm-style .' + prefix + '-rsvp-wrap').forEach(function(span) {
+                        renderRsvpButton(span, prefix);
+                    });
+                }, 50);
+            });
+        });
+        if (locations.length > 1) {
+            map.fitBounds(bounds);
+            var listener = google.maps.event.addListenerOnce(map, 'idle', function() {
+                if (map.getZoom() > 11) map.setZoom(11);
+            });
+        } else {
+            map.setZoom(11);
+        }
+    }
+
+    function getEventLocations(prefix) {
+        if (prefix === 'kn' && typeof KnConfig !== 'undefined') {
+            return window.knEventMapLocations || [];
+        }
+        if (prefix === 'pk' && typeof PkConfig !== 'undefined') {
+            return window.pkEventMapLocations || [];
+        }
+        return [];
+    }
+
+    var mapInited = { kn: false, pk: false };
+
+    function showEventMap(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (!mapWrap) return;
+        if (listView) listView.style.display = 'none';
+        if (calWrap)  calWrap.style.display  = 'none';
+        mapWrap.style.display = '';
+
+        // Update toggle button active state
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-map');
+        if (btn) btn.classList.add(prefix + '-view-active');
+
+        if (mapInited[prefix]) return;
+        mapInited[prefix] = true;
+        ensureGoogleMaps(function() {
+            var locs = getEventLocations(prefix);
+            buildEventMap(prefix, locs);
+            // Footer "no location" line
+            var noLocCount = (prefix === 'kn') ? (window.knEventMapNoLocCount || 0) : (window.pkEventMapNoLocCount || 0);
+            var footer = document.getElementById(prefix + '-events-map-footer');
+            if (footer && noLocCount > 0) {
+                footer.textContent = noLocCount + ' event' + (noLocCount === 1 ? '' : 's') + ' in this window have no map location.';
+                footer.style.display = '';
+            }
+        });
+    }
+
+    function showListView(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (mapWrap)  mapWrap.style.display  = 'none';
+        if (calWrap)  calWrap.style.display  = 'none';
+        if (listView) listView.style.display = '';
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-list');
+        if (btn) btn.classList.add(prefix + '-view-active');
+    }
+
+    function showCalView(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (mapWrap)  mapWrap.style.display  = 'none';
+        if (listView) listView.style.display = 'none';
+        if (calWrap)  calWrap.style.display  = '';
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-cal');
+        if (btn) btn.classList.add(prefix + '-view-active');
+    }
+
+    // Wire the Map button (List + Calendar already wired by existing code).
+    function wireMapBtn(prefix) {
+        var btn = document.getElementById(prefix + '-ev-view-map');
+        if (!btn) return;
+        btn.addEventListener('click', function() { showEventMap(prefix); });
+        // Also intercept the existing list/cal buttons to hide map when clicked.
+        var listBtn = document.getElementById(prefix + '-ev-view-list');
+        var calBtn  = document.getElementById(prefix + '-ev-view-cal');
+        if (listBtn) listBtn.addEventListener('click', function() { showListView(prefix); });
+        if (calBtn)  calBtn.addEventListener('click', function() { showCalView(prefix);  });
+    }
+
+    if (typeof KnConfig !== 'undefined') wireMapBtn('kn');
+    if (typeof PkConfig !== 'undefined') wireMapBtn('pk');
+})();
+
+
+// =============================================================================
+// Event Preview overlay — calendar grid quick-look modal for full Amtgard events.
+// Triggered by FullCalendar eventClick on Kingdomnew + Parknew. Renders basic
+// info + RSVP ▾ + a "See Full Details" CTA so casual browsing doesn't trigger
+// a page load per click.
+// =============================================================================
+(function() {
+    var Cfg = (typeof KnConfig !== 'undefined') ? KnConfig
+            : (typeof PkConfig !== 'undefined') ? PkConfig : null;
+    if (!Cfg) return;
+    if (!document.getElementById('evpv-overlay')) return;
+
+    var UIR  = Cfg.uir;
+    var HTTP_EVENT_HERALDRY = (typeof HTTP_EVENT_HERALDRY !== 'undefined') ? HTTP_EVENT_HERALDRY : (Cfg.uir.replace(/\/orkui\/.*/, '') + '/assets/heraldry/event/');
+    var heraldryFallback = HTTP_EVENT_HERALDRY + '00000.jpg';
+
+    function gid(id) { return document.getElementById(id); }
+    function show(el, on) { if (el) el.style.display = on ? '' : 'none'; }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+    }
+
+    function heraldryUrl(eventId, hasHeraldry) {
+        if (!hasHeraldry) return heraldryFallback;
+        var padded = String(eventId).padStart(5, '0');
+        return HTTP_EVENT_HERALDRY + padded + '.jpg';
+    }
+
+    window.evpvOpen = function(eventId, detailId) {
+        var overlay = gid('evpv-overlay');
+        if (!overlay) return;
+        overlay.classList.add('evpv-loading');
+        overlay.classList.add('evpv-open');
+        document.body.style.overflow = 'hidden';
+
+        $.getJSON(UIR + 'EventAjax/preview/' + eventId + '/' + (detailId || 0), function(r) {
+            overlay.classList.remove('evpv-loading');
+            if (!r || r.status !== 0) {
+                alert((r && r.error) || 'Failed to load event preview.');
+                evpvClose();
+                return;
+            }
+            // Header pills
+            var kindLabel = r.is_park_event ? 'Park Event' : 'Kingdom Event';
+            var kindIcon  = r.is_park_event ? 'fa-tree' : 'fa-crown';
+            var kindPill  = gid('evpv-kind-pill');
+            kindPill.className = 'evpv-kind-pill ' + (r.is_park_event ? 'evpv-kind-park' : 'evpv-kind-kingdom');
+            kindPill.innerHTML = '<i class="fas ' + kindIcon + '"></i> <span>' + escapeHtml(kindLabel) + '</span>';
+            show(gid('evpv-draft-pill'), !!r.is_draft);
+
+            // Hero
+            var img = gid('evpv-heraldry');
+            img.src = heraldryUrl(r.event_id, r.has_heraldry);
+            img.onerror = function() { this.onerror = null; this.src = heraldryFallback; };
+            img.alt = r.name + ' heraldry';
+
+            var nameLink = gid('evpv-name');
+            nameLink.textContent = r.name;
+            nameLink.href = r.detail_url;
+
+            gid('evpv-date').textContent = r.date_label || '';
+            var timeRow = gid('evpv-time-row');
+            if (r.time_label) { gid('evpv-time').textContent = r.time_label; show(timeRow, true); } else { show(timeRow, false); }
+
+            var parkRow = gid('evpv-park-row');
+            if (r.park_name) { gid('evpv-park').textContent = r.park_name; show(parkRow, true); } else { show(parkRow, false); }
+
+            // Description excerpt
+            var descEl = gid('evpv-description');
+            if (r.description_excerpt) {
+                descEl.textContent = r.description_excerpt;
+                show(descEl, true);
+            } else {
+                show(descEl, false);
+            }
+
+            // RSVP wrap — match the page context's prefix so the right click delegate fires.
+            var rsvpPrefix = (typeof KnConfig !== 'undefined') ? 'kn' : 'pk';
+            var rsvpWrap = gid('evpv-rsvp');
+            rsvpWrap.className = rsvpPrefix + '-rsvp-wrap';
+            rsvpWrap.setAttribute('data-detail',     r.event_calendardetail_id || 0);
+            rsvpWrap.setAttribute('data-going',      r.going_count || 0);
+            rsvpWrap.setAttribute('data-interested', r.interested_count || 0);
+            rsvpWrap.setAttribute('data-mine',       r.my_rsvp || '');
+            if (typeof window.renderRsvpButton === 'function') {
+                window.renderRsvpButton(rsvpWrap, rsvpPrefix);
+            } else {
+                // Fallback: dispatch a synthetic event the wireRsvp body listener won't help here, so
+                // we rely on the existing renderer being available. Render a minimal label so it's not
+                // empty if the helper hasn't been exposed.
+                rsvpWrap.innerHTML = '<span class="ev-rsvp-btn ev-rsvp-rsvp-none">RSVP <i class="fas fa-caret-down"></i></span>';
+            }
+
+            // CTA
+            gid('evpv-cta').href = r.detail_url;
+        }).fail(function() {
+            overlay.classList.remove('evpv-loading');
+            alert('Request failed.');
+            evpvClose();
+        });
+    };
+
+    window.evpvClose = function() {
+        var overlay = gid('evpv-overlay');
+        if (overlay) overlay.classList.remove('evpv-open', 'evpv-loading');
+        document.body.style.overflow = '';
+    };
+
+    // Outside-click + escape
+    var overlay = gid('evpv-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', function(e) { if (e.target === this) evpvClose(); });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay && overlay.classList.contains('evpv-open')) evpvClose();
+    });
 })();

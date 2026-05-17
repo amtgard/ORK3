@@ -161,6 +161,11 @@
 	$checkinOpenTs    = $eventStart ? strtotime($eventStart) - 86400 : 0;
 	$checkinOpen      = !$isUpcoming || !$checkinOpenTs || time() >= $checkinOpenTs;
 	$checkinOpenLabel = $checkinOpenTs ? date('D, M j, Y \\a\\t g:i A T', $checkinOpenTs) : '';
+
+	// Calendar-enhancements R2: status
+	$evtStatus       = $EventStatus      ?? 'published';
+	$evtIsDraft      = ($evtStatus === 'draft');
+	$evtCanEditStat  = !empty($EventCanEditStatus);
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -168,14 +173,14 @@
 .ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
 .ev-checkin-locked { display:flex; align-items:flex-start; gap:10px; background:#fffbeb; border:1px solid #f6e05e; border-radius:7px; padding:11px 14px; margin-bottom:14px; font-size:13px; color:#744210; line-height:1.45; }
 .ev-checkin-locked i { color:#d69e2e; margin-top:1px; flex-shrink:0; }
-.ev-icon-btn { background: #fff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 9px; font-size: 13px; color: #4a5568; cursor: pointer; transition: background .15s, border-color .15s; line-height: 1; }
-.ev-icon-btn:hover { background: #edf2f7; border-color: #cbd5e0; }
+.ev-icon-btn { background: #fff; border: 1px solid var(--ork-border); border-radius: 5px; padding: 5px 9px; font-size: 13px; color: var(--ork-text-body); cursor: pointer; transition: background .15s, border-color .15s; line-height: 1; }
+.ev-icon-btn:hover { background: var(--ork-surface-hover); border-color: #cbd5e0; }
 .ev-modal-btn-delete {
 	background: #fff0f0; border: 1px solid #fc8181; color: #c53030;
 	padding: 8px 14px; border-radius: 5px; font-size: 13px; font-weight: 600;
 	cursor: pointer; transition: background .15s, border-color .15s;
 }
-.ev-modal-btn-delete:hover:not(:disabled) { background: #fed7d7; border-color: #e53e3e; }
+.ev-modal-btn-delete:hover:not(:disabled) { background: #fed7d7; border-color: var(--ork-red-danger); }
 .ev-modal-btn-delete-disabled { opacity: .45; cursor: not-allowed; }
 .ev-del-detail-wrap { position: relative; display: inline-block; }
 .ev-del-detail-tooltip {
@@ -192,7 +197,7 @@
 @keyframes ev-credits-pulse {
 	0%   { box-shadow: 0 0 0 0 rgba(66,153,225,.7); border-color: #4299e1; }
 	60%  { box-shadow: 0 0 0 6px rgba(66,153,225,0); border-color: #4299e1; }
-	100% { box-shadow: 0 0 0 0 rgba(66,153,225,0); border-color: #e2e8f0; }
+	100% { box-shadow: 0 0 0 0 rgba(66,153,225,0); border-color: var(--ork-border); }
 }
 .ev-credits-pulse { animation: ev-credits-pulse 1s ease-out; }
 /* Sign-in link modal */
@@ -250,20 +255,20 @@
 }
 .ev-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
-	padding: 14px 18px; border-bottom: 1px solid #e2e8f0; background: #f7fafc;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
 }
 .ev-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
-.ev-img-close-btn { background: none; border: none; font-size: 20px; color: #718096; cursor: pointer; padding: 0 4px; }
+.ev-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
 .ev-img-modal-body { padding: 20px 22px; }
 .ev-upload-area {
 	display: flex; flex-direction: column; align-items: center; gap: 8px;
 	border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px 20px;
-	cursor: pointer; color: #4a5568; font-size: 14px; text-align: center;
+	cursor: pointer; color: var(--ork-text-body); font-size: 14px; text-align: center;
 	transition: border-color .15s, background .15s;
 }
 .ev-upload-area:hover { border-color: #4299e1; background: #ebf8ff; }
-.ev-upload-icon { font-size: 32px; color: #a0aec0; }
-.ev-upload-area small { font-size: 12px; color: #a0aec0; }
+.ev-upload-icon { font-size: 32px; color: var(--ork-text-hint); }
+.ev-upload-area small { font-size: 12px; color: var(--ork-text-hint); }
 .ev-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .ev-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
 .ev-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
@@ -325,8 +330,8 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 /* Attendance player-search scoped autocomplete */
 .ev-att-form .ev-pn-field { position: relative; }
 .ev-att-form #ev-PlayerName-results { position: fixed; top: 0; left: 0; right: auto; width: 320px; max-height: 360px; margin: 0; }
-.ev-ac-section { padding: 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #718096; background: #f7fafc; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
-.ev-ac-empty { padding: 8px 12px; font-size: 13px; color: #a0aec0; cursor: default; }
+.ev-ac-section { padding: 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ork-text-muted); background: var(--ork-surface-light); text-transform: uppercase; border-bottom: 1px solid var(--ork-border); }
+.ev-ac-empty { padding: 8px 12px; font-size: 13px; color: var(--ork-text-hint); cursor: default; }
 html[data-theme="dark"] .ev-ac-section { color: var(--ork-text-muted); background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 
@@ -602,6 +607,36 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 .ev-edit-btn { background: none; border: none; cursor: pointer; color: #718096; font-size: 15px; padding: 0; line-height: 1; }
 .ev-edit-btn:hover { color: #2b6cb0; }
 </style>
+
+<?php // ---- DRAFT BLOCKED ---- ?>
+<?php if (!empty($DraftBlocked ?? false)): ?>
+<div style="margin:30px auto;max-width:520px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;text-align:center;color:#4a5568;">
+	<i class="fas fa-eye-slash" style="font-size:32px;color:#a0aec0;margin-bottom:14px;display:block"></i>
+	<h2 style="margin:0 0 6px;font-size:18px;background:transparent;border:none;padding:0;border-radius:0;">This event isn't visible</h2>
+	<p style="margin:0;font-size:13px;color:#718096">It's currently a draft, accessible only to the creator and people authorized to edit it.</p>
+</div>
+<?php else: ?>
+
+<?php // ---- DRAFT BANNER (visible to editors) ---- ?>
+<?php if ($evtIsDraft): ?>
+<div class="ev-draft-banner">
+	<div class="ev-draft-banner-text">
+		<i class="fas fa-eye-slash"></i>
+		<strong>Draft</strong> — this event is hidden from members. Publish to make it visible.
+	</div>
+	<?php if ($evtCanEditStat): ?>
+	<button type="button" class="ev-draft-publish-btn" onclick="evSetEventStatus(<?= $eventId ?>, 'published', this)">
+		<i class="fas fa-paper-plane"></i> Publish
+	</button>
+	<?php endif; ?>
+</div>
+<?php elseif ($evtCanEditStat): ?>
+<div class="ev-draft-toggle-bar">
+	<button type="button" class="ev-draft-toggle-btn" onclick="evSetEventStatus(<?= $eventId ?>, 'draft', this)" data-tip="Hide this event from members. Only editors and admins will see it.">
+		<i class="fas fa-eye-slash"></i> Move to draft
+	</button>
+</div>
+<?php endif; ?>
 
 <?php // ---- HERO ---- ?>
 <?php
@@ -2701,11 +2736,11 @@ function evPrintSection(contentHtml, title) {
 	w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + title + '</title><style>' +
 		'body{font-family:Arial,sans-serif;font-size:13px;color:#1a202c;padding:20px}' +
 		'h2{margin:0 0 4px;font-size:16px}' +
-		'.ev-print-sub{font-size:12px;color:#718096;margin:0 0 14px}' +
+		'.ev-print-sub{font-size:12px;color:var(--ork-text-muted);margin:0 0 14px}' +
 		'table{border-collapse:collapse;width:100%}' +
-		'th,td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;font-size:12px}' +
-		'th{background:#f7fafc;font-weight:700}' +
-		'tr:nth-child(even) td{background:#f7fafc}' +
+		'th,td{border:1px solid var(--ork-border);padding:6px 10px;text-align:left;font-size:12px}' +
+		'th{background:var(--ork-surface-light);font-weight:700}' +
+		'tr:nth-child(even) td{background:var(--ork-surface-light)}' +
 		'a{color:inherit;text-decoration:none}' +
 		'@media print{body{padding:0}}' +
 	'</style></head><body>' + contentHtml + '</body></html>');
@@ -3491,3 +3526,4 @@ html[data-theme="dark"] .ev-grid-view-btn.ev-grid-view-active {
 })();
 </script>
 
+<?php endif; /* DraftBlocked */ ?>
