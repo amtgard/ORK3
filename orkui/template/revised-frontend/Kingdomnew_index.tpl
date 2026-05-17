@@ -2814,80 +2814,6 @@ function knEscapeAttr(s) {
 }
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
-
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script>
-window.knRecActiveFilter = 'open';
-$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-	if (settings.nTable.id !== 'kn-rec-table') return true;
-	var filter = window.knRecActiveFilter || 'all';
-	if (filter === 'all') return true;
-	var row = settings.aoData[dataIndex].nTr;
-	var rowFilter = row ? row.getAttribute('data-filter') : '';
-	if (filter === 'open') return rowFilter !== 'already';
-	if (filter === 'mycircles') {
-		if (rowFilter === 'already') return false;
-		var aid = parseInt(row.getAttribute('data-award-id') || '0', 10);
-		return (window.knRecCircleAwardIds || []).indexOf(aid) !== -1;
-	}
-	return rowFilter === filter;
-});
-// Initialise the rec-table DataTable + filter bar. Idempotent so the lazy-loader
-// can call it again after injecting the rec-tab HTML on first tab activation.
-window.knInitRecsTab = function() {
-	var $tbl = $('#kn-rec-table');
-	if (!$tbl.length) return;
-	window.knRecCircleAwardIds = (function() { try { return JSON.parse($tbl.attr('data-circle-ids') || '[]'); } catch (e) { return []; } })();
-	if ($.fn.dataTable.isDataTable('#kn-rec-table')) {
-		$tbl.DataTable().destroy();
-	}
-	window.knRecDT = $tbl.DataTable({
-		// Columns: 0 Player · 1 Park · 2 Award · 3 Rank · 4 Rec By · 5 Date · 6 Notes · (-1 actions)
-		order: [[5, 'desc']],
-		columnDefs: [
-			{ targets: [5], type: 'date' },
-			<?php if ($CanManageKingdom ?? false): ?>
-			{ targets: [-1], orderable: false, searchable: false },
-			<?php endif; ?>
-		],
-		pageLength: 25
-	});
-	// Filter bar: re-bind in case the HTML is freshly injected.
-	var bar = document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar');
-	if (bar && !bar.__knFilterBound) {
-		bar.__knFilterBound = true;
-		bar.addEventListener('click', function(e) {
-			var btn = e.target.closest('.kn-rec-filter-btn');
-			if (!btn) return;
-			var filter = btn.dataset.filter;
-			bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(b) {
-				b.classList.toggle('kn-rec-filter-active', b.dataset.filter === filter);
-			});
-			window.knRecActiveFilter = filter;
-			if (window.knRecDT) window.knRecDT.draw();
-		});
-	}
-};
-$(function() { window.knInitRecsTab(); });
-window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
-window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
-initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
-</script>
-
-<?php if (!empty($IsLoggedIn)): ?>
-<script>
-window.OrkRsCfg = {
-	url:         null,  /* unused */
-	uir:         '<?= UIR ?>',
-	userId:      <?= (int)$this->__session->user_id ?>,
-	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
-	reload:      function() { location.reload(); }
-};
-</script>
-<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
-<?php endif; ?>
-
 <!-- kn-banner-modal (ported from event) -->
 <div class="kn-img-overlay kn-banner-modal" id="kn-banner-overlay">
 	<div class="kn-img-modal" style="width:min(680px, 96vw)">
@@ -3053,3 +2979,76 @@ window.OrkRsCfg = {
 	</div>
 </div>
 
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script>
+window.knRecActiveFilter = 'open';
+$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+	if (settings.nTable.id !== 'kn-rec-table') return true;
+	var filter = window.knRecActiveFilter || 'all';
+	if (filter === 'all') return true;
+	var row = settings.aoData[dataIndex].nTr;
+	var rowFilter = row ? row.getAttribute('data-filter') : '';
+	if (filter === 'open') return rowFilter !== 'already';
+	if (filter === 'mycircles') {
+		if (rowFilter === 'already') return false;
+		var aid = parseInt(row.getAttribute('data-award-id') || '0', 10);
+		return (window.knRecCircleAwardIds || []).indexOf(aid) !== -1;
+	}
+	return rowFilter === filter;
+});
+// Initialise the rec-table DataTable + filter bar. Idempotent so the lazy-loader
+// can call it again after injecting the rec-tab HTML on first tab activation.
+window.knInitRecsTab = function() {
+	var $tbl = $('#kn-rec-table');
+	if (!$tbl.length) return;
+	window.knRecCircleAwardIds = (function() { try { return JSON.parse($tbl.attr('data-circle-ids') || '[]'); } catch (e) { return []; } })();
+	if ($.fn.dataTable.isDataTable('#kn-rec-table')) {
+		$tbl.DataTable().destroy();
+	}
+	window.knRecDT = $tbl.DataTable({
+		// Columns: 0 Player · 1 Park · 2 Award · 3 Rank · 4 Rec By · 5 Date · 6 Notes · (-1 actions)
+		order: [[5, 'desc']],
+		columnDefs: [
+			{ targets: [5], type: 'date' },
+			<?php if ($CanManageKingdom ?? false): ?>
+			{ targets: [-1], orderable: false, searchable: false },
+			<?php endif; ?>
+		],
+		pageLength: 25
+	});
+	// Filter bar: re-bind in case the HTML is freshly injected.
+	var bar = document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar');
+	if (bar && !bar.__knFilterBound) {
+		bar.__knFilterBound = true;
+		bar.addEventListener('click', function(e) {
+			var btn = e.target.closest('.kn-rec-filter-btn');
+			if (!btn) return;
+			var filter = btn.dataset.filter;
+			bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(b) {
+				b.classList.toggle('kn-rec-filter-active', b.dataset.filter === filter);
+			});
+			window.knRecActiveFilter = filter;
+			if (window.knRecDT) window.knRecDT.draw();
+		});
+	}
+};
+$(function() { window.knInitRecsTab(); });
+window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
+window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
+initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
+</script>
+
+<?php if (!empty($IsLoggedIn)): ?>
+<script>
+window.OrkRsCfg = {
+	url:         null,  /* unused */
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { location.reload(); }
+};
+</script>
+<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
