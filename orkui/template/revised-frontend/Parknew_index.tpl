@@ -294,6 +294,44 @@
 		<div class="pk-stat-value"><?= count($eventList) ?></div>
 		<div class="pk-stat-label">Event<?= count($eventList) != 1 ? 's' : '' ?></div>
 	</div>
+	<?php
+	// Park weather card — only render when we have a valid current temp.
+	$wx = $park_weather ?? null;
+	$wxTemp = $wx['current_temp_f'] ?? null;
+	if ($wxTemp !== null):
+		$wxCode  = (int)($wx['current_code']  ?? -1);
+		$wxIsDay = (int)($wx['current_is_day'] ?? 1);
+		// WMO code → emoji + short label (mirrors Live ticker logic)
+		$wxIcon  = '';
+		$wxLabel = '';
+		if     ($wxCode === 0)                          { $wxIcon = $wxIsDay ? '☀️' : '🌙';  $wxLabel = 'Clear'; }
+		elseif ($wxCode === 1)                          { $wxIcon = $wxIsDay ? '🌤️' : '🌙'; $wxLabel = 'Mostly clear'; }
+		elseif ($wxCode === 2)                          { $wxIcon = '⛅';  $wxLabel = 'Partly cloudy'; }
+		elseif ($wxCode === 3)                          { $wxIcon = '☁️';  $wxLabel = 'Overcast'; }
+		elseif ($wxCode === 45 || $wxCode === 48)       { $wxIcon = '🌫️'; $wxLabel = 'Fog'; }
+		elseif ($wxCode >= 51 && $wxCode <= 57)         { $wxIcon = '🌦️'; $wxLabel = 'Drizzle'; }
+		elseif ($wxCode >= 61 && $wxCode <= 67)         { $wxIcon = '🌧️'; $wxLabel = 'Rain'; }
+		elseif ($wxCode >= 71 && $wxCode <= 77)         { $wxIcon = '❄️';  $wxLabel = 'Snow'; }
+		elseif ($wxCode >= 80 && $wxCode <= 82)         { $wxIcon = '🌦️'; $wxLabel = 'Showers'; }
+		elseif ($wxCode === 85 || $wxCode === 86)       { $wxIcon = '🌨️'; $wxLabel = 'Snow showers'; }
+		elseif ($wxCode >= 95 && $wxCode <= 99)         { $wxIcon = '⛈️'; $wxLabel = 'Thunderstorm'; }
+	?>
+	<div class="pk-stat-card pk-stat-card-weather">
+		<div class="pk-stat-icon"><?= $wxIcon ?: '🌡️' ?></div>
+		<div class="pk-stat-value"><?= round($wxTemp) ?>°F</div>
+		<div class="pk-stat-label">
+			<?= htmlspecialchars($wxLabel) ?>
+			<?php if (isset($wx['today_high_f'], $wx['today_low_f'])): ?>
+				<br><span style="font-size:.85em;color:var(--ork-text-muted,#718096)">H <?= round($wx['today_high_f']) ?>° / L <?= round($wx['today_low_f']) ?>°<?php
+					if (!empty($wx['today_precip_pct'])) echo ' · ' . (int)$wx['today_precip_pct'] . '% rain';
+				?></span>
+			<?php endif; ?>
+			<a href="https://open-meteo.com/" target="_blank" rel="noopener"
+			   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
+			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>
+		</div>
+	</div>
+	<?php endif; ?>
 </div>
 
 <!-- =============================================
