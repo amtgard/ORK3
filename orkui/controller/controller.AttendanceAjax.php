@@ -77,9 +77,48 @@ class Controller_AttendanceAjax extends Controller {
 				];
 			}
 			echo json_encode(['status' => 0, 'entries' => array_values($entries)]);
+		} elseif ($action === 'weather') {
+			// Historic weather for /Attendance/park/{id} day pages.
+			// Route: AttendanceAjax/park/{park_id}/weather/{YYYY-MM-DD}
+			$date = $parts[2] ?? '';
+			if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid date']);
+				exit;
+			}
+			$wx = Ork3::$Lib->weather->archive_for_date($park_id, $date);
+			echo json_encode(['status' => 0, 'weather' => $wx]);
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}
+		exit;
+	}
+
+	/**
+	 * Coord-based historic weather lookup.
+	 * Route: AttendanceAjax/weather_at/{lat}/{lng}/{YYYY-MM-DD}
+	 * Used by callers whose location isn't a park (e.g., an event with its own
+	 * venue coords). Same auth/cache/output shape as the park-based version.
+	 */
+	public function weather_at($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$parts = explode('/', $p ?? '');
+		$lat   = $parts[0] ?? '';
+		$lng   = $parts[1] ?? '';
+		$date  = $parts[2] ?? '';
+		if (!is_numeric($lat) || !is_numeric($lng)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid coordinates']);
+			exit;
+		}
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+			echo json_encode(['status' => 1, 'error' => 'Invalid date']);
+			exit;
+		}
+		$wx = Ork3::$Lib->weather->archive_for_coords((float)$lat, (float)$lng, $date);
+		echo json_encode(['status' => 0, 'weather' => $wx]);
 		exit;
 	}
 

@@ -7161,6 +7161,9 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-focused {
 html[data-theme="dark"] .pk-stat-value {
   color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%));
 }
+html[data-theme="dark"] .pk-stat-sub {
+  color: var(--ork-text-muted);
+}
 html[data-theme="dark"] #theme_container .pk-link-list a,
 html[data-theme="dark"] #theme_container .pk-officer-name a,
 html[data-theme="dark"] #theme_container .pk-about-text a,

@@ -412,13 +412,40 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 	<?php endif; ?>
 	<?php
 		// Event forecast card.
-		// Date selection: if event is currently running (today ∈ [start, end]) show today;
-		// else if event is upcoming, show start day. Past events get no forecast.
-		// Either way, only renders when the chosen date is within the 7-day cache window.
-		$evWxDate     = null;
-		$evWxParkId   = $atParkId ?: $parkId;
-		$evWxLive     = false;  // live = today during a multi-day event
-		if ($evWxParkId && $eventStart) {
+		// Date selection. Three modes:
+		//   - 'live'       : today is inside [start, end] (today's forecast)
+		//   - 'forecast'   : event is upcoming AND start day is within the
+		//                     7-day forecast cache window
+		//   - 'historical' : event ended >5 days ago — lazy-fetched from the
+		//                     Open-Meteo archive endpoint via AJAX
+		// Past events <5 days back are still inside the archive lag → no card.
+		$evWxDate    = null;
+		$evWxParkId  = $atParkId ?: $parkId;
+		$evWxMode    = null;  // 'live' | 'forecast' | 'historical'
+		// Coord priority: event's own (event_calendardetail) → at_park → owning park.
+		// Historical mode uses these coords directly; live/forecast modes use the
+		// forecast cache keyed by park_id (event-specific coords don't have a
+		// per-park forecast cache, so they fall back to the at_park/park).
+		$evWxLat = null; $evWxLng = null;
+		global $DB; $DB->Clear();
+		$_evCdCo = $DB->DataSet("SELECT latitude, longitude FROM " . DB_PREFIX . "event_calendardetail
+			WHERE event_calendardetail_id = " . (int)($cd['EventCalendarDetailId'] ?? $detail_id ?? 0) . " LIMIT 1");
+		if ($_evCdCo && $_evCdCo->Size() > 0 && $_evCdCo->Next()
+			&& (float)$_evCdCo->latitude !== 0.0 && (float)$_evCdCo->longitude !== 0.0
+			&& $_evCdCo->latitude !== null && $_evCdCo->longitude !== null) {
+			$evWxLat = (float)$_evCdCo->latitude;
+			$evWxLng = (float)$_evCdCo->longitude;
+		}
+		if (($evWxLat === null || $evWxLng === null) && $evWxParkId) {
+			// Park coords with the same scalar→JSON fallback used everywhere else.
+			$_evParkCoords = Ork3::$Lib->weather->coords_for_park($evWxParkId);
+			if ($_evParkCoords !== null) {
+				$evWxLat = $_evParkCoords[0];
+				$evWxLng = $_evParkCoords[1];
+			}
+		}
+		$evWxHasCoords = ($evWxLat !== null && $evWxLng !== null);
+		if ($evWxHasCoords && $eventStart) {
 			$_evStartDay = substr($eventStart, 0, 10);
 			$_evEndDay   = $eventEnd ? substr($eventEnd, 0, 10) : $_evStartDay;
 			// "Today" in the park's local timezone — not server time (Chicago).
@@ -430,13 +457,18 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 					try { $_today = (new DateTime('now', new DateTimeZone($_pwx['timezone'])))->format('Y-m-d'); } catch (Exception $e) {}
 				}
 			}
+			$_archiveCutoff = date('Y-m-d', strtotime('-5 days'));
 			if ($_today >= $_evStartDay && $_today <= $_evEndDay) {
-				$evWxDate = $_today;  $evWxLive = true;
+				$evWxDate = $_today;       $evWxMode = 'live';
 			} elseif ($_evStartDay > $_today) {
-				$evWxDate = $_evStartDay;
+				$evWxDate = $_evStartDay;  $evWxMode = 'forecast';
+			} elseif ($_evEndDay < $_archiveCutoff && $_evStartDay >= '1940-01-01') {
+				$evWxDate = $_evStartDay;  $evWxMode = 'historical';
 			}
 		}
-		$evFC = ($evWxDate && $evWxParkId)
+		// For live/forecast: render from the cached 7-day forecast (server-side).
+		// For historical: render placeholder; JS lazy-fetches the archive.
+		$evFC = ($evWxMode === 'live' || $evWxMode === 'forecast')
 			? Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate)
 			: null;
 		if ($evFC && $evFC['hi_f'] !== null):
@@ -462,11 +494,20 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 			<?php endif; ?>
 		</div>
 		<div class="ev-stat-label">
-			<?= $evWxLive ? 'Today' : 'Forecast' ?>
+			<?= $evWxMode === 'live' ? 'Today' : 'Forecast' ?>
 			<a href="https://open-meteo.com/" target="_blank" rel="noopener"
 			   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
 			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>
 		</div>
+	</div>
+	<?php elseif ($evWxMode === 'historical'): ?>
+	<div class="ev-stat-card" id="ev-wx-historical"
+	     data-lat="<?= htmlspecialchars((string)$evWxLat) ?>"
+	     data-lng="<?= htmlspecialchars((string)$evWxLng) ?>"
+	     data-date="<?= htmlspecialchars($evWxDate) ?>">
+		<div class="ev-stat-icon" id="ev-wx-icon"><i class="fas fa-cloud-sun" style="opacity:.4"></i></div>
+		<div class="ev-stat-value" id="ev-wx-temps" style="font-size:15px;padding-top:3px;opacity:.5">—</div>
+		<div class="ev-stat-label" id="ev-wx-label"><em style="opacity:.6">loading historical…</em></div>
 	</div>
 	<?php endif; ?>
 </div>
@@ -1637,4 +1678,57 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	});
 })();
 <?php endif; ?>
+
+// Lazy-fill historical weather card for past events. Identical pattern to
+// the Attendance day page: card renders immediately with a placeholder so
+// there's no layout shift; AJAX resolves and either fills the slot or
+// switches it to "unavailable" if the archive can't serve the date.
+(function() {
+	var card = document.getElementById('ev-wx-historical');
+	if (!card) return;
+	var lat  = card.dataset.lat;
+	var lng  = card.dataset.lng;
+	var date = card.dataset.date;
+	if (!lat || !lng || !date) return;
+	function wxIcon(c) {
+		if (c === 0)                  return '☀️';
+		if (c === 1)                  return '🌤️';
+		if (c === 2)                  return '⛅';
+		if (c === 3)                  return '☁️';
+		if (c === 45 || c === 48)     return '🌫️';
+		if (c >= 51 && c <= 57)       return '🌦️';
+		if (c >= 61 && c <= 67)       return '🌧️';
+		if (c >= 71 && c <= 77)       return '❄️';
+		if (c >= 80 && c <= 82)       return '🌦️';
+		if (c === 85 || c === 86)     return '🌨️';
+		if (c >= 95 && c <= 99)       return '⛈️';
+		return '🌡️';
+	}
+	function showUnavailable() {
+		document.getElementById('ev-wx-icon').innerHTML  = '<i class="fas fa-cloud-sun" style="opacity:.35"></i>';
+		document.getElementById('ev-wx-temps').innerHTML = '<span style="opacity:.55;font-size:12px;font-weight:400">unavailable</span>';
+		document.getElementById('ev-wx-label').innerHTML = 'Historical';
+	}
+	fetch('<?=UIR?>AttendanceAjax/weather_at/' + lat + '/' + lng + '/' + date, { credentials: 'same-origin' })
+		.then(function(r) { return r.json(); })
+		.then(function(d) {
+			if (!d || d.status !== 0 || !d.weather || d.weather.hi_f == null) { showUnavailable(); return; }
+			var w = d.weather;
+			var hi  = Math.round(w.hi_f), hiC = Math.round((w.hi_f - 32) * 5 / 9);
+			var lo  = w.lo_f != null ? Math.round(w.lo_f) : null;
+			var loC = w.lo_f != null ? Math.round((w.lo_f - 32) * 5 / 9) : null;
+			document.getElementById('ev-wx-icon').textContent = wxIcon(w.code);
+			document.getElementById('ev-wx-temps').style.opacity = '';
+			document.getElementById('ev-wx-temps').innerHTML = hi + '/' + hiC + '°' +
+				(lo != null ? ' <span style="font-size:11px;color:var(--ork-text-muted,#718096)">L ' + lo + '/' + loC + '°</span>' : '') +
+				(w.precip_inches != null && w.precip_inches >= 0.1
+					? '<div style="font-size:11px;color:var(--ork-text-muted,#718096);margin-top:2px">' + w.precip_inches.toFixed(2) + '" / ' + Math.round(w.precip_inches * 25.4) + ' mm rain</div>'
+					: '');
+			document.getElementById('ev-wx-label').innerHTML = 'Historical' +
+				' <a href="https://open-meteo.com/" target="_blank" rel="noopener"' +
+				' title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"' +
+				' style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>';
+		})
+		.catch(showUnavailable);
+})();
 </script>
