@@ -15931,6 +15931,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
 
     // Hoisted to be safe even if later setup throws.
     window.pkOpenBannerModal = function() {
+        if (!overlay) return;
         if (fileInput) fileInput.value = '';
         if (resizeNote) resizeNote.textContent = '';
         clearError();
@@ -15942,6 +15943,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         document.body.style.overflow = 'hidden';
     };
     window.pkCloseBannerModal = function() {
+        if (!overlay) return;
         overlay.classList.remove('pk-open');
         document.body.style.overflow = '';
     };
@@ -16308,9 +16310,16 @@ window.evSetEventStatus = function(eventId, status, btn) {
 
     // Hoisted to be safe even if later setup throws.
     window.knOpenBannerModal = function() {
+        if (!overlay) return;
         if (fileInput) fileInput.value = '';
         if (resizeNote) resizeNote.textContent = '';
         clearError();
+        // I6 fix: refresh modal title based on current bannerUrl state
+        var titleEl = document.getElementById('kn-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>' +
+                (KnBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
         // Reset toggles to current persisted config
         if (showLogoCb) showLogoCb.checked = !!KnBannerConfig.bannerShowLogo;
         if (vignetteCb) vignetteCb.checked = !!KnBannerConfig.bannerVignette;
@@ -16319,6 +16328,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         document.body.style.overflow = 'hidden';
     };
     window.knCloseBannerModal = function() {
+        if (!overlay) return;
         overlay.classList.remove('kn-open');
         document.body.style.overflow = '';
     };
@@ -16685,6 +16695,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
 
     // Hoisted to be safe even if later setup throws.
     window.pnOpenBannerModal = function() {
+        if (!overlay) return;
         if (fileInput) fileInput.value = '';
         if (resizeNote) resizeNote.textContent = '';
         clearError();
@@ -16696,6 +16707,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         document.body.style.overflow = 'hidden';
     };
     window.pnCloseBannerModal = function() {
+        if (!overlay) return;
         overlay.classList.remove('pn-open');
         document.body.style.overflow = '';
     };
@@ -17062,6 +17074,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
 
     // Hoisted to be safe even if later setup throws.
     window.unOpenBannerModal = function() {
+        if (!overlay) return;
         if (fileInput) fileInput.value = '';
         if (resizeNote) resizeNote.textContent = '';
         clearError();
@@ -17073,6 +17086,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         document.body.style.overflow = 'hidden';
     };
     window.unCloseBannerModal = function() {
+        if (!overlay) return;
         overlay.classList.remove('un-open');
         document.body.style.overflow = '';
     };
