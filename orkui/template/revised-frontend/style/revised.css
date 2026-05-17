@@ -10185,23 +10185,35 @@ html[data-theme="dark"] .kn-banner-position-hint i { color: var(--ork-link-brigh
 	.kn-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
 }
 
-/* ── kn-img modal shell (C1 fix — ported from ev-img-* in Eventnew_index.tpl) ── */
+/* ── kn-img modal shell ── */
 /* These classes are referenced in the kn-banner-modal HTML in Kingdomnew_index.tpl */
+/* C1 fix: z-index raised to --z-modal-top (10200) — above all kingdom modals (10100) */
+/* M2 fix: opacity+visibility fade pattern instead of display:none/flex toggle        */
 .kn-img-overlay {
-	display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
-	z-index: 1500; align-items: center; justify-content: center;
+	position: fixed; inset: 0; background: rgba(0,0,0,.55);
+	z-index: var(--z-modal-top, 10200);
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
 }
-.kn-img-overlay.kn-open { display: flex; }
+.kn-img-overlay.kn-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
 .kn-img-modal {
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
+	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
+	max-height: 90vh; overflow-y: auto;
 }
 .kn-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
 	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
 }
 .kn-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
+/* M3 fix: add hover state to match other kingdom modal close buttons */
 .kn-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
+.kn-img-close-btn:hover { color: var(--ork-text); }
 .kn-img-modal-body { padding: 20px 22px; }
 .kn-upload-area {
 	display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -10234,6 +10246,14 @@ html[data-theme="dark"] .kn-fp-title { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .kn-field-hint { color: var(--ork-text-muted); }
 html[data-theme="dark"] .kn-img-modal .kn-btn-outline { background: var(--ork-bg-secondary); color: var(--ork-text) !important; border-color: var(--ork-border); }
 html[data-theme="dark"] .kn-img-modal .kn-btn-outline:hover { background: var(--ork-bg-tertiary); color: var(--ork-text) !important; }
+/* I1 fix: override hardcoded inline color:#4a5568/#888 in modal body (invisible in dark mode) */
+html[data-theme="dark"] .kn-img-modal-body { color: var(--ork-text); }
+html[data-theme="dark"] .kn-img-modal-body p { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-img-modal-body #kn-banner-resize-notice,
+html[data-theme="dark"] .kn-img-modal-body small { color: var(--ork-text-muted); }
+/* M-A fix: modal title icon color — CSS class so dark mode can remap */
+.kn-img-modal-title i { color: #2c5282; }
+html[data-theme="dark"] .kn-img-modal-title i { color: var(--ork-accent, #90cdf4); }
 
 
 

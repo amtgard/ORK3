@@ -5552,7 +5552,10 @@ $(document).ready(function() {
 
     window.knDoRemoveHeraldry = function() {
         fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(r) {
                 if (r && r.status === 0) {
                 } else {
@@ -15120,7 +15123,10 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         fd.append('OffsetX', String(offX));
         fd.append('OffsetY', String(offY));
         fetch(CONFIG_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 cb(!!(result && result.status === 0), result && result.error);
             })
@@ -15181,7 +15187,10 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         if (!confirm('Remove the banner image? This cannot be undone.')) return;
         removeBtn.disabled = true;
         fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
@@ -15208,7 +15217,13 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
         fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
         fetch(UPLOAD_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
@@ -16000,7 +16015,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(offX));
         fd.append('OffsetY', String(offY));
         fetch(CONFIG_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 cb(!!(result && result.status === 0), result && result.error);
             })
@@ -16061,7 +16079,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
         if (!confirm('Remove the banner image? This cannot be undone.')) return;
         removeBtn.disabled = true;
         fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
@@ -16088,7 +16109,13 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
         fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
         fetch(UPLOAD_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
@@ -16317,7 +16344,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         // I6 fix: refresh modal title based on current bannerUrl state
         var titleEl = document.getElementById('kn-banner-modal-title');
         if (titleEl) {
-            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>' +
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
                 (KnBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
         }
         // Reset toggles to current persisted config
@@ -16446,7 +16473,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
         if (!confirm('Remove the banner image? This cannot be undone.')) return;
         removeBtn.disabled = true;
         fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
@@ -16473,7 +16503,13 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
         fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
         fetch(UPLOAD_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
