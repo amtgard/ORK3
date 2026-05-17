@@ -359,7 +359,7 @@ class Player extends Ork3 {
 						'BasicFonts' => (int)$this->mundane->basic_fonts,
 						'DyslexiaFonts' => (int)$this->mundane->dyslexia_fonts,
 				);
-			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1 ));
+			$unit = Ork3::$Lib->report->UnitSummary(array( 'MundaneId' => $this->mundane->mundane_id, 'IncludeCompanies' => 1, 'ActiveOnly' => 1 ));
 			if ($unit['Status']['Status'] != 0) {
 				$response['Player']['Company'] = "";
 			} else {
