@@ -488,6 +488,92 @@ class Weather extends Ork3 {
 	}
 
 	/**
+	 * Parks playing in-person on a given date, each enriched with that day's
+	 * forecast + badges. Sorted by severity (worst weather first) so users
+	 * see the biggest concerns at the top of the list.
+	 */
+	public function play_for_date($date) {
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = date('Y-m-d');
+		$ids = $this->parks_playing_on($date);
+		if (empty($ids)) return array();
+		$ids_sql = implode(',', array_map('intval', $ids));
+
+		// Pull schedule + park metadata for the playing set
+		$ts = strtotime($date);
+		$dow_name = date('l', $ts);
+		$dom = (int)date('j', $ts);
+		$wom = (int)ceil($dom / 7);
+
+		$rs = $this->db->query("SELECT pd.park_id, pd.parkday_id, pd.purpose, pd.time, pd.description,
+		         p.name AS park_name, k.name AS kingdom_name
+			FROM " . DB_PREFIX . "parkday pd
+			JOIN " . DB_PREFIX . "park p ON p.park_id = pd.park_id
+			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+			WHERE pd.online = 0 AND pd.park_id IN ($ids_sql)
+			  AND (
+				(pd.recurrence = 'weekly'        AND pd.week_day = '$dow_name') OR
+				(pd.recurrence = 'week-of-month' AND pd.week_day = '$dow_name' AND pd.week_of_month = $wom) OR
+				(pd.recurrence = 'monthly'       AND pd.month_day = $dom)
+			  )
+			ORDER BY p.name");
+		$by_park = array();
+		if ($rs && $rs->size() > 0) {
+			while ($rs->next()) {
+				$pid = (int)$rs->park_id;
+				$purpose_labels = array(
+					'park-day'         => 'Park Day',
+					'fighter-practice' => 'Fighter Practice',
+					'arts-day'         => 'A&S Day',
+					'other'            => 'Other',
+				);
+				$by_park[$pid][] = array(
+					'parkday_id'  => (int)$rs->parkday_id,
+					'park_name'   => $rs->park_name,
+					'kingdom'     => $rs->kingdom_name,
+					'purpose'     => $purpose_labels[$rs->purpose] ?? ucfirst($rs->purpose),
+					'time'        => $rs->time,
+					'description' => $rs->description,
+				);
+			}
+		}
+
+		// Severity scoring — same scale used in daily_summary's standout pick
+		$severity = array(
+			'Extreme heat'    => 100,
+			'Frostbite risk'  => 100,
+			'Thunderstorms'   =>  80,
+			'Severe wind'     =>  60,
+			'Very high UV'    =>  40,
+			'Warm day'        =>  10,
+			'Cool day'        =>  10,
+			'Windy day'       =>   5,
+		);
+
+		$out = array();
+		foreach ($by_park as $pid => $schedules) {
+			$first = $schedules[0];
+			$fc     = $this->forecast_for_date($pid, $date);
+			$badges = $fc ? self::safety_badges($fc, null, $date) : array();
+			$score  = 0;
+			foreach ($badges as $b) $score += $severity[$b['label']] ?? 0;
+			$out[] = array(
+				'park_id'      => $pid,
+				'park_name'    => $first['park_name'],
+				'kingdom_name' => $first['kingdom'],
+				'schedules'    => $schedules,
+				'forecast'     => $fc,
+				'badges'       => $badges,
+				'_score'       => $score,
+			);
+		}
+		usort($out, function($a, $b) {
+			if ($a['_score'] !== $b['_score']) return $b['_score'] - $a['_score'];
+			return strcmp($a['park_name'], $b['park_name']);
+		});
+		return $out;
+	}
+
+	/**
 	 * Upcoming events in the next $days, each enriched with the start-day
 	 * forecast (or null if outside the cache window). Sorted by start date.
 	 */
