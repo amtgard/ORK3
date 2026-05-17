@@ -15933,7 +15933,28 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 })();
 
 // =============================================================================
-// Calendar Enhancements R2: RSVP dropdowns, Map view, Event status setter
+// Event status setter — reachable from any page that includes revised.js
+// (Event detail, Kingdomnew, Parknew). Resolves UIR from whichever config is
+// loaded; falls back to the document base if none is.
+// =============================================================================
+window.evSetEventStatus = function(eventId, status, btn) {
+    var uir = (typeof EvConfig !== 'undefined' && EvConfig.uir) ? EvConfig.uir
+            : (typeof KnConfig !== 'undefined' && KnConfig.uir) ? KnConfig.uir
+            : (typeof PkConfig !== 'undefined' && PkConfig.uir) ? PkConfig.uir
+            : '/orkui/';
+    if (btn) btn.disabled = true;
+    $.post(uir + 'EventAjax/set_status', { EventId: eventId, Status: status }, function(r) {
+        if (r && r.status === 0) {
+            window.location.reload();
+        } else {
+            alert((r && r.error) || 'Failed to set event status.');
+            if (btn) btn.disabled = false;
+        }
+    }, 'json').fail(function() { alert('Request failed.'); if (btn) btn.disabled = false; });
+};
+
+// =============================================================================
+// Calendar Enhancements R2: RSVP dropdowns, Map view
 // Works on both Kingdomnew (kn-*) and Parknew (pk-*) surfaces.
 // =============================================================================
 (function() {
@@ -15941,19 +15962,6 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             : (typeof PkConfig !== 'undefined') ? PkConfig : null;
     if (!Cfg) return;
     var UIR = Cfg.uir;
-
-    // Reachable from event detail page directly.
-    window.evSetEventStatus = function(eventId, status, btn) {
-        if (btn) btn.disabled = true;
-        $.post(UIR + 'EventAjax/set_status', { EventId: eventId, Status: status }, function(r) {
-            if (r && r.status === 0) {
-                window.location.reload();
-            } else {
-                alert((r && r.error) || 'Failed to set event status.');
-                if (btn) btn.disabled = false;
-            }
-        }, 'json').fail(function() { alert('Request failed.'); if (btn) btn.disabled = false; });
-    };
 
     // ---- RSVP component (portal-based menu — escapes Google Maps InfoWindow clipping) ----
     var RSVP_LABELS = {
@@ -16400,3 +16408,1501 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         if (e.key === 'Escape' && overlay && overlay.classList.contains('evpv-open')) evpvClose();
     });
 })();
+
+// ── Ported entity banner IIFEs (park/kingdom/player/unit) ──────────────
+// ── Park banner ─────────────────────────────────── //
+(function() {
+    if (typeof PkBannerConfig === 'undefined' || !PkBannerConfig.canManage) return;
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/update';
+    var REMOVE_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/remove';
+    var CONFIG_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('pk-banner-overlay');
+    var fileInput   = gid('pk-banner-file-input');
+    var showLogoCb  = gid('pk-banner-show-logo');
+    var vignetteCb  = gid('pk-banner-vignette');
+    var resizeNote  = gid('pk-banner-resize-notice');
+    var errorEl     = gid('pk-banner-error');
+    var stepSelect  = gid('pk-banner-step-select');
+    var stepPosition  = gid('pk-banner-step-position');
+    var stepUploading = gid('pk-banner-step-uploading');
+    var stepSuccess = gid('pk-banner-step-success');
+    var saveCfgBtn  = gid('pk-banner-save-config-btn');
+    var removeBtn   = gid('pk-banner-remove-btn');
+    var adjustBtn   = gid('pk-banner-adjust-btn');
+    var closeBtn    = gid('pk-banner-close-btn');
+    var posCanvas       = gid('pk-banner-position-canvas');
+    var posBackBtn      = gid('pk-banner-position-back-btn');
+    var posConfirmBtn   = gid('pk-banner-position-confirm-btn');
+    var posHintText     = gid('pk-banner-position-hint-text');
+    var posErrorEl      = gid('pk-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+    window.pkOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!PkBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!PkBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('pk-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.pkCloseBannerModal = function() {
+        overlay.classList.remove('pk-open');
+        document.body.style.overflow = '';
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', pkCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) pkCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pk-open')) pkCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof PkBannerConfig.bannerOffsetX === 'number') ? PkBannerConfig.bannerOffsetX : 50,
+            (typeof PkBannerConfig.bannerOffsetY === 'number') ? PkBannerConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = PkBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof PkBannerConfig.bannerOffsetX === 'number') ? PkBannerConfig.bannerOffsetX : 50,
+                        y: (typeof PkBannerConfig.bannerOffsetY === 'number') ? PkBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        if (!confirm('Remove the banner image? This cannot be undone.')) return;
+        removeBtn.disabled = true;
+        fetch(REMOVE_URL, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    removeBtn.disabled = false;
+                    showError((result && result.error) || 'Remove failed.');
+                }
+            })
+            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+
+// ── Kingdom banner ─────────────────────────────────── //
+(function() {
+    if (typeof KnBannerConfig === 'undefined' || !KnBannerConfig.canManage) return;
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/update';
+    var REMOVE_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/remove';
+    var CONFIG_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('kn-banner-overlay');
+    var fileInput   = gid('kn-banner-file-input');
+    var showLogoCb  = gid('kn-banner-show-logo');
+    var vignetteCb  = gid('kn-banner-vignette');
+    var resizeNote  = gid('kn-banner-resize-notice');
+    var errorEl     = gid('kn-banner-error');
+    var stepSelect  = gid('kn-banner-step-select');
+    var stepPosition  = gid('kn-banner-step-position');
+    var stepUploading = gid('kn-banner-step-uploading');
+    var stepSuccess = gid('kn-banner-step-success');
+    var saveCfgBtn  = gid('kn-banner-save-config-btn');
+    var removeBtn   = gid('kn-banner-remove-btn');
+    var adjustBtn   = gid('kn-banner-adjust-btn');
+    var closeBtn    = gid('kn-banner-close-btn');
+    var posCanvas       = gid('kn-banner-position-canvas');
+    var posBackBtn      = gid('kn-banner-position-back-btn');
+    var posConfirmBtn   = gid('kn-banner-position-confirm-btn');
+    var posHintText     = gid('kn-banner-position-hint-text');
+    var posErrorEl      = gid('kn-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+    window.knOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!KnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!KnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('kn-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.knCloseBannerModal = function() {
+        overlay.classList.remove('kn-open');
+        document.body.style.overflow = '';
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', knCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) knCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('kn-open')) knCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof KnBannerConfig.bannerOffsetX === 'number') ? KnBannerConfig.bannerOffsetX : 50,
+            (typeof KnBannerConfig.bannerOffsetY === 'number') ? KnBannerConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = KnBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof KnBannerConfig.bannerOffsetX === 'number') ? KnBannerConfig.bannerOffsetX : 50,
+                        y: (typeof KnBannerConfig.bannerOffsetY === 'number') ? KnBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        if (!confirm('Remove the banner image? This cannot be undone.')) return;
+        removeBtn.disabled = true;
+        fetch(REMOVE_URL, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    removeBtn.disabled = false;
+                    showError((result && result.error) || 'Remove failed.');
+                }
+            })
+            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+
+// ── Player banner ─────────────────────────────────── //
+(function() {
+    if (typeof PnBannerConfig === 'undefined' || !PnBannerConfig.canManage) return;
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/update';
+    var REMOVE_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/remove';
+    var CONFIG_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('pn-banner-overlay');
+    var fileInput   = gid('pn-banner-file-input');
+    var showLogoCb  = gid('pn-banner-show-logo');
+    var vignetteCb  = gid('pn-banner-vignette');
+    var resizeNote  = gid('pn-banner-resize-notice');
+    var errorEl     = gid('pn-banner-error');
+    var stepSelect  = gid('pn-banner-step-select');
+    var stepPosition  = gid('pn-banner-step-position');
+    var stepUploading = gid('pn-banner-step-uploading');
+    var stepSuccess = gid('pn-banner-step-success');
+    var saveCfgBtn  = gid('pn-banner-save-config-btn');
+    var removeBtn   = gid('pn-banner-remove-btn');
+    var adjustBtn   = gid('pn-banner-adjust-btn');
+    var closeBtn    = gid('pn-banner-close-btn');
+    var posCanvas       = gid('pn-banner-position-canvas');
+    var posBackBtn      = gid('pn-banner-position-back-btn');
+    var posConfirmBtn   = gid('pn-banner-position-confirm-btn');
+    var posHintText     = gid('pn-banner-position-hint-text');
+    var posErrorEl      = gid('pn-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+    window.pnOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!PnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!PnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('pn-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.pnCloseBannerModal = function() {
+        overlay.classList.remove('pn-open');
+        document.body.style.overflow = '';
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', pnCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) pnCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open')) pnCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof PnBannerConfig.bannerOffsetX === 'number') ? PnBannerConfig.bannerOffsetX : 50,
+            (typeof PnBannerConfig.bannerOffsetY === 'number') ? PnBannerConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = PnBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof PnBannerConfig.bannerOffsetX === 'number') ? PnBannerConfig.bannerOffsetX : 50,
+                        y: (typeof PnBannerConfig.bannerOffsetY === 'number') ? PnBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        if (!confirm('Remove the banner image? This cannot be undone.')) return;
+        removeBtn.disabled = true;
+        fetch(REMOVE_URL, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    removeBtn.disabled = false;
+                    showError((result && result.error) || 'Remove failed.');
+                }
+            })
+            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+
+// ── Unit banner ─────────────────────────────────── //
+(function() {
+    if (typeof UnBannerConfig === 'undefined' || !UnBannerConfig.canManage) return;
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/update';
+    var REMOVE_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/remove';
+    var CONFIG_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('un-banner-overlay');
+    var fileInput   = gid('un-banner-file-input');
+    var showLogoCb  = gid('un-banner-show-logo');
+    var vignetteCb  = gid('un-banner-vignette');
+    var resizeNote  = gid('un-banner-resize-notice');
+    var errorEl     = gid('un-banner-error');
+    var stepSelect  = gid('un-banner-step-select');
+    var stepPosition  = gid('un-banner-step-position');
+    var stepUploading = gid('un-banner-step-uploading');
+    var stepSuccess = gid('un-banner-step-success');
+    var saveCfgBtn  = gid('un-banner-save-config-btn');
+    var removeBtn   = gid('un-banner-remove-btn');
+    var adjustBtn   = gid('un-banner-adjust-btn');
+    var closeBtn    = gid('un-banner-close-btn');
+    var posCanvas       = gid('un-banner-position-canvas');
+    var posBackBtn      = gid('un-banner-position-back-btn');
+    var posConfirmBtn   = gid('un-banner-position-confirm-btn');
+    var posHintText     = gid('un-banner-position-hint-text');
+    var posErrorEl      = gid('un-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+    window.unOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!UnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!UnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('un-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.unCloseBannerModal = function() {
+        overlay.classList.remove('un-open');
+        document.body.style.overflow = '';
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', unCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) unCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('un-open')) unCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof UnBannerConfig.bannerOffsetX === 'number') ? UnBannerConfig.bannerOffsetX : 50,
+            (typeof UnBannerConfig.bannerOffsetY === 'number') ? UnBannerConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = UnBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof UnBannerConfig.bannerOffsetX === 'number') ? UnBannerConfig.bannerOffsetX : 50,
+                        y: (typeof UnBannerConfig.bannerOffsetY === 'number') ? UnBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        if (!confirm('Remove the banner image? This cannot be undone.')) return;
+        removeBtn.disabled = true;
+        fetch(REMOVE_URL, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    removeBtn.disabled = false;
+                    showError((result && result.error) || 'Remove failed.');
+                }
+            })
+            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+
