@@ -2708,58 +2708,6 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 <?php if ($CanAdminPark ?? false): ?>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <?php endif; ?>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
-
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script>
-function pkCopyEventLink(el) {
-	var url = el.getAttribute('data-url');
-	navigator.clipboard.writeText(url).then(function() {
-		el.classList.add('pk-copied');
-		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
-	});
-}
-window.pkRecActiveFilter = 'open';
-$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-	if (settings.nTable.id !== 'pk-rec-table') return true;
-	var filter = window.pkRecActiveFilter || 'all';
-	if (filter === 'all') return true;
-	var row = settings.aoData[dataIndex].nTr;
-	var rowFilter = row ? row.getAttribute('data-filter') : '';
-	if (filter === 'open') return rowFilter !== 'already';
-	return rowFilter === filter;
-});
-$(function() {
-	if ($('#pk-rec-table').length) {
-		window.pkRecDT = $('#pk-rec-table').DataTable({
-			order: [[4, 'desc']],
-			columnDefs: [
-				{ targets: [4], type: 'date' },
-				<?php if (!empty($CanAdminPark)): ?>
-				{ targets: [-1], orderable: false, searchable: false },
-				<?php endif; ?>
-			],
-			pageLength: 25
-		});
-	}
-});
-window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
-window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
-initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
-</script>
-
-<?php if (!empty($IsLoggedIn)): ?>
-<script>
-window.OrkRsCfg = {
-	uir:         '<?= UIR ?>',
-	userId:      <?= (int)$this->__session->user_id ?>,
-	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
-	reload:      function() { location.reload(); }
-};
-</script>
-<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
-<?php endif; ?>
-
 <!-- pk-banner-modal (ported from event) -->
 <div class="pk-img-overlay pk-banner-modal" id="pk-banner-overlay">
 	<div class="pk-img-modal" style="width:min(680px, 96vw)">
@@ -2924,4 +2872,57 @@ window.OrkRsCfg = {
 		</div>
 	</div>
 </div>
+
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script>
+function pkCopyEventLink(el) {
+	var url = el.getAttribute('data-url');
+	navigator.clipboard.writeText(url).then(function() {
+		el.classList.add('pk-copied');
+		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
+	});
+}
+window.pkRecActiveFilter = 'open';
+$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+	if (settings.nTable.id !== 'pk-rec-table') return true;
+	var filter = window.pkRecActiveFilter || 'all';
+	if (filter === 'all') return true;
+	var row = settings.aoData[dataIndex].nTr;
+	var rowFilter = row ? row.getAttribute('data-filter') : '';
+	if (filter === 'open') return rowFilter !== 'already';
+	return rowFilter === filter;
+});
+$(function() {
+	if ($('#pk-rec-table').length) {
+		window.pkRecDT = $('#pk-rec-table').DataTable({
+			order: [[4, 'desc']],
+			columnDefs: [
+				{ targets: [4], type: 'date' },
+				<?php if (!empty($CanAdminPark)): ?>
+				{ targets: [-1], orderable: false, searchable: false },
+				<?php endif; ?>
+			],
+			pageLength: 25
+		});
+	}
+});
+window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
+window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
+initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+</script>
+
+<?php if (!empty($IsLoggedIn)): ?>
+<script>
+window.OrkRsCfg = {
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { location.reload(); }
+};
+</script>
+<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
+
 

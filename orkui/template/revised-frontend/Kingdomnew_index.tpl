@@ -2766,52 +2766,6 @@ function knEscapeAttr(s) {
 }
 </script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
-
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script>
-window.knRecActiveFilter = 'open';
-$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-	if (settings.nTable.id !== 'kn-rec-table') return true;
-	var filter = window.knRecActiveFilter || 'all';
-	if (filter === 'all') return true;
-	var row = settings.aoData[dataIndex].nTr;
-	var rowFilter = row ? row.getAttribute('data-filter') : '';
-	if (filter === 'open') return rowFilter !== 'already';
-	return rowFilter === filter;
-});
-$(function() {
-	if ($('#kn-rec-table').length) {
-		window.knRecDT = $('#kn-rec-table').DataTable({
-			order: [[4, 'desc']],
-			columnDefs: [
-				{ targets: [4], type: 'date' },
-				<?php if ($CanManageKingdom ?? false): ?>
-				{ targets: [-1], orderable: false, searchable: false },
-				<?php endif; ?>
-			],
-			pageLength: 25
-		});
-	}
-});
-window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
-window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
-initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
-</script>
-
-<?php if (!empty($IsLoggedIn)): ?>
-<script>
-window.OrkRsCfg = {
-	url:         null,  /* unused */
-	uir:         '<?= UIR ?>',
-	userId:      <?= (int)$this->__session->user_id ?>,
-	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
-	reload:      function() { location.reload(); }
-};
-</script>
-<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
-<?php endif; ?>
-
 <!-- kn-banner-modal (ported from event) -->
 <div class="kn-img-overlay kn-banner-modal" id="kn-banner-overlay">
 	<div class="kn-img-modal" style="width:min(680px, 96vw)">
@@ -2976,4 +2930,51 @@ window.OrkRsCfg = {
 		</div>
 	</div>
 </div>
+
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script>
+window.knRecActiveFilter = 'open';
+$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+	if (settings.nTable.id !== 'kn-rec-table') return true;
+	var filter = window.knRecActiveFilter || 'all';
+	if (filter === 'all') return true;
+	var row = settings.aoData[dataIndex].nTr;
+	var rowFilter = row ? row.getAttribute('data-filter') : '';
+	if (filter === 'open') return rowFilter !== 'already';
+	return rowFilter === filter;
+});
+$(function() {
+	if ($('#kn-rec-table').length) {
+		window.knRecDT = $('#kn-rec-table').DataTable({
+			order: [[4, 'desc']],
+			columnDefs: [
+				{ targets: [4], type: 'date' },
+				<?php if ($CanManageKingdom ?? false): ?>
+				{ targets: [-1], orderable: false, searchable: false },
+				<?php endif; ?>
+			],
+			pageLength: 25
+		});
+	}
+});
+window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
+window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
+initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
+</script>
+
+<?php if (!empty($IsLoggedIn)): ?>
+<script>
+window.OrkRsCfg = {
+	url:         null,  /* unused */
+	uir:         '<?= UIR ?>',
+	userId:      <?= (int)$this->__session->user_id ?>,
+	userPersona: <?= json_encode($this->__session->persona ?? '') ?>,
+	reload:      function() { location.reload(); }
+};
+</script>
+<?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
+
 
