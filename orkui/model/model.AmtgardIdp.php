@@ -27,7 +27,8 @@ class Model_AmtgardIdp extends Model {
 
         $token_data = json_decode($response, true);
         if (!isset($token_data['access_token'])) {
-            die("OAuth Callback: Failed to get access token. Response: $response. Curl Error: $curl_err");
+            error_log("Model_AmtgardIdp::exchangeAuthCodeForAccessToken failed curl_err=$curl_err");
+            return ['error' => true, 'response' => $response];
         }
         return $token_data;
     }

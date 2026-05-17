@@ -341,6 +341,42 @@
 		padding: 28px 24px;
 	}
 }
+.lg-btn-oauth-primary {
+	width: 100%;
+	padding: 14px;
+	font-size: 16px;
+	font-weight: 600;
+	background: #b22222;
+	color: #fff;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	margin-top: 8px;
+}
+.lg-btn-oauth-primary:hover { background: #8b0000; }
+.lg-btn-oauth-primary img { height: 22px; width: 22px; }
+.lg-oauth-sub {
+	margin-top: 10px;
+	color: #666;
+	font-size: 13px;
+	text-align: center;
+}
+.lg-legacy-disclosure {
+	margin-top: 28px;
+	padding-top: 16px;
+	border-top: 1px solid #eee;
+}
+.lg-legacy-disclosure summary {
+	cursor: pointer;
+	color: #555;
+	font-size: 14px;
+	padding: 6px 0;
+}
+.lg-legacy-disclosure[open] summary { margin-bottom: 12px; }
 /* =====================================================
    DARK MODE — Login page (.lg-*)
    Left panel (form) goes dark; right panel already dark.
@@ -383,33 +419,54 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
 			</div>
 		<?php endif; ?>
 
-		<h2 class="lg-heading">Welcome back</h2>
-		<p class="lg-subheading">Sign in to access your records and community</p>
+		<?php if (!empty($ShowWelcomeBack)): ?>
+			<?php $_wbName = trim((string)($WelcomePersona ?? '')); ?>
+			<h2 class="lg-heading">Welcome back<?= $_wbName !== '' ? ', ' . htmlspecialchars($_wbName) : '' ?></h2>
+			<p class="lg-subheading">One click to pick up where you left off.</p>
 
-		<form action="<?= UIR ?>Login/login" method="POST">
-			<div class="lg-field">
-				<label class="lg-label" for="lg-username">Username</label>
-				<input class="lg-input" type="text" id="lg-username" name="username" autocomplete="username" autofocus />
-			</div>
-			<div class="lg-field">
-				<label class="lg-label" for="lg-password">Password</label>
-				<input class="lg-input" type="password" id="lg-password" name="password" autocomplete="current-password" value="<?= htmlspecialchars($_GET['pw'] ?? '') ?>" />
-			</div>
-			<button type="submit" class="lg-btn-primary">
-				<i class="fas fa-sign-in-alt" style="margin-right:7px"></i> Sign In
+			<button type="button" class="lg-btn-oauth lg-btn-oauth-primary" onclick="window.location='<?= UIR ?>Login/login_oauth'">
+				<img src="<?= HTTP_ASSETS ?>images/amtgard_idp_favicon.png" alt="Amtgard IDP" />
+				Continue<?= $_wbName !== '' ? ' as ' . htmlspecialchars($_wbName) : '' ?>
 			</button>
-		</form>
+			<div class="lg-oauth-sub" style="margin-bottom:14px;">
+				<a href="<?= UIR ?>Login/logout" style="color:inherit;text-decoration:underline;">
+					<i class="fas fa-user-times" style="margin-right:4px;opacity:0.6"></i>Not you? Sign in as someone else
+				</a>
+			</div>
 
-		<div class="lg-divider">or</div>
+			<details class="lg-legacy-disclosure">
+				<summary>Sign in with ORK credentials instead</summary>
+		<?php else: ?>
+			<h2 class="lg-heading">Welcome back</h2>
+			<p class="lg-subheading">Sign in to access your records and community</p>
 
-		<button type="button" class="lg-btn-oauth" onclick="window.location='<?= UIR ?>Login/login_oauth'">
-			<img src="<?= HTTP_ASSETS ?>images/amtgard_idp_favicon.png" alt="Amtgard IDP" />
-			Sign in with Amtgard
-		</button>
+			<button type="button" class="lg-btn-oauth lg-btn-oauth-primary" onclick="window.location='<?= UIR ?>Login/login_oauth'">
+				<img src="<?= HTTP_ASSETS ?>images/amtgard_idp_favicon.png" alt="Amtgard IDP" />
+				Sign in with Amtgard
+			</button>
+			<div class="lg-oauth-sub">One sign-in shared across Amtgard apps. New here? Pick Google, Discord, or Facebook on the next screen.</div>
 
-		<div class="lg-links">
-			<a href="<?= UIR ?>Login/forgotpassword"><i class="fas fa-key" style="margin-right:4px;opacity:0.6"></i>Forgot your password?</a>
-		</div>
+			<details class="lg-legacy-disclosure">
+				<summary>Use legacy ORK login</summary>
+		<?php endif; ?>
+			<form action="<?= UIR ?>Login/login" method="POST">
+				<div class="lg-field">
+					<label class="lg-label" for="lg-username">Username</label>
+					<input class="lg-input" type="text" id="lg-username" name="username" autocomplete="username" />
+				</div>
+				<div class="lg-field">
+					<label class="lg-label" for="lg-password">Password</label>
+					<input class="lg-input" type="password" id="lg-password" name="password" autocomplete="current-password" value="<?= htmlspecialchars($_GET['pw'] ?? '') ?>" />
+				</div>
+				<button type="submit" class="lg-btn-primary">
+					<i class="fas fa-sign-in-alt" style="margin-right:7px"></i> Sign In
+				</button>
+			</form>
+			<div class="lg-links">
+				<a href="<?= UIR ?>Login/forgotpassword"><i class="fas fa-key" style="margin-right:4px;opacity:0.6"></i>Forgot your password?</a>
+				<a href="#" id="lc-different-account" style="margin-left:12px"><i class="fas fa-user-times" style="margin-right:4px;opacity:0.6"></i>Sign in with a different account</a>
+			</div>
+		</details>
 
 		<?php if (strlen($error) > 0): ?>
 			<div class="lg-error">
@@ -481,3 +538,18 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
 	</div>
 
 </div>
+
+<script>
+(function() {
+	// The autoredirect cookie now drives a server-side Welcome Back
+	// interstitial (rendered above). Keep the legacy escape hatch for
+	// users who reach the disclosure form and want a clean restart.
+	var diff = document.getElementById('lc-different-account');
+	if (diff) {
+		diff.addEventListener('click', function(e) {
+			e.preventDefault();
+			window.location = '<?= UIR ?>Login/logout';
+		});
+	}
+})();
+</script>

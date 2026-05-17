@@ -380,6 +380,9 @@ class Authorization extends Ork3
 		return $response;
 	}
 
+	const IDP_RESULT_LOGGED_IN  = 'logged_in';
+	const IDP_RESULT_NEEDS_CLAIM = 'needs_claim';
+
 	public function AuthorizeIdp()
 	{
 		$request = [
@@ -391,15 +394,246 @@ class Authorization extends Ork3
 			'ExpiresAt' => $_SESSION['Session_Vars']['ExpiresAt'],
 		];
 
-		error_log("AuthorizeIdp: Request: " . print_r($request, true));
 		$this->idp_auth->clear();
 		$this->idp_auth->idp_user_id = $request['IdpUserId'];
 
 		if ($this->idp_auth->find()) {
-			return $this->idpAuthorize($request);
+			$resp = $this->idpAuthorize($request);
+			$resp['IdpResult'] = self::IDP_RESULT_LOGGED_IN;
+			return $resp;
 		}
 
-		return $this->linkIdpAuthorization($request);
+		// No existing link. Try the email auto-link path.
+		$autoLinked = $this->tryAutoLinkByEmail($request);
+		if ($autoLinked !== false) {
+			$autoLinked['IdpResult'] = self::IDP_RESULT_LOGGED_IN;
+			return $autoLinked;
+		}
+
+		// No auto-link possible: caller should redirect into the claim flow.
+		return [
+			'Status' => Success(),
+			'IdpResult' => self::IDP_RESULT_NEEDS_CLAIM,
+		];
+	}
+
+	/**
+	 * Try to link this IDP identity to an existing ork_mundane row by email.
+	 * Returns the standard auth response array on a successful link, or false
+	 * if there were zero or multiple matches.
+	 */
+	private function tryAutoLinkByEmail($request)
+	{
+		global $DB;
+		$email = trim($request['Email']);
+		if (strlen($email) === 0) {
+			return false;
+		}
+
+		// Case-insensitive exact match. ork_mundane.email is varchar(165) MUL.
+		$DB->Clear();
+		$rows = $DB->DataSet(
+			"SELECT m.mundane_id FROM " . DB_PREFIX . "mundane m " .
+			"LEFT JOIN " . DB_PREFIX . "idp_auth ia ON ia.mundane_id = m.mundane_id " .
+			"WHERE LOWER(m.email) = LOWER(?) AND ia.authorization_id IS NULL",
+			array($email)
+		);
+
+		if (!is_array($rows) || count($rows) !== 1) {
+			$matchCount = is_array($rows) ? count($rows) : 0;
+			error_log("AuthorizeIdp: tryAutoLinkByEmail matched $matchCount rows for $email");
+			// Stash the count so the claim form can show a helpful banner.
+			$_SESSION['Session_Vars']['IdpEmailMatchCount'] = $matchCount;
+			return false;
+		}
+
+		$mundaneId = (int)$rows[0]['mundane_id'];
+		$this->mundane->clear();
+		$this->mundane->mundane_id = $mundaneId;
+		if (!$this->mundane->find()) {
+			return false;
+		}
+		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+			return false;
+		}
+
+		// Reuse createIdpLink, which writes ork_idp_auth + issues the ORK token.
+		$linked = $this->createIdpLink($request);
+
+		// Mirror to bastion-idp (best-effort).
+		$this->mirrorLinkToIdp($request['IdpUserId'], $mundaneId);
+
+		return $linked;
+	}
+
+	/**
+	 * Verify ORK credentials and finalize the IDP link in one shot.
+	 * $claim is the session-stashed callback context: idp_user_id, email,
+	 * access_token, refresh_token, expires_at. $username/$password are what
+	 * the user typed into the claim form.
+	 *
+	 * Returns the standard auth response array on success, or
+	 * ['Status' => NoAuthorization(...)] on credential failure.
+	 */
+	public function verifyClaimCredentials($username, $password, $claim)
+	{
+		// Reuse the existing password verification path.
+		$auth = $this->Authorize(['UserName' => $username, 'Password' => $password, 'Token' => null]);
+		if (!isset($auth['Status']) || $auth['Status']['Status'] !== 0) {
+			return ['Status' => NoAuthorization("Username or password incorrect")];
+		}
+
+		$mundaneId = $auth['UserId'];
+
+		// Refuse if this ORK profile is already linked to a different IDP id.
+		$this->idp_auth->clear();
+		$this->idp_auth->mundane_id = $mundaneId;
+		if ($this->idp_auth->find() && $this->idp_auth->idp_user_id !== $claim['IdpUserId']) {
+			return ['Status' => NoAuthorization("This ORK profile is already linked to another Amtgard account. Contact support if you need to transfer it.")];
+		}
+
+		// Build the request shape createIdpLink expects.
+		$this->mundane->clear();
+		$this->mundane->mundane_id = $mundaneId;
+		$this->mundane->find();
+
+		$request = [
+			'IdpUserId'    => $claim['IdpUserId'],
+			'Email'        => $claim['Email'],
+			'AccessToken'  => $claim['AccessToken'],
+			'RefreshToken' => $claim['RefreshToken'],
+			'ExpiresAt'    => $claim['ExpiresAt'],
+		];
+		$linked = $this->createIdpLink($request);
+
+		// Mirror to bastion-idp (best-effort).
+		$this->mirrorLinkToIdp($claim['IdpUserId'], $mundaneId);
+
+		return $linked;
+	}
+
+	/**
+	 * Generate a magic-link token row and return the token string.
+	 * The caller is responsible for sending the email.
+	 * Returns false if the username has no matching ork_mundane.
+	 */
+	public function issueClaimMagicLink($username, $claim)
+	{
+		global $DB;
+
+		$this->mundane->clear();
+		$this->mundane->like('username', trim($username));
+		if (!$this->mundane->find()) {
+			return false;
+		}
+		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+			return false;
+		}
+
+		$token = bin2hex(openssl_random_pseudo_bytes(32)); // 64 hex chars
+		$expires = date('Y-m-d H:i:s', time() + 60 * 60 * 24); // 24h
+
+		$DB->Clear();
+		$DB->Execute(
+			"INSERT INTO " . DB_PREFIX . "idp_claim_token " .
+			"(token, idp_user_id, idp_email, mundane_id, expires_at) " .
+			"VALUES (?, ?, ?, ?, ?)",
+			array($token, $claim['IdpUserId'], $claim['Email'], (int)$this->mundane->mundane_id, $expires)
+		);
+
+		return [
+			'token'      => $token,
+			'email'      => $this->mundane->email,
+			'username'   => $this->mundane->username,
+			'mundane_id' => (int)$this->mundane->mundane_id,
+		];
+	}
+
+	/**
+	 * Consume a magic-link token. Marks the row consumed and finalizes
+	 * the IDP link in one shot. Returns the standard auth response array,
+	 * or ['Status' => NoAuthorization(...)] with a specific reason.
+	 */
+	public function consumeMagicLink($token)
+	{
+		global $DB;
+		$token = trim((string)$token);
+		if (strlen($token) !== 64) {
+			return ['Status' => NoAuthorization("That link isn't valid.")];
+		}
+
+		$DB->Clear();
+		$rows = $DB->DataSet(
+			"SELECT * FROM " . DB_PREFIX . "idp_claim_token WHERE token = ? LIMIT 1",
+			array($token)
+		);
+		if (!is_array($rows) || count($rows) === 0) {
+			return ['Status' => NoAuthorization("That link isn't valid.")];
+		}
+		$row = $rows[0];
+
+		if (!is_null($row['consumed_at'])) {
+			return ['Status' => NoAuthorization("That link has already been used.")];
+		}
+		if (strtotime($row['expires_at']) < time()) {
+			return ['Status' => NoAuthorization("That link has expired. Start over from the login page.")];
+		}
+
+		// Refuse if this ORK profile is already linked to a different IDP id.
+		$this->idp_auth->clear();
+		$this->idp_auth->mundane_id = (int)$row['mundane_id'];
+		if ($this->idp_auth->find() && $this->idp_auth->idp_user_id !== $row['idp_user_id']) {
+			return ['Status' => NoAuthorization("This ORK profile is already linked to another Amtgard account.")];
+		}
+
+		// Mark consumed BEFORE finalizing so concurrent uses fail fast.
+		// Atomic guard: only one concurrent request will flip consumed_at from NULL.
+		$DB->Clear();
+		$DB->Execute(
+			"UPDATE " . DB_PREFIX . "idp_claim_token SET consumed_at = NOW() WHERE token = ? AND consumed_at IS NULL",
+			array($token)
+		);
+		$DB->Clear();
+		$check = $DB->DataSet(
+			"SELECT consumed_at FROM " . DB_PREFIX . "idp_claim_token WHERE token = ? LIMIT 1",
+			array($token)
+		);
+		if (!is_array($check) || count($check) === 0 || is_null($check[0]['consumed_at'])) {
+			return ['Status' => NoAuthorization("That link has already been used.")];
+		}
+
+		// Build createIdpLink request shape. We don't have access/refresh
+		// tokens at magic-link consumption time — that's fine, the next IDP
+		// sign-in will refresh them via idpAuthorize().
+		$this->mundane->clear();
+		$this->mundane->mundane_id = (int)$row['mundane_id'];
+		$this->mundane->find();
+
+		$request = [
+			'IdpUserId'    => $row['idp_user_id'],
+			'Email'        => $row['idp_email'],
+			'AccessToken'  => null,
+			'RefreshToken' => null,
+			'ExpiresAt'    => time(),
+		];
+		$linked = $this->createIdpLink($request);
+
+		$this->mirrorLinkToIdp($row['idp_user_id'], (int)$row['mundane_id']);
+
+		return $linked;
+	}
+
+	/**
+	 * Best-effort mirror of an ORK link back to bastion-idp.
+	 * Updates ork_idp_auth.idp_mirror_status accordingly. Never throws.
+	 */
+	public function mirrorLinkToIdp($idpUserId, $mundaneId)
+	{
+		// Delegate to IdpHandoff::mirrorToIdp — the original code here had
+		// (a) a bad require_once path that fataled when actually invoked, and
+		// (b) positional ? placeholders that Yapo's Execute() doesn't bind.
+		// IdpHandoff is auto-loaded by startup.php's scandir over system/lib/ork3/.
+		Ork3::$Lib->idphandoff->mirrorToIdp($idpUserId, $mundaneId);
 	}
 
 	private function idpAuthorize($request)
@@ -436,31 +670,6 @@ class Authorization extends Ork3
 			'UserName' => $this->mundane->username,
 			'Timeout' => $this->mundane->token_expires
 		];
-	}
-
-	private function linkIdpAuthorization($request)
-	{
-		error_log("AuthorizeIdp: No link found. Checking for MundaneId or Email.");
-
-		$this->mundane->clear();
-		$found_mundane = false;
-
-		// Try to find by MundaneId first if provided
-		if (isset($request['MundaneId']) && $request['MundaneId'] > 0) {
-			error_log("AuthorizeIdp: Trying to link by MundaneId: " . $request['MundaneId']);
-			$this->mundane->mundane_id = $request['MundaneId'];
-			if ($this->mundane->find()) {
-				$found_mundane = true;
-				error_log("AuthorizeIdp: User found by MundaneId.");
-			}
-		}
-
-		if (!$found_mundane) {
-			error_log("AuthorizeIdp: User not found by MundaneId or Email.");
-			return ['Status' => NoAuthorization("User not found and could not be automatically linked.")];
-		}
-
-		return $this->createIdpLink($request);
 	}
 
 	private function createIdpLink($request)
