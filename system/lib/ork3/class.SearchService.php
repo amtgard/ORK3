@@ -126,7 +126,8 @@ class SearchService extends Ork3 {
 					'City' => $eventdetail->city,
 					'Country' => $eventdetail->country,
 					'MapUrl' => $eventdetail->map_url,
-					'MapUrlName' => $eventdetail->map_url_name
+					'MapUrlName' => $eventdetail->map_url_name,
+				'EventType'  => $eventdetail->event_type
 				);
 			return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $detail);
 		} else {
@@ -170,7 +171,7 @@ class SearchService extends Ork3 {
 						)";
 		}
 
-		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description,
+		$sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description, cd.event_type as event_type,
 					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'going') AS rsvp_going,
 					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'interested') AS rsvp_interested
 					from " . DB_PREFIX . "event e
@@ -217,9 +218,15 @@ class SearchService extends Ork3 {
 						'NextDetailId' => $d->next_detail_id,
 						'ShortDescription' => $d->short_description,
 						'HasHeraldry' => $d->has_heraldry,
+						'HasBanner'      => isset($d->has_banner) ? (int)$d->has_banner : 0,
+						'BannerShowLogo' => isset($d->banner_show_logo) ? (int)$d->banner_show_logo : 1,
+						'BannerVignette' => isset($d->banner_vignette) ? (int)$d->banner_vignette : 1,
+						'BannerOffsetX'  => isset($d->banner_offset_x) ? (int)$d->banner_offset_x : 50,
+						'BannerOffsetY'  => isset($d->banner_offset_y) ? (int)$d->banner_offset_y : 50,
 						'RsvpGoing' => (int)$d->rsvp_going,
 						'RsvpInterested' => (int)$d->rsvp_interested,
-						'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested
+						'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested,
+						'EventType' => $d->event_type ?? ''
 					);
 				if (!is_null($limit)) {
     				$limit--;

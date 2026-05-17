@@ -25,6 +25,21 @@ foreach ($_members as $_m) {
 }
 
 $_can_edit   = !empty($CanEdit);
+
+$hasBanner       = !empty($_unit['HasBanner']);
+$bannerShowLogo  = !isset($_unit['BannerShowLogo']) || (int)$_unit['BannerShowLogo'] !== 0;
+$bannerVignette  = !isset($_unit['BannerVignette']) || (int)$_unit['BannerVignette'] !== 0;
+$bannerOffsetX   = isset($_unit['BannerOffsetX']) ? max(0, min(100, (int)$_unit['BannerOffsetX'])) : 50;
+$bannerOffsetY   = isset($_unit['BannerOffsetY']) ? max(0, min(100, (int)$_unit['BannerOffsetY'])) : 50;
+$bannerUrl       = '';
+if ($hasBanner) {
+	$bannerFile = Common::resolve_image_ext(DIR_UNIT_BANNER, sprintf('%05d', $_unit_id));
+	$bannerFs   = DIR_UNIT_BANNER . $bannerFile;
+	if (file_exists($bannerFs)) {
+		$bannerUrl = HTTP_UNIT_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+	}
+}
+$unCanManageBanner = !empty($_can_edit);
 $_err        = $SaveError ?? '';
 $_base_url   = UIR . "Unit/index/$_unit_id";
 
@@ -325,11 +340,36 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 <?php endif; ?>
 
 <!-- ── Hero ─────────────────────────────────────────────── -->
-<div class="un-hero">
-	<div class="un-hero-bg" style="background-image:url('<?=htmlspecialchars($_hero_src)?>')"></div>
+<?php
+	$_heroBgUrl    = $bannerUrl ?: $_hero_src;
+	$_heroClasses  = 'un-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' un-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' un-hero-vignette';
+	if ($unCanManageBanner)            $_heroClasses .= ' un-hero-editable';
+	$_unShowLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="un-hero">
+	<div class="un-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+	<?php if ($unCanManageBanner): ?>
+	<button type="button" class="un-banner-edit-btn"
+			onclick="unOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="un-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt un-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="un-hero-content">
 
 		<!-- Heraldry -->
+		<?php if ($_unShowLogo): ?>
 		<div class="un-heraldry-wrap">
 			<div class="un-heraldry-frame">
 				<img class="heraldry-img" src="<?=htmlspecialchars($_hero_src)?>"
@@ -342,6 +382,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 			</button>
 <?php endif; ?>
 		</div>
+		<?php endif; ?>
 
 		<!-- Name / type -->
 		<div class="un-hero-info">
@@ -835,6 +876,185 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 
 <?php endif; ?>
 
+<script>
+var UnBannerConfig = {
+    uir:            '<?= UIR ?>',
+    canManage:      <?= $unCanManageBanner ? 'true' : 'false' ?>,
+    entityId:       <?= (int)$_unit_id ?>,
+    hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+    bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+    bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+    bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+    bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+    bannerUrl:      <?= json_encode($bannerUrl) ?>,
+};
+</script>
+<!-- un-banner-modal (ported from event) -->
+<?php if ($unCanManageBanner): ?>
+<div class="un-img-overlay un-banner-modal" id="un-banner-overlay">
+	<div class="un-img-modal" style="width:min(680px, 96vw)">
+		<div class="un-img-modal-header">
+			<span class="un-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<button class="un-img-close-btn" id="un-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="un-img-modal-body" id="un-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
+				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+
+			<div class="un-banner-wireframes">
+				<figure class="un-banner-wireframe un-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="un-banner-wireframe un-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="un-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="un-banner-config">
+				<label class="un-banner-toggle">
+					<input type="checkbox" id="un-banner-show-logo" checked>
+					<span>Show Unit Heraldry on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="un-banner-toggle">
+					<input type="checkbox" id="un-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="un-upload-area" for="un-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt un-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="un-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="un-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div class="un-img-form-error" id="un-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="un-btn un-btn-outline" id="un-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="un-btn un-btn-outline" id="un-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="un-btn un-btn-outline" id="un-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="un-img-modal-body" id="un-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="un-banner-position-wrap">
+				<canvas id="un-banner-position-canvas" class="un-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="un-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .un-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="un-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="un-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="un-img-form-error" id="un-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="un-btn un-btn-outline" id="un-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="un-btn un-btn-white" id="un-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="un-img-modal-body" id="un-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+		</div>
+		<div class="un-img-modal-body" id="un-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
@@ -1185,3 +1405,6 @@ html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_
   opacity: 0.4 !important;
 }
 </style>
+
+
+<?php endif; ?>

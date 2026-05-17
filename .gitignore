@@ -6,6 +6,8 @@ assets/heraldry/*
 !assets/heraldry/.gitkeep
 assets/heraldry/event/*
 !assets/heraldry/event/.gitkeep
+assets/heraldry/event-banner/*
+!assets/heraldry/event-banner/.gitkeep
 assets/heraldry/kingdom/*
 !assets/heraldry/kingdom/.gitkeep
 assets/heraldry/park/*

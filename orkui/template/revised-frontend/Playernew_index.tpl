@@ -25,6 +25,21 @@
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 	$imageUrl = $Player['HasImage'] > 0 ? $Player['Image'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 
+	$hasBanner       = !empty($Player['HasBanner']);
+	$bannerShowLogo  = !isset($Player['BannerShowLogo']) || (int)$Player['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($Player['BannerVignette']) || (int)$Player['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($Player['BannerOffsetX']) ? max(0, min(100, (int)$Player['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($Player['BannerOffsetY']) ? max(0, min(100, (int)$Player['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PLAYER_BANNER, sprintf('%06d', (int)$Player['MundaneId']));
+		$bannerFs   = DIR_PLAYER_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PLAYER_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+
+
 	$knightAwardIds = array(17, 18, 19, 20, 245);
 	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
 	$beltImageMap = array(
@@ -67,6 +82,19 @@
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
 	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
+	// Banner edit scope: self OR park officer OR kingdom officer OR admin.
+	$pnCanManageBanner =
+		   $isOwnProfile
+		|| $canEditAdmin
+		|| (
+			   !empty($Player['KingdomId'])
+			&& isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, (int)$Player['KingdomId'], AUTH_EDIT)
+		   )
+		|| (
+			   isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, null, null)
+		   );
 	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
@@ -235,6 +263,7 @@
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
 	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
 	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
+	$_pnShowLogo = !$bannerUrl || $bannerShowLogo;
 
 ?>
 <style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; } html[data-theme="dark"] .pn-hero { background: <?= $_pnHeroBgValueDark ?>; }</style>
@@ -265,16 +294,16 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-layout{display:flex;gap:16px;align-items:flex-start}
 .pna-sidebar{flex:0 0 260px;display:flex;flex-direction:column;gap:12px}
 .pna-feed{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
-.pna-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
-.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pna-card{background:#fff;border:1px solid var(--ork-border);border-radius:8px;padding:14px 16px}
+.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .pna-card-title a.pna-card-more{margin-left:auto;font-weight:600;font-size:11px;color:#4299e1;text-decoration:none;text-transform:none;letter-spacing:0}
 .pna-card-title a.pna-card-more:hover{text-decoration:underline}
 .pna-tenure{text-align:center;padding:6px 0 2px}
-.pna-tenure-years{font-size:44px;font-weight:800;color:#2c5282;line-height:1}
-.pna-tenure-label{font-size:13px;color:#718096;margin-top:2px}
-.pna-tenure-since{font-size:11px;color:#a0aec0;margin-top:6px}
+.pna-tenure-years{font-size:44px;font-weight:800;color:var(--ork-blue-primary);line-height:1}
+.pna-tenure-label{font-size:13px;color:var(--ork-text-muted);margin-top:2px}
+.pna-tenure-since{font-size:11px;color:var(--ork-text-hint);margin-top:6px}
 .pna-tenure-info-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#ebf4ff;color:#2b6cb0;font-size:10px;cursor:help;border:1px solid #bee3f8;position:relative;z-index:10;flex-shrink:0;margin-top:8px;vertical-align:middle}
-.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:var(--ork-bg-dark);color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
@@ -283,25 +312,25 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-class-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .pna-class-name{font-size:12px;font-weight:600;color:#2d3748}
 .pna-class-level{font-size:11px;font-weight:700;color:#276749}
-.pna-bar-wrap{height:6px;background:#edf2f7;border-radius:4px;overflow:hidden}
+.pna-bar-wrap{height:6px;background:var(--ork-surface-hover);border-radius:4px;overflow:hidden}
 .pna-bar{height:100%;background:linear-gradient(90deg,#48bb78,#276749);border-radius:4px;transition:width .4s ease}
 .pna-bar-max{background:linear-gradient(90deg,#f6ad55,#dd6b20)}
-.pna-class-credits{font-size:10px;color:#a0aec0;margin-top:3px}
+.pna-class-credits{font-size:10px;color:var(--ork-text-hint);margin-top:3px}
 .pna-paragon-dot{color:#b7791f;font-size:10px;margin-left:3px}
-.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #f7fafc}
+.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--ork-surface-light)}
 .pna-officer-row:last-child{border-bottom:none}
 .pna-officer-title{font-size:12px;font-weight:600;color:#2d3748}
 .pna-officer-entity{font-size:11px;color:#4299e1;text-decoration:none}
 .pna-officer-entity:hover{text-decoration:underline}
-.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #edf2f7}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12.5px}
+.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-hint);padding:8px 0 3px;margin-top:4px;border-top:1px solid var(--ork-surface-hover)}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--ork-surface-light);font-size:12.5px}
 .pna-feed-row:last-child{border-bottom:none}
-.pna-feed-date{flex-shrink:0;color:#a0aec0;font-size:11px;min-width:46px}
+.pna-feed-date{flex-shrink:0;color:var(--ork-text-hint);font-size:11px;min-width:46px}
 .pna-feed-label{flex:1;color:#2d3748;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pna-feed-label a{color:#2d3748;text-decoration:none}
 .pna-feed-label a:hover{text-decoration:underline}
-.pna-feed-sub{flex-shrink:0;color:#718096;font-size:11px}
+.pna-feed-sub{flex-shrink:0;color:var(--ork-text-muted);font-size:11px}
 .pna-feed-rank{display:inline-block;background:#e9d8fd;color:#553c9a;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;vertical-align:middle}
-.pna-feed-more{font-size:11px;color:#718096;padding-top:6px;text-align:center}
+.pna-feed-more{font-size:11px;color:var(--ork-text-muted);padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
 .pna-welcome-banner-icon{font-size:32px;flex-shrink:0;line-height:1}
@@ -312,23 +341,23 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-welcome-tip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 10px;font-size:12px;display:flex;align-items:center;gap:5px}
 .pna-sparkline{display:flex;gap:3px;align-items:flex-end;height:34px;margin-bottom:2px}
 .pna-spark-week{flex:1;border-radius:2px;min-width:0}
-.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:#718096;flex-wrap:wrap}
+.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:var(--ork-text-muted);flex-wrap:wrap}
 .pna-spark-swatch{width:12px;height:12px;display:inline-block;border-radius:2px;vertical-align:middle}
 .pna-spark-on{background:#48bb78}
-.pna-spark-off{background:#edf2f7;border:1px solid #e2e8f0}
+.pna-spark-off{background:var(--ork-surface-hover);border:1px solid var(--ork-border)}
 .pna-spark-swatch-on{background:#48bb78}
-.pna-spark-swatch-off{background:#edf2f7;border:1px solid #cbd5e0}
+.pna-spark-swatch-off{background:var(--ork-surface-hover);border:1px solid #cbd5e0}
 .pna-ev-cols{display:flex;gap:10px}
 .pna-ev-col{flex:1;min-width:0}
-.pna-ev-col-hdr{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+.pna-ev-col-hdr{font-size:11px;font-weight:700;color:var(--ork-text-body);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--ork-border)}
 .pna-ev-park{color:#718096;font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
-.pna-spark-month-lbl{flex:1;font-size:9px;color:#a0aec0;text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
+.pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
 @media(max-width:700px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
-.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-border)}
 .pna-card{padding:12px 13px}
 .pna-tenure-years{font-size:36px}
 }
@@ -340,8 +369,8 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-congrats-banner{font-size:11.5px;padding:7px 10px}
 }
 .pn-givenby-warn{display:inline-flex;align-items:center;gap:4px;cursor:default;position:relative}
-.pn-givenby-warn .pn-tip-icon{color:#e53e3e;font-size:11px;font-weight:700;font-style:normal;border:1px solid #e53e3e;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
-.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#2d3748;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-givenby-warn .pn-tip-icon{color:var(--ork-red-danger);font-size:11px;font-weight:700;font-style:normal;border:1px solid var(--ork-red-danger);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:var(--ork-bg-dark);color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .pn-givenby-warn:hover .pn-tip-box{display:block}
 
 /* ===================================================================
@@ -350,7 +379,7 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
    =================================================================== */
 
 /* Required field indicator */
-.required-indicator { color: #e53e3e; }
+.required-indicator { color: var(--ork-red-danger); }
 
 /* Inline danger buttons — light default, dark override below */
 .btn-danger-confirm { background: #c53030; color: #fff; border: none; cursor: pointer; }
@@ -379,7 +408,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: #a0aec0; }
+html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
@@ -900,14 +929,40 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero">
-<?php if ($_pnOverlayIsVignette): ?>
+<?php
+	$_heroBgUrl   = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses = 'pn-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' pn-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pn-hero-vignette';
+	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pn-hero">
+<?php if ($bannerUrl): ?>
+	<div class="pn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+<?php elseif ($_pnOverlayIsVignette): ?>
 	<div class="pn-hero-bg pn-hero-bg-vignette-base" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-bg-vignette-sharp" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 <?php else: ?>
 	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 <?php endif; ?>
+	<?php if ($pnCanManageBanner): ?>
+	<button type="button" class="pn-banner-edit-btn"
+			onclick="pnOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="pn-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt pn-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="pn-hero-content">
+		<?php if ($_pnShowLogo): ?>
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
@@ -917,6 +972,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 		<div class="pn-avatar">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 		</div>
+		<?php endif; ?>
 		<?php endif; ?>
 		<div class="pn-hero-info">
 			<?php
@@ -3592,9 +3648,189 @@ var PnConfig = {
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
+<script>
+var PnBannerConfig = {
+	uir:            '<?= UIR ?>',
+	canManage:      <?= $pnCanManageBanner ? 'true' : 'false' ?>,
+	entityId:       <?= (int)$Player['MundaneId'] ?>,
+	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+	bannerUrl:      <?= json_encode($bannerUrl) ?>,
+};
+</script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<!-- pn-banner-modal (ported from event) -->
+<?php if ($pnCanManageBanner): ?>
+<!-- Event Banner Upload Modal -->
+<div class="pn-img-overlay pn-banner-modal" id="pn-banner-overlay">
+	<div class="pn-img-modal" style="width:min(680px, 96vw)">
+		<div class="pn-img-modal-header">
+			<span class="pn-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<button class="pn-img-close-btn" id="pn-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
+				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+
+			<div class="pn-banner-wireframes">
+				<figure class="pn-banner-wireframe pn-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="pn-banner-wireframe pn-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="pn-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="pn-banner-config">
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-show-logo" checked>
+					<span>Show Persona Avatar on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="pn-upload-area" for="pn-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="pn-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="pn-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div class="pn-img-form-error" id="pn-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="pn-btn pn-btn-outline" id="pn-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="pn-btn pn-btn-outline" id="pn-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="pn-btn pn-btn-outline" id="pn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="pn-banner-position-wrap">
+				<canvas id="pn-banner-position-canvas" class="pn-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="pn-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .pn-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="pn-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="pn-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="pn-img-form-error" id="pn-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="pn-btn pn-btn-outline" id="pn-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="pn-btn pn-btn-white" id="pn-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+		</div>
+		<div class="pn-img-modal-body" id="pn-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 // ---- Markdown rendering for About tab ----
@@ -4728,12 +4964,12 @@ pnRenderSparkline();
 <!-- Move Player Modal -->
 <?php if ($canEditAdmin): ?>
 <style>
-.pn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
-.pn-mp-toggle-btn { flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; background:transparent; color:#718096; white-space:nowrap; }
+.pn-mp-toggle { display:flex; background:var(--ork-surface-hover); border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.pn-mp-toggle-btn { flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; background:transparent; color:var(--ork-text-muted); white-space:nowrap; }
 .pn-mp-toggle-btn.pn-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
 #pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
 #pn-moveplayer-overlay .pn-acct-field { position:relative; }
-.pn-mp-player-locked { background:#f7fafc; border:1px solid #e2e8f0; border-radius:4px; padding:8px 12px; color:#4a5568; font-size:0.95rem; }
+.pn-mp-player-locked { background:var(--ork-surface-light); border:1px solid var(--ork-border); border-radius:4px; padding:8px 12px; color:var(--ork-text-body); font-size:0.95rem; }
 </style>
 <div class="pn-overlay" id="pn-moveplayer-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
@@ -5396,3 +5632,6 @@ $(function() {
 });
 initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
 </script>
+
+<?php endif; ?>
+

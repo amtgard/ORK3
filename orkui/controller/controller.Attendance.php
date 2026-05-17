@@ -91,6 +91,8 @@ class Controller_Attendance extends Controller {
 			$this->data['AttendanceDate'] = isset($this->request->AttendanceDate)?$this->request->AttendanceDate:date('Y-m-d');
 		}
 		$this->data['AttendanceReport'] = $this->Attendance->get_kingdom_attendance_for_date($id, $this->data['AttendanceDate']);
+		$_aeKingdom = Ork3::$Lib->event->GetActiveEventsAtScope(['Scope'=>'kingdom','ScopeId'=>$id,'Date'=>$this->data['AttendanceDate']]);
+		$this->data['ActiveEvent'] = !empty($_aeKingdom['Events']) ? $_aeKingdom['Events'][0] : null;
 		if ($this->request->exists('Attendance_kingdom')) {
 			$this->data['Attendance_kingdom'] = $this->request->Attendance_kingdom->Request;
 		}
@@ -224,6 +226,8 @@ class Controller_Attendance extends Controller {
 			$this->data['AttendanceDate'] = isset($this->request->AttendanceDate)?$this->request->AttendanceDate:date('Y-m-d');
 		}
 		$this->data['AttendanceReport']  = $this->Attendance->get_attendance_for_date($id, $this->data['AttendanceDate']);
+		$_aePark = Ork3::$Lib->event->GetActiveEventsAtScope(['Scope'=>'park','ScopeId'=>$id,'Date'=>$this->data['AttendanceDate']]);
+		$this->data['ActiveEvent'] = !empty($_aePark['Events']) ? $_aePark['Events'][0] : null;
 		$this->data['RecentAttendees']   = $this->Attendance->get_recent_attendees($id);
 		$this->data['AdjacentDates']     = $this->Attendance->get_adjacent_park_dates($id, $this->data['AttendanceDate']);
 		if ($this->request->exists('Attendance_park')) {

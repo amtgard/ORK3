@@ -3,6 +3,20 @@
 	$parkInfo    = $park_info['ParkInfo']     ?? [];
 	$heraldryUrl = $park_info['Heraldry']['Url'] ?? '';
 	$hasHeraldry = !empty($parkInfo['HasHeraldry']);
+	$hasBanner       = !empty($parkInfo['HasBanner']);
+	$bannerShowLogo  = !isset($parkInfo['BannerShowLogo']) || (int)$parkInfo['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($parkInfo['BannerVignette']) || (int)$parkInfo['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($parkInfo['BannerOffsetX']) ? max(0, min(100, (int)$parkInfo['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($parkInfo['BannerOffsetY']) ? max(0, min(100, (int)$parkInfo['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PARK_BANNER, sprintf('%05d', (int)($parkInfo['ParkId'] ?? 0)));
+		$bannerFs   = DIR_PARK_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PARK_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+	$pkCanManageBanner = !empty($CanManagePark);
 	$parkTitle   = trim($parkInfo['ParkTitle']   ?? '');
 	$description = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Description'] ?? ''));
 	$directions  = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Directions']  ?? ''));
@@ -83,7 +97,31 @@
 	$pkCalEvents = [];
 	foreach ($eventList as $ev) {
 		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
-		if (!empty($ev['is_park_day'])) {
+		if (!empty($ev['_IsCalendarItem'])) {
+			$allDay = !empty($ev['AllDay']);
+			$calEv = [
+				'title'         => $ev['Name'],
+				'start'         => $allDay ? substr($ev['NextDate'], 0, 10) : $ev['NextDate'],
+				'color'         => '#64748b',
+				'type'          => 'calendar-item',
+				'allDay'        => $allDay,
+				'extendedProps' => [
+					'calendarItemId' => $ev['CalendarItemId'],
+					'description'    => $ev['Description'] ?? '',
+					'rawStart'       => $ev['NextDate'],
+					'rawEnd'         => $ev['NextEndDate'] ?? $ev['NextDate'],
+				],
+			];
+			$startDate = substr($ev['NextDate'], 0, 10);
+			$endDate   = substr($ev['NextEndDate'] ?? $ev['NextDate'], 0, 10);
+			if ($endDate > $startDate) {
+				$endDt = new DateTime($endDate);
+				if ($allDay) $endDt->modify('+1 day');
+				$calEv['end'] = $allDay ? $endDt->format('Y-m-d') : ($ev['NextEndDate'] ?? '');
+			} elseif (!$allDay) {
+				$calEv['end'] = $ev['NextEndDate'] ?? '';
+			}
+		} elseif (!empty($ev['is_park_day'])) {
 			$calEv = [
 				'title' => $ev['Name'],
 				'start' => $ev['NextDate'] . 'T' . $ev['park_day_time'],
@@ -96,6 +134,11 @@
 				'start' => $ev['NextDate'],
 				'url'   => $ev['NextDetailId'] ? UIR . 'Event/detail/' . $ev['EventId'] . '/' . $ev['NextDetailId'] : '',
 				'color' => '#2b6cb0', // Blue for regular events
+				'extendedProps' => [
+					'eventId'  => (int)$ev['EventId'],
+					'detailId' => (int)$ev['NextDetailId'],
+					'isDraft'  => (($ev['Status'] ?? 'published') === 'draft'),
+				],
 			];
 			$endRaw = $ev['NextEndDate'] ?? '';
 			if ($endRaw && substr($endRaw, 0, 10) > substr($ev['NextDate'], 0, 10)) {
@@ -112,8 +155,8 @@
 	$_pd_today      = new DateTime(); $_pd_today->setTime(0, 0, 0);
 	$_pd_end        = (clone $_pd_today)->modify('+90 days');
 	$_pd_dayNames   = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-	$_pd_colors     = ['fighter-practice'=>'#e53e3e','arts-day'=>'#805ad5','other'=>'#ed8936'];
-	$_pd_labels     = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
+	$_pd_colors     = ['park-day'=>'#38a169','fighter-practice'=>'#e53e3e','arts-day'=>'#805ad5','other'=>'#ed8936'];
+	$_pd_labels     = ['park-day'=>'Park Day','fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
 	foreach ($parkDayList as $_pd) {
 		$_pdColor   = $_pd_colors[$_pd['Purpose']] ?? '#38a169';
 		$_pdLabel   = $_pd_labels[$_pd['Purpose']] ?? 'Park Day';
@@ -179,11 +222,37 @@
 <!-- =============================================
      ZONE 1: Hero Header
      ============================================= -->
-<div class="pk-hero<?= $parkIsInactive ? ' pk-hero--inactive' : '' ?>">
-	<div class="pk-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php
+	$_heroBgUrl    = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses  = 'pk-hero';
+	if ($parkIsInactive)              $_heroClasses .= ' pk-hero--inactive';
+	if ($bannerUrl)                    $_heroClasses .= ' pk-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pk-hero-vignette';
+	if ($pkCanManageBanner)            $_heroClasses .= ' pk-hero-editable';
+	$_pkShowLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pk-hero">
+	<div class="pk-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+	<?php if ($pkCanManageBanner): ?>
+	<button type="button" class="pk-banner-edit-btn"
+			onclick="pkOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="pk-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt pk-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="pk-hero-content">
 
 		<!-- Heraldry -->
+		<?php if ($_pkShowLogo): ?>
 		<div class="pk-hero-left">
 			<?php $displayHeraldryUrl = $hasHeraldry ? $heraldryUrl : HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 			<div class="pk-heraldry-frame<?= !empty($CanAdminPark) ? ' pk-heraldry-editable' : '' ?>">
@@ -199,6 +268,7 @@
 				<?php endif; ?>
 			</div>
 		</div>
+		<?php endif; ?>
 
 		<!-- Name / title / officers -->
 		<div class="pk-hero-center">
@@ -510,10 +580,11 @@
 								default:              $recText = $day['Recurrence'];
 							}
 							switch ($day['Purpose']) {
-								case 'fighter-practice': $purposeLabel = 'Fighter Practice'; $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
-								case 'arts-day':         $purposeLabel = 'A&S Day';       $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
+								case 'park-day':         $purposeLabel = 'Park Day';          $purposeCls = 'purpose-parkday'; $iconCls = 'icon-parkday'; $iconFa = 'fa-shield-alt'; break;
+								case 'fighter-practice': $purposeLabel = 'Fighter Practice';  $purposeCls = 'purpose-fighter'; $iconCls = 'icon-fighter'; $iconFa = 'fa-user-shield'; break;
+								case 'arts-day':         $purposeLabel = 'A&S Day';           $purposeCls = 'purpose-arts';    $iconCls = 'icon-arts';    $iconFa = 'fa-palette';    break;
 								case 'other':            $purposeLabel = 'Other';             $purposeCls = 'purpose-other';   $iconCls = 'icon-other';   $iconFa = 'fa-star';       break;
-								default:                 $purposeLabel = 'Park Day';          $purposeCls = '';                $iconCls = '';             $iconFa = 'fa-shield-alt';
+								default:                 $purposeLabel = 'Park Day';          $purposeCls = 'purpose-parkday'; $iconCls = 'icon-parkday'; $iconFa = 'fa-shield-alt';
 							}
 							// Day-specific map URL
 							$dayMapUrl = null;
@@ -596,13 +667,15 @@
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
-						<?php if (count($parkDayList) > 0): ?>
+						<button class="pk-view-btn" id="pk-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
 						<div id="pk-ev-filter-bar" style="display:flex;align-items:center;gap:5px;">
 							<span style="font-size:11px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Show:</span>
 							<button class="pk-filter-toggle pk-filter-on" data-filter="event">Events</button>
+							<button class="pk-filter-toggle pk-filter-on" data-filter="calendar-item">Calendar Items</button>
+							<?php if (count($parkDayList) > 0): ?>
 							<button class="pk-filter-toggle" data-filter="park-day">Park Days</button>
+							<?php endif; ?>
 						</div>
-						<?php endif; ?>
 						<?php if ($CanAdminPark): ?>
 						<button onclick="pkOpenEventModal()"style="display:inline-flex;align-items:center;gap:5px;background:#276749;color:#fff;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;border:none;cursor:pointer;">
 							<i class="fas fa-plus"></i> Add Event
@@ -614,6 +687,12 @@
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="pk-events-cal" style="display:none"></div>
 
+				<!-- Map view (lazy-loaded Google Maps) -->
+				<div id="pk-events-map-wrap" style="position:relative;display:none">
+					<div id="pk-events-map" style="width:100%;height:480px;border-radius:8px;border:1px solid #e2e8f0;"></div>
+					<div id="pk-events-map-footer" style="margin-top:8px;font-size:12px;color:#718096;display:none"></div>
+				</div>
+
 				<!-- List view -->
 				<div id="pk-events-list-view">
 				<?php if (count($eventList) > 0 || count($parkDayList) > 0): ?>
@@ -622,34 +701,61 @@
 							<tr>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="date">Next Date</th>
-								<th data-sorttype="numeric">Going</th>
-							<th data-sorttype="numeric">Interested</th>
+								<th colspan="2" style="text-align:center;">RSVP</th>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($eventList as $event): ?>
-							<tr<?= $event['NextDetailId'] ? ' onclick="window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
-								<td>
-									<div class="pk-tiny-heraldry">
-										<?php if ($event['HasHeraldry'] == 1): ?>
-											<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
-											     loading="lazy"
-											     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
-										<?php else: ?>
-											<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
-										<?php endif; ?>
+								<?php if (!empty($event['_IsCalendarItem'])): ?>
+								<?php $ciOff = !empty($event['IsOfficerOnly']); $ciLoc = !empty($event['IsLocalsOnly']); ?>
+								<tr class="<?= $ciOff ? 'pk-officer-only' : '' ?> <?= $ciLoc ? 'pk-locals-only' : '' ?>" data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
+									<td>
+										<span class="pk-ci-pill"><i class="fas fa-calendar-day"></i> Calendar Item</span>
+										<?php if ($ciOff): ?><span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="pk-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
-									</div>
-								</td>
-								<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
-									<?php if (0 != $event['NextDate']): ?>
-										<?= date('M. j, Y', strtotime($event['NextDate'])) ?>
-										<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
-									<?php endif; ?>
-								</td>
-								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
-							<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpInterested'] ?? 0) ?: '—' ?></td>
-							</tr>
+										<?php if ($event['NextDetailId']): ?>
+											<span class="pk-copy-link" data-url="<?= HTTP_UI ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>" onclick="event.stopPropagation(); pkCopyEventLink(this)" data-tip="Copy the event link and share to boost RSVPs!"><i class="fas fa-link"></i></span>
+										<?php endif; ?>
+									</td>
+									<td class="pk-date-col" data-sortval="<?= htmlspecialchars($event['NextDate']) ?>">
+										<?= $event['NextDate'] ? date('M. j, Y', strtotime($event['NextDate'])) : '' ?>
+									</td>
+									<td class="pk-date-col" style="text-align:center;color:#a0aec0">—</td>
+									<td class="pk-date-col" style="text-align:center;color:#a0aec0">—</td>
+								</tr>
+								<?php else: ?>
+								<?php $isDraft = (($event['Status'] ?? 'published') === 'draft'); ?>
+								<tr class="<?= $isDraft ? 'pk-row-draft' : '' ?>" data-type="event"<?= $event['NextDetailId'] ? ' onclick="if(event.target.closest(\'.pk-rsvp-wrap\'))return; window.location.href=\''.UIR.'Event/detail/' . $event['EventId'] . '/' . $event['NextDetailId'] . '\'"' : '' ?>>
+									<td>
+										<div class="pk-tiny-heraldry">
+											<?php if ($event['HasHeraldry'] == 1): ?>
+												<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
+												     loading="lazy"
+												     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
+											<?php else: ?>
+												<img loading="lazy" src="<?= HTTP_EVENT_HERALDRY ?>00000.jpg">
+											<?php endif; ?>
+											<?php if ($isDraft): ?><span class="pk-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?><?= htmlspecialchars($event['Name']) ?>
+											<?php if ($event['NextDetailId']): ?>
+												<span class="pk-copy-link" data-url="<?= HTTP_UI ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>" onclick="event.stopPropagation(); pkCopyEventLink(this)" data-tip="Copy the event link and share to boost RSVPs!"><i class="fas fa-link"></i></span>
+											<?php endif; ?>
+										</div>
+									</td>
+									<td class="pk-date-col" data-sortval="<?= $event['NextDate'] ?>">
+										<?php if (0 != $event['NextDate']): ?>
+											<?= date('M. j, Y', strtotime($event['NextDate'])) ?>
+											<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+										<?php endif; ?>
+									</td>
+									<td class="pk-date-col" colspan="2" style="text-align:center;padding:6px 8px;">
+										<?php if ((int)$event['NextDetailId'] > 0): ?>
+											<span class="pk-rsvp-wrap" data-detail="<?= (int)$event['NextDetailId'] ?>" data-going="<?= (int)($event['RsvpGoing'] ?? 0) ?>" data-interested="<?= (int)($event['RsvpInterested'] ?? 0) ?>" data-mine="<?= htmlspecialchars($event['MyRsvp'] ?? '') ?>"></span>
+										<?php else: ?>
+											<span style="color:#a0aec0">—</span>
+										<?php endif; ?>
+									</td>
+								</tr>
+								<?php endif; ?>
 							<?php endforeach; ?>
 							<?php foreach ($parkDayList as $pkDay): ?>
 							<?php
@@ -659,7 +765,7 @@
 									case 'monthly':       $pkDayRec = 'Monthly on the ' . pk_ordinal($pkDay['MonthDay']); break;
 									default:              $pkDayRec = $pkDay['Recurrence'];
 								}
-								$pkPurposeLabels = ['fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
+								$pkPurposeLabels = ['park-day'=>'Park Day','fighter-practice'=>'Fighter Practice','arts-day'=>'A&S Day','other'=>'Other'];
 								$pkDayLabel = $pkPurposeLabels[$pkDay['Purpose']] ?? 'Park Day';
 							?>
 							<tr data-type="park-day" style="display:none">
@@ -1195,6 +1301,21 @@ var PkConfig = {
 		directions:  <?= json_encode($directions) ?>,
 	},
 };
+window.pkEventMapLocations  = <?= json_encode(array_values($pkEventMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
+</script>
+<script>
+var PkBannerConfig = {
+	uir:            '<?= UIR ?>',
+	canManage:      <?= $pkCanManageBanner ? 'true' : 'false' ?>,
+	entityId:       <?= (int)($parkInfo['ParkId'] ?? 0) ?>,
+	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+	bannerUrl:      <?= json_encode($bannerUrl) ?>,
+};
 </script>
 <?php if (!empty($CanAdminPark)): ?>
 <div id="pk-award-overlay">
@@ -1353,6 +1474,14 @@ var PkConfig = {
 				</div>
 			</div>
 
+			<div id="pk-att-event-nudge" class="pk-att-event-nudge" style="display:none">
+				<div class="pk-att-event-nudge-icon"><i class="fas fa-info-circle"></i></div>
+				<div class="pk-att-event-nudge-body">
+					<p class="pk-att-event-nudge-text">It looks like <strong id="pk-att-event-nudge-name"></strong> is currently happening. Would you like to capture attendance on that event instead? Using event attendance makes for better and more accurate reporting.</p>
+					<a class="pk-att-event-nudge-btn" id="pk-att-event-nudge-link" href="#">Go To Event <i class="fas fa-arrow-right"></i></a>
+				</div>
+			</div>
+
 			<div class="pk-att-feedback" id="pk-att-feedback" style="display:none"></div>
 
 			<!-- Tab bar -->
@@ -1363,6 +1492,11 @@ var PkConfig = {
 				<button class="pk-att-tab" id="pk-att-tab-recent" data-panel="pk-att-panel-recent">
 					<i class="fas fa-users"></i> Recent Park Attendees
 				</button>
+			<?php if (!empty($CanManagePark)): ?>
+				<button class="pk-att-tab" id="pk-att-tab-link" data-panel="pk-att-panel-link">
+					<i class="fas fa-link"></i> Sign-in Link
+				</button>
+			<?php endif; ?>
 			</div>
 
 			<!-- Search panel -->
@@ -1410,6 +1544,65 @@ var PkConfig = {
 				</div>
 			</div>
 
+			<?php if (!empty($CanManagePark)): ?>
+			<!-- Sign-in Link panel -->
+			<div class="pk-att-tab-panel" id="pk-att-panel-link" style="display:none">
+				<div class="pk-att-search-section-inner">
+					<div class="pk-att-search-row">
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Duration (hrs)</label>
+							<input type="number" id="pk-att-link-hours" min="1" max="96" step="1" value="3">
+						</div>
+						<div class="pk-att-field pk-att-field-sm">
+							<label>Credits</label>
+							<input type="number" id="pk-att-link-credits" min="0.5" max="10" step="0.5" value="1">
+						</div>
+						<div class="pk-att-field pk-att-field-btn">
+							<label>&nbsp;</label>
+							<button class="pk-btn pk-btn-primary" id="pk-att-link-gen-btn">
+								<i class="fas fa-link"></i> Generate
+							</button>
+						</div>
+					</div>
+					<div id="pk-att-link-result" style="display:none;margin-top:12px">
+						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
+							<input type="text" id="pk-att-link-url" readonly
+								style="flex:1;min-width:0;font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#f7fafc">
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-copy-btn" style="white-space:nowrap">
+								<i class="fas fa-copy"></i> Copy
+							</button>
+							<button class="pk-btn pk-btn-secondary" id="pk-att-link-qr-btn" style="white-space:nowrap">
+								<i class="fas fa-qrcode"></i> QR
+							</button>
+						</div>
+						<div id="pk-att-link-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
+					</div>
+					<div style="margin-top:10px;font-size:11px;color:#718096">
+						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
+					</div>
+					<!-- Active links collapsible -->
+					<div id="pk-att-links-wrap" style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px">
+						<button type="button" id="pk-att-links-toggle" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px">
+							<i class="fas fa-chevron-right" id="pk-att-links-chevron" style="font-size:10px;transition:transform 0.15s"></i>
+							<span>Active Links</span> <span id="pk-att-links-count" style="color:#a0aec0"></span>
+						</button>
+						<div id="pk-att-links-body" style="display:none;margin-top:8px">
+							<div id="pk-att-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
+							<div id="pk-att-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
+							<table id="pk-att-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+								<thead><tr style="color:#718096;text-align:left">
+									<th style="padding:4px 6px;font-weight:600">Expires</th>
+									<th style="padding:4px 6px;font-weight:600">Cr.</th>
+									<th style="padding:4px 6px"></th>
+								</tr></thead>
+								<tbody id="pk-att-links-tbody"></tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 			<!-- Entered today (always visible, shared by both tabs) -->
 			<div class="pk-att-entered-section">
 				<div class="pk-att-section-label">
@@ -1431,6 +1624,21 @@ var PkConfig = {
 			<button class="pk-btn pk-btn-ghost" id="pk-att-done-btn">Done</button>
 		</div>
 
+	</div>
+</div>
+
+<!-- QR Code Modal -->
+<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100;align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
+	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
+			<button onclick="pkCloseQrModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#a0aec0;line-height:1">&times;</button>
+		</div>
+		<img id="pk-qr-img" src="" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:6px;display:block;margin:0 auto 14px">
+		<div id="pk-qr-expires" style="font-size:11px;color:#718096;margin-bottom:14px"></div>
+		<a id="pk-qr-download" href="" download="signin-qr.png" class="pk-btn pk-btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px">
+			<i class="fas fa-download"></i> Download PNG
+		</a>
 	</div>
 </div>
 
@@ -1483,34 +1691,153 @@ var PkConfig = {
 </div>
 
 <?php if ($CanAdminPark ?? false): ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <div class="pk-emod-overlay" id="pk-event-modal">
 	<div class="pk-emod-box">
 		<div class="pk-emod-header">
-			<h3 class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
+			<h3 id="pk-emod-title" class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
 			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
 		</div>
 		<div class="pk-emod-body">
+
+			<div class="pk-emod-typesel">
+				<label class="pk-emod-typeopt">
+					<input type="radio" name="pk-emod-type" value="event" checked>
+					<span><i class="fas fa-flag"></i> Amtgard Event</span>
+				</label>
+				<label class="pk-emod-typeopt">
+					<input type="radio" name="pk-emod-type" value="calendar-item">
+					<span><i class="fas fa-calendar-day"></i> Calendar Item</span>
+				</label>
+			</div>
+
 			<div class="pk-emod-field">
-				<label class="pk-emod-label">Event Name <span style="color:#e53e3e">*</span></label>
+				<label class="pk-emod-label">Name <span style="color:#e53e3e">*</span></label>
 				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
 			</div>
 			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
 			</div>
-			<p class="pk-emod-hint" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+			<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+
+			<!-- Calendar-item-only fields -->
+			<div class="pk-emod-ci-only" style="display:none">
+				<div class="pk-emod-field" style="margin-top:12px">
+					<label class="pk-emod-check-label">
+						<input type="checkbox" id="pk-ci-allday"> All day
+					</label>
+				</div>
+				<div class="pk-emod-field" style="margin-top:6px">
+					<label class="pk-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
+						<input type="checkbox" id="pk-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Only Display to Officers
+					</label>
+				</div>
+				<div class="pk-emod-field" style="margin-top:6px">
+					<label class="pk-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
+						<input type="checkbox" id="pk-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Only Display to Local Park/Kingdom Players
+					</label>
+				</div>
+				<div style="display:flex;gap:10px;margin-top:8px">
+					<div class="pk-emod-field" style="flex:1">
+						<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="pk-emod-input" id="pk-ci-start" autocomplete="off" placeholder="Select start…">
+					</div>
+					<div class="pk-emod-field" style="flex:1">
+						<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
+						<input type="text" class="pk-emod-input" id="pk-ci-end" autocomplete="off" placeholder="Select end…">
+					</div>
+				</div>
+				<div class="pk-emod-field" style="margin-top:10px">
+					<label class="pk-emod-label">Description</label>
+					<textarea class="pk-emod-input" id="pk-ci-description" rows="3" placeholder="Optional details…"></textarea>
+				</div>
+				<div class="pk-emod-ci-note">
+					<i class="fas fa-info-circle" style="margin-right:6px"></i>
+					Calendar Items are lightweight. They do <strong>not</strong> support RSVPs, sign-ins, schedules, attendance, heraldry, pricing, or event authorization lists. Use an Amtgard Event for those.
+				</div>
+			</div>
+
 			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
 		</div>
 		<div class="pk-emod-footer">
 			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
+			<button class="pk-emod-btn-cancel pk-emod-draft-btn" id="pk-emod-draft-btn" onclick="pkCreateEvent('draft')" disabled style="display:none;font-size:12px;">
+				<i class="fas fa-eye-slash"></i> Save as Draft
+			</button>
 			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
-				Create Event <i class="fas fa-arrow-right"></i>
+				<span id="pk-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
 			</button>
 		</div>
 	</div>
 </div>
 
 <?php endif; ?>
+
+<!-- Event Preview Overlay (calendar quick-look) -->
+<div class="evpv-overlay" id="evpv-overlay">
+	<div class="evpv-box">
+		<div class="evpv-header">
+			<div class="evpv-header-meta">
+				<span class="evpv-kind-pill" id="evpv-kind-pill"><i class="fas fa-flag"></i> <span id="evpv-kind-label">Amtgard Event</span></span>
+				<span class="kn-draft-pill" id="evpv-draft-pill" style="display:none">DRAFT</span>
+			</div>
+			<button class="evpv-close" onclick="evpvClose()" aria-label="Close">&times;</button>
+		</div>
+		<div class="evpv-body">
+			<div class="evpv-hero">
+				<img class="evpv-heraldry" id="evpv-heraldry" alt="" loading="lazy">
+				<div class="evpv-hero-text">
+					<a class="evpv-name" id="evpv-name" href="#"></a>
+					<div class="evpv-meta-row">
+						<span class="evpv-meta-date"><i class="far fa-calendar-alt"></i> <span id="evpv-date"></span></span>
+					</div>
+					<div class="evpv-meta-row">
+						<span class="evpv-meta-time" id="evpv-time-row"><i class="far fa-clock"></i> <span id="evpv-time"></span></span>
+						<span class="evpv-meta-park" id="evpv-park-row" style="display:none"><i class="fas fa-tree"></i> <span id="evpv-park"></span></span>
+					</div>
+				</div>
+			</div>
+			<div class="evpv-description" id="evpv-description" style="display:none"></div>
+			<div class="evpv-rsvp-row">
+				<span class="kn-rsvp-wrap" id="evpv-rsvp"></span>
+			</div>
+		</div>
+		<div class="evpv-footer">
+			<button class="kn-emod-btn-cancel" onclick="evpvClose()">Close</button>
+			<a class="evpv-cta" id="evpv-cta" href="#"><i class="fas fa-arrow-right"></i> See Full Details</a>
+		</div>
+	</div>
+</div>
+
+<!-- Calendar Item Detail Overlay (read/edit/delete) — available to all viewers -->
+<div class="pk-ci-overlay" id="pk-ci-overlay">
+	<div class="pk-ci-box">
+		<div class="pk-ci-header">
+			<h3><i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>Calendar Item</h3>
+			<button class="pk-emod-close" onclick="pkCloseCalendarItemOverlay()">&times;</button>
+		</div>
+		<div class="pk-ci-body">
+			<div class="pk-ci-name" id="pk-ci-view-name"></div>
+			<div class="pk-ci-meta">
+				<i class="fas fa-clock" style="margin-right:6px;color:#a0aec0"></i>
+				<span id="pk-ci-view-when"></span>
+			</div>
+			<div class="pk-ci-scope" id="pk-ci-view-scope"></div>
+			<div class="pk-ci-description" id="pk-ci-view-desc"></div>
+		</div>
+		<div class="pk-ci-footer">
+			<button class="pk-emod-btn-cancel" onclick="pkCloseCalendarItemOverlay()">Close</button>
+			<button class="pk-emod-btn-cancel" id="pk-ci-edit-btn" style="display:none" onclick="pkEditCalendarItem()">
+				<i class="fas fa-pencil-alt"></i> Edit
+			</button>
+			<button class="pk-emod-btn-cancel" id="pk-ci-delete-btn" style="display:none;color:#c53030;border-color:#fc8181" onclick="pkDeleteCalendarItem()">
+				<i class="fas fa-trash"></i> Delete
+			</button>
+		</div>
+	</div>
+</div>
 
 <?php if ($CanAdminPark ?? false): ?>
 <!-- Add Player Modal -->
@@ -1584,11 +1911,228 @@ var PkConfig = {
 				</div>
 			</div>
 		</div>
-		<div class="pk-modal-footer">
+		<div class="pk-modal-footer" style="justify-content:flex-end;gap:8px;">
+			<button class="pk-btn pk-btn-secondary pk-selfreg-trigger" id="pk-selfreg-btn" onclick="pkOpenSelfRegModal()" style="margin-right:auto;">
+				<i class="fas fa-qrcode"></i> Self Registration
+			</button>
 			<button class="pk-btn pk-btn-ghost" id="pk-addplayer-cancel">Cancel</button>
 			<button class="pk-btn pk-btn-primary" id="pk-addplayer-submit">
 				<i class="fas fa-user-plus"></i> Create Player
 			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<style>
+/* ---- Instant tooltip (data-tip) ---- */
+[data-tip] { position: relative; }
+[data-tip]::before, [data-tip]::after {
+	position: absolute; left: 50%; bottom: 100%; pointer-events: none;
+	opacity: 0; transition: opacity 0.08s;
+}
+[data-tip]::after {
+	content: attr(data-tip); transform: translateX(-50%) translateY(-4px);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 4px 9px; border-radius: 4px; white-space: nowrap; z-index: 900;
+}
+[data-tip]::before {
+	content: ''; transform: translateX(-50%); margin-bottom: -4px;
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+[data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
+
+/* ---- Copy-link icon ---- */
+.pk-copy-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	margin-left: 5px; font-size: 11px; color: #a0aec0;
+	cursor: pointer; opacity: 0; transition: opacity 0.15s;
+	position: relative;
+}
+tr:hover .pk-copy-link { opacity: 1; }
+.pk-copy-link:hover { color: #4299e1; }
+.pk-copy-link.pk-copied::after {
+	content: 'Copied!' !important; position: absolute; bottom: 100%; left: 50%;
+	transform: translateX(-50%); background: #2d3748; color: #fff;
+	font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; opacity: 1; animation: pkCopiedFade 1.4s forwards;
+}
+@keyframes pkCopiedFade {
+	0%,70% { opacity: 1; } 100% { opacity: 0; }
+}
+</style>
+
+<?php if ($CanAdminPark ?? false): ?>
+<!-- Self-Registration QR Modal -->
+<style>
+/* ---- Self-Registration QR Modal ---- */
+#pk-selfreg-overlay {
+	position: fixed; inset: 0;
+	background: rgba(0,0,0,0.5);
+	display: flex; align-items: center; justify-content: center;
+	z-index: var(--z-modal, 1100);
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+#pk-selfreg-overlay.pk-selfreg-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+#pk-selfreg-overlay .pk-modal-box {
+	background: #fff; border-radius: 12px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+	max-height: 90vh; display: flex; flex-direction: column;
+}
+#pk-selfreg-overlay .pk-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+}
+#pk-selfreg-overlay .pk-modal-title {
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+#pk-selfreg-overlay .pk-modal-close-btn {
+	background: none; border: none; font-size: 22px; color: #a0aec0;
+	cursor: pointer; line-height: 1; padding: 0 4px;
+}
+#pk-selfreg-overlay .pk-modal-close-btn:hover { color: #4a5568; }
+#pk-selfreg-overlay .pk-modal-body {
+	padding: 20px; overflow-y: auto; flex: 1;
+}
+#pk-selfreg-overlay .pk-modal-footer {
+	padding: 14px 20px; border-top: 1px solid #e2e8f0;
+	display: flex; align-items: center; flex-shrink: 0;
+}
+
+/* Warning banner */
+.pk-selfreg-warning {
+	background: #fffbeb;
+	border: 1px solid #f6e05e;
+	color: #744210;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-warning i {
+	color: #d69e2e;
+	margin-right: 6px;
+}
+.pk-selfreg-note {
+	background: #ebf8ff;
+	border: 1px solid #90cdf4;
+	color: #2a4365;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 20px;
+	text-align: left;
+	line-height: 1.5;
+}
+.pk-selfreg-note i {
+	color: #3182ce;
+	margin-right: 6px;
+}
+
+/* QR container + anti-copy shield */
+#pk-selfreg-qr-wrap {
+	position: relative;
+	display: inline-block;
+	margin: 0 auto 16px;
+	background: #fff;
+	padding: 10px;
+	border-radius: 6px;
+}
+.pk-selfreg-qr-container {
+	user-select: none;
+	pointer-events: none;
+	-webkit-user-select: none;
+}
+.pk-selfreg-qr-container canvas,
+.pk-selfreg-qr-container img {
+	display: block;
+	margin: 0 auto;
+}
+.pk-selfreg-qr-shield {
+	position: absolute; inset: 0;
+	z-index: 2;
+	background: transparent;
+	cursor: default;
+}
+
+/* A18: Expired badge overlay */
+.pk-selfreg-expired-badge {
+	position: absolute;
+	top: 50%; left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(255,255,255,0.85);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	color: #c53030;
+	font-size: 20px;
+	font-weight: 700;
+	padding: 12px 28px;
+	border-radius: 8px;
+	z-index: 3;
+	display: none;
+}
+
+/* Timer */
+.pk-selfreg-timer-row {
+	font-size: 18px;
+	font-weight: 600;
+	color: #2d3748;
+	margin: 12px 0 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+.pk-selfreg-timer-row i {
+	color: #a0aec0;
+	font-size: 14px;
+}
+.pk-selfreg-timer-expired {
+	color: #c53030;
+}
+
+/* Regenerate button */
+#pk-selfreg-regen-btn {
+	margin-top: 8px;
+}
+</style>
+<div id="pk-selfreg-overlay">
+	<div class="pk-modal-box" style="width:420px;max-width:calc(100vw - 40px);">
+		<div class="pk-modal-header">
+			<h3 class="pk-modal-title"><i class="fas fa-qrcode" style="margin-right:8px;color:#2c5282"></i>Self Registration</h3>
+			<button class="pk-modal-close-btn" id="pk-selfreg-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pk-modal-body" style="text-align:center;">
+			<div id="pk-selfreg-feedback" class="plr-feedback" style="display:none" aria-live="polite" role="status"></div>
+			<div class="pk-selfreg-warning">
+				<i class="fas fa-exclamation-triangle"></i>
+				Do not distribute this self-registration QR code. This is designed to be used for in-person registration only.
+			</div>
+			<div class="pk-selfreg-note">
+				<i class="fas fa-info-circle"></i>
+				The new player will be assigned a Color credit for today to ensure they show in Active Player lists, but you can change this to any other class at a later time.
+			</div>
+			<div id="pk-selfreg-qr-wrap">
+				<div id="pk-selfreg-qr" class="pk-selfreg-qr-container"></div>
+				<div class="pk-selfreg-qr-shield" id="pk-selfreg-shield"></div>
+				<div class="pk-selfreg-expired-badge" id="pk-selfreg-expired-badge">Expired</div>
+			</div>
+			<div class="pk-selfreg-timer-row" aria-live="polite">
+				<i class="fas fa-clock"></i>
+				<span id="pk-selfreg-timer">--:--</span>
+			</div>
+			<button class="pk-btn pk-btn-primary" id="pk-selfreg-regen-btn" style="display:none;">
+				<i class="fas fa-sync-alt"></i> Regenerate
+			</button>
+		</div>
+		<div class="pk-modal-footer" style="justify-content:center;">
+			<button class="pk-btn pk-btn-ghost" id="pk-selfreg-cancel">Close</button>
 		</div>
 	</div>
 </div>
@@ -1632,11 +2176,12 @@ var PkConfig = {
 			<div class="pk-addday-field">
 				<label>Purpose</label>
 				<div class="pk-seg-group">
-					<button type="button" class="pk-seg-btn pk-seg-active" data-group="purpose" data-val="fighter-practice">Fighter Practice</button>
+					<button type="button" class="pk-seg-btn pk-seg-active" data-group="purpose" data-val="park-day">Park Day</button>
+					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="fighter-practice">Fighter Practice</button>
 					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="arts-day">A&amp;S Day</button>
 					<button type="button" class="pk-seg-btn" data-group="purpose" data-val="other">Other</button>
 				</div>
-				<input type="hidden" id="pk-addday-purpose" value="fighter-practice" />
+				<input type="hidden" id="pk-addday-purpose" value="park-day" />
 			</div>
 
 			<div class="pk-addday-field">
@@ -1809,10 +2354,10 @@ var PkConfig = {
 
 <!-- Move Player Modal -->
 <style>
-.pk-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.pk-mp-toggle { display:flex; background:var(--ork-surface-hover); border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
 .pk-mp-toggle-btn {
 	flex:1; padding:6px 10px; border:none; border-radius:4px; font-size:12px; font-weight:600;
-	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s;
+	cursor:pointer; background:transparent; color:var(--ork-text-muted); transition:background 0.15s,color 0.15s;
 }
 .pk-mp-toggle-btn.pk-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
 
@@ -1873,8 +2418,60 @@ html[data-theme="dark"] .fc-button:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
 html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
 
+/* ---- Self-Registration QR modal — dark mode ---- */
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-box {
+	background: var(--ork-card-bg);
+	box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-header { border-bottom-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-footer { border-top-color: var(--ork-border); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] #pk-selfreg-overlay .pk-modal-close-btn:hover { color: var(--ork-text); }
+html[data-theme="dark"] .pk-selfreg-warning {
+	background: #744210;
+	border-color: #975a16;
+	color: #fbd38d;
+}
+html[data-theme="dark"] .pk-selfreg-warning i { color: #f6ad55; }
+html[data-theme="dark"] .pk-selfreg-note {
+	background: #1a365d;
+	border-color: #2c5282;
+	color: #90cdf4;
+}
+html[data-theme="dark"] .pk-selfreg-note i { color: #63b3ed; }
+html[data-theme="dark"] .pk-selfreg-timer-row { color: var(--ork-text); }
+html[data-theme="dark"] .pk-selfreg-timer-row i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-selfreg-timer-expired { color: #fc8181 !important; }
+html[data-theme="dark"] .pk-selfreg-expired-badge {
+	background: rgba(45,55,72,0.85);
+	color: #fc8181;
+}
+
+/* ---- Sign-in QR overlay (#pk-qr-overlay) — dark mode ---- */
+html[data-theme="dark"] #pk-qr-overlay > div { background: var(--ork-card-bg) !important; box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; color: var(--ork-text); }
+html[data-theme="dark"] #pk-qr-img { border-color: var(--ork-border) !important; background: #fff; }
+html[data-theme="dark"] #pk-qr-expires { color: var(--ork-text-muted) !important; }
+
+/* ---- Sign-in Link panel inputs/labels (within pk-att-* tabs) — dark mode ---- */
+html[data-theme="dark"] #pk-att-link-url { background: var(--ork-input-bg) !important; border-color: var(--ork-input-border) !important; color: var(--ork-text); }
+html[data-theme="dark"] #pk-att-link-expires { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-wrap { border-top-color: var(--ork-border) !important; }
+html[data-theme="dark"] #pk-att-links-toggle { color: var(--ork-text-secondary) !important; }
+html[data-theme="dark"] #pk-att-links-loading,
+html[data-theme="dark"] #pk-att-links-empty { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-table thead tr,
+html[data-theme="dark"] #pk-att-links-table th { color: var(--ork-text-muted) !important; }
+html[data-theme="dark"] #pk-att-links-count { color: var(--ork-text-muted) !important; }
+
+/* Copy-link / data-tip — dark mode */
+html[data-theme="dark"] [data-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
+html[data-theme="dark"] .pk-copy-link { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-copy-link:hover { color: #63b3ed; }
+html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+
 /* ============================================================
-   </style>
+</style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
@@ -2108,10 +2705,185 @@ html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { bac
 <?php endif; ?>
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<?php if ($CanAdminPark ?? false): ?>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<?php endif; ?>
+<!-- pk-banner-modal (ported from event) -->
+<div class="pk-img-overlay pk-banner-modal" id="pk-banner-overlay">
+	<div class="pk-img-modal" style="width:min(680px, 96vw)">
+		<div class="pk-img-modal-header">
+			<span class="pk-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<button class="pk-img-close-btn" id="pk-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pk-img-modal-body" id="pk-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
+				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+
+			<div class="pk-banner-wireframes">
+				<figure class="pk-banner-wireframe pk-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="pk-banner-wireframe pk-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="pk-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="pk-banner-config">
+				<label class="pk-banner-toggle">
+					<input type="checkbox" id="pk-banner-show-logo" checked>
+					<span>Show Park Heraldry on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="pk-banner-toggle">
+					<input type="checkbox" id="pk-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="pk-upload-area" for="pk-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt pk-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="pk-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="pk-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div class="pk-img-form-error" id="pk-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="pk-btn pk-btn-outline" id="pk-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="pk-btn pk-btn-outline" id="pk-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="pk-btn pk-btn-outline" id="pk-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="pk-img-modal-body" id="pk-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="pk-banner-position-wrap">
+				<canvas id="pk-banner-position-canvas" class="pk-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="pk-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .pk-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="pk-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="pk-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="pk-img-form-error" id="pk-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="pk-btn pk-btn-outline" id="pk-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="pk-btn pk-btn-white" id="pk-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="pk-img-modal-body" id="pk-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+		</div>
+		<div class="pk-img-modal-body" id="pk-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+function pkCopyEventLink(el) {
+	var url = el.getAttribute('data-url');
+	navigator.clipboard.writeText(url).then(function() {
+		el.classList.add('pk-copied');
+		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
+	});
+}
 window.pkRecActiveFilter = 'open';
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (settings.nTable.id !== 'pk-rec-table') return true;
@@ -2152,3 +2924,5 @@ window.OrkRsCfg = {
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
 <?php endif; ?>
+
+

@@ -115,6 +115,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 	padding:2px 7px; border-radius:4px; white-space:nowrap;
 }
 .se-rsvp-badge i { font-size:10px; }
+.se-rsvp-badge.se-rsvp-interested { background:#fffbeb; color:#92400e; }
 .se-rsvp-none { font-size:12px; color:#a0aec0; }
 
 /* ── Empty / loading ── */
@@ -124,11 +125,45 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 }
 .se-empty i { display:block; font-size:22px; margin-bottom:8px; color:#cbd5e0; }
 .se-hidden { display:none; }
+.se-type-badge {
+	display:inline-flex; align-items:center;
+	background:#e9d8fd; color:#553c9a;
+	font-size:10px; font-weight:700;
+	padding:1px 6px; border-radius:3px;
+	text-transform:uppercase; letter-spacing:.04em;
+	margin-left:4px; white-space:nowrap;
+}
 
 @media (max-width:768px) {
 	.se-search-card { flex-direction:column; align-items:stretch; gap:10px; }
 	.se-search-hint { display:none; }
 }
+
+/* ── Dark mode overrides ── */
+html[data-theme="dark"] .se-search-card,
+html[data-theme="dark"] .se-results-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-results-header { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-results-title { color: var(--ork-text); }
+html[data-theme="dark"] .se-results-count { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-search-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .se-search-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .se-search-input::placeholder { color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-search-hint,
+html[data-theme="dark"] .se-all-toggle { color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-table th { background: var(--ork-bg-secondary); color: var(--ork-text-muted); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .se-table tbody tr:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .se-table tbody tr:hover td { color: var(--ork-text); }
+html[data-theme="dark"] .se-event-name { color: var(--ork-text); }
+html[data-theme="dark"] .se-date-badge { background: rgba(99, 179, 237, 0.18); color: #9ecdff; }
+html[data-theme="dark"] .se-date-past { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-rsvp-badge { background: rgba(72, 187, 120, 0.18); color: #9ae6b4; }
+html[data-theme="dark"] .se-rsvp-badge.se-rsvp-interested { background: rgba(237, 137, 54, 0.20); color: #fbd38d; }
+html[data-theme="dark"] .se-rsvp-none,
+html[data-theme="dark"] .se-no-date { color: var(--ork-text-muted); }
+html[data-theme="dark"] .se-type-badge { background: rgba(159, 122, 234, 0.22); color: #d6bcfa; }
+html[data-theme="dark"] .se-empty,
+html[data-theme="dark"] .se-empty i { color: var(--ork-text-muted); }
 </style>
 
 <div class="se-page">
@@ -247,10 +282,12 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 		} else {
 			rsvpCel = '';
 			if (rsvpGoing      > 0) rsvpCel += '<span class="se-rsvp-badge"><i class="fas fa-check-circle"></i>' + rsvpGoing      + ' going</span> ';
-			if (rsvpInterested > 0) rsvpCel += '<span class="se-rsvp-badge" style="background:#fffbeb;color:#92400e;"><i class="fas fa-star"></i>' + rsvpInterested + ' interested</span>';
+			if (rsvpInterested > 0) rsvpCel += '<span class="se-rsvp-badge se-rsvp-interested"><i class="fas fa-star"></i>' + rsvpInterested + ' interested</span>';
 		}
+		var nameCel = '<span class="se-event-name">' + name + '</span>';
+		if (v.EventType) nameCel += ' <span class="se-type-badge">' + v.EventType + '</span>';
 		return '<tr onclick="window.location.href=\'' + url + '\'">'
-			+ '<td><span class="se-event-name">' + name + '</span></td>'
+			+ '<td>' + nameCel + '</td>'
 			+ '<td>' + dateCel + '</td>'
 			+ '<td>' + kingdomCel + '</td>'
 			+ '<td>' + parkCel + '</td>'
@@ -372,16 +409,19 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .se-header-title {
 
 	document.getElementById('se-all-past-toggle').addEventListener('change', function() {
 		_allPast = this.checked;
-		if (_current.length >= 2) doSearch(_current);
+		doSearch(_current.length >= 2 || _current.length === 0 ? _current : '');
 	});
 
 	document.getElementById('se-event-input').addEventListener('input', function() {
 		var term = this.value;
 		_current = term;
 		clearTimeout(_timer);
-		if (term.length < 2) { resetTables(); document.getElementById('se-upcoming-label').textContent = 'Next Upcoming Events'; return; }
+		if (term.length === 0) { doSearch(''); document.getElementById('se-upcoming-label').textContent = 'Next Upcoming Events'; return; }
+		if (term.length < 2) { return; }
 		document.getElementById('se-upcoming-label').textContent = 'Upcoming Events';
 		_timer = setTimeout(function() { doSearch(term); }, 300);
 	});
+	// Browse upcoming events on page load
+	doSearch('');
 })();
 </script>

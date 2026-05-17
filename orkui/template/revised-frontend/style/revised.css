@@ -2067,17 +2067,21 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 .kn-filter-toggle.kn-filter-on { color:#fff; }
 .kn-filter-toggle[data-filter="kingdom-event"].kn-filter-on { background:var(--kn-accent-mid, #276749); border-color:var(--kn-accent-mid, #276749); }
 .kn-filter-toggle[data-filter="park-event"].kn-filter-on    { background:#6b46c1; border-color:#6b46c1; }
+.kn-filter-toggle[data-filter="calendar-item"].kn-filter-on { background:#64748b; border-color:#64748b; }
 .kn-filter-toggle[data-filter="park-day"].kn-filter-on      { background:#b7791f; border-color:#b7791f; }
 .kn-filter-toggle[data-filter="kingdom-event"]:hover:not(.kn-filter-on) { border-color:var(--kn-accent-mid, #276749); color:var(--kn-accent-mid, #276749); }
 .kn-filter-toggle[data-filter="park-event"]:hover:not(.kn-filter-on)    { border-color:#6b46c1; color:#6b46c1; }
+.kn-filter-toggle[data-filter="calendar-item"]:hover:not(.kn-filter-on) { border-color:#64748b; color:#64748b; }
 .kn-filter-toggle[data-filter="park-day"]:hover:not(.kn-filter-on)      { border-color:#b7791f; color:#b7791f; }
 
 .pk-filter-toggle { padding:3px 10px; border:1px solid #cbd5e0; background:#fff; border-radius:20px; font-size:11px; font-weight:600; color:#718096; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; }
 .pk-filter-toggle.pk-filter-on { color:#fff; }
-.pk-filter-toggle[data-filter="event"].pk-filter-on    { background:var(--pk-accent, #0891b2); border-color:var(--pk-accent, #0891b2); }
-.pk-filter-toggle[data-filter="park-day"].pk-filter-on { background:#b7791f; border-color:#b7791f; }
-.pk-filter-toggle[data-filter="event"]:hover:not(.pk-filter-on)    { border-color:var(--pk-accent, #0891b2); color:var(--pk-accent, #0891b2); }
-.pk-filter-toggle[data-filter="park-day"]:hover:not(.pk-filter-on) { border-color:#b7791f; color:#b7791f; }
+.pk-filter-toggle[data-filter="event"].pk-filter-on         { background:var(--pk-accent, #0891b2); border-color:var(--pk-accent, #0891b2); }
+.pk-filter-toggle[data-filter="calendar-item"].pk-filter-on { background:#64748b; border-color:#64748b; }
+.pk-filter-toggle[data-filter="park-day"].pk-filter-on      { background:#b7791f; border-color:#b7791f; }
+.pk-filter-toggle[data-filter="event"]:hover:not(.pk-filter-on)         { border-color:var(--pk-accent, #0891b2); color:var(--pk-accent, #0891b2); }
+.pk-filter-toggle[data-filter="calendar-item"]:hover:not(.pk-filter-on) { border-color:#64748b; color:#64748b; }
+.pk-filter-toggle[data-filter="park-day"]:hover:not(.pk-filter-on)      { border-color:#b7791f; color:#b7791f; }
 
 /* Park tile grid */
 .kn-park-tiles {
@@ -2775,7 +2779,7 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 	border-bottom: 1px solid #e2e8f0;
 	background: #f7fafc;
 }
-.kn-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
+.kn-emod-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
 .kn-emod-close {
 	background: none; border: none; font-size: 20px; cursor: pointer;
 	color: #718096; padding: 2px 6px; border-radius: 4px; line-height: 1;
@@ -2812,6 +2816,132 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 .kn-emod-input { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 5px; font-size: 14px; color: #2d3748; background: #fff; box-sizing: border-box; }
 .kn-emod-input:focus { outline: none; border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(66,153,225,0.15); }
 .kn-emod-feedback { margin-top: 10px; padding: 8px 12px; border-radius: 5px; font-size: 13px; background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; }
+
+/* ---- Modal type selector (Event vs Calendar Item) ---- */
+.kn-emod-typesel, .pk-emod-typesel {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 16px;
+	padding: 4px;
+	background: #f7fafc;
+	border-radius: 8px;
+}
+.kn-emod-typeopt, .pk-emod-typeopt {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 9px 10px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 600;
+	color: #718096;
+	transition: background 0.15s, color 0.15s;
+}
+.kn-emod-typeopt:hover, .pk-emod-typeopt:hover { color: #4a5568; }
+.kn-emod-typeopt input, .pk-emod-typeopt input { display: none; }
+.kn-emod-typeopt:has(input:checked),
+.pk-emod-typeopt:has(input:checked) {
+	background: #fff;
+	color: #276749;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.kn-emod-typeopt:has(input:disabled),
+.pk-emod-typeopt:has(input:disabled) { cursor: default; opacity: 0.75; }
+.kn-emod-check-label, .pk-emod-check-label {
+	display: inline-flex; align-items: center; gap: 8px;
+	font-size: 13px; font-weight: 600; color: #4a5568; cursor: pointer;
+}
+.kn-emod-check-label input, .pk-emod-check-label input { width: 15px; height: 15px; cursor: pointer; }
+.kn-emod-ci-note, .pk-emod-ci-note {
+	margin-top: 14px;
+	padding: 10px 12px;
+	border-radius: 6px;
+	background: #fffbeb;
+	border-left: 3px solid #f6ad55;
+	font-size: 12px;
+	line-height: 1.5;
+	color: #744210;
+}
+
+/* ---- Calendar Item list-row pill ---- */
+.kn-ci-pill, .pk-ci-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: #edf2f7;
+	color: #64748b;
+	border: 1px solid #e2e8f0;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 2px 7px;
+	border-radius: 10px;
+	margin-right: 6px;
+	vertical-align: middle;
+}
+
+/* ---- Calendar Item view overlay ---- */
+.kn-ci-overlay, .pk-ci-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.5);
+	z-index: 1100;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+.kn-ci-overlay.kn-ci-open, .pk-ci-overlay.pk-ci-open { display: flex; }
+.kn-ci-box, .pk-ci-box {
+	background: #fff;
+	border-radius: 10px;
+	width: 100%;
+	max-width: 460px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+	overflow: hidden;
+}
+.kn-ci-header, .pk-ci-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #f7fafc;
+}
+.kn-ci-header h3, .pk-ci-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #2d3748; }
+.kn-ci-body, .pk-ci-body { padding: 20px; }
+.kn-ci-name, .pk-ci-name { font-size: 18px; font-weight: 700; color: #2d3748; margin-bottom: 10px; }
+.kn-ci-meta, .pk-ci-meta { font-size: 13px; color: #4a5568; margin-bottom: 8px; }
+.kn-ci-scope, .pk-ci-scope {
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: #718096;
+	background: #edf2f7;
+	padding: 3px 8px;
+	border-radius: 10px;
+	margin-bottom: 12px;
+}
+.kn-ci-description, .pk-ci-description {
+	font-size: 13px;
+	color: #4a5568;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	padding: 10px 12px;
+	background: #f7fafc;
+	border-radius: 6px;
+	border-left: 3px solid #cbd5e0;
+}
+.kn-ci-footer, .pk-ci-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
 
 /* ===========================
    Park Profile (pk-)
@@ -3287,6 +3417,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	font-size: 15px;
 	flex-shrink: 0;
 }
+.pk-schedule-icon.icon-parkday { background: #f0fff4; color: #2f855a; }
 .pk-schedule-icon.icon-fighter { background: #fff5f5; color: #c53030; }
 .pk-schedule-icon.icon-arts    { background: #faf5ff; color: #6b46c1; }
 .pk-schedule-icon.icon-other   { background: #fffbeb; color: #d69e2e; }
@@ -3303,6 +3434,7 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	background: #ebf8ff;
 	color: #0891b2;
 }
+.pk-schedule-purpose.purpose-parkday { background: #f0fff4; color: #2f855a; }
 .pk-schedule-purpose.purpose-fighter { background: #fff5f5; color: #c53030; }
 .pk-schedule-purpose.purpose-arts    { background: #faf5ff; color: #6b46c1; }
 .pk-schedule-purpose.purpose-other   { background: #fffbeb; color: #d69e2e; }
@@ -3896,25 +4028,206 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	opacity: 0.14;
 	filter: blur(6px);
 }
+/* Banner image: full-bleed, no blur, no opacity dampening. */
+.ev-hero-has-banner .ev-hero-bg {
+	top: 0; left: 0; right: 0; bottom: 0;
+	opacity: 1;
+	filter: none;
+}
+/* Vignette: radial soft blur + darkening only at the LEFT (logo+badges)
+   and BOTTOM (title+crumb) edges where overlaid text needs contrast.
+   Right ~40% stays clean so the host's banner art isn't smothered.
+   ::before = darkening gradient, ::after = radial blur via backdrop-filter. */
+.ev-hero-has-banner.ev-hero-vignette::before {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	background:
+		linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.38) 18%, rgba(0,0,0,0.05) 38%, rgba(0,0,0,0) 55%),
+		linear-gradient(to top,   rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.20) 30%, rgba(0,0,0,0)  60%);
+}
+.ev-hero-has-banner.ev-hero-vignette::after {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	/* Blur ellipse sits on the LEFT (where the logo + title + badges live).
+	   It fades to fully clear by x ≈ 40%, so the entire center third
+	   (33%–67%) and the right third are untouched — no blur leaking into
+	   the bottom of the middle band. mask-image: opaque = blur applied,
+	   transparent = no blur. */
+	-webkit-mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	backdrop-filter: blur(7px);
+	-webkit-backdrop-filter: blur(7px);
+}
+/* "Add / Update Banner Image" pill — only visible on hover for users
+   with edit scope. Sits in the top-right corner above the vignette. */
+.ev-banner-edit-btn {
+	position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+	display: inline-flex; align-items: center; gap: 6px;
+	background: rgba(0,0,0,0.55); color: #fff;
+	border: 1px solid rgba(255,255,255,0.30);
+	border-radius: 999px; padding: 6px 12px;
+	font-size: 12px; font-weight: 600; cursor: pointer;
+	opacity: 0; transition: opacity .18s, background .15s, border-color .15s;
+	backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.ev-hero-editable:hover .ev-banner-edit-btn,
+.ev-banner-edit-btn:focus { opacity: 1; outline: none; }
+.ev-banner-edit-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.55); }
+.ev-banner-edit-btn i { font-size: 11px; }
+/* Touch / coarse pointer: no hover state, so reveal the pill at a softer
+   opacity by default so event hosts on phones can reach it. */
+@media (hover: none), (pointer: coarse) {
+	.ev-hero-editable .ev-banner-edit-btn { opacity: 0.85; }
+	.ev-hero-editable .ev-banner-edit-btn:active { opacity: 1; }
+}
+
+/* ---- Banner upload modal (wireframes + toggles) ---- */
+.ev-banner-wireframes {
+	display: flex; gap: 12px; margin: 8px 0 6px;
+}
+.ev-banner-wireframe {
+	margin: 0; flex: 1 1 0; min-width: 0;
+	border: 1px solid #e2e8f0; border-radius: 6px;
+	background: #fff; overflow: hidden;
+}
+.ev-banner-wireframe figcaption {
+	font-size: 11px; font-weight: 600; color: #4a5568;
+	padding: 6px 10px; background: #f7fafc;
+	border-bottom: 1px solid #e2e8f0;
+	display: flex; align-items: center; gap: 6px;
+}
+.ev-banner-wireframe figcaption i { color: #718096; font-size: 11px; }
+.ev-banner-wireframe svg { display: block; width: 100%; height: auto; }
+/* Both wireframes are 7.5:1, so let them share the row width equally. */
+.ev-banner-wf-hint {
+	margin: 0 0 12px; font-size: 12px; color: #718096;
+	display: flex; align-items: flex-start; gap: 6px;
+}
+.ev-banner-wf-hint i { margin-top: 2px; color: #4299e1; }
+.ev-banner-config {
+	display: flex; flex-direction: column; gap: 10px;
+	margin-top: 6px; padding: 10px 12px;
+	background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.ev-banner-toggle {
+	display: grid; grid-template-columns: 18px 1fr; row-gap: 1px; column-gap: 8px;
+	align-items: center; cursor: pointer; user-select: none;
+}
+.ev-banner-toggle input { grid-row: 1 / span 2; align-self: start; margin-top: 3px; cursor: pointer; }
+.ev-banner-toggle span { font-size: 13px; font-weight: 600; color: #2d3748; }
+.ev-banner-toggle small { font-size: 11px; color: #718096; line-height: 1.45; }
+
+html[data-theme="dark"] .ev-banner-wireframe { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-banner-wireframe figcaption { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-banner-wireframe figcaption i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-banner-wf-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-banner-wf-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .ev-banner-config { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-banner-toggle span { color: var(--ork-text); }
+html[data-theme="dark"] .ev-banner-toggle small { color: var(--ork-text-muted); }
+
+/* ---- Banner position step (drag-to-arrange) ---- */
+.ev-banner-position-wrap {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 1800 / 240;
+	background: #1a202c;
+	border-radius: 6px;
+	overflow: hidden;
+	user-select: none;
+	touch-action: none;
+	border: 1px solid #2d3748;
+}
+.ev-banner-position-canvas {
+	position: absolute; inset: 0;
+	display: block;
+	width: 100%; height: 100%;
+	cursor: grab;
+}
+.ev-banner-position-canvas:active { cursor: grabbing; }
+.ev-banner-position-overlay {
+	position: absolute; inset: 0;
+	width: 100%; height: 100%;
+	pointer-events: none;
+}
+.ev-banner-position-hint {
+	margin: 8px 0 0; font-size: 12px; color: #4a5568;
+	display: flex; align-items: center; gap: 6px;
+}
+.ev-banner-position-hint i { color: #4299e1; font-size: 12px; }
+html[data-theme="dark"] .ev-banner-position-wrap { background: #0f1419; border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-banner-position-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ev-banner-position-hint i { color: var(--ork-link-bright); }
+
+/* ---- Details tab layout: fees + description + links ---- */
+.ev-details-row {
+	display: flex; gap: 20px; align-items: flex-start;
+}
+.ev-details-main { flex: 1 1 auto; min-width: 0; }
+.ev-details-side {
+	flex: 0 0 240px; display: flex; flex-direction: column; gap: 14px;
+}
+.ev-fees-chevron { display: none; }
+
+/* Mobile-only: stack the cards, put Admission & Fees on top (collapsed
+   by default), description below, links last. The fees header becomes
+   a tap target. */
+@media (max-width: 768px) {
+	.ev-details-row { flex-direction: column; }
+	/* display:contents flattens the side wrapper so its children become
+	   direct flex items of .ev-details-row and can be reordered. */
+	.ev-details-side  { display: contents; }
+	.ev-details-fees  { order: 1; }
+	.ev-details-main  { order: 2; }
+	.ev-details-links { order: 3; }
+	.ev-details-fees, .ev-details-links { width: 100%; box-sizing: border-box; }
+	.ev-fees-toggle {
+		cursor: pointer; user-select: none;
+		display: flex; align-items: center; justify-content: space-between;
+		gap: 8px;
+	}
+	.ev-fees-chevron {
+		display: inline-block;
+		color: #718096; font-size: 12px;
+		transition: transform .18s ease;
+	}
+	.ev-fees-card:not(.ev-open) .ev-fees-body { display: none; }
+	.ev-fees-card.ev-open .ev-fees-chevron { transform: rotate(180deg); }
+	html[data-theme="dark"] .ev-fees-chevron { color: var(--ork-text-muted); }
+
+	/* Edit Details + Hide-as-draft: icon only on mobile. */
+	.ev-edit-details-btn .ev-edit-details-label,
+	.ev-hide-draft-btn .ev-hide-draft-label { display: none; }
+	.ev-edit-details-btn,
+	.ev-hide-draft-btn { padding-left: 10px; padding-right: 10px; }
+
+	/* Banner edit pill: top-right, icon-only on mobile. */
+	.ev-banner-edit-btn {
+		top: 10px; left: auto; right: 10px; transform: none;
+		padding: 6px 10px; gap: 4px;
+	}
+	.ev-banner-edit-label { display: none; }
+	.ev-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
+}
 .ev-hero-content {
 	position: relative;
 	display: flex;
 	align-items: center;
 	padding: 24px 30px;
 	gap: 24px;
-	z-index: 1;
+	z-index: 2;
 }
 .ev-heraldry-frame {
-	width: 110px;
-	height: 110px;
-	border-radius: 8px;
+	width: 140px;
+	height: 140px;
+	border-radius: 10px;
 	overflow: hidden;
-	border: 3px solid rgba(255,255,255,0.8);
 	flex-shrink: 0;
-	background: rgba(0,0,0,0.15);
+	background: transparent;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	filter: drop-shadow(0 4px 10px rgba(0,0,0,0.45));
 }
 .ev-heraldry-frame img {
 	width: 100%;
@@ -3942,22 +4255,33 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .ev-badges {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 6px;
 	margin-bottom: 8px;
 }
+/* Unified pill geometry — every hero pill sits on the same grid. */
 .ev-badge {
-	display: inline-block;
-	padding: 3px 10px;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 24px;
+	padding: 0 11px;
 	border-radius: 12px;
 	font-size: 11px;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	line-height: 1.4;
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
+	box-sizing: border-box;
+	margin: 0;
+	vertical-align: middle;
 }
+.ev-badge { text-transform: uppercase; letter-spacing: 0.05em; }
+.ev-badge i { font-size: 10px; line-height: 1; }
 .ev-badge-green  { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
 .ev-badge-gray   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
 .ev-badge-blue   { background: #bee3f8; color: #2a69ac; }
+.ev-badge-purple { background: #e9d8fd; color: #553c9a; }
+html[data-theme="dark"] .ev-badge-blue { background: rgba(66,153,225,0.20); color: #bee3f8; }
 
 .ev-owner-inline {
 	color: rgba(255,255,255,0.85);
@@ -4092,6 +4416,10 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	text-decoration: none;
 }
 .ev-map-btn:hover { background: #bee3f8; }
+.ev-buy-tickets-btn { background: #f0fff4; color: #276749; border-color: #9ae6b4; }
+.ev-buy-tickets-btn:hover { background: #c6f6d5; }
+html[data-theme="dark"] .ev-buy-tickets-btn { background: rgba(72,187,120,0.18); color: #9ae6b4; border-color: rgba(72,187,120,0.40); }
+html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,0.26); }
 
 /* ---- Tabs ---- */
 .ev-tabs { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
@@ -4456,7 +4784,8 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 	.ev-owner-sep { display: none; }
 	.ev-owner-inline > i.fa-layer-group { display: none; }
 	.ev-badges { gap: 4px; margin-bottom: 4px; }
-	.ev-badge { font-size: 10px; padding: 2px 7px; }
+	.ev-badge { font-size: 10px; padding: 0 8px; height: 20px; gap: 4px; }
+	.ev-badge i { font-size: 9px; }
 	.ev-hero-actions {
 		grid-column: 2;
 		grid-row: 2;
@@ -5186,6 +5515,31 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .pk-att-feedback { padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:12px; }
 .pk-att-feedback.pk-att-ok  { background:#f0fff4; border:1px solid #c6f6d5; color:#276749; }
 .pk-att-feedback.pk-att-err { background:#fff5f5; border:1px solid #fed7d7; color:#c53030; }
+
+/* Active-event banner: nudges the user to enter attendance on the event
+   itself when an event is happening at the same scope on the selected date. */
+.pk-att-event-nudge {
+	display:flex; gap:12px; align-items:flex-start;
+	padding:12px 14px; margin-bottom:12px;
+	background:var(--ork-alert-info-bg, #ebf8ff);
+	border:1px solid var(--ork-alert-info-border, #90cdf4);
+	border-left:3px solid var(--ork-alert-info-border, #90cdf4);
+	border-radius:6px;
+	color:var(--ork-alert-info-text, #2a4365);
+	font-size:13px; line-height:1.45;
+}
+.pk-att-event-nudge-icon { font-size:18px; color:var(--ork-alert-info-text, #2b6cb0); flex-shrink:0; margin-top:1px; }
+.pk-att-event-nudge-body { flex:1; min-width:0; }
+.pk-att-event-nudge-text { margin:0 0 8px 0; }
+.pk-att-event-nudge-btn {
+	display:inline-flex; align-items:center; gap:6px;
+	padding:6px 12px; border-radius:6px;
+	background:var(--ork-link, #2b6cb0); color:#fff;
+	font-size:12px; font-weight:600; text-decoration:none;
+	transition:background 0.15s;
+}
+.pk-att-event-nudge-btn:hover { background:var(--ork-link-bright, #3182ce); color:#fff; text-decoration:none; }
+.pk-att-event-nudge-btn i { font-size:11px; }
 .pk-att-section { border:1px solid #e2e8f0; border-radius:8px; margin-bottom:12px; overflow:hidden; }
 .pk-att-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f7fafc; border:none; cursor:pointer; font-size:13px; font-weight:600; color:#4a5568; text-align:left; }
 .pk-att-toggle:hover { background:#edf2f7; }
@@ -5274,8 +5628,24 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
   #pk-att-overlay .pk-modal-body { padding:10px 16px; }
   .pk-att-date-display { font-size:15px; padding:5px 12px; }
   .pk-att-date-row { margin-bottom:8px; }
-  /* Credits column visible on mobile — remove if too cramped */
   .pk-att-del-btn { min-width:unset; min-height:unset; padding:2px 4px; }
+
+  /* Tab bar: scroll horizontally so no tab gets clipped */
+  .pk-att-tabs { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; flex-wrap:nowrap; }
+  .pk-att-tabs::-webkit-scrollbar { display:none; }
+  .pk-att-tab { white-space:nowrap; padding:8px 10px; font-size:12px; }
+
+  /* Sign-in Link panel: URL field full-width, buttons below */
+  .pk-att-link-url-row { flex-wrap:wrap; }
+  .pk-att-link-url-row input[type=text] { width:100%; flex:unset; }
+  .pk-att-link-url-row .pk-btn { flex:1; justify-content:center; }
+
+  /* Active links table: bigger touch targets on buttons */
+  .pk-links-copy, .pk-links-revoke { padding:6px 10px !important; font-size:12px !important; min-height:34px; }
+
+  /* QR modal: scale image to fit narrow screens */
+  #pk-qr-overlay > div, #kn-qr-overlay > div { padding:20px 16px 16px; }
+  #pk-qr-img, #kn-qr-img { width:min(200px, calc(100vw - 72px)); height:min(200px, calc(100vw - 72px)); }
 }
 
 /* ---- Add Park Modal (kn-addpark-) ---- */
@@ -7376,10 +7746,12 @@ html[data-theme="dark"] .pk-schedule-time { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pk-schedule-address { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-schedule-desc { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-schedule-icon { background: var(--ork-bg-tertiary); color: #63b3ed; }
+html[data-theme="dark"] .pk-schedule-icon.icon-parkday { background: rgba(47,133,90,0.18); color: #9ae6b4; }
 html[data-theme="dark"] .pk-schedule-icon.icon-fighter { background: rgba(197,48,48,0.15); color: #fc8181; }
 html[data-theme="dark"] .pk-schedule-icon.icon-arts { background: rgba(107,70,193,0.15); color: #b794f4; }
 html[data-theme="dark"] .pk-schedule-icon.icon-other { background: rgba(214,158,46,0.15); color: #f6e05e; }
 html[data-theme="dark"] .pk-schedule-purpose { background: var(--ork-bg-tertiary); color: #63b3ed; }
+html[data-theme="dark"] .pk-schedule-purpose.purpose-parkday { background: rgba(47,133,90,0.18); color: #9ae6b4; }
 html[data-theme="dark"] .pk-schedule-purpose.purpose-fighter { background: rgba(197,48,48,0.15); color: #fc8181; }
 html[data-theme="dark"] .pk-schedule-purpose.purpose-arts { background: rgba(107,70,193,0.15); color: #b794f4; }
 html[data-theme="dark"] .pk-schedule-purpose.purpose-other { background: rgba(214,158,46,0.15); color: #f6e05e; }
@@ -7567,6 +7939,14 @@ html[data-theme="dark"] .pk-att-feedback.pk-att-err {
   border-color: #fc8181;
   color: #feb2b2;
 }
+html[data-theme="dark"] .pk-att-event-nudge {
+  background: var(--ork-alert-info-bg);
+  border-color: var(--ork-alert-info-border);
+  color: var(--ork-alert-info-text);
+}
+html[data-theme="dark"] .pk-att-event-nudge-icon { color: var(--ork-alert-info-text); }
+html[data-theme="dark"] .pk-att-event-nudge-btn { background: #3182ce; }
+html[data-theme="dark"] .pk-att-event-nudge-btn:hover { background: #4299e1; }
 html[data-theme="dark"] .pk-att-added-list li { color: #9ae6b4; }
 html[data-theme="dark"] .pk-att-added-list li.pk-att-prior { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-att-del-btn:hover { background: rgba(197,48,48,0.15); }
@@ -8151,6 +8531,99 @@ html[data-theme="dark"] .ec-ac-badge-kingdom { background: rgba(43,108,176,0.15)
 html[data-theme="dark"] .ec-ac-no-results { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ec-held-at-optional { color: var(--ork-text-muted); }
 
+/* ---- Ticket Link box (lives inside the Admission & Fees section on
+       both Eventcreate and the Eventnew edit modal). The entry it
+       manages is stored in ExternalLinks but rendered only here, never
+       in the External Links list. ---- */
+.ec-ticket-link-block {
+	margin-top: 14px; padding: 12px 14px;
+	background: #f7fafc; border: 1px dashed #cbd5e0; border-radius: 6px;
+}
+.ec-ticket-link-heading {
+	display: flex; align-items: center; gap: 6px;
+	font-size: 12px; font-weight: 600; color: #4a5568;
+	text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px;
+}
+.ec-ticket-link-heading i.fa-ticket-alt { color: #2b6cb0; font-size: 13px; }
+.ec-ticket-link-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.ec-ticket-link-field { display: flex; flex-direction: column; gap: 4px; flex: 0 0 180px; min-width: 0; }
+.ec-ticket-link-field-grow { flex: 1 1 240px; }
+.ec-ticket-link-label {
+	font-size: 11px; font-weight: 600; color: #718096;
+	text-transform: uppercase; letter-spacing: .04em;
+}
+.ec-ticket-link-input {
+	width: 100%; padding: 6px 10px; box-sizing: border-box;
+	border: 1px solid #cbd5e0; border-radius: 5px;
+	font-size: 13px; color: #2d3748; background: #fff;
+}
+.ec-ticket-link-input:focus { outline: none; border-color: #4299e1; box-shadow: 0 0 0 2px rgba(66,153,225,.15); }
+.ec-help-tip {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 16px; height: 16px; border-radius: 50%;
+	border: 1px solid #cbd5e0; background: #fff; color: #718096;
+	font-size: 10px; font-weight: 700; line-height: 1;
+	cursor: help; user-select: none; position: relative;
+	text-transform: none; letter-spacing: 0;
+}
+.ec-help-tip:hover, .ec-help-tip:focus { background: #ebf8ff; border-color: #90cdf4; color: #2b6cb0; outline: none; }
+.ec-help-tip[data-ec-tip]::before,
+.ec-help-tip[data-ec-tip]::after {
+	position: absolute; left: 50%; bottom: calc(100% + 4px);
+	pointer-events: none; opacity: 0; transition: opacity .08s;
+}
+.ec-help-tip[data-ec-tip]::after {
+	content: attr(data-ec-tip); transform: translateX(-50%);
+	background: #2d3748; color: #fff; font-size: 11px; font-weight: 500;
+	padding: 8px 11px; border-radius: 5px; white-space: normal;
+	width: 280px; max-width: 80vw; line-height: 1.4;
+	text-transform: none; letter-spacing: 0; z-index: 900;
+	box-shadow: 0 4px 12px rgba(0,0,0,.18);
+}
+.ec-help-tip[data-ec-tip]::before {
+	content: ''; transform: translateX(-50%) translateY(4px);
+	border: 5px solid transparent; border-top-color: #2d3748; z-index: 901;
+}
+.ec-help-tip[data-ec-tip]:hover::before,
+.ec-help-tip[data-ec-tip]:hover::after,
+.ec-help-tip[data-ec-tip]:focus::before,
+.ec-help-tip[data-ec-tip]:focus::after { opacity: 1; }
+
+html[data-theme="dark"] .ec-ticket-link-block { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ec-ticket-link-heading { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ec-ticket-link-heading i.fa-ticket-alt { color: #63b3ed; }
+html[data-theme="dark"] .ec-ticket-link-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ec-ticket-link-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ec-ticket-link-input:focus { border-color: var(--ork-link-bright); box-shadow: 0 0 0 2px rgba(99,179,237,.18); }
+html[data-theme="dark"] .ec-help-tip { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-muted); }
+html[data-theme="dark"] .ec-help-tip:hover, html[data-theme="dark"] .ec-help-tip:focus { background: var(--ork-bg-secondary); border-color: var(--ork-link-bright); color: var(--ork-link-bright); }
+html[data-theme="dark"] .ec-help-tip[data-ec-tip]::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border), 0 4px 12px rgba(0,0,0,.55); }
+html[data-theme="dark"] .ec-help-tip[data-ec-tip]::before { border-top-color: #1a202c; }
+
+/* ---- "Help Me Write..." pill button (above the Description textarea
+       on Eventcreate and the Eventnew edit modal) ---- */
+.ev-help-write-btn {
+	display: inline-flex; align-items: center; gap: 5px;
+	background: linear-gradient(135deg, #ebf4ff 0%, #e9d8fd 100%);
+	color: #553c9a; border: 1px solid #d6bcfa;
+	border-radius: 999px; padding: 3px 10px;
+	font-size: 11px; font-weight: 600; cursor: pointer;
+	margin-left: auto; line-height: 1.4;
+	text-transform: none; letter-spacing: 0;
+	transition: background .15s, border-color .15s, transform .08s;
+}
+.ev-help-write-btn:hover { background: linear-gradient(135deg, #bee3f8 0%, #d6bcfa 100%); border-color: #b794f4; }
+.ev-help-write-btn:active { transform: translateY(1px); }
+.ev-help-write-btn i { font-size: 10px; }
+html[data-theme="dark"] .ev-help-write-btn {
+	background: linear-gradient(135deg, rgba(99,179,237,0.18) 0%, rgba(159,122,234,0.22) 100%);
+	color: #d6bcfa; border-color: rgba(159,122,234,0.40);
+}
+html[data-theme="dark"] .ev-help-write-btn:hover {
+	background: linear-gradient(135deg, rgba(99,179,237,0.28) 0%, rgba(159,122,234,0.32) 100%);
+	border-color: rgba(159,122,234,0.65);
+}
+
 /* Hero heading reset */
 html[data-theme="dark"] .ec-banner-name {
   background: transparent !important;
@@ -8698,3 +9171,1391 @@ html[data-theme="dark"] .pn-notes-infobox-icon { color: #63b3ed; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox a { color: #90cdf4; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox-icon { color: #63b3ed; }
 }
+
+
+/* ============================================================
+ * Calendar Enhancements R2: Officer-only, Drafts, RSVP, Map
+ * ============================================================ */
+
+/* Officer-only calendar items (kingdom + park) */
+.kn-officer-only,
+.pk-officer-only { background: rgba(128, 90, 213, 0.05); }
+html[data-theme="dark"] .kn-officer-only,
+html[data-theme="dark"] .pk-officer-only { background: rgba(128, 90, 213, 0.18); }
+.kn-officer-pill, .pk-officer-pill {
+	display: inline-flex; align-items: center; justify-content: center;
+	background: rgba(128, 90, 213, 0.13); color: #6b46c1;
+	padding: 1px 5px; border-radius: 4px; font-size: 10px;
+	margin-right: 5px; vertical-align: middle;
+}
+html[data-theme="dark"] .kn-officer-pill,
+html[data-theme="dark"] .pk-officer-pill { background: rgba(128, 90, 213, 0.32); color: #d6bcfa; }
+
+/* DRAFT pill on event rows */
+.kn-draft-pill, .pk-draft-pill {
+	display: inline-block; background: #fed7aa; color: #9a3412;
+	font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
+	padding: 2px 6px; border-radius: 3px; margin-right: 5px; vertical-align: middle;
+}
+html[data-theme="dark"] .kn-draft-pill,
+html[data-theme="dark"] .pk-draft-pill { background: #7c2d12; color: #ffedd5; }
+.kn-row-draft, .pk-row-draft { opacity: 0.62; }
+.kn-row-draft:hover, .pk-row-draft:hover { opacity: 0.92; }
+
+
+
+
+/* Draft banner + toggle on event detail */
+.ev-draft-banner {
+	display: flex; align-items: center; justify-content: space-between; gap: 12px;
+	background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px;
+	padding: 12px 16px; margin: 16px auto; max-width: 900px;
+}
+.ev-draft-banner-text { color: #78350f; font-size: 13px; line-height: 1.5; }
+.ev-draft-banner-text i { margin-right: 6px; color: #d97706; }
+.ev-draft-publish-btn {
+	background: #92400e; color: #fff; border: none; border-radius: 6px;
+	padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+	white-space: nowrap;
+}
+.ev-draft-publish-btn:hover { background: #78350f; }
+html[data-theme="dark"] .ev-draft-banner { background: #4a2c0e; border-color: #d97706; }
+html[data-theme="dark"] .ev-draft-banner-text { color: #fde68a; }
+
+/* RSVP dropdown widget (used in lists + map popovers) */
+.kn-rsvp-wrap, .pk-rsvp-wrap { position: relative; display: inline-block; }
+.ev-rsvp-btn {
+	display: inline-flex; align-items: center; gap: 5px;
+	background: #fff; border: 1px solid #cbd5e0; color: #4a5568;
+	padding: 5px 11px; border-radius: 6px; font-size: 11px; font-weight: 600;
+	cursor: pointer; line-height: 1.2; user-select: none;
+}
+.ev-rsvp-btn:hover { border-color: #4a5568; background: #f7fafc; }
+.ev-rsvp-rsvp-going { background: #c6f6d5; border-color: #68d391; color: #22543d; }
+.ev-rsvp-rsvp-going:hover { background: #9ae6b4; }
+.ev-rsvp-rsvp-interested { background: #fefcbf; border-color: #f6e05e; color: #744210; }
+.ev-rsvp-rsvp-interested:hover { background: #faf089; }
+.ev-rsvp-counts {
+	display: inline-block; font-size: 10px; color: #a0aec0; margin-left: 6px;
+	vertical-align: middle;
+}
+.ev-rsvp-count-going { color: #38a169; font-weight: 700; }
+.ev-rsvp-count-sep { margin: 0 3px; opacity: 0.6; }
+.ev-rsvp-count-interest { color: #d69e2e; font-weight: 700; }
+.ev-rsvp-menu {
+	display: none; position: absolute; right: 50%; transform: translateX(50%); top: 100%;
+	margin-top: 5px; min-width: 170px; z-index: 1000;
+	background: #fff; border: 1px solid #e2e8f0; border-radius: 7px;
+	box-shadow: 0 4px 14px rgba(0,0,0,0.13); padding: 4px;
+}
+.ev-rsvp-open .ev-rsvp-menu { display: block; }
+.ev-rsvp-menu-item {
+	display: flex; align-items: center; gap: 7px; width: 100%;
+	background: none; border: none; padding: 7px 11px; font-size: 12px;
+	color: #2d3748; cursor: pointer; text-align: left; border-radius: 5px;
+}
+.ev-rsvp-menu-item:hover:not([disabled]) { background: #edf2f7; }
+.ev-rsvp-menu-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+.ev-rsvp-withdraw { color: #c53030; }
+.ev-rsvp-busy .ev-rsvp-btn { opacity: 0.6; pointer-events: none; }
+html[data-theme="dark"] .ev-rsvp-btn { background: #2d3748; border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .ev-rsvp-btn:hover { background: #1a202c; }
+html[data-theme="dark"] .ev-rsvp-rsvp-going { background: #22543d; border-color: #38a169; color: #c6f6d5; }
+html[data-theme="dark"] .ev-rsvp-rsvp-interested { background: #744210; border-color: #d69e2e; color: #fefcbf; }
+html[data-theme="dark"] .ev-rsvp-menu { background: #1a202c; border-color: #2d3748; }
+html[data-theme="dark"] .ev-rsvp-menu-item { color: #cbd5e0; }
+html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #2d3748; }
+
+/* Map view popover */
+.ev-map-popover { font-family: inherit; font-size: 12px; min-width: 200px; padding: 4px; }
+.ev-map-popover-name { display: block; font-size: 14px; font-weight: 700; color: #2b6cb0; text-decoration: none; margin-bottom: 4px; }
+.ev-map-popover-name:hover { text-decoration: underline; }
+.ev-map-popover-meta { color: #718096; font-size: 11px; margin-bottom: 6px; }
+.ev-map-popover-rsvp { margin-top: 6px; }
+
+/* Generic data-tip CSS tooltip (light, dark-mode aware) */
+.kn-officer-pill[data-tip], .pk-officer-pill[data-tip],
+.kn-draft-pill[data-tip], .pk-draft-pill[data-tip] {
+	position: relative;
+}
+.kn-officer-pill[data-tip]:hover::after, .pk-officer-pill[data-tip]:hover::after,
+.kn-draft-pill[data-tip]:hover::after, .pk-draft-pill[data-tip]:hover::after {
+	content: attr(data-tip);
+	position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+	background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
+	padding: 6px 10px; border-radius: 4px; white-space: pre-line;
+	pointer-events: none; z-index: 500; min-width: max-content; max-width: 240px;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+
+/* Kingdomnew Save-as-draft button */
+.kn-emod-draft-btn,
+.pk-emod-draft-btn {
+	background: #fff; color: #92400e; border-color: #fbbf24 !important;
+}
+.kn-emod-draft-btn:hover:not(:disabled),
+.pk-emod-draft-btn:hover:not(:disabled) {
+	background: #fef3c7;
+}
+html[data-theme="dark"] .kn-emod-draft-btn,
+html[data-theme="dark"] .pk-emod-draft-btn { background: #2d3748; color: #fde68a; }
+
+
+
+/* ============================================================
+ * Calendar R2 — Polish + Dark Mode (popover, RSVP portal, gmap chrome)
+ * ============================================================ */
+
+/* ── Popover layout (tight, intentional) ─────────────────────── */
+/* Compress Google's default InfoWindow inner padding so our content controls rhythm. */
+.gm-style .gm-style-iw-c { padding: 0 !important; }
+.gm-style .gm-style-iw-d { padding: 0 !important; max-height: none !important; overflow: visible !important; }
+
+.ev-map-popover {
+	font-family: inherit;
+	font-size: 12px;
+	line-height: 1.45;
+	min-width: 232px;
+	max-width: 280px;
+	padding: 14px 16px 12px;
+	color: #2d3748;
+}
+
+/* Header row: name + draft pill aligned. */
+.ev-map-popover-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 4px;
+	padding-right: 22px;  /* leave room for Google's close X */
+}
+.ev-map-popover-name {
+	flex: 0 1 auto;
+	font-size: 15px;
+	font-weight: 700;
+	color: #2c5282;
+	text-decoration: none;
+	letter-spacing: -0.01em;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+.ev-map-popover-name:hover { color: #2b6cb0; text-decoration: underline; }
+.ev-map-popover-draft { flex-shrink: 0; }
+
+/* Meta row: simple inline date · park, no flex-spacer trickery. */
+.ev-map-popover-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0 6px;
+	color: #718096;
+	font-size: 11.5px;
+	margin-bottom: 12px;
+}
+.ev-map-popover-meta-date  { white-space: nowrap; }
+.ev-map-popover-meta-park  { white-space: nowrap; color: #4a5568; font-weight: 600; }
+.ev-map-popover-meta-dot {
+	width: 3px; height: 3px; border-radius: 50%;
+	background: currentColor; opacity: 0.5;
+	display: inline-block;
+	flex-shrink: 0;
+}
+
+/* Action row: RSVP. */
+.ev-map-popover-action {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+.ev-map-popover-rsvp {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-height: 28px;
+}
+
+/* RSVP counts (label-aware now: "5 going · 2 interested" or hidden when both 0) */
+.ev-rsvp-counts {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: #718096;
+}
+.ev-rsvp-count-going    { color: #38a169; font-weight: 600; }
+.ev-rsvp-count-interest { color: #b7791f; font-weight: 600; }
+.ev-rsvp-count-sep      { opacity: 0.5; }
+
+/* Draft popover affordance — left rail accent. */
+.ev-map-popover-isdraft {
+	border-left: 3px solid #f6ad55;
+	padding-left: 13px;
+}
+
+/* ── Dark mode: popover content ──────────────────────────────── */
+html[data-theme="dark"] .ev-map-popover               { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .ev-map-popover-name          { color: #90cdf4; }
+html[data-theme="dark"] .ev-map-popover-name:hover    { color: #bee3f8; }
+html[data-theme="dark"] .ev-map-popover-meta          { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .ev-map-popover-meta-park     { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .ev-map-popover-isdraft       { border-left-color: #d97706; }
+html[data-theme="dark"] .ev-rsvp-counts               { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .ev-rsvp-count-going          { color: #68d391; }
+html[data-theme="dark"] .ev-rsvp-count-interest       { color: #f6ad55; }
+
+/* ── Dark mode: Google Maps InfoWindow chrome ────────────────── */
+html[data-theme="dark"] .gm-style .gm-style-iw-c {
+	background: var(--ork-bg-secondary, #1a202c) !important;
+	box-shadow: 0 2px 7px 1px rgba(0,0,0,0.55) !important;
+}
+html[data-theme="dark"] .gm-style .gm-style-iw-d {
+	background: transparent !important;
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .gm-style .gm-style-iw-tc::after {
+	background: var(--ork-bg-secondary, #1a202c) !important;
+}
+html[data-theme="dark"] .gm-style .gm-style-iw-c button[aria-label="Close"] img {
+	filter: invert(1) brightness(1.2) opacity(0.75);
+}
+html[data-theme="dark"] .gm-style .gm-style-iw-c button[aria-label="Close"]:hover img {
+	filter: invert(1) brightness(1.4) opacity(1);
+}
+
+/* ── RSVP portal menu (escapes ALL clipping ancestors) ───────── */
+.ev-rsvp-portal {
+	display: none;
+	position: fixed;
+	z-index: 100000;
+	min-width: 180px;
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	box-shadow:
+		0 10px 32px rgba(0, 0, 0, 0.18),
+		0 2px 6px rgba(0, 0, 0, 0.08);
+	padding: 5px;
+	font-size: 12px;
+	font-family: inherit;
+	animation: ev-rsvp-pop 120ms ease-out;
+}
+.ev-rsvp-portal.ev-rsvp-portal-open { display: block; }
+.ev-rsvp-portal .ev-rsvp-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	width: 100%;
+	background: none;
+	border: none;
+	padding: 8px 11px;
+	font-size: 12.5px;
+	color: #2d3748;
+	cursor: pointer;
+	text-align: left;
+	border-radius: 5px;
+	font-family: inherit;
+	transition: background-color 80ms;
+}
+.ev-rsvp-portal .ev-rsvp-menu-item:hover:not([disabled])     { background: #edf2f7; }
+.ev-rsvp-portal .ev-rsvp-menu-item:focus-visible             { outline: 2px solid #4299e1; outline-offset: -2px; }
+.ev-rsvp-portal .ev-rsvp-menu-item[disabled]                 { opacity: 0.42; cursor: not-allowed; }
+.ev-rsvp-portal .ev-rsvp-mi-going    i                       { color: #38a169; }
+.ev-rsvp-portal .ev-rsvp-mi-interest i                       { color: #d69e2e; }
+.ev-rsvp-portal .ev-rsvp-withdraw                            { color: #c53030; }
+.ev-rsvp-portal .ev-rsvp-withdraw i                          { color: #c53030; }
+
+/* Show a check next to the user's current RSVP, when set */
+.ev-rsvp-portal.ev-rsvp-mine-going       .ev-rsvp-mi-going::after,
+.ev-rsvp-portal.ev-rsvp-mine-interested  .ev-rsvp-mi-interest::after {
+	content: "✓";
+	margin-left: auto;
+	font-weight: 700;
+	color: #38a169;
+}
+.ev-rsvp-portal.ev-rsvp-mine-interested  .ev-rsvp-mi-interest::after { color: #d69e2e; }
+
+@keyframes ev-rsvp-pop {
+	from { opacity: 0; transform: translateY(-3px); }
+	to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Dark mode: RSVP portal ──────────────────────────────────── */
+html[data-theme="dark"] .ev-rsvp-portal {
+	background: var(--ork-bg-secondary, #1a202c);
+	border-color: var(--ork-border, #2d3748);
+	box-shadow:
+		0 10px 32px rgba(0, 0, 0, 0.6),
+		0 2px 6px rgba(0, 0, 0, 0.4);
+}
+html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-menu-item        { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-menu-item:hover:not([disabled]) {
+	background: var(--ork-bg-tertiary, #2d3748);
+}
+html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-mi-going    i    { color: #68d391; }
+html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-mi-interest i    { color: #f6ad55; }
+html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-withdraw,
+html[data-theme="dark"] .ev-rsvp-portal .ev-rsvp-withdraw i       { color: #fc8181; }
+
+
+/* ============================================================
+ * Calendar Items: Locals-only pill + dark mode for the detail overlay
+ * ============================================================ */
+
+/* Locals-only row tint + pill (teal, distinct from officer-only purple) */
+.kn-locals-only,
+.pk-locals-only { background: rgba(13, 148, 136, 0.05); }
+html[data-theme="dark"] .kn-locals-only,
+html[data-theme="dark"] .pk-locals-only { background: rgba(13, 148, 136, 0.16); }
+.kn-locals-pill, .pk-locals-pill {
+	display: inline-flex; align-items: center; justify-content: center;
+	background: rgba(13, 148, 136, 0.13); color: #0f766e;
+	padding: 1px 5px; border-radius: 4px; font-size: 10px;
+	margin-right: 5px; vertical-align: middle;
+}
+html[data-theme="dark"] .kn-locals-pill,
+html[data-theme="dark"] .pk-locals-pill { background: rgba(13, 148, 136, 0.32); color: #5eead4; }
+
+/* Combined: rows that are BOTH officer + locals get a subtler blended tint */
+.kn-officer-only.kn-locals-only,
+.pk-officer-only.pk-locals-only { background: linear-gradient(135deg, rgba(128,90,213,0.05), rgba(13,148,136,0.05)); }
+html[data-theme="dark"] .kn-officer-only.kn-locals-only,
+html[data-theme="dark"] .pk-officer-only.pk-locals-only { background: linear-gradient(135deg, rgba(128,90,213,0.18), rgba(13,148,136,0.16)); }
+
+
+/* ── Dark mode: Calendar Item detail overlay (kn-ci-* / pk-ci-*) ─── */
+html[data-theme="dark"] .kn-ci-overlay,
+html[data-theme="dark"] .pk-ci-overlay {
+	background: rgba(0, 0, 0, 0.7);
+}
+html[data-theme="dark"] .kn-ci-box,
+html[data-theme="dark"] .pk-ci-box {
+	background: var(--ork-bg-secondary, #1a202c);
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+html[data-theme="dark"] .kn-ci-header,
+html[data-theme="dark"] .pk-ci-header {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .kn-ci-header h3,
+html[data-theme="dark"] .pk-ci-header h3 { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .kn-ci-name,
+html[data-theme="dark"] .pk-ci-name { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .kn-ci-meta,
+html[data-theme="dark"] .pk-ci-meta { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .kn-ci-scope,
+html[data-theme="dark"] .pk-ci-scope {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .kn-ci-description,
+html[data-theme="dark"] .pk-ci-description {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-secondary, #cbd5e0);
+	border-left-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .kn-ci-footer,
+html[data-theme="dark"] .pk-ci-footer {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-top-color: var(--ork-border, #4a5568);
+}
+
+/* Light-mode calendar-item pill on rows: dark-mode variant */
+html[data-theme="dark"] .kn-ci-pill,
+html[data-theme="dark"] .pk-ci-pill {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-muted, #a0aec0);
+	border-color: var(--ork-border, #4a5568);
+}
+
+
+/* ============================================================
+ * Dark-mode contrast pass for Calendar Item modals + create modal
+ * ============================================================ */
+
+/* Reset global h1-h6 box-pill styling inside ALL modal headers (both themes).
+   Without this, orkui.css's "every heading is a gray pill" wins and the
+   header title renders as a barely-visible chip in dark mode. */
+.kn-emod-header h3,
+.kn-ci-header h3,
+.pk-ci-header h3 {
+	background: transparent !important;
+	border: none !important;
+	padding: 0 !important;
+	border-radius: 0 !important;
+	text-shadow: none !important;
+}
+
+/* Title color: explicit, so it doesn't fall back to muted gray. */
+html[data-theme="dark"] .kn-emod-header h3,
+html[data-theme="dark"] .kn-ci-header h3,
+html[data-theme="dark"] .pk-ci-header h3 {
+	color: var(--ork-text, #e2e8f0);
+}
+
+/* Cancel/Close/Edit buttons in dark mode — full-contrast text + a real
+   1px border so they read as buttons instead of ghost shapes. */
+html[data-theme="dark"] .kn-emod-btn-cancel,
+html[data-theme="dark"] .pk-emod-btn-cancel {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text, #e2e8f0);
+	border: 1px solid var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .kn-emod-btn-cancel:hover,
+html[data-theme="dark"] .pk-emod-btn-cancel:hover {
+	background: var(--ork-border, #4a5568);
+	color: var(--ork-text, #fff);
+}
+
+/* The Delete button uses inline `color:#c53030; border-color:#fc8181`
+   which is unreadable on a dark surface. Lighten it for dark theme. */
+html[data-theme="dark"] #kn-ci-delete-btn,
+html[data-theme="dark"] #pk-ci-delete-btn {
+	color: #fc8181 !important;
+	border-color: rgba(252, 129, 129, 0.45) !important;
+	background: rgba(252, 129, 129, 0.08);
+}
+html[data-theme="dark"] #kn-ci-delete-btn:hover,
+html[data-theme="dark"] #pk-ci-delete-btn:hover {
+	background: rgba(252, 129, 129, 0.18);
+}
+
+/* Checkbox-row labels — "All day", "Officer-only", "Locals-only" were
+   landing at .kn-emod-check-label's #4a5568 which is washed-out on dark. */
+html[data-theme="dark"] .kn-emod-check-label,
+html[data-theme="dark"] .pk-emod-check-label {
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .kn-emod-check-label input,
+html[data-theme="dark"] .pk-emod-check-label input {
+	accent-color: #4299e1;
+}
+
+/* Type-toggle (Amtgard Event / Calendar Item) tab strip */
+html[data-theme="dark"] .kn-emod-typesel,
+html[data-theme="dark"] .pk-emod-typesel {
+	background: var(--ork-bg-tertiary, #2d3748);
+}
+html[data-theme="dark"] .kn-emod-typeopt,
+html[data-theme="dark"] .pk-emod-typeopt {
+	color: var(--ork-text-muted, #a0aec0);
+}
+html[data-theme="dark"] .kn-emod-typeopt:hover,
+html[data-theme="dark"] .pk-emod-typeopt:hover {
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .kn-emod-typeopt:has(input:checked),
+html[data-theme="dark"] .pk-emod-typeopt:has(input:checked) {
+	background: var(--ork-card-bg, #1a202c);
+	color: #68d391;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* The "Calendar Items are lightweight…" yellow info box */
+html[data-theme="dark"] .kn-emod-ci-note,
+html[data-theme="dark"] .pk-emod-ci-note {
+	background: rgba(251, 191, 36, 0.10);
+	border-left-color: #d97706;
+	color: #fde68a;
+}
+
+/* Section labels (NAME, HOST PARK, START, END, DESCRIPTION) need a real
+   bump — currently --ork-text-muted is too dim against the dark inputs. */
+html[data-theme="dark"] .kn-emod-label,
+html[data-theme="dark"] .pk-emod-label {
+	color: var(--ork-text-secondary, #cbd5e0);
+}
+
+/* Input placeholders too — they were near-invisible. */
+html[data-theme="dark"] .kn-emod-input::placeholder,
+html[data-theme="dark"] .pk-emod-input::placeholder {
+	color: var(--ork-text-muted, #718096);
+	opacity: 0.85;
+}
+
+
+/* ============================================================
+ * Event Preview Overlay — calendar grid quick-look modal
+ * Triggered by FullCalendar eventClick on Kingdomnew + Parknew.
+ * Shares the kn-ci-overlay aesthetic — same shape, eventy content.
+ * ============================================================ */
+
+.evpv-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 1100;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+.evpv-overlay.evpv-open { display: flex; }
+
+.evpv-box {
+	background: #fff;
+	border-radius: 12px;
+	width: 100%;
+	max-width: 520px;
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32);
+	overflow: hidden;
+	animation: evpv-in 160ms ease-out;
+}
+@keyframes evpv-in {
+	from { opacity: 0; transform: translateY(8px) scale(0.98); }
+	to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.evpv-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 18px;
+	border-bottom: 1px solid #e2e8f0;
+	background: #f7fafc;
+	gap: 10px;
+}
+.evpv-header h3 {
+	background: transparent !important;
+	border: none !important;
+	padding: 0 !important;
+	border-radius: 0 !important;
+	text-shadow: none !important;
+}
+.evpv-header-meta {
+	display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+}
+.evpv-kind-pill {
+	display: inline-flex; align-items: center; gap: 5px;
+	background: rgba(43, 108, 176, 0.10);
+	color: #2c5282;
+	border: 1px solid rgba(43, 108, 176, 0.18);
+	padding: 3px 10px;
+	border-radius: 14px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.evpv-kind-pill.evpv-kind-park {
+	background: rgba(107, 70, 193, 0.10);
+	color: #553c9a;
+	border-color: rgba(107, 70, 193, 0.20);
+}
+.evpv-close {
+	background: none; border: none; cursor: pointer;
+	font-size: 22px; line-height: 1;
+	color: #a0aec0;
+	padding: 2px 6px;
+	border-radius: 4px;
+}
+.evpv-close:hover { color: #4a5568; background: rgba(0,0,0,0.04); }
+
+.evpv-body { padding: 18px 20px 14px; }
+
+/* Hero row: heraldry thumb · name+meta */
+.evpv-hero {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	margin-bottom: 14px;
+}
+.evpv-heraldry {
+	width: 64px; height: 64px;
+	border-radius: 8px;
+	object-fit: cover;
+	flex-shrink: 0;
+	border: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.evpv-hero-text {
+	flex: 1;
+	min-width: 0;
+}
+.evpv-name {
+	display: block;
+	font-size: 18px;
+	font-weight: 700;
+	color: #2b6cb0;
+	text-decoration: none;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	margin-bottom: 6px;
+	overflow-wrap: anywhere;
+}
+.evpv-name:hover { text-decoration: underline; }
+.evpv-meta-row {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+	color: #718096;
+	font-size: 12px;
+	line-height: 1.4;
+	margin-top: 2px;
+}
+.evpv-meta-row i { color: #a0aec0; margin-right: 5px; }
+.evpv-meta-park   { color: #4a5568; font-weight: 600; }
+
+/* Description excerpt block — same style as kn-ci-description but bigger */
+.evpv-description {
+	font-size: 13px;
+	color: #4a5568;
+	line-height: 1.6;
+	padding: 12px 14px;
+	background: #f7fafc;
+	border-radius: 7px;
+	border-left: 3px solid #cbd5e0;
+	margin-bottom: 14px;
+	max-height: 110px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.evpv-rsvp-row {
+	display: flex; align-items: center; gap: 10px;
+	margin-top: 4px;
+}
+
+.evpv-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+	background: #f7fafc;
+}
+.evpv-cta {
+	display: inline-flex; align-items: center; gap: 6px;
+	background: var(--kn-accent, #276749);
+	color: #fff;
+	padding: 8px 16px;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+}
+.evpv-cta:hover { background: #22543d; color: #fff; }
+
+/* Loading state */
+.evpv-overlay.evpv-loading .evpv-body,
+.evpv-overlay.evpv-loading .evpv-header-meta,
+.evpv-overlay.evpv-loading .evpv-footer { opacity: 0.4; pointer-events: none; }
+
+
+/* ── Dark mode (per dark-mode checklist) ─────────────────────── */
+html[data-theme="dark"] .evpv-overlay { background: rgba(0, 0, 0, 0.7); }
+html[data-theme="dark"] .evpv-box {
+	background: var(--ork-bg-secondary, #1a202c);
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+}
+html[data-theme="dark"] .evpv-header {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .evpv-close { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .evpv-close:hover { color: var(--ork-text, #e2e8f0); background: rgba(255,255,255,0.06); }
+
+html[data-theme="dark"] .evpv-kind-pill {
+	background: rgba(99, 179, 237, 0.16);
+	color: #90cdf4;
+	border-color: rgba(99, 179, 237, 0.30);
+}
+html[data-theme="dark"] .evpv-kind-pill.evpv-kind-park {
+	background: rgba(159, 122, 234, 0.18);
+	color: #d6bcfa;
+	border-color: rgba(159, 122, 234, 0.32);
+}
+
+html[data-theme="dark"] .evpv-heraldry {
+	border-color: var(--ork-border, #4a5568);
+	background: var(--ork-bg-tertiary, #2d3748);
+}
+html[data-theme="dark"] .evpv-name { color: #90cdf4; }
+html[data-theme="dark"] .evpv-name:hover { color: #bee3f8; }
+html[data-theme="dark"] .evpv-meta-row { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .evpv-meta-row i { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .evpv-meta-park { color: var(--ork-text-secondary, #cbd5e0); }
+
+html[data-theme="dark"] .evpv-description {
+	background: var(--ork-bg-tertiary, #2d3748);
+	color: var(--ork-text-secondary, #cbd5e0);
+	border-left-color: var(--ork-border, #4a5568);
+}
+
+html[data-theme="dark"] .evpv-footer {
+	background: var(--ork-bg-tertiary, #2d3748);
+	border-top-color: var(--ork-border, #4a5568);
+}
+
+/* CTA stays accent green in both themes — readable on either bg */
+html[data-theme="dark"] .evpv-cta { background: #38a169; }
+html[data-theme="dark"] .evpv-cta:hover { background: #2f855a; }
+
+/* Mobile tweaks */
+@media (max-width: 540px) {
+	.evpv-box { max-width: 100%; }
+	.evpv-hero { gap: 10px; }
+	.evpv-heraldry { width: 52px; height: 52px; }
+	.evpv-name { font-size: 16px; }
+}
+
+/* ── Ported entity banners (park/kingdom/player/unit) ────────────────── */
+
+/* ── pk banner (ported from ev-) ─────────────────────────────────── */
+/* ---- Hero ---- */
+/* Banner image: full-bleed, no blur, no opacity dampening. */
+.pk-hero-has-banner .pk-hero-bg {
+	top: 0; left: 0; right: 0; bottom: 0;
+	opacity: 1;
+	filter: none;
+}
+/* Vignette: radial soft blur + darkening only at the LEFT (logo+badges)
+   and BOTTOM (title+crumb) edges where overlaid text needs contrast.
+   Right ~40% stays clean so the host's banner art isn't smothered.
+   ::before = darkening gradient, ::after = radial blur via backdrop-filter. */
+.pk-hero-has-banner.pk-hero-vignette::before {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	background:
+		linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.38) 18%, rgba(0,0,0,0.05) 38%, rgba(0,0,0,0) 55%),
+		linear-gradient(to top,   rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.20) 30%, rgba(0,0,0,0)  60%);
+}
+.pk-hero-has-banner.pk-hero-vignette::after {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	/* Blur ellipse sits on the LEFT (where the logo + title + badges live).
+	   It fades to fully clear by x ≈ 40%, so the entire center third
+	   (33%–67%) and the right third are untouched — no blur leaking into
+	   the bottom of the middle band. mask-image: opaque = blur applied,
+	   transparent = no blur. */
+	-webkit-mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	backdrop-filter: blur(7px);
+	-webkit-backdrop-filter: blur(7px);
+}
+/* "Add / Update Banner Image" pill — only visible on hover for users
+   with edit scope. Sits in the top-right corner above the vignette. */
+.pk-banner-edit-btn {
+	position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+	display: inline-flex; align-items: center; gap: 6px;
+	background: rgba(0,0,0,0.55); color: #fff;
+	border: 1px solid rgba(255,255,255,0.30);
+	border-radius: 999px; padding: 6px 12px;
+	font-size: 12px; font-weight: 600; cursor: pointer;
+	opacity: 0; transition: opacity .18s, background .15s, border-color .15s;
+	backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.pk-hero-editable:hover .pk-banner-edit-btn,
+.pk-banner-edit-btn:focus { opacity: 1; outline: none; }
+.pk-banner-edit-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.55); }
+.pk-banner-edit-btn i { font-size: 11px; }
+/* Touch / coarse pointer: no hover state, so reveal the pill at a softer
+   opacity by default so event hosts on phones can reach it. */
+@media (hover: none), (pointer: coarse) {
+	.pk-hero-editable .pk-banner-edit-btn { opacity: 0.85; }
+	.pk-hero-editable .pk-banner-edit-btn:active { opacity: 1; }
+}
+
+/* ---- Banner upload modal (wireframes + toggles) ---- */
+.pk-banner-wireframes {
+	display: flex; gap: 12px; margin: 8px 0 6px;
+}
+.pk-banner-wireframe {
+	margin: 0; flex: 1 1 0; min-width: 0;
+	border: 1px solid #e2e8f0; border-radius: 6px;
+	background: #fff; overflow: hidden;
+}
+.pk-banner-wireframe figcaption {
+	font-size: 11px; font-weight: 600; color: #4a5568;
+	padding: 6px 10px; background: #f7fafc;
+	border-bottom: 1px solid #e2e8f0;
+	display: flex; align-items: center; gap: 6px;
+}
+.pk-banner-wireframe figcaption i { color: #718096; font-size: 11px; }
+.pk-banner-wireframe svg { display: block; width: 100%; height: auto; }
+/* Both wireframes are 7.5:1, so let them share the row width equally. */
+.pk-banner-wf-hint {
+	margin: 0 0 12px; font-size: 12px; color: #718096;
+	display: flex; align-items: flex-start; gap: 6px;
+}
+.pk-banner-wf-hint i { margin-top: 2px; color: #4299e1; }
+.pk-banner-config {
+	display: flex; flex-direction: column; gap: 10px;
+	margin-top: 6px; padding: 10px 12px;
+	background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.pk-banner-toggle {
+	display: grid; grid-template-columns: 18px 1fr; row-gap: 1px; column-gap: 8px;
+	align-items: center; cursor: pointer; user-select: none;
+}
+.pk-banner-toggle input { grid-row: 1 / span 2; align-self: start; margin-top: 3px; cursor: pointer; }
+.pk-banner-toggle span { font-size: 13px; font-weight: 600; color: #2d3748; }
+.pk-banner-toggle small { font-size: 11px; color: #718096; line-height: 1.45; }
+
+html[data-theme="dark"] .pk-banner-wireframe { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-banner-wireframe figcaption { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-banner-wireframe figcaption i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-banner-wf-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-banner-wf-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .pk-banner-config { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-banner-toggle span { color: var(--ork-text); }
+html[data-theme="dark"] .pk-banner-toggle small { color: var(--ork-text-muted); }
+
+/* ---- Banner position step (drag-to-arrange) ---- */
+.pk-banner-position-wrap {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 1800 / 240;
+	background: #1a202c;
+	border-radius: 6px;
+	overflow: hidden;
+	user-select: none;
+	touch-action: none;
+	border: 1px solid #2d3748;
+}
+.pk-banner-position-canvas {
+	position: absolute; inset: 0;
+	display: block;
+	width: 100%; height: 100%;
+	cursor: grab;
+}
+.pk-banner-position-canvas:active { cursor: grabbing; }
+.pk-banner-position-overlay {
+	position: absolute; inset: 0;
+	width: 100%; height: 100%;
+	pointer-events: none;
+}
+.pk-banner-position-hint {
+	margin: 8px 0 0; font-size: 12px; color: #4a5568;
+	display: flex; align-items: center; gap: 6px;
+}
+.pk-banner-position-hint i { color: #4299e1; font-size: 12px; }
+html[data-theme="dark"] .pk-banner-position-wrap { background: #0f1419; border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-banner-position-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-banner-position-hint i { color: var(--ork-link-bright); }
+@media (max-width: 768px) {
+	.pk-banner-edit-btn {
+		top: 10px; left: auto; right: 10px; transform: none;
+		padding: 6px 10px; gap: 4px;
+	}
+	.pk-banner-edit-label { display: none; }
+	.pk-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
+}
+
+
+/* ── kn banner (ported from ev-) ─────────────────────────────────── */
+/* ---- Hero ---- */
+/* Banner image: full-bleed, no blur, no opacity dampening. */
+.kn-hero-has-banner .kn-hero-bg {
+	top: 0; left: 0; right: 0; bottom: 0;
+	opacity: 1;
+	filter: none;
+}
+/* Vignette: radial soft blur + darkening only at the LEFT (logo+badges)
+   and BOTTOM (title+crumb) edges where overlaid text needs contrast.
+   Right ~40% stays clean so the host's banner art isn't smothered.
+   ::before = darkening gradient, ::after = radial blur via backdrop-filter. */
+.kn-hero-has-banner.kn-hero-vignette::before {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	background:
+		linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.38) 18%, rgba(0,0,0,0.05) 38%, rgba(0,0,0,0) 55%),
+		linear-gradient(to top,   rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.20) 30%, rgba(0,0,0,0)  60%);
+}
+.kn-hero-has-banner.kn-hero-vignette::after {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	/* Blur ellipse sits on the LEFT (where the logo + title + badges live).
+	   It fades to fully clear by x ≈ 40%, so the entire center third
+	   (33%–67%) and the right third are untouched — no blur leaking into
+	   the bottom of the middle band. mask-image: opaque = blur applied,
+	   transparent = no blur. */
+	-webkit-mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	backdrop-filter: blur(7px);
+	-webkit-backdrop-filter: blur(7px);
+}
+/* "Add / Update Banner Image" pill — only visible on hover for users
+   with edit scope. Sits in the top-right corner above the vignette. */
+.kn-banner-edit-btn {
+	position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+	display: inline-flex; align-items: center; gap: 6px;
+	background: rgba(0,0,0,0.55); color: #fff;
+	border: 1px solid rgba(255,255,255,0.30);
+	border-radius: 999px; padding: 6px 12px;
+	font-size: 12px; font-weight: 600; cursor: pointer;
+	opacity: 0; transition: opacity .18s, background .15s, border-color .15s;
+	backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.kn-hero-editable:hover .kn-banner-edit-btn,
+.kn-banner-edit-btn:focus { opacity: 1; outline: none; }
+.kn-banner-edit-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.55); }
+.kn-banner-edit-btn i { font-size: 11px; }
+/* Touch / coarse pointer: no hover state, so reveal the pill at a softer
+   opacity by default so event hosts on phones can reach it. */
+@media (hover: none), (pointer: coarse) {
+	.kn-hero-editable .kn-banner-edit-btn { opacity: 0.85; }
+	.kn-hero-editable .kn-banner-edit-btn:active { opacity: 1; }
+}
+
+/* ---- Banner upload modal (wireframes + toggles) ---- */
+.kn-banner-wireframes {
+	display: flex; gap: 12px; margin: 8px 0 6px;
+}
+.kn-banner-wireframe {
+	margin: 0; flex: 1 1 0; min-width: 0;
+	border: 1px solid #e2e8f0; border-radius: 6px;
+	background: #fff; overflow: hidden;
+}
+.kn-banner-wireframe figcaption {
+	font-size: 11px; font-weight: 600; color: #4a5568;
+	padding: 6px 10px; background: #f7fafc;
+	border-bottom: 1px solid #e2e8f0;
+	display: flex; align-items: center; gap: 6px;
+}
+.kn-banner-wireframe figcaption i { color: #718096; font-size: 11px; }
+.kn-banner-wireframe svg { display: block; width: 100%; height: auto; }
+/* Both wireframes are 7.5:1, so let them share the row width equally. */
+.kn-banner-wf-hint {
+	margin: 0 0 12px; font-size: 12px; color: #718096;
+	display: flex; align-items: flex-start; gap: 6px;
+}
+.kn-banner-wf-hint i { margin-top: 2px; color: #4299e1; }
+.kn-banner-config {
+	display: flex; flex-direction: column; gap: 10px;
+	margin-top: 6px; padding: 10px 12px;
+	background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.kn-banner-toggle {
+	display: grid; grid-template-columns: 18px 1fr; row-gap: 1px; column-gap: 8px;
+	align-items: center; cursor: pointer; user-select: none;
+}
+.kn-banner-toggle input { grid-row: 1 / span 2; align-self: start; margin-top: 3px; cursor: pointer; }
+.kn-banner-toggle span { font-size: 13px; font-weight: 600; color: #2d3748; }
+.kn-banner-toggle small { font-size: 11px; color: #718096; line-height: 1.45; }
+
+html[data-theme="dark"] .kn-banner-wireframe { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-banner-wireframe figcaption { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-banner-wireframe figcaption i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-banner-wf-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-banner-wf-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .kn-banner-config { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-banner-toggle span { color: var(--ork-text); }
+html[data-theme="dark"] .kn-banner-toggle small { color: var(--ork-text-muted); }
+
+/* ---- Banner position step (drag-to-arrange) ---- */
+.kn-banner-position-wrap {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 1800 / 240;
+	background: #1a202c;
+	border-radius: 6px;
+	overflow: hidden;
+	user-select: none;
+	touch-action: none;
+	border: 1px solid #2d3748;
+}
+.kn-banner-position-canvas {
+	position: absolute; inset: 0;
+	display: block;
+	width: 100%; height: 100%;
+	cursor: grab;
+}
+.kn-banner-position-canvas:active { cursor: grabbing; }
+.kn-banner-position-overlay {
+	position: absolute; inset: 0;
+	width: 100%; height: 100%;
+	pointer-events: none;
+}
+.kn-banner-position-hint {
+	margin: 8px 0 0; font-size: 12px; color: #4a5568;
+	display: flex; align-items: center; gap: 6px;
+}
+.kn-banner-position-hint i { color: #4299e1; font-size: 12px; }
+html[data-theme="dark"] .kn-banner-position-wrap { background: #0f1419; border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-banner-position-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-banner-position-hint i { color: var(--ork-link-bright); }
+@media (max-width: 768px) {
+	.kn-banner-edit-btn {
+		top: 10px; left: auto; right: 10px; transform: none;
+		padding: 6px 10px; gap: 4px;
+	}
+	.kn-banner-edit-label { display: none; }
+	.kn-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
+}
+
+/* ── kn-img modal shell ── */
+/* These classes are referenced in the kn-banner-modal HTML in Kingdomnew_index.tpl */
+/* C1 fix: z-index raised to --z-modal-top (10200) — above all kingdom modals (10100) */
+/* M2 fix: opacity+visibility fade pattern instead of display:none/flex toggle        */
+.kn-img-overlay {
+	position: fixed; inset: 0; background: rgba(0,0,0,.55);
+	z-index: var(--z-modal-top, 10200);
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+.kn-img-overlay.kn-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+.kn-img-modal {
+	background: #fff; border-radius: 10px; width: min(520px, 96vw);
+	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
+	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
+	max-height: 90vh; overflow-y: auto;
+}
+.kn-img-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
+}
+.kn-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
+/* M3 fix: add hover state to match other kingdom modal close buttons */
+.kn-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
+.kn-img-close-btn:hover { color: var(--ork-text); }
+.kn-img-modal-body { padding: 20px 22px; }
+.kn-upload-area {
+	display: flex; flex-direction: column; align-items: center; gap: 8px;
+	border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px 20px;
+	cursor: pointer; color: var(--ork-text-body); font-size: 14px; text-align: center;
+	transition: border-color .15s, background .15s;
+}
+.kn-upload-area:hover { border-color: #4299e1; background: #ebf8ff; }
+.kn-upload-icon { font-size: 32px; color: var(--ork-text-hint); }
+.kn-upload-area small { font-size: 12px; color: var(--ork-text-hint); }
+.kn-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.kn-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
+.kn-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+.kn-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
+/* M1 fix: kn-field-hint (replaces stale ec-field-hint inside kn banner modal) */
+.kn-field-hint { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+/* I1 fix: .kn-btn-outline inside modal gets light-bg override so white text is visible */
+.kn-img-modal .kn-btn-outline { background: #fff; color: #2d3748 !important; border-color: #cbd5e0; }
+.kn-img-modal .kn-btn-outline:hover { background: #f7fafc; color: #1a202c !important; }
+/* Dark mode — kn-img modal shell */
+html[data-theme="dark"] .kn-img-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .kn-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .kn-img-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .kn-img-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-upload-area { border-color: var(--ork-border); color: var(--ork-text-secondary); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .kn-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-upload-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .kn-fp-title { background: #1a365d; color: #90cdf4; }
+html[data-theme="dark"] .kn-field-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-img-modal .kn-btn-outline { background: var(--ork-bg-secondary); color: var(--ork-text) !important; border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-img-modal .kn-btn-outline:hover { background: var(--ork-bg-tertiary); color: var(--ork-text) !important; }
+/* I1 fix: override hardcoded inline color:#4a5568/#888 in modal body (invisible in dark mode) */
+html[data-theme="dark"] .kn-img-modal-body { color: var(--ork-text); }
+html[data-theme="dark"] .kn-img-modal-body p { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-img-modal-body #kn-banner-resize-notice,
+html[data-theme="dark"] .kn-img-modal-body small { color: var(--ork-text-muted); }
+/* M-A fix: modal title icon color — CSS class so dark mode can remap */
+.kn-img-modal-title i { color: #2c5282; }
+html[data-theme="dark"] .kn-img-modal-title i { color: var(--ork-accent, #90cdf4); }
+
+
+
+
+
+/* ── pn banner (ported from ev-) ─────────────────────────────────── */
+/* ---- Hero ---- */
+/* Banner image: full-bleed, no blur, no opacity dampening. */
+.pn-hero-has-banner .pn-hero-bg {
+	top: 0; left: 0; right: 0; bottom: 0;
+	opacity: 1;
+	filter: none;
+}
+/* Vignette: radial soft blur + darkening only at the LEFT (logo+badges)
+   and BOTTOM (title+crumb) edges where overlaid text needs contrast.
+   Right ~40% stays clean so the host's banner art isn't smothered.
+   ::before = darkening gradient, ::after = radial blur via backdrop-filter. */
+.pn-hero-has-banner.pn-hero-vignette::before {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	background:
+		linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.38) 18%, rgba(0,0,0,0.05) 38%, rgba(0,0,0,0) 55%),
+		linear-gradient(to top,   rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.20) 30%, rgba(0,0,0,0)  60%);
+}
+.pn-hero-has-banner.pn-hero-vignette::after {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	/* Blur ellipse sits on the LEFT (where the logo + title + badges live).
+	   It fades to fully clear by x ≈ 40%, so the entire center third
+	   (33%–67%) and the right third are untouched — no blur leaking into
+	   the bottom of the middle band. mask-image: opaque = blur applied,
+	   transparent = no blur. */
+	-webkit-mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	backdrop-filter: blur(7px);
+	-webkit-backdrop-filter: blur(7px);
+}
+/* "Add / Update Banner Image" pill — only visible on hover for users
+   with edit scope. Sits in the top-right corner above the vignette. */
+.pn-banner-edit-btn {
+	position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+	display: inline-flex; align-items: center; gap: 6px;
+	background: rgba(0,0,0,0.55); color: #fff;
+	border: 1px solid rgba(255,255,255,0.30);
+	border-radius: 999px; padding: 6px 12px;
+	font-size: 12px; font-weight: 600; cursor: pointer;
+	opacity: 0; transition: opacity .18s, background .15s, border-color .15s;
+	backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.pn-hero-editable:hover .pn-banner-edit-btn,
+.pn-banner-edit-btn:focus { opacity: 1; outline: none; }
+.pn-banner-edit-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.55); }
+.pn-banner-edit-btn i { font-size: 11px; }
+/* Touch / coarse pointer: no hover state, so reveal the pill at a softer
+   opacity by default so event hosts on phones can reach it. */
+@media (hover: none), (pointer: coarse) {
+	.pn-hero-editable .pn-banner-edit-btn { opacity: 0.85; }
+	.pn-hero-editable .pn-banner-edit-btn:active { opacity: 1; }
+}
+
+/* ---- Banner upload modal (wireframes + toggles) ---- */
+.pn-banner-wireframes {
+	display: flex; gap: 12px; margin: 8px 0 6px;
+}
+.pn-banner-wireframe {
+	margin: 0; flex: 1 1 0; min-width: 0;
+	border: 1px solid #e2e8f0; border-radius: 6px;
+	background: #fff; overflow: hidden;
+}
+.pn-banner-wireframe figcaption {
+	font-size: 11px; font-weight: 600; color: #4a5568;
+	padding: 6px 10px; background: #f7fafc;
+	border-bottom: 1px solid #e2e8f0;
+	display: flex; align-items: center; gap: 6px;
+}
+.pn-banner-wireframe figcaption i { color: #718096; font-size: 11px; }
+.pn-banner-wireframe svg { display: block; width: 100%; height: auto; }
+/* Both wireframes are 7.5:1, so let them share the row width equally. */
+.pn-banner-wf-hint {
+	margin: 0 0 12px; font-size: 12px; color: #718096;
+	display: flex; align-items: flex-start; gap: 6px;
+}
+.pn-banner-wf-hint i { margin-top: 2px; color: #4299e1; }
+.pn-banner-config {
+	display: flex; flex-direction: column; gap: 10px;
+	margin-top: 6px; padding: 10px 12px;
+	background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.pn-banner-toggle {
+	display: grid; grid-template-columns: 18px 1fr; row-gap: 1px; column-gap: 8px;
+	align-items: center; cursor: pointer; user-select: none;
+}
+.pn-banner-toggle input { grid-row: 1 / span 2; align-self: start; margin-top: 3px; cursor: pointer; }
+.pn-banner-toggle span { font-size: 13px; font-weight: 600; color: #2d3748; }
+.pn-banner-toggle small { font-size: 11px; color: #718096; line-height: 1.45; }
+
+html[data-theme="dark"] .pn-banner-wireframe { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-banner-wireframe figcaption { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-banner-wireframe figcaption i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-banner-wf-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-banner-wf-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .pn-banner-config { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-banner-toggle span { color: var(--ork-text); }
+html[data-theme="dark"] .pn-banner-toggle small { color: var(--ork-text-muted); }
+
+/* ---- Banner position step (drag-to-arrange) ---- */
+.pn-banner-position-wrap {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 1800 / 240;
+	background: #1a202c;
+	border-radius: 6px;
+	overflow: hidden;
+	user-select: none;
+	touch-action: none;
+	border: 1px solid #2d3748;
+}
+.pn-banner-position-canvas {
+	position: absolute; inset: 0;
+	display: block;
+	width: 100%; height: 100%;
+	cursor: grab;
+}
+.pn-banner-position-canvas:active { cursor: grabbing; }
+.pn-banner-position-overlay {
+	position: absolute; inset: 0;
+	width: 100%; height: 100%;
+	pointer-events: none;
+}
+.pn-banner-position-hint {
+	margin: 8px 0 0; font-size: 12px; color: #4a5568;
+	display: flex; align-items: center; gap: 6px;
+}
+.pn-banner-position-hint i { color: #4299e1; font-size: 12px; }
+html[data-theme="dark"] .pn-banner-position-wrap { background: #0f1419; border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-banner-position-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-banner-position-hint i { color: var(--ork-link-bright); }
+@media (max-width: 768px) {
+	.pn-banner-edit-btn {
+		top: 10px; left: auto; right: 10px; transform: none;
+		padding: 6px 10px; gap: 4px;
+	}
+	.pn-banner-edit-label { display: none; }
+	.pn-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
+}
+
+
+/* ── un banner (ported from ev-) ─────────────────────────────────── */
+/* ---- Hero ---- */
+.un-hero {
+	position: relative;
+	border-radius: 10px;
+	overflow: hidden;
+	margin-top: 3px;
+	margin-bottom: 20px;
+	min-height: 160px;
+	background-color: #2d3748;
+}
+.un-hero-bg {
+	position: absolute;
+	top: -10px; left: -10px; right: -10px; bottom: -10px;
+	background-size: cover;
+	background-position: center;
+	opacity: 0.14;
+	filter: blur(6px);
+}
+/* Banner image: full-bleed, no blur, no opacity dampening. */
+.un-hero-has-banner .un-hero-bg {
+	top: 0; left: 0; right: 0; bottom: 0;
+	opacity: 1;
+	filter: none;
+}
+/* Vignette: radial soft blur + darkening only at the LEFT (logo+badges)
+   and BOTTOM (title+crumb) edges where overlaid text needs contrast.
+   Right ~40% stays clean so the host's banner art isn't smothered.
+   ::before = darkening gradient, ::after = radial blur via backdrop-filter. */
+.un-hero-has-banner.un-hero-vignette::before {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	background:
+		linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.38) 18%, rgba(0,0,0,0.05) 38%, rgba(0,0,0,0) 55%),
+		linear-gradient(to top,   rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.20) 30%, rgba(0,0,0,0)  60%);
+}
+.un-hero-has-banner.un-hero-vignette::after {
+	content: '';
+	position: absolute; inset: 0; z-index: 1; pointer-events: none;
+	/* Blur ellipse sits on the LEFT (where the logo + title + badges live).
+	   It fades to fully clear by x ≈ 40%, so the entire center third
+	   (33%–67%) and the right third are untouched — no blur leaking into
+	   the bottom of the middle band. mask-image: opaque = blur applied,
+	   transparent = no blur. */
+	-webkit-mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
+	backdrop-filter: blur(7px);
+	-webkit-backdrop-filter: blur(7px);
+}
+/* "Add / Update Banner Image" pill — only visible on hover for users
+   with edit scope. Sits in the top-right corner above the vignette. */
+.un-banner-edit-btn {
+	position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+	display: inline-flex; align-items: center; gap: 6px;
+	background: rgba(0,0,0,0.55); color: #fff;
+	border: 1px solid rgba(255,255,255,0.30);
+	border-radius: 999px; padding: 6px 12px;
+	font-size: 12px; font-weight: 600; cursor: pointer;
+	opacity: 0; transition: opacity .18s, background .15s, border-color .15s;
+	backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.un-hero-editable:hover .un-banner-edit-btn,
+.un-banner-edit-btn:focus { opacity: 1; outline: none; }
+.un-banner-edit-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.55); }
+.un-banner-edit-btn i { font-size: 11px; }
+/* Touch / coarse pointer: no hover state, so reveal the pill at a softer
+   opacity by default so event hosts on phones can reach it. */
+@media (hover: none), (pointer: coarse) {
+	.un-hero-editable .un-banner-edit-btn { opacity: 0.85; }
+	.un-hero-editable .un-banner-edit-btn:active { opacity: 1; }
+}
+
+/* ---- Banner upload modal (wireframes + toggles) ---- */
+.un-banner-wireframes {
+	display: flex; gap: 12px; margin: 8px 0 6px;
+}
+.un-banner-wireframe {
+	margin: 0; flex: 1 1 0; min-width: 0;
+	border: 1px solid #e2e8f0; border-radius: 6px;
+	background: #fff; overflow: hidden;
+}
+.un-banner-wireframe figcaption {
+	font-size: 11px; font-weight: 600; color: #4a5568;
+	padding: 6px 10px; background: #f7fafc;
+	border-bottom: 1px solid #e2e8f0;
+	display: flex; align-items: center; gap: 6px;
+}
+.un-banner-wireframe figcaption i { color: #718096; font-size: 11px; }
+.un-banner-wireframe svg { display: block; width: 100%; height: auto; }
+/* Both wireframes are 7.5:1, so let them share the row width equally. */
+.un-banner-wf-hint {
+	margin: 0 0 12px; font-size: 12px; color: #718096;
+	display: flex; align-items: flex-start; gap: 6px;
+}
+.un-banner-wf-hint i { margin-top: 2px; color: #4299e1; }
+.un-banner-config {
+	display: flex; flex-direction: column; gap: 10px;
+	margin-top: 6px; padding: 10px 12px;
+	background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.un-banner-toggle {
+	display: grid; grid-template-columns: 18px 1fr; row-gap: 1px; column-gap: 8px;
+	align-items: center; cursor: pointer; user-select: none;
+}
+.un-banner-toggle input { grid-row: 1 / span 2; align-self: start; margin-top: 3px; cursor: pointer; }
+.un-banner-toggle span { font-size: 13px; font-weight: 600; color: #2d3748; }
+.un-banner-toggle small { font-size: 11px; color: #718096; line-height: 1.45; }
+
+html[data-theme="dark"] .un-banner-wireframe { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .un-banner-wireframe figcaption { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .un-banner-wireframe figcaption i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .un-banner-wf-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .un-banner-wf-hint i { color: var(--ork-link-bright); }
+html[data-theme="dark"] .un-banner-config { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .un-banner-toggle span { color: var(--ork-text); }
+html[data-theme="dark"] .un-banner-toggle small { color: var(--ork-text-muted); }
+
+/* ---- Banner position step (drag-to-arrange) ---- */
+.un-banner-position-wrap {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 1800 / 240;
+	background: #1a202c;
+	border-radius: 6px;
+	overflow: hidden;
+	user-select: none;
+	touch-action: none;
+	border: 1px solid #2d3748;
+}
+.un-banner-position-canvas {
+	position: absolute; inset: 0;
+	display: block;
+	width: 100%; height: 100%;
+	cursor: grab;
+}
+.un-banner-position-canvas:active { cursor: grabbing; }
+.un-banner-position-overlay {
+	position: absolute; inset: 0;
+	width: 100%; height: 100%;
+	pointer-events: none;
+}
+.un-banner-position-hint {
+	margin: 8px 0 0; font-size: 12px; color: #4a5568;
+	display: flex; align-items: center; gap: 6px;
+}
+.un-banner-position-hint i { color: #4299e1; font-size: 12px; }
+html[data-theme="dark"] .un-banner-position-wrap { background: #0f1419; border-color: var(--ork-border); }
+html[data-theme="dark"] .un-banner-position-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .un-banner-position-hint i { color: var(--ork-link-bright); }
+@media (max-width: 768px) {
+	.un-banner-edit-btn {
+		top: 10px; left: auto; right: 10px; transform: none;
+		padding: 6px 10px; gap: 4px;
+	}
+	.un-banner-edit-label { display: none; }
+	.un-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
+}
+
