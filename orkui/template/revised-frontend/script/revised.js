@@ -13149,13 +13149,6 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
               + '" data-interested="' + (loc.interested || 0)
               + '" data-mine="' + (loc.my_rsvp || '') + '"></span>'
             : '';
-        var wxChip = '';
-        if (loc.weather && loc.weather.high_f !== null && loc.weather.high_f !== undefined) {
-            wxChip = '<span class="ev-map-popover-wx" title="' + escapeHtml(loc.weather.label || '') + '">'
-                   + '<span class="ev-map-popover-wx-icon">' + loc.weather.icon + '</span>'
-                   + '<span class="ev-map-popover-wx-temp">' + loc.weather.high_f + '°<span class="ev-map-popover-wx-sep">/</span>' + loc.weather.low_f + '°</span>'
-                   + '</span>';
-        }
         var metaParts = [
             '<span class="ev-map-popover-meta-date">' + escapeHtml(loc.date_label || loc.date) + '</span>'
         ];
@@ -13173,7 +13166,6 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
                 + '<div class="ev-map-popover-meta">' + metaParts.join('') + '</div>'
                 + '<div class="ev-map-popover-action">'
                     + '<div class="ev-map-popover-rsvp">' + rsvpHtml + '</div>'
-                    + (wxChip ? '<div class="ev-map-popover-wx-wrap">' + wxChip + '</div>' : '')
                 + '</div>'
             + '</div>';
     }
@@ -13381,30 +13373,6 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
 
             var parkRow = gid('evpv-park-row');
             if (r.park_name) { gid('evpv-park').textContent = r.park_name; show(parkRow, true); } else { show(parkRow, false); }
-
-            // Solar tooltip
-            var solarEl = gid('evpv-solar');
-            if (r.solar && r.solar.sunrise) {
-                var tip = 'Sunrise ' + r.solar.sunrise + '\nSunset ' + r.solar.sunset;
-                if (r.solar.twilight_start && r.solar.twilight_end) {
-                    tip += '\nTwilight ' + r.solar.twilight_start + ' – ' + r.solar.twilight_end;
-                }
-                solarEl.setAttribute('data-tip', tip);
-                show(solarEl, true);
-            } else {
-                show(solarEl, false);
-            }
-
-            // Weather chip
-            var wxWrap = gid('evpv-wx-wrap');
-            var wxEl   = gid('evpv-wx');
-            if (r.weather && r.weather.high_f != null) {
-                wxEl.innerHTML = '<span class="ev-weather-icon">' + r.weather.icon + '</span> H ' + r.weather.high_f + '° L ' + r.weather.low_f + '°';
-                wxEl.setAttribute('data-tip', r.weather.label || '');
-                show(wxWrap, true);
-            } else {
-                show(wxWrap, false);
-            }
 
             // Description excerpt
             var descEl = gid('evpv-description');

@@ -156,43 +156,6 @@ class Controller_EventAjax extends Controller {
 			}
 		}
 
-		// Resolve coords for weather + sunrise (event location → at_park park lat/lng → host park lat/lng)
-		$lat = null; $lng = null;
-		if ($cd) {
-			$rawLoc = (string)($cd->location ?? '');
-			if ($rawLoc) {
-				$loc = @json_decode(stripslashes($rawLoc));
-				if ($loc) {
-					$pt = isset($loc->location) ? $loc->location
-						: (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
-					if ($pt && is_numeric($pt->lat ?? null) && is_numeric($pt->lng ?? null)) {
-						$lat = (float)$pt->lat; $lng = (float)$pt->lng;
-					}
-				}
-			}
-			if ($lat === null && (int)($cd->at_park_id ?? 0) > 0) {
-				$DB->Clear();
-				$pkLook = $DB->DataSet("SELECT latitude, longitude FROM " . DB_PREFIX . "park WHERE park_id = " . (int)$cd->at_park_id . " LIMIT 1");
-				if ($pkLook && $pkLook->Next() && is_numeric($pkLook->latitude) && (float)$pkLook->latitude != 0) {
-					$lat = (float)$pkLook->latitude; $lng = (float)$pkLook->longitude;
-				}
-			}
-		}
-		if ($lat === null && (int)$ev->park_id > 0) {
-			$DB->Clear();
-			$pkLook = $DB->DataSet("SELECT latitude, longitude FROM " . DB_PREFIX . "park WHERE park_id = " . (int)$ev->park_id . " LIMIT 1");
-			if ($pkLook && $pkLook->Next() && is_numeric($pkLook->latitude) && (float)$pkLook->latitude != 0) {
-				$lat = (float)$pkLook->latitude; $lng = (float)$pkLook->longitude;
-			}
-		}
-
-		$weather = null; $solar = null;
-		if ($lat !== null && $cd) {
-			$dayStr = date('Y-m-d', strtotime($cd->event_start));
-			$weather = Ork3::$Lib->weather->GetForecast($lat, $lng, $dayStr);
-			$solar   = SolarTimes::ForDate($lat, $lng, $dayStr);
-		}
-
 		// Description excerpt — strip markdown to first ~200 chars on a sentence boundary.
 		$desc = (string)($cd->description ?? '');
 		$plain = trim(preg_replace('/\s+/', ' ', preg_replace('/[#*_\[\]\(\)`>~-]+/', ' ', $desc)));
@@ -233,8 +196,6 @@ class Controller_EventAjax extends Controller {
 			'going_count'      => $going,
 			'interested_count' => $interested,
 			'my_rsvp'          => $myRsvp,
-			'weather'          => $weather,
-			'solar'            => $solar,
 			'detail_url'       => $detailId > 0 ? (UIR . 'Event/detail/' . $eventId . '/' . $detailId) : (UIR . 'Event/index/' . $eventId),
 			'can_edit'         => $canEdit,
 		]);
