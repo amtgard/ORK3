@@ -16897,7 +16897,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(offX));
         fd.append('OffsetY', String(offY));
         fetch(CONFIG_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 cb(!!(result && result.status === 0), result && result.error);
             })
@@ -17285,7 +17288,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(offX));
         fd.append('OffsetY', String(offY));
         fetch(CONFIG_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 cb(!!(result && result.status === 0), result && result.error);
             })
@@ -17664,7 +17670,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(offX));
         fd.append('OffsetY', String(offY));
         fetch(CONFIG_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(result) {
                 cb(!!(result && result.status === 0), result && result.error);
             })
