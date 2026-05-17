@@ -5675,45 +5675,6 @@ initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
 
 <!-- pn-banner-modal (ported from event) -->
 <?php if ($pnCanManageBanner): ?>
-<!-- Event Heraldry Upload Modal -->
-<div class="pn-img-overlay" id="pn-img-overlay">
-	<div class="pn-img-modal">
-		<div class="pn-img-modal-header">
-			<span class="pn-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Event Logo</span>
-			<button class="pn-img-close-btn" id="pn-img-close-btn" aria-label="Close">&times;</button>
-		</div>
-		<div class="pn-img-modal-body" id="pn-img-step-select">
-			<label class="pn-upload-area" for="pn-img-file-input">
-				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
-				Click to choose an image
-				<small>JPG, GIF, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
-			</label>
-			<input type="file" id="pn-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none;" />
-			<div id="pn-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
-			<div class="pn-img-form-error" id="pn-img-error" style="display:none;"></div>
-			<div style="text-align:center;margin-top:10px">
-				<button class="pn-btn pn-btn-outline" id="pn-img-remove-btn" type="button" style="font-size:12px;padding:4px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Logo</button>
-			</div>
-		</div>
-		<div class="pn-img-modal-body" id="pn-img-step-crop" style="display:none;">
-			<p style="margin:0 0 10px;font-size:13px;color:#718096;">Drag inside the crop box to reposition it, or drag the corner handles to resize.</p>
-			<div class="pn-crop-wrap"><canvas id="pn-img-canvas"></canvas></div>
-			<div class="pn-img-step-actions">
-				<button class="pn-btn pn-btn-outline" id="pn-img-back-btn"><i class="fas fa-arrow-left"></i> Choose Different</button>
-				<button class="pn-btn pn-btn-white" id="pn-img-upload-btn"><i class="fas fa-upload"></i> Upload</button>
-			</div>
-		</div>
-		<div class="pn-img-modal-body" id="pn-img-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
-			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
-			<p style="margin-top:12px;color:#718096;">Uploading&hellip;</p>
-		</div>
-		<div class="pn-img-modal-body" id="pn-img-step-success" style="display:none;text-align:center;padding:40px 20px;">
-			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
-			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
-		</div>
-	</div>
-</div>
-
 <!-- Event Banner Upload Modal -->
 <div class="pn-img-overlay pn-banner-modal" id="pn-banner-overlay">
 	<div class="pn-img-modal" style="width:min(680px, 96vw)">
