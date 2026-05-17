@@ -485,7 +485,11 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 
 		var workersFull    = total > 0 && active >= total;
 		var queueFull      = queue > 0;
-		var threadsHigh    = threads > 3;
+		// Threshold-running is a noisy signal on a busy app — the 2s poll itself
+		// often catches a handful of in-flight queries (including its own
+		// PROCESSLIST snapshot query). Workers/queue triggers are the real
+		// saturation signals. Bumped from >3 to >8.
+		var threadsHigh    = threads > 8;
 		var rowLockWaiting = lockNow > 0;
 		// Catch fast transient waits that completed within a poll interval:
 		// cumulative waits went up since last poll, even if current is back to 0.
