@@ -1071,9 +1071,10 @@ class Controller_KingdomAjax extends Controller {
 		}
 
 		$uid = (int)$this->session->user_id;
-		$canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
+		// Banner management requires AUTH_CREATE (matching the UI gate in Kingdomnew_index.tpl)
+		$canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE);
 		if (!$canEdit) {
-			echo json_encode(['status' => 1, 'error' => 'Not authorized to edit this kingdom.']);
+			echo json_encode(['status' => 1, 'error' => 'Not authorized to manage this kingdom\'s banner.']);
 			exit;
 		}
 
@@ -1085,6 +1086,15 @@ class Controller_KingdomAjax extends Controller {
 			// upload starts fresh instead of inheriting the removed banner's
 			// config.
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE kingdom_id = ' . $kingdom_id);
+			// I4 fix: verify the UPDATE landed before deleting the file.
+			// If the DB update silently failed and we delete the file, the
+			// banner column stays 1 but the file is gone -> broken banner.
+			$DB->Clear();
+			$removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
+			if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
+				echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
+				exit;
+			}
 			$base = DIR_KINGDOM_BANNER . sprintf('%04d', $kingdom_id);
 			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
 			if (file_exists($base . '.png')) unlink($base . '.png');
@@ -1115,16 +1125,20 @@ class Controller_KingdomAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
 				exit;
 			}
-			$tmp  = $_FILES['Banner']['tmp_name'];
-			$mime = $_FILES['Banner']['type'] ?? 'image/jpeg';
-			// JPEG and PNG only: resolve_image_ext returns .jpg or .png and the
-			// rest of the pipeline (storage filename, frontend cache-bust, banner
-			// modal accept attribute) only knows those two. GIFs would land as
-			// .jpg on disk with corrupt bytes.
-			if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
-				echo json_encode(['status' => 1, 'error' => 'Unsupported image type. Use JPG or PNG.']);
+			// I5 fix: server-side file size check (JS resize can be bypassed via curl).
+			if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
+				echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
 				exit;
 			}
+			$tmp  = $_FILES['Banner']['tmp_name'];
+			// I3 fix: use exif_imagetype() (magic-byte check) instead of the
+			// browser-supplied MIME type, which is trivially spoofable.
+			$detectedType = exif_imagetype($tmp);
+			if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
+				echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
+				exit;
+			}
+			$mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
 			if (!is_dir(DIR_KINGDOM_BANNER)) {
 				@mkdir(DIR_KINGDOM_BANNER, 0775, true);
 			}
