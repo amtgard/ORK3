@@ -9904,23 +9904,6 @@ html[data-theme="dark"] .evpv-cta:hover { background: #2f855a; }
 
 /* ── pk banner (ported from ev-) ─────────────────────────────────── */
 /* ---- Hero ---- */
-.pk-hero {
-	position: relative;
-	border-radius: 10px;
-	overflow: hidden;
-	margin-top: 3px;
-	margin-bottom: 20px;
-	min-height: 160px;
-	background-color: #2d3748;
-}
-.pk-hero-bg {
-	position: absolute;
-	top: -10px; left: -10px; right: -10px; bottom: -10px;
-	background-size: cover;
-	background-position: center;
-	opacity: 0.14;
-	filter: blur(6px);
-}
 /* Banner image: full-bleed, no blur, no opacity dampening. */
 .pk-hero-has-banner .pk-hero-bg {
 	top: 0; left: 0; right: 0; bottom: 0;
@@ -10063,23 +10046,6 @@ html[data-theme="dark"] .pk-banner-position-hint i { color: var(--ork-link-brigh
 
 /* ── kn banner (ported from ev-) ─────────────────────────────────── */
 /* ---- Hero ---- */
-.kn-hero {
-	position: relative;
-	border-radius: 10px;
-	overflow: hidden;
-	margin-top: 3px;
-	margin-bottom: 20px;
-	min-height: 160px;
-	background-color: #2d3748;
-}
-.kn-hero-bg {
-	position: absolute;
-	top: -10px; left: -10px; right: -10px; bottom: -10px;
-	background-size: cover;
-	background-position: center;
-	opacity: 0.14;
-	filter: blur(6px);
-}
 /* Banner image: full-bleed, no blur, no opacity dampening. */
 .kn-hero-has-banner .kn-hero-bg {
 	top: 0; left: 0; right: 0; bottom: 0;
@@ -10219,26 +10185,62 @@ html[data-theme="dark"] .kn-banner-position-hint i { color: var(--ork-link-brigh
 	.kn-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
 }
 
+/* ── kn-img modal shell (C1 fix — ported from ev-img-* in Eventnew_index.tpl) ── */
+/* These classes are referenced in the kn-banner-modal HTML in Kingdomnew_index.tpl */
+.kn-img-overlay {
+	display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
+	z-index: 1500; align-items: center; justify-content: center;
+}
+.kn-img-overlay.kn-open { display: flex; }
+.kn-img-modal {
+	background: #fff; border-radius: 10px; width: min(520px, 96vw);
+	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
+}
+.kn-img-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
+}
+.kn-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
+.kn-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
+.kn-img-modal-body { padding: 20px 22px; }
+.kn-upload-area {
+	display: flex; flex-direction: column; align-items: center; gap: 8px;
+	border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px 20px;
+	cursor: pointer; color: var(--ork-text-body); font-size: 14px; text-align: center;
+	transition: border-color .15s, background .15s;
+}
+.kn-upload-area:hover { border-color: #4299e1; background: #ebf8ff; }
+.kn-upload-icon { font-size: 32px; color: var(--ork-text-hint); }
+.kn-upload-area small { font-size: 12px; color: var(--ork-text-hint); }
+.kn-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.kn-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
+.kn-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+.kn-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
+/* M1 fix: kn-field-hint (replaces stale ec-field-hint inside kn banner modal) */
+.kn-field-hint { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+/* I1 fix: .kn-btn-outline inside modal gets light-bg override so white text is visible */
+.kn-img-modal .kn-btn-outline { background: #fff; color: #2d3748 !important; border-color: #cbd5e0; }
+.kn-img-modal .kn-btn-outline:hover { background: #f7fafc; color: #1a202c !important; }
+/* Dark mode — kn-img modal shell */
+html[data-theme="dark"] .kn-img-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .kn-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .kn-img-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .kn-img-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-upload-area { border-color: var(--ork-border); color: var(--ork-text-secondary); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .kn-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-upload-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .kn-fp-title { background: #1a365d; color: #90cdf4; }
+html[data-theme="dark"] .kn-field-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-img-modal .kn-btn-outline { background: var(--ork-bg-secondary); color: var(--ork-text) !important; border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-img-modal .kn-btn-outline:hover { background: var(--ork-bg-tertiary); color: var(--ork-text) !important; }
+
+
+
+
 
 /* ── pn banner (ported from ev-) ─────────────────────────────────── */
 /* ---- Hero ---- */
-.pn-hero {
-	position: relative;
-	border-radius: 10px;
-	overflow: hidden;
-	margin-top: 3px;
-	margin-bottom: 20px;
-	min-height: 160px;
-	background-color: #2d3748;
-}
-.pn-hero-bg {
-	position: absolute;
-	top: -10px; left: -10px; right: -10px; bottom: -10px;
-	background-size: cover;
-	background-position: center;
-	opacity: 0.14;
-	filter: blur(6px);
-}
 /* Banner image: full-bleed, no blur, no opacity dampening. */
 .pn-hero-has-banner .pn-hero-bg {
 	top: 0; left: 0; right: 0; bottom: 0;
