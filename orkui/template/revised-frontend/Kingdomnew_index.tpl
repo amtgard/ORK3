@@ -25,6 +25,22 @@
 		: HTTP_KINGDOM_HERALDRY . '0000.jpg';
 	$entityLabel = $IsPrinz ? 'Principality' : 'Kingdom';
 
+	$_knInfo         = $kingdom_info['Info']['KingdomInfo'] ?? [];
+	$hasBanner       = !empty($_knInfo['HasBanner']);
+	$bannerShowLogo  = !isset($_knInfo['BannerShowLogo']) || (int)$_knInfo['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($_knInfo['BannerVignette']) || (int)$_knInfo['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($_knInfo['BannerOffsetX']) ? max(0, min(100, (int)$_knInfo['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($_knInfo['BannerOffsetY']) ? max(0, min(100, (int)$_knInfo['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_KINGDOM_BANNER, sprintf('%04d', (int)($_knInfo['KingdomId'] ?? 0)));
+		$bannerFs   = DIR_KINGDOM_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_KINGDOM_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+	$knCanManageBanner = !empty($CanManageKingdom);
+
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
@@ -95,8 +111,23 @@
 <!-- =============================================
      ZONE 1: Hero Header
      ============================================= -->
-<div class="kn-hero">
-	<div class="kn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+<?php
+	$_heroBgUrl    = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses  = 'kn-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' kn-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' kn-hero-vignette';
+	if ($knCanManageBanner)            $_heroClasses .= ' kn-hero-editable';
+	$_knShowLogo = !$bannerUrl || $bannerShowLogo;
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="kn-hero">
+	<div class="kn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
 	<div class="kn-hero-content">
 
 		<div class="kn-heraldry-wrap">
