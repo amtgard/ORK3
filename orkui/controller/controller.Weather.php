@@ -29,7 +29,46 @@ class Controller_Weather extends Controller {
 		}
 		$this->template = '../revised-frontend/Weather_index.tpl';
 		$this->data['page_title'] = 'Weather Forecast';
-		$this->data['Rundown']         = Ork3::$Lib->weather->daily_summary(date('Y-m-d'));
+		$today = date('Y-m-d');
+		$this->data['SelectedDate']    = $today;
+		$this->data['Rundown']         = Ork3::$Lib->weather->daily_summary($today);
+		$this->data['PlayToday']       = Ork3::$Lib->weather->play_for_date($today);
 		$this->data['UpcomingEvents']  = Ork3::$Lib->weather->upcoming_events_with_forecast(7);
+		// 7-day strip of pills (today + next 6 days)
+		$strip = array();
+		for ($i = 0; $i < 7; $i++) {
+			$d = date('Y-m-d', strtotime("+$i days"));
+			$strip[] = array(
+				'date'      => $d,
+				'day_label' => $i === 0 ? 'Today' : date('D', strtotime($d)),
+				'date_label'=> date('M j', strtotime($d)),
+				'is_today'  => $i === 0,
+			);
+		}
+		$this->data['DateStrip'] = $strip;
+	}
+
+	/**
+	 * Per-day data fetched by the date-pill switcher.
+	 * Route: Weather/day/{YYYY-MM-DD}
+	 */
+	public function day($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(array('status' => 5, 'error' => 'Not logged in'));
+			exit;
+		}
+		$date = trim($p ?? '');
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+			echo json_encode(array('status' => 1, 'error' => 'Invalid date'));
+			exit;
+		}
+		echo json_encode(array(
+			'status'   => 0,
+			'date'     => $date,
+			'rundown'  => Ork3::$Lib->weather->daily_summary($date),
+			'play'     => Ork3::$Lib->weather->play_for_date($date),
+		));
+		exit;
 	}
 }

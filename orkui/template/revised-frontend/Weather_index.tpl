@@ -1,6 +1,9 @@
 <?php
-	$rundown = $Rundown ?? array();
-	$events  = $UpcomingEvents ?? array();
+	$rundown    = $Rundown ?? array();
+	$events     = $UpcomingEvents ?? array();
+	$dateStrip  = $DateStrip ?? array();
+	$playToday  = $PlayToday ?? array();
+	$selected   = $SelectedDate ?? date('Y-m-d');
 
 	// ─── Rundown sentence builder ──────────────────────────────────
 	// Pre-written slot templates; no LLM.
@@ -186,13 +189,41 @@ html[data-theme="dark"] .wx-event-badge-warning { background: #450a0a; color: #f
 html[data-theme="dark"] .wx-event-badge-caution { background: #422006; color: #fcd34d; border-color: #78350f; }
 
 .wx-empty { padding: 30px 12px; text-align: center; color: var(--ork-text-muted, #a0aec0); font-style: italic; }
+
+/* Date strip */
+.wx-strip { display: flex; gap: 6px; margin: 20px 0 14px; flex-wrap: wrap; }
+.wx-pill { flex: 1 1 0; min-width: 70px; padding: 8px 10px; border-radius: 8px; background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); cursor: pointer; text-align: center; transition: background .12s, border-color .12s, transform .12s; }
+.wx-pill:hover { background: var(--ork-bg-secondary, #f7fafc); }
+.wx-pill.active { border-color: var(--ork-link-bright, #2b6cb0); background: var(--ork-link-bright, #2b6cb0); color: #fff; }
+.wx-pill.active .wx-pill-date { color: rgba(255,255,255,0.85); }
+.wx-pill-day { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.wx-pill-date { font-size: 11px; color: var(--ork-text-muted, #718096); margin-top: 2px; }
+
+/* Play list */
+.wx-play { background: var(--ork-card-bg, #fff); border: 1px solid var(--ork-border, #e2e8f0); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
+.wx-play-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--ork-border, #e2e8f0); }
+.wx-play-header h2 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
+.wx-play-count { font-size: 11px; color: var(--ork-text-muted, #a0aec0); }
+.wx-play-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--ork-border, #edf2f7); align-items: center; }
+.wx-play-row:last-child { border-bottom: 0; }
+.wx-play-main { min-width: 0; }
+.wx-play-park { font-size: 14px; font-weight: 600; color: var(--ork-text, #2d3748); }
+.wx-play-park a { color: inherit; text-decoration: none; }
+.wx-play-park a:hover { color: var(--ork-link-bright, #2b6cb0); }
+.wx-play-meta { font-size: 11.5px; color: var(--ork-text-muted, #718096); margin-top: 2px; }
+.wx-play-wx { text-align: right; font-size: 13px; min-width: 130px; }
+.wx-play-wx .wx-play-temps { font-weight: 600; color: var(--ork-text, #2d3748); }
+.wx-play-wx .wx-play-empty { font-size: 11px; color: var(--ork-text-muted, #a0aec0); font-style: italic; }
+
+.wx-loading { padding: 20px; text-align: center; color: var(--ork-text-muted, #a0aec0); font-style: italic; }
 </style>
 
-<div class="wx-root">
+<div class="wx-root" data-selected-date="<?= htmlspecialchars($selected) ?>">
 
 	<!-- ── Rundown ──────────────────────────────────────────── -->
-	<div class="wx-rundown">
+	<div class="wx-rundown" id="wx-rundown">
 		<h2>🌤️ Amtgard Weather This Week</h2>
+		<div id="wx-rundown-body">
 		<?php if (!empty($leadParts)): ?>
 			<p><?= implode(' ', $leadParts) ?></p>
 		<?php endif; ?>
@@ -202,6 +233,72 @@ html[data-theme="dark"] .wx-event-badge-caution { background: #422006; color: #f
 		<?php if ($comingUp): ?>
 			<p><?= $comingUp ?></p>
 		<?php endif; ?>
+		</div>
+	</div>
+
+	<!-- ── Date strip ─────────────────────────────────────── -->
+	<div class="wx-strip" id="wx-strip">
+		<?php foreach ($dateStrip as $pill): ?>
+			<button class="wx-pill<?= $pill['is_today'] ? ' active' : '' ?>"
+			        data-date="<?= htmlspecialchars($pill['date']) ?>">
+				<div class="wx-pill-day"><?= htmlspecialchars($pill['day_label']) ?></div>
+				<div class="wx-pill-date"><?= htmlspecialchars($pill['date_label']) ?></div>
+			</button>
+		<?php endforeach; ?>
+	</div>
+
+	<!-- ── Play list (for selected day) ───────────────────── -->
+	<div class="wx-play" id="wx-play">
+		<div class="wx-play-header">
+			<h2 id="wx-play-title">🏕️ Play Today</h2>
+			<span class="wx-play-count" id="wx-play-count"><?= count($playToday) ?> parks</span>
+		</div>
+		<div id="wx-play-body">
+			<?php if (empty($playToday)): ?>
+				<div class="wx-empty">No in-person play scheduled.</div>
+			<?php else: ?>
+				<?php foreach ($playToday as $p):
+					$fc = $p['forecast'] ?? null;
+					$kshort = Weather::short_kingdom($p['kingdom_name'] ?? '');
+					$scheds = array();
+					foreach ($p['schedules'] as $s) {
+						$t = $s['time'] ? date('g:i A', strtotime($s['time'])) : '';
+						$scheds[] = htmlspecialchars($s['purpose']) . ($t ? " at $t" : '');
+					}
+				?>
+				<div class="wx-play-row">
+					<div class="wx-play-main">
+						<div class="wx-play-park">
+							<a href="<?= UIR ?>Park/profile/<?= (int)$p['park_id'] ?>"><?= htmlspecialchars($p['park_name']) ?></a>
+						</div>
+						<div class="wx-play-meta">
+							<?= implode(' &middot; ', $scheds) ?><?php if ($kshort): ?> &middot; <?= htmlspecialchars($kshort) ?><?php endif; ?>
+						</div>
+					</div>
+					<div class="wx-play-wx">
+						<?php if ($fc && $fc['hi_f'] !== null):
+							$hiC = round(($fc['hi_f'] - 32) * 5 / 9);
+							$loC = $fc['lo_f'] !== null ? round(($fc['lo_f'] - 32) * 5 / 9) : null;
+						?>
+							<div class="wx-play-temps">
+								<?= $wxIcon($fc['code']) ?>
+								<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?php endif; ?>
+							</div>
+							<?php if (!empty($p['badges'])): ?>
+								<div class="wx-play-meta">
+									<?php foreach ($p['badges'] as $b): ?>
+										<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"><?= $b['icon'] ?></span>
+									<?php endforeach; ?>
+								</div>
+							<?php endif; ?>
+						<?php else: ?>
+							<div class="wx-play-empty">forecast unavailable</div>
+						<?php endif; ?>
+					</div>
+				</div>
+				<?php endforeach; ?>
+			<?php endif; ?>
+		</div>
 	</div>
 
 	<!-- ── Upcoming Events ─────────────────────────────────── -->
@@ -275,16 +372,187 @@ html[data-theme="dark"] .wx-event-badge-caution { background: #422006; color: #f
 </div>
 
 <script>
-// Park link clicks: for v1, scroll to a future map placeholder. With no map
-// on the page yet, fall back to opening the park profile.
-document.querySelectorAll('.wx-jump-park').forEach(function(a) {
-	a.addEventListener('click', function(e) {
-		if (!document.getElementById('weather-map')) {
-			// No map yet — let the default # anchor jump do nothing, navigate to the park profile instead.
-			e.preventDefault();
-			var pid = this.dataset.parkId;
-			if (pid) window.location.href = '<?= UIR ?>Park/profile/' + pid;
+(function() {
+	var UIR = '<?= UIR ?>';
+	var wxIcon = function(c) {
+		c = +c;
+		if (c === 0)                  return '☀️';
+		if (c === 1)                  return '🌤️';
+		if (c === 2)                  return '⛅';
+		if (c === 3)                  return '☁️';
+		if (c === 45 || c === 48)     return '🌫️';
+		if (c >= 51 && c <= 57)       return '🌦️';
+		if (c >= 61 && c <= 67)       return '🌧️';
+		if (c >= 71 && c <= 77)       return '❄️';
+		if (c >= 80 && c <= 82)       return '🌦️';
+		if (c === 85 || c === 86)     return '🌨️';
+		if (c >= 95 && c <= 99)       return '⛈️';
+		return '🌡️';
+	};
+	function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+	function tempPair(f) { var c = Math.round((f - 32) * 5 / 9); return Math.round(f) + '/' + c + '°'; }
+
+	// Kingdom-name shortener mirrors Weather::short_kingdom in PHP
+	function shortKingdom(name) {
+		if (!name) return '';
+		if (/Freeholds/i.test(name)) return '';
+		var m = name.match(/^The (.+ Kingdom)$/i);
+		if (m) return 'the ' + m[1];
+		return name.replace(/^The /i, '').replace(/^(Kingdom|Empire|Principality) of /i, '');
+	}
+
+	function rollupKingdoms(map, max) {
+		max = max || 5;
+		if (!map) return '';
+		var arr = Object.keys(map).map(function(k) { return [k, map[k]]; });
+		arr.sort(function(a, b) { return b[1] - a[1]; });
+		arr = arr.slice(0, max);
+		var names = arr.map(function(e) { return shortKingdom(e[0]); }).filter(function(s) { return s; });
+		if (names.length === 0) return '';
+		if (names.length === 1) return names[0];
+		if (names.length === 2) return names[0] + ' and ' + names[1];
+		return names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
+	}
+
+	function renderRundown(r, dayLabel) {
+		var bc = r.badge_counts || {}, bk = r.badge_kingdoms || {};
+		var standout = r.standout_park || null;
+		var leadParts = [];
+		var noPlay = r.no_play_today;
+		var noFlags = Object.keys(bc).length === 0;
+		if (noPlay) {
+			leadParts.push('No parks have in-person play scheduled for ' + dayLabel + '.');
+		} else if (noFlags) {
+			leadParts.push('Of the parks playing ' + dayLabel + ', conditions look favorable across the board — no warnings flagged.');
+		} else {
+			if (bc['Thunderstorms']) {
+				var n = bc['Thunderstorms'], k = rollupKingdoms(bk['Thunderstorms']);
+				leadParts.push('Of parks playing ' + dayLabel + ', ' + n + ' ' + (n === 1 ? 'faces' : 'face') + ' thunderstorms' + (k ? ' — primarily in ' + k : '') + '.');
+			}
+			if (bc['Extreme heat']) {
+				var n = bc['Extreme heat'];
+				leadParts.push((n === 1 ? 'One park playing ' + dayLabel + ' is' : n + ' parks playing ' + dayLabel + ' are') + ' facing extreme heat.');
+			}
+			if (bc['Frostbite risk']) {
+				var n = bc['Frostbite risk'];
+				leadParts.push((n === 1 ? 'One park playing ' + dayLabel + ' is' : n + ' parks playing ' + dayLabel + ' are') + ' under frostbite-risk conditions.');
+			}
+			if (bc['Severe wind']) {
+				var n = bc['Severe wind'], k = rollupKingdoms(bk['Severe wind']);
+				leadParts.push('Severe wind gusts (40+ mph / 65+ km/h) at ' + n + ' ' + (n === 1 ? 'park' : 'parks') + ' playing ' + dayLabel + (k ? ', across ' + k : '') + '.');
+			}
+			if (bc['Very high UV']) {
+				var n = bc['Very high UV'], k = rollupKingdoms(bk['Very high UV']);
+				leadParts.push('Very high UV at ' + n + ' ' + (n === 1 ? 'park' : 'parks') + ' playing ' + dayLabel + (k ? ' in ' + k : '') + '.');
+			}
 		}
+
+		var standoutLine = '';
+		if (standout) {
+			var icons = { 'Extreme heat':'🥵', 'Frostbite risk':'🥶', 'Thunderstorms':'⛈️', 'Severe wind':'💨', 'Very high UV':'🌞' };
+			var pieces = (standout.flags || []).map(function(f) { return (icons[f] || '⚠️') + ' ' + esc(f); });
+			standoutLine = '<a href="' + UIR + 'Park/profile/' + standout.park_id + '" class="wx-jump-park" data-park-id="' + standout.park_id + '">' + esc(standout.name) + '</a> carries the worst forecast — ' + pieces.join(' · ');
+			if (standout.app_hi_f != null) {
+				standoutLine += ' (' + tempPair(standout.app_hi_f) + ' apparent).';
+			} else {
+				standoutLine += '.';
+			}
+		}
+
+		// Coming-up: ALWAYS today-relative — keep this constant even when pills shift.
+		// We don't have the event count in the per-day response (we only computed it
+		// for today on initial load), so leave the existing paragraph untouched.
+
+		var html = '';
+		if (leadParts.length) html += '<p>' + leadParts.join(' ') + '</p>';
+		if (standoutLine)     html += '<p>' + standoutLine + '</p>';
+		// Preserve the existing 'coming up' paragraph (it's today-relative, not day-scoped)
+		var existingComingUp = document.querySelector('#wx-rundown-body p:last-child');
+		var preservedComingUp = '';
+		if (existingComingUp && existingComingUp.querySelector('a[href="#upcoming-events"]')) {
+			preservedComingUp = existingComingUp.outerHTML;
+		}
+		document.getElementById('wx-rundown-body').innerHTML = html + preservedComingUp;
+	}
+
+	function renderPlay(rows, dayLabel) {
+		var title = dayLabel === 'today' ? '🏕️ Play Today' : '🏕️ Play ' + dayLabel.replace(/\b\w/, function(c) { return c.toUpperCase(); });
+		document.getElementById('wx-play-title').textContent = title;
+		document.getElementById('wx-play-count').textContent = rows.length + (rows.length === 1 ? ' park' : ' parks');
+		var body = document.getElementById('wx-play-body');
+		if (!rows.length) {
+			body.innerHTML = '<div class="wx-empty">No in-person play scheduled.</div>';
+			return;
+		}
+		var html = '';
+		rows.forEach(function(p) {
+			var k = shortKingdom(p.kingdom_name || '');
+			var fc = p.forecast || null;
+			var scheds = (p.schedules || []).map(function(s) {
+				var t = '';
+				if (s.time) {
+					var parts = s.time.split(':');
+					var d = new Date(); d.setHours(+parts[0], +parts[1] || 0, 0, 0);
+					t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+				}
+				return esc(s.purpose) + (t ? ' at ' + t : '');
+			});
+			var wx = '';
+			if (fc && fc.hi_f != null) {
+				var loPart = fc.lo_f != null ? ' · L ' + tempPair(fc.lo_f) : '';
+				wx = '<div class="wx-play-temps">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + loPart + '</div>';
+				if (p.badges && p.badges.length) {
+					wx += '<div class="wx-play-meta">' +
+						p.badges.map(function(b) { return '<span class="wx-event-badge wx-event-badge-' + b.severity + '" title="' + esc(b.label) + '">' + b.icon + '</span>'; }).join(' ') +
+						'</div>';
+				}
+			} else {
+				wx = '<div class="wx-play-empty">forecast unavailable</div>';
+			}
+			html += '<div class="wx-play-row">' +
+				'<div class="wx-play-main">' +
+					'<div class="wx-play-park"><a href="' + UIR + 'Park/profile/' + p.park_id + '">' + esc(p.park_name) + '</a></div>' +
+					'<div class="wx-play-meta">' + scheds.join(' &middot; ') + (k ? ' &middot; ' + esc(k) : '') + '</div>' +
+				'</div>' +
+				'<div class="wx-play-wx">' + wx + '</div>' +
+			'</div>';
+		});
+		body.innerHTML = html;
+	}
+
+	function activatePill(date) {
+		document.querySelectorAll('.wx-pill').forEach(function(b) {
+			b.classList.toggle('active', b.dataset.date === date);
+		});
+		document.querySelector('.wx-root').dataset.selectedDate = date;
+	}
+
+	function fetchAndRender(date, dayLabel) {
+		document.getElementById('wx-play-body').innerHTML = '<div class="wx-loading">Loading…</div>';
+		fetch(UIR + 'Weather/day/' + date, { credentials: 'same-origin' })
+			.then(function(r) { return r.json(); })
+			.then(function(d) {
+				if (!d || d.status !== 0) {
+					document.getElementById('wx-play-body').innerHTML = '<div class="wx-empty">Could not load weather.</div>';
+					return;
+				}
+				renderRundown(d.rundown || {}, dayLabel);
+				renderPlay(d.play || [], dayLabel);
+			})
+			.catch(function() {
+				document.getElementById('wx-play-body').innerHTML = '<div class="wx-empty">Request failed.</div>';
+			});
+	}
+
+	document.querySelectorAll('.wx-pill').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var date = this.dataset.date;
+			var today = new Date().toISOString().slice(0, 10);
+			var dayLabel = (date === today) ? 'today' :
+				new Date(date + 'T00:00:00').toLocaleDateString([], { weekday: 'long' });
+			activatePill(date);
+			fetchAndRender(date, dayLabel);
+		});
 	});
-});
+})();
 </script>
