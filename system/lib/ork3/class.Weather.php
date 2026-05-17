@@ -46,6 +46,108 @@ class Weather extends Ork3 {
 	}
 
 	/**
+	 * Pull a single day's forecast out of the cached forecast_json for a
+	 * park. Returns null if the date is outside the 7-day window we cached,
+	 * or if the park has no weather row at all.
+	 *
+	 * Returned shape: ['date'=>'YYYY-MM-DD','code'=>int,'hi_f'=>float,'lo_f'=>float,'precip_pct'=>int]
+	 */
+	public function forecast_for_date($park_id, $date) {
+		$row = $this->for_park($park_id);
+		if (!$row || empty($row['forecast_json'])) return null;
+		$wx = json_decode($row['forecast_json'], true);
+		if (!is_array($wx) || empty($wx['daily']['time'])) return null;
+		$idx = array_search($date, $wx['daily']['time'], true);
+		if ($idx === false) return null;
+		return array(
+			'date'         => $date,
+			'code'         => isset($wx['daily']['weather_code'][$idx])                  ? (int)$wx['daily']['weather_code'][$idx]                  : null,
+			'hi_f'         => isset($wx['daily']['temperature_2m_max'][$idx])            ? (float)$wx['daily']['temperature_2m_max'][$idx]          : null,
+			'lo_f'         => isset($wx['daily']['temperature_2m_min'][$idx])            ? (float)$wx['daily']['temperature_2m_min'][$idx]          : null,
+			'app_hi_f'     => isset($wx['daily']['apparent_temperature_max'][$idx])      ? (float)$wx['daily']['apparent_temperature_max'][$idx]    : null,
+			'app_lo_f'     => isset($wx['daily']['apparent_temperature_min'][$idx])      ? (float)$wx['daily']['apparent_temperature_min'][$idx]    : null,
+			'uv_max'       => isset($wx['daily']['uv_index_max'][$idx])                  ? (float)$wx['daily']['uv_index_max'][$idx]                : null,
+			'gusts_max'    => isset($wx['daily']['wind_gusts_10m_max'][$idx])            ? (float)$wx['daily']['wind_gusts_10m_max'][$idx]          : null,
+			'precip_pct'   => isset($wx['daily']['precipitation_probability_max'][$idx]) ? (int)$wx['daily']['precipitation_probability_max'][$idx] : null,
+		);
+	}
+
+	/**
+	 * Derive safety badges for a single forecast row.
+	 *
+	 * Two tiers:
+	 *  - WARNINGS (absolute, universal): things that are biologically dangerous
+	 *    no matter where you live — heat stroke territory, frostbite territory,
+	 *    lightning, severe wind, extreme UV. Same thresholds for Texas as
+	 *    Ottawa as Florida.
+	 *  - CAUTIONS (relative): "this day is notably hotter/colder/windier than
+	 *    the surrounding week here." Solves the Texas-vs-Ottawa problem
+	 *    without per-park config — a steady-cold Ottawa Sunday is normal and
+	 *    flagless; a cold snap below the local week's average lights up.
+	 *
+	 * @param array      $f         Single-day forecast (from forecast_for_date)
+	 * @param array|null $allDaily  Optional: the 'daily' block from forecast_json
+	 *                              for week-relative comparisons. Without it,
+	 *                              only the absolute warnings fire.
+	 * @param string|null $forDate  Optional: the date string for $f (skips it
+	 *                              when computing the week's average so we're
+	 *                              comparing today against the other days).
+	 */
+	public static function safety_badges($f, $allDaily = null, $forDate = null) {
+		$out = array();
+		$code = isset($f['code'])      ? (int)$f['code']        : null;
+		$ah   = isset($f['app_hi_f'])  ? (float)$f['app_hi_f']  : null;
+		$al   = isset($f['app_lo_f'])  ? (float)$f['app_lo_f']  : null;
+		$uv   = isset($f['uv_max'])    ? (float)$f['uv_max']    : null;
+		$g    = isset($f['gusts_max']) ? (float)$f['gusts_max'] : null;
+
+		// ---- WARNINGS — absolute, biologically dangerous everywhere ----
+		if ($ah !== null && $ah >= 103)                   { $out[] = array('icon'=>'🥵','label'=>'Extreme heat',   'severity'=>'warning'); }
+		if ($al !== null && $al <=   0)                   { $out[] = array('icon'=>'🥶','label'=>'Frostbite risk', 'severity'=>'warning'); }
+		if ($code !== null && $code >= 95 && $code <= 99) { $out[] = array('icon'=>'⛈️','label'=>'Thunderstorms',  'severity'=>'warning'); }
+		if ($g  !== null && $g  >= 40)                    { $out[] = array('icon'=>'💨','label'=>'Severe wind',    'severity'=>'warning'); }
+		if ($uv !== null && $uv >= 10)                    { $out[] = array('icon'=>'🌞','label'=>'Very high UV',   'severity'=>'warning'); }
+
+		// ---- CAUTIONS — relative to the local 7-day forecast ----
+		if (is_array($allDaily) && !empty($allDaily['time'])) {
+			$idxToday = $forDate !== null ? array_search($forDate, $allDaily['time'], true) : false;
+			$peers = array_keys($allDaily['time']);
+			if ($idxToday !== false) {
+				$peers = array_values(array_diff($peers, array($idxToday)));
+			}
+			$avg = function($key) use ($allDaily, $peers) {
+				$vals = array();
+				foreach ($peers as $i) {
+					if (isset($allDaily[$key][$i]) && is_numeric($allDaily[$key][$i])) $vals[] = (float)$allDaily[$key][$i];
+				}
+				return $vals ? array_sum($vals) / count($vals) : null;
+			};
+			$avgHi  = $avg('apparent_temperature_max');
+			$avgLo  = $avg('apparent_temperature_min');
+			$avgGus = $avg('wind_gusts_10m_max');
+			if ($ah !== null && $avgHi  !== null && ($ah - $avgHi) >=  10)   { $out[] = array('icon'=>'🔥','label'=>'Hot for the week','severity'=>'caution'); }
+			if ($al !== null && $avgLo  !== null && ($avgLo - $al) >=  10)   { $out[] = array('icon'=>'❄️','label'=>'Cold for the week','severity'=>'caution'); }
+			if ($g  !== null && $avgGus !== null && ($g  - $avgGus) >= 15)   { $out[] = array('icon'=>'💨','label'=>'Windy day',       'severity'=>'caution'); }
+		}
+		return $out;
+	}
+
+	/**
+	 * Convenience: look up a park's forecast for a date AND its 7-day daily
+	 * block in one call, return the badges for that date with week-relative
+	 * cautions enabled. Returns [] if no data.
+	 */
+	public function badges_for_date($park_id, $date) {
+		$row = $this->for_park($park_id);
+		if (!$row || empty($row['forecast_json'])) return array();
+		$wx = json_decode($row['forecast_json'], true);
+		if (!is_array($wx) || empty($wx['daily']['time'])) return array();
+		$f = $this->forecast_for_date($park_id, $date);
+		if (!$f) return array();
+		return self::safety_badges($f, $wx['daily'], $date);
+	}
+
+	/**
 	 * Batch variant — one query for a list of park IDs. Returns an assoc
 	 * keyed by park_id. If any returned row is missing or older than
 	 * STALE_MIN, triggers ONE refresh and re-reads. Caller pays at most one
@@ -90,8 +192,9 @@ class Weather extends Ork3 {
 		$url = self::URL_FORECAST . '?'
 			. 'latitude='  . implode(',', $lats) . '&'
 			. 'longitude=' . implode(',', $lngs) . '&'
-			. 'current=temperature_2m,weather_code,is_day,wind_speed_10m&'
-			. 'daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&'
+			. 'current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m&'
+			. 'daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,'
+				. 'precipitation_probability_max,weather_code,uv_index_max,wind_gusts_10m_max&'
 			. 'temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&'
 			. 'timezone=auto&forecast_days=7';
 

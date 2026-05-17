@@ -411,14 +411,28 @@
 		}
 		eventLayers = eFresh;
 
-		// Fit bounds once on first stats with data
-		if (!initialBounds) {
-			const lats = [], lngs = [];
-			for (const pid in parksMeta)  { const p = parksMeta[pid];  if (p.lat && p.lng) { lats.push(p.lat); lngs.push(p.lng); } }
-			for (const eid in eventsMeta) { const e = eventsMeta[eid]; if (e.lat && e.lng && e.coord_source !== 'none') { lats.push(e.lat); lngs.push(e.lng); } }
-			if (lats.length > 0) {
-				initialBounds = [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]];
+		// Recompute "fit-all" bounds from the current park/event set every
+		// stats refresh. If a new park appeared outside the previously-fit
+		// area (e.g., a Florida signin while watching a Canadian-anchored
+		// view), expand the auto-fit envelope. When the viewer isn't
+		// focused on a specific park/event, also auto-fly out so the new
+		// arrival is visible without user action.
+		const lats = [], lngs = [];
+		for (const pid in parksMeta)  { const p = parksMeta[pid];  if (p.lat && p.lng) { lats.push(p.lat); lngs.push(p.lng); } }
+		for (const eid in eventsMeta) { const e = eventsMeta[eid]; if (e.lat && e.lng && e.coord_source !== 'none') { lats.push(e.lat); lngs.push(e.lng); } }
+		if (lats.length > 0) {
+			const newBounds = [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]];
+			const firstFit  = !initialBounds;
+			const extended  = initialBounds && (
+				newBounds[0][0] < initialBounds[0][0] || newBounds[0][1] < initialBounds[0][1] ||
+				newBounds[1][0] > initialBounds[1][0] || newBounds[1][1] > initialBounds[1][1]
+			);
+			initialBounds = newBounds;
+			if (firstFit) {
 				map.fitBounds(initialBounds, { padding: [40, 40] });
+			} else if (extended && !focusedId) {
+				// New park outside the previous envelope and viewer is just watching.
+				map.flyToBounds(initialBounds, { padding: [40, 40], duration: 0.8 });
 			}
 		}
 		applyCircles();
@@ -619,16 +633,19 @@
 		if (code >= 95 && code <= 99)           return ['⛈️', 'Thunderstorm'];
 		return ['', 'Unknown'];
 	}
+	// Format °F as "68°F / 20°C" — both units side by side for the US+CA audience.
+	function fmtTemp(f)      { return f == null ? '—' : `${Math.round(f)}°F / ${Math.round((f - 32) * 5 / 9)}°C`; }
+	function fmtTempShort(f) { return f == null ? '—' : `${Math.round(f)}/${Math.round((f - 32) * 5 / 9)}°`; }
 	function renderWeather(wx) {
 		const wrap = document.getElementById('lv-pi-weather');
 		if (!wx || wx.temp_f == null) { wrap.style.display = 'none'; return; }
 		const [icon, label] = wxIcon(wx.code, wx.is_day);
 		const now  = document.getElementById('lv-wx-now');
 		const meta = document.getElementById('lv-wx-meta');
-		now.textContent  = `${icon} ${Math.round(wx.temp_f)}°F`;
+		now.textContent  = `${icon} ${fmtTemp(wx.temp_f)}`;
 		const parts = [label];
 		if (wx.hi_f != null && wx.lo_f != null) {
-			parts.push(`H ${Math.round(wx.hi_f)}° / L ${Math.round(wx.lo_f)}°`);
+			parts.push(`H ${fmtTempShort(wx.hi_f)} / L ${fmtTempShort(wx.lo_f)}`);
 		}
 		if (wx.precip_pct != null && wx.precip_pct > 0) {
 			parts.push(`${wx.precip_pct}% precip`);

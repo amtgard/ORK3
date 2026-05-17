@@ -410,6 +410,65 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 		<div class="ev-stat-label">Website</div>
 	</a>
 	<?php endif; ?>
+	<?php
+		// Event forecast card.
+		// Date selection: if event is currently running (today ∈ [start, end]) show today;
+		// else if event is upcoming, show start day. Past events get no forecast.
+		// Either way, only renders when the chosen date is within the 7-day cache window.
+		$evWxDate     = null;
+		$evWxParkId   = $atParkId ?: $parkId;
+		$evWxLive     = false;  // live = today during a multi-day event
+		if ($evWxParkId && $eventStart) {
+			$_evStartDay = substr($eventStart, 0, 10);
+			$_evEndDay   = $eventEnd ? substr($eventEnd, 0, 10) : $_evStartDay;
+			// "Today" in the park's local timezone — not server time (Chicago).
+			$_today    = date('Y-m-d');
+			$_parkRow  = Ork3::$Lib->weather->for_park($evWxParkId);
+			if (!empty($_parkRow['forecast_json'])) {
+				$_pwx = @json_decode($_parkRow['forecast_json'], true);
+				if (!empty($_pwx['timezone'])) {
+					try { $_today = (new DateTime('now', new DateTimeZone($_pwx['timezone'])))->format('Y-m-d'); } catch (Exception $e) {}
+				}
+			}
+			if ($_today >= $_evStartDay && $_today <= $_evEndDay) {
+				$evWxDate = $_today;  $evWxLive = true;
+			} elseif ($_evStartDay > $_today) {
+				$evWxDate = $_evStartDay;
+			}
+		}
+		$evFC = ($evWxDate && $evWxParkId)
+			? Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate)
+			: null;
+		if ($evFC && $evFC['hi_f'] !== null):
+			$c = (int)$evFC['code'];
+			$evIc = ($c===0)?'☀️':(($c===1)?'🌤️':(($c===2)?'⛅':(($c===3)?'☁️':(($c===45||$c===48)?'🌫️':(($c>=51&&$c<=57)?'🌦️':(($c>=61&&$c<=67)?'🌧️':(($c>=71&&$c<=77)?'❄️':(($c>=80&&$c<=82)?'🌦️':(($c===85||$c===86)?'🌨️':(($c>=95)?'⛈️':'🌡️'))))))))));
+			$evHiC = round(($evFC['hi_f']-32)*5/9);
+			$evLoC = $evFC['lo_f'] !== null ? round(($evFC['lo_f']-32)*5/9) : null;
+	?>
+	<?php $evBadges = Ork3::$Lib->weather->badges_for_date($evWxParkId, $evWxDate); ?>
+	<div class="ev-stat-card">
+		<div class="ev-stat-icon"><?= $evIc ?></div>
+		<div class="ev-stat-value" style="font-size:15px;padding-top:3px">
+			<?= round($evFC['hi_f']) ?>/<?= $evHiC ?>°<?php if ($evFC['lo_f'] !== null): ?> <span style="font-size:11px;color:var(--ork-text-muted,#718096)">L <?= round($evFC['lo_f']) ?>/<?= $evLoC ?>°</span><?php endif; ?>
+			<?php if (!empty($evFC['precip_pct']) && $evFC['precip_pct'] >= 20): ?>
+				<div style="font-size:11px;color:var(--ork-text-muted,#718096);margin-top:2px"><?= (int)$evFC['precip_pct'] ?>% rain</div>
+			<?php endif; ?>
+			<?php if ($evBadges): ?>
+				<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;justify-content:center">
+					<?php foreach ($evBadges as $_b): ?>
+						<span title="<?= htmlspecialchars($_b['label']) ?>" style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:<?= $_b['severity']==='warning'?'#fee2e2':'#fef3c7' ?>;color:<?= $_b['severity']==='warning'?'#991b1b':'#92400e' ?>;border:1px solid <?= $_b['severity']==='warning'?'#fca5a5':'#fcd34d' ?>"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
+		</div>
+		<div class="ev-stat-label">
+			<?= $evWxLive ? 'Today' : 'Forecast' ?>
+			<a href="https://open-meteo.com/" target="_blank" rel="noopener"
+			   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
+			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>
+		</div>
+	</div>
+	<?php endif; ?>
 </div>
 
 <?php // ---- LAYOUT ---- ?>

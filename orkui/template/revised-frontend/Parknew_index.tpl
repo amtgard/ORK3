@@ -157,16 +157,36 @@
 		}
 		foreach ($_pdOccs as $_pdOcc) {
 			$_pdTitle = !empty($_pd['Online']) ? '(Online) ' . $_pdLabel : $_pdLabel;
-			$pkCalParkDays[] = ['title'=>$_pdTitle,'start'=>$_pdOcc.'T'.$_pdTimeStr,'color'=>$_pdColor];
+			$pkCalParkDays[] = ['title'=>$_pdTitle,'start'=>$_pdOcc.'T'.$_pdTimeStr,'color'=>$_pdColor,'online'=>!empty($_pd['Online'])];
 		}
+		// Lookup: first upcoming occurrence per park-day-id, for the schedule cards' forecast badges
+		if (!empty($_pdOccs)) { $pdNextDateById[(int)$_pd['ParkDayId']] = $_pdOccs[0]; }
+	}
+	if (!isset($pdNextDateById)) { $pdNextDateById = []; }
+
+	// Next Park Day: earliest upcoming IN-PERSON occurrence. Online park days
+	// (Discord/Zoom A&S, virtual fighter practice prep, etc.) are excluded —
+	// the card drives field/weather decisions, which don't apply to online.
+	$nextParkDayDate = null;
+	$_inPersonStarts = array_column(array_filter($pkCalParkDays, function($e) { return empty($e['online']); }), 'start');
+	if (!empty($_inPersonStarts)) {
+		sort($_inPersonStarts);
+		$nextParkDayDate = substr($_inPersonStarts[0], 0, 10);
 	}
 
-	// Next Park Day: earliest upcoming occurrence across all park days
-	$nextParkDayDate = null;
-	if (!empty($pkCalParkDays)) {
-		$_starts = array_column($pkCalParkDays, 'start');
-		sort($_starts);
-		$nextParkDayDate = substr($_starts[0], 0, 10);
+	// "Today" anchor for forecast-vs-current labelling.
+	// Open-Meteo returns dates in each park's local timezone (we use timezone=auto)
+	// so the right comparison is "today in this park's local time" — not server time
+	// (Chicago) and not the viewer's time (could be anywhere).
+	$parkLocalToday = date('Y-m-d');  // sensible fallback
+	if (!empty($park_weather['forecast_json'])) {
+		$_wxDecoded = @json_decode($park_weather['forecast_json'], true);
+		$_wxTz      = $_wxDecoded['timezone'] ?? null;
+		if ($_wxTz) {
+			try {
+				$parkLocalToday = (new DateTime('now', new DateTimeZone($_wxTz)))->format('Y-m-d');
+			} catch (Exception $e) { /* fall back to server-local */ }
+		}
 	}
 
 	// Active Players: last sign-in within the past 6 months — matches the Players tab subtitle
@@ -264,11 +284,46 @@
      ZONE 2: Stats Row
      ============================================= -->
 <div class="pk-stats-row">
+	<?php
+		// Forecast for the next park day (when within the 7-day cache window)
+		$nextPdForecast = ($nextParkDayDate && $park_weather)
+			? Ork3::$Lib->weather->forecast_for_date($park_id, $nextParkDayDate)
+			: null;
+	?>
 	<div class="pk-stat-card<?= count($parkDayList) > 0 ? ' pk-stat-card-link' : '' ?>"<?php if (count($parkDayList) > 0): ?> onclick="pkActivateTab('about')"<?php endif; ?>>
 		<div class="pk-stat-icon"><i class="fas fa-calendar-check"></i></div>
 		<?php if ($nextParkDayDate): ?>
 			<div class="pk-stat-value" style="font-size:1.1rem"><?= date('M j', strtotime($nextParkDayDate)) ?></div>
 			<div class="pk-stat-sub"><?= date('l', strtotime($nextParkDayDate)) ?></div>
+			<?php if ($nextPdForecast && $nextPdForecast['hi_f'] !== null):
+				// WMO code → emoji (daytime; forecast doesn't distinguish day/night)
+				$fcCode = (int)$nextPdForecast['code'];
+				if     ($fcCode === 0)                        { $fcIcon = '☀️'; }
+				elseif ($fcCode === 1)                        { $fcIcon = '🌤️'; }
+				elseif ($fcCode === 2)                        { $fcIcon = '⛅'; }
+				elseif ($fcCode === 3)                        { $fcIcon = '☁️'; }
+				elseif ($fcCode === 45 || $fcCode === 48)     { $fcIcon = '🌫️'; }
+				elseif ($fcCode >= 51 && $fcCode <= 57)       { $fcIcon = '🌦️'; }
+				elseif ($fcCode >= 61 && $fcCode <= 67)       { $fcIcon = '🌧️'; }
+				elseif ($fcCode >= 71 && $fcCode <= 77)       { $fcIcon = '❄️'; }
+				elseif ($fcCode >= 80 && $fcCode <= 82)       { $fcIcon = '🌦️'; }
+				elseif ($fcCode === 85 || $fcCode === 86)     { $fcIcon = '🌨️'; }
+				elseif ($fcCode >= 95 && $fcCode <= 99)       { $fcIcon = '⛈️'; }
+				else                                          { $fcIcon = '🌡️'; }
+				$fcHiC = round(($nextPdForecast['hi_f'] - 32) * 5 / 9);
+				$fcLoC = $nextPdForecast['lo_f'] !== null ? round(($nextPdForecast['lo_f'] - 32) * 5 / 9) : null;
+			?>
+				<div class="pk-stat-sub" style="margin-top:2px;font-size:11px">
+					<?php if ($nextParkDayDate !== $parkLocalToday): ?><span style="font-style:italic;opacity:.55;margin-right:3px">forecast</span><?php endif; ?>
+					<?= $fcIcon ?> <?= round($nextPdForecast['hi_f']) ?>/<?= $fcHiC ?>°<?php
+						if ($nextPdForecast['lo_f'] !== null) echo ' · <span style="opacity:.7">L ' . round($nextPdForecast['lo_f']) . '/' . $fcLoC . '°</span>';
+						if (!empty($nextPdForecast['precip_pct']) && $nextPdForecast['precip_pct'] >= 20) echo ' · ' . (int)$nextPdForecast['precip_pct'] . '% rain';
+					?>
+					<?php foreach (Ork3::$Lib->weather->badges_for_date($park_id, $nextParkDayDate) as $_b): ?>
+						<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
 		<?php else: ?>
 			<div class="pk-stat-value">&mdash;</div>
 		<?php endif; ?>
@@ -295,10 +350,12 @@
 		<div class="pk-stat-label">Event<?= count($eventList) != 1 ? 's' : '' ?></div>
 	</div>
 	<?php
-	// Park weather card — only render when we have a valid current temp.
+	// Park weather card — only render when we have a valid current temp AND the
+	// Next Park Day card isn't already showing today/upcoming forecast (which
+	// would make this redundant).
 	$wx = $park_weather ?? null;
 	$wxTemp = $wx['current_temp_f'] ?? null;
-	if ($wxTemp !== null):
+	if ($wxTemp !== null && empty($nextPdForecast)):
 		$wxCode  = (int)($wx['current_code']  ?? -1);
 		$wxIsDay = (int)($wx['current_is_day'] ?? 1);
 		// WMO code → emoji + short label (mirrors Live ticker logic)
@@ -316,13 +373,21 @@
 		elseif ($wxCode === 85 || $wxCode === 86)       { $wxIcon = '🌨️'; $wxLabel = 'Snow showers'; }
 		elseif ($wxCode >= 95 && $wxCode <= 99)         { $wxIcon = '⛈️'; $wxLabel = 'Thunderstorm'; }
 	?>
+	<?php
+		// Pair of °F / °C for the US + Canadian audience.
+		$wxTempC      = ($wxTemp - 32) * 5 / 9;
+		$wxTodayHi    = $wx['today_high_f'] ?? null;
+		$wxTodayLo    = $wx['today_low_f']  ?? null;
+		$wxTodayHiC   = $wxTodayHi !== null ? ($wxTodayHi - 32) * 5 / 9 : null;
+		$wxTodayLoC   = $wxTodayLo !== null ? ($wxTodayLo - 32) * 5 / 9 : null;
+	?>
 	<div class="pk-stat-card pk-stat-card-weather">
 		<div class="pk-stat-icon"><?= $wxIcon ?: '🌡️' ?></div>
-		<div class="pk-stat-value"><?= round($wxTemp) ?>°F</div>
+		<div class="pk-stat-value" style="font-size:1.1rem"><?= round($wxTemp) ?>°F / <?= round($wxTempC) ?>°C</div>
 		<div class="pk-stat-label">
 			<?= htmlspecialchars($wxLabel) ?>
-			<?php if (isset($wx['today_high_f'], $wx['today_low_f'])): ?>
-				<br><span style="font-size:.85em;color:var(--ork-text-muted,#718096)">H <?= round($wx['today_high_f']) ?>° / L <?= round($wx['today_low_f']) ?>°<?php
+			<?php if ($wxTodayHi !== null && $wxTodayLo !== null): ?>
+				<br><span style="font-size:.85em;color:var(--ork-text-muted,#718096)">H <?= round($wxTodayHi) ?>/<?= round($wxTodayHiC) ?>° · L <?= round($wxTodayLo) ?>/<?= round($wxTodayLoC) ?>°<?php
 					if (!empty($wx['today_precip_pct'])) echo ' · ' . (int)$wx['today_precip_pct'] . '% rain';
 				?></span>
 			<?php endif; ?>
@@ -614,6 +679,37 @@
 										</a>
 									<?php endif; ?>
 								<?php endif; ?>
+							<?php
+								// Forecast for the next occurrence of THIS park day, when in-person and within the 7-day cache window
+								$_pdNext = $pdNextDateById[(int)$day['ParkDayId']] ?? null;
+								$_pdFC   = (empty($day['Online']) && $_pdNext)
+									? Ork3::$Lib->weather->forecast_for_date($park_id, $_pdNext)
+									: null;
+								if ($_pdFC && $_pdFC['hi_f'] !== null):
+									$c = (int)$_pdFC['code'];
+									$ic = ($c===0)?'☀️':(($c===1)?'🌤️':(($c===2)?'⛅':(($c===3)?'☁️':(($c===45||$c===48)?'🌫️':(($c>=51&&$c<=57)?'🌦️':(($c>=61&&$c<=67)?'🌧️':(($c>=71&&$c<=77)?'❄️':(($c>=80&&$c<=82)?'🌦️':(($c===85||$c===86)?'🌨️':(($c>=95)?'⛈️':'🌡️'))))))))));
+									$hiC = round(($_pdFC['hi_f']-32)*5/9);
+									$loC = $_pdFC['lo_f'] !== null ? round(($_pdFC['lo_f']-32)*5/9) : null;
+							?>
+								<?php $_pdBadges = Ork3::$Lib->weather->badges_for_date($park_id, $_pdNext); ?>
+								<div class="pk-schedule-forecast" style="margin-top:6px;padding:6px 8px;background:var(--ork-bg-secondary,#f7fafc);border-radius:4px;font-size:11px;color:var(--ork-text-muted,#718096)">
+									<?php if ($_pdNext !== $parkLocalToday): ?><em style="opacity:.75;margin-right:3px">forecast</em><?php endif; ?>
+									<span style="font-size:13px"><?= $ic ?></span>
+									<span style="color:var(--ork-text,#2d3748);font-weight:600;margin-left:4px"><?= round($_pdFC['hi_f']) ?>/<?= $hiC ?>°</span>
+									<?php if ($_pdFC['lo_f'] !== null): ?>
+										<span style="margin-left:6px">L <?= round($_pdFC['lo_f']) ?>/<?= $loC ?>°</span>
+									<?php endif; ?>
+									<?php if (!empty($_pdFC['precip_pct']) && $_pdFC['precip_pct'] >= 20): ?>
+										<span style="margin-left:6px"><?= (int)$_pdFC['precip_pct'] ?>% rain</span>
+									<?php endif; ?>
+									<?php foreach ($_pdBadges as $_b): ?>
+										<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>" style="margin-left:6px"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+									<?php endforeach; ?>
+									<a href="https://open-meteo.com/" target="_blank" rel="noopener"
+									   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
+									   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:6px;opacity:.6">ⓘ</a>
+								</div>
+							<?php endif; ?>
 							<?php if (!empty($day['Description'])): ?>
 								<p class="pk-schedule-desc"><?= htmlspecialchars($day['Description']) ?></p>
 							<?php endif; ?>
@@ -683,6 +779,21 @@
 									<?php if (0 != $event['NextDate']): ?>
 										<?= date('M. j, Y', strtotime($event['NextDate'])) ?>
 										<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+										<?php
+											// Forecast badge when the event date is within the 7-day cache window
+											$evDateStr = substr($event['NextDate'], 0, 10);
+											$evFC = (strtotime($event['NextDate']) >= time() && $park_weather)
+												? Ork3::$Lib->weather->forecast_for_date($park_id, $evDateStr)
+												: null;
+											if ($evFC && $evFC['hi_f'] !== null):
+												$c = (int)$evFC['code'];
+												$ic = ($c===0)?'☀️':(($c===1)?'🌤️':(($c===2)?'⛅':(($c===3)?'☁️':(($c>=51&&$c<=67)?'🌧️':(($c>=71&&$c<=77)?'❄️':(($c>=80&&$c<=82)?'🌦️':(($c>=95)?'⛈️':'🌡️')))))));
+												$hiC = round(($evFC['hi_f']-32)*5/9);
+										?>
+										<br><span style="font-size:11px;color:var(--ork-text-muted,#718096)"><?php if ($evDateStr !== $parkLocalToday): ?><em style="opacity:.7;margin-right:2px">forecast</em> <?php endif; ?><?= $ic ?> <?= round($evFC['hi_f']) ?>/<?= $hiC ?>°<?php
+											if (!empty($evFC['precip_pct']) && $evFC['precip_pct'] >= 20) echo ' · ' . (int)$evFC['precip_pct'] . '%';
+										?><?php foreach (Ork3::$Lib->weather->badges_for_date($park_id, $evDateStr) as $_b): ?> <span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"><?= $_b['icon'] ?></span><?php endforeach; ?></span>
+										<?php endif; ?>
 									<?php endif; ?>
 								</td>
 								<td class="pk-date-col" style="text-align:center"><?= (int)($event['RsvpGoing'] ?? 0) ?: '—' ?></td>
@@ -1910,6 +2021,13 @@ html[data-theme="dark"] .fc-button { background: var(--ork-bg-secondary); border
 html[data-theme="dark"] .fc-button:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .fc-button-primary:not(:disabled):active,
 html[data-theme="dark"] .fc-button-primary:not(:disabled).fc-button-active { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+
+/* Weather safety badges (heat, cold, storm, UV, wind) */
+.pk-wx-badge { display:inline-block; padding:1px 6px; border-radius:10px; font-size:10px; font-weight:600; line-height:1.4; vertical-align:middle; white-space:nowrap; }
+.pk-wx-caution { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+.pk-wx-warning { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+html[data-theme="dark"] .pk-wx-caution { background:#422006; color:#fcd34d; border-color:#78350f; }
+html[data-theme="dark"] .pk-wx-warning { background:#450a0a; color:#fca5a5; border-color:#7f1d1d; }
 
 /* ============================================================
    </style>
