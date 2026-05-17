@@ -369,6 +369,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 	<div class="un-hero-content">
 
 		<!-- Heraldry -->
+		<?php if ($_unShowLogo): ?>
 		<div class="un-heraldry-wrap">
 			<div class="un-heraldry-frame">
 				<img class="heraldry-img" src="<?=htmlspecialchars($_hero_src)?>"
@@ -381,6 +382,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 			</button>
 <?php endif; ?>
 		</div>
+		<?php endif; ?>
 
 		<!-- Name / type -->
 		<div class="un-hero-info">

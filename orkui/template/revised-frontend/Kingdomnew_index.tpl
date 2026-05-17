@@ -112,6 +112,7 @@
 	<?php endif; ?>
 	<div class="kn-hero-content">
 
+		<?php if ($_knShowLogo): ?>
 		<div class="kn-heraldry-wrap">
 			<div class="kn-heraldry-frame<?= !empty($CanManageKingdom) ? ' kn-heraldry-editable' : '' ?>">
 				<img class="heraldry-img" src="<?= htmlspecialchars($heraldryUrl) ?>"
@@ -125,6 +126,7 @@
 			</button>
 			<?php endif; ?>
 		</div>
+		<?php endif; ?>
 
 		<div class="kn-hero-info">
 			<?php if ($IsPrinz && !empty($ParentKingdomId)): ?>
