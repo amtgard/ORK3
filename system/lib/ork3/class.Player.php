@@ -327,11 +327,6 @@ class Player extends Ork3 {
 					'DuesThrough' => $old_dues_through, //Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->kingdom_id, $this->mundane->park_id, 0),
 				'LastDuesThrough' => $last_dues_through,
 					'HasHeraldry' => $this->mundane->has_heraldry,
-					'HasBanner'      => (int)$this->mundane->has_banner,
-					'BannerShowLogo' => (int)$this->mundane->banner_show_logo,
-					'BannerVignette' => (int)$this->mundane->banner_vignette,
-					'BannerOffsetX'  => (int)$this->mundane->banner_offset_x,
-					'BannerOffsetY'  => (int)$this->mundane->banner_offset_y,
 					'Heraldry' => $heraldry['Url'] . '?' . strtotime($this->mundane->modified),
 					'HasImage' => $this->mundane->has_image,
 					'Image' => $this->resolve_player_image_url($this->mundane->mundane_id, $this->mundane->modified),
@@ -371,6 +366,17 @@ class Player extends Ork3 {
 				$response['Player']['Company'] = "";
 			} else {
 				$response['Player']['Company'] = $unit['Units'];
+			}
+			// Hydrate banner fields via raw DataSet (avoids Yapo schema-cache misses)
+			global $DB;
+			$DB->Clear();
+			$_bn = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_mundane WHERE mundane_id = ' . (int)$this->mundane->mundane_id);
+			if ($_bn && $_bn->Next()) {
+				$response['Player']['HasBanner']      = (int)$_bn->has_banner;
+				$response['Player']['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+				$response['Player']['BannerVignette'] = (int)$_bn->banner_vignette;
+				$response['Player']['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+				$response['Player']['BannerOffsetY']  = (int)$_bn->banner_offset_y;
 			}
 		} else {
 			$response['Status'] = InvalidParameter();

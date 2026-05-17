@@ -168,17 +168,23 @@ class Unit extends Ork3 {
 					'UnitId' => $this->unit->unit_id,
 					'Type' => $this->unit->type,
 					'HasHeraldry' => $this->unit->has_heraldry,
-					'HasBanner'      => (int)$this->unit->has_banner,
-					'BannerShowLogo' => (int)$this->unit->banner_show_logo,
-					'BannerVignette' => (int)$this->unit->banner_vignette,
-					'BannerOffsetX'  => (int)$this->unit->banner_offset_x,
-					'BannerOffsetY'  => (int)$this->unit->banner_offset_y,
 					'Name' => $this->unit->name,
 					'Description' => $this->unit->description,
 					'Url' => $this->unit->url,
 					'History' => $this->unit->history,
 					'Active' => $this->unit->active
 				);
+			// Hydrate banner fields via raw DataSet (avoids Yapo schema-cache misses)
+			global $DB;
+			$DB->Clear();
+			$_bn = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_unit WHERE unit_id = ' . (int)$this->unit->unit_id);
+			if ($_bn && $_bn->Next()) {
+				$response['Unit']['HasBanner']      = (int)$_bn->has_banner;
+				$response['Unit']['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+				$response['Unit']['BannerVignette'] = (int)$_bn->banner_vignette;
+				$response['Unit']['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+				$response['Unit']['BannerOffsetY']  = (int)$_bn->banner_offset_y;
+			}
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
