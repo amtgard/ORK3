@@ -85,6 +85,11 @@
 .lv-pi-stat { text-align: center; padding: 6px 4px; background: var(--ork-bg-secondary); border-radius: 4px; }
 .lv-pi-stat .lv-num { font-size: 20px; font-weight: 700; color: #48bb78; line-height: 1; }
 .lv-pi-stat .lv-lbl { font-size: 9px; color: var(--ork-text-muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+.lv-pi-weather { margin-top: 10px; padding: 8px 10px; background: var(--ork-bg-secondary); border-radius: 4px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ork-text); }
+.lv-pi-weather .lv-wx-now { font-weight: 600; }
+.lv-pi-weather .lv-wx-meta { color: var(--ork-text-muted); flex: 1; }
+.lv-pi-weather .lv-wx-attr { color: var(--ork-text-muted); text-decoration: none; font-size: 11px; opacity: 0.6; }
+.lv-pi-weather .lv-wx-attr:hover { opacity: 1; }
 
 .lv-ticker-head { padding: 12px 16px; border-bottom: 1px solid var(--ork-border); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--ork-text-muted); display: flex; justify-content: space-between; align-items: center; }
 .lv-ticker { flex: 1 1 auto; overflow-y: auto; padding: 8px 0; }
@@ -163,6 +168,12 @@
 				<div class="lv-pi-stat"><div class="lv-num" id="lv-pi-day">0</div><div class="lv-lbl">past 24h</div></div>
 				<div class="lv-pi-stat"><div class="lv-num" id="lv-pi-3h">0</div><div class="lv-lbl">past 3h</div></div>
 				<div class="lv-pi-stat"><div class="lv-num" id="lv-pi-30m">0</div><div class="lv-lbl">past 30m</div></div>
+			</div>
+			<div class="lv-pi-weather" id="lv-pi-weather" style="display:none">
+				<span class="lv-wx-now" id="lv-wx-now">—</span>
+				<span class="lv-wx-meta" id="lv-wx-meta">—</span>
+				<a class="lv-wx-attr" href="https://open-meteo.com/" target="_blank" rel="noopener"
+				   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com">ⓘ</a>
 			</div>
 		</div>
 		<div class="lv-ticker-head">
@@ -588,6 +599,42 @@
 		piDay.textContent = src ? (src.day || 0) : 0;
 		pi3h.textContent  = src ? (src.h3  || 0) : 0;
 		pi30m.textContent = src ? (src.m30 || 0) : 0;
+		renderWeather(src && src.weather);
+	}
+	// WMO weather code → emoji + label.
+	// Reference: https://open-meteo.com/en/docs (weather_code field)
+	function wxIcon(code, isDay) {
+		const sun  = isDay ? '☀️' : '🌙';
+		if (code === 0)                         return [sun,  'Clear'];
+		if (code === 1)                         return [isDay ? '🌤️' : '🌙', 'Mostly clear'];
+		if (code === 2)                         return ['⛅', 'Partly cloudy'];
+		if (code === 3)                         return ['☁️', 'Overcast'];
+		if (code === 45 || code === 48)         return ['🌫️', 'Fog'];
+		if (code >= 51 && code <= 57)           return ['🌦️', 'Drizzle'];
+		if (code >= 61 && code <= 65)           return ['🌧️', 'Rain'];
+		if (code === 66 || code === 67)         return ['🌧️', 'Freezing rain'];
+		if (code >= 71 && code <= 77)           return ['❄️', 'Snow'];
+		if (code >= 80 && code <= 82)           return ['🌦️', 'Showers'];
+		if (code === 85 || code === 86)         return ['🌨️', 'Snow showers'];
+		if (code >= 95 && code <= 99)           return ['⛈️', 'Thunderstorm'];
+		return ['', 'Unknown'];
+	}
+	function renderWeather(wx) {
+		const wrap = document.getElementById('lv-pi-weather');
+		if (!wx || wx.temp_f == null) { wrap.style.display = 'none'; return; }
+		const [icon, label] = wxIcon(wx.code, wx.is_day);
+		const now  = document.getElementById('lv-wx-now');
+		const meta = document.getElementById('lv-wx-meta');
+		now.textContent  = `${icon} ${Math.round(wx.temp_f)}°F`;
+		const parts = [label];
+		if (wx.hi_f != null && wx.lo_f != null) {
+			parts.push(`H ${Math.round(wx.hi_f)}° / L ${Math.round(wx.lo_f)}°`);
+		}
+		if (wx.precip_pct != null && wx.precip_pct > 0) {
+			parts.push(`${wx.precip_pct}% precip`);
+		}
+		meta.textContent = parts.join(' · ');
+		wrap.style.display = 'flex';
 	}
 	document.getElementById('lv-pi-close').addEventListener('click', () => {
 		piPanel.classList.remove('open'); focusedId = null; focusedKind = null;
