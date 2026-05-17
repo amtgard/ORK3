@@ -2459,6 +2459,29 @@ class Controller_Admin extends Controller {
 			}
 			echo json_encode($out);
 
+		} elseif ($action === 'serverhealth_weather_refresh') {
+			// Capture the previous newest fetched_at so we can show "last
+			// successful refresh was X ago" alongside this run's outcome.
+			global $DB;
+			$DB->Clear();
+			$rs = $DB->DataSet("SELECT MAX(fetched_at) AS prev FROM " . DB_PREFIX . "park_weather");
+			$prev = ($rs && $rs->Size() > 0 && $rs->Next()) ? $rs->prev : null;
+			$prev_age_min = $prev ? round((time() - strtotime($prev)) / 60) : null;
+
+			$start = microtime(true);
+			$count = Ork3::$Lib->weather->refresh_all_active_parks();
+			$elapsed_ms = (int)round((microtime(true) - $start) * 1000);
+
+			echo json_encode([
+				'status'  => 0,
+				'weather' => [
+					'count'                => $count,
+					'elapsed_ms'           => $elapsed_ms,
+					'previous_fetched_at'  => $prev,
+					'previous_age_min'     => $prev_age_min,
+				],
+			]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

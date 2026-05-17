@@ -38,9 +38,19 @@ class Weather extends Ork3 {
 
 		$row = $this->read_row($park_id);
 		$stale = !$row || strtotime($row['fetched_at']) < (time() - self::STALE_MIN * 60);
-		if ($stale) {
+		if ($stale && $this->is_active_park($park_id)) {
+			// Only refresh for parks in the active set. Pages for dormant parks
+			// stay fast (no Open-Meteo round trip); they just don't show weather.
+			// When a dormant park gets a fresh signin, the active filter picks
+			// it up automatically on the next refresh — no code change needed.
 			$this->refresh_all_active_parks();
 			$row = $this->read_row($park_id);
+		} elseif ($stale) {
+			// Dormant park with a stale row from when it was active. Don't
+			// surface months-old data to the UI; just show nothing. The row
+			// stays in the table (cheap) and will get overwritten if the park
+			// reactivates and the next refresh picks it up.
+			return null;
 		}
 		return $row;
 	}
@@ -169,6 +179,13 @@ class Weather extends Ork3 {
 			$rows = $this->read_rows($ids);
 		}
 		return $rows;
+	}
+
+	private function is_active_park($park_id) {
+		$cutoff = date('Y-m-d', time() - self::ACTIVE_DAYS * 86400);
+		$rs = $this->db->query("SELECT 1 FROM " . DB_PREFIX . "attendance
+			WHERE park_id = " . (int)$park_id . " AND date >= '$cutoff' LIMIT 1");
+		return ($rs && $rs->size() > 0);
 	}
 
 	/**

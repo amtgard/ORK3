@@ -213,10 +213,12 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 					<button class="sh-fs-btn" id="sh-fs-btn"><i class="fas fa-hdd"></i> Check Filesystem</button>
 					<button class="sh-fs-btn" id="sh-memcache-btn"><i class="fas fa-database"></i> Check Memcache</button>
 					<button class="sh-fs-btn" id="sh-opcache-btn"><i class="fab fa-php"></i> Check OPcache</button>
+					<button class="sh-fs-btn" id="sh-weather-btn"><i class="fas fa-cloud-sun"></i> Refresh Weather</button>
 				</div>
 				<div id="sh-fs-result"></div>
 				<div id="sh-memcache-result"></div>
 				<div id="sh-opcache-result"></div>
+				<div id="sh-weather-result"></div>
 			</div>
 		</div>
 
@@ -701,6 +703,24 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			html += renderFsRow('Wasted memory', wastedPct + '% (' + fmtBytes(o.memory_wasted) + ')', wastedCls);
 			html += renderFsRow('Cached scripts', fmtCount(o.scripts), '');
 			html += renderFsRow('Hit rate', (Math.round(o.hit_rate * 10) / 10) + '%', '');
+			return html;
+		},
+	});
+
+	wireCheckBtn({
+		btnId:    'sh-weather-btn',
+		resultId: 'sh-weather-result',
+		action:   'serverhealth_weather_refresh',
+		label:    'Refresh Weather',
+		render:   function(d) {
+			if (!d.weather) return '';
+			var w = d.weather;
+			var html = '';
+			html += renderFsRow('Parks refreshed', fmtCount(w.count), '');
+			html += renderFsRow('Refresh duration', w.elapsed_ms + ' ms', '');
+			if (w.previous_fetched_at) {
+				html += renderFsRow('Previous fetch', w.previous_fetched_at + ' (' + w.previous_age_min + ' min ago)', '');
+			}
 			return html;
 		},
 	});
