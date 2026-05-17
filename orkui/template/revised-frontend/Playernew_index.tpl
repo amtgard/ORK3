@@ -5543,7 +5543,7 @@ initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
 			<div class="pn-banner-config">
 				<label class="pn-banner-toggle">
 					<input type="checkbox" id="pn-banner-show-logo" checked>
-					<span>Show Event Logo on Left</span>
+					<span>Show Persona Avatar on Left</span>
 					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
 				</label>
 				<label class="pn-banner-toggle">

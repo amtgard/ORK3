@@ -2835,7 +2835,7 @@ window.OrkRsCfg = {
 			<div class="pk-banner-config">
 				<label class="pk-banner-toggle">
 					<input type="checkbox" id="pk-banner-show-logo" checked>
-					<span>Show Event Logo on Left</span>
+					<span>Show Park Heraldry on Left</span>
 					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
 				</label>
 				<label class="pk-banner-toggle">
