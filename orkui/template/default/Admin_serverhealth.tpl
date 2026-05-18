@@ -496,20 +496,40 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		var m = Math.floor((mc.uptime % 3600) / 60);
 		var uptimeStr = d > 0 ? (d + 'd ' + h + 'h ' + m + 'm') : (h + 'h ' + m + 'm');
 
-		// Drop/restart/flush detectors — only valid once we have a baseline
+		// Drop/restart/flush detectors — only valid once we have a baseline.
+		// Each event ALSO fires a sticky entry in the alert log so the user
+		// doesn't need to be watching the live panel when it happens.
 		var itemsCls = '', uptimeCls = '', flushCls = '', evCls = '';
 		var note = '';
+		var fired = [];
 		if (prevMcItems !== null && mc.curr_items < prevMcItems * 0.5 && prevMcItems > 20) {
 			itemsCls = 'alert';
 			note = ' (was ' + fmtCount(prevMcItems) + ')';
+			fired.push('Memcache items dropped: ' + fmtCount(prevMcItems) + ' → ' + fmtCount(mc.curr_items));
 		}
 		if (prevMcUptime !== null && mc.uptime < prevMcUptime) {
 			uptimeCls = 'alert';
+			fired.push('Memcache restarted (uptime: ' + fmtCount(prevMcUptime) + 's → ' + fmtCount(mc.uptime) + 's)');
 		}
 		if (prevMcFlush !== null && mc.cmd_flush > prevMcFlush) {
 			flushCls = 'alert';
+			fired.push('Memcache flush_all issued (count: ' + fmtCount(prevMcFlush) + ' → ' + fmtCount(mc.cmd_flush) + ')');
 		}
 		if (mc.evictions > 0) evCls = 'warn';
+
+		if (fired.length) {
+			alertLog.unshift({
+				time:     new Date().toLocaleTimeString(),
+				triggers: fired,
+				kind:     'memcache',
+				queries:  [],
+				workers:  [],
+				qps:      currentQps,
+				sps:      currentSps,
+			});
+			if (alertLog.length > 30) alertLog.pop();
+			renderAlertLog();
+		}
 
 		var memPct  = mc.limit_maxbytes ? Math.round(mc.bytes / mc.limit_maxbytes * 100 * 10) / 10 : 0;
 		var memCls  = memPct >= 80 ? 'warn' : '';
@@ -612,7 +632,7 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 						'</div>';
 				});
 				html += '</div>';
-			} else {
+			} else if (e.kind !== 'memcache') {
 				html += '<div class="sh-al-none">No active queries at capture time</div>';
 			}
 			if (e.workers && e.workers.length) {
