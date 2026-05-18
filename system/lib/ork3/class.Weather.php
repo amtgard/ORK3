@@ -852,6 +852,17 @@ class Weather extends Ork3 {
 		$parks = $this->active_parks_with_coords();
 		if (empty($parks)) return 0;
 
+		// Skip parks already refreshed within STALE_MIN. Open-Meteo counts each
+		// coordinate in a batch separately, so re-fetching fresh parks wastes
+		// quota and can trigger the hourly rate limit.
+		$stale_cutoff = date('Y-m-d H:i:s', time() - self::STALE_MIN * 60);
+		$existing     = $this->read_rows(array_column($parks, 'park_id'));
+		$parks = array_values(array_filter($parks, function($p) use ($existing, $stale_cutoff) {
+			$row = $existing[$p['park_id']] ?? null;
+			return !$row || $row['fetched_at'] < $stale_cutoff;
+		}));
+		if (empty($parks)) return 0;
+
 		$lats = array();
 		$lngs = array();
 		foreach ($parks as $p) {
