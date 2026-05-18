@@ -1126,10 +1126,34 @@ class Weather extends Ork3 {
 			);
 		}
 		$cooldown_ts = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
+
+		// Pull memcached server's own clock so we can tell clock skew from a
+		// stuck (non-evicting) key. If 'remaining' is negative AND the key
+		// is still present, that's a memcache TTL anomaly worth flagging.
+		$mc_time = null;
+		if (Ork3::$Lib->ghettocache->memcache instanceof Memcached) {
+			$stats = @Ork3::$Lib->ghettocache->memcache->getStats();
+			if (is_array($stats) && !empty($stats)) {
+				$first = reset($stats);
+				if (!empty($first['time'])) $mc_time = (int)$first['time'];
+			}
+		}
+		$now             = time();
+		$clears_unix     = $cooldown_ts ? (int)$cooldown_ts + 1800 : null;
+		$remaining_srv   = $clears_unix !== null ? $clears_unix - $now      : null;
+		$remaining_mc    = ($clears_unix !== null && $mc_time !== null) ? $clears_unix - $mc_time : null;
+		$skew_seconds    = $mc_time !== null ? $mc_time - $now : null;
+
 		return array(
-			'days'              => $out,
-			'cooldown_set_at'   => $cooldown_ts ? date('Y-m-d H:i:s', (int)$cooldown_ts) : null,
-			'cooldown_clears_at'=> $cooldown_ts ? date('Y-m-d H:i:s', (int)$cooldown_ts + 1800) : null,
+			'days'                => $out,
+			'cooldown_set_at'     => $cooldown_ts ? date('Y-m-d H:i:s', (int)$cooldown_ts) : null,
+			'cooldown_clears_at'  => $clears_unix ? date('Y-m-d H:i:s', $clears_unix)      : null,
+			'cooldown_present'    => $cooldown_ts !== false,
+			'remaining_seconds_server'   => $remaining_srv,
+			'remaining_seconds_memcache' => $remaining_mc,
+			'server_time'         => date('Y-m-d H:i:s', $now),
+			'memcache_time'       => $mc_time !== null ? date('Y-m-d H:i:s', $mc_time) : null,
+			'clock_skew_seconds'  => $skew_seconds,
 		);
 	}
 

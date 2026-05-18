@@ -737,7 +737,35 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			var w = d.wx;
 			var html = '';
 			if (w.cooldown_set_at) {
-				html += renderFsRow('Cooldown active', 'set ' + w.cooldown_set_at + ' UTC — clears ' + w.cooldown_clears_at + ' UTC', 'warn');
+				html += renderFsRow('Cooldown active', 'set ' + w.cooldown_set_at + ' — clears ' + w.cooldown_clears_at, 'warn');
+				// Diagnostic: per-clock remaining seconds. If server says
+				// "overdue" but the key is still present, memcache isn't
+				// TTL-evicting and we have a stuck key. A non-zero clock
+				// skew points at a memcached/web clock mismatch instead.
+				var srvLbl, srvCls;
+				if (w.remaining_seconds_server === null) {
+					srvLbl = '—'; srvCls = '';
+				} else if (w.remaining_seconds_server >= 0) {
+					srvLbl = w.remaining_seconds_server + 's remaining';
+					srvCls = '';
+				} else {
+					srvLbl = (-w.remaining_seconds_server) + 's overdue (key not evicted)';
+					srvCls = 'warn';
+				}
+				html += renderFsRow('Server clock view', srvLbl, srvCls);
+				if (w.memcache_time) {
+					var mcLbl;
+					if (w.remaining_seconds_memcache === null) {
+						mcLbl = '—';
+					} else if (w.remaining_seconds_memcache >= 0) {
+						mcLbl = w.remaining_seconds_memcache + 's remaining';
+					} else {
+						mcLbl = (-w.remaining_seconds_memcache) + 's overdue (key not evicted)';
+					}
+					html += renderFsRow('Memcache clock view', mcLbl + '  (mc time: ' + w.memcache_time + ', skew ' + w.clock_skew_seconds + 's)', '');
+				}
+			} else if (w.cooldown_present) {
+				html += renderFsRow('Cooldown', 'key present but empty value (corrupt)', 'warn');
 			} else {
 				html += renderFsRow('Cooldown', 'inactive', '');
 			}
