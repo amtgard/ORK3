@@ -2482,6 +2482,10 @@ class Controller_Admin extends Controller {
 				],
 			]);
 
+		} elseif ($action === 'serverhealth_weather_stats') {
+			$stats = Ork3::$Lib->weather->api_stats(3);
+			echo json_encode(['status' => 0, 'wx' => $stats]);
+
 		} else {
 			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
 		}

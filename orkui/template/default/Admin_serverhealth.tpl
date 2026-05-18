@@ -214,11 +214,13 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 					<button class="sh-fs-btn" id="sh-memcache-btn"><i class="fas fa-database"></i> Check Memcache</button>
 					<button class="sh-fs-btn" id="sh-opcache-btn"><i class="fab fa-php"></i> Check OPcache</button>
 					<button class="sh-fs-btn" id="sh-weather-btn"><i class="fas fa-cloud-sun"></i> Refresh Weather</button>
+					<button class="sh-fs-btn" id="sh-wxstats-btn"><i class="fas fa-chart-bar"></i> Weather API Stats</button>
 				</div>
 				<div id="sh-fs-result"></div>
 				<div id="sh-memcache-result"></div>
 				<div id="sh-opcache-result"></div>
 				<div id="sh-weather-result"></div>
+				<div id="sh-wxstats-result"></div>
 			</div>
 		</div>
 
@@ -721,6 +723,35 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			if (w.previous_fetched_at) {
 				html += renderFsRow('Previous fetch', w.previous_fetched_at + ' (' + w.previous_age_min + ' min ago)', '');
 			}
+			return html;
+		},
+	});
+
+	wireCheckBtn({
+		btnId:    'sh-wxstats-btn',
+		resultId: 'sh-wxstats-result',
+		action:   'serverhealth_weather_stats',
+		label:    'Weather API Stats',
+		render:   function(d) {
+			if (!d.wx) return '';
+			var w = d.wx;
+			var html = '';
+			if (w.cooldown_set_at) {
+				html += renderFsRow('Cooldown active', 'set ' + w.cooldown_set_at + ' UTC — clears ' + w.cooldown_clears_at + ' UTC', 'warn');
+			} else {
+				html += renderFsRow('Cooldown', 'inactive', '');
+			}
+			(w.days || []).forEach(function(day, i) {
+				var label = (i === 0 ? 'Today (' : (i === 1 ? 'Yesterday (' : (i + ' days ago ('))) + day.date + ' UTC)';
+				var cls = day.rate_limited > 0 ? 'warn' : '';
+				var detail = day.attempt + ' attempts'
+					+ ' · ' + day.success + ' ok'
+					+ ' · ' + day.rate_limited + ' 429'
+					+ ' · ' + day.error + ' err'
+					+ ' · ' + day.blocked + ' blocked'
+					+ '  (fc: ' + day.attempt_forecast + ', ar: ' + day.attempt_archive + ')';
+				html += renderFsRow(label, detail, cls);
+			});
 			return html;
 		},
 	});

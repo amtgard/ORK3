@@ -1085,7 +1085,57 @@ class Weather extends Ork3 {
 		$this->db->query($sql);
 	}
 
+	/**
+	 * Bump one or more counters in today's stats bucket. Used by http_get to
+	 * track outcomes (attempt/success/429/blocked/error) so the admin server
+	 * health panel can show what Open-Meteo activity has looked like. Cheap:
+	 * one memcache read + write per counted event. 7-day TTL gives ~3 days
+	 * of trend visibility in the UI before buckets evict.
+	 */
+	private function wx_stats_bump($keys) {
+		$day     = gmdate('Y-m-d');
+		$current = Ork3::$Lib->ghettocache->get(__CLASS__ . '.stats', $day, 7 * 86400);
+		if (!is_array($current)) $current = array();
+		foreach ((array)$keys as $k) {
+			$current[$k] = (int)($current[$k] ?? 0) + 1;
+		}
+		Ork3::$Lib->ghettocache->cache(__CLASS__ . '.stats', $day, $current);
+	}
+
+	/**
+	 * Read API-call counters for the last $days UTC days, plus the cooldown
+	 * state if active. Returns a structured array for the admin UI. Read-only.
+	 */
+	public function api_stats($days = 3) {
+		$out = array();
+		for ($i = 0; $i < (int)$days; $i++) {
+			$d = gmdate('Y-m-d', time() - $i * 86400);
+			$s = Ork3::$Lib->ghettocache->get(__CLASS__ . '.stats', $d, 7 * 86400);
+			if (!is_array($s)) $s = array();
+			$out[] = array(
+				'date'                 => $d,
+				'attempt'              => (int)($s['attempt']           ?? 0),
+				'success'              => (int)($s['success']           ?? 0),
+				'rate_limited'         => (int)($s['rate_limited']      ?? 0),
+				'error'                => (int)($s['error']             ?? 0),
+				'blocked'              => (int)($s['blocked']           ?? 0),
+				'attempt_forecast'     => (int)($s['attempt_forecast']  ?? 0),
+				'attempt_archive'      => (int)($s['attempt_archive']   ?? 0),
+				'blocked_forecast'     => (int)($s['blocked_forecast']  ?? 0),
+				'blocked_archive'      => (int)($s['blocked_archive']   ?? 0),
+			);
+		}
+		$cooldown_ts = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
+		return array(
+			'days'              => $out,
+			'cooldown_set_at'   => $cooldown_ts ? date('Y-m-d H:i:s', (int)$cooldown_ts) : null,
+			'cooldown_clears_at'=> $cooldown_ts ? date('Y-m-d H:i:s', (int)$cooldown_ts + 1800) : null,
+		);
+	}
+
 	private function http_get($url) {
+		$endpoint = (strpos($url, 'archive-api') !== false) ? 'archive' : 'forecast';
+
 		// 429 cooldown — bail before opening a socket if a recent call hit
 		// Open-Meteo's rate limit. Without this gate, every park page load
 		// triggers a synchronous refresh that 429s, blocking page render for
@@ -1094,6 +1144,7 @@ class Weather extends Ork3 {
 		$cooldown = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
 		if ($cooldown !== false) {
 			$this->last_http_status = 429;
+			$this->wx_stats_bump(array('blocked', 'blocked_' . $endpoint));
 			return false;
 		}
 
@@ -1103,12 +1154,18 @@ class Weather extends Ork3 {
 			curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 			curl_setopt($ch, CURLOPT_USERAGENT, 'ORK3 weather refresh (https://ork.amtgard.com)');
+			$this->wx_stats_bump(array('attempt', 'attempt_' . $endpoint));
 			$body = curl_exec($ch);
 			$http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 			curl_close($ch);
 			$this->last_http_status = $http;
-			if ($http === 429) {
+			if ($http === 200) {
+				$this->wx_stats_bump('success');
+			} elseif ($http === 429) {
+				$this->wx_stats_bump('rate_limited');
 				Ork3::$Lib->ghettocache->cache(__CLASS__ . '.cooldown_429', 'global', time());
+			} else {
+				$this->wx_stats_bump('error');
 			}
 			if ($http !== 200) return false;
 			return $body;
