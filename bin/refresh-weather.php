@@ -19,7 +19,12 @@ require_once dirname(__DIR__) . '/startup.php';
 
 $start = microtime(true);
 $count = Ork3::$Lib->weather->refresh_all_active_parks();
-$dt    = round((microtime(true) - $start) * 1000);
+$park_ms = round((microtime(true) - $start) * 1000);
 
-fprintf(STDOUT, "[%s] refreshed %d parks in %dms\n", date('Y-m-d H:i:s'), $count, $dt);
+$ev_start = microtime(true);
+$ev_count = Ork3::$Lib->weather->warm_event_venue_coords(14);
+$ev_ms = round((microtime(true) - $ev_start) * 1000);
+
+fprintf(STDOUT, "[%s] refreshed %d parks in %dms; warmed %d event venues in %dms\n",
+	date('Y-m-d H:i:s'), $count, $park_ms, $ev_count, $ev_ms);
 exit($count > 0 ? 0 : 1);

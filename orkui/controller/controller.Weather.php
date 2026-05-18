@@ -45,6 +45,11 @@ class Controller_Weather extends Controller {
 				'is_today'  => $i === 0,
 			);
 		}
+		$severities = Ork3::$Lib->weather->strip_severities(array_column($strip, 'date'));
+		foreach ($strip as &$pill) {
+			$pill['severity'] = $severities[$pill['date']] ?? 'ok';
+		}
+		unset($pill);
 		$this->data['DateStrip'] = $strip;
 	}
 
