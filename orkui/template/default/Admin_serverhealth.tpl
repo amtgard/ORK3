@@ -583,7 +583,9 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		if (queueFull      && !threshState.queueFull)      fired.push('Listen queue: ' + queue);
 		if (threadsHigh    && !threshState.threadsHigh)    fired.push('Threads running: ' + threads);
 		if (rowLockWaiting && !threshState.rowLockWaiting) fired.push('Row lock waits pending: ' + lockNow);
-		else if (!rowLockWaiting && newLockSince > 0)      fired.push('Row lock waits (transient): ' + newLockSince);
+		// A single transient wait per 2s poll is common app-level noise. Only
+		// flag bursts that suggest real contention on a hot row.
+		else if (!rowLockWaiting && newLockSince >= 3)     fired.push('Row lock waits (transient): ' + newLockSince);
 
 		threshState.workersFull    = workersFull;
 		threshState.queueFull      = queueFull;
