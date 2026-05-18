@@ -205,6 +205,12 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			<div class="sh-panel-body" id="sh-db-metrics"></div>
 		</div>
 
+		<!-- Memcache Panel -->
+		<div class="sh-panel">
+			<div class="sh-panel-hdr"><i class="fas fa-bolt"></i> Memcache</div>
+			<div class="sh-panel-body" id="sh-mc-metrics"></div>
+		</div>
+
 		<!-- Optional Checks -->
 		<div class="sh-panel">
 			<div class="sh-panel-hdr"><i class="fas fa-toolbox"></i> Optional Checks <span class="sh-al-subtitle">on demand</span></div>
@@ -470,6 +476,51 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 	function metric(label, val, cls) {
 		return '<div class="sh-metric"><span class="sh-metric-label">' + label + '</span><span class="sh-metric-val ' + (cls||'') + '">' + val + '</span></div>';
 	}
+
+	/* ── Render Memcache panel ──────────────────────────
+	 * Tracks prevMcItems / prevMcUptime / prevMcFlush across polls to flag
+	 * the exact symptoms we saw with the weather stats bucket: keys vanishing
+	 * with no eviction signal. A sudden curr_items drop >50%, a flush count
+	 * bump, or an uptime that goes backwards all light up here in real-time
+	 * instead of being invisible until someone clicks the on-demand panel.
+	 */
+	var prevMcItems  = null;
+	var prevMcUptime = null;
+	var prevMcFlush  = null;
+	function renderMc(mc) {
+		var el = document.getElementById('sh-mc-metrics');
+		if (!mc) { el.innerHTML = '<div class="sh-empty">Memcache unavailable</div>'; return; }
+		var d = Math.floor(mc.uptime / 86400);
+		var h = Math.floor((mc.uptime % 86400) / 3600);
+		var m = Math.floor((mc.uptime % 3600) / 60);
+		var uptimeStr = d > 0 ? (d + 'd ' + h + 'h ' + m + 'm') : (h + 'h ' + m + 'm');
+
+		// Drop/restart/flush detectors — only valid once we have a baseline
+		var itemsCls = '', uptimeCls = '', flushCls = '', evCls = '';
+		var note = '';
+		if (prevMcItems !== null && mc.curr_items < prevMcItems * 0.5 && prevMcItems > 20) {
+			itemsCls = 'alert';
+			note = ' (was ' + fmtCount(prevMcItems) + ')';
+		}
+		if (prevMcUptime !== null && mc.uptime < prevMcUptime) {
+			uptimeCls = 'alert';
+		}
+		if (prevMcFlush !== null && mc.cmd_flush > prevMcFlush) {
+			flushCls = 'alert';
+		}
+		if (mc.evictions > 0) evCls = 'warn';
+
+		el.innerHTML =
+			metric('Items cached', fmtCount(mc.curr_items) + note, itemsCls) +
+			metric('Uptime', uptimeStr, uptimeCls) +
+			metric('Connections (cur / total)', fmtCount(mc.curr_connections) + ' / ' + fmtCount(mc.total_connections), '') +
+			metric('Evictions (lifetime)', fmtCount(mc.evictions), evCls) +
+			metric('Flushes (lifetime)', fmtCount(mc.cmd_flush), flushCls);
+
+		prevMcItems  = mc.curr_items;
+		prevMcUptime = mc.uptime;
+		prevMcFlush  = mc.cmd_flush;
+	}
 	function esc(s) {
 		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 	}
@@ -591,6 +642,7 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 				if (d.status !== 0) return;
 				renderFpm(d.fpm);
 				renderDb(d.db);
+				renderMc(d.memcache);
 				renderProcs(d.processes);
 				renderWorkers(d.workers);
 				checkThresholds(d.fpm, d.db, d.processes, d.workers);

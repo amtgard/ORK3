@@ -2393,7 +2393,28 @@ class Controller_Admin extends Controller {
 				];
 			} while ($pr->Next());
 
-			echo json_encode(['status' => 0, 'fpm' => $fpm_data, 'workers' => $fpm_workers, 'db' => $db_status, 'processes' => $processes]);
+			// Memcache health — cheap (single getStats roundtrip). Surfaced
+			// on the live poll so a sudden curr_items drop or cmd_flush bump
+			// is visible without clicking the on-demand panel.
+			$memcache = null;
+			if (class_exists('Memcached')) {
+				$m = new Memcached();
+				$m->addServer('localhost', 11211);
+				$mstats = @$m->getStats();
+				if (is_array($mstats) && !empty($mstats)) {
+					$first = reset($mstats);
+					$memcache = [
+						'uptime'            => (int)($first['uptime']            ?? 0),
+						'curr_items'        => (int)($first['curr_items']        ?? 0),
+						'evictions'         => (int)($first['evictions']         ?? 0),
+						'cmd_flush'         => (int)($first['cmd_flush']         ?? 0),
+						'curr_connections'  => (int)($first['curr_connections']  ?? 0),
+						'total_connections' => (int)($first['total_connections'] ?? 0),
+					];
+				}
+			}
+
+			echo json_encode(['status' => 0, 'fpm' => $fpm_data, 'workers' => $fpm_workers, 'db' => $db_status, 'processes' => $processes, 'memcache' => $memcache]);
 
 		} elseif ($action === 'serverhealth_fs_check') {
 			// On-demand filesystem check — not part of the 2s poll so the shell call
