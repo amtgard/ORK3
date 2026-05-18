@@ -184,7 +184,10 @@ class Weather extends Ork3 {
 		$lng = number_format((float)$lng, 4, '.', '');
 
 		$key = Ork3::$Lib->ghettocache->key(array($lat, $lng));
-		$cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.forecast_for_coords', $key, 30 * 60);
+		// TTL must exceed the cron interval (30 min) or warm_event_venue_coords
+		// re-fetches every venue every cycle and burns Open-Meteo's per-minute
+		// budget. 90 min matches STALE_MIN used by the park-row refresh.
+		$cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.forecast_for_coords', $key, 90 * 60);
 		if ($cached === false) {
 			// Caller opted out of synchronous HTTP — return null and let the
 			// cron-driven warm-up fill the cache for next time. Keeps hot
