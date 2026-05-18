@@ -42,6 +42,15 @@ class Weather extends Ork3 {
 	// scale (a few thousand calls/year).
 	const ARCHIVE_TTL_SEC = 2592000; // 30 days
 
+	// Per-cron-run chunk sizes. Open-Meteo bills each coord in a batch as a
+	// separate credit, so an unlimited batch (all ~280 parks) plus the venue
+	// warm in one cron run blows the per-minute budget AND, on 429, leaves
+	// every row stale so the next cron retries the entire batch. Chunking
+	// caps per-cycle damage and lets the next cron take a smaller bite even
+	// after a rate-limit period.
+	const BATCH_LIMIT_PARKS  = 60;
+	const BATCH_LIMIT_VENUES = 20;
+
 	/**
 	 * Read the cached weather row for a park. Triggers an inline refresh of
 	 * ALL active parks if this park's row is missing or older than STALE_MIN.
@@ -870,6 +879,18 @@ class Weather extends Ork3 {
 		}));
 		if (empty($parks)) return 0;
 
+		// Chunk: cap each cron run at BATCH_LIMIT_PARKS, oldest first. Without
+		// this, after any rate-limit period every park ages past STALE_MIN and
+		// the next cron sends them all in a single request, which then 429s
+		// and leaves everything stale again. Smaller batches succeed, prevent
+		// per-minute spikes, and naturally stagger fetched_at over the day.
+		usort($parks, function($a, $b) use ($existing) {
+			$aft = $existing[$a['park_id']]['fetched_at'] ?? '0';
+			$bft = $existing[$b['park_id']]['fetched_at'] ?? '0';
+			return strcmp($aft, $bft);
+		});
+		$parks = array_slice($parks, 0, self::BATCH_LIMIT_PARKS);
+
 		$lats = array();
 		$lngs = array();
 		foreach ($parks as $p) {
@@ -951,14 +972,23 @@ class Weather extends Ork3 {
 			  AND cd.latitude != 0 AND cd.longitude != 0
 			  AND DATE(cd.event_start) >= '$today' AND DATE(cd.event_start) <= '$cutoff'");
 		$warmed = 0;
+		$http_calls = 0;
 		if ($rs && $rs->size() > 0) {
 			while ($rs->next()) {
 				$lat = (float)$rs->latitude;
 				$lng = (float)$rs->longitude;
 				if ($lat == 0.0 || $lng == 0.0) continue;
-				// Use the existing single-coord path — it caches as a side
-				// effect. We don't care about the return value here.
-				$got = $this->forecast_for_coords($lat, $lng, $today, true);
+				// Cap HTTP fetches per cron run. Cache hits stay free; once
+				// we've spent BATCH_LIMIT_VENUES misses, pass fetch=false so
+				// remaining venues only count if already cached. Bail on 429
+				// — no point grinding through the rest of the list.
+				$fetch  = $http_calls < self::BATCH_LIMIT_VENUES;
+				$before = $this->last_http_status;
+				$got    = $this->forecast_for_coords($lat, $lng, $today, $fetch);
+				if ($this->last_http_status !== $before) {
+					$http_calls++;
+					if ($this->last_http_status === 429) break;
+				}
 				if ($got !== null) $warmed++;
 			}
 		}
