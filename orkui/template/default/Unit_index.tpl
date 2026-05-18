@@ -99,7 +99,7 @@ $_show_claim    = !$_is_retired && $_logged_in && $_mgr_count === 0;
 	align-items: center;
 	padding: 24px 30px;
 	gap: 24px;
-	z-index: 1;
+	z-index: 2;
 }
 .un-heraldry-wrap {
 	position: relative;
@@ -357,6 +357,36 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 	#un-roster-table th:nth-child(5),
 	#un-roster-table td:nth-child(5) { display: none; }
 }
+
+/* In-product CSS tooltip for [data-tip] — mirrors the revised.css pattern.
+   Native title="" causes a 1–2s browser delay and clashes with our dark theme,
+   so all Unit buttons use data-tip instead. */
+.un-heraldry-edit-btn[data-tip],
+.pn-card-edit-btn[data-tip],
+.pn-btn[data-tip],
+.kn-md-help-btn[data-tip] { position: relative; }
+.un-heraldry-edit-btn[data-tip]:hover::after,
+.pn-card-edit-btn[data-tip]:hover::after,
+.pn-btn[data-tip]:hover::after,
+.kn-md-help-btn[data-tip]:hover::after {
+	content: attr(data-tip);
+	position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+	background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
+	padding: 6px 10px; border-radius: 4px; white-space: nowrap;
+	pointer-events: none; z-index: 500;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+html[data-theme="dark"] .un-heraldry-edit-btn[data-tip]:hover::after,
+html[data-theme="dark"] .pn-card-edit-btn[data-tip]:hover::after,
+html[data-theme="dark"] .pn-btn[data-tip]:hover::after,
+html[data-theme="dark"] .kn-md-help-btn[data-tip]:hover::after {
+	background: #4a5568; color: #f7fafc;
+}
+
+/* Destructive-action color preserved across themes. Inline color:#e53e3e on
+   buttons gets stomped by a dark-mode rule in revised.css; this class wins. */
+.un-btn-danger { color: #e53e3e !important; border-color: #feb2b2 !important; }
+html[data-theme="dark"] .un-btn-danger { color: #fc8181 !important; border-color: #742a2a !important; }
 </style>
 
 <?php if ($_err): ?>
@@ -404,7 +434,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 					alt="<?=htmlspecialchars($_name)?>">
 			</div>
 <?php if ($_can_edit): ?>
-			<button class="un-heraldry-edit-btn" onclick="unOpenHeraldryModal()" title="Update heraldry">
+			<button class="un-heraldry-edit-btn" onclick="unOpenHeraldryModal()" data-tip="Update heraldry">
 				<i class="fas fa-camera"></i>
 			</button>
 <?php endif; ?>
@@ -479,7 +509,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-align-left"></i> About</span>
 				<?php if ($_can_edit): ?>
-				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-details')" title="Edit details">
+				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-details')" data-tip="Edit details">
 					<i class="fas fa-pen"></i>
 				</button>
 				<?php endif; ?>
@@ -495,7 +525,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-scroll"></i> History</span>
 				<?php if ($_can_edit): ?>
-				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-details')" title="Edit details">
+				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-details')" data-tip="Edit details">
 					<i class="fas fa-pen"></i>
 				</button>
 				<?php endif; ?>
@@ -513,7 +543,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 		<div class="pn-card">
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-user-shield"></i> Managers</span>
-				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-add-manager')" title="Add manager">
+				<button class="pn-card-edit-btn" onclick="unOpenModal('un-modal-add-manager')" data-tip="Add manager">
 					<i class="fas fa-plus"></i>
 				</button>
 			</h4>
@@ -535,7 +565,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 						</form>
 						<button class="pn-btn pn-btn-ghost pn-btn-sm"
 							onclick="pnConfirm({title:'Remove Manager',message:'Remove <?=$__mgr_js?> as a manager?',confirmText:'Remove',danger:true},function(){document.getElementById('un-mgr-form-<?=$__aid?>').submit()})"
-							title="Remove manager" style="color:#e53e3e;">
+							data-tip="Remove manager" style="color:#e53e3e;">
 							<i class="fas fa-times"></i>
 						</button>
 					</span>
@@ -684,17 +714,17 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 						<div class="un-action-btns">
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
 								onclick="unOpenEditMember(<?=$_um_id?>, '<?=$_role_esc?>', '<?=$_title_esc?>')"
-								title="Edit role / title">
+								data-tip="Edit role / title">
 								<i class="fas fa-pen"></i>
 							</button>
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
 								onclick="pnConfirm({title:'Retire Member',message:'Retire <?=$_persona_js?> from the unit?',confirmText:'Retire',danger:true},function(){document.getElementById('un-retire-form-<?=$_um_id?>').submit()})"
-								title="Retire member" style="color:#c05621;">
+								data-tip="Retire member" style="color:#c05621;">
 								<i class="fas fa-user-minus"></i>
 							</button>
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
 								onclick="pnConfirm({title:'Remove Member',message:'Permanently remove <?=$_persona_js?> from the unit?',confirmText:'Remove',danger:true},function(){document.getElementById('un-remove-form-<?=$_um_id?>').submit()})"
-								title="Remove member" style="color:#e53e3e;">
+								data-tip="Remove member" style="color:#e53e3e;">
 								<i class="fas fa-times"></i>
 							</button>
 						</div>
@@ -793,14 +823,14 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 				<div class="pn-acct-field">
 					<label style="display:flex;align-items:center;gap:6px;">
 						Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
-						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('un-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('un-md-help-overlay').classList.add('kn-open')" data-tip="Markdown help">?</button>
 					</label>
 					<textarea name="Description" rows="4"><?=htmlspecialchars($_desc)?></textarea>
 				</div>
 				<div class="pn-acct-field">
 					<label style="display:flex;align-items:center;gap:6px;">
 						History <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
-						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('un-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+						<button type="button" class="kn-md-help-btn" onclick="document.getElementById('un-md-help-overlay').classList.add('kn-open')" data-tip="Markdown help">?</button>
 					</label>
 					<textarea name="History" rows="4"><?=htmlspecialchars($_history)?></textarea>
 				</div>
@@ -1072,13 +1102,13 @@ var UnBannerConfig = {
 <div class="un-img-overlay un-banner-modal" id="un-banner-overlay">
 	<div class="un-img-modal" style="width:min(680px, 96vw)">
 		<div class="un-img-modal-header">
-			<span class="un-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<span class="un-img-modal-title" id="un-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
 			<button class="un-img-close-btn" id="un-banner-close-btn" aria-label="Close">&times;</button>
 		</div>
 
 		<div class="un-img-modal-body" id="un-banner-step-select">
-			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
-				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the unit header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
 			<div class="un-banner-wireframes">
@@ -1086,8 +1116,8 @@ var UnBannerConfig = {
 					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
 					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
-						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
-						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#un-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#un-wfBottomFade)" opacity="0.55"/>
 						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
 						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
@@ -1097,10 +1127,10 @@ var UnBannerConfig = {
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<linearGradient id="un-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
-							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<linearGradient id="un-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
 						</defs>
@@ -1114,7 +1144,7 @@ var UnBannerConfig = {
 						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
-						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#un-wfMobileFade)" opacity="0.40"/>
 						<!-- Tiny logo + title inside the middle band -->
 						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
@@ -1128,7 +1158,7 @@ var UnBannerConfig = {
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+							<linearGradient id="un-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
 								<stop offset="0" stop-color="#000" stop-opacity="0"/>
 								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
 							</linearGradient>
@@ -1159,7 +1189,7 @@ var UnBannerConfig = {
 				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
 			</label>
 			<input type="file" id="un-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
-			<div id="un-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div id="un-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
 			<div class="un-img-form-error" id="un-banner-error" style="display:none;"></div>
 
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
@@ -1168,29 +1198,29 @@ var UnBannerConfig = {
 					<button class="un-btn un-btn-outline" id="un-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
 					<button class="un-btn un-btn-outline" id="un-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
 				</div>
-				<button class="un-btn un-btn-outline" id="un-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<button class="un-btn un-btn-outline un-btn-danger" id="un-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;"><i class="fas fa-trash"></i> Remove Banner</button>
 				<?php else: ?>
-				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<span class="un-field-hint">Upload an image to enable banner display settings.</span>
 				<?php endif; ?>
 			</div>
 		</div>
 
 		<div class="un-img-modal-body" id="un-banner-step-position" style="display:none;">
-			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
 				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
 			</p>
 			<div class="un-banner-position-wrap">
 				<canvas id="un-banner-position-canvas" class="un-banner-position-canvas" width="1800" height="240"></canvas>
 				<svg class="un-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 					<!-- Faint vignette tint for safe zones (matches the real .un-hero-vignette) -->
-					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
-					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<rect x="0" y="0" width="900" height="240" fill="url(#un-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#un-posBottomFade)" opacity="0.35"/>
 					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
 					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
 					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
 					<!-- Title bar -->
 					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
-					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Unit Name goes here</text>
 					<!-- Badges row -->
 					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
 					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
@@ -1202,10 +1232,10 @@ var UnBannerConfig = {
 					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
 					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
 					<defs>
-						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+						<linearGradient id="un-posLeftFade" x1="0" y1="0" x2="1" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
-						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+						<linearGradient id="un-posBottomFade" x1="0" y1="1" x2="0" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
 					</defs>
@@ -1224,7 +1254,7 @@ var UnBannerConfig = {
 
 		<div class="un-img-modal-body" id="un-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
-			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+			<p style="margin-top:12px;">Uploading…</p>
 		</div>
 		<div class="un-img-modal-body" id="un-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
@@ -1233,6 +1263,11 @@ var UnBannerConfig = {
 	</div>
 </div>
 
+<?php /* NOTE: revised.js currently loads BEFORE jquery.dataTables. Any DataTables-dependent
+         code that ships inside revised.js will run before $.fn.dataTable exists. If a
+         future change to revised.js relies on DataTables, swap this ordering (or move
+         the init into the inline <script> at the bottom of this file, which already
+         runs after both). Deferred — flagged by QA, not fixed in the hero-region pass. */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>

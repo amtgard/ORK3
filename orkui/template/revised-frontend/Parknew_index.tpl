@@ -16,12 +16,15 @@
 			$bannerUrl = HTTP_PARK_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
 		}
 	}
-	$pkCanManageBanner = !empty($CanManagePark);
 	$parkTitle   = trim($parkInfo['ParkTitle']   ?? '');
 	$description = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Description'] ?? ''));
 	$directions  = trim(str_replace(['<br />', '<br/>', '<br>'], '', $parkInfo['Directions']  ?? ''));
 	$websiteUrl  = trim($parkInfo['Url']          ?? '');
 	$parkIsInactive = (trim($parkInfo['Active'] ?? 'Active') !== 'Active');
+	// Cycle 2 fix: do not expose banner-edit UI on retired parks (backend
+	// already rejects update/config for inactive parks; this prevents the
+	// dead-end UX of opening the modal only to receive a server rejection).
+	$pkCanManageBanner = !empty($CanManagePark) && !$parkIsInactive;
 
 	$officerList    = $park_officers['Officers']          ?? [];
 	$parkDayList    = $park_days['ParkDays']              ?? [];
@@ -282,7 +285,7 @@
 				     crossorigin="anonymous"
 				     onload="typeof pkApplyHeroColor==='function'&&!<?= $parkIsInactive ? 'true' : 'false' ?>&&pkApplyHeroColor(this)">
 				<?php if (!empty($CanAdminPark)): ?>
-				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" title="Change heraldry">
+				<button class="pk-heraldry-edit-btn" onclick="pkOpenHeraldryModal()" data-tip="Change heraldry">
 					<i class="fas fa-camera"></i>
 				</button>
 				<?php endif; ?>
@@ -483,7 +486,7 @@
 			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if (!empty($CanAdminPark)): ?>
-				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" title="Edit officers">
+				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
 					<i class="fas fa-pencil-alt"></i>
 				</button>
 				<?php endif; ?>
@@ -720,7 +723,7 @@
 					data-province="<?= htmlspecialchars($day['Province'] ?? '', ENT_QUOTES) ?>"
 					data-postal="<?= htmlspecialchars($day['PostalCode'] ?? '', ENT_QUOTES) ?>">
 				<?php if (!empty($CanAdminPark)): ?>
-				<button class="pk-schedule-card-edit" title="Edit park day"><i class="fas fa-pencil-alt"></i></button>
+				<button class="pk-schedule-card-edit" data-tip="Edit park day"><i class="fas fa-pencil-alt"></i></button>
 				<?php endif; ?>
 							<div class="pk-schedule-icon <?= $iconCls ?>">
 								<i class="fas <?= $iconFa ?>"></i>
@@ -2899,17 +2902,18 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 <?php if ($CanAdminPark ?? false): ?>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <?php endif; ?>
-<!-- pk-banner-modal (ported from event) -->
+<?php if ($pkCanManageBanner): ?>
+<!-- pk-banner-modal -->
 <div class="pk-img-overlay pk-banner-modal" id="pk-banner-overlay">
 	<div class="pk-img-modal" style="width:min(680px, 96vw)">
 		<div class="pk-img-modal-header">
-			<span class="pk-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<span class="pk-img-modal-title" id="pk-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
 			<button class="pk-img-close-btn" id="pk-banner-close-btn" aria-label="Close">&times;</button>
 		</div>
 
 		<div class="pk-img-modal-body" id="pk-banner-step-select">
-			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
-				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the park header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
 			<div class="pk-banner-wireframes">
@@ -2917,8 +2921,8 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
 					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
-						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
-						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#pk-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#pk-wfBottomFade)" opacity="0.55"/>
 						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
 						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
@@ -2928,10 +2932,10 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<linearGradient id="pk-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
-							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<linearGradient id="pk-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
 						</defs>
@@ -2945,7 +2949,7 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
-						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#pk-wfMobileFade)" opacity="0.40"/>
 						<!-- Tiny logo + title inside the middle band -->
 						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
@@ -2959,7 +2963,7 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+							<linearGradient id="pk-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
 								<stop offset="0" stop-color="#000" stop-opacity="0"/>
 								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
 							</linearGradient>
@@ -2990,7 +2994,7 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
 			</label>
 			<input type="file" id="pk-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
-			<div id="pk-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div id="pk-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
 			<div class="pk-img-form-error" id="pk-banner-error" style="display:none;"></div>
 
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
@@ -2999,29 +3003,29 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 					<button class="pk-btn pk-btn-outline" id="pk-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
 					<button class="pk-btn pk-btn-outline" id="pk-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
 				</div>
-				<button class="pk-btn pk-btn-outline" id="pk-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<button class="pk-btn pk-btn-outline pk-btn-danger" id="pk-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
 				<?php else: ?>
-				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<span class="pk-field-hint">Upload an image to enable banner display settings.</span>
 				<?php endif; ?>
 			</div>
 		</div>
 
 		<div class="pk-img-modal-body" id="pk-banner-step-position" style="display:none;">
-			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
 				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
 			</p>
 			<div class="pk-banner-position-wrap">
 				<canvas id="pk-banner-position-canvas" class="pk-banner-position-canvas" width="1800" height="240"></canvas>
 				<svg class="pk-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 					<!-- Faint vignette tint for safe zones (matches the real .pk-hero-vignette) -->
-					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
-					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<rect x="0" y="0" width="900" height="240" fill="url(#pk-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#pk-posBottomFade)" opacity="0.35"/>
 					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
 					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
 					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
 					<!-- Title bar -->
 					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
-					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Park Name goes here</text>
 					<!-- Badges row -->
 					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
 					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
@@ -3033,10 +3037,10 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
 					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
 					<defs>
-						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+						<linearGradient id="pk-posLeftFade" x1="0" y1="0" x2="1" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
-						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+						<linearGradient id="pk-posBottomFade" x1="0" y1="1" x2="0" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
 					</defs>
@@ -3055,7 +3059,7 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 
 		<div class="pk-img-modal-body" id="pk-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
-			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+			<p style="margin-top:12px;">Uploading…</p>
 		</div>
 		<div class="pk-img-modal-body" id="pk-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
@@ -3063,6 +3067,7 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 

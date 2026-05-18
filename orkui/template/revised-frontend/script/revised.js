@@ -2517,7 +2517,7 @@ function knRenderCalendar() {
                     :                    'Regent in Attendance';
             var crown = document.createElement('span');
             crown.className = 'kn-cal-royal-crown';
-            crown.title = tip;
+            crown.setAttribute('data-tip', tip);
             crown.innerHTML = ' <i class="fas fa-crown"></i>';
             var titleEl = info.el.querySelector('.fc-event-title');
             if (titleEl) titleEl.appendChild(crown);
@@ -2528,7 +2528,7 @@ function knRenderCalendar() {
             if (!top) return;
             var btn = document.createElement('button');
             btn.className = 'kn-cal-add-btn';
-            btn.title = 'Create event';
+            btn.setAttribute('data-tip', 'Create event');
             btn.innerHTML = '<i class="fas fa-plus"></i>';
             btn.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -5896,6 +5896,76 @@ $(document).ready(function() {
     });
 })();
 
+// ── Shared: bannerConfirm — self-injecting confirm modal for banner removes ──
+// Works on any page (pk/kn/pn/un/ev) without requiring template-side overlay markup.
+// Uses .banner-confirm-overlay class (defined in revised.css) and supports dark mode.
+window.bannerConfirm = (function() {
+    var overlay = null;
+    var msgEl = null;
+    var titleEl = null;
+    var okBtn = null;
+    var cancelBtn = null;
+    var currentCb = null;
+    var keyHandler = null;
+
+    function ensureDom() {
+        if (overlay) return;
+        overlay = document.createElement('div');
+        overlay.className = 'banner-confirm-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.innerHTML =
+            '<div class="banner-confirm-modal">' +
+                '<h3 class="banner-confirm-title"></h3>' +
+                '<p class="banner-confirm-message"></p>' +
+                '<div class="banner-confirm-actions">' +
+                    '<button type="button" class="banner-confirm-cancel">Cancel</button>' +
+                    '<button type="button" class="banner-confirm-ok">Remove</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        titleEl    = overlay.querySelector('.banner-confirm-title');
+        msgEl      = overlay.querySelector('.banner-confirm-message');
+        okBtn      = overlay.querySelector('.banner-confirm-ok');
+        cancelBtn  = overlay.querySelector('.banner-confirm-cancel');
+
+        okBtn.addEventListener('click', function() {
+            var cb = currentCb;
+            close();
+            if (cb) cb();
+        });
+        cancelBtn.addEventListener('click', close);
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    }
+
+    function close() {
+        if (!overlay) return;
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+        currentCb = null;
+        if (keyHandler) {
+            document.removeEventListener('keydown', keyHandler);
+            keyHandler = null;
+        }
+    }
+
+    return function(title, message, onConfirm, okLabel) {
+        ensureDom();
+        titleEl.textContent = title || 'Confirm';
+        msgEl.textContent   = message || '';
+        okBtn.textContent   = okLabel || 'Remove';
+        currentCb = onConfirm;
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        keyHandler = function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) close();
+        };
+        document.addEventListener('keydown', keyHandler);
+        // Focus cancel by default for safety on destructive action
+        setTimeout(function() { if (cancelBtn) cancelBtn.focus(); }, 0);
+    };
+})();
+
 // ---- Kingdom heraldry modal ----
 (function() {
     if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
@@ -7886,8 +7956,8 @@ $(document).ready(function() {
             '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
             '<td class="ev-credits-cell">' + escHtml(att.Credits || '') + '</td>' +
             '<td class="ev-del-cell">' +
-                '<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
-                '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
+                '<button class="ev-icon-btn" data-tip="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
+                '<a class="ev-del-link" data-tip="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
             '</td>' +
             '</tr>';
         var tableBody = document.querySelector('#ev-attendance-table tbody');
@@ -8223,7 +8293,7 @@ $(document).ready(function() {
                         '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
                         '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
                         '<td>' + (s.CanFeast ? chk : x) + '</td>' +
-                        '<td class="ev-del-cell"><button class="ev-del-link" title="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button></td>' +
+                        '<td class="ev-del-cell"><button class="ev-del-link" data-tip="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button></td>' +
                         '</tr>';
                     var tbody = gid('ev-staff-tbody');
                     if (tbody) {
@@ -8665,22 +8735,22 @@ $(document).ready(function() {
                     var glyphHtml = (function(cat, secCat) {
                         var cfg    = EV_CATEGORIES[cat]    || EV_CATEGORIES['Other'];
                         var secCfg = secCat ? (EV_CATEGORIES[secCat] || EV_CATEGORIES['Other']) : null;
-                        var p = '<i class="fas fa-fw ' + cfg.icon + '" style="color:' + cfg.color + '" title="' + escHtmlSch(cat) + '"></i>';
+                        var p = '<i class="fas fa-fw ' + cfg.icon + '" style="color:' + cfg.color + '" data-tip="' + escHtmlSch(cat) + '"></i>';
                         var s2 = secCfg
-                            ? '<i class="fas fa-fw ' + secCfg.icon + '" style="color:' + secCfg.color + ';margin-right:4px" title="' + escHtmlSch(secCat) + '"></i>'
+                            ? '<i class="fas fa-fw ' + secCfg.icon + '" style="color:' + secCfg.color + ';margin-right:4px" data-tip="' + escHtmlSch(secCat) + '"></i>'
                             : '<span style="display:inline-block;width:1.25em;margin-right:4px"></span>';
                         return p + s2;
                     })(s.Category, s.SecondaryCategory || '');
                     var actionCells = '<td class="ev-del-cell">' +
-                        '<button class="ev-edit-link" title="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
-                        '<button class="ev-del-link" title="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
+                        '<button class="ev-edit-link" data-tip="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
+                        '<button class="ev-del-link" data-tip="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
                         '</td>';
                     if (isEdit) {
                         var row = gid('ev-schedule-row-' + s.EventScheduleId);
                         if (row) {
                             row.setAttribute('data-title',       s.Title);
-                            row.setAttribute('data-start',       s.StartTime.replace(' ', 'T').substring(0, 16));
-                            row.setAttribute('data-end',         s.EndTime.replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-start',       (s.StartTime || '').replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-end',         (s.EndTime || '').replace(' ', 'T').substring(0, 16));
                             row.setAttribute('data-location',    s.Location);
                             row.setAttribute('data-description', s.Description);
                             row.setAttribute('data-category',           s.Category);
@@ -8698,8 +8768,8 @@ $(document).ready(function() {
                     } else {
                         var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
                             ' data-title="' + s.Title.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
-                            ' data-start="' + s.StartTime.replace(' ','T').substring(0,16) + '"' +
-                            ' data-end="'   + s.EndTime.replace(' ','T').substring(0,16) + '"' +
+                            ' data-start="' + (s.StartTime || '').replace(' ','T').substring(0,16) + '"' +
+                            ' data-end="'   + (s.EndTime || '').replace(' ','T').substring(0,16) + '"' +
                             ' data-location="' + s.Location.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-description="' + s.Description.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-category="' + escHtmlSch(s.Category) + '"' +
@@ -10205,7 +10275,7 @@ $(document).ready(function() {
     var genBtn  = document.getElementById('ev-signin-gen-btn');
     var copyBtn = document.getElementById('ev-signin-copy-btn');
     var creditsEl = document.getElementById('ev-signin-credits');
-    if (!genBtn || !creditsEl) return;
+    if (!genBtn || !creditsEl || !copyBtn) return;
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             var ov = document.getElementById('ev-signin-link-overlay');
@@ -15094,7 +15164,7 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
                 '<input type="number" min="0" step="0.01" value="' + costVal + '" ' +
                 'data-fees-idx="' + idx + '" data-fees-field="Cost" ' +
                 'style="width:80px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
-                '<button type="button" data-fees-remove="' + idx + '" title="Remove" ' +
+                '<button type="button" data-fees-remove="' + idx + '" data-tip="Remove" ' +
                 'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1">&times;</button>';
             list.appendChild(row);
         });
@@ -15201,7 +15271,7 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
                 'flex-wrap:wrap;gap:4px;width:160px">' +
                 LINK_ICONS.map(function(li) {
                     var active = link.Icon === li.icon;
-                    return '<button type="button" title="' + li.label + '" data-links-icon-pick="' + idx + '" data-links-icon-val="' + li.icon + '" ' +
+                    return '<button type="button" data-tip="' + li.label + '" data-links-icon-pick="' + idx + '" data-links-icon-val="' + li.icon + '" ' +
                         'style="width:34px;height:34px;border:1px solid ' + (active ? '#4299e1' : '#e2e8f0') + ';' +
                         'border-radius:4px;background:' + (active ? '#ebf8ff' : '#fff') + ';cursor:pointer;' +
                         'font-size:14px;display:flex;align-items:center;justify-content:center">' +
@@ -15215,7 +15285,7 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
             var noIcon = !link.Icon;
             row.innerHTML =
                 '<div style="position:relative;flex-shrink:0">' +
-                    '<button type="button" data-links-icon-btn="' + idx + '" title="Choose icon" ' +
+                    '<button type="button" data-links-icon-btn="' + idx + '" data-tip="Choose icon" ' +
                     'style="width:36px;height:34px;border:1px solid ' + (noIcon ? '#fc8181' : '#cbd5e0') + ';' +
                     'border-radius:4px;background:' + (noIcon ? '#fff5f5' : '#fff') + ';' +
                     'cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;' +
@@ -15230,7 +15300,7 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
                 '<input type="text" placeholder="https://\u2026" value="' + urlVal + '" ' +
                 'data-links-idx="' + idx + '" data-links-field="Url" ' +
                 'style="flex:2;min-width:0;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
-                '<button type="button" data-links-remove="' + idx + '" title="Remove" ' +
+                '<button type="button" data-links-remove="' + idx + '" data-tip="Remove" ' +
                 'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1;flex-shrink:0">\xd7</button>';
 
             list.appendChild(row);
@@ -15669,23 +15739,24 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
     });
 
     if (removeBtn) removeBtn.addEventListener('click', function() {
-        if (!confirm('Remove the banner image? This cannot be undone.')) return;
-        removeBtn.disabled = true;
-        fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json();
-            })
-            .then(function(result) {
-                if (result && result.status === 0) {
-                    showStep(stepSuccess);
-                    setTimeout(function() { window.location.reload(); }, 900);
-                } else {
-                    removeBtn.disabled = false;
-                    showError((result && result.error) || 'Remove failed.');
-                }
-            })
-            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
     });
 
     function doUpload(blob, isPng, offX, offY) {
@@ -15715,10 +15786,15 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
                     setTimeout(function() { window.location.reload(); }, 1200);
                 } else {
                     showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
                     showError((result && result.error) || 'Upload failed.');
                 }
             })
-            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
     }
 
     // ---- Position step ----
@@ -16435,6 +16511,12 @@ window.evSetEventStatus = function(eventId, status, btn) {
         if (fileInput) fileInput.value = '';
         if (resizeNote) resizeNote.textContent = '';
         clearError();
+        // I6 fix: refresh modal title based on current bannerUrl state
+        var titleEl = document.getElementById('pk-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
+                (PkBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
         // Reset toggles to current persisted config
         if (showLogoCb) showLogoCb.checked = !!PkBannerConfig.bannerShowLogo;
         if (vignetteCb) vignetteCb.checked = !!PkBannerConfig.bannerVignette;
@@ -16561,23 +16643,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 
     if (removeBtn) removeBtn.addEventListener('click', function() {
-        if (!confirm('Remove the banner image? This cannot be undone.')) return;
-        removeBtn.disabled = true;
-        fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json();
-            })
-            .then(function(result) {
-                if (result && result.status === 0) {
-                    showStep(stepSuccess);
-                    setTimeout(function() { window.location.reload(); }, 900);
-                } else {
-                    removeBtn.disabled = false;
-                    showError((result && result.error) || 'Remove failed.');
-                }
-            })
-            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
     });
 
     function doUpload(blob, isPng, offX, offY) {
@@ -16607,10 +16690,15 @@ window.evSetEventStatus = function(eventId, status, btn) {
                     setTimeout(function() { window.location.reload(); }, 1200);
                 } else {
                     showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
                     showError((result && result.error) || 'Upload failed.');
                 }
             })
-            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
     }
 
     // ---- Position step ----
@@ -16958,23 +17046,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 
     if (removeBtn) removeBtn.addEventListener('click', function() {
-        if (!confirm('Remove the banner image? This cannot be undone.')) return;
-        removeBtn.disabled = true;
-        fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json();
-            })
-            .then(function(result) {
-                if (result && result.status === 0) {
-                    showStep(stepSuccess);
-                    setTimeout(function() { window.location.reload(); }, 900);
-                } else {
-                    removeBtn.disabled = false;
-                    showError((result && result.error) || 'Remove failed.');
-                }
-            })
-            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
     });
 
     function doUpload(blob, isPng, offX, offY) {
@@ -17004,10 +17093,15 @@ window.evSetEventStatus = function(eventId, status, btn) {
                     setTimeout(function() { window.location.reload(); }, 1200);
                 } else {
                     showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
                     showError((result && result.error) || 'Upload failed.');
                 }
             })
-            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
     }
 
     // ---- Position step ----
@@ -17223,6 +17317,12 @@ window.evSetEventStatus = function(eventId, status, btn) {
         if (fileInput) fileInput.value = '';
         if (resizeNote) resizeNote.textContent = '';
         clearError();
+        // I6 fix: refresh modal title based on current bannerUrl state
+        var titleEl = document.getElementById('pn-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
+                (PnBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
         // Reset toggles to current persisted config
         if (showLogoCb) showLogoCb.checked = !!PnBannerConfig.bannerShowLogo;
         if (vignetteCb) vignetteCb.checked = !!PnBannerConfig.bannerVignette;
@@ -17301,19 +17401,25 @@ window.evSetEventStatus = function(eventId, status, btn) {
     if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
         clearError();
         saveCfgBtn.disabled = true;
-        postConfigWithOffsets(
-            (typeof PnBannerConfig.bannerOffsetX === 'number') ? PnBannerConfig.bannerOffsetX : 50,
-            (typeof PnBannerConfig.bannerOffsetY === 'number') ? PnBannerConfig.bannerOffsetY : 50,
-            function(ok, err) {
-                if (ok) {
-                    showStep(stepSuccess);
-                    setTimeout(function() { window.location.reload(); }, 900);
-                } else {
-                    saveCfgBtn.disabled = false;
-                    showError(err || 'Save failed.');
-                }
+        // If the user has loaded an image into the position step (e.g. via
+        // "Adjust Image Framing"), use the live canvas offsets so partial
+        // re-framing isn't silently discarded in favor of stale persisted values.
+        var useLive = !!(posState && posState.img);
+        var offX = useLive
+            ? Math.round(posState.pct.x)
+            : ((typeof PnBannerConfig.bannerOffsetX === 'number') ? PnBannerConfig.bannerOffsetX : 50);
+        var offY = useLive
+            ? Math.round(posState.pct.y)
+            : ((typeof PnBannerConfig.bannerOffsetY === 'number') ? PnBannerConfig.bannerOffsetY : 50);
+        postConfigWithOffsets(offX, offY, function(ok, err) {
+            if (ok) {
+                showStep(stepSuccess);
+                setTimeout(function() { window.location.reload(); }, 900);
+            } else {
+                saveCfgBtn.disabled = false;
+                showError(err || 'Save failed.');
             }
-        );
+        });
     });
 
     // "Adjust Image Framing" loads the saved banner (now stored uncropped)
@@ -17349,20 +17455,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 
     if (removeBtn) removeBtn.addEventListener('click', function() {
-        if (!confirm('Remove the banner image? This cannot be undone.')) return;
-        removeBtn.disabled = true;
-        fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) { return r.json(); })
-            .then(function(result) {
-                if (result && result.status === 0) {
-                    showStep(stepSuccess);
-                    setTimeout(function() { window.location.reload(); }, 900);
-                } else {
-                    removeBtn.disabled = false;
-                    showError((result && result.error) || 'Remove failed.');
-                }
-            })
-            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
     });
 
     function doUpload(blob, isPng, offX, offY) {
@@ -17379,17 +17489,28 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
         fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
         fetch(UPLOAD_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
                     setTimeout(function() { window.location.reload(); }, 1200);
                 } else {
                     showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
                     showError((result && result.error) || 'Upload failed.');
                 }
             })
-            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
     }
 
     // ---- Position step ----
@@ -17605,6 +17726,12 @@ window.evSetEventStatus = function(eventId, status, btn) {
         if (fileInput) fileInput.value = '';
         if (resizeNote) resizeNote.textContent = '';
         clearError();
+        // Refresh modal title based on current bannerUrl state (matches kn pattern)
+        var titleEl = document.getElementById('un-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
+                (UnBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
         // Reset toggles to current persisted config
         if (showLogoCb) showLogoCb.checked = !!UnBannerConfig.bannerShowLogo;
         if (vignetteCb) vignetteCb.checked = !!UnBannerConfig.bannerVignette;
@@ -17731,20 +17858,24 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 
     if (removeBtn) removeBtn.addEventListener('click', function() {
-        if (!confirm('Remove the banner image? This cannot be undone.')) return;
-        removeBtn.disabled = true;
-        fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) { return r.json(); })
-            .then(function(result) {
-                if (result && result.status === 0) {
-                    showStep(stepSuccess);
-                    setTimeout(function() { window.location.reload(); }, 900);
-                } else {
-                    removeBtn.disabled = false;
-                    showError((result && result.error) || 'Remove failed.');
-                }
-            })
-            .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
     });
 
     function doUpload(blob, isPng, offX, offY) {
@@ -17761,17 +17892,28 @@ window.evSetEventStatus = function(eventId, status, btn) {
         fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
         fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
         fetch(UPLOAD_URL, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
             .then(function(result) {
                 if (result && result.status === 0) {
                     showStep(stepSuccess);
                     setTimeout(function() { window.location.reload(); }, 1200);
                 } else {
                     showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
                     showError((result && result.error) || 'Upload failed.');
                 }
             })
-            .catch(function(err) { showStep(stepSelect); showError('Upload failed: ' + err.message); });
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
     }
 
     // ---- Position step ----
