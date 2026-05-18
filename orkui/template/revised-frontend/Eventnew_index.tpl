@@ -470,7 +470,7 @@ html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 		// For historical: render placeholder; JS lazy-fetches the archive.
 		$evFC = ($evWxMode === 'live' || $evWxMode === 'forecast')
 			? ($evWxLat !== null
-				? Ork3::$Lib->weather->forecast_for_coords($evWxLat, $evWxLng, $evWxDate, true)
+				? Ork3::$Lib->weather->forecast_for_coords($evWxLat, $evWxLng, $evWxDate, false)
 				: Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate))
 			: null;
 		if ($evFC && $evFC['hi_f'] !== null):
