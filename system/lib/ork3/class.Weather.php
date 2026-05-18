@@ -75,6 +75,15 @@ class Weather extends Ork3 {
 	 */
 	public function forecast_for_date($park_id, $date) {
 		$row = $this->for_park($park_id);
+		return self::forecast_from_row($row, $date);
+	}
+
+	/**
+	 * Decode a pre-fetched park_weather row into a single-day forecast array.
+	 * Used to avoid the N+1 of forecast_for_date() when iterating many parks —
+	 * callers do one read_rows() then ask this helper per-park.
+	 */
+	public static function forecast_from_row($row, $date) {
 		if (!$row || empty($row['forecast_json'])) return null;
 		$wx = json_decode($row['forecast_json'], true);
 		if (!is_array($wx) || empty($wx['daily']['time'])) return null;
@@ -164,7 +173,7 @@ class Weather extends Ork3 {
 	 * the park-based forecast cache, so coord-based one-offs stay roughly as
 	 * fresh as the park ones. Returns the same shape as forecast_for_date.
 	 */
-	public function forecast_for_coords($lat, $lng, $date) {
+	public function forecast_for_coords($lat, $lng, $date, $fetch_if_missing = true) {
 		if (!is_numeric($lat) || !is_numeric($lng)) return null;
 		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) return null;
 		$lat = number_format((float)$lat, 4, '.', '');
@@ -173,6 +182,10 @@ class Weather extends Ork3 {
 		$key = Ork3::$Lib->ghettocache->key(array($lat, $lng));
 		$cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.forecast_for_coords', $key, 30 * 60);
 		if ($cached === false) {
+			// Caller opted out of synchronous HTTP — return null and let the
+			// cron-driven warm-up fill the cache for next time. Keeps hot
+			// page-render paths from blocking on Open-Meteo.
+			if (!$fetch_if_missing) return null;
 			$url = self::URL_FORECAST . '?latitude=' . $lat . '&longitude=' . $lng
 				. '&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,'
 					. 'precipitation_probability_max,weather_code,uv_index_max,wind_gusts_10m_max'
@@ -348,10 +361,15 @@ class Weather extends Ork3 {
 		$dom       = (int)date('j', $ts);     // day-of-month for monthly recurrence
 		$wom       = (int)ceil($dom / 7);     // 1..5 — which Nth-weekday of the month today is
 
-		$sql = "SELECT DISTINCT park_id FROM " . DB_PREFIX . "parkday WHERE online = 0 AND (
-			(recurrence = 'weekly'        AND week_day = '$dow_name') OR
-			(recurrence = 'week-of-month' AND week_day = '$dow_name' AND week_of_month = $wom) OR
-			(recurrence = 'monthly'       AND month_day = $dom)
+		// Filter retired/inactive parks at the source — they may still have
+		// parkday rows from when they were active, but we don't want them on
+		// the weather page (map markers, play list, rundown counts).
+		$sql = "SELECT DISTINCT pd.park_id FROM " . DB_PREFIX . "parkday pd
+			JOIN " . DB_PREFIX . "park p ON p.park_id = pd.park_id
+			WHERE pd.online = 0 AND p.active = 'Active' AND (
+			(pd.recurrence = 'weekly'        AND pd.week_day = '$dow_name') OR
+			(pd.recurrence = 'week-of-month' AND pd.week_day = '$dow_name' AND pd.week_of_month = $wom) OR
+			(pd.recurrence = 'monthly'       AND pd.month_day = $dom)
 		)";
 		$rs = $this->db->query($sql);
 		$out = array();
@@ -467,21 +485,35 @@ class Weather extends Ork3 {
 		}
 
 		// Event counts. Concerning = event's start day forecast carries any warning badge.
+		// Two-pass: buffer rows, batch-read host-park weather, then judge.
+		// (Original code did forecast_for_date per event → N+1 SQL plus a real
+		// risk of triggering refresh_all_active_parks() synchronously.)
 		$cutoff = date('Y-m-d', time() + 7 * 86400);
 		$today  = date('Y-m-d');
 		$er = $this->db->query("SELECT e.event_id, e.park_id, cd.event_start, cd.event_calendardetail_id
 			FROM " . DB_PREFIX . "event e
 			JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
 			WHERE DATE(cd.event_start) >= '$today' AND DATE(cd.event_start) <= '$cutoff'");
+		$ev_buf = array();
+		$ev_park_ids = array();
 		if ($er && $er->size() > 0) {
 			while ($er->next()) {
 				$out['event_count']++;
-				$d = substr($er->event_start, 0, 10);
-				$evFC = $this->forecast_for_date((int)$er->park_id, $d);
-				if (!$evFC) continue;
-				$bs = self::safety_badges($evFC, null, $d);
-				$warn = array_filter($bs, function($b) { return $b['severity'] === 'warning'; });
-				if (!empty($warn)) $out['event_concerning']++;
+				$ev_buf[] = array(
+					'park_id'     => (int)$er->park_id,
+					'event_start' => $er->event_start,
+				);
+				if ((int)$er->park_id > 0) $ev_park_ids[(int)$er->park_id] = true;
+			}
+		}
+		$ev_weather = !empty($ev_park_ids) ? $this->read_rows(array_keys($ev_park_ids)) : array();
+		foreach ($ev_buf as $ev) {
+			$d = substr($ev['event_start'], 0, 10);
+			$evFC = self::forecast_from_row($ev_weather[$ev['park_id']] ?? null, $d);
+			if (!$evFC) continue;
+			$bs = self::safety_badges($evFC, null, $d);
+			foreach ($bs as $b) {
+				if ($b['severity'] === 'warning') { $out['event_concerning']++; break; }
 			}
 		}
 		return $out;
@@ -505,11 +537,11 @@ class Weather extends Ork3 {
 		$wom = (int)ceil($dom / 7);
 
 		$rs = $this->db->query("SELECT pd.park_id, pd.parkday_id, pd.purpose, pd.time, pd.description,
-		         p.name AS park_name, k.name AS kingdom_name
+		         p.name AS park_name, p.latitude, p.longitude, p.location, k.name AS kingdom_name
 			FROM " . DB_PREFIX . "parkday pd
 			JOIN " . DB_PREFIX . "park p ON p.park_id = pd.park_id
 			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
-			WHERE pd.online = 0 AND pd.park_id IN ($ids_sql)
+			WHERE pd.online = 0 AND p.active = 'Active' AND pd.park_id IN ($ids_sql)
 			  AND (
 				(pd.recurrence = 'weekly'        AND pd.week_day = '$dow_name') OR
 				(pd.recurrence = 'week-of-month' AND pd.week_day = '$dow_name' AND pd.week_of_month = $wom) OR
@@ -517,6 +549,7 @@ class Weather extends Ork3 {
 			  )
 			ORDER BY p.name");
 		$by_park = array();
+		$park_coords = array();
 		if ($rs && $rs->size() > 0) {
 			while ($rs->next()) {
 				$pid = (int)$rs->park_id;
@@ -534,6 +567,15 @@ class Weather extends Ork3 {
 					'time'        => $rs->time,
 					'description' => $rs->description,
 				);
+				if (!isset($park_coords[$pid])) {
+					$lat = (float)$rs->latitude;
+					$lng = (float)$rs->longitude;
+					if ($lat != 0.0 && $lng != 0.0) {
+						$park_coords[$pid] = array($lat, $lng);
+					} else {
+						$park_coords[$pid] = $this->parse_location_blob($rs->location);
+					}
+				}
 			}
 		}
 
@@ -549,21 +591,65 @@ class Weather extends Ork3 {
 			'Windy day'       =>   5,
 		);
 
+		// Bulk-classify which parks are "active" (recent attendance) so we can
+		// label gray markers / unavailable rows with a reason. One query for the
+		// whole playing set instead of N is_active_park() calls.
+		$active_set = array();
+		if (!empty($by_park)) {
+			$cutoff = date('Y-m-d', time() - self::ACTIVE_DAYS * 86400);
+			$ids_in = implode(',', array_map('intval', array_keys($by_park)));
+			$ar = $this->db->query("SELECT DISTINCT park_id FROM " . DB_PREFIX . "attendance
+				WHERE park_id IN ($ids_in) AND date >= '$cutoff'");
+			if ($ar && $ar->size() > 0) {
+				while ($ar->next()) $active_set[(int)$ar->park_id] = true;
+			}
+		}
+
+		// Batch-read every park's weather row in ONE query — replaces the N+1
+		// where each forecast_for_date() did its own SELECT. The cron is the
+		// source of truth; we don't lazy-refresh from this hot path.
+		$weather_rows = !empty($by_park) ? $this->read_rows(array_keys($by_park)) : array();
+		$stale_threshold = time() - self::STALE_MIN * 60;
+
 		$out = array();
 		foreach ($by_park as $pid => $schedules) {
 			$first = $schedules[0];
-			$fc     = $this->forecast_for_date($pid, $date);
+			// Treat stale rows for now-dormant parks as "no forecast" so we
+			// don't surface months-old data. Cron-fresh rows fall through.
+			$row = $weather_rows[$pid] ?? null;
+			if ($row && strtotime($row['fetched_at']) < $stale_threshold && empty($active_set[$pid])) {
+				$row = null;
+			}
+			$fc     = self::forecast_from_row($row, $date);
 			$badges = $fc ? self::safety_badges($fc, null, $date) : array();
 			$score  = 0;
 			foreach ($badges as $b) $score += $severity[$b['label']] ?? 0;
+			$coords = $park_coords[$pid] ?? null;
+
+			// Reason classification for missing forecasts — surfaced in the UI
+			// so users understand "why no forecast?" without us having to make
+			// a support ticket out of it.
+			if ($fc) {
+				$status = 'ok';
+			} elseif ($coords === null) {
+				$status = 'no_coords';
+			} elseif (empty($active_set[$pid])) {
+				$status = 'dormant';
+			} else {
+				$status = 'unavailable';
+			}
+
 			$out[] = array(
-				'park_id'      => $pid,
-				'park_name'    => $first['park_name'],
-				'kingdom_name' => $first['kingdom'],
-				'schedules'    => $schedules,
-				'forecast'     => $fc,
-				'badges'       => $badges,
-				'_score'       => $score,
+				'park_id'         => $pid,
+				'park_name'       => $first['park_name'],
+				'kingdom_name'    => $first['kingdom'],
+				'lat'             => $coords ? $coords[0] : null,
+				'lng'             => $coords ? $coords[1] : null,
+				'schedules'       => $schedules,
+				'forecast'        => $fc,
+				'forecast_status' => $status,
+				'badges'          => $badges,
+				'_score'          => $score,
 			);
 		}
 		usort($out, function($a, $b) {
@@ -583,7 +669,8 @@ class Weather extends Ork3 {
 		$rs = $this->db->query("SELECT e.event_id, e.name AS event_name, e.park_id, e.kingdom_id,
 		         cd.event_start, cd.event_end, cd.event_calendardetail_id, cd.at_park_id,
 		         cd.latitude AS ev_lat, cd.longitude AS ev_lng,
-		         p.name AS park_name, k.name AS kingdom_name
+		         p.name AS park_name, p.latitude AS p_lat, p.longitude AS p_lng, p.location AS p_loc,
+		         k.name AS kingdom_name
 			FROM " . DB_PREFIX . "event e
 			JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
 			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
@@ -591,22 +678,78 @@ class Weather extends Ork3 {
 			WHERE DATE(cd.event_start) >= '$today' AND DATE(cd.event_start) <= '$cutoff'
 			ORDER BY cd.event_start ASC");
 		$out = array();
+		// Two-pass: buffer rows, collect park_ids that need a forecast, do ONE
+		// read_rows() for all of them, then build the output. Saves N+1 SELECTs.
+		$buf = array();
+		$park_ids_needed = array();
 		if ($rs && $rs->size() > 0) {
 			while ($rs->next()) {
+				$row = array(
+					'event_id'                => (int)$rs->event_id,
+					'event_name'              => $rs->event_name,
+					'park_id'                 => (int)$rs->park_id,
+					'at_park_id'              => (int)$rs->at_park_id,
+					'event_calendardetail_id' => (int)$rs->event_calendardetail_id,
+					'event_start'             => $rs->event_start,
+					'event_end'               => $rs->event_end,
+					'ev_lat'                  => (float)$rs->ev_lat,
+					'ev_lng'                  => (float)$rs->ev_lng,
+					'p_lat'                   => (float)$rs->p_lat,
+					'p_lng'                   => (float)$rs->p_lng,
+					'p_loc'                   => $rs->p_loc,
+					'park_name'               => $rs->park_name,
+					'kingdom_name'            => $rs->kingdom_name,
+				);
+				$pid = $row['at_park_id'] ?: $row['park_id'];
+				if ($pid > 0) $park_ids_needed[$pid] = true;
+				$buf[] = $row;
+			}
+		}
+		$park_weather_rows = !empty($park_ids_needed)
+			? $this->read_rows(array_keys($park_ids_needed))
+			: array();
+		foreach ($buf as $rs) {
+			$rs = (object)$rs;
 				$d = substr($rs->event_start, 0, 10);
 				// Coord priority for forecast:
-				//   1. event_calendardetail's own coords (event-only venue)
-				//   2. at_park (host park)
-				//   3. owning park
+				//   1. event_calendardetail's own coords IF already cached (no HTTP)
+				//   2. host/owning park (cron-warmed, always cheap)
+				//   3. event_calendardetail's own coords WITH HTTP fallback —
+				//      last resort, only if no park forecast available. Cron
+				//      can later warm this; we accept slightly stale data
+				//      rather than block 19 HTTP roundtrips per page render.
 				$fc = null;
 				$evLat = (float)$rs->ev_lat;
 				$evLng = (float)$rs->ev_lng;
 				if ($evLat != 0.0 && $evLng != 0.0) {
-					$fc = $this->forecast_for_coords($evLat, $evLng, $d);
+					$fc = $this->forecast_for_coords($evLat, $evLng, $d, /*fetch_if_missing*/ false);
 				}
 				$pid = (int)$rs->at_park_id ?: (int)$rs->park_id;
 				if (!$fc && $pid > 0) {
-					$fc = $this->forecast_for_date($pid, $d);
+					$fc = self::forecast_from_row($park_weather_rows[$pid] ?? null, $d);
+				}
+				// Note: we never synchronously fetch from page render — even
+				// for event-only venues. warm_event_venue_coords() (run by
+				// the cron) keeps those coord caches populated. If the cron
+				// hasn't run yet for a new event, the row just shows
+				// "forecast unavailable" until next refresh.
+				// Coords for map-jump (same priority as the forecast lookup):
+				// 1. event_calendardetail's own coords, 2. at_park, 3. owning park
+				$lat = null; $lng = null;
+				if ($evLat != 0.0 && $evLng != 0.0) {
+					$lat = $evLat; $lng = $evLng;
+				} elseif ((int)$rs->at_park_id > 0) {
+					$c = $this->coords_for_park((int)$rs->at_park_id);
+					if ($c) { $lat = $c[0]; $lng = $c[1]; }
+				}
+				if ($lat === null) {
+					$plat = (float)$rs->p_lat; $plng = (float)$rs->p_lng;
+					if ($plat != 0.0 && $plng != 0.0) {
+						$lat = $plat; $lng = $plng;
+					} else {
+						$c = $this->parse_location_blob($rs->p_loc);
+						if ($c) { $lat = $c[0]; $lng = $c[1]; }
+					}
 				}
 				$badges = $fc ? self::safety_badges($fc, null, $d) : array();
 				$out[] = array(
@@ -615,13 +758,48 @@ class Weather extends Ork3 {
 					'park_id'                 => $pid,
 					'park_name'               => $rs->park_name,
 					'kingdom_name'            => $rs->kingdom_name,
+					'lat'                     => $lat,
+					'lng'                     => $lng,
 					'event_start'             => $rs->event_start,
 					'event_end'               => $rs->event_end,
 					'event_calendardetail_id' => (int)$rs->event_calendardetail_id,
 					'forecast'                => $fc,
 					'badges'                  => $badges,
 				);
+		}
+		return $out;
+	}
+
+	/**
+	 * Severity signal for each date in $dates — used to render warning dots on
+	 * the date-strip pills. Returns ['YYYY-MM-DD' => 'warning'|'ok'|'none'].
+	 * 'none' = no parks playing; 'ok' = parks playing but no flags.
+	 *
+	 * Costs 7 parkday queries + 1 batch read_rows for all parks across all dates.
+	 */
+	public function strip_severities(array $dates) {
+		$per_date = array();
+		$all_ids  = array();
+		foreach ($dates as $date) {
+			$ids = $this->parks_playing_on($date);
+			$per_date[$date] = $ids;
+			foreach ($ids as $id) $all_ids[$id] = true;
+		}
+		$rows = !empty($all_ids) ? $this->read_rows(array_keys($all_ids)) : array();
+		$out = array();
+		foreach ($dates as $date) {
+			$ids = $per_date[$date] ?? array();
+			if (empty($ids)) { $out[$date] = 'none'; continue; }
+			$max = 'ok';
+			foreach ($ids as $pid) {
+				$fc = self::forecast_from_row($rows[$pid] ?? null, $date);
+				if (!$fc) continue;
+				foreach (self::safety_badges($fc, null, $date) as $b) {
+					if ($b['severity'] === 'warning') { $max = 'warning'; break 2; }
+					$max = 'caution';
+				}
 			}
+			$out[$date] = $max;
 		}
 		return $out;
 	}
@@ -735,6 +913,38 @@ class Weather extends Ork3 {
 			$updated++;
 		}
 		return $updated;
+	}
+
+	/**
+	 * Warm the coord-based forecast cache for upcoming-event venues whose
+	 * cd.latitude/longitude is set. Without this, the /Weather page's events
+	 * list pays a synchronous Open-Meteo call per event with its own coords
+	 * (typically ~250ms each) on every cold-cache request. Called by the cron
+	 * alongside refresh_all_active_parks().
+	 *
+	 * Returns the number of venues warmed.
+	 */
+	public function warm_event_venue_coords($days = 14) {
+		$today  = date('Y-m-d');
+		$cutoff = date('Y-m-d', time() + (int)$days * 86400);
+		$rs = $this->db->query("SELECT DISTINCT cd.latitude, cd.longitude
+			FROM " . DB_PREFIX . "event_calendardetail cd
+			WHERE cd.latitude IS NOT NULL AND cd.longitude IS NOT NULL
+			  AND cd.latitude != 0 AND cd.longitude != 0
+			  AND DATE(cd.event_start) >= '$today' AND DATE(cd.event_start) <= '$cutoff'");
+		$warmed = 0;
+		if ($rs && $rs->size() > 0) {
+			while ($rs->next()) {
+				$lat = (float)$rs->latitude;
+				$lng = (float)$rs->longitude;
+				if ($lat == 0.0 || $lng == 0.0) continue;
+				// Use the existing single-coord path — it caches as a side
+				// effect. We don't care about the return value here.
+				$got = $this->forecast_for_coords($lat, $lng, $today, true);
+				if ($got !== null) $warmed++;
+			}
+		}
+		return $warmed;
 	}
 
 	// ---- internals --------------------------------------------------------
