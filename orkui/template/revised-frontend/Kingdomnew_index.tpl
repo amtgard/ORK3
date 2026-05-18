@@ -37,7 +37,11 @@
 			$bannerUrl = HTTP_KINGDOM_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
 		}
 	}
-	$knCanManageBanner = !empty($CanManageKingdom);
+	// Banner management gates on AUTH_EDIT (matches Park/Player and the AJAX endpoint).
+	// $CanManageKingdom is AUTH_CREATE, so we derive this independently.
+	$_knBannerUid = isset($this->__session->user_id) ? (int)$this->__session->user_id : 0;
+	$knCanManageBanner = $_knBannerUid > 0
+		&& Ork3::$Lib->authorization->HasAuthority($_knBannerUid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
 
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
@@ -121,7 +125,7 @@
 				     onload="typeof knApplyHeroColor==='function'&&knApplyHeroColor(this)">
 			</div>
 			<?php if (!empty($CanManageKingdom)): ?>
-			<button class="kn-heraldry-edit-btn" onclick="knOpenHeraldryModal()" title="Change heraldry">
+			<button class="kn-heraldry-edit-btn" onclick="knOpenHeraldryModal()" data-tip="Change heraldry">
 				<i class="fas fa-camera"></i>
 			</button>
 			<?php endif; ?>
@@ -214,7 +218,7 @@
 			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
 				<?php if ($CanManageKingdom ?? false): ?>
-				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" title="Edit officers">
+				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" data-tip="Edit officers">
 					<i class="fas fa-pencil-alt"></i>
 				</button>
 				<?php endif; ?>
@@ -1032,7 +1036,7 @@ window.knEventMapNoLocCount = <?= (int)($knEventMapNoLocCount ?? 0) ?>;
 var KnBannerConfig = {
 	uir:            '<?= UIR ?>',
 	canManage:      <?= $knCanManageBanner ? 'true' : 'false' ?>,
-	entityId:       <?= (int)($_knInfo['KingdomId'] ?? 0) ?>,
+	entityId:       <?= (int)($kingdom_id ?? 0) ?>,
 	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
 	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
 	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
@@ -2785,8 +2789,8 @@ function knEscapeAttr(s) {
 					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
 					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
-						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
-						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#kn-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#kn-wfBottomFade)" opacity="0.55"/>
 						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
 						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
@@ -2796,10 +2800,10 @@ function knEscapeAttr(s) {
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<linearGradient id="kn-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
-							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<linearGradient id="kn-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
 						</defs>
@@ -2813,7 +2817,7 @@ function knEscapeAttr(s) {
 						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
-						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#kn-wfMobileFade)" opacity="0.40"/>
 						<!-- Tiny logo + title inside the middle band -->
 						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
@@ -2827,7 +2831,7 @@ function knEscapeAttr(s) {
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+							<linearGradient id="kn-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
 								<stop offset="0" stop-color="#000" stop-opacity="0"/>
 								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
 							</linearGradient>
@@ -2867,7 +2871,7 @@ function knEscapeAttr(s) {
 					<button class="kn-btn kn-btn-outline" id="kn-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
 					<button class="kn-btn kn-btn-outline" id="kn-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
 				</div>
-				<button class="kn-btn kn-btn-outline" id="kn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<button class="kn-btn kn-btn-outline kn-btn-danger" id="kn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;"><i class="fas fa-trash"></i> Remove Banner</button>
 				<?php else: ?>
 				<span class="kn-field-hint">Upload an image to enable banner display settings.</span>
 				<?php endif; ?>
@@ -2882,8 +2886,8 @@ function knEscapeAttr(s) {
 				<canvas id="kn-banner-position-canvas" class="kn-banner-position-canvas" width="1800" height="240"></canvas>
 				<svg class="kn-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 					<!-- Faint vignette tint for safe zones (matches the real .kn-hero-vignette) -->
-					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
-					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<rect x="0" y="0" width="900" height="240" fill="url(#kn-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#kn-posBottomFade)" opacity="0.35"/>
 					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
 					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
 					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
@@ -2901,10 +2905,10 @@ function knEscapeAttr(s) {
 					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
 					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
 					<defs>
-						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+						<linearGradient id="kn-posLeftFade" x1="0" y1="0" x2="1" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
-						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+						<linearGradient id="kn-posBottomFade" x1="0" y1="1" x2="0" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
 					</defs>

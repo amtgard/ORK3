@@ -93,7 +93,7 @@
 		   )
 		|| (
 			   isset($this->__session->user_id)
-			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, null, null)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)
 		   );
 	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
@@ -986,7 +986,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<h1 class="pn-persona" id="pn-hero-persona">
 				<?= $_pnDisplayName ?>
 				<?php if ($isKnight && $_pnBeltDisplay === 'white'): ?>
-					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
+					<img class="pn-belt-icon" src="<?= htmlspecialchars($beltIconUrl) ?>" alt="Knight" data-tip="Belted Knight" />
 				<?php elseif ($isKnight && $_pnBeltDisplay === 'own' && !empty($ownBelts)): ?>
 					<span class="pn-hero-belts">
 					<?php foreach ($ownBelts as $_b): ?>
@@ -3648,6 +3648,7 @@ var PnConfig = {
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
+<?php if ($pnCanManageBanner): ?>
 <script>
 var PnBannerConfig = {
 	uir:            '<?= UIR ?>',
@@ -3661,22 +3662,22 @@ var PnBannerConfig = {
 	bannerUrl:      <?= json_encode($bannerUrl) ?>,
 };
 </script>
+<?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-<!-- pn-banner-modal (ported from event) -->
 <?php if ($pnCanManageBanner): ?>
-<!-- Event Banner Upload Modal -->
+<!-- pn-banner-modal -->
 <div class="pn-img-overlay pn-banner-modal" id="pn-banner-overlay">
 	<div class="pn-img-modal" style="width:min(680px, 96vw)">
 		<div class="pn-img-modal-header">
-			<span class="pn-img-modal-title"><i class="fas fa-image" style="margin-right:8px;color:#2c5282"></i>Update Banner Image</span>
+			<span class="pn-img-modal-title" id="pn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
 			<button class="pn-img-close-btn" id="pn-banner-close-btn" aria-label="Close">&times;</button>
 		</div>
 
 		<div class="pn-img-modal-body" id="pn-banner-step-select">
-			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
-				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the player profile header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
 			<div class="pn-banner-wireframes">
@@ -3684,8 +3685,8 @@ var PnBannerConfig = {
 					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
 					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
-						<rect x="0" y="0" width="360" height="80" fill="url(#wfLeftFade)" opacity="0.55"/>
-						<rect x="0" y="58" width="600" height="22" fill="url(#wfBottomFade)" opacity="0.55"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#pn-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#pn-wfBottomFade)" opacity="0.55"/>
 						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
 						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
@@ -3695,10 +3696,10 @@ var PnBannerConfig = {
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<linearGradient id="pn-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
-							<linearGradient id="wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<linearGradient id="pn-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
 								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 							</linearGradient>
 						</defs>
@@ -3712,7 +3713,7 @@ var PnBannerConfig = {
 						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
 						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
-						<rect x="204" y="0" width="192" height="80" fill="url(#wfMobileFade)" opacity="0.40"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#pn-wfMobileFade)" opacity="0.40"/>
 						<!-- Tiny logo + title inside the middle band -->
 						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
 						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
@@ -3726,7 +3727,7 @@ var PnBannerConfig = {
 						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
 						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
 						<defs>
-							<linearGradient id="wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+							<linearGradient id="pn-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
 								<stop offset="0" stop-color="#000" stop-opacity="0"/>
 								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
 							</linearGradient>
@@ -3757,7 +3758,7 @@ var PnBannerConfig = {
 				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
 			</label>
 			<input type="file" id="pn-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
-			<div id="pn-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div id="pn-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
 			<div class="pn-img-form-error" id="pn-banner-error" style="display:none;"></div>
 
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
@@ -3766,29 +3767,29 @@ var PnBannerConfig = {
 					<button class="pn-btn pn-btn-outline" id="pn-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
 					<button class="pn-btn pn-btn-outline" id="pn-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
 				</div>
-				<button class="pn-btn pn-btn-outline" id="pn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<button class="pn-btn pn-btn-outline pn-btn-danger" id="pn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;"><i class="fas fa-trash"></i> Remove Banner</button>
 				<?php else: ?>
-				<span class="ec-field-hint">Upload a banner first to unlock the display toggles.</span>
+				<span class="pn-field-hint">Upload an image to enable banner display settings.</span>
 				<?php endif; ?>
 			</div>
 		</div>
 
 		<div class="pn-img-modal-body" id="pn-banner-step-position" style="display:none;">
-			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
 				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
 			</p>
 			<div class="pn-banner-position-wrap">
 				<canvas id="pn-banner-position-canvas" class="pn-banner-position-canvas" width="1800" height="240"></canvas>
 				<svg class="pn-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
 					<!-- Faint vignette tint for safe zones (matches the real .pn-hero-vignette) -->
-					<rect x="0" y="0" width="900" height="240" fill="url(#posLeftFade)" opacity="0.40"/>
-					<rect x="0" y="150" width="1800" height="90" fill="url(#posBottomFade)" opacity="0.35"/>
+					<rect x="0" y="0" width="900" height="240" fill="url(#pn-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#pn-posBottomFade)" opacity="0.35"/>
 					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
 					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
 					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
 					<!-- Title bar -->
 					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
-					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Event Title goes here</text>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Player Name goes here</text>
 					<!-- Badges row -->
 					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
 					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
@@ -3800,10 +3801,10 @@ var PnBannerConfig = {
 					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
 					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
 					<defs>
-						<linearGradient id="posLeftFade" x1="0" y1="0" x2="1" y2="0">
+						<linearGradient id="pn-posLeftFade" x1="0" y1="0" x2="1" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
-						<linearGradient id="posBottomFade" x1="0" y1="1" x2="0" y2="0">
+						<linearGradient id="pn-posBottomFade" x1="0" y1="1" x2="0" y2="0">
 							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
 						</linearGradient>
 					</defs>
@@ -3822,7 +3823,7 @@ var PnBannerConfig = {
 
 		<div class="pn-img-modal-body" id="pn-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
-			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+			<p style="margin-top:12px;">Uploading…</p>
 		</div>
 		<div class="pn-img-modal-body" id="pn-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
@@ -3830,6 +3831,7 @@ var PnBannerConfig = {
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>

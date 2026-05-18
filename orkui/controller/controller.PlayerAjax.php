@@ -784,10 +784,10 @@ class Controller_PlayerAjax extends Controller {
 			   $uid === $mundane_id_target
 			|| ($_parkId    && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK,    $_parkId,    AUTH_EDIT))
 			|| ($_kingdomId && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $_kingdomId, AUTH_EDIT))
-			|| Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)
+			|| Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
 		);
 		if (!$canEdit) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized to edit this player.']);
+			echo json_encode(['status' => 5, 'error' => 'Not authorized to manage this player\'s banner.']);
 			exit;
 		}
 
@@ -797,6 +797,15 @@ class Controller_PlayerAjax extends Controller {
 			// upload starts fresh instead of inheriting the removed banner's
 			// config.
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE mundane_id = ' . $mundane_id_target);
+			// I4 fix: verify the UPDATE landed before deleting the file.
+			// If the DB update silently failed and we delete the file, the
+			// banner column stays 1 but the file is gone -> broken banner.
+			$DB->Clear();
+			$removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+			if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
+				echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
+				exit;
+			}
 			$base = DIR_PLAYER_BANNER . sprintf('%06d', $mundane_id_target);
 			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
 			if (file_exists($base . '.png')) unlink($base . '.png');
@@ -818,6 +827,19 @@ class Controller_PlayerAjax extends Controller {
 			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
 			$DB->Clear();
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
+			// Verify the UPDATE landed (YapoMysql can silently swallow failures
+			// under STRICT sql_mode etc). Re-read and compare each field so the
+			// client can surface a real error rather than a false success.
+			$DB->Clear();
+			$verifyCfg = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+			if (!$verifyCfg || !$verifyCfg->Next()
+				|| (int)$verifyCfg->banner_show_logo !== $showLogo
+				|| (int)$verifyCfg->banner_vignette  !== $vignette
+				|| (int)$verifyCfg->banner_offset_x  !== $offX
+				|| (int)$verifyCfg->banner_offset_y  !== $offY) {
+				echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
+				exit;
+			}
 			echo json_encode(['status' => 0]);
 			exit;
 		}
@@ -827,16 +849,25 @@ class Controller_PlayerAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
 				exit;
 			}
-			$tmp  = $_FILES['Banner']['tmp_name'];
-			$mime = $_FILES['Banner']['type'] ?? 'image/jpeg';
-			// JPEG and PNG only: resolve_image_ext returns .jpg or .png and the
-			// rest of the pipeline (storage filename, frontend cache-bust, banner
-			// modal accept attribute) only knows those two. GIFs would land as
-			// .jpg on disk with corrupt bytes.
-			if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
-				echo json_encode(['status' => 1, 'error' => 'Unsupported image type. Use JPG or PNG.']);
+			// I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
+			if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
 				exit;
 			}
+			// I5 fix: server-side file size check (JS resize can be bypassed via curl).
+			if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
+				echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
+				exit;
+			}
+			$tmp  = $_FILES['Banner']['tmp_name'];
+			// I3 fix: use exif_imagetype() (magic-byte check) instead of the
+			// browser-supplied MIME type, which is trivially spoofable.
+			$detectedType = exif_imagetype($tmp);
+			if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
+				echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
+				exit;
+			}
+			$mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
 			if (!is_dir(DIR_PLAYER_BANNER)) {
 				@mkdir(DIR_PLAYER_BANNER, 0775, true);
 			}

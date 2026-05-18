@@ -206,7 +206,7 @@ html[data-theme="dark"] .pk-btn-white {
 	align-items: center;
 	padding: 24px 30px;
 	gap: 24px;
-	z-index: 1;
+	z-index: 2;
 }
 .pn-avatar {
 	position: relative;
@@ -1637,7 +1637,7 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 	align-items: center;
 	padding: 16px 32px 16px 36px;
 	gap: 32px;
-	z-index: 1;
+	z-index: 2;
 }
 .kn-heraldry-wrap {
 	position: relative;
@@ -1729,6 +1729,7 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 	background: transparent;
 	border: none;
 	padding: 0;
+	border-radius: 0;
 }
 .kn-badges {
 	display: flex;
@@ -2982,6 +2983,14 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 	opacity: 0.04;
 	filter: blur(6px) grayscale(1);
 }
+/* When an inactive park has a banner, override the default dampening so the
+   banner art is visible but still clearly signals "inactive" via partial
+   desaturation. Compound selector (.pk-hero--inactive.pk-hero-has-banner)
+   beats both .pk-hero--inactive .pk-hero-bg and .pk-hero-has-banner .pk-hero-bg. */
+.pk-hero--inactive.pk-hero-has-banner .pk-hero-bg {
+	opacity: 0.35;
+	filter: grayscale(0.6);
+}
 .pk-inactive-badge {
 	display: inline-flex;
 	align-items: center;
@@ -3003,7 +3012,7 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 	gap: 32px;
 	padding: 16px 32px 16px 36px;
 	color: #fff;
-	z-index: 1;
+	z-index: 2;
 }
 .pk-hero-left {
 	position: relative;
@@ -9288,6 +9297,25 @@ html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #
 	box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
 
+/* Broad data-tip fallback for every other element that opted in via the
+ * data-tip attribute (per the no-browser-tooltips rule). Mirrors the styling
+ * above. Scoped selector is :not(.kn-officer-pill):not(.pk-officer-pill):not(.kn-draft-pill):not(.pk-draft-pill)
+ * to avoid double rules on the scoped variants. */
+[data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):not(.kn-draft-pill):not(.pk-draft-pill):not(.pn-acct-help-tip) {
+	position: relative;
+}
+[data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):not(.kn-draft-pill):not(.pk-draft-pill):not(.pn-acct-help-tip):hover::after {
+	content: attr(data-tip);
+	position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+	background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
+	padding: 6px 10px; border-radius: 4px; white-space: pre-line;
+	pointer-events: none; z-index: 500; min-width: max-content; max-width: 240px;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+html[data-theme="dark"] [data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):not(.kn-draft-pill):not(.pk-draft-pill):not(.pn-acct-help-tip):hover::after {
+	background: #f7fafc; color: #1a202c;
+}
+
 /* Kingdomnew Save-as-draft button */
 .kn-emod-draft-btn,
 .pk-emod-draft-btn {
@@ -10043,6 +10071,76 @@ html[data-theme="dark"] .pk-banner-position-hint i { color: var(--ork-link-brigh
 	.pk-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
 }
 
+/* ── pk-img modal shell ── */
+/* These classes are referenced in the pk-banner-modal HTML in Parknew_index.tpl */
+/* C1 fix: z-index --z-modal-top (10200) — above all park modals (10100) */
+/* M2 fix: opacity+visibility fade pattern instead of display:none/flex toggle */
+.pk-img-overlay {
+	position: fixed; inset: 0; background: rgba(0,0,0,.55);
+	z-index: var(--z-modal-top, 10200);
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+.pk-img-overlay.pk-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+.pk-img-modal {
+	background: #fff; border-radius: 10px; width: min(520px, 96vw);
+	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
+	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
+	max-height: 90vh; overflow-y: auto;
+}
+.pk-img-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
+}
+.pk-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
+/* M3 fix: add hover state to match other park modal close buttons */
+.pk-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
+.pk-img-close-btn:hover { color: var(--ork-text); }
+.pk-img-modal-body { padding: 20px 22px; }
+.pk-upload-area {
+	display: flex; flex-direction: column; align-items: center; gap: 8px;
+	border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px 20px;
+	cursor: pointer; color: var(--ork-text-body); font-size: 14px; text-align: center;
+	transition: border-color .15s, background .15s;
+}
+.pk-upload-area:hover { border-color: #4299e1; background: #ebf8ff; }
+.pk-upload-icon { font-size: 32px; color: var(--ork-text-hint); }
+.pk-upload-area small { font-size: 12px; color: var(--ork-text-hint); }
+.pk-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.pk-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
+.pk-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+.pk-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
+/* M1 fix: pk-field-hint (replaces stale ec-field-hint inside pk banner modal) */
+.pk-field-hint { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+/* I1 fix: .pk-btn-outline inside modal gets light-bg override so white text is visible */
+.pk-img-modal .pk-btn-outline { background: #fff; color: #2d3748 !important; border-color: #cbd5e0; }
+.pk-img-modal .pk-btn-outline:hover { background: #f7fafc; color: #1a202c !important; }
+/* Dark mode — pk-img modal shell */
+html[data-theme="dark"] .pk-img-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .pk-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .pk-img-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .pk-img-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-upload-area { border-color: var(--ork-border); color: var(--ork-text-secondary); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .pk-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-upload-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .pk-fp-title { background: #1a365d; color: #90cdf4; }
+html[data-theme="dark"] .pk-field-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-img-modal .pk-btn-outline { background: var(--ork-bg-secondary); color: var(--ork-text) !important; border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-img-modal .pk-btn-outline:hover { background: var(--ork-bg-tertiary); color: var(--ork-text) !important; }
+/* I1 fix: override hardcoded inline color:#4a5568/#888 in modal body (invisible in dark mode) */
+html[data-theme="dark"] .pk-img-modal-body { color: var(--ork-text); }
+html[data-theme="dark"] .pk-img-modal-body p { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-img-modal-body #pk-banner-resize-notice,
+html[data-theme="dark"] .pk-img-modal-body small { color: var(--ork-text-muted); }
+/* M-A fix: modal title icon color — CSS class so dark mode can remap */
+.pk-img-modal-title i { color: #2c5282; }
+html[data-theme="dark"] .pk-img-modal-title i { color: var(--ork-accent, #90cdf4); }
+
 
 /* ── kn banner (ported from ev-) ─────────────────────────────────── */
 /* ---- Hero ---- */
@@ -10400,26 +10498,72 @@ html[data-theme="dark"] .pn-banner-position-hint i { color: var(--ork-link-brigh
 	.pn-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
 }
 
+/* ── pn-img modal shell (ported from kn-img-* / Kingdomnew QA round 1+2) ── */
+/* These classes are referenced in the pn-banner-modal HTML in Playernew_index.tpl.
+   The pre-existing .pn-upload-area / .pn-crop-wrap / .pn-img-modal-box rules at
+   ~line 1273 are reused by other player modals (avatar/heraldry) and remain
+   intact — only the modal SHELL is added here. */
+/* C1 fix: z-index = --z-modal-top (10200) — above all player modals (10100) */
+/* M2 fix: opacity+visibility fade pattern instead of display:none/flex toggle */
+.pn-img-overlay {
+	position: fixed; inset: 0; background: rgba(0,0,0,.55);
+	z-index: var(--z-modal-top, 10200);
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+.pn-img-overlay.pn-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+.pn-img-modal {
+	background: #fff; border-radius: 10px; width: min(520px, 96vw);
+	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
+	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
+	max-height: 90vh; overflow-y: auto;
+}
+.pn-img-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
+}
+.pn-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
+/* M3 fix: add hover state to match other player modal close buttons */
+.pn-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
+.pn-img-close-btn:hover { color: var(--ork-text); }
+.pn-img-modal-body { padding: 20px 22px; }
+.pn-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+.pn-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
+/* M1 fix: pn-field-hint (replaces stale ec-field-hint inside pn banner modal) */
+.pn-field-hint { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+/* I1 fix: .pn-btn-outline inside modal gets light-bg override so text is visible */
+.pn-img-modal .pn-btn-outline { background: #fff; color: #2d3748 !important; border-color: #cbd5e0; }
+.pn-img-modal .pn-btn-outline:hover { background: #f7fafc; color: #1a202c !important; }
+/* M-A fix: modal title icon color — CSS class so dark mode can remap */
+.pn-img-modal-title i { color: #2c5282; }
+/* Dark mode — pn-img modal shell */
+html[data-theme="dark"] .pn-img-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .pn-img-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .pn-img-modal-title i { color: var(--ork-accent, #90cdf4); }
+html[data-theme="dark"] .pn-img-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .pn-fp-title { background: #1a365d; color: #90cdf4; }
+html[data-theme="dark"] .pn-field-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-img-modal .pn-btn-outline { background: var(--ork-bg-secondary); color: var(--ork-text) !important; border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-img-modal .pn-btn-outline:hover { background: var(--ork-bg-tertiary); color: var(--ork-text) !important; }
+/* I1 fix: override hardcoded inline color:#4a5568/#888 in modal body (invisible in dark mode) */
+html[data-theme="dark"] .pn-img-modal-body { color: var(--ork-text); }
+/* Body paragraphs need readable contrast; reserve --ork-text-muted for hints only. */
+html[data-theme="dark"] .pn-img-modal-body p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-img-modal-body #pn-banner-resize-notice,
+html[data-theme="dark"] .pn-img-modal-body small { color: var(--ork-text-muted); }
+
 
 /* ── un banner (ported from ev-) ─────────────────────────────────── */
 /* ---- Hero ---- */
-.un-hero {
-	position: relative;
-	border-radius: 10px;
-	overflow: hidden;
-	margin-top: 3px;
-	margin-bottom: 20px;
-	min-height: 160px;
-	background-color: #2d3748;
-}
-.un-hero-bg {
-	position: absolute;
-	top: -10px; left: -10px; right: -10px; bottom: -10px;
-	background-size: cover;
-	background-position: center;
-	opacity: 0.14;
-	filter: blur(6px);
-}
+/* Note: .un-hero / .un-hero-bg base rules live inline in Unit_index.tpl
+   (need the dynamic $_hero_color background). The duplicate rules that
+   used to live here clobbered the type-specific color with #2d3748. */
 /* Banner image: full-bleed, no blur, no opacity dampening. */
 .un-hero-has-banner .un-hero-bg {
 	top: 0; left: 0; right: 0; bottom: 0;
@@ -10558,4 +10702,205 @@ html[data-theme="dark"] .un-banner-position-hint i { color: var(--ork-link-brigh
 	.un-banner-edit-label { display: none; }
 	.un-banner-edit-pencil { display: inline-block; font-size: 10px; opacity: 0.85; }
 }
+
+/* ── un-img modal shell (ported from kn-img-* / Kingdomnew QA round 1+2) ── */
+/* These classes are referenced in the un-banner-modal HTML in Unit_index.tpl.
+   Note: the unit heraldry modal at id="un-img-overlay" reuses the .pn-overlay
+   class shell (NOT .un-img-overlay), so the banner modal class selector here
+   does not collide with that element. */
+/* C1 fix: z-index = --z-modal-top (10200) — above all unit modals (10100) */
+/* M2 fix: opacity+visibility fade pattern instead of display:none/flex toggle */
+.un-img-overlay {
+	position: fixed; inset: 0; background: rgba(0,0,0,.55);
+	z-index: var(--z-modal-top, 10200);
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; visibility: hidden;
+	transition: opacity 0.2s, visibility 0s 0.2s;
+}
+.un-img-overlay.un-open {
+	opacity: 1; pointer-events: auto; visibility: visible;
+	transition: opacity 0.2s, visibility 0s 0s;
+}
+.un-img-modal {
+	background: #fff; border-radius: 10px; width: min(520px, 96vw);
+	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
+	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
+	max-height: 90vh; overflow-y: auto;
+}
+.un-img-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-border); background: var(--ork-surface-light);
+}
+.un-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
+/* M3 fix: add hover state to match other unit modal close buttons */
+.un-img-close-btn { background: none; border: none; font-size: 20px; color: var(--ork-text-muted); cursor: pointer; padding: 0 4px; }
+.un-img-close-btn:hover { color: var(--ork-text); }
+.un-img-modal-body { padding: 20px 22px; }
+.un-upload-area {
+	display: flex; flex-direction: column; align-items: center; gap: 8px;
+	border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px 20px;
+	cursor: pointer; color: var(--ork-text-body); font-size: 14px; text-align: center;
+	transition: border-color .15s, background .15s;
+}
+.un-upload-area:hover { border-color: #4299e1; background: #ebf8ff; }
+.un-upload-icon { font-size: 32px; color: var(--ork-text-hint); }
+.un-upload-area small { font-size: 12px; color: var(--ork-text-hint); }
+.un-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+/* M-A fix: modal title icon color — CSS class so dark mode can remap */
+.un-img-modal-title i { color: #2c5282; }
+/* Unit page has no global .un-btn rule; the banner modal markup uses
+   .un-btn / .un-btn-outline / .un-btn-white. Scope the base button rules
+   inside .un-img-modal so we don't accidentally collide with future un- code. */
+.un-img-modal .un-btn {
+	display: inline-flex; align-items: center; gap: 6px;
+	padding: 7px 14px; border-radius: 6px;
+	font-size: 13px; font-weight: 600; cursor: pointer;
+	border: 1px solid transparent; line-height: 1.2;
+	transition: background .15s, color .15s, border-color .15s, opacity .15s;
+}
+.un-img-modal .un-btn:disabled, .un-img-modal .un-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+.un-img-modal .un-btn-white { background: #fff; color: #2d3748; border-color: #cbd5e0; }
+.un-img-modal .un-btn-white:hover:not(:disabled) { background: #f7fafc; }
+/* I1 fix: .un-btn-outline inside modal gets light-bg override so text is visible */
+.un-img-modal .un-btn-outline { background: #fff; color: #2d3748 !important; border-color: #cbd5e0; }
+.un-img-modal .un-btn-outline:hover { background: #f7fafc; color: #1a202c !important; }
+/* Dark mode — un-img modal shell */
+html[data-theme="dark"] .un-img-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .un-img-modal-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .un-img-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .un-img-modal-title i { color: var(--ork-accent, #90cdf4); }
+html[data-theme="dark"] .un-img-close-btn { color: var(--ork-text-muted); }
+html[data-theme="dark"] .un-upload-area { border-color: var(--ork-border); color: var(--ork-text-secondary); background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .un-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .un-upload-icon { color: var(--ork-text-muted); }
+html[data-theme="dark"] .un-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .un-img-modal .un-btn-white { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .un-img-modal .un-btn-white:hover:not(:disabled) { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .un-img-modal .un-btn-outline { background: var(--ork-bg-secondary); color: var(--ork-text) !important; border-color: var(--ork-border); }
+html[data-theme="dark"] .un-img-modal .un-btn-outline:hover { background: var(--ork-bg-tertiary); color: var(--ork-text) !important; }
+/* I1 fix: override hardcoded inline color:#4a5568/#888 in modal body (invisible in dark mode) */
+html[data-theme="dark"] .un-img-modal-body { color: var(--ork-text); }
+html[data-theme="dark"] .un-img-modal-body p { color: var(--ork-text-muted); }
+html[data-theme="dark"] .un-img-modal-body #un-banner-resize-notice,
+html[data-theme="dark"] .un-img-modal-body small { color: var(--ork-text-muted); }
+
+/* ── Shared: danger button for destructive actions inside banner modals ──
+   Outranks the dark-mode `.{x}-img-modal .{x}-btn-outline` rule that forces
+   color: var(--ork-text) !important. Keeps red visible in BOTH themes. */
+.pk-btn-danger, .kn-btn-danger, .pn-btn-danger, .un-btn-danger {
+	color: #e53e3e !important;
+	border-color: #fed7d7 !important;
+}
+.pk-btn-danger:hover, .kn-btn-danger:hover, .pn-btn-danger:hover, .un-btn-danger:hover {
+	background: #fff5f5 !important;
+	color: #c53030 !important;
+	border-color: #feb2b2 !important;
+}
+html[data-theme="dark"] .pk-btn-danger,
+html[data-theme="dark"] .kn-btn-danger,
+html[data-theme="dark"] .pn-btn-danger,
+html[data-theme="dark"] .un-btn-danger {
+	color: #fc8181 !important;
+	border-color: #742a2a !important;
+	background: var(--ork-bg-secondary) !important;
+}
+html[data-theme="dark"] .pk-btn-danger:hover,
+html[data-theme="dark"] .kn-btn-danger:hover,
+html[data-theme="dark"] .pn-btn-danger:hover,
+html[data-theme="dark"] .un-btn-danger:hover {
+	background: #742a2a !important;
+	color: #fed7d7 !important;
+	border-color: #9b2c2c !important;
+}
+
+/* ── Shared: banner-confirm modal (used by bannerConfirm() in revised.js) ── */
+.banner-confirm-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.55);
+	z-index: 100000; /* above all banner modals */
+	display: none;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+}
+.banner-confirm-overlay.open { display: flex; }
+.banner-confirm-modal {
+	background: #fff;
+	color: #1a202c;
+	border-radius: 8px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+	width: 100%;
+	max-width: 420px;
+	padding: 20px 22px;
+	font-family: inherit;
+}
+.banner-confirm-title {
+	margin: 0 0 8px 0;
+	font-size: 16px;
+	font-weight: 700;
+	color: #1a202c;
+	/* Reset against global h1-h6 styling */
+	background: transparent;
+	border: none;
+	padding: 0;
+	border-radius: 0;
+	text-shadow: none;
+}
+.banner-confirm-message {
+	margin: 0 0 18px 0;
+	font-size: 14px;
+	line-height: 1.5;
+	color: #4a5568;
+}
+.banner-confirm-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.banner-confirm-cancel,
+.banner-confirm-ok {
+	padding: 8px 16px;
+	font-size: 14px;
+	font-weight: 600;
+	border-radius: 6px;
+	cursor: pointer;
+	border: 1px solid transparent;
+	font-family: inherit;
+}
+.banner-confirm-cancel {
+	background: #fff;
+	color: #2d3748;
+	border-color: #cbd5e0;
+}
+.banner-confirm-cancel:hover { background: #f7fafc; }
+.banner-confirm-ok {
+	background: #e53e3e;
+	color: #fff;
+	border-color: #c53030;
+}
+.banner-confirm-ok:hover { background: #c53030; border-color: #9b2c2c; }
+.banner-confirm-ok:focus,
+.banner-confirm-cancel:focus { outline: 2px solid #4299e1; outline-offset: 2px; }
+
+/* Dark mode */
+html[data-theme="dark"] .banner-confirm-modal {
+	background: var(--ork-bg-secondary);
+	color: var(--ork-text);
+	box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+}
+html[data-theme="dark"] .banner-confirm-title { color: var(--ork-text); }
+html[data-theme="dark"] .banner-confirm-message { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .banner-confirm-cancel {
+	background: var(--ork-bg-tertiary);
+	color: var(--ork-text);
+	border-color: var(--ork-border);
+}
+html[data-theme="dark"] .banner-confirm-cancel:hover { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .banner-confirm-ok {
+	background: #c53030;
+	color: #fff;
+	border-color: #9b2c2c;
+}
+html[data-theme="dark"] .banner-confirm-ok:hover { background: #9b2c2c; }
 

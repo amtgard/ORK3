@@ -661,14 +661,16 @@ class Controller_KingdomAjax extends Controller {
 		global $DB;
 		$events = [];
 
-		// Fetch Monarch/Regent mundane IDs for royal-attendance detection
-		$DB->Clear();
-		$offResult = $DB->DataSet("SELECT role, mundane_id FROM ork_officer WHERE kingdom_id = {$kid} AND park_id = 0 AND role IN ('Monarch','Regent') AND mundane_id > 0");
+		// Fetch Monarch/Regent mundane IDs for royal-attendance detection.
+		// A11: ORDER BY officer_id DESC LIMIT 1 per role so the most-recent record wins
+		// (prior query was last-wins on iteration order, which is arbitrary in MySQL).
 		$monarchId = 0; $regentId = 0;
-		if ($offResult) { while ($offResult->Next()) {
-			if ($offResult->role === 'Monarch') $monarchId = (int)$offResult->mundane_id;
-			if ($offResult->role === 'Regent')  $regentId  = (int)$offResult->mundane_id;
-		} }
+		$DB->Clear();
+		$mRes = $DB->DataSet("SELECT mundane_id FROM ork_officer WHERE kingdom_id = {$kid} AND park_id = 0 AND role = 'Monarch' AND mundane_id > 0 ORDER BY officer_id DESC LIMIT 1");
+		if ($mRes && $mRes->Next()) $monarchId = (int)$mRes->mundane_id;
+		$DB->Clear();
+		$rRes = $DB->DataSet("SELECT mundane_id FROM ork_officer WHERE kingdom_id = {$kid} AND park_id = 0 AND role = 'Regent' AND mundane_id > 0 ORDER BY officer_id DESC LIMIT 1");
+		if ($rRes && $rRes->Next()) $regentId = (int)$rRes->mundane_id;
 		$monarchSubq = $monarchId > 0
 			? "(SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$monarchId})"
 			: "0";
@@ -724,9 +726,11 @@ class Controller_KingdomAjax extends Controller {
 						'isDraft'  => $evStatus === 'draft',
 					],
 				];
-				if ($mRsvp && $rRsvp)  $ev['royalPresence'] = 'both';
-				elseif ($mRsvp)        $ev['royalPresence'] = 'monarch';
-				elseif ($rRsvp)        $ev['royalPresence'] = 'regent';
+				// A10: FullCalendar strips unrecognized top-level keys — royalPresence MUST live in extendedProps
+				if (!isset($ev['extendedProps']) || !is_array($ev['extendedProps'])) $ev['extendedProps'] = [];
+				if ($mRsvp && $rRsvp)  $ev['extendedProps']['royalPresence'] = 'both';
+				elseif ($mRsvp)        $ev['extendedProps']['royalPresence'] = 'monarch';
+				elseif ($rRsvp)        $ev['extendedProps']['royalPresence'] = 'regent';
 				$endRaw = $evtResult->event_end ?? '';
 				if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {
 					$endDt = new DateTime(substr($endRaw, 0, 10));
@@ -1033,10 +1037,10 @@ class Controller_KingdomAjax extends Controller {
 		}
 
 		$uid = (int)$this->session->user_id;
-		// Banner management requires AUTH_CREATE (matching the UI gate in Kingdomnew_index.tpl)
-		$canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE);
+		// Banner management requires AUTH_EDIT (aligned with Park/Player banner endpoints and design spec).
+		$canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
 		if (!$canEdit) {
-			echo json_encode(['status' => 1, 'error' => 'Not authorized to manage this kingdom\'s banner.']);
+			echo json_encode(['status' => 5, 'error' => 'Not authorized to manage this kingdom\'s banner.']);
 			exit;
 		}
 
@@ -1078,6 +1082,20 @@ class Controller_KingdomAjax extends Controller {
 			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
 			$DB->Clear();
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE kingdom_id = ' . $kingdom_id);
+			// Verify the UPDATE landed (mirrors the verify pattern in update/remove
+			// branches). $DB->Execute() is void and YapoMysql can silently swallow
+			// failures (sql_mode=STRICT etc), so re-read banner_offset_x and
+			// compare against the submitted value.
+			$DB->Clear();
+			$verify = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
+			if (!$verify || !$verify->Next()
+				|| (int)$verify->banner_show_logo !== $showLogo
+				|| (int)$verify->banner_vignette  !== $vignette
+				|| (int)$verify->banner_offset_x  !== $offX
+				|| (int)$verify->banner_offset_y  !== $offY) {
+				echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
+				exit;
+			}
 			echo json_encode(['status' => 0]);
 			exit;
 		}
