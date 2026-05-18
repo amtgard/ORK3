@@ -441,6 +441,10 @@ class Controller_Kingdom extends Controller {
 		// we keep it simple — non-editors only see published events. ORK admins see all.
 		$kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
 		$kn_draftClause = $kn_isAdmin ? '' : ($kn_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$kn_uid})" : "AND e.status = 'published'");
+		// A12: Skip correlated subquery for anonymous users — emit NULL literal instead of joining on mundane_id = 0.
+		$myRsvpSubq = $kn_uid > 0
+			? "(SELECT status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = " . (int)$kn_uid . " LIMIT 1)"
+			: "NULL";
 		$evtSql = "
 			SELECT e.event_id, e.name, e.park_id, e.status, e.mundane_id AS event_creator,
 			       p.name AS park_name, p.abbreviation AS park_abbr,
@@ -449,7 +453,7 @@ class Controller_Kingdom extends Controller {
 			       COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested,
 			       {$monarchSubq} AS monarch_rsvp,
 			       {$regentSubq} AS regent_rsvp,
-			       (SELECT status FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$kn_uid} LIMIT 1) AS my_rsvp
+			       {$myRsvpSubq} AS my_rsvp
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id

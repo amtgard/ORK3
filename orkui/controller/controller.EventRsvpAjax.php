@@ -39,10 +39,25 @@ class Controller_EventRsvpAjax extends Controller {
 
 		$uid = (int)$this->session->user_id;
 		global $DB;
+
+		// A9: server-side date gate — reject if event has ended.
 		$DB->Clear();
+		$endRow = $DB->DataSet("SELECT event_end FROM " . DB_PREFIX . "event_calendardetail WHERE event_calendardetail_id = " . (int)$detailId . " LIMIT 1");
+		if (!$endRow || !$endRow->Next()) {
+			echo json_encode(['status' => 1, 'error' => 'Event not found.']);
+			exit;
+		}
+		$_endTs = strtotime((string)$endRow->event_end);
+		if ($_endTs && $_endTs < time()) {
+			echo json_encode(['status' => 1, 'error' => 'Event has ended.']);
+			exit;
+		}
+
+		$DB->Clear();
+		// A3: $status whitelisted above; drop mysql_real_escape_string (fatal under PHP 8). Cast IDs to int.
 		$DB->Execute("
 			INSERT INTO " . DB_PREFIX . "event_rsvp (event_calendardetail_id, mundane_id, status, modified)
-			VALUES ({$detailId}, {$uid}, '" . mysql_real_escape_string($status) . "', NOW())
+			VALUES (" . (int)$detailId . ", " . (int)$uid . ", '" . $status . "', NOW())
 			ON DUPLICATE KEY UPDATE status = VALUES(status), modified = NOW()");
 
 		$counts = $this->counts($detailId);

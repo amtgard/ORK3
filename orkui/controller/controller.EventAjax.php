@@ -69,10 +69,33 @@ class Controller_EventAjax extends Controller {
 		}
 		global $DB;
 		$DB->Clear();
-		$DB->Execute("UPDATE " . DB_PREFIX . "event SET status = '" . mysql_real_escape_string($status) . "' WHERE event_id = " . $evtId);
+		// A2: $status is whitelisted to 'published'|'draft' above; safe to interpolate. Drop mysql_real_escape_string (fatal under PHP 8).
+		$DB->Execute("UPDATE " . DB_PREFIX . "event SET status = '" . $status . "' WHERE event_id = " . $evtId);
 		// Bust SearchService.Event memcache for this event.
 		$evKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $evtId]);
 		Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
+		// NF1: Also bust Event.GetActiveEventsAtScope for park+kingdom across each
+		// calendardetail date so a publish/unpublish flip propagates immediately to
+		// Attendance/park and Attendance/kingdom pages (otherwise stale up to 60s).
+		$DB->Clear();
+		$evRow = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = " . $evtId . " LIMIT 1");
+		if ($evRow && $evRow->Next()) {
+			$_parkId = (int)$evRow->park_id;
+			$_kingdomId = (int)$evRow->kingdom_id;
+			$DB->Clear();
+			$_dates = $DB->DataSet("SELECT DISTINCT DATE(event_start) AS d FROM " . DB_PREFIX . "event_calendardetail WHERE event_id = " . $evtId . " AND event_end >= NOW()");
+			while ($_dates && $_dates->Next()) {
+				$_d = (string)$_dates->d;
+				if ($_parkId > 0) {
+					$_k = Ork3::$Lib->ghettocache->key(['Scope' => 'park', 'ScopeId' => $_parkId, 'Date' => $_d]);
+					Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $_k);
+				}
+				if ($_kingdomId > 0) {
+					$_k = Ork3::$Lib->ghettocache->key(['Scope' => 'kingdom', 'ScopeId' => $_kingdomId, 'Date' => $_d]);
+					Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $_k);
+				}
+			}
+		}
 		echo json_encode(['status' => 0, 'event_status' => $status]);
 		exit;
 	}
@@ -674,10 +697,11 @@ class Controller_EventAjax extends Controller {
 		$leadsIn = ($leadsJson !== '') ? json_decode($leadsJson, true) : [];
 		$leadsOut = [];
 		if (is_array($leadsIn)) {
-			$DB->Clear();
+			// A16: $DB->Clear() per-iteration so prior PDO bindings can't silently break the INSERT.
 			foreach ($leadsIn as $lead) {
 				$lmid = (int)($lead['MundaneId'] ?? 0);
 				if (!valid_id($lmid)) continue;
+				$DB->Clear();
 				$DB->Execute('INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (' . $schedule_id . ', ' . $lmid . ')');
 				$leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? ''];
 			}
@@ -719,8 +743,21 @@ class Controller_EventAjax extends Controller {
 		$uid = (int)$this->session->user_id;
 		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
 			global $DB;
+			// A17: Look up the schedule row's category so feast-only staff can delete
+			// feast items (parity with feast tab's permissive UI).
 			$DB->Clear();
-			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND (can_manage = 1 OR can_schedule = 1) LIMIT 1');
+			$catRow = $DB->DataSet('SELECT category, secondary_category FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ' . (int)$schedule_id . ' AND event_calendardetail_id = ' . (int)$detail_id . ' LIMIT 1');
+			$_isFeast = false;
+			if ($catRow && $catRow->Next()) {
+				$_cat  = (string)($catRow->category ?? '');
+				$_scat = (string)($catRow->secondary_category ?? '');
+				$_isFeast = ($_cat === 'Feast and Food' || $_scat === 'Feast and Food');
+			}
+			$DB->Clear();
+			$_staffSql = $_isFeast
+				? 'SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$detail_id . ' AND mundane_id = ' . (int)$uid . ' AND (can_manage = 1 OR can_schedule = 1 OR can_feast = 1) LIMIT 1'
+				: 'SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$detail_id . ' AND mundane_id = ' . (int)$uid . ' AND (can_manage = 1 OR can_schedule = 1) LIMIT 1';
+			$staffRow = $DB->DataSet($_staffSql);
 			if (!($staffRow && $staffRow->Next())) {
 				echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
 			}
@@ -863,9 +900,11 @@ class Controller_EventAjax extends Controller {
 		if ($can_schedule && is_array($leadsIn)) {
 			$DB->Clear();
 			$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $schedule_id);
+			// A16: $DB->Clear() per-iteration so prior PDO bindings can't silently break the INSERT.
 			foreach ($leadsIn as $lead) {
 				$lmid = (int)($lead['MundaneId'] ?? 0);
 				if (!valid_id($lmid)) continue;
+				$DB->Clear();
 				$DB->Execute('INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (' . $schedule_id . ', ' . $lmid . ')');
 				$leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? ''];
 			}
@@ -874,8 +913,9 @@ class Controller_EventAjax extends Controller {
 		echo json_encode(['status' => 0, 'schedule' => [
 			'EventScheduleId'   => $schedule_id,
 			'Title'             => $title,
-			'StartTime'         => $start_fmt ?: null,
-			'EndTime'           => $end_fmt   ?: null,
+			// A19: emit empty string (not null) so JS-side .replace() stays compatible when can_schedule=false.
+			'StartTime'         => $start_fmt ?: '',
+			'EndTime'           => $end_fmt   ?: '',
 			'Location'          => $can_schedule ? $location    : null,
 			'Description'       => $can_schedule ? $description : null,
 			'Category'          => $can_schedule ? $category    : null,
@@ -937,8 +977,26 @@ class Controller_EventAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
 				exit;
 			}
+			// A7: validate the upload came via a real HTTP file upload (prevents spoofing).
+			if (!is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
+				exit;
+			}
+			// A7: server-side file size check (max 1 MB).
+			if (($_FILES['Heraldry']['size'] ?? 0) > 1024 * 1024) {
+				echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
+				exit;
+			}
 			$tmp  = $_FILES['Heraldry']['tmp_name'];
-			$mime = $_FILES['Heraldry']['type'] ?? 'image/jpeg';
+			// A7: use exif_imagetype() (magic-byte check) instead of the
+			// browser-supplied MIME type, which is trivially spoofable. Only
+			// JPEG and PNG are supported downstream.
+			$detectedType = exif_imagetype($tmp);
+			if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
+				echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
+				exit;
+			}
+			$mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
 			$r = Ork3::$Lib->heraldry->SetEventHeraldry([
 				'Token'            => $this->session->token,
 				'EventId'          => $event_id,
@@ -1044,16 +1102,29 @@ class Controller_EventAjax extends Controller {
 				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
 				exit;
 			}
-			$tmp  = $_FILES['Banner']['tmp_name'];
-			$mime = $_FILES['Banner']['type'] ?? 'image/jpeg';
-			// JPEG and PNG only: resolve_image_ext returns .jpg or .png and the
-			// rest of the pipeline (storage filename, frontend cache-bust, banner
-			// modal accept attribute) only knows those two. GIFs would land as
-			// .jpg on disk with corrupt bytes.
-			if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
-				echo json_encode(['status' => 1, 'error' => 'Unsupported image type. Use JPG or PNG.']);
+			// A1/I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
+			if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
+				echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
 				exit;
 			}
+			// A1/I5 fix: server-side file size check (JS resize can be bypassed via curl).
+			if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
+				echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
+				exit;
+			}
+			$tmp  = $_FILES['Banner']['tmp_name'];
+			// A1/I3 fix: use exif_imagetype() (magic-byte check) instead of the
+			// browser-supplied MIME type, which is trivially spoofable. JPEG and
+			// PNG only: resolve_image_ext returns .jpg or .png and the rest of the
+			// pipeline (storage filename, frontend cache-bust, banner modal accept
+			// attribute) only knows those two. GIFs would land as .jpg on disk
+			// with corrupt bytes.
+			$detectedType = exif_imagetype($tmp);
+			if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
+				echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
+				exit;
+			}
+			$mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
 			if (!is_dir(DIR_EVENT_BANNER)) {
 				@mkdir(DIR_EVENT_BANNER, 0775, true);
 			}

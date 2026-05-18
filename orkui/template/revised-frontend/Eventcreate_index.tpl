@@ -43,7 +43,7 @@
 				<i class="fas fa-camera" style="margin-right:4px"></i>Add Image
 			</a>
 			<?php else: ?>
-			<span class="ec-add-image-link ec-add-image-link-disabled" title="Save the event first to add a logo">
+			<span class="ec-add-image-link ec-add-image-link-disabled" data-tip="Save the event first to add a logo">
 				<i class="fas fa-camera" style="margin-right:4px"></i>Add Image
 			</span>
 			<?php endif; ?>
@@ -163,7 +163,7 @@
 					<div class="ec-field ec-full">
 						<label style="display:flex;align-items:center;gap:6px;">
 							Event Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
-							<button type="button" class="kn-md-help-btn" onclick="document.getElementById('ec-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+							<button type="button" class="kn-md-help-btn" onclick="document.getElementById('ec-md-help-overlay').classList.add('kn-open')" data-tip="Markdown help">?</button>
 							<button type="button" class="ev-help-write-btn"
 								data-target='textarea[name="Description"]'
 								data-event-name="<?= $eventName ?>"
@@ -324,14 +324,11 @@ var EcConfig = {
 	linksListId: 'ec-links-list',
 };
 function ecCancelAndReturn(ev, eventId) {
-	ev.preventDefault();
-	var btn = document.getElementById('ec-cancel-btn');
-	if (btn) { btn.textContent = 'Cancelling…'; btn.style.pointerEvents = 'none'; }
-	var fd = new FormData();
-	fd.append('EventId', eventId);
-	fetch(EcConfig.cancelUrl, { method: 'POST', body: fd })
-		.catch(function () {})
-		.finally(function () { window.location.href = EcConfig.returnUrl; });
+	if (ev && ev.preventDefault) ev.preventDefault();
+	// Eventcreate adds an occurrence to an existing event — never POST to
+	// EventAjax/cancel (that would cancel the parent event). Just navigate back.
+	var fallback = '<?= UIR ?>Event/index/' + (eventId || '');
+	window.location.href = EcConfig.returnUrl || fallback;
 }
 </script>
 <!-- Markdown Help Modal -->
@@ -450,9 +447,9 @@ var EvConfig = {
 			<label class="ev-upload-area" for="ev-img-file-input">
 				<i class="fas fa-cloud-upload-alt ev-upload-icon"></i>
 				Click to choose an image
-				<small>JPG, GIF, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
+				<small>JPG, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
 			</label>
-			<input type="file" id="ev-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none;" />
+			<input type="file" id="ev-img-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
 			<div id="ev-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
 			<div class="ev-img-form-error" id="ev-img-error" style="display:none;"></div>
 			<div style="text-align:center;margin-top:10px">

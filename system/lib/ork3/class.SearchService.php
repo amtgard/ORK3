@@ -135,7 +135,7 @@ class SearchService extends Ork3 {
 		}
 	}
 	
-	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1, $multi = 0) {
+	public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1, $multi = 0, $include_drafts = false) {
 		// Cache key must reflect the FULL search term — historically this truncated
 		// the name to the first 4 chars, so "iron" and "ironclad" collided and the
 		// longer search would return the shorter search's results.
@@ -186,6 +186,10 @@ class SearchService extends Ork3 {
 
 		$sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' ";
 		$sql .= " and e.kingdom_id != 15 and (p.kingdom_id is null or p.kingdom_id != 15) ";
+		// Filter out draft events by default. Admin callers may opt in via $include_drafts=true.
+		if (!$include_drafts) {
+			$sql .= " and (e.status is null or e.status = 'published') ";
+		}
 		if (valid_id($kingdom_id)) $sql .= " and e.kingdom_id = $kingdom_id ";
 		if (is_numeric($park_id)) $sql .= " and e.park_id = $park_id ";
 		if (valid_id($mundane_id)) $sql .= " and e.mundane_id = $mundane_id ";

@@ -1,0 +1,21 @@
+-- B11: Feast-unify orphan-check (informational / archival)
+--
+-- Historical concern: when ork_event_meal existed (pre-2026-04-12 feast-unify),
+-- meal rows could be orphaned from their parent event_calendardetail. The
+-- 2026-04-12-unify-feast-schedule.sql migration copied surviving rows into
+-- ork_event_schedule and dropped ork_event_meal in its final statement:
+--     DROP TABLE IF EXISTS ork_event_meal;
+--
+-- This migration is therefore a no-op on any environment that has already
+-- applied the feast-unify migration. It exists to satisfy the QA checklist
+-- (B11) and to leave a written record that the historical orphan-check has
+-- been considered and is no longer actionable: there is no ork_event_meal
+-- table left to audit. Any orphaned meal data was either reattached during
+-- the unify INSERT...SELECT or was lost with the dropped table; neither
+-- outcome can be reversed by this migration.
+--
+-- The cascading FK added to ork_event_schedule in
+-- 2026-05-17-add-event-schedule-fk.sql prevents the equivalent orphan class
+-- from re-emerging on the unified table going forward.
+
+SELECT 'B11: ork_event_meal already dropped by 2026-04-12-unify-feast-schedule.sql; no action required.' AS note;

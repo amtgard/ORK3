@@ -17,7 +17,7 @@ class Controller_QR extends Controller {
 
 		global $DB;
 		$DB->Clear();
-		$rs = $DB->DataSet('SELECT link_id FROM ' . DB_PREFIX . 'attendance_link WHERE token = \'' . $token . '\' LIMIT 1');
+		$rs = $DB->DataSet('SELECT link_id FROM ' . DB_PREFIX . 'attendance_link WHERE token = \'' . $token . '\' AND expires_at > NOW() LIMIT 1');
 		if (!$rs || !$rs->Next() || !(int)$rs->link_id) {
 			while (ob_get_level()) ob_end_clean();
 			header('Content-Type: application/json');

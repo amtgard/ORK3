@@ -51,6 +51,8 @@ class Controller_SelfReg extends Controller {
 				$this->data['error'] = 'Username must be at least 4 characters.';
 			} elseif (!strlen($password)) {
 				$this->data['error'] = 'Password is required.';
+			} elseif (strlen($password) < 8) {
+				$this->data['error'] = 'Password must be at least 8 characters.';
 			} elseif ($password !== $confirm) {
 				$this->data['error'] = 'Passwords do not match.';
 			} else {

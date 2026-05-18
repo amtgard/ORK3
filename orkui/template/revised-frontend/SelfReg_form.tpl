@@ -425,6 +425,11 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 			if (errEl) errEl.style.display = 'none';
 			// Disable button to prevent double-submit
 			document.getElementById('sr-submit-btn').disabled = true;
+			// Stop the countdown so it doesn't fire (and disable the submit button)
+			// while the form POST is in flight.
+			if (typeof timerInterval !== 'undefined' && timerInterval) {
+				clearInterval(timerInterval);
+			}
 		});
 	}
 

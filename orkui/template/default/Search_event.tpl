@@ -243,6 +243,14 @@ html[data-theme="dark"] .se-empty i { color: var(--ork-text-muted); }
 	var _pid     = parseInt(document.getElementById('se-park-id').value)    || 0;
 	var _uid_val = parseInt(document.getElementById('se-unit-id').value)    || 0;
 
+	// XSS escape helper — used everywhere a search-service string is inserted via innerHTML.
+	function escHtml(s) {
+		if (s == null) return '';
+		var d = document.createElement('div');
+		d.textContent = String(s);
+		return d.innerHTML;
+	}
+
 	function formatDate(dateStr) {
 		if (!dateStr) return null;
 		var d = new Date(dateStr + 'T00:00:00');
@@ -252,7 +260,7 @@ html[data-theme="dark"] .se-empty i { color: var(--ork-text-muted); }
 
 	function navLink(href, label) {
 		return '<a href="' + href + '" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none">'
-			+ label + '</a>';
+			+ escHtml(label) + '</a>';
 	}
 
 	function buildRow(v, isPast) {
@@ -284,8 +292,8 @@ html[data-theme="dark"] .se-empty i { color: var(--ork-text-muted); }
 			if (rsvpGoing      > 0) rsvpCel += '<span class="se-rsvp-badge"><i class="fas fa-check-circle"></i>' + rsvpGoing      + ' going</span> ';
 			if (rsvpInterested > 0) rsvpCel += '<span class="se-rsvp-badge se-rsvp-interested"><i class="fas fa-star"></i>' + rsvpInterested + ' interested</span>';
 		}
-		var nameCel = '<span class="se-event-name">' + name + '</span>';
-		if (v.EventType) nameCel += ' <span class="se-type-badge">' + v.EventType + '</span>';
+		var nameCel = '<span class="se-event-name">' + escHtml(name) + '</span>';
+		if (v.EventType) nameCel += ' <span class="se-type-badge">' + escHtml(v.EventType) + '</span>';
 		return '<tr onclick="window.location.href=\'' + url + '\'">'
 			+ '<td>' + nameCel + '</td>'
 			+ '<td>' + dateCel + '</td>'
@@ -421,7 +429,6 @@ html[data-theme="dark"] .se-empty i { color: var(--ork-text-muted); }
 		document.getElementById('se-upcoming-label').textContent = 'Upcoming Events';
 		_timer = setTimeout(function() { doSearch(term); }, 300);
 	});
-	// Browse upcoming events on page load
-	doSearch('');
+	// (loadDefaults() above already populated upcoming on page load; no extra search.)
 })();
 </script>
