@@ -2410,6 +2410,10 @@ class Controller_Admin extends Controller {
 						'cmd_flush'         => (int)($first['cmd_flush']         ?? 0),
 						'curr_connections'  => (int)($first['curr_connections']  ?? 0),
 						'total_connections' => (int)($first['total_connections'] ?? 0),
+						'bytes'             => (int)($first['bytes']             ?? 0),
+						'limit_maxbytes'    => (int)($first['limit_maxbytes']    ?? 0),
+						'get_hits'          => (int)($first['get_hits']          ?? 0),
+						'get_misses'        => (int)($first['get_misses']        ?? 0),
 					];
 				}
 			}

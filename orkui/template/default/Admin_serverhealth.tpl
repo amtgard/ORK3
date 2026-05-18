@@ -215,12 +215,13 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		<div class="sh-panel">
 			<div class="sh-panel-hdr"><i class="fas fa-toolbox"></i> Optional Checks <span class="sh-al-subtitle">on demand</span></div>
 			<div class="sh-panel-body">
-				<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+				<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
 					<button class="sh-fs-btn" id="sh-fs-btn"><i class="fas fa-hdd"></i> Check Filesystem</button>
 					<button class="sh-fs-btn" id="sh-memcache-btn"><i class="fas fa-database"></i> Check Memcache</button>
 					<button class="sh-fs-btn" id="sh-opcache-btn"><i class="fab fa-php"></i> Check OPcache</button>
 					<button class="sh-fs-btn" id="sh-weather-btn"><i class="fas fa-cloud-sun"></i> Refresh Weather</button>
 					<button class="sh-fs-btn" id="sh-wxstats-btn"><i class="fas fa-chart-bar"></i> Weather API Stats</button>
+					<button class="sh-fs-btn" id="sh-clear-btn" style="margin-left:auto"><i class="fas fa-times"></i> Clear</button>
 				</div>
 				<div id="sh-fs-result"></div>
 				<div id="sh-memcache-result"></div>
@@ -510,7 +511,14 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		}
 		if (mc.evictions > 0) evCls = 'warn';
 
+		var memPct  = mc.limit_maxbytes ? Math.round(mc.bytes / mc.limit_maxbytes * 100 * 10) / 10 : 0;
+		var memCls  = memPct >= 80 ? 'warn' : '';
+		var totGets = mc.get_hits + mc.get_misses;
+		var hitPct  = totGets ? Math.round(mc.get_hits / totGets * 100 * 10) / 10 : null;
+
 		el.innerHTML =
+			metric('Memory used', memPct + '% (' + fmtBytes(mc.bytes) + ' / ' + fmtBytes(mc.limit_maxbytes) + ')', memCls) +
+			metric('Hit rate', totGets ? (hitPct + '%') : '— (no reads yet)', '') +
 			metric('Items cached', fmtCount(mc.curr_items) + note, itemsCls) +
 			metric('Uptime', uptimeStr, uptimeCls) +
 			metric('Connections (cur / total)', fmtCount(mc.curr_connections) + ' / ' + fmtCount(mc.total_connections), '') +
@@ -777,6 +785,13 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			}
 			return html;
 		},
+	});
+
+	// Clear button — empties every result div in the Optional Checks panel
+	// so the screen isn't permanently cluttered with the last run's output.
+	document.getElementById('sh-clear-btn').addEventListener('click', function() {
+		['sh-fs-result', 'sh-memcache-result', 'sh-opcache-result', 'sh-weather-result', 'sh-wxstats-result']
+			.forEach(function(id) { var el = document.getElementById(id); if (el) el.innerHTML = ''; });
 	});
 
 	wireCheckBtn({
