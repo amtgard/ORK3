@@ -279,24 +279,28 @@ class Controller_Event extends Controller {
 		if ( $action === 'deletedetail' && $uid > 0 ) {
 			if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
 				global $DB;
-				$checkAtt  = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "attendance WHERE event_calendardetail_id = " . $detail_id . " LIMIT 1");
+				$DB->Clear();
+				$checkAtt  = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "attendance WHERE event_calendardetail_id = " . (int)$detail_id . " LIMIT 1");
 				$attCnt    = ($checkAtt && $checkAtt->Size() > 0 && $checkAtt->Next()) ? (int)$checkAtt->cnt : 0;
-				$checkRsvp = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . $detail_id . " LIMIT 1");
+				$DB->Clear();
+				$checkRsvp = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " LIMIT 1");
 				$rsvpCnt   = ($checkRsvp && $checkRsvp->Size() > 0 && $checkRsvp->Next()) ? (int)$checkRsvp->cnt : 0;
 				if ( $attCnt === 0 && $rsvpCnt === 0 ) {
 					$this->Event->delete_calendar_detail($this->session->token, $detail_id);
 				}
 			}
-			$evRow = $DB->DataSet("SELECT kingdom_id, park_id FROM " . DB_PREFIX . "event WHERE event_id = " . $event_id . " LIMIT 1");
+			global $DB;
+			$DB->Clear();
+			$evRow = $DB->DataSet("SELECT kingdom_id, park_id FROM " . DB_PREFIX . "event WHERE event_id = " . (int)$event_id . " LIMIT 1");
 			$evKid = 0; $evPid = 0;
 			if ($evRow && $evRow->Size() > 0 && $evRow->Next()) {
 				$evKid = (int)$evRow->kingdom_id;
 				$evPid = (int)$evRow->park_id;
 			}
 			if ($evPid > 0) {
-				$redirect = UIR . 'Park/profile/' . $evPid . '&tab=events';
+				$redirect = UIR . 'Park/profile/' . $evPid . '?tab=events';
 			} elseif ($evKid > 0) {
-				$redirect = UIR . 'Kingdom/profile/' . $evKid . '&tab=events';
+				$redirect = UIR . 'Kingdom/profile/' . $evKid . '?tab=events';
 			} else {
 				$redirect = UIR;
 			}
@@ -388,11 +392,21 @@ class Controller_Event extends Controller {
 						$_linksIn = ($_linksJson !== '') ? json_decode($_linksJson, true) : [];
 						$DB->Clear();
 						$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $detail_id);
+						$_allowedIcons = ['fab fa-facebook','fab fa-discord','fas fa-globe','far fa-clipboard','fas fa-link','fas fa-ticket-alt'];
 						if (is_array($_linksIn)) {
 							foreach ($_linksIn as $_li => $_link) {
 								$_lt  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Title'] ?? ''));
-								$_lu  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Url'] ?? ''));
-								$_lic = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Icon'] ?? 'fas fa-link'));
+								// A4: block javascript:/data: schemes — only http/https/mailto permitted
+								$_luRaw = trim($_link['Url'] ?? '');
+								if ($_luRaw !== '') {
+									$_scheme = strtolower((string)parse_url($_luRaw, PHP_URL_SCHEME));
+									if (!in_array($_scheme, ['http', 'https', 'mailto'], true)) $_luRaw = '';
+								}
+								$_lu  = str_replace(["'", '\\'], ["''", '\\\\'], $_luRaw);
+								// A14: icon class must be in the allow-list
+								$_icRaw = trim($_link['Icon'] ?? '');
+								if (!in_array($_icRaw, $_allowedIcons, true)) $_icRaw = 'fas fa-link';
+								$_lic = str_replace(["'", '\\'], ["''", '\\\\'], $_icRaw);
 								$DB->Clear();
 								$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $detail_id . ', \'' . $_lt . '\', \'' . $_lu . '\', \'' . $_lic . '\', ' . $_li . ')');
 							}
@@ -834,10 +848,20 @@ class Controller_Event extends Controller {
 				if (is_array($_linksIn2) && !empty($_linksIn2) && $new_id > 0) {
 					$DB->Clear();
 					$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $new_id);
+					$_allowedIcons2 = ['fab fa-facebook','fab fa-discord','fas fa-globe','far fa-clipboard','fas fa-link','fas fa-ticket-alt'];
 					foreach ($_linksIn2 as $_li2 => $_link2) {
 						$_lt2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Title'] ?? ''));
-						$_lu2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Url'] ?? ''));
-						$_lic2 = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Icon'] ?? 'fas fa-link'));
+						// A4: block javascript:/data: schemes — only http/https/mailto permitted
+						$_luRaw2 = trim($_link2['Url'] ?? '');
+						if ($_luRaw2 !== '') {
+							$_scheme2 = strtolower((string)parse_url($_luRaw2, PHP_URL_SCHEME));
+							if (!in_array($_scheme2, ['http', 'https', 'mailto'], true)) $_luRaw2 = '';
+						}
+						$_lu2  = str_replace(["'", '\\'], ["''", '\\\\'], $_luRaw2);
+						// A14: icon class must be in the allow-list
+						$_icRaw2 = trim($_link2['Icon'] ?? '');
+						if (!in_array($_icRaw2, $_allowedIcons2, true)) $_icRaw2 = 'fas fa-link';
+						$_lic2 = str_replace(["'", '\\'], ["''", '\\\\'], $_icRaw2);
 						$DB->Clear();
 						$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $new_id . ', \'' . $_lt2 . '\', \'' . $_lu2 . '\', \'' . $_lic2 . '\', ' . $_li2 . ')');
 					}

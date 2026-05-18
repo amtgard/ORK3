@@ -167,14 +167,16 @@ class Model_Event extends Model {
 			" ORDER BY cd.event_start ASC"
 		);
 		$list = [];
-		while ($r->Next()) {
-			$list[] = [
-				'EventCalendarDetailId' => $r->event_calendardetail_id,
-				'EventId'               => $r->event_id,
-				'EventName'             => $r->event_name,
-				'EventStart'            => $r->event_start,
-				'EventEnd'              => $r->event_end,
-			];
+		if ($r) {
+			while ($r->Next()) {
+				$list[] = [
+					'EventCalendarDetailId' => $r->event_calendardetail_id,
+					'EventId'               => $r->event_id,
+					'EventName'             => $r->event_name,
+					'EventStart'            => $r->event_start,
+					'EventEnd'              => $r->event_end,
+				];
+			}
 		}
 		return $list;
 	}
@@ -189,6 +191,7 @@ class Model_Event extends Model {
 			" JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id" .
 			" LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id" .
 			" WHERE e.kingdom_id = " . (int)$kingdom_id .
+			" AND (e.status IS NULL OR e.status = 'published')" .
 			" AND cd.event_start > NOW()" .
 			" AND cd.event_calendardetail_id NOT IN (" .
 			"   SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_rsvp WHERE mundane_id = " . (int)$exclude_mundane_id .
@@ -196,7 +199,7 @@ class Model_Event extends Model {
 			" ORDER BY cd.event_start ASC LIMIT 6"
 		);
 		$list = [];
-		while ($r->Next()) {
+		if ($r) while ($r->Next()) {
 			$list[] = [
 				'EventCalendarDetailId' => $r->event_calendardetail_id,
 				'EventId'               => $r->event_id,

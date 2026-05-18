@@ -64,13 +64,16 @@
 	$province   = $cd['Province']   ?? '';
 	$postalCode = $cd['PostalCode'] ?? '';
 	$country    = $cd['Country']    ?? '';
-	// If $address already contains a fully-formatted address (≥2 commas, e.g. from a map-picker
-	// autocomplete), trust it and don't re-append city/province/country, which would duplicate.
-	if (substr_count($address, ',') >= 2) {
-		$locationDisplay = $address;
-	} else {
-		$locationDisplay = implode(', ', array_filter([$address, $city, $province, $country]));
-	}
+	// Trimmed substring dedupe: include each component only if it isn't already contained
+	// (case-insensitive) within $address. Handles map-picker addresses that already embed
+	// city/province/country without relying on a fragile comma-count heuristic.
+	$_parts = [];
+	if (trim($address) !== '') $_parts[] = trim($address);
+	$_addrLower = strtolower((string)$address);
+	if (trim($city) !== '' && stripos($_addrLower, strtolower(trim($city))) === false) $_parts[] = trim($city);
+	if (trim($province) !== '' && stripos($_addrLower, strtolower(trim($province))) === false) $_parts[] = trim($province);
+	if (trim($country) !== '' && stripos($_addrLower, strtolower(trim($country))) === false) $_parts[] = trim($country);
+	$locationDisplay = implode(', ', $_parts);
 	$mapQueryAddress = implode(', ', array_filter([$address, $city, $province, $postalCode, $country]));
 
 	$eventType = $cd['EventType'] ?? '';
@@ -606,6 +609,55 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 .ev-meal-cb-group input[type=checkbox] { margin: 0; cursor: pointer; }
 .ev-edit-btn { background: none; border: none; cursor: pointer; color: #718096; font-size: 15px; padding: 0; line-height: 1; }
 .ev-edit-btn:hover { color: #2b6cb0; }
+.ev-meal-free { color: #276749; font-weight: 600; }
+
+/* Dark-mode overrides for meal cards. The light-mode "warm peach" tint
+   (#fff8f5/#fff3ec) is replaced with the card-bg token + a darker amber
+   border so the card still reads as a feast item but doesn't glow on dark. */
+html[data-theme="dark"] .ev-meal-card {
+	background: var(--ork-card-bg);
+	border-color: #5a3a25;
+}
+html[data-theme="dark"] .ev-meal-card-header {
+	background: rgba(230, 81, 0, 0.10);
+	border-bottom-color: #5a3a25;
+}
+html[data-theme="dark"] .ev-meal-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-meal-cost,
+html[data-theme="dark"] .ev-meal-menu { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-meal-footer { border-top-color: #5a3a25; }
+html[data-theme="dark"] .ev-meal-tag-dietary {
+	background: rgba(72, 187, 120, 0.18); color: #9ae6b4;
+}
+html[data-theme="dark"] .ev-meal-tag-allergen {
+	background: rgba(237, 137, 54, 0.18); color: #fbd38d;
+}
+html[data-theme="dark"] .ev-meal-free { color: #9ae6b4; }
+
+/* Banner / heraldry upload modal body copy and resize notice — use tokens
+   so the muted helper text stays readable in both themes. */
+.ev-img-modal-body p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ev-img-modal-body p { color: var(--ork-text-secondary); }
+#ev-banner-resize-notice,
+#ev-img-resize-notice { color: var(--ork-text-muted); }
+html[data-theme="dark"] #ev-banner-resize-notice,
+html[data-theme="dark"] #ev-img-resize-notice { color: var(--ork-text-muted); }
+
+/* Sign-in link active links revoke button. The button HTML is built in
+   revised.js with inline `background:#fed7d7;border-color:#fc8181;color:#c53030`
+   which I cannot touch this round, so this rule uses !important to override the
+   inline style in dark mode. Round 2 should move the styling off inline-style
+   onto the .ev-signin-links-revoke class entirely. */
+.ev-signin-links-revoke {
+	background: #fed7d7;
+	border: 1px solid #fc8181;
+	color: #c53030;
+}
+html[data-theme="dark"] .ev-signin-links-revoke {
+	background: rgba(252, 129, 129, 0.15) !important;
+	border-color: #c53030 !important;
+	color: #fc8181 !important;
+}
 </style>
 
 <?php // ---- DRAFT BLOCKED ---- ?>
@@ -616,27 +668,6 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 	<p style="margin:0;font-size:13px;color:#718096">It's currently a draft, accessible only to the creator and people authorized to edit it.</p>
 </div>
 <?php else: ?>
-
-<?php // ---- DRAFT BANNER (visible to editors) ---- ?>
-<?php if ($evtIsDraft): ?>
-<div class="ev-draft-banner">
-	<div class="ev-draft-banner-text">
-		<i class="fas fa-eye-slash"></i>
-		<strong>Draft</strong> — this event is hidden from members. Publish to make it visible.
-	</div>
-	<?php if ($evtCanEditStat): ?>
-	<button type="button" class="ev-draft-publish-btn" onclick="evSetEventStatus(<?= $eventId ?>, 'published', this)">
-		<i class="fas fa-paper-plane"></i> Publish
-	</button>
-	<?php endif; ?>
-</div>
-<?php elseif ($evtCanEditStat): ?>
-<div class="ev-draft-toggle-bar">
-	<button type="button" class="ev-draft-toggle-btn" onclick="evSetEventStatus(<?= $eventId ?>, 'draft', this)" data-tip="Hide this event from members. Only editors and admins will see it.">
-		<i class="fas fa-eye-slash"></i> Move to draft
-	</button>
-</div>
-<?php endif; ?>
 
 <?php // ---- HERO ---- ?>
 <?php
@@ -666,7 +697,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 	<div class="ev-hero-content">
 
 		<?php if ($_showLogo): ?>
-		<div class="ev-heraldry-frame<?= $canManage ? ' ev-heraldry-edit-wrap' : '' ?>"<?= $canManage ? ' onclick="evOpenImgModal()" title="Change logo"' : '' ?>>
+		<div class="ev-heraldry-frame<?= $canManage ? ' ev-heraldry-edit-wrap' : '' ?>"<?= $canManage ? ' onclick="evOpenImgModal()" data-tip="Change logo"' : '' ?>>
 			<img id="ev-heraldry-img"
 				src="<?= htmlspecialchars($heraldryUrl) ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
@@ -724,12 +755,17 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 		</div>
 
 		<div class="ev-hero-actions">
-			<button class="ev-btn ev-btn-white" type="button" id="ev-share-btn" onclick="evShareUrl(this)" title="Copy link to this event">
+			<button class="ev-btn ev-btn-white" type="button" id="ev-share-btn" onclick="evShareUrl(this)" data-tip="Copy link to this event">
 				<i class="fas fa-share-alt"></i> Share
 			</button>
 			<?php if ($CanManageEvent ?? false): ?>
 			<button class="ev-btn ev-btn-outline ev-edit-details-btn" type="button" onclick="evOpenEditModal()" aria-label="Edit Details">
 				<i class="fas fa-pencil-alt"></i><span class="ev-edit-details-label"> Edit Details</span>
+			</button>
+			<?php endif; ?>
+			<?php if ($evtCanEditStat && !$evtIsDraft): ?>
+			<button class="ev-btn ev-btn-outline ev-hide-draft-btn" type="button" onclick="evSetEventStatus(<?= $eventId ?>, 'draft', this)" data-tip="Hide this event from members. Only editors and admins will see it." aria-label="Hide as draft">
+				<i class="fas fa-eye-slash"></i><span class="ev-hide-draft-label"> Hide as draft</span>
 			</button>
 			<?php endif; ?>
 			<?php if ($loggedIn && !$isPastEvent): ?>
@@ -749,6 +785,21 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 
 	</div>
 </div>
+
+<?php // ---- DRAFT BANNER (visible to editors) ---- ?>
+<?php if ($evtIsDraft): ?>
+<div class="ev-draft-banner">
+	<div class="ev-draft-banner-text">
+		<i class="fas fa-eye-slash"></i>
+		<strong>Draft</strong> — this event is hidden from members. Publish to make it visible.
+	</div>
+	<?php if ($evtCanEditStat): ?>
+	<button type="button" class="ev-draft-publish-btn" onclick="evSetEventStatus(<?= $eventId ?>, 'published', this)">
+		<i class="fas fa-paper-plane"></i> Publish
+	</button>
+	<?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php // ---- STATS ROW ---- ?>
 <div class="ev-stats-row">
@@ -774,7 +825,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 		<div class="ev-stat-label">Location</div>
 	</a>
 	<?php else: ?>
-	<div class="ev-stat-card<?= $hasMapTab ? ' ev-stat-card-link' : '' ?>"<?= $hasMapTab ? ' onclick="evShowTab(document.querySelector(\'[data-tab=ev-tab-map]\'),\'ev-tab-map\')" title="View map"' : '' ?> style="<?= $hasMapTab ? 'cursor:pointer' : '' ?>">
+	<div class="ev-stat-card<?= $hasMapTab ? ' ev-stat-card-link' : '' ?>"<?= $hasMapTab ? ' onclick="evShowTab(document.querySelector(\'[data-tab=ev-tab-map]\'),\'ev-tab-map\')" data-tip="View map"' : '' ?> style="<?= $hasMapTab ? 'cursor:pointer' : '' ?>">
 		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
 		<div class="ev-stat-value" style="font-size:14px;padding-top:3px">
 			<?php $_dispLoc = $locationDisplay ?: $locationFallback; ?>
@@ -906,7 +957,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 	<div class="ev-sidebar">
 
 		<?php if ($canManage): ?>
-		<div class="ev-heraldry-edit-wrap" onclick="evOpenImgModal()" title="Change logo">
+		<div class="ev-heraldry-edit-wrap" onclick="evOpenImgModal()" data-tip="Change logo">
 			<img class="ev-heraldry-large"
 				src="<?= htmlspecialchars($heraldryUrl) ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
@@ -1187,16 +1238,16 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['StartTime'])) ?></td>
 							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['EndTime'])) ?></td>
-							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" title="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" title="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" title="Has menu"></i><?php endif; ?></td>
+							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" data-tip="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" data-tip="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" data-tip="Has menu"></i><?php endif; ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
 							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Playernew/index/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
 							<td><?= htmlspecialchars($item['Description']) ?></td>
 							<?php if ($canManageSchedule): ?>
 							<td class="ev-del-cell">
-								<button class="ev-edit-link" title="Edit" onclick="evOpenScheduleEditModal(<?= (int)$item['EventScheduleId'] ?>, this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0">
+								<button class="ev-edit-link" data-tip="Edit" onclick="evOpenScheduleEditModal(<?= (int)$item['EventScheduleId'] ?>, this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0">
 									<i class="fas fa-pencil-alt"></i>
 								</button>
-								<button class="ev-del-link" title="Remove"
+								<button class="ev-del-link" data-tip="Remove"
 									onclick="evRemoveSchedule(this, <?= (int)$item['EventScheduleId'] ?>)"
 									style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">
 									&times;
@@ -1336,7 +1387,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 										onclick="evGridBlockClick(<?= $sid ?>, event)">
 										<div class="ev-grid-block-title">
 											<?= htmlspecialchars($it['Title']) ?>
-											<?php if ($hasMenu): ?><i class="fas fa-scroll" style="color:#e65100;font-size:9px;margin-left:3px" title="Has menu"></i><?php endif; ?>
+											<?php if ($hasMenu): ?><i class="fas fa-scroll" style="color:#e65100;font-size:9px;margin-left:3px" data-tip="Has menu"></i><?php endif; ?>
 										</div>
 										<div class="ev-grid-block-time"><?= date('g:ia', $entry['start']) ?> – <?= date('g:ia', $entry['end']) ?></div>
 										<?php if (!empty($it['Location'])): ?>
@@ -1392,13 +1443,13 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 						<span class="ev-meal-title"><i class="fas fa-utensils" style="color:#e65100;margin-right:7px"></i><?= htmlspecialchars($meal['Title']) ?></span>
 						<span style="display:flex;align-items:center;gap:10px">
 							<?php if ($meal['Cost'] !== null): ?>
-							<span class="ev-meal-cost"><?= (float)$meal['Cost'] == 0 ? '<span style="color:#276749;font-weight:600">Free</span>' : '<span style="font-weight:600">$' . number_format((float)$meal['Cost'], 2) . '</span>' ?></span>
+							<span class="ev-meal-cost"><?= (float)$meal['Cost'] == 0 ? '<span class="ev-meal-free">Free</span>' : '<span style="font-weight:600">$' . number_format((float)$meal['Cost'], 2) . '</span>' ?></span>
 							<?php endif; ?>
 							<?php if ($canManageFeast || $canManageSchedule): ?>
-							<button class="ev-edit-btn" title="Edit feast item"
+							<button class="ev-edit-btn" data-tip="Edit feast item"
 								onclick='evOpenFeastEditModal(<?= htmlspecialchars(json_encode(["EventScheduleId"=>(int)$meal["EventScheduleId"],"Title"=>$meal["Title"],"StartTime"=>$meal["StartTime"]??"","EndTime"=>$meal["EndTime"]??"","Location"=>$meal["Location"]??"","Description"=>$meal["Description"]??"","Category"=>$meal["Category"]??"","SecondaryCategory"=>$meal["SecondaryCategory"]??"","Leads"=>$meal["Leads"]??[],"Menu"=>$meal["Menu"]??"","Cost"=>$meal["Cost"],"Dietary"=>$meal["Dietary"]??"","Allergens"=>$meal["Allergens"]??""]), ENT_QUOTES) ?>)'>
 								<i class="fas fa-pencil-alt"></i></button>
-							<button class="ev-del-link" title="Remove feast item" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1"
+							<button class="ev-del-link" data-tip="Remove feast item" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1"
 								onclick="evRemoveFeastCard(this, <?= (int)$meal['EventScheduleId'] ?>)">&times;</button>
 							<?php endif; ?>
 						</span>
@@ -1466,17 +1517,17 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 				<div class="ev-export-bar">
 					<?php if ($kingdomId): ?>
 					<a class="ev-icon-btn"
-						title="Attendance Report"
+						data-tip="Attendance Report"
 						style="display:inline-flex;align-items:center;gap:6px;text-decoration:none"
 						href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdomId ?>&filter=<?= urlencode($info['Name'] ?? '') ?>">
 						<i class="fas fa-list-alt"></i> Attendance Report
 					</a>
 					<?php endif; ?>
 					<?php if ($canManageAttendance && $checkinOpen): ?>
-					<button type="button" class="ev-icon-btn" id="ev-signin-link-open-btn" title="Sign-in Link" onclick="evOpenSigninLinkModal()" style="display:inline-flex;align-items:center;gap:6px"><i class="fas fa-qrcode"></i> Sign-In Link</button>
+					<button type="button" class="ev-icon-btn" id="ev-signin-link-open-btn" data-tip="Sign-in Link" onclick="evOpenSigninLinkModal()" style="display:inline-flex;align-items:center;gap:6px"><i class="fas fa-qrcode"></i> Sign-In Link</button>
 					<?php endif; ?>
-					<button class="ev-icon-btn" title="Export CSV" onclick="evExportAttendanceCsv()"><i class="fas fa-download"></i></button>
-					<button class="ev-icon-btn" title="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>
+					<button class="ev-icon-btn" data-tip="Export CSV" onclick="evExportAttendanceCsv()"><i class="fas fa-download"></i></button>
+					<button class="ev-icon-btn" data-tip="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>
 				</div>
 				<?php if ($canManageAttendance): ?>
 				<?php if (!$checkinOpen): ?>
@@ -1550,8 +1601,8 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 							<td class="ev-credits-cell"><?= htmlspecialchars($att['Credits']) ?></td>
 							<?php if ($canManageAttendance): ?>
 							<td class="ev-del-cell">
-								<button class="ev-icon-btn" title="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>
-								<a class="ev-del-link" title="Remove" href="#"
+								<button class="ev-icon-btn" data-tip="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>
+								<a class="ev-del-link" data-tip="Remove" href="#"
 									data-del-url="<?= UIR ?>AttendanceAjax/attendance/<?= (int)$att['AttendanceId'] ?>/delete"
 									onclick="evConfirmAttDelete(event, this)">×</a>
 							</td>
@@ -1584,8 +1635,8 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 						<strong><?= $rsvpCounts['interested'] ?></strong> Interested
 					</p>
 					<div style="display:flex;gap:6px">
-						<button class="ev-icon-btn" title="Export CSV" onclick="evExportRsvpCsv()"><i class="fas fa-download"></i></button>
-						<button class="ev-icon-btn" title="Print" onclick="evPrintRsvp()"><i class="fas fa-print"></i></button>
+						<button class="ev-icon-btn" data-tip="Export CSV" onclick="evExportRsvpCsv()"><i class="fas fa-download"></i></button>
+						<button class="ev-icon-btn" data-tip="Print" onclick="evPrintRsvp()"><i class="fas fa-print"></i></button>
 					</div>
 				</div>
 				<?php if ($loggedIn && count($rsvpList) > 0): ?>
@@ -1593,7 +1644,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 						<i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#a0aec0;font-size:12px;pointer-events:none"></i>
 						<input type="text" id="ev-rsvp-search" placeholder="Filter by name…" oninput="evFilterRsvp(this.value)"
 							style="width:100%;box-sizing:border-box;padding:6px 28px 6px 28px;border:1px solid #e2e8f0;border-radius:5px;font-size:13px;color:#2d3748;">
-						<button id="ev-rsvp-clear" onclick="evClearRsvpSearch()" title="Clear search"
+						<button id="ev-rsvp-clear" onclick="evClearRsvpSearch()" data-tip="Clear search"
 							style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:#a0aec0;font-size:14px;cursor:pointer;padding:0;line-height:1;">&times;</button>
 					</div>
 					<table class="ev-table" id="ev-rsvp-table">
@@ -1611,7 +1662,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 										<label style="display:block;font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Sign-in Credits</label>
 										<input type="number" id="ev-rsvp-credits" value="1" min="0.25" step="0.25"
 											style="width:55px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px;text-align:center"
-											oninput="evSyncCredits(this.value)" title="Credits to assign on quick check-in">
+											oninput="evSyncCredits(this.value)" data-tip="Credits to assign on quick check-in">
 									</th>
 									<?php endif; ?>
 								</tr>
@@ -1631,9 +1682,9 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 								</td>
 								<td style="text-align:center;white-space:nowrap">
 									<?php if (!empty($attendee['Waivered'])): ?>
-										<i class="fas fa-check-circle" style="color:#276749" title="Waivered"></i>
+										<i class="fas fa-check-circle" style="color:#276749" data-tip="Waivered"></i>
 									<?php else: ?>
-										<i class="fas fa-circle" style="color:#cbd5e0" title="Not waivered"></i>
+										<i class="fas fa-circle" style="color:#cbd5e0" data-tip="Not waivered"></i>
 									<?php endif; ?>
 								</td>
 								<?php if ($canManageAttendance): ?>
@@ -1654,7 +1705,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : '<span class="ev-checkin-label">Check-in </span>as...' ?>
 									</button>
 									<button class="ev-rsvp-del-btn" type="button"
-										onclick="evDeleteRsvp(this, <?= (int)$attendee['MundaneId'] ?>)" title="Remove RSVP">
+										onclick="evDeleteRsvp(this, <?= (int)$attendee['MundaneId'] ?>)" data-tip="Remove RSVP">
 										<i class="fas fa-times"></i>
 									</button>
 								</td>
@@ -1709,7 +1760,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 							<td><?= $staff['CanFeast'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
 							<?php if ($canManageStaff): ?>
 							<td class="ev-del-cell">
-								<button class="ev-del-link" title="Remove"
+								<button class="ev-del-link" data-tip="Remove"
 									onclick="evRemoveStaff(this, <?= (int)$staff['EventStaffId'] ?>)"
 									style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">
 									&times;
@@ -1876,7 +1927,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 						<div class="ev-modal-field ev-field-full">
 							<label style="display:flex;align-items:center;gap:6px;">
 								Description <span class="kn-admin-hint-inline">(optional — Markdown supported)</span>
-								<button type="button" class="kn-md-help-btn" onclick="document.getElementById('ev-md-help-overlay').classList.add('kn-open')" title="Markdown help">?</button>
+								<button type="button" class="kn-md-help-btn" onclick="document.getElementById('ev-md-help-overlay').classList.add('kn-open')" data-tip="Markdown help">?</button>
 								<button type="button" class="ev-help-write-btn"
 									data-target='#ev-edit-modal textarea[name="Description"]'
 									data-event-name="<?= htmlspecialchars($info['Name'] ?? '') ?>"
@@ -2054,7 +2105,7 @@ html[data-theme="dark"] #ev-qr-img { border-color: var(--ork-border); background
 			<div class="att-edit-modal-title">
 				<i class="fas fa-pencil-alt"></i> Edit Attendance
 			</div>
-			<button class="att-edit-modal-close" id="ev-att-edit-close" title="Close">&times;</button>
+			<button class="att-edit-modal-close" id="ev-att-edit-close" data-tip="Close">&times;</button>
 		</div>
 		<div class="att-edit-modal-body">
 			<div class="att-edit-feedback" id="ev-att-edit-feedback" style="display:none"></div>
@@ -2155,10 +2206,10 @@ var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _ev
 			<div id="ev-signin-link-result" style="display:none">
 				<div class="ev-signin-link-url-row">
 					<input type="text" id="ev-signin-link-url" readonly>
-					<button type="button" class="ev-icon-btn" id="ev-signin-copy-btn" title="Copy">
+					<button type="button" class="ev-icon-btn" id="ev-signin-copy-btn" data-tip="Copy">
 						<i class="fas fa-copy"></i> Copy
 					</button>
-					<button type="button" class="ev-icon-btn" id="ev-signin-qr-btn" title="QR Code">
+					<button type="button" class="ev-icon-btn" id="ev-signin-qr-btn" data-tip="QR Code">
 						<i class="fas fa-qrcode"></i> QR
 					</button>
 				</div>
@@ -2311,17 +2362,17 @@ var EvConfig = {
 			<label class="ev-upload-area" for="ev-img-file-input">
 				<i class="fas fa-cloud-upload-alt ev-upload-icon"></i>
 				Click to choose an image
-				<small>JPG, GIF, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
+				<small>JPG, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
 			</label>
-			<input type="file" id="ev-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none;" />
-			<div id="ev-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<input type="file" id="ev-img-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="ev-img-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
 			<div class="ev-img-form-error" id="ev-img-error" style="display:none;"></div>
 			<div style="text-align:center;margin-top:10px">
 				<button class="ev-btn ev-btn-outline" id="ev-img-remove-btn" type="button" style="font-size:12px;padding:4px 14px;border-color:#feb2b2;color:#e53e3e;"><i class="fas fa-trash"></i> Remove Logo</button>
 			</div>
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-crop" style="display:none;">
-			<p style="margin:0 0 10px;font-size:13px;color:#718096;">Drag inside the crop box to reposition it, or drag the corner handles to resize.</p>
+			<p style="margin:0 0 10px;font-size:13px;">Drag inside the crop box to reposition it, or drag the corner handles to resize.</p>
 			<div class="ev-crop-wrap"><canvas id="ev-img-canvas"></canvas></div>
 			<div class="ev-img-step-actions">
 				<button class="ev-btn ev-btn-outline" id="ev-img-back-btn"><i class="fas fa-arrow-left"></i> Choose Different</button>
@@ -2330,7 +2381,7 @@ var EvConfig = {
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
-			<p style="margin-top:12px;color:#718096;">Uploading&hellip;</p>
+			<p style="margin-top:12px;">Uploading&hellip;</p>
 		</div>
 		<div class="ev-img-modal-body" id="ev-img-step-success" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
@@ -2348,7 +2399,7 @@ var EvConfig = {
 		</div>
 
 		<div class="ev-img-modal-body" id="ev-banner-step-select">
-			<p style="margin:0 0 12px;font-size:13px;color:#4a5568;line-height:1.5">
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
 				Banners are full-bleed across the event header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
 
@@ -2430,7 +2481,7 @@ var EvConfig = {
 				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
 			</label>
 			<input type="file" id="ev-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
-			<div id="ev-banner-resize-notice" style="font-size:12px;color:#888;min-height:16px;margin-top:6px;"></div>
+			<div id="ev-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
 			<div class="ev-img-form-error" id="ev-banner-error" style="display:none;"></div>
 
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
@@ -2447,7 +2498,7 @@ var EvConfig = {
 		</div>
 
 		<div class="ev-img-modal-body" id="ev-banner-step-position" style="display:none;">
-			<p style="margin:0 0 10px;font-size:13px;color:#4a5568;line-height:1.5">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
 				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
 			</p>
 			<div class="ev-banner-position-wrap">
@@ -2495,7 +2546,7 @@ var EvConfig = {
 
 		<div class="ev-img-modal-body" id="ev-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
-			<p style="margin-top:12px;color:#4a5568;">Uploading…</p>
+			<p style="margin-top:12px;">Uploading…</p>
 		</div>
 		<div class="ev-img-modal-body" id="ev-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
 			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
@@ -2531,7 +2582,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		<div class="ev-modal-body">
 			<div class="ev-modal-row">
 				<div class="ev-modal-field">
-					<label>Primary Category <span style="cursor:help;color:#a0aec0;font-size:11px;border-bottom:1px dotted #a0aec0" title="The primary category will determine schedule color coding.">(?)</span></label>
+					<label>Primary Category <span style="cursor:help;color:#a0aec0;font-size:11px;border-bottom:1px dotted #a0aec0" data-tip="The primary category will determine schedule color coding.">(?)</span></label>
 					<select id="ev-sched-category" style="width:100%">
 						<option value="Administrative">Administrative</option>
 						<option value="Tournament">Tournament</option>
@@ -3184,6 +3235,10 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		// Meal fields
 		evSchedToggleMealPanel();
 		evSchedPopulateMealFields(meal);
+		// Sync Flatpickr from the .value writes above so the picker shows the
+		// correct datetime instead of whatever was loaded last (mirrors the
+		// wrappers around evOpenScheduleModal / evOpenScheduleEditModal).
+		if (window._schedFpSyncFromValue) window._schedFpSyncFromValue();
 		modal.style.display = 'flex';
 		document.body.style.overflow = 'hidden';
 		setTimeout(function() { titleEl.focus(); }, 50);
@@ -3346,6 +3401,9 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 				if (ed) e._flatpickr.setDate(_snap5(ed), false);
 			}
 		}
+		// Expose for any other open paths (e.g. evOpenFeastEditModal) that assign
+		// startEl.value / endEl.value directly and need to re-sync the picker.
+		window._schedFpSyncFromValue = _schedFpSyncFromValue;
 		var _origOpenForFp     = window.evOpenScheduleModal;
 		var _origEditOpenForFp = window.evOpenScheduleEditModal;
 		window.evOpenScheduleModal = function() {

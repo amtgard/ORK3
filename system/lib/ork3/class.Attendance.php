@@ -404,6 +404,14 @@ class Attendance  extends Ork3 {
 			}
 			if (!$event_end || $event_end === '0000-00-00 00:00:00') $event_end = $event_start;
 			if (!$event_end) return InvalidParameter('Event has no end date.');
+			// B9: Server-side check-in window gate. The Eventnew front-end shows the
+			// "Create sign-in link" affordance only when the event starts within 24h;
+			// enforce the same on the server so a hand-crafted request cannot create
+			// a link weeks in advance.
+			$_event_start_ts = $event_start ? strtotime($event_start) : false;
+			if ($_event_start_ts !== false && $_event_start_ts > (time() + 86400)) {
+				return InvalidParameter('Check-in window not yet open.');
+			}
 			$expires_at = date('Y-m-d H:i:s', strtotime($event_end) + 86400);
 			if (strtotime($expires_at) <= time()) return InvalidParameter('This event has already ended.');
 		} elseif (valid_id($park_id)) {
@@ -427,8 +435,11 @@ class Attendance  extends Ork3 {
 		$this->attendance_link->token                   = $token;
 		$this->attendance_link->park_id                 = $park_id;
 		$this->attendance_link->kingdom_id              = $kingdom_id;
-		$this->attendance_link->event_id                = $event_id;
-		$this->attendance_link->event_calendardetail_id = $event_calendardetail_id;
+		// R2 fix: After B3 migration, event_id/event_calendardetail_id are NULL-able
+		// with FK CASCADE. Writing integer 0 fails the FK check (no parent row with id=0).
+		// Persist NULL for park/kingdom-scoped links instead.
+		$this->attendance_link->event_id                = valid_id($event_id) ? $event_id : null;
+		$this->attendance_link->event_calendardetail_id = valid_id($event_calendardetail_id) ? $event_calendardetail_id : null;
 		$this->attendance_link->by_whom_id              = $mundane_id;
 		$this->attendance_link->credits                 = $credits;
 		$this->attendance_link->expires_at              = $expires_at;
@@ -544,6 +555,10 @@ class Attendance  extends Ork3 {
 			$this->db->query(
 				'UPDATE ' . DB_PREFIX . 'attendance SET date_year = YEAR(`date`), date_month = MONTH(`date`), date_week3 = WEEK(`date`, 3), date_week6 = WEEK(`date`, 6) WHERE attendance_id = ' . $this->attendance->attendance_id
 			);
+			// B6: Bust player caches so newly-recorded attendance appears immediately.
+			$_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$mundane_id]);
+			Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $_ck);
+			Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
 			return Success($this->attendance->attendance_id);
 		}
 		return InvalidParameter('Could not save attendance. You may have already signed in today.');
@@ -572,11 +587,13 @@ class Attendance  extends Ork3 {
 		} elseif (valid_id($park_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
 				return NoAuthorization();
-			$where = 'park_id = ' . $park_id . ' AND event_id = 0';
+			// RW1: B3 migration converts ork_attendance_link.event_id from 0 sentinel to NULL.
+			$where = 'park_id = ' . $park_id . ' AND event_id IS NULL';
 		} elseif (valid_id($kingdom_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
 				return NoAuthorization();
-			$where = 'kingdom_id = ' . $kingdom_id . ' AND (park_id = 0 OR park_id IS NULL) AND event_id = 0';
+			// RW1: B3 migration — event_id IS NULL replaces 0 sentinel; same for park_id (already nullable).
+			$where = 'kingdom_id = ' . $kingdom_id . ' AND (park_id = 0 OR park_id IS NULL) AND event_id IS NULL';
 		} else {
 			return InvalidParameter('ParkId, KingdomId, or EventId required.');
 		}

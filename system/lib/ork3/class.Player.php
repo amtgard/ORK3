@@ -856,19 +856,41 @@ class Player extends Ork3 {
 	public function SelfRegister($request) {
 		// A8: Transactional locking — do NOT delegate to ValidateSelfRegLink
 		$token = preg_replace('/[^a-f0-9]/', '', (string)($request['SelfRegToken'] ?? ''));
+
+		// B10: Build a sanitized audit payload (no password, capture IP and
+		// the token + email actually attempted) used by both success and
+		// failure paths below. selfreg is a public, unauthenticated surface
+		// so every attempt — good or bad — should leave a trail.
+		$_selfreg_audit = [
+			'SelfRegToken' => $token,
+			'Email'        => trim($request['Email'] ?? ''),
+			'Persona'      => trim($request['Persona'] ?? ''),
+			'UserName'     => trim($request['UserName'] ?? ''),
+			'RemoteAddr'   => $_SERVER['REMOTE_ADDR'] ?? '',
+		];
+		$_selfreg_fail = function($reason) use ($_selfreg_audit) {
+			$payload = $_selfreg_audit;
+			$payload['Result'] = 'failure';
+			$payload['Reason'] = $reason;
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::SelfRegister", $payload, 'Player', 0, null);
+			return InvalidParameter($reason);
+		};
+
 		if (strlen($token) !== 48)
-			return InvalidParameter('Invalid registration link.');
+			return $_selfreg_fail('Invalid registration link.');
 
 		if (strlen(trim($request['Persona'] ?? '')) < 1)
-			return InvalidParameter('Persona is required.');
+			return $_selfreg_fail('Persona is required.');
 		if (strlen(trim($request['Email'] ?? '')) < 1)
-			return InvalidParameter('Email is required.');
+			return $_selfreg_fail('Email is required.');
 		if (!filter_var(trim($request['Email']), FILTER_VALIDATE_EMAIL))
-			return InvalidParameter('Please enter a valid email address.');
+			return $_selfreg_fail('Please enter a valid email address.');
 		if (strlen(trim($request['UserName'] ?? '')) < 4)
-			return InvalidParameter('Username must be at least 4 characters.');
-		if (strlen($request['Password'] ?? '') < 1)
-			return InvalidParameter('Password is required.');
+			return $_selfreg_fail('Username must be at least 4 characters.');
+		// Defense in depth: controller.SelfReg.php also enforces this; service layer
+		// enforces it again so direct orkservice POSTs cannot bypass the minimum.
+		if (strlen($request['Password'] ?? '') < 8)
+			return $_selfreg_fail('Password must be at least 8 characters.');
 
 		global $DB;
 
@@ -882,7 +904,7 @@ class Player extends Ork3 {
 		if (!$row || !$row->Next()) {
 			$DB->Clear();
 			$DB->Execute('ROLLBACK');
-			return InvalidParameter('Link not found.');
+			return $_selfreg_fail('Link not found.');
 		}
 
 		$selfreg_id = (int)$row->selfreg_id;
@@ -892,12 +914,12 @@ class Player extends Ork3 {
 		if (!empty($row->used_by) && (int)$row->used_by > 0) {
 			$DB->Clear();
 			$DB->Execute('ROLLBACK');
-			return InvalidParameter('This registration link has already been used.');
+			return $_selfreg_fail('This registration link has already been used.');
 		}
 		if (strtotime($row->expires_at) <= time()) {
 			$DB->Clear();
 			$DB->Execute('ROLLBACK');
-			return InvalidParameter('This registration link has expired.');
+			return $_selfreg_fail('This registration link has expired.');
 		}
 
 		// A14: Duplicate email check
@@ -908,7 +930,7 @@ class Player extends Ork3 {
 		if ($emailCheck && $emailCheck->Next()) {
 			$DB->Clear();
 			$DB->Execute('ROLLBACK');
-			return InvalidParameter('An account with this email already exists. Please sign in instead, or use a different email address.');
+			return $_selfreg_fail('An account with this email already exists. Please sign in instead, or use a different email address.');
 		}
 
 		// Look up park for kingdom_id
@@ -918,7 +940,7 @@ class Player extends Ork3 {
 		if (!$park->find()) {
 			$DB->Clear();
 			$DB->Execute('ROLLBACK');
-			return InvalidParameter('Park not found.');
+			return $_selfreg_fail('Park not found.');
 		}
 		$kingdom_id = (int)$park->kingdom_id;
 		$park_name  = $park->name;
@@ -928,7 +950,7 @@ class Player extends Ork3 {
 		if ($username === false) {
 			$DB->Clear();
 			$DB->Execute('ROLLBACK');
-			return InvalidParameter('No username could be generated. Please try again.');
+			return $_selfreg_fail('No username could be generated. Please try again.');
 		}
 
 		// Create mundane record (mirrors CreatePlayer lines 536-560)
@@ -960,7 +982,7 @@ class Player extends Ork3 {
 		if (!$new_mundane_id) {
 			$DB->Clear();
 			$DB->Execute('ROLLBACK');
-			return InvalidParameter('Could not create account. Please try again.');
+			return $_selfreg_fail('Could not create account. Please try again.');
 		}
 
 		// Hash password
@@ -992,6 +1014,13 @@ class Player extends Ork3 {
 		if ($knRow && $knRow->Next()) {
 			$kingdom_name = $knRow->name;
 		}
+
+		// B10: success audit — capture token, IP, and resulting mundane_id.
+		$_selfreg_success = $_selfreg_audit;
+		$_selfreg_success['Result']    = 'success';
+		$_selfreg_success['ParkId']    = $park_id;
+		$_selfreg_success['KingdomId'] = $kingdom_id;
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::SelfRegister", $_selfreg_success, 'Player', $new_mundane_id, null);
 
 		return Success([
 			'mundane_id'   => $new_mundane_id,

@@ -275,6 +275,10 @@ class Event  extends Ork3 {
 		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
 			return ['Status' => InvalidParameter(), 'Events' => []];
 		}
+		// GhettoCache: 60s TTL keyed by scope + scope_id + date.
+		$cacheKey = Ork3::$Lib->ghettocache->key(['Scope' => $scope, 'ScopeId' => $scopeId, 'Date' => $date]);
+		if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 60)) !== false)
+			return $cached;
 		$dStart = $date . ' 00:00:00';
 		$dEnd   = $date . ' 23:59:59';
 		if ($scope === 'park') {
@@ -311,7 +315,8 @@ class Event  extends Ork3 {
 				}
 			} while ($rs->Next());
 		}
-		return ['Status' => Success(), 'Events' => $events];
+		$response = ['Status' => Success(), 'Events' => $events];
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $response);
 	}
 
 	public function SetCurrent($request) {
@@ -367,6 +372,14 @@ class Event  extends Ork3 {
 		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
 			if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
 				return InvalidParameter('This event occurrence cannot be deleted because attendance has already been entered for it.');
+			// B5: Expire any scoped attendance links before the detail row goes away.
+			// Once the B3 FK CASCADE migration is deployed, link rows will be hard-deleted
+			// automatically; this UPDATE provides graceful expiration first so staff UIs
+			// can render "expired" instead of "missing" during the brief window before
+			// the cascade runs.
+			$_detail_id = (int)$request['EventCalendarDetailId'];
+			$this->db->Clear();
+			$this->db->Execute("UPDATE " . DB_PREFIX . "attendance_link SET expires_at = NOW() - INTERVAL 1 SECOND WHERE event_calendardetail_id = " . $_detail_id);
 			$this->detail->clear();
 			$this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
 			if ($this->detail->find()) {
@@ -390,14 +403,29 @@ class Event  extends Ork3 {
 
     $latitude  = (float)($request['latitude']  ?? 0);
     $longitude = (float)($request['longitude'] ?? 0);
-    $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
-    $end = date("Y-m-d", strtotime($request['end'] ?? $request['start'] ?? 'now + 90 days'));
-    // Validate dates are proper Y-m-d format
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) {
+    // B8: Validate strtotime BEFORE calling date(); date(false) silently becomes
+    // '1970-01-01' which would return thousands of historical rows.
+    if (isset($request['start'])) {
+        $_start_ts = strtotime((string)$request['start']);
+        if ($_start_ts === false) {
+            return InvalidParameter('Invalid date range.');
+        }
+        $start = date("Y-m-d", $_start_ts);
+    } else {
         $start = date("Y-m-d");
     }
+    $_end_raw = $request['end'] ?? $request['start'] ?? 'now + 90 days';
+    $_end_ts  = strtotime((string)$_end_raw);
+    if ($_end_ts === false) {
+        return InvalidParameter('Invalid date range.');
+    }
+    $end = date("Y-m-d", $_end_ts);
+    // Validate dates are proper Y-m-d format (belt-and-suspenders).
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) {
+        return InvalidParameter('Invalid date range.');
+    }
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
-        $end = date("Y-m-d", strtotime('+90 days'));
+        return InvalidParameter('Invalid date range.');
     }
     $distance = max(1, (float)($request['distance'] ?? 25));
     $limit    = min(100, max(1, (int)($request['limit'] ?? 12)));
