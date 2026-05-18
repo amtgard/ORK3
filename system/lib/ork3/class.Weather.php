@@ -1086,6 +1086,17 @@ class Weather extends Ork3 {
 	}
 
 	private function http_get($url) {
+		// 429 cooldown — bail before opening a socket if a recent call hit
+		// Open-Meteo's rate limit. Without this gate, every park page load
+		// triggers a synchronous refresh that 429s, blocking page render for
+		// hundreds of ms AND racing the cron's careful chunked batches. Set
+		// in this method on 429; auto-expires after 30 min (one cron cycle).
+		$cooldown = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
+		if ($cooldown !== false) {
+			$this->last_http_status = 429;
+			return false;
+		}
+
 		if (function_exists('curl_init')) {
 			$ch = curl_init($url);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1096,6 +1107,9 @@ class Weather extends Ork3 {
 			$http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 			curl_close($ch);
 			$this->last_http_status = $http;
+			if ($http === 429) {
+				Ork3::$Lib->ghettocache->cache(__CLASS__ . '.cooldown_429', 'global', time());
+			}
 			if ($http !== 200) return false;
 			return $body;
 		}
