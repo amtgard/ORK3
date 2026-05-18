@@ -4196,6 +4196,20 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 	backdrop-filter: blur(7px);
 	-webkit-backdrop-filter: blur(7px);
 }
+/* Mobile: directional ellipse is sized for a wide hero, so once the title
+   wraps it overflows the clear zone. Drop the mask + apply a uniform flat
+   blur + flat dark overlay so all overlaid text stays legible. */
+@media (max-width: 768px) {
+	.ev-hero-has-banner.ev-hero-vignette::before {
+		background: rgba(0,0,0,0.30);
+	}
+	.ev-hero-has-banner.ev-hero-vignette::after {
+		-webkit-mask-image: none;
+		        mask-image: none;
+		backdrop-filter: blur(5px);
+		-webkit-backdrop-filter: blur(5px);
+	}
+}
 /* "Add / Update Banner Image" pill — only visible on hover for users
    with edit scope. Sits in the top-right corner above the vignette. */
 .ev-banner-edit-btn {
@@ -10241,6 +10255,20 @@ html[data-theme="dark"] .evpv-cta:hover { background: #2f855a; }
 	backdrop-filter: blur(7px);
 	-webkit-backdrop-filter: blur(7px);
 }
+/* Mobile: directional ellipse is sized for a wide hero, so once the title
+   wraps it overflows the clear zone. Drop the mask + apply a uniform flat
+   blur + flat dark overlay so all overlaid text stays legible. */
+@media (max-width: 768px) {
+	.pk-hero-has-banner.pk-hero-vignette::before {
+		background: rgba(0,0,0,0.30);
+	}
+	.pk-hero-has-banner.pk-hero-vignette::after {
+		-webkit-mask-image: none;
+		        mask-image: none;
+		backdrop-filter: blur(5px);
+		-webkit-backdrop-filter: blur(5px);
+	}
+}
 /* "Add / Update Banner Image" pill — only visible on hover for users
    with edit scope. Sits in the top-right corner above the vignette. */
 .pk-banner-edit-btn {
@@ -10452,6 +10480,21 @@ html[data-theme="dark"] .pk-img-modal-title i { color: var(--ork-accent, #90cdf4
 	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
 	backdrop-filter: blur(7px);
 	-webkit-backdrop-filter: blur(7px);
+}
+/* Mobile: the directional ellipse is anchored at 12% 50% and sized for a
+   wide hero, so once the title wraps to two lines it overflows the clear
+   zone on the right. Drop the mask and apply a uniform flat blur + a flat
+   dark overlay across the whole hero so all overlaid text stays legible. */
+@media (max-width: 768px) {
+	.kn-hero-has-banner.kn-hero-vignette::before {
+		background: rgba(0,0,0,0.30);
+	}
+	.kn-hero-has-banner.kn-hero-vignette::after {
+		-webkit-mask-image: none;
+		        mask-image: none;
+		backdrop-filter: blur(5px);
+		-webkit-backdrop-filter: blur(5px);
+	}
 }
 /* "Add / Update Banner Image" pill — only visible on hover for users
    with edit scope. Sits in the top-right corner above the vignette. */
@@ -10668,6 +10711,20 @@ html[data-theme="dark"] .kn-img-modal-title i { color: var(--ork-accent, #90cdf4
 	backdrop-filter: blur(7px);
 	-webkit-backdrop-filter: blur(7px);
 }
+/* Mobile: directional ellipse is sized for a wide hero, so once the title
+   wraps it overflows the clear zone. Drop the mask + apply a uniform flat
+   blur + flat dark overlay so all overlaid text stays legible. */
+@media (max-width: 768px) {
+	.pn-hero-has-banner.pn-hero-vignette::before {
+		background: rgba(0,0,0,0.30);
+	}
+	.pn-hero-has-banner.pn-hero-vignette::after {
+		-webkit-mask-image: none;
+		        mask-image: none;
+		backdrop-filter: blur(5px);
+		-webkit-backdrop-filter: blur(5px);
+	}
+}
 /* "Add / Update Banner Image" pill — only visible on hover for users
    with edit scope. Sits in the top-right corner above the vignette. */
 .pn-banner-edit-btn {
@@ -10872,6 +10929,20 @@ html[data-theme="dark"] .pn-img-modal-body small { color: var(--ork-text-muted);
 	        mask-image: radial-gradient(ellipse 50% 90% at 12% 50%, #000 45%, transparent 100%);
 	backdrop-filter: blur(7px);
 	-webkit-backdrop-filter: blur(7px);
+}
+/* Mobile: directional ellipse is sized for a wide hero, so once the title
+   wraps it overflows the clear zone. Drop the mask + apply a uniform flat
+   blur + flat dark overlay so all overlaid text stays legible. */
+@media (max-width: 768px) {
+	.un-hero-has-banner.un-hero-vignette::before {
+		background: rgba(0,0,0,0.30);
+	}
+	.un-hero-has-banner.un-hero-vignette::after {
+		-webkit-mask-image: none;
+		        mask-image: none;
+		backdrop-filter: blur(5px);
+		-webkit-backdrop-filter: blur(5px);
+	}
 }
 /* "Add / Update Banner Image" pill — only visible on hover for users
    with edit scope. Sits in the top-right corner above the vignette. */
