@@ -70,6 +70,7 @@ define('DB_USERNAME', 'ork');
 define('DB_PASSWORD', 'secret');
 define('DB_DATABASE', 'ork');
 define('DB_PREFIX', 'ork_');
+define('CACHE_HOST', 'ork-dev');
 define('CUSTOM_CSS', HTTP_TEMPLATE . 'default/style/custom.css');
 
 // System Config

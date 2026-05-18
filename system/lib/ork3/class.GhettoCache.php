@@ -10,7 +10,7 @@ class Ghettocache {
 		$this->memcache = new Memcached();
 		$this->memcache->addServer('localhost', 11211);
 		$this->lifetime = array();
-		$this->prefix = $_SERVER[ 'HTTP_HOST' ];
+		$this->prefix = defined('CACHE_HOST') ? CACHE_HOST : ($_SERVER['HTTP_HOST'] ?? 'ork');
 	}
 	
 	function get($call, $key, $lifetime) {

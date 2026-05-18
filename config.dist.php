@@ -71,6 +71,7 @@ define('DB_USERNAME', 'DB_USERNAME');
 define('DB_PASSWORD', 'DB_PASSWORD');
 define('DB_DATABASE', 'DB_DATABASE');
 define('DB_PREFIX', 'ork_');
+define('CACHE_HOST', 'ork.amtgard.com');
 
 // System Config
 define('LOGIN_TIMEOUT', 72 * 60 * 60);

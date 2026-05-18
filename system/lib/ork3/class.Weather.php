@@ -21,6 +21,10 @@ class Weather extends Ork3 {
 	// Considered "active" if any signin happened in the past N days
 	const ACTIVE_DAYS = 60;
 
+	// Last HTTP status from any Open-Meteo call — lets callers distinguish
+	// rate-limit failures (429) from "nothing to do" (no HTTP call made).
+	public $last_http_status = 0;
+
 	// Cache row age (minutes) after which we'll re-fetch on a read
 	const STALE_MIN = 90;
 
@@ -1058,6 +1062,7 @@ class Weather extends Ork3 {
 			$body = curl_exec($ch);
 			$http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 			curl_close($ch);
+			$this->last_http_status = $http;
 			if ($http !== 200) return false;
 			return $body;
 		}
