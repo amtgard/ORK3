@@ -783,11 +783,14 @@ class Player extends Ork3 {
 		}
 	}
 
-	// Bust the three Report.PlayerAwardRecommendations cache keys that could
-	// hold this player's data: the player-keyed view, plus the kingdom and
-	// park scoped lists they appear in. Pass kingdom_id/park_id when the
-	// caller already knows them (e.g. merge/delete after the row is gone);
-	// otherwise we look them up.
+	// Bust caches affected by a change to this player's recommendation data:
+	//   - Report.PlayerAwardRecommendations under the three scopes (player,
+	//     kingdom, park) that could hold this player's row.
+	//   - Model_Player.fetch_player_details — recommendation/second changes
+	//     show up on the player's awards tab and the 60-min cache there
+	//     needs invalidating.
+	// Pass kingdom_id/park_id when the caller already knows them (e.g.
+	// merge/delete after the row is gone); otherwise we look them up.
 	private function bust_player_award_recs_cache($mundane_id, $kingdom_id = null, $park_id = null) {
 		if (!valid_id($mundane_id)) return;
 		if ($kingdom_id === null || $park_id === null) {
@@ -806,6 +809,8 @@ class Player extends Ork3 {
 			Ork3::$Lib->ghettocache->bust('Report.PlayerAwardRecommendations',
 				Ork3::$Lib->ghettocache->key($kd));
 		}
+		Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details',
+			Ork3::$Lib->ghettocache->key(['MundaneId' => $mid]));
 	}
 
 	public function MergePlayer($request) {
@@ -2520,9 +2525,7 @@ class Player extends Ork3 {
 				SET notes = :notes, updated_at = :updated_at, deleted_at = NULL, deleted_by = NULL
 				WHERE recommendation_seconds_id = $_existingId");
 			$this->db->Clear();
-			if (isset(Ork3::$Lib->ghettocache->memcache)) {
-				Ork3::$Lib->ghettocache->memcache->flush();
-			}
+			$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
 			$this->audit_second_change(__FUNCTION__, [
 				'RecommendationsId'        => (int)$request['RecommendationsId'],
 				'RecommendationSecondsId'  => $_existingId,
@@ -2541,9 +2544,7 @@ class Player extends Ork3 {
 		$second->supporter_mundane_id = $mundane_id;
 		$second->notes = $notes;
 		$second->save();
-		if (isset(Ork3::$Lib->ghettocache->memcache)) {
-			Ork3::$Lib->ghettocache->memcache->flush();
-		}
+		$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
 		$this->audit_second_change(__FUNCTION__, [
 			'RecommendationsId'        => (int)$request['RecommendationsId'],
 			'RecommendationSecondsId'  => (int)$second->recommendation_seconds_id,
@@ -2580,8 +2581,13 @@ class Player extends Ork3 {
 		$second->notes = isset($request['Notes']) ? substr(trim($request['Notes']), 0, 400) : '';
 		$second->updated_at = date('Y-m-d H:i:s');
 		$second->save();
-		if (isset(Ork3::$Lib->ghettocache->memcache)) {
-			Ork3::$Lib->ghettocache->memcache->flush();
+		// Look up the parent recommendation to find the recipient whose
+		// caches need busting.
+		$parent = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$parent->clear();
+		$parent->recommendations_id = $second->recommendations_id;
+		if ($parent->find()) {
+			$this->bust_player_award_recs_cache((int)$parent->mundane_id);
 		}
 		return Success($second->recommendation_seconds_id);
 	}
@@ -2629,8 +2635,8 @@ class Player extends Ork3 {
 		$second->deleted_at = date('Y-m-d H:i:s');
 		$second->deleted_by = $mundane_id;
 		$second->save();
-		if (isset(Ork3::$Lib->ghettocache->memcache)) {
-			Ork3::$Lib->ghettocache->memcache->flush();
+		if ($parent_found) {
+			$this->bust_player_award_recs_cache((int)$parent->mundane_id);
 		}
 		$this->audit_second_change(__FUNCTION__, [
 			'RecommendationsId'        => $rec_id,
@@ -2668,9 +2674,7 @@ class Player extends Ork3 {
 
 		$awardRec->reason = isset($request['Reason']) ? substr(trim($request['Reason']), 0, 400) : '';
 		$awardRec->save();
-		if (isset(Ork3::$Lib->ghettocache->memcache)) {
-			Ork3::$Lib->ghettocache->memcache->flush();
-		}
+		$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
 		return Success('Reason updated.');
 	}
 
