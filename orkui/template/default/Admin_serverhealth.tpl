@@ -744,12 +744,18 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			(w.days || []).forEach(function(day, i) {
 				var label = (i === 0 ? 'Today (' : (i === 1 ? 'Yesterday (' : (i + ' days ago ('))) + day.date + ' UTC)';
 				var cls = day.rate_limited > 0 ? 'warn' : '';
+				// Per-endpoint touch count = real attempts + cooldown-blocked
+				// touches. Without including blocks, the (fc/ar) split shows
+				// zero even when something tried to call forecast and got
+				// gated, which is misleading.
+				var fcTouches = day.attempt_forecast + day.blocked_forecast;
+				var arTouches = day.attempt_archive  + day.blocked_archive;
 				var detail = day.attempt + ' attempts'
 					+ ' · ' + day.success + ' ok'
 					+ ' · ' + day.rate_limited + ' 429'
 					+ ' · ' + day.error + ' err'
 					+ ' · ' + day.blocked + ' blocked'
-					+ '  (fc: ' + day.attempt_forecast + ', ar: ' + day.attempt_archive + ')';
+					+ '  (fc: ' + fcTouches + ', ar: ' + arTouches + ')';
 				html += renderFsRow(label, detail, cls);
 			});
 			return html;
