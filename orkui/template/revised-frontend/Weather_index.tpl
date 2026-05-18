@@ -32,6 +32,23 @@
 		return implode(', ', array_slice($names, 0, -1)) . ', and ' . end($names);
 	};
 
+	// Helper: build the " in X" / " — primarily in X" / ", across X" suffix
+	// for a narrative line. Uses plain "in" when there's only one park OR
+	// only one kingdom involved (since "primarily"/"across" both imply
+	// multiple sources). Falls back to the badge-specific $multiPrefix when
+	// multiple parks span multiple kingdoms.
+	$wxKingdomPhrase = function($n, $map, $multiPrefix) use ($wxRollupKingdoms) {
+		if (empty($map)) return '';
+		$names = $wxRollupKingdoms($map);
+		if ($names === '') return '';
+		$kc = 0;
+		foreach ($map as $k => $_count) {
+			if (Weather::short_kingdom($k) !== '') $kc++;
+		}
+		if ($n === 1 || $kc === 1) return ' in ' . $names;
+		return $multiPrefix . $names;
+	};
+
 	// Helper: park name as a link, "the Kingdom of Foo" suffix only when kingdom is non-Freeholds
 	$wxParkLink = function($p) {
 		if (!$p) return '';
@@ -62,9 +79,8 @@
 	} else {
 		if (!empty($bc['Thunderstorms'])) {
 			$n = $bc['Thunderstorms'];
-			$kingdoms = $wxRollupKingdoms($bk['Thunderstorms'] ?? array());
-			$leadParts[] = "Of parks playing today, $n " . ($n === 1 ? 'faces' : 'face') . ' thunderstorms' .
-				($kingdoms ? " — primarily in $kingdoms" : '') . '.';
+			$suffix = $wxKingdomPhrase($n, $bk['Thunderstorms'] ?? array(), ' — primarily in ');
+			$leadParts[] = "Of parks playing today, $n " . ($n === 1 ? 'faces' : 'face') . ' thunderstorms' . $suffix . '.';
 		}
 		if (!empty($bc['Extreme heat'])) {
 			$n = $bc['Extreme heat'];
@@ -76,15 +92,13 @@
 		}
 		if (!empty($bc['Severe wind'])) {
 			$n = $bc['Severe wind'];
-			$kingdoms = $wxRollupKingdoms($bk['Severe wind'] ?? array());
-			$leadParts[] = "Severe wind gusts (40+ mph / 65+ km/h) at $n " . ($n === 1 ? 'park' : 'parks') . ' playing today' .
-				($kingdoms ? ", across $kingdoms" : '') . '.';
+			$suffix = $wxKingdomPhrase($n, $bk['Severe wind'] ?? array(), ', across ');
+			$leadParts[] = "Severe wind gusts (40+ mph / 65+ km/h) at $n " . ($n === 1 ? 'park' : 'parks') . ' playing today' . $suffix . '.';
 		}
 		if (!empty($bc['Very high UV'])) {
 			$n = $bc['Very high UV'];
-			$kingdoms = $wxRollupKingdoms($bk['Very high UV'] ?? array());
-			$leadParts[] = "Very high UV at $n " . ($n === 1 ? 'park' : 'parks') . ' playing today' .
-				($kingdoms ? " in $kingdoms" : '') . '.';
+			$suffix = $wxKingdomPhrase($n, $bk['Very high UV'] ?? array(), ' in ');
+			$leadParts[] = "Very high UV at $n " . ($n === 1 ? 'park' : 'parks') . ' playing today' . $suffix . '.';
 		}
 	}
 
@@ -607,6 +621,19 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 		return names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
 	}
 
+	// JS mirror of $wxKingdomPhrase — see PHP comment.
+	function kingdomPhrase(n, map, multiPrefix) {
+		if (!map) return '';
+		var names = rollupKingdoms(map);
+		if (!names) return '';
+		var kc = 0;
+		for (var k in map) {
+			if (Object.prototype.hasOwnProperty.call(map, k) && shortKingdom(k) !== '') kc++;
+		}
+		if (n === 1 || kc === 1) return ' in ' + names;
+		return multiPrefix + names;
+	}
+
 	function renderRundown(r, dayLabel) {
 		var bc = r.badge_counts || {}, bk = r.badge_kingdoms || {};
 		var standout = r.standout_park || null;
@@ -619,8 +646,9 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 			leadParts.push('Of the parks playing ' + dayLabel + ', conditions look favorable across the board — no warnings flagged.');
 		} else {
 			if (bc['Thunderstorms']) {
-				var n = bc['Thunderstorms'], k = rollupKingdoms(bk['Thunderstorms']);
-				leadParts.push('Of parks playing ' + dayLabel + ', ' + n + ' ' + (n === 1 ? 'faces' : 'face') + ' thunderstorms' + (k ? ' — primarily in ' + k : '') + '.');
+				var n = bc['Thunderstorms'];
+				var suffix = kingdomPhrase(n, bk['Thunderstorms'], ' — primarily in ');
+				leadParts.push('Of parks playing ' + dayLabel + ', ' + n + ' ' + (n === 1 ? 'faces' : 'face') + ' thunderstorms' + suffix + '.');
 			}
 			if (bc['Extreme heat']) {
 				var n = bc['Extreme heat'];
@@ -631,12 +659,14 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 				leadParts.push((n === 1 ? 'One park playing ' + dayLabel + ' is' : n + ' parks playing ' + dayLabel + ' are') + ' under frostbite-risk conditions.');
 			}
 			if (bc['Severe wind']) {
-				var n = bc['Severe wind'], k = rollupKingdoms(bk['Severe wind']);
-				leadParts.push('Severe wind gusts (40+ mph / 65+ km/h) at ' + n + ' ' + (n === 1 ? 'park' : 'parks') + ' playing ' + dayLabel + (k ? ', across ' + k : '') + '.');
+				var n = bc['Severe wind'];
+				var suffix = kingdomPhrase(n, bk['Severe wind'], ', across ');
+				leadParts.push('Severe wind gusts (40+ mph / 65+ km/h) at ' + n + ' ' + (n === 1 ? 'park' : 'parks') + ' playing ' + dayLabel + suffix + '.');
 			}
 			if (bc['Very high UV']) {
-				var n = bc['Very high UV'], k = rollupKingdoms(bk['Very high UV']);
-				leadParts.push('Very high UV at ' + n + ' ' + (n === 1 ? 'park' : 'parks') + ' playing ' + dayLabel + (k ? ' in ' + k : '') + '.');
+				var n = bc['Very high UV'];
+				var suffix = kingdomPhrase(n, bk['Very high UV'], ' in ');
+				leadParts.push('Very high UV at ' + n + ' ' + (n === 1 ? 'park' : 'parks') + ' playing ' + dayLabel + suffix + '.');
 			}
 		}
 
