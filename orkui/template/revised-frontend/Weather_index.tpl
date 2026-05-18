@@ -413,7 +413,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 		</div>
 		<div class="wx-play-mode" id="wx-play-mode">
 			<span class="wx-play-mode-icon">⚠️</span>
-			<span>Showing only parks with <strong>weather concerns</strong> today.</span>
+			<span>Showing only parks with <strong>weather concerns</strong> on this day.</span>
 			<button type="button" class="wx-play-mode-clear" id="wx-play-mode-clear">Show all parks</button>
 		</div>
 		<div id="wx-play-body">
