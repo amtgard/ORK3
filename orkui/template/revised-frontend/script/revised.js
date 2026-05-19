@@ -18227,7 +18227,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(d) {
                 if (!d || d.status !== 0) { renderResults([]); return; }
-                renderResults(d.results || []);
+                var rows = d.results || [];
+                // Empty query (initial focus) → show only the 3 most recent as a teaser.
+                if (q === '') rows = rows.slice(0, 3);
+                renderResults(rows);
             })
             .catch(function() { renderResults([]); });
     }
@@ -18472,7 +18475,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(d) {
                 if (!d || d.status !== 0) { renderResults([]); return; }
-                renderResults(d.results || []);
+                var rows = d.results || [];
+                if (q === '') rows = rows.slice(0, 3);
+                renderResults(rows);
             })
             .catch(function() { renderResults([]); });
     }
