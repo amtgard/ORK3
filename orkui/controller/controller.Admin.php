@@ -2398,7 +2398,16 @@ class Controller_Admin extends Controller {
 			// (and lazy fallback) are keeping forecasts current. Plus an
 			// upcoming-events count so we can spot if event-venue warming
 			// has fallen behind.
-			$weather = null;
+			//
+			// fetched_at is written by PHP's date() which uses PHP's local
+			// timezone (e.g. America/Chicago on prod), but MySQL's NOW() is
+			// UTC. To avoid a TZ-mismatch where every park appears stale,
+			// compute the cutoffs in PHP and pass them as string literals so
+			// comparisons happen entirely in PHP's local TZ.
+			$weather   = null;
+			$now_local      = date('Y-m-d H:i:s');
+			$cutoff_fresh   = date('Y-m-d H:i:s', time() - 90 * 60);
+			$cutoff_aging   = date('Y-m-d H:i:s', time() - 4 * 3600);
 			$DB->Clear();
 			$wsql = "SELECT
 				(SELECT COUNT(*) FROM " . DB_PREFIX . "park p WHERE p.active = 'Active'
@@ -2408,15 +2417,15 @@ class Controller_Admin extends Controller {
 				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
 				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
 				   WHERE p.active = 'Active'
-				     AND pw.fetched_at >= NOW() - INTERVAL 90 MINUTE
+				     AND pw.fetched_at >= '$cutoff_fresh'
 				) AS fresh,
 				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
 				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
 				   WHERE p.active = 'Active'
-				     AND pw.fetched_at >= NOW() - INTERVAL 4 HOUR
-				     AND pw.fetched_at <  NOW() - INTERVAL 90 MINUTE
+				     AND pw.fetched_at >= '$cutoff_aging'
+				     AND pw.fetched_at <  '$cutoff_fresh'
 				) AS aging,
-				(SELECT TIMESTAMPDIFF(MINUTE, MIN(pw.fetched_at), NOW())
+				(SELECT TIMESTAMPDIFF(MINUTE, MIN(pw.fetched_at), '$now_local')
 				   FROM " . DB_PREFIX . "park_weather pw
 				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
 				   WHERE p.active = 'Active'
