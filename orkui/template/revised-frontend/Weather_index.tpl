@@ -202,6 +202,7 @@
 .wx-rundown h2 { margin: 0 0 10px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ork-text-muted, #718096); background: none; border: none; padding: 0; border-radius: 0; text-shadow: none; box-shadow: none; }
 .wx-rundown p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; color: var(--ork-text, #2d3748); }
 .wx-rundown p:last-child { margin-bottom: 0; }
+.wx-rundown .wx-freshness { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted, #718096); margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ork-border, #edf2f7); }
 .wx-rundown .wx-jump-park { color: var(--ork-link-bright, #2b6cb0); font-weight: 600; text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
 .wx-rundown .wx-jump-park:hover { border-bottom-style: solid; }
 .wx-rundown .wx-events-link { color: var(--ork-link-bright, #2b6cb0); text-decoration: none; border-bottom: 1px dotted currentColor; }
@@ -361,6 +362,9 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 			<p><?= $comingUp ?></p>
 		<?php endif; ?>
 		</div>
+		<?php if (!empty($FreshnessPhrase)): ?>
+			<p class="wx-freshness"><?= htmlspecialchars($FreshnessPhrase) ?></p>
+		<?php endif; ?>
 	</div>
 
 	<!-- ── Date strip ─────────────────────────────────────── -->

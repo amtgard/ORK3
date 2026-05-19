@@ -34,6 +34,7 @@ class Controller_Weather extends Controller {
 		$this->data['Rundown']         = Ork3::$Lib->weather->daily_summary($today);
 		$this->data['PlayToday']       = Ork3::$Lib->weather->play_for_date($today);
 		$this->data['UpcomingEvents']  = Ork3::$Lib->weather->upcoming_events_with_forecast(7);
+		$this->data['FreshnessPhrase'] = Ork3::$Lib->weather->freshness_phrase();
 		// 7-day strip of pills (today + next 6 days)
 		$strip = array();
 		for ($i = 0; $i < 7; $i++) {

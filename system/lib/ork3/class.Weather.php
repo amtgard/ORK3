@@ -408,6 +408,35 @@ class Weather extends Ork3 {
 	 *
 	 * No external calls — reads ork_park_weather + ork_event.
 	 */
+	/**
+	 * Public-facing freshness sentence for the /Weather page header.
+	 *
+	 * Returns a bucketed phrase based on the MEDIAN fetched_at across active
+	 * parks. Median (vs MIN) is robust to a handful of coord-less parks or
+	 * rows that haven't been refreshed yet — most park rows have to drift
+	 * before the message changes. Returns '' if there's no data at all.
+	 */
+	public function freshness_phrase() {
+		$rs = $this->db->query("SELECT pw.fetched_at FROM " . DB_PREFIX . "park_weather pw
+			JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
+			WHERE p.active = 'Active'
+			ORDER BY pw.fetched_at");
+		if (!$rs || $rs->size() === 0) return '';
+		$ts = array();
+		while ($rs->next()) {
+			$t = strtotime($rs->fetched_at);
+			if ($t !== false) $ts[] = $t;
+		}
+		if (empty($ts)) return '';
+		$n = count($ts);
+		$median = ($n % 2 === 1) ? $ts[intdiv($n, 2)] : ($ts[$n / 2 - 1] + $ts[$n / 2]) / 2;
+		$age = time() - (int)$median;
+		if ($age <  3600)        return 'Forecasts updated within the last hour.';
+		if ($age <  3 * 3600)    return 'Forecasts updated within the last few hours.';
+		if ($age <  6 * 3600)    return 'Forecasts may be a few hours old.';
+		return 'Some forecasts may be out of date.';
+	}
+
 	public function daily_summary($date) {
 		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = date('Y-m-d');
 
