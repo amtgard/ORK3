@@ -1213,7 +1213,43 @@ class Controller_EventAjax extends Controller {
 		$new_detail_id = ($ndRow && $ndRow->Next()) ? (int)$ndRow->event_calendardetail_id : 0;
 		if ($new_detail_id <= 0) { $rollback_event(); echo json_encode(['status' => 1, 'error' => 'Failed to create event occurrence.']); exit; }
 
-		// TODO(task 4): fees + links
+		if ($mod['details']) {
+			// Fees
+			$DB->Clear();
+			$feesRs = $DB->DataSet('SELECT admission_type, cost, sort_order FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $src_detail_id . ' ORDER BY sort_order ASC');
+			if ($feesRs) {
+				while ($feesRs->Next()) {
+					$_at = $sq((string)$feesRs->admission_type);
+					$_co = round((float)$feesRs->cost, 2);
+					$_so = (int)$feesRs->sort_order;
+					$DB->Clear();
+					$DB->Execute('INSERT INTO ' . DB_PREFIX . "event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (" . $new_detail_id . ", '" . $_at . "', " . $_co . ", " . $_so . ")");
+				}
+			}
+
+			// Links — re-validate URL scheme and icon allow-list on insert.
+			$allowed_icons = ['fab fa-facebook','fab fa-discord','fas fa-globe','far fa-clipboard','fas fa-link','fas fa-ticket-alt'];
+			$DB->Clear();
+			$linksRs = $DB->DataSet('SELECT title, url, icon, sort_order FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $src_detail_id . ' ORDER BY sort_order ASC');
+			if ($linksRs) {
+				while ($linksRs->Next()) {
+					$_lt = $sq((string)$linksRs->title);
+					$_lu_raw = trim((string)$linksRs->url);
+					if ($_lu_raw !== '') {
+						$_sc = strtolower((string)parse_url($_lu_raw, PHP_URL_SCHEME));
+						if (!in_array($_sc, ['http', 'https', 'mailto'], true)) $_lu_raw = '';
+					}
+					$_lu = $sq($_lu_raw);
+					$_ic_raw = trim((string)$linksRs->icon);
+					if (!in_array($_ic_raw, $allowed_icons, true)) $_ic_raw = 'fas fa-link';
+					$_ic = $sq($_ic_raw);
+					$_so = (int)$linksRs->sort_order;
+					$DB->Clear();
+					$DB->Execute('INSERT INTO ' . DB_PREFIX . "event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (" . $new_detail_id . ", '" . $_lt . "', '" . $_lu . "', '" . $_ic . "', " . $_so . ")");
+				}
+			}
+		}
+
 		// TODO(task 5): schedule + feast + leads
 		// TODO(task 6): staff
 		// TODO(task 6): banner
