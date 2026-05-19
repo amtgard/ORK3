@@ -2425,6 +2425,11 @@ class Controller_Admin extends Controller {
 				     AND pw.fetched_at >= '$cutoff_aging'
 				     AND pw.fetched_at <  '$cutoff_fresh'
 				) AS aging,
+				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
+				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
+				   WHERE p.active = 'Active'
+				     AND pw.fetched_at <  '$cutoff_aging'
+				) AS stale_row,
 				(SELECT TIMESTAMPDIFF(MINUTE, MIN(pw.fetched_at), '$now_local')
 				   FROM " . DB_PREFIX . "park_weather pw
 				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
@@ -2444,14 +2449,16 @@ class Controller_Admin extends Controller {
 				) AS events_with_coords";
 			$wr = $DB->DataSet($wsql);
 			if ($wr && $wr->Size() > 0 && $wr->Next()) {
-				$total = (int)$wr->total_active;
-				$fresh = (int)$wr->fresh;
-				$aging = (int)$wr->aging;
+				$total     = (int)$wr->total_active;
+				$fresh     = (int)$wr->fresh;
+				$aging     = (int)$wr->aging;
+				$stale_row = (int)$wr->stale_row;
 				$weather = [
 					'parks_active'        => $total,
 					'parks_fresh'         => $fresh,
 					'parks_aging'         => $aging,
-					'parks_stale'         => max(0, $total - $fresh - $aging),
+					'parks_stale'         => $stale_row,
+					'parks_no_data'       => max(0, $total - $fresh - $aging - $stale_row),
 					'parks_oldest_min'    => $wr->oldest_min !== null ? (int)$wr->oldest_min : null,
 					'events_upcoming'     => (int)$wr->events_upcoming,
 					'events_with_coords'  => (int)$wr->events_with_coords,

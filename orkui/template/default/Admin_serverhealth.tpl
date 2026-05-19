@@ -566,8 +566,12 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		if (!wx) { el.innerHTML = '<div class="sh-empty">Weather data unavailable</div>'; return; }
 		var freshPct = wx.parks_active ? Math.round(wx.parks_fresh / wx.parks_active * 100) : 0;
 		var stalePct = wx.parks_active ? Math.round(wx.parks_stale / wx.parks_active * 100) : 0;
+		var noDataPct = wx.parks_active ? Math.round(wx.parks_no_data / wx.parks_active * 100) : 0;
 		var freshCls = freshPct >= 80 ? '' : (freshPct >= 50 ? 'warn' : 'alert');
-		var staleCls = stalePct >= 20 ? 'alert' : (stalePct >= 10 ? 'warn' : '');
+		var staleCls = stalePct >= 10 ? 'alert' : (stalePct >= 5 ? 'warn' : '');
+		// Missing-data parks usually mean missing/bad coords — a config issue
+		// to investigate, not an operational alert. Soft warn at any non-zero.
+		var noDataCls = noDataPct > 0 ? 'warn' : '';
 		var oldestCls = '';
 		if (wx.parks_oldest_min !== null) {
 			if (wx.parks_oldest_min > 240) oldestCls = 'alert';
@@ -581,7 +585,8 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			metric('Active parks tracked', fmtCount(wx.parks_active), '') +
 			metric('Fresh (< 90 min)', fmtCount(wx.parks_fresh) + ' (' + freshPct + '%)', freshCls) +
 			metric('Aging (90 min – 4 h)', fmtCount(wx.parks_aging), '') +
-			metric('Stale (> 4 h or no data)', fmtCount(wx.parks_stale) + ' (' + stalePct + '%)', staleCls) +
+			metric('Stale row (> 4 h)', fmtCount(wx.parks_stale) + ' (' + stalePct + '%)', staleCls) +
+			metric('Missing data (no row)', fmtCount(wx.parks_no_data) + ' (' + noDataPct + '%)', noDataCls) +
 			metric('Oldest park row', oldestStr, oldestCls) +
 			metric('Upcoming events (14 d)', fmtCount(wx.events_upcoming) + ' (' + fmtCount(wx.events_with_coords) + ' with venue coords)', '');
 	}
