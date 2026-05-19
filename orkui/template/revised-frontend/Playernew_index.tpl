@@ -215,21 +215,30 @@
 	}
 	$_pnAccent = (!empty($Player['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorAccent'])) ? $Player['ColorAccent'] : '#4299e1';
 	$_pnColorSecondary = (!empty($Player['ColorSecondary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $Player['ColorSecondary'])) ? $Player['ColorSecondary'] : '';
+	// Amtpride Nameplate: when set, this preset key takes precedence over
+	// color_primary/color_secondary on the hero background. Suspended state
+	// still wins (red signal), as does dark mode for the rest of the page.
+	$_pnPrideGradients = require __DIR__ . '/../../../system/lib/ork3/pride_gradients.php';
+	$_pnHeroGradientKey = (!$isSuspended && !empty($Player['HeroGradient']) && isset($_pnPrideGradients[$Player['HeroGradient']])) ? $Player['HeroGradient'] : '';
+	$_pnHeroGradientCss = $_pnHeroGradientKey ? ('linear-gradient(90deg, ' . implode(', ', $_pnPrideGradients[$_pnHeroGradientKey]['colors']) . ')') : '';
 	$_pnOverlay = in_array($Player['HeroOverlay'] ?? 'med', ['low','med','high','vignette']) ? ($Player['HeroOverlay'] ?? 'med') : 'med';
 	// Opacity for the flat-blur layer. Unused in vignette mode (which renders
 	// its own two-layer composition with per-layer opacities).
 	$_pnOverlayOpacity = ['low' => '0.06', 'med' => '0.12', 'high' => '0.22', 'vignette' => '0.12'][$_pnOverlay];
 	$_pnOverlayIsVignette = ($_pnOverlay === 'vignette');
-	// Single `background` shorthand value (color OR gradient).
-	$_pnHeroBgValue = !empty($_pnColorSecondary)
-		? "linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
-		: $_pnHeroBg;
+	// Single `background` shorthand value (color OR gradient). Pride gradient
+	// wins over the legacy 135deg two-color gradient when active.
+	$_pnHeroBgValue = $_pnHeroGradientCss
+		?: (!empty($_pnColorSecondary)
+			? "linear-gradient(135deg, $_pnHeroBg, $_pnColorSecondary)"
+			: $_pnHeroBg);
 	// In dark mode, respect user customization (primary color and/or gradient) so
 	// the value the player picked in the design modal preview is what they see on
 	// the rendered hero. Fall back to --ork-bg-secondary only when the player has
 	// not customized, so default uncustomized heroes still auto-darken. Suspended
-	// state forces the red signal in both modes.
-	$_pnHeroBgValueDark = ($isSuspended || $_pnIsCustomPrimary || !empty($_pnColorSecondary))
+	// state forces the red signal in both modes. Amtpride flags render as-is in
+	// both themes — the colors are identity-bearing and shouldn't be tinted.
+	$_pnHeroBgValueDark = ($isSuspended || $_pnIsCustomPrimary || !empty($_pnColorSecondary) || $_pnHeroGradientCss)
 		? $_pnHeroBgValue
 		: 'var(--ork-bg-secondary)';
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
@@ -720,6 +729,30 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-gradient-toggle-col{display:flex;flex-direction:column;justify-content:flex-end}
 .pn-gradient-toggle-label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#4a5568}
 .pn-gradient-toggle-label input[type="checkbox"]{width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)}
+/* Amtpride Nameplate subsection */
+.pn-amtpride-section{margin-top:14px;border:1px solid #e2e8f0;border-radius:8px;background:#fafbfc}
+.pn-amtpride-toggle{width:100%;display:flex;align-items:center;gap:8px;padding:10px 12px;background:transparent;border:0;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em}
+.pn-amtpride-section.pn-amtpride-open .pn-amtpride-toggle{border-radius:7px 7px 0 0}
+.pn-amtpride-toggle:hover{background:rgba(66,153,225,0.06)}
+.pn-amtpride-chev{transition:transform .2s ease;font-size:11px;color:#a0aec0}
+.pn-amtpride-section.pn-amtpride-open .pn-amtpride-chev{transform:rotate(90deg)}
+.pn-amtpride-active-badge{margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:linear-gradient(90deg,#e40303,#ff8c00,#ffed00,#008026,#004dff,#750787);color:#fff;text-shadow:0 1px 1px rgba(0,0,0,0.5);letter-spacing:.03em}
+.pn-amtpride-body{display:none;padding:4px 12px 12px}
+.pn-amtpride-section.pn-amtpride-open .pn-amtpride-body{display:block}
+.pn-amtpride-presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.pn-amtpride-swatch{width:42px;height:24px;border-radius:4px;border:2px solid transparent;cursor:pointer;position:relative;transition:transform .15s,border-color .15s;box-shadow:0 1px 2px rgba(0,0,0,0.08)}
+.pn-amtpride-swatch:hover{transform:scale(1.08)}
+.pn-amtpride-swatch.pn-selected{border-color:#2d3748;box-shadow:0 0 0 2px #fff,0 0 0 3px #2d3748}
+.pn-amtpride-swatch[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2d3748;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;pointer-events:none;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,0.2)}
+.pn-amtpride-swatch[data-tip]:hover::before{content:'';position:absolute;bottom:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#2d3748;pointer-events:none;z-index:10}
+/* Known limit: tooltip uses position:absolute and can clip at the top edge of
+   the modal viewport on very short screens. Acceptable given short flag names
+   and the swatch's visible gradient already identifies the flag. */
+/* Dim primary/secondary inputs while a pride flag is active */
+.pn-design-panel.pn-pride-active .pn-color-presets,
+.pn-design-panel.pn-pride-active .pn-color-row,
+.pn-design-panel.pn-pride-active #pn-color-presets,
+.pn-design-panel.pn-pride-active #pn-gradient-presets{opacity:0.4;pointer-events:none}
 /* Shared section heading + checkbox toggle label inside Design panels */
 .pn-section-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:12px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
 .pn-section-toggle-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
@@ -874,6 +907,13 @@ html[data-theme="dark"] .pn-ms-custom-wrap { border-top-color: var(--ork-border)
 /* Colors-tab field labels — promote to secondary text so they stay legible */
 html[data-theme="dark"] .pn-color-field-label { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-gradient-toggle-label { color: var(--ork-text-secondary); }
+/* Amtpride Nameplate — dark mode */
+html[data-theme="dark"] .pn-amtpride-section { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-amtpride-toggle { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pn-amtpride-toggle:hover { background: rgba(255,255,255,0.04); }
+html[data-theme="dark"] .pn-amtpride-swatch.pn-selected { border-color: var(--ork-text); box-shadow: 0 0 0 2px var(--ork-card-bg), 0 0 0 3px var(--ork-text); }
+html[data-theme="dark"] .pn-amtpride-swatch[data-tip]:hover::after { background: var(--ork-text); color: var(--ork-card-bg); }
+html[data-theme="dark"] .pn-amtpride-swatch[data-tip]:hover::before { border-top-color: var(--ork-text); }
 html[data-theme="dark"] .pn-section-heading { color: var(--ork-text); }
 html[data-theme="dark"] .pn-section-toggle-label { color: var(--ork-text-secondary); }
 
@@ -3110,6 +3150,28 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<div class="pn-color-swatch" data-primary="#2c5282" data-accent="#4299e1" data-secondary="#285e61" style="background:linear-gradient(135deg,#2c5282,#285e61)" title="Ocean Teal"></div>
 					<div class="pn-color-swatch" data-primary="#744210" data-accent="#ecc94b" data-secondary="#9b2c2c" style="background:linear-gradient(135deg,#744210,#9b2c2c)" title="Autumn"></div>
 				</div>
+				<?php
+					$_pnPrideActiveKey = (!$isSuspended && !empty($Player['HeroGradient']) && isset($_pnPrideGradients[$Player['HeroGradient']])) ? $Player['HeroGradient'] : '';
+				?>
+				<div class="pn-amtpride-section<?= $_pnPrideActiveKey ? ' pn-amtpride-open' : '' ?>" id="pn-amtpride-section">
+					<button type="button" class="pn-amtpride-toggle" id="pn-amtpride-toggle" aria-expanded="<?= $_pnPrideActiveKey ? 'true' : 'false' ?>" aria-controls="pn-amtpride-body">
+						<i class="fas fa-chevron-right pn-amtpride-chev"></i>
+						<span>Amtpride Nameplate</span>
+						<span class="pn-amtpride-active-badge" id="pn-amtpride-active-badge"<?= $_pnPrideActiveKey ? '' : ' style="display:none"' ?>>Active</span>
+					</button>
+					<div class="pn-amtpride-body" id="pn-amtpride-body">
+						<div class="pn-design-hint" style="margin-bottom:8px">Display a pride flag as your nameplate background. Overrides the custom colors below while active.</div>
+						<div class="pn-amtpride-presets" id="pn-amtpride-presets">
+							<?php foreach ($_pnPrideGradients as $_pgKey => $_pg):
+								$_pgCss = 'linear-gradient(90deg, ' . implode(', ', $_pg['colors']) . ')';
+							?>
+							<div class="pn-amtpride-swatch<?= $_pnPrideActiveKey === $_pgKey ? ' pn-selected' : '' ?>" data-pride="<?= htmlspecialchars($_pgKey) ?>" data-tip="<?= htmlspecialchars($_pg['name']) ?>" style="background:<?= $_pgCss ?>"></div>
+							<?php endforeach; ?>
+						</div>
+						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-amtpride-clear" style="margin-top:10px<?= $_pnPrideActiveKey ? '' : ';display:none' ?>"><i class="fas fa-times"></i> Clear pride flag</button>
+					</div>
+				</div>
+				<input type="hidden" id="pn-hero-gradient" value="<?= htmlspecialchars($_pnPrideActiveKey) ?>" />
 				<div class="pn-design-preview-label" style="margin-top:14px">Custom Colors</div>
 				<div class="pn-color-row">
 					<div class="pn-color-col">
@@ -3816,6 +3878,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	var allSwatches = document.querySelectorAll('.pn-color-swatch');
 	allSwatches.forEach(function(sw) {
 		sw.addEventListener('click', function() {
+			clearPrideFlag();
 			allSwatches.forEach(function(s) { s.classList.remove('pn-selected'); });
 			sw.classList.add('pn-selected');
 			gid('pn-color-primary').value = sw.dataset.primary;
@@ -3844,6 +3907,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		if (/^#[0-9a-f]{6}$/i.test(this.value)) { gid('pn-color-accent').value = this.value; syncPresetSwatch(); updateColorPreview(); }
 	});
 	gid('pn-color-reset').addEventListener('click', function() {
+		clearPrideFlag();
 		gid('pn-color-primary').value = '#2c5282'; gid('pn-color-primary-hex').value = '#2c5282';
 		gid('pn-color-accent').value = '#4299e1'; gid('pn-color-accent-hex').value = '#4299e1';
 		gid('pn-color-secondary-hex').value = ''; gid('pn-color-secondary').value = '#2c5282';
@@ -3883,9 +3947,15 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 			sw.classList.toggle('pn-selected', matchBase && swSec === s);
 		});
 	}
+	var _pnPrideGradients = <?= json_encode($_pnPrideGradients, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 	function updateColorPreview() {
 		var preview = gid('pn-color-hero-preview');
 		if (!preview) return;
+		var prideKey = gid('pn-hero-gradient') ? gid('pn-hero-gradient').value : '';
+		if (prideKey && _pnPrideGradients[prideKey]) {
+			preview.style.background = 'linear-gradient(90deg, ' + _pnPrideGradients[prideKey].colors.join(', ') + ')';
+			return;
+		}
 		var primary = gid('pn-color-primary').value;
 		var gradientOn = gid('pn-gradient-enabled').checked;
 		var secondary = gid('pn-color-secondary').value;
@@ -3897,6 +3967,64 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	}
 	updateColorPreview();
 	syncPresetSwatch();
+
+	// ---- Amtpride Nameplate ----
+	var prideSection = gid('pn-amtpride-section');
+	var prideToggle  = gid('pn-amtpride-toggle');
+	var prideBadge   = gid('pn-amtpride-active-badge');
+	var prideClear   = gid('pn-amtpride-clear');
+	var prideHidden  = gid('pn-hero-gradient');
+	var prideSwatches = document.querySelectorAll('.pn-amtpride-swatch');
+	var colorPanel   = document.getElementById('pn-design-colors');
+	// Function declarations are hoisted, so the regular swatch/reset handlers
+	// (which call clearPrideFlag) keep working even if the Amtpride DOM is
+	// missing — clearPrideFlag's own !prideHidden guard short-circuits cleanly.
+	function applyPrideFlag(key) {
+		prideHidden.value = key || '';
+		prideSwatches.forEach(function(sw) {
+			sw.classList.toggle('pn-selected', sw.dataset.pride === key);
+		});
+		if (key) {
+			prideBadge.style.display = '';
+			prideClear.style.display = '';
+			if (colorPanel) colorPanel.classList.add('pn-pride-active');
+			prideSection.classList.add('pn-amtpride-open');
+			prideToggle.setAttribute('aria-expanded', 'true');
+			// Deselect regular presets — they're no longer driving the hero.
+			allSwatches.forEach(function(s) { s.classList.remove('pn-selected'); });
+		} else {
+			prideBadge.style.display = 'none';
+			prideClear.style.display = 'none';
+			if (colorPanel) colorPanel.classList.remove('pn-pride-active');
+			// Deselect regular presets unconditionally — the user cleared the pride
+			// flag, they haven't re-chosen a color preset. Re-lighting a preset off
+			// the current input values would mislead them about saved state.
+			allSwatches.forEach(function(s) { s.classList.remove('pn-selected'); });
+		}
+		updateColorPreview();
+	}
+	function clearPrideFlag() {
+		if (!prideHidden || !prideHidden.value) return;
+		applyPrideFlag('');
+	}
+	// Listener wiring is gated on the Amtpride DOM existing. If a future feature
+	// flag hides the subsection, this block skips cleanly and the Name builder /
+	// save handler below still run.
+	if (prideSection && prideToggle && prideHidden && prideClear) {
+		prideSwatches.forEach(function(sw) {
+			sw.addEventListener('click', function() {
+				var key = sw.dataset.pride;
+				applyPrideFlag(prideHidden.value === key ? '' : key);
+			});
+		});
+		prideToggle.addEventListener('click', function() {
+			var open = prideSection.classList.toggle('pn-amtpride-open');
+			prideToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+		});
+		prideClear.addEventListener('click', function() { clearPrideFlag(); });
+		// Sync dim-state with the initial server-rendered selection.
+		if (prideHidden.value && colorPanel) colorPanel.classList.add('pn-pride-active');
+	}
 
 	// Name builder
 	var prefixSel = gid('pn-name-prefix-select');
@@ -4226,6 +4354,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		fd.append('ColorPrimary', gid('pn-color-primary').value);
 		fd.append('ColorAccent', gid('pn-color-accent').value);
 		fd.append('ColorSecondary', gid('pn-gradient-enabled').checked ? gid('pn-color-secondary').value : '');
+		fd.append('HeroGradient', (gid('pn-hero-gradient') && gid('pn-hero-gradient').value) || '');
 		fd.append('HeroOverlay', gid('pn-hero-overlay').value);
 		fd.append('NamePrefix', prefix);
 		fd.append('NameSuffix', suffix);
