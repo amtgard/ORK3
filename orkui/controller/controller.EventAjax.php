@@ -1040,10 +1040,8 @@ class Controller_EventAjax extends Controller {
 			echo json_encode(['status' => 1, 'error' => 'A kingdom or park is required.']); exit;
 		}
 
-		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, 0, AUTH_CREATE)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
-		}
+		// Auth: matches EventAjax::create — session-gated. The dropdown only exposes
+		// event names + dates (already public site-wide).
 
 		if (valid_id($park_id)) {
 			$scope_where = 'e.park_id = ' . $park_id;
@@ -1123,9 +1121,9 @@ class Controller_EventAjax extends Controller {
 		if (!$ns_ts || !$ne_ts) { echo json_encode(['status' => 1, 'error' => 'Valid start and end times are required.']); exit; }
 		if ($ne_ts < $ns_ts)   { echo json_encode(['status' => 1, 'error' => 'End time cannot be before start time.']); exit; }
 
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, 0, AUTH_CREATE)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized to create events here.']); exit;
-		}
+		// Auth is delegated to Event->create_event() below, matching the existing
+		// EventAjax::create() pattern. HasAuthority($uid, AUTH_EVENT, 0, ...) always
+		// returns false for non-global-admins (class.Authorization.php:751).
 
 		global $DB;
 		$DB->Clear();
