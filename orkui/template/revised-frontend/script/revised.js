@@ -18372,6 +18372,21 @@ window.evSetEventStatus = function(eventId, status, btn) {
             s.addEventListener('blur',  function() { setTimeout(function() { var b = gid('kn-cfe-results'); if (b) b.classList.remove('kn-ac-open'); }, 150); });
         }
     });
+
+    // Outside-click close for the date pickers. Flatpickr's default close-on-outside
+    // doesn't fire reliably inside the modal stacking context, so we walk the click
+    // target and close any open picker the click didn't land inside.
+    function knCfeIsInsidePicker(picker, target) {
+        if (!picker) return false;
+        if (picker.altInput && picker.altInput.contains(target)) return true;
+        if (picker.input    && picker.input.contains(target))    return true;
+        if (picker.calendarContainer && picker.calendarContainer.contains(target)) return true;
+        return false;
+    }
+    document.addEventListener('mousedown', function(e) {
+        if (pickerStart && pickerStart.isOpen && !knCfeIsInsidePicker(pickerStart, e.target)) pickerStart.close();
+        if (pickerEnd   && pickerEnd.isOpen   && !knCfeIsInsidePicker(pickerEnd,   e.target)) pickerEnd.close();
+    }, true);
 })();
 
 /* ============================================================================
@@ -18612,5 +18627,17 @@ window.evSetEventStatus = function(eventId, status, btn) {
             s.addEventListener('blur',  function() { setTimeout(function() { var b = gid('pk-cfe-results'); if (b) b.classList.remove('kn-ac-open'); }, 150); });
         }
     });
+
+    function pkCfeIsInsidePicker(picker, target) {
+        if (!picker) return false;
+        if (picker.altInput && picker.altInput.contains(target)) return true;
+        if (picker.input    && picker.input.contains(target))    return true;
+        if (picker.calendarContainer && picker.calendarContainer.contains(target)) return true;
+        return false;
+    }
+    document.addEventListener('mousedown', function(e) {
+        if (pickerStart && pickerStart.isOpen && !pkCfeIsInsidePicker(pickerStart, e.target)) pickerStart.close();
+        if (pickerEnd   && pickerEnd.isOpen   && !pkCfeIsInsidePicker(pickerEnd,   e.target)) pickerEnd.close();
+    }, true);
 })();
 
