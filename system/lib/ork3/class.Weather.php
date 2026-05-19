@@ -48,7 +48,7 @@ class Weather extends Ork3 {
 	// every row stale so the next cron retries the entire batch. Chunking
 	// caps per-cycle damage and lets the next cron take a smaller bite even
 	// after a rate-limit period.
-	const BATCH_LIMIT_PARKS  = 60;
+	const BATCH_LIMIT_PARKS  = 30;
 	const BATCH_LIMIT_VENUES = 20;
 
 	/**
@@ -1175,7 +1175,7 @@ class Weather extends Ork3 {
 		if (function_exists('curl_init')) {
 			$ch = curl_init($url);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-			curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+			curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 			curl_setopt($ch, CURLOPT_USERAGENT, 'ORK3 weather refresh (https://ork.amtgard.com)');
 			$this->wx_stats_bump(array('attempt', 'attempt_' . $endpoint));
