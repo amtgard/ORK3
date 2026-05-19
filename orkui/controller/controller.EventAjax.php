@@ -1310,8 +1310,51 @@ class Controller_EventAjax extends Controller {
 			}
 		}
 
-		// TODO(task 6): staff
-		// TODO(task 6): banner
+		if ($mod['staff']) {
+			$DB->Clear();
+			$staffRs = $DB->DataSet('SELECT mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $src_detail_id);
+			if ($staffRs) {
+				while ($staffRs->Next()) {
+					$_mid = (int)$staffRs->mundane_id;
+					if (!$this->_isMundaneEligible($_mid)) continue;
+					$_role = $sq((string)$staffRs->role_name);
+					$_cm   = (int)$staffRs->can_manage     ? 1 : 0;
+					$_ca   = (int)$staffRs->can_attendance ? 1 : 0;
+					$_cs   = (int)$staffRs->can_schedule   ? 1 : 0;
+					$_cf   = (int)$staffRs->can_feast      ? 1 : 0;
+					$DB->Clear();
+					$DB->Execute('INSERT INTO ' . DB_PREFIX . "event_staff
+						(event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast)
+						VALUES (" . $new_detail_id . ", " . $_mid . ", '" . $_role . "', " . $_cm . ", " . $_ca . ", " . $_cs . ", " . $_cf . ")
+						ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage), can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule), can_feast = VALUES(can_feast)");
+				}
+			}
+		}
+
+		if ($mod['banner'] && (int)$src->has_banner === 1) {
+			$src_base = DIR_EVENT_BANNER . sprintf('%05d', $src_evt_id);
+			$new_base = DIR_EVENT_BANNER . sprintf('%05d', $new_event_id);
+			$copied = false;
+			$ext = null;
+			if (file_exists($src_base . '.jpg'))      { $ext = 'jpg'; }
+			elseif (file_exists($src_base . '.png'))  { $ext = 'png'; }
+			if ($ext) {
+				if (!is_dir(DIR_EVENT_BANNER)) { @mkdir(DIR_EVENT_BANNER, 0775, true); }
+				if (@copy($src_base . '.' . $ext, $new_base . '.' . $ext)) {
+					$_sl = (int)$src->banner_show_logo ? 1 : 0;
+					$_vg = (int)$src->banner_vignette  ? 1 : 0;
+					$_ox = max(0, min(100, (int)$src->banner_offset_x));
+					$_oy = max(0, min(100, (int)$src->banner_offset_y));
+					$DB->Clear();
+					$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_banner = 1, banner_show_logo = ' . $_sl . ', banner_vignette = ' . $_vg . ', banner_offset_x = ' . $_ox . ', banner_offset_y = ' . $_oy . ' WHERE event_id = ' . $new_event_id);
+					$copied = true;
+				}
+			}
+			if (!$copied) {
+				$warnings[] = 'Banner could not be copied.';
+			}
+		}
+
 
 		$warnings = [];
 
