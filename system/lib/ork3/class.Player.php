@@ -341,6 +341,7 @@ class Player extends Ork3 {
 					'ColorPrimary' => $design->color_primary,
 					'ColorAccent' => $design->color_accent,
 						'ColorSecondary' => $design->color_secondary,
+						'HeroGradient' => $design->hero_gradient,
 						'HeroOverlay' => $design->hero_overlay,
 					'NamePrefix' => $design->name_prefix,
 					'NameSuffix' => $design->name_suffix,
@@ -1098,7 +1099,7 @@ class Player extends Ork3 {
 		// what's exposed publicly, so changes there should land in the log.
 		$cosmetic = [
 			'AboutPersona' => 1, 'AboutStory' => 1, 'MilestoneConfig' => 1,
-			'ColorPrimary' => 1, 'ColorAccent' => 1, 'ColorSecondary' => 1, 'HeroOverlay' => 1,
+			'ColorPrimary' => 1, 'ColorAccent' => 1, 'ColorSecondary' => 1, 'HeroGradient' => 1, 'HeroOverlay' => 1,
 			'NameFont' => 1,
 			'PhotoFocusX' => 1, 'PhotoFocusY' => 1, 'PhotoFocusSize' => 1,
 			'ShowBeltline' => 1, 'BeltDisplay' => 1,
@@ -1197,7 +1198,7 @@ class Player extends Ork3 {
 					$_cur = [];
 					if ($_designExisted) {
 						foreach (['about_persona','about_story','color_primary','color_accent','color_secondary',
-								  'hero_overlay','name_prefix','name_suffix','suffix_comma',
+								  'hero_gradient','hero_overlay','name_prefix','name_suffix','suffix_comma',
 								  'photo_focus_x','photo_focus_y','photo_focus_size',
 								  'show_beltline','belt_display','pronunciation_guide',
 								  'show_mundane_first','show_mundane_last','show_email',
@@ -1244,6 +1245,14 @@ class Player extends Ork3 {
 					$design->color_primary = $_pick($request['ColorPrimary'], 'color_primary');
 					$design->color_accent = $_pick($request['ColorAccent'], 'color_accent');
 					$design->color_secondary = $_pick($request['ColorSecondary'], 'color_secondary');
+					// HeroGradient is an Amtpride preset key validated against the keys of
+					// system/lib/ork3/pride_gradients.php. Anything else is coerced to ''.
+					if (array_key_exists('HeroGradient', $request)) {
+						$_prideKeys = array_keys(require __DIR__ . '/pride_gradients.php');
+						$design->hero_gradient = (is_string($request['HeroGradient']) && in_array($request['HeroGradient'], $_prideKeys, true)) ? $request['HeroGradient'] : null;
+					} else {
+						$design->hero_gradient = $_designExisted ? $_cur['hero_gradient'] : null;
+					}
 					$validOverlays = ['low','med','high','vignette'];
 					$design->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : ($_designExisted ? $_cur['hero_overlay'] : 'med');
 					$design->name_prefix = $_pick($request['NamePrefix'], 'name_prefix');
