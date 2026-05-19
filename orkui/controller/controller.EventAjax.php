@@ -1090,6 +1090,147 @@ class Controller_EventAjax extends Controller {
 		exit;
 	}
 
+
+	public function create_with_copy($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+
+		$uid         = (int)$this->session->user_id;
+		$name        = trim($_POST['Name']          ?? '');
+		$kingdom_id  = (int)($_POST['KingdomId']    ?? 0);
+		$park_id     = (int)($_POST['ParkId']       ?? 0);
+		$src_evt_id  = (int)($_POST['SourceEventId']?? 0);
+		$new_start   = trim($_POST['NewStart']      ?? '');
+		$new_end     = trim($_POST['NewEnd']        ?? '');
+		$modules_raw = trim($_POST['Modules']       ?? '{}');
+		$status_in   = (string)($_POST['Status']    ?? 'published');
+
+		$modules = json_decode($modules_raw, true);
+		if (!is_array($modules)) $modules = [];
+		$mod = [
+			'details'  => !empty($modules['details']),
+			'schedule' => !empty($modules['schedule']),
+			'staff'    => !empty($modules['staff']),
+			'feast'    => !empty($modules['feast']),
+			'banner'   => !empty($modules['banner']),
+		];
+
+		if (!strlen($name)) { echo json_encode(['status' => 1, 'error' => 'Event name is required.']); exit; }
+		if (!valid_id($kingdom_id) && !valid_id($park_id)) { echo json_encode(['status' => 1, 'error' => 'A kingdom or park is required.']); exit; }
+		if (!valid_id($src_evt_id)) { echo json_encode(['status' => 1, 'error' => 'A source event is required.']); exit; }
+		$ns_ts = strtotime($new_start);
+		$ne_ts = strtotime($new_end);
+		if (!$ns_ts || !$ne_ts) { echo json_encode(['status' => 1, 'error' => 'Valid start and end times are required.']); exit; }
+		if ($ne_ts < $ns_ts)   { echo json_encode(['status' => 1, 'error' => 'End time cannot be before start time.']); exit; }
+
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, 0, AUTH_CREATE)) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized to create events here.']); exit;
+		}
+
+		global $DB;
+		$DB->Clear();
+		$srcRow = $DB->DataSet('SELECT event_id, name, kingdom_id, park_id, has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $src_evt_id . ' LIMIT 1');
+		if (!$srcRow || !$srcRow->Next()) { echo json_encode(['status' => 1, 'error' => 'Source event not found.']); exit; }
+		$src = $srcRow;
+		if (valid_id($park_id)) {
+			if ((int)$src->park_id !== $park_id) { echo json_encode(['status' => 3, 'error' => 'Source event is not available in this scope.']); exit; }
+		} else {
+			if ((int)$src->kingdom_id !== $kingdom_id || ((int)$src->park_id !== 0 && $src->park_id !== null)) {
+				echo json_encode(['status' => 3, 'error' => 'Source event is not available in this scope.']); exit;
+			}
+		}
+
+		$DB->Clear();
+		$srcDetail = $DB->DataSet('SELECT * FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $src_evt_id . ' ORDER BY event_start DESC LIMIT 1');
+		if (!$srcDetail || !$srcDetail->Next()) { echo json_encode(['status' => 1, 'error' => 'Selected event has no occurrence data to copy.']); exit; }
+		$sd = $srcDetail;
+		$src_detail_id = (int)$sd->event_calendardetail_id;
+		$src_start_ts  = strtotime((string)$sd->event_start);
+		if (!$src_start_ts) { echo json_encode(['status' => 1, 'error' => 'Source occurrence has an invalid start time.']); exit; }
+		$delta_seconds = $ns_ts - $src_start_ts;
+
+		$this->load_model('Event');
+		$r = $this->Event->create_event($this->session->token, $kingdom_id, $park_id, 0, 0, $name);
+		if ((int)$r['Status'] !== 0) {
+			echo json_encode(['status' => (int)$r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]); exit;
+		}
+		$new_event_id = (int)($r['Detail'] ?? 0);
+		if ($new_event_id <= 0) { echo json_encode(['status' => 1, 'error' => 'Failed to create event row.']); exit; }
+
+		if ($status_in === 'draft') {
+			$DB->Clear();
+			$DB->Execute('UPDATE ' . DB_PREFIX . "event SET status = 'draft' WHERE event_id = " . $new_event_id);
+		}
+
+		$rollback_event = function() use ($new_event_id) {
+			global $DB;
+			$DB->Clear(); $DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id IN (SELECT s.event_schedule_id FROM ' . DB_PREFIX . 'event_schedule s JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = s.event_calendardetail_id WHERE cd.event_id = ' . $new_event_id . ')');
+			$DB->Clear(); $DB->Execute('DELETE s FROM ' . DB_PREFIX . 'event_schedule s JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = s.event_calendardetail_id WHERE cd.event_id = ' . $new_event_id);
+			$DB->Clear(); $DB->Execute('DELETE st FROM ' . DB_PREFIX . 'event_staff st JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = st.event_calendardetail_id WHERE cd.event_id = ' . $new_event_id);
+			$DB->Clear(); $DB->Execute('DELETE fe FROM ' . DB_PREFIX . 'event_fees fe JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = fe.event_calendardetail_id WHERE cd.event_id = ' . $new_event_id);
+			$DB->Clear(); $DB->Execute('DELETE lk FROM ' . DB_PREFIX . 'event_links lk JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = lk.event_calendardetail_id WHERE cd.event_id = ' . $new_event_id);
+			$DB->Clear(); $DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $new_event_id);
+			$DB->Clear(); $DB->Execute('DELETE FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $new_event_id);
+			$base = DIR_EVENT_BANNER . sprintf('%05d', $new_event_id);
+			if (file_exists($base . '.jpg')) @unlink($base . '.jpg');
+			if (file_exists($base . '.png')) @unlink($base . '.png');
+		};
+
+		$new_start_fmt = date('Y-m-d H:i:s', $ns_ts);
+		$new_end_fmt   = date('Y-m-d H:i:s', $ne_ts);
+		$at_park_sql   = valid_id($park_id) ? (string)$park_id : 'NULL';
+
+		$dsc  = $mod['details'] ? (string)$sd->description : '';
+		$prc  = $mod['details'] ? (float)$sd->price        : 0;
+		$url  = $mod['details'] ? (string)$sd->url         : '';
+		$urln = $mod['details'] ? (string)$sd->url_name    : '';
+		$adr  = $mod['details'] ? (string)$sd->address     : '';
+		$prv  = $mod['details'] ? (string)$sd->province    : '';
+		$pst  = $mod['details'] ? (string)$sd->postal_code : '';
+		$cty  = $mod['details'] ? (string)$sd->city        : '';
+		$cnt  = $mod['details'] ? (string)$sd->country     : '';
+		$mur  = $mod['details'] ? (string)$sd->map_url     : '';
+		$murn = $mod['details'] ? (string)$sd->map_url_name: '';
+		$etp  = $mod['details'] ? (string)$sd->event_type  : '';
+
+		foreach (['url' => &$url, 'mur' => &$mur] as $_k => &$_v) {
+			if ($_v !== '') {
+				$_sc = strtolower((string)parse_url($_v, PHP_URL_SCHEME));
+				if (!in_array($_sc, ['http', 'https', 'mailto'], true)) $_v = '';
+			}
+		}
+		unset($_v);
+
+		$sq = function($s) { return str_replace(["'", '\\'], ["''", '\\\\'], (string)$s); };
+		$DB->Clear();
+		$DB->Execute("UPDATE " . DB_PREFIX . "event_calendardetail SET current = 0 WHERE event_id = " . $new_event_id);
+		$DB->Clear();
+		$DB->Execute('INSERT INTO ' . DB_PREFIX . "event_calendardetail
+			(event_id, at_park_id, current, price, event_start, event_end, description, url, url_name, address, province, postal_code, city, country, map_url, map_url_name, event_type)
+			VALUES (" . $new_event_id . ', ' . $at_park_sql . ", 1, " . (float)$prc . ", '" . $new_start_fmt . "', '" . $new_end_fmt . "', '" . $sq($dsc) . "', '" . $sq($url) . "', '" . $sq($urln) . "', '" . $sq($adr) . "', '" . $sq($prv) . "', '" . $sq($pst) . "', '" . $sq($cty) . "', '" . $sq($cnt) . "', '" . $sq($mur) . "', '" . $sq($murn) . "', '" . $sq($etp) . "')");
+		$DB->Clear();
+		$ndRow = $DB->DataSet('SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $new_event_id . ' ORDER BY event_calendardetail_id DESC LIMIT 1');
+		$new_detail_id = ($ndRow && $ndRow->Next()) ? (int)$ndRow->event_calendardetail_id : 0;
+		if ($new_detail_id <= 0) { $rollback_event(); echo json_encode(['status' => 1, 'error' => 'Failed to create event occurrence.']); exit; }
+
+		// TODO(task 4): fees + links
+		// TODO(task 5): schedule + feast + leads
+		// TODO(task 6): staff
+		// TODO(task 6): banner
+
+		$warnings = [];
+
+		$this->_bustEventSearchCache($new_event_id);
+		echo json_encode([
+			'status'   => 0,
+			'eventId'  => $new_event_id,
+			'detailId' => $new_detail_id,
+			'url'      => UIR . 'Event/detail/' . $new_event_id . '/' . $new_detail_id,
+			'warnings' => $warnings,
+		]);
+		exit;
+	}
+
 	private $_mundaneEligibleCache = [];
 
 	private function _isMundaneEligible($mundane_id) {
