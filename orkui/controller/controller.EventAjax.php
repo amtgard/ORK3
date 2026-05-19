@@ -1023,6 +1023,35 @@ class Controller_EventAjax extends Controller {
 	 * the canonical `get_event_info($event_id)` call signature so the next
 	 * page load reads fresh data.
 	 */
+
+	// Per-request cache for mundane eligibility — copy passes reference the same
+	// mundane through many schedule leads + staff rows.
+	private $_mundaneEligibleCache = [];
+
+	private function _isMundaneEligible($mundane_id) {
+		$mid = (int)$mundane_id;
+		if ($mid <= 0) return false;
+		if (array_key_exists($mid, $this->_mundaneEligibleCache)) return $this->_mundaneEligibleCache[$mid];
+		global $DB;
+		$DB->Clear();
+		$row = $DB->DataSet('SELECT active, suspended, suspended_until FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mid . ' LIMIT 1');
+		$ok = false;
+		if ($row && $row->Next()) {
+			if ((int)$row->active === 1) {
+				if ((int)$row->suspended !== 1) {
+					$ok = true;
+				} else {
+					$until = $row->suspended_until;
+					if ($until && strtotime($until) !== false && strtotime($until) < strtotime(date('Y-m-d'))) {
+						$ok = true;
+					}
+				}
+			}
+		}
+		$this->_mundaneEligibleCache[$mid] = $ok;
+		return $ok;
+	}
+
 	private function _bustEventSearchCache($event_id) {
 		// Event(null, null, null, null, null, null, $event_id) — 7 positional args.
 		// SearchService::Event applies substr($keys[0] ?? '', 0, 4) before keying.
