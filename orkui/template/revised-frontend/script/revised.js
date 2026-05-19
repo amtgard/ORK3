@@ -18147,6 +18147,34 @@ window.evSetEventStatus = function(eventId, status, btn) {
         try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch(e) {}
     }
 
+    // Modal-safe positioning for the typeahead results: the parent modal has
+    // overflow:hidden, so the default position:absolute on .kn-ac-results gets
+    // clipped. Switch to position:fixed and pin to the input's bounding rect.
+    // Also re-pin on scroll/resize while the dropdown is open.
+    var _knCfeReposBound = false;
+    function knCfePositionResults() {
+        var input = $('kn-cfe-search');
+        var box   = $('kn-cfe-results');
+        if (!input || !box) return;
+        var r = input.getBoundingClientRect();
+        box.style.position = 'fixed';
+        box.style.top      = (r.bottom + 4) + 'px';
+        box.style.left     = r.left + 'px';
+        box.style.right    = 'auto';
+        box.style.width    = r.width + 'px';
+        box.style.zIndex   = '10000';
+    }
+    function knCfeBindReposition() {
+        if (_knCfeReposBound) return;
+        _knCfeReposBound = true;
+        var handler = function() {
+            var box = $('kn-cfe-results');
+            if (box && box.classList.contains('kn-ac-open')) knCfePositionResults();
+        };
+        window.addEventListener('scroll', handler, true);
+        window.addEventListener('resize', handler);
+    }
+
     window.knCfeToggleExpander = function() {
         var body = $('kn-cfe-body');
         var btn  = $('kn-cfe-toggle');
@@ -18173,7 +18201,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
         box.innerHTML = '';
         if (!rows || rows.length === 0) {
             box.innerHTML = '<div class="kn-ac-empty">No matching past events</div>';
-            if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, box);
+            knCfePositionResults();
+            knCfeBindReposition();
             box.classList.add('kn-ac-open');
             return;
         }
@@ -18187,7 +18216,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
             row.addEventListener('mousedown', function(e) { e.preventDefault(); knCfePick(r); });
             box.appendChild(row);
         });
-        if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, box);
+        knCfePositionResults();
+        knCfeBindReposition();
         box.classList.add('kn-ac-open');
     }
 
@@ -18366,6 +18396,30 @@ window.evSetEventStatus = function(eventId, status, btn) {
         try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch(e) {}
     }
 
+    var _pkCfeReposBound = false;
+    function pkCfePositionResults() {
+        var input = $('pk-cfe-search');
+        var box   = $('pk-cfe-results');
+        if (!input || !box) return;
+        var r = input.getBoundingClientRect();
+        box.style.position = 'fixed';
+        box.style.top      = (r.bottom + 4) + 'px';
+        box.style.left     = r.left + 'px';
+        box.style.right    = 'auto';
+        box.style.width    = r.width + 'px';
+        box.style.zIndex   = '10000';
+    }
+    function pkCfeBindReposition() {
+        if (_pkCfeReposBound) return;
+        _pkCfeReposBound = true;
+        var handler = function() {
+            var box = $('pk-cfe-results');
+            if (box && box.classList.contains('kn-ac-open')) pkCfePositionResults();
+        };
+        window.addEventListener('scroll', handler, true);
+        window.addEventListener('resize', handler);
+    }
+
     window.pkCfeToggleExpander = function() {
         var body = $('pk-cfe-body');
         var btn  = $('pk-cfe-toggle');
@@ -18392,7 +18446,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
         box.innerHTML = '';
         if (!rows || rows.length === 0) {
             box.innerHTML = '<div class="kn-ac-empty">No matching past events</div>';
-            if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, box);
+            pkCfePositionResults();
+            pkCfeBindReposition();
             box.classList.add('kn-ac-open');
             return;
         }
@@ -18406,7 +18461,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
             row.addEventListener('mousedown', function(e) { e.preventDefault(); pkCfePick(r); });
             box.appendChild(row);
         });
-        if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, box);
+        pkCfePositionResults();
+        pkCfeBindReposition();
         box.classList.add('kn-ac-open');
     }
 
