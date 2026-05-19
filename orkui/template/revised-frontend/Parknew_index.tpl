@@ -1896,7 +1896,72 @@ var PkBannerConfig = {
 			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
 				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
 			</div>
-			<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
+			<!-- Copy from past event (collapsible, event-mode only) -->
+			<div class="pk-cfe-wrap pk-emod-event-only" id="pk-cfe-wrap" style="margin-top:14px">
+				<button type="button" class="pk-cfe-toggle" id="pk-cfe-toggle" onclick="pkCfeToggleExpander()" aria-expanded="false">
+					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
+					Copy from past event <span style="color:#a0aec0;font-weight:400">(optional)</span>
+					<i class="fas fa-chevron-down pk-cfe-chev" id="pk-cfe-chev" style="margin-left:auto"></i>
+				</button>
+				<div class="pk-cfe-body" id="pk-cfe-body" style="display:none">
+					<div class="pk-cfe-field" id="pk-cfe-picker-wrap">
+						<label class="pk-emod-label">Source event <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(park-level)</span></label>
+						<div class="kn-ac-wrap">
+							<input type="text" class="pk-emod-input" id="pk-cfe-search" autocomplete="off" placeholder="Search past events…">
+							<div class="kn-ac-results" id="pk-cfe-results"></div>
+						</div>
+						<input type="hidden" id="pk-cfe-source-id" value="">
+						<input type="hidden" id="pk-cfe-source-start" value="">
+						<input type="hidden" id="pk-cfe-source-end" value="">
+					</div>
+					<div class="pk-cfe-chip" id="pk-cfe-chip" style="display:none">
+						<i class="fas fa-bookmark" style="margin-right:6px;color:#2b6cb0"></i>
+						<span id="pk-cfe-chip-label"></span>
+						<button type="button" class="pk-cfe-chip-clear" onclick="pkCfeClear()" aria-label="Clear source">&times;</button>
+					</div>
+					<div class="pk-cfe-detail" id="pk-cfe-detail" style="display:none">
+						<div class="pk-emod-row" style="display:flex;gap:10px;margin-top:12px">
+							<div class="pk-emod-field" style="flex:1">
+								<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="pk-emod-input" id="pk-cfe-start" autocomplete="off" placeholder="Select start…">
+							</div>
+							<div class="pk-emod-field" style="flex:1">
+								<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="pk-emod-input" id="pk-cfe-end" autocomplete="off" placeholder="Select end…">
+							</div>
+						</div>
+						<div class="pk-cfe-modules" style="margin-top:12px">
+							<div class="pk-cfe-mod-title">What to copy</div>
+							<label class="pk-cfe-mod-row pk-cfe-mod-all">
+								<input type="checkbox" id="pk-cfe-mod-all" checked onchange="pkCfeToggleAll(this)">
+								<span><strong>Select all</strong></span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-details" checked onchange="pkCfeSyncAll()">
+								<span>Event Details <span class="pk-cfe-mod-hint">description, address, fees, links</span></span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-schedule" checked onchange="pkCfeSyncAll()">
+								<span>Schedule</span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-staff" checked onchange="pkCfeSyncAll()">
+								<span>Staff <span class="pk-cfe-mod-hint">banned/deactivated people are skipped</span></span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-feast" checked onchange="pkCfeSyncAll()">
+								<span>Feast</span>
+							</label>
+							<label class="pk-cfe-mod-row">
+								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-banner" onchange="pkCfeSyncAll()">
+								<span>Banner <span class="pk-cfe-mod-hint">image + framing config</span></span>
+							</label>
+						</div>
+					</div>
+				</div>
+			</div>
+
+						<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
 
 			<!-- Calendar-item-only fields -->
 			<div class="pk-emod-ci-only" style="display:none">
@@ -2659,6 +2724,49 @@ html[data-theme="dark"] .pk-copy-link:hover { color: #63b3ed; }
 html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
 
 /* ============================================================
+
+/* ---- Copy from past event (pk-cfe-*) ---- */
+.pk-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
+.pk-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
+.pk-cfe-toggle:hover { background: #edf2f7; }
+.pk-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
+.pk-cfe-toggle[aria-expanded="true"] .pk-cfe-chev { transform: rotate(180deg); }
+.pk-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
+.pk-cfe-field { position: relative; }
+.pk-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
+.pk-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
+.pk-cfe-chip-clear:hover { color: #1a365d; }
+.pk-cfe-modules .pk-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.pk-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
+.pk-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
+.pk-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
+.pk-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
+
+#pk-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
+#pk-cfe-results .kn-ac-row:hover, #pk-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
+#pk-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
+#pk-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
+#pk-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
+#pk-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
+
+html[data-theme="dark"] .pk-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-cfe-toggle { color: var(--ork-text); }
+html[data-theme="dark"] .pk-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .pk-cfe-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .pk-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
+html[data-theme="dark"] .pk-cfe-chip-clear { color: #90cdf4; }
+html[data-theme="dark"] .pk-cfe-chip-clear:hover { color: #ebf8ff; }
+html[data-theme="dark"] .pk-cfe-mod-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .pk-cfe-mod-row { color: var(--ork-text); }
+html[data-theme="dark"] .pk-cfe-mod-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-cfe-mod-all { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #pk-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row-title { color: var(--ork-text); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
+html[data-theme="dark"] #pk-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
+
 </style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
