@@ -48,14 +48,7 @@ class Weather extends Ork3 {
 	// every row stale so the next cron retries the entire batch. Chunking
 	// caps per-cycle damage and lets the next cron take a smaller bite even
 	// after a rate-limit period.
-	//
-	// PARKS=10 is a temporary low value while we're rate-limited on
-	// 2026-05-18 — small batches (~13 credits) are more likely to slip
-	// through under daily-quota pressure than the ~78-credit 60-park batch.
-	// Restore to 60 once the daily counter resets or the cron is reliably
-	// pulling fresh rows again, otherwise steady-state can't keep up (need
-	// ~93/cron to maintain 90-min freshness across ~280 parks).
-	const BATCH_LIMIT_PARKS  = 10;
+	const BATCH_LIMIT_PARKS  = 60;
 	const BATCH_LIMIT_VENUES = 20;
 
 	/**

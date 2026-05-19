@@ -2393,6 +2393,62 @@ class Controller_Admin extends Controller {
 				];
 			} while ($pr->Next());
 
+			// Weather data freshness — one query bucketing active parks by
+			// staleness so the admin can see at a glance whether the cron
+			// (and lazy fallback) are keeping forecasts current. Plus an
+			// upcoming-events count so we can spot if event-venue warming
+			// has fallen behind.
+			$weather = null;
+			$DB->Clear();
+			$wsql = "SELECT
+				(SELECT COUNT(*) FROM " . DB_PREFIX . "park p WHERE p.active = 'Active'
+				   AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "attendance a
+				               WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
+				) AS total_active,
+				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
+				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
+				   WHERE p.active = 'Active'
+				     AND pw.fetched_at >= NOW() - INTERVAL 90 MINUTE
+				) AS fresh,
+				(SELECT COUNT(*) FROM " . DB_PREFIX . "park_weather pw
+				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
+				   WHERE p.active = 'Active'
+				     AND pw.fetched_at >= NOW() - INTERVAL 4 HOUR
+				     AND pw.fetched_at <  NOW() - INTERVAL 90 MINUTE
+				) AS aging,
+				(SELECT TIMESTAMPDIFF(MINUTE, MIN(pw.fetched_at), NOW())
+				   FROM " . DB_PREFIX . "park_weather pw
+				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
+				   WHERE p.active = 'Active'
+				) AS oldest_min,
+				(SELECT COUNT(DISTINCT e.event_id)
+				   FROM " . DB_PREFIX . "event e
+				   JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
+				   WHERE DATE(cd.event_start) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)
+				) AS events_upcoming,
+				(SELECT COUNT(DISTINCT e.event_id)
+				   FROM " . DB_PREFIX . "event e
+				   JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
+				   WHERE DATE(cd.event_start) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)
+				     AND cd.latitude IS NOT NULL AND cd.longitude IS NOT NULL
+				     AND cd.latitude != 0 AND cd.longitude != 0
+				) AS events_with_coords";
+			$wr = $DB->DataSet($wsql);
+			if ($wr && $wr->Size() > 0 && $wr->Next()) {
+				$total = (int)$wr->total_active;
+				$fresh = (int)$wr->fresh;
+				$aging = (int)$wr->aging;
+				$weather = [
+					'parks_active'        => $total,
+					'parks_fresh'         => $fresh,
+					'parks_aging'         => $aging,
+					'parks_stale'         => max(0, $total - $fresh - $aging),
+					'parks_oldest_min'    => $wr->oldest_min !== null ? (int)$wr->oldest_min : null,
+					'events_upcoming'     => (int)$wr->events_upcoming,
+					'events_with_coords'  => (int)$wr->events_with_coords,
+				];
+			}
+
 			// Memcache health — cheap (single getStats roundtrip). Surfaced
 			// on the live poll so a sudden curr_items drop or cmd_flush bump
 			// is visible without clicking the on-demand panel.
@@ -2418,7 +2474,7 @@ class Controller_Admin extends Controller {
 				}
 			}
 
-			echo json_encode(['status' => 0, 'fpm' => $fpm_data, 'workers' => $fpm_workers, 'db' => $db_status, 'processes' => $processes, 'memcache' => $memcache]);
+			echo json_encode(['status' => 0, 'fpm' => $fpm_data, 'workers' => $fpm_workers, 'db' => $db_status, 'processes' => $processes, 'memcache' => $memcache, 'weather' => $weather]);
 
 		} elseif ($action === 'serverhealth_fs_check') {
 			// On-demand filesystem check — not part of the 2s poll so the shell call

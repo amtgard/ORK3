@@ -211,6 +211,12 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			<div class="sh-panel-body" id="sh-mc-metrics"></div>
 		</div>
 
+		<!-- Weather Health Panel -->
+		<div class="sh-panel">
+			<div class="sh-panel-hdr"><i class="fas fa-cloud-sun"></i> Weather Data Freshness</div>
+			<div class="sh-panel-body" id="sh-wx-metrics"></div>
+		</div>
+
 		<!-- Optional Checks -->
 		<div class="sh-panel">
 			<div class="sh-panel-hdr"><i class="fas fa-toolbox"></i> Optional Checks <span class="sh-al-subtitle">on demand</span></div>
@@ -549,6 +555,36 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 		prevMcUptime = mc.uptime;
 		prevMcFlush  = mc.cmd_flush;
 	}
+
+	/* ── Render Weather Data Freshness ──────────────────
+	 * Snapshot of how many active parks have recently-refreshed weather
+	 * rows (vs aging or stale) plus upcoming event-venue counts. Lets the
+	 * admin spot at a glance whether cron + lazy fallback are keeping up.
+	 */
+	function renderWx(wx) {
+		var el = document.getElementById('sh-wx-metrics');
+		if (!wx) { el.innerHTML = '<div class="sh-empty">Weather data unavailable</div>'; return; }
+		var freshPct = wx.parks_active ? Math.round(wx.parks_fresh / wx.parks_active * 100) : 0;
+		var stalePct = wx.parks_active ? Math.round(wx.parks_stale / wx.parks_active * 100) : 0;
+		var freshCls = freshPct >= 80 ? '' : (freshPct >= 50 ? 'warn' : 'alert');
+		var staleCls = stalePct >= 20 ? 'alert' : (stalePct >= 10 ? 'warn' : '');
+		var oldestCls = '';
+		if (wx.parks_oldest_min !== null) {
+			if (wx.parks_oldest_min > 240) oldestCls = 'alert';
+			else if (wx.parks_oldest_min > 120) oldestCls = 'warn';
+		}
+		var oldestStr = wx.parks_oldest_min === null ? '—' :
+			(wx.parks_oldest_min < 60 ? wx.parks_oldest_min + ' min'
+				: Math.floor(wx.parks_oldest_min / 60) + 'h ' + (wx.parks_oldest_min % 60) + 'm');
+
+		el.innerHTML =
+			metric('Active parks tracked', fmtCount(wx.parks_active), '') +
+			metric('Fresh (< 90 min)', fmtCount(wx.parks_fresh) + ' (' + freshPct + '%)', freshCls) +
+			metric('Aging (90 min – 4 h)', fmtCount(wx.parks_aging), '') +
+			metric('Stale (> 4 h or no data)', fmtCount(wx.parks_stale) + ' (' + stalePct + '%)', staleCls) +
+			metric('Oldest park row', oldestStr, oldestCls) +
+			metric('Upcoming events (14 d)', fmtCount(wx.events_upcoming) + ' (' + fmtCount(wx.events_with_coords) + ' with venue coords)', '');
+	}
 	function esc(s) {
 		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 	}
@@ -673,6 +709,7 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 				renderFpm(d.fpm);
 				renderDb(d.db);
 				renderMc(d.memcache);
+				renderWx(d.weather);
 				renderProcs(d.processes);
 				renderWorkers(d.workers);
 				checkThresholds(d.fpm, d.db, d.processes, d.workers);
