@@ -1250,7 +1250,66 @@ class Controller_EventAjax extends Controller {
 			}
 		}
 
-		// TODO(task 5): schedule + feast + leads
+		if ($mod['schedule'] || $mod['feast']) {
+			$DB->Clear();
+			$schedRs = $DB->DataSet('SELECT * FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . $src_detail_id . ' ORDER BY start_time ASC');
+			$src_sched_ids = [];
+			if ($schedRs) {
+				while ($schedRs->Next()) {
+					$cat    = (string)$schedRs->category;
+					$secCat = (string)$schedRs->secondary_category;
+					$is_feast = ($cat === 'Feast and Food' || $secCat === 'Feast and Food');
+					$want = $is_feast ? $mod['feast'] : $mod['schedule'];
+					if (!$want) continue;
+
+					$_title    = $sq((string)$schedRs->title);
+					$_loc      = $sq((string)$schedRs->location);
+					$_desc     = $sq((string)$schedRs->description);
+					$_cat      = $sq($cat);
+					$_secCat   = $sq($secCat);
+					$_st       = strtotime((string)$schedRs->start_time);
+					$_et       = strtotime((string)$schedRs->end_time);
+					if (!$_st || !$_et) continue;
+					$_st_new = date('Y-m-d H:i:s', $_st + $delta_seconds);
+					$_et_new = date('Y-m-d H:i:s', $_et + $delta_seconds);
+
+					$_menuV  = $schedRs->menu;
+					$_costV  = $schedRs->cost;
+					$_dietV  = $schedRs->dietary;
+					$_alleV  = $schedRs->allergens;
+					$_menu_sql = ($_menuV !== null) ? "'" . $sq($_menuV) . "'" : 'NULL';
+					$_cost_sql = ($_costV !== null && is_numeric($_costV)) ? (string)round((float)$_costV, 2) : 'NULL';
+					$_diet_sql = ($_dietV !== null) ? "'" . $sq($_dietV) . "'" : 'NULL';
+					$_alle_sql = ($_alleV !== null) ? "'" . $sq($_alleV) . "'" : 'NULL';
+
+					$_src_sched_id = (int)$schedRs->event_schedule_id;
+					$DB->Clear();
+					$DB->Execute('INSERT INTO ' . DB_PREFIX . "event_schedule
+						(event_calendardetail_id, title, start_time, end_time, location, description, category, secondary_category, menu, cost, dietary, allergens)
+						VALUES (" . $new_detail_id . ", '" . $_title . "', '" . $_st_new . "', '" . $_et_new . "', '" . $_loc . "', '" . $_desc . "', '" . $_cat . "', '" . $_secCat . "', " . $_menu_sql . ", " . $_cost_sql . ", " . $_diet_sql . ", " . $_alle_sql . ")");
+					$DB->Clear();
+					$nsRow = $DB->DataSet('SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . $new_detail_id . ' ORDER BY event_schedule_id DESC LIMIT 1');
+					$_new_sched_id = ($nsRow && $nsRow->Next()) ? (int)$nsRow->event_schedule_id : 0;
+					if ($_new_sched_id > 0) {
+						$src_sched_ids[$_src_sched_id] = $_new_sched_id;
+					}
+				}
+			}
+
+			// Copy leads — filter banned/deactivated mundanes silently.
+			foreach ($src_sched_ids as $src_sid => $new_sid) {
+				$DB->Clear();
+				$leadsRs = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $src_sid);
+				if (!$leadsRs) continue;
+				while ($leadsRs->Next()) {
+					$_mid = (int)$leadsRs->mundane_id;
+					if (!$this->_isMundaneEligible($_mid)) continue;
+					$DB->Clear();
+					$DB->Execute('INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (' . $new_sid . ', ' . $_mid . ')');
+				}
+			}
+		}
+
 		// TODO(task 6): staff
 		// TODO(task 6): banner
 
