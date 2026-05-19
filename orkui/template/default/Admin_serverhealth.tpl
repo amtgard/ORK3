@@ -577,13 +577,34 @@ html[data-theme="dark"] .sh-lt-log { background: #1e2433; border-color: #4a5568;
 			(wx.parks_oldest_min < 60 ? wx.parks_oldest_min + ' min'
 				: Math.floor(wx.parks_oldest_min / 60) + 'h ' + (wx.parks_oldest_min % 60) + 'm');
 
+		// TZ diagnostic: PHP-CLI's date() (used by cron's stale filter)
+		// must agree with MySQL NOW() (used by this panel) or the cron will
+		// silently miss stale parks. Highlight if php_now != mysql_now.
+		var tzCls = '';
+		var tzNote = '';
+		if (wx.tz_php_now && wx.tz_mysql_now) {
+			var phpSecs   = Date.parse(wx.tz_php_now.replace(' ', 'T') + 'Z') / 1000;
+			var mysqlSecs = Date.parse(wx.tz_mysql_now.replace(' ', 'T') + 'Z') / 1000;
+			var deltaSec  = Math.abs(phpSecs - mysqlSecs);
+			if (deltaSec > 120) {
+				tzCls = 'alert';
+				tzNote = ' — ' + Math.round(deltaSec / 60) + 'm offset (cron stale filter likely broken)';
+			} else if (deltaSec > 30) {
+				tzCls = 'warn';
+				tzNote = ' — ' + deltaSec + 's offset';
+			}
+		}
+
 		el.innerHTML =
 			metric('Active parks tracked', fmtCount(wx.parks_active), '') +
 			metric('Fresh (< 90 min)', fmtCount(wx.parks_fresh) + ' (' + freshPct + '%)', freshCls) +
 			metric('Aging (90 min – 4 h)', fmtCount(wx.parks_aging), '') +
 			metric('Stale (> 4 h or no data)', fmtCount(wx.parks_stale) + ' (' + stalePct + '%)', staleCls) +
 			metric('Oldest park row', oldestStr, oldestCls) +
-			metric('Upcoming events (14 d)', fmtCount(wx.events_upcoming) + ' (' + fmtCount(wx.events_with_coords) + ' with venue coords)', '');
+			metric('Upcoming events (14 d)', fmtCount(wx.events_upcoming) + ' (' + fmtCount(wx.events_with_coords) + ' with venue coords)', '') +
+			metric('PHP TZ / now', (wx.tz_php || '?') + ' — ' + (wx.tz_php_now || '?') + tzNote, tzCls) +
+			metric('MySQL TZ / now', (wx.tz_mysql || '?') + ' — ' + (wx.tz_mysql_now || '?'), tzCls) +
+			metric('UTC compare (PHP / MySQL)', (wx.tz_php_utc || '?') + ' / ' + (wx.tz_mysql_utc || '?'), '');
 	}
 	function esc(s) {
 		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
