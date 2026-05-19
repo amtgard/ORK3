@@ -1026,6 +1026,70 @@ class Controller_EventAjax extends Controller {
 
 	// Per-request cache for mundane eligibility — copy passes reference the same
 	// mundane through many schedule leads + staff rows.
+
+	public function copy_source_list($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+
+		$kingdom_id = (int)($_GET['KingdomId'] ?? 0);
+		$park_id    = (int)($_GET['ParkId']    ?? 0);
+		$query      = trim((string)($_GET['Query'] ?? ''));
+		$exclude    = (int)($_GET['ExcludeEventId'] ?? 0);
+
+		if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+			echo json_encode(['status' => 1, 'error' => 'A kingdom or park is required.']); exit;
+		}
+
+		$uid = (int)$this->session->user_id;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, 0, AUTH_CREATE)) {
+			echo json_encode(['status' => 3, 'error' => 'Not authorized.']); exit;
+		}
+
+		if (valid_id($park_id)) {
+			$scope_where = 'e.park_id = ' . $park_id;
+		} else {
+			$scope_where = 'e.kingdom_id = ' . $kingdom_id . ' AND (e.park_id IS NULL OR e.park_id = 0)';
+		}
+
+		$name_where = '';
+		if ($query !== '') {
+			$safe = str_replace(['\\', '%', '_', "'"], ['\\\\', '\\%', '\\_', "''"], $query);
+			$name_where = " AND e.name LIKE '%" . $safe . "%'";
+		}
+
+		$exclude_where = $exclude > 0 ? ' AND e.event_id != ' . $exclude : '';
+
+		global $DB;
+		$DB->Clear();
+		$sql = 'SELECT e.event_id, e.name,
+					MAX(cd.event_start) AS last_start,
+					MAX(cd.event_end)   AS last_end,
+					COUNT(cd.event_calendardetail_id) AS occ_count
+				FROM ' . DB_PREFIX . 'event e
+				JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_id = e.event_id
+				WHERE ' . $scope_where . $exclude_where . "
+				  AND e.status = 'published'" . $name_where . '
+				GROUP BY e.event_id
+				HAVING last_start IS NOT NULL
+				ORDER BY last_start DESC
+				LIMIT 25';
+		$rs = $DB->DataSet($sql);
+		$results = [];
+		if ($rs) {
+			while ($rs->Next()) {
+				$results[] = [
+					'eventId'         => (int)$rs->event_id,
+					'name'            => (string)$rs->name,
+					'lastStart'       => (string)$rs->last_start,
+					'lastEnd'         => (string)$rs->last_end,
+					'occurrenceCount' => (int)$rs->occ_count,
+				];
+			}
+		}
+		echo json_encode(['status' => 0, 'results' => $results]);
+		exit;
+	}
+
 	private $_mundaneEligibleCache = [];
 
 	private function _isMundaneEligible($mundane_id) {
