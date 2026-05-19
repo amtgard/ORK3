@@ -18222,8 +18222,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
     }
 
     function runSearch(q) {
-        var params = 'KingdomId=' + encodeURIComponent(KnConfig.kingdomId) + '&Query=' + encodeURIComponent(q);
-        fetch(SRC_URL + '?' + params, { credentials: 'same-origin' })
+        var params = '&KingdomId=' + encodeURIComponent(KnConfig.kingdomId) + '&Query=' + encodeURIComponent(q);
+        fetch(SRC_URL + params, { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(d) {
                 if (!d || d.status !== 0) { renderResults([]); return; }
@@ -18470,8 +18470,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
     }
 
     function runSearch(q) {
-        var params = 'ParkId=' + encodeURIComponent(PkConfig.parkId) + '&Query=' + encodeURIComponent(q);
-        fetch(SRC_URL + '?' + params, { credentials: 'same-origin' })
+        var params = '&ParkId=' + encodeURIComponent(PkConfig.parkId) + '&Query=' + encodeURIComponent(q);
+        fetch(SRC_URL + params, { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(d) {
                 if (!d || d.status !== 0) { renderResults([]); return; }
