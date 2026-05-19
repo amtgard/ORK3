@@ -95,7 +95,7 @@ class Controller_Court extends Controller {
         }
 
         $courtAwards  = Ork3::$Lib->court->getCourtAwards($court_id);
-        $pendingRecs  = Ork3::$Lib->court->getPendingRecommendations($court['KingdomId'], $court['ParkId']);
+        $pendingRecs  = Ork3::$Lib->court->getPendingRecommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id);
         $awardOptions = Ork3::$Lib->court->getKingdomAwardOptions($court['KingdomId']);
 
         // Status labels and next-status transitions

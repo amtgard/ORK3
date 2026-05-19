@@ -229,58 +229,91 @@ class Court {
     // Pending recommendations (for the add-from-rec modal)
     // -----------------------------------------------------------------------
 
-    public function getPendingRecommendations($kingdom_id, $park_id = 0) {
-        $location_clause = $park_id > 0
-            ? 'm.park_id = ' . (int)$park_id
-            : 'm.kingdom_id = ' . (int)$kingdom_id;
+    public function getPendingRecommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0) {
+        // Delegate the heavy lifting (Master-peerage cascade, custom-award carve-out,
+        // award_id cross-check, snooze awareness, age, seconds, anon masking) to
+        // Report->recommended_awards — the same data path the Kingdom Recs tab uses.
+        // We then post-process to:
+        //   - look up which recs are on THIS court vs SOME OTHER court
+        //   - look up the park abbreviation (recommended_awards doesn't return it)
+        //   - map the field names to what the Court Planner template expects
+        $req = ['RequestedBy' => (int)$caller_uid];
+        if ($park_id > 0) {
+            $req['ParkId']    = (int)$park_id;
+            $req['KingdomId'] = 0;
+        } else {
+            $req['KingdomId'] = (int)$kingdom_id;
+            $req['ParkId']    = 0;
+        }
+        $res = Ork3::$Lib->report->PlayerAwardRecommendations($req);
+        $rawRecs = is_array($res) && isset($res['AwardRecommendations']) && is_array($res['AwardRecommendations'])
+            ? $res['AwardRecommendations']
+            : [];
+        if (empty($rawRecs)) return [];
 
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT recs.recommendations_id, recs.mundane_id, recs.kingdomaward_id,
-                    recs.rank, recs.reason, recs.date_recommended,
-                    m.persona, p.abbreviation AS park_abbrev,
-                    IFNULL(ka.name, a.name) AS award_name,
-                    a.is_ladder,
-                    (SELECT COUNT(ca.court_award_id)
-                       FROM ' . DB_PREFIX . 'court_award ca
-                      WHERE ca.recommendations_id = recs.recommendations_id
-                        AND ca.status != \'cancelled\') AS already_planned
-             FROM ' . DB_PREFIX . 'recommendations recs
-             LEFT JOIN ' . DB_PREFIX . 'mundane m       ON m.mundane_id       = recs.mundane_id
-             LEFT JOIN ' . DB_PREFIX . 'park p          ON p.park_id          = m.park_id
-             LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka  ON ka.kingdomaward_id = recs.kingdomaward_id
-             LEFT JOIN ' . DB_PREFIX . 'award a          ON a.award_id         = ka.award_id
-             WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0)
-               AND m.active = 1 AND (m.suspended IS NULL OR m.suspended = 0)
-               AND ' . $location_clause . '
-             HAVING (
-                 SELECT COUNT(aw.awards_id) FROM ' . DB_PREFIX . 'awards aw
-                  WHERE aw.mundane_id = recs.mundane_id
-                    AND aw.kingdomaward_id = ka.kingdomaward_id
-                    AND aw.rank >= recs.rank
-             ) = 0
-             ORDER BY m.persona, a.name, recs.rank'
-        );
-
-        $recs = [];
-        if ($rs) {
-            while ($rs->Next()) {
-                $recs[] = [
-                    'RecommendationsId' => (int)$rs->recommendations_id,
-                    'MundaneId'         => (int)$rs->mundane_id,
-                    'Persona'           => $rs->persona,
-                    'KingdomAwardId'    => (int)$rs->kingdomaward_id,
-                    'AwardName'         => $rs->award_name,
-                    'IsLadder'          => (bool)(int)$rs->is_ladder,
-                    'Rank'              => (int)$rs->rank,
-                    'Reason'            => $rs->reason,
-                    'DateRecommended'   => $rs->date_recommended,
-                    'ParkAbbrev'        => $rs->park_abbrev ?? '',
-                    'AlreadyPlanned'    => (int)$rs->already_planned > 0,
-                ];
+        // Park abbreviation lookup — recommended_awards has ParkName but not abbrev.
+        $parkIds = array_unique(array_filter(array_map(fn($r) => (int)($r['ParkId'] ?? 0), $rawRecs)));
+        $parkAbbrev = [];
+        if (!empty($parkIds)) {
+            $idCsv = implode(',', $parkIds);
+            $this->db->Clear();
+            $pr = $this->db->DataSet('SELECT park_id, abbreviation FROM ' . DB_PREFIX . 'park WHERE park_id IN (' . $idCsv . ')');
+            if ($pr) {
+                do { $parkAbbrev[(int)$pr->park_id] = (string)$pr->abbreviation; } while ($pr->Next());
             }
         }
-        return $recs;
+
+        // Per-rec court-plan mapping: which court is each rec on (if any)?
+        $recIds = array_map(fn($r) => (int)$r['RecommendationsId'], $rawRecs);
+        $onCourt = [];  // recommendations_id => [court_id => true]
+        if (!empty($recIds)) {
+            $idCsv = implode(',', $recIds);
+            $this->db->Clear();
+            $cr = $this->db->DataSet(
+                'SELECT recommendations_id, court_id FROM ' . DB_PREFIX . 'court_award
+                 WHERE recommendations_id IN (' . $idCsv . ') AND status != \'cancelled\''
+            );
+            if ($cr) {
+                do { $onCourt[(int)$cr->recommendations_id][(int)$cr->court_id] = true; } while ($cr->Next());
+            }
+        }
+
+        $curCourt = (int)$court_id;
+        $out = [];
+        foreach ($rawRecs as $r) {
+            $rid = (int)$r['RecommendationsId'];
+            $plans = $onCourt[$rid] ?? [];
+            $isOnThis  = $curCourt > 0 && !empty($plans[$curCourt]);
+            $isOnOther = !empty(array_diff_key($plans, [$curCourt => true]));
+            // Skip recs already on THIS court — they can't be added again, and the user
+            // can already see them in the main Order-of-Court list.
+            if ($isOnThis) continue;
+            $out[] = [
+                'RecommendationsId' => $rid,
+                'MundaneId'         => (int)$r['MundaneId'],
+                'Persona'           => $r['Persona'],
+                'KingdomAwardId'    => (int)$r['KingdomAwardId'],
+                'AwardName'         => $r['AwardName'],
+                'IsLadder'          => (int)($r['Rank'] ?? 0) > 0,  // proxy: only used for "Rank N" suffix display
+                'Rank'              => (int)$r['Rank'],
+                'Reason'            => $r['Reason'],
+                'DateRecommended'   => $r['DateRecommended'],
+                'ParkAbbrev'        => $parkAbbrev[(int)$r['ParkId']] ?? '',
+                'AlreadyPlanned'    => false,           // preserved for backward compat (always false here since we filtered above)
+                'IsOnOtherCourt'    => $isOnOther,
+                // Pass-through eligibility/context flags from Reports
+                'AlreadyHas'        => !empty($r['AlreadyHas']),
+                'CoveredByMaster'   => !empty($r['CoveredByMaster']),
+                'CurrentRank'       => isset($r['CurrentRank']) ? (int)$r['CurrentRank'] : null,
+                'CurrentRankDate'   => $r['CurrentRankDate'] ?? null,
+                'IsSnoozed'         => !empty($r['IsSnoozed']),
+                'AgeDays'           => (int)($r['AgeDays'] ?? 0),
+                'SecondsCount'      => (int)($r['SecondsCount'] ?? 0),
+                'IsAnonymous'       => !empty($r['IsAnonymous']),
+                'RecommendedByName' => $r['RecommendedByName'] ?? null,
+            ];
+        }
+        return $out;
     }
 
     // -----------------------------------------------------------------------

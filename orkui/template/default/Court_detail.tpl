@@ -147,19 +147,24 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-rm-search:focus { border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66,153,225,.15); }
 .cp-rm-meta { font-size: 12px; color: #718096; margin-bottom: 10px; }
 .cp-rm-meta strong { color: #2b6cb0; }
-.cp-rm-list { max-height: 420px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
-.cp-rm-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #edf2f7; cursor: pointer; transition: background .1s; position: relative; }
+.cp-rm-list { max-height: 460px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.cp-rm-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid #edf2f7; cursor: pointer; transition: background .1s; position: relative; }
 .cp-rm-row:last-child { border-bottom: none; }
 .cp-rm-row:hover:not(.already) { background: #f7fafc; }
 .cp-rm-row.selected { background: #ebf8ff; }
 .cp-rm-row.selected::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #2c5282; border-radius: 8px 0 0 8px; }
 .cp-rm-row.already { cursor: default; background: #fafafa; }
-.cp-rm-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+.cp-rm-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
 .cp-rm-main { flex: 1; min-width: 0; }
-.cp-rm-persona { font-weight: 700; font-size: 14px; color: #1a202c; line-height: 1.2; }
-.cp-rm-award { font-size: 12px; color: #4a5568; margin-top: 2px; }
-.cp-rm-rank { display: inline-block; background: #edf2f7; color: #4a5568; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 1px 6px; margin-left: 5px; }
-.cp-rm-reason { font-size: 12px; color: #718096; margin-top: 3px; line-height: 1.4; }
+/* Header line: persona · award · rank · date — all on one row, bullet-separated */
+.cp-rm-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; overflow: hidden; line-height: 1.25; }
+.cp-rm-persona { font-weight: 700; font-size: 13px; color: #1a202c; flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-rm-park    { font-size: 11px; font-weight: 400; color: #a0aec0; letter-spacing: .2px; flex-shrink: 0; }
+.cp-rm-award   { font-size: 12px; color: #4a5568; flex-shrink: 1; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-rm-rank    { display: inline-block; background: #edf2f7; color: #4a5568; border-radius: 4px; font-size: 10px; font-weight: 700; padding: 1px 6px; flex-shrink: 0; }
+.cp-rm-date    { font-size: 11px; color: #a0aec0; white-space: nowrap; flex-shrink: 0; }
+.cp-rm-sep     { color: #cbd5e0; font-size: 11px; flex-shrink: 0; user-select: none; }
+.cp-rm-reason  { font-size: 11px; color: #718096; line-height: 1.35; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; }
 .cp-rm-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .cp-rm-in-plan { background: #fefcbf; color: #744210; border: 1px solid #f6e05e; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .cp-rm-check { width: 20px; height: 20px; border-radius: 50%; background: #2c5282; color: #fff; display: none; align-items: center; justify-content: center; font-size: 11px; }
@@ -175,7 +180,33 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-rm-sort-btn { background: #edf2f7; border: 1px solid #e2e8f0; color: #4a5568; padding: 4px 10px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; transition: background .1s, border-color .1s; white-space: nowrap; }
 .cp-rm-sort-btn:hover { background: #e2e8f0; }
 .cp-rm-sort-btn.active { background: #2c5282; border-color: #2c5282; color: #fff; }
-.cp-rm-date { font-size: 11px; color: #a0aec0; margin-top: 3px; }
+
+/* View filter (Open / All / Snoozed / Already Qualified) */
+.cp-rm-view-btn { background: #edf2f7; border: 1px solid #e2e8f0; color: #4a5568; padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; transition: background .1s, border-color .1s; white-space: nowrap; }
+.cp-rm-view-btn:hover { background: #e2e8f0; }
+.cp-rm-view-btn.active { background: #2c5282; border-color: #2c5282; color: #fff; }
+
+/* Inline metadata chips inside the rec head */
+.cp-rm-age-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; letter-spacing: .03em; flex-shrink: 0; }
+.cp-age-green   { background: #f0fff4; color: #276749; }
+.cp-age-yellow  { background: #fffff0; color: #975a16; }
+.cp-age-orange  { background: #fffaf0; color: #c05621; }
+.cp-age-red     { background: #fff5f5; color: #c53030; }
+
+.cp-rm-seconds  { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #2f855a; font-weight: 600; flex-shrink: 0; }
+.cp-rm-seconds i { font-size: 9px; }
+
+.cp-rm-onother  { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #6b46c1; font-weight: 600; flex-shrink: 0; background: #faf5ff; border: 1px solid #d6bcfa; padding: 0 5px; border-radius: 4px; }
+.cp-rm-onother i { font-size: 9px; }
+
+.cp-rm-qualified { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #276749; font-weight: 600; flex-shrink: 0; background: #f0fff4; border: 1px solid #9ae6b4; padding: 0 5px; border-radius: 4px; }
+.cp-rm-qualified i { font-size: 9px; }
+
+.cp-rm-snooze-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #4a5568; font-weight: 600; flex-shrink: 0; background: #edf2f7; border: 1px solid #cbd5e0; padding: 0 5px; border-radius: 4px; }
+.cp-rm-snooze-chip i { font-size: 9px; }
+
+/* Snoozed rows render with a slight muting */
+.cp-rm-row.cp-rm-snoozed:not(.already) { opacity: .8; }
 
 /* Autocomplete */
 .cp-ac-wrap { position: relative; }
@@ -240,11 +271,454 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 
 /* Published mode: hide drag column */
 .cp-list-published .cp-reorder-btns { visibility: hidden; pointer-events: none; }
+
+/* ============================================================
+   SPREADSHEET REDESIGN — Court Planner v2
+   ============================================================ */
+
+/* Density tokens — applied at .cp-award-list level */
+.cp-density-cozy        { --cp-row-py: 11px; --cp-row-px: 14px; --cp-row-font: 14px; --cp-row-num: 13px; --cp-track-size: 24px; --cp-track-font: 13px; }
+.cp-density-comfortable { --cp-row-py: 6px;  --cp-row-px: 12px; --cp-row-font: 13px; --cp-row-num: 12px; --cp-track-size: 22px; --cp-track-font: 12px; }
+.cp-density-compact     { --cp-row-py: 2px;  --cp-row-px: 10px; --cp-row-font: 12px; --cp-row-num: 11px; --cp-track-size: 18px; --cp-track-font: 10px; }
+
+/* Toolbar above the spreadsheet */
+.cp-list-toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 12px;
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    font-size: 12px;
+    color: #4a5568;
+    flex-wrap: wrap;
+}
+.cp-list-toolbar-label {
+    font-size: 10px; font-weight: 700; color: #a0aec0;
+    text-transform: uppercase; letter-spacing: .08em;
+}
+.cp-list-toolbar-spacer { flex: 1 1 auto; min-width: 4px; }
+
+/* Density segmented control */
+.cp-density-seg {
+    display: inline-flex;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 2px;
+    gap: 1px;
+}
+.cp-density-seg button {
+    background: none; border: none;
+    padding: 4px 9px; font-size: 11px; color: #4a5568;
+    cursor: pointer; border-radius: 4px;
+    font-weight: 600; display: inline-flex; align-items: center; gap: 5px;
+    transition: background .12s, color .12s;
+    line-height: 1;
+}
+.cp-density-seg button:hover { background: #f7fafc; }
+.cp-density-seg button.active { background: #2c5282; color: #fff; }
+.cp-density-seg button.active:hover { background: #2c5282; }
+.cp-density-seg button i { font-size: 10px; }
+
+/* When the toolbar is present, the list should square its top corners */
+.cp-list-toolbar + .cp-award-list { border-radius: 0 0 8px 8px; border-top: none; }
+
+/* ----- Grid template for header + rows (spreadsheet alignment) -----
+   Columns: drag/order | num | recipient | award | type | flags | scroll | regalia | status | chevron
+*/
+.cp-row-grid {
+    display: grid;
+    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 30px 30px 96px 22px;
+    align-items: center;
+    column-gap: 8px;
+}
+.cp-list-published .cp-row-grid {
+    /* Wider status column to fit Grant / Skip buttons */
+    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 30px 30px 178px 22px;
+}
+
+/* Header row — sticky, label-style */
+.cp-list-header {
+    background: #f7fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 7px var(--cp-row-px, 12px);
+    font-size: 10px; font-weight: 700;
+    color: #718096;
+    text-transform: uppercase; letter-spacing: .07em;
+    position: sticky; top: 0; z-index: 4;
+}
+.cp-list-header > div {
+    white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cp-list-header .cp-hdr-num     { text-align: right; padding-right: 2px; }
+.cp-list-header .cp-hdr-scroll,
+.cp-list-header .cp-hdr-regalia { text-align: center; }
+.cp-list-header .cp-hdr-status  { text-align: left; }
+
+/* The list itself becomes the spreadsheet container */
+.cp-award-list { background: #fff; }
+/* Override the old per-row border-bottom — single 1px on row instead */
+.cp-award-row { border-bottom: 1px solid #edf2f7; background: #fff; }
+.cp-award-row:last-child { border-bottom: none; }
+
+/* Zebra striping (subtle) — light mode */
+.cp-award-row:nth-child(even) { background: #fafbfc; }
+.cp-density-compact .cp-award-row:nth-child(even) { background: #fbfcfd; }
+
+/* The row's main interactive area becomes a grid */
+.cp-award-row-main {
+    padding: var(--cp-row-py, 6px) var(--cp-row-px, 12px);
+    font-size: var(--cp-row-font, 13px);
+    cursor: pointer;
+    column-gap: 8px;
+    /* Re-declare grid template since this overrides the old flex display */
+    display: grid;
+}
+.cp-award-row-main:hover { background: #edf2f7; }
+
+/* Cells */
+.cp-cell { min-width: 0; }
+.cp-cell-order  { display: flex; align-items: center; justify-content: flex-start; }
+.cp-cell-num    { color: #a0aec0; font-variant-numeric: tabular-nums; font-size: var(--cp-row-num, 12px); text-align: right; padding-right: 2px; font-weight: 600; }
+.cp-cell-recipient { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-weight: 700; color: #2d3748; overflow: hidden; }
+.cp-cell-recipient .cp-recipient-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cp-cell-recipient .cp-award-park    { font-weight: 400; color: #718096; font-size: 11px; letter-spacing: .2px; flex-shrink: 0; }
+.cp-cell-recipient .cp-note-btn      { background: none; border: none; cursor: pointer; color: #a0aec0; font-size: 11px; padding: 0; flex-shrink: 0; line-height: 1; transition: color .15s; }
+.cp-cell-recipient .cp-note-btn:hover { color: #4a5568; }
+.cp-cell-award   { color: #4a5568; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.cp-cell-award .cp-award-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cp-cell-award .cp-award-rank      { color: #a0aec0; font-size: 11px; flex-shrink: 0; font-weight: 600; }
+.cp-cell-type    { display: flex; align-items: center; }
+.cp-cell-type > * { width: 100%; text-align: center; }
+.cp-cell-flags   { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; overflow: hidden; }
+.cp-cell-scroll, .cp-cell-regalia { display: flex; align-items: center; justify-content: center; }
+.cp-cell-status  { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.cp-cell-chevron { color: #cbd5e0; font-size: 11px; text-align: center; display: flex; align-items: center; justify-content: center; }
+
+/* Tracking icons — scale by density */
+.cp-density-cozy        .cp-tracking-icon,
+.cp-density-comfortable .cp-tracking-icon,
+.cp-density-compact     .cp-tracking-icon {
+    width: var(--cp-track-size, 22px); height: var(--cp-track-size, 22px);
+    line-height: var(--cp-track-size, 22px);
+    font-size: var(--cp-track-font, 12px);
+    margin-left: 0;
+}
+
+/* Reorder arrows compact in spreadsheet */
+.cp-row-grid .cp-reorder-btns { gap: 0; }
+.cp-row-grid .cp-reorder-btn { width: 18px; height: 13px; font-size: 8px; }
+.cp-density-compact .cp-row-grid .cp-reorder-btn { height: 11px; }
+.cp-density-cozy    .cp-row-grid .cp-reorder-btn { height: 15px; }
+
+/* Type badge — pill in cozy/comfortable, square chip in compact */
+.cp-cell-type .cp-type-title,
+.cp-cell-type .cp-type-ladder,
+.cp-cell-type .cp-type-award {
+    width: 100%; box-sizing: border-box;
+    text-align: center; padding: 1px 6px; font-size: 10px;
+    letter-spacing: .04em;
+}
+.cp-density-compact .cp-cell-type .cp-type-title,
+.cp-density-compact .cp-cell-type .cp-type-ladder,
+.cp-density-compact .cp-cell-type .cp-type-award { font-size: 9px; padding: 0 4px; border-radius: 3px; }
+
+/* Status badge sizing by density */
+.cp-density-compact .cp-aw-badge { padding: 1px 6px; font-size: 10px; }
+
+/* Cozy mode: allow recipient to wrap park abbrev underneath */
+.cp-density-cozy .cp-cell-recipient { flex-direction: column; align-items: flex-start; gap: 1px; }
+.cp-density-cozy .cp-cell-recipient .cp-award-park { font-size: 10px; margin-left: 0; }
+.cp-density-cozy .cp-cell-award { flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.3; }
+
+/* Compact mode: shrink padding aggressively */
+.cp-density-compact .cp-cell-recipient { font-size: 12px; }
+.cp-density-compact .cp-cell-recipient .cp-award-park { font-size: 10px; }
+.cp-density-compact .cp-cell-award      { font-size: 12px; }
+.cp-density-compact .cp-flag-local,
+.cp-density-compact .cp-flag-rec        { width: 16px; height: 16px; font-size: 8px; }
+.cp-density-comfortable .cp-flag-local,
+.cp-density-comfortable .cp-flag-rec    { width: 18px; height: 18px; font-size: 9px; }
+
+/* Granted / Skipped rows */
+.cp-award-row.cp-granted .cp-award-row-main,
+.cp-award-row.cp-skipped .cp-award-row-main { padding-top: 4px; padding-bottom: 4px; }
+.cp-density-compact .cp-award-row.cp-granted .cp-award-row-main,
+.cp-density-compact .cp-award-row.cp-skipped .cp-award-row-main { padding-top: 2px; padding-bottom: 2px; }
+
+/* Hide the colored left border on rows when in spreadsheet view (type column shows it instead).
+   Keep a 3px colored marker on the order cell. */
+.cp-award-row.cp-aw-type-title,
+.cp-award-row.cp-aw-type-ladder,
+.cp-award-row.cp-aw-type-award { border-left: none !important; }
+.cp-cell-order { position: relative; }
+.cp-award-row.cp-aw-type-title  .cp-cell-order::before,
+.cp-award-row.cp-aw-type-ladder .cp-cell-order::before,
+.cp-award-row.cp-aw-type-award  .cp-cell-order::before {
+    content: ''; position: absolute; left: -12px; top: 0; bottom: 0; width: 3px;
+}
+.cp-award-row.cp-aw-type-title  .cp-cell-order::before { background: #d69e2e; }
+.cp-award-row.cp-aw-type-ladder .cp-cell-order::before { background: #9f7aea; }
+.cp-award-row.cp-aw-type-award  .cp-cell-order::before { background: #38a169; }
+
+/* Grant / Skip in published mode — sized to fit status column */
+.cp-list-published .cp-grant-actions .cp-btn-grant,
+.cp-list-published .cp-grant-actions .cp-btn-skip {
+    padding: 3px 8px; font-size: 11px; gap: 4px;
+}
+.cp-density-compact .cp-list-published .cp-grant-actions .cp-btn-grant,
+.cp-density-compact .cp-list-published .cp-grant-actions .cp-btn-skip {
+    padding: 2px 6px; font-size: 10px;
+}
+
+/* Expand area — match new alignment */
+.cp-award-row-expand { padding: 14px 18px 16px; border-top: 1px solid #edf2f7; background: #fafbfc; }
+.cp-density-compact .cp-award-row-expand { padding: 10px 14px 12px; }
+
+/* ----- Sidebar collapse ----- */
+.cp-sidebar { width: 220px; flex-shrink: 0; transition: width .22s ease; position: relative; }
+.cp-sidebar-rail {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; padding: 0 2px;
+}
+.cp-sidebar-rail-label {
+    font-size: 10px; font-weight: 700; color: #a0aec0;
+    text-transform: uppercase; letter-spacing: .08em;
+}
+.cp-sidebar-collapse-btn {
+    background: #fff; border: 1px solid #e2e8f0;
+    width: 26px; height: 26px; border-radius: 6px;
+    cursor: pointer; color: #718096;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.cp-sidebar-collapse-btn:hover { color: #2d3748; border-color: #cbd5e0; background: #f7fafc; }
+.cp-sidebar-collapse-btn i { font-size: 11px; }
+
+/* Collapsed state */
+.cp-body.cp-sidebar-collapsed .cp-sidebar { width: 30px; }
+.cp-body.cp-sidebar-collapsed .cp-sidebar-card { display: none; }
+.cp-body.cp-sidebar-collapsed .cp-sidebar-rail { justify-content: center; }
+.cp-body.cp-sidebar-collapsed .cp-sidebar-rail-label { display: none; }
+.cp-body.cp-sidebar-collapsed .cp-sidebar-collapse-btn { width: 30px; height: 30px; }
+
+/* Chevron direction by state */
+.cp-sidebar-collapse-btn .cp-side-arrow-collapse { display: inline-block; }
+.cp-sidebar-collapse-btn .cp-side-arrow-expand   { display: none; }
+.cp-body.cp-sidebar-collapsed .cp-sidebar-collapse-btn .cp-side-arrow-collapse { display: none; }
+.cp-body.cp-sidebar-collapsed .cp-sidebar-collapse-btn .cp-side-arrow-expand   { display: inline-block; }
+
+/* ----- Error box + section-header reusable bits ----- */
+.cp-error-box { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 14px 18px; border-radius: 6px; }
+.cp-h2-icon   { color: #4a5568; margin-right: 6px; }
+.cp-count     { font-size: 13px; color: #718096; font-weight: 400; }
+.cp-btn-danger-inline { background: #fff5f5 !important; border: 1px solid #fc8181 !important; color: #c53030 !important; }
+
+/* ----- About-card pills & legend (light mode defaults) ----- */
+.cp-about-body { font-size: 12px; line-height: 1.55; color: #4a5568; }
+.cp-about-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #a0aec0; margin-bottom: 6px; }
+.cp-about-flow { display: flex; align-items: center; gap: 5px; margin-bottom: 12px; flex-wrap: wrap; }
+.cp-about-arrow { color: #cbd5e0; font-size: 10px; }
+.cp-about-list { margin: 0 0 12px; padding-left: 14px; }
+.cp-about-list li { margin-bottom: 4px; }
+.cp-about-p { margin: 0 0 12px; }
+.cp-about-track-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.cp-about-track-row .cp-tracking-demo { flex-shrink: 0; pointer-events: none; margin-top: 1px; }
+.cp-about-legend { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #718096; margin-top: 4px; }
+.cp-legend-gray   { font-weight: 700; color: #a0aec0; }
+.cp-legend-red    { font-weight: 700; color: #e53e3e; }
+.cp-legend-green  { font-weight: 700; color: #38a169; }
+
+/* Status pills used in About section (workflow chain + grant/skip examples) */
+.cp-pill { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.cp-pill-draft     { background: #edf2f7; color: #718096; }
+.cp-pill-published { background: #ebf8ff; color: #2b6cb0; }
+.cp-pill-complete  { background: #f0fff4; color: #276749; }
+.cp-pill-grant     { background: #f0fff4; color: #276749; border: 1px solid #9ae6b4; padding: 1px 6px; }
+.cp-pill-skip      { background: #edf2f7; color: #718096; border: 1px solid #cbd5e0; padding: 1px 6px; }
+
+/* ----- Dark-mode pre-emptive overrides ----- */
+/* New spreadsheet surfaces */
+html[data-theme="dark"] .cp-list-toolbar { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-list-toolbar-label,
+html[data-theme="dark"] .cp-sidebar-rail-label { color: #718096; }
+html[data-theme="dark"] .cp-density-seg { background: #161b22; border-color: #2d3748; }
+html[data-theme="dark"] .cp-density-seg button { color: #cbd5e0; }
+html[data-theme="dark"] .cp-density-seg button:hover { background: #1f2733; }
+html[data-theme="dark"] .cp-list-header { background: #1f2733; color: #a0aec0; border-color: #2d3748; }
+html[data-theme="dark"] .cp-award-list { background: #161b22; border-color: #2d3748; }
+html[data-theme="dark"] .cp-award-row { background: #161b22; border-color: #1f2733; }
+html[data-theme="dark"] .cp-award-row:nth-child(even) { background: #1a2030; }
+html[data-theme="dark"] .cp-award-row-main:hover { background: #1f2733; }
+html[data-theme="dark"] .cp-cell-recipient { color: #e2e8f0; }
+html[data-theme="dark"] .cp-cell-award     { color: #a0aec0; }
+html[data-theme="dark"] .cp-cell-num,
+html[data-theme="dark"] .cp-cell-chevron   { color: #4a5568; }
+html[data-theme="dark"] .cp-award-row-expand { background: #1a2030; border-color: #2d3748; }
+html[data-theme="dark"] .cp-sidebar-collapse-btn { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-sidebar-collapse-btn:hover { background: #2d3748; }
+
+/* Status bar + section heading */
+html[data-theme="dark"] .cp-status-bar { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-status-sep { color: #4a5568; }
+html[data-theme="dark"] .cp-stat-none  { color: #718096; }
+html[data-theme="dark"] .cp-section-header h2 { color: #e2e8f0; }
+html[data-theme="dark"] .cp-section-header h2 i { color: #a0aec0 !important; }
+html[data-theme="dark"] #cp-award-count { color: #718096 !important; }
+
+/* Sidebar cards */
+html[data-theme="dark"] .cp-sidebar-card { background: #161b22; border-color: #2d3748; box-shadow: none; }
+html[data-theme="dark"] .cp-sidebar-card-header { background: #1f2733; border-color: #2d3748; color: #a0aec0; }
+html[data-theme="dark"] .cp-sb-sort-btn,
+html[data-theme="dark"] .cp-sb-toggle-btn { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-sb-sort-btn:hover,
+html[data-theme="dark"] .cp-sb-toggle-btn:hover { background: #2d3748; }
+html[data-theme="dark"] .cp-sb-toggle-btn.active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .cp-sidebar-card hr { border-top-color: #2d3748 !important; }
+
+/* About card content */
+html[data-theme="dark"] .cp-about-body { color: #cbd5e0; }
+html[data-theme="dark"] .cp-about-section { color: #718096; }
+html[data-theme="dark"] .cp-about-arrow { color: #4a5568; }
+html[data-theme="dark"] .cp-about-legend { background: #1f2733; border-color: #2d3748; color: #a0aec0; }
+
+/* Workflow / pill chips — soften the light pastel backgrounds */
+html[data-theme="dark"] .cp-pill-draft     { background: rgba(160,174,192,.15);  color: #cbd5e0; }
+html[data-theme="dark"] .cp-pill-published { background: rgba(99,179,237,.18);   color: #90cdf4; }
+html[data-theme="dark"] .cp-pill-complete  { background: rgba(72,187,120,.18);   color: #9ae6b4; }
+html[data-theme="dark"] .cp-pill-grant     { background: rgba(72,187,120,.18);   color: #9ae6b4; border-color: rgba(72,187,120,.4); }
+html[data-theme="dark"] .cp-pill-skip      { background: rgba(160,174,192,.15);  color: #cbd5e0; border-color: rgba(160,174,192,.3); }
+
+/* Type chips in spreadsheet rows — same softening */
+html[data-theme="dark"] .cp-type-title  { background: rgba(214,158,46,.18);  color: #f6e05e; border-color: rgba(214,158,46,.4); }
+html[data-theme="dark"] .cp-type-ladder { background: rgba(159,122,234,.20); color: #d6bcfa; border-color: rgba(159,122,234,.4); }
+html[data-theme="dark"] .cp-type-award  { background: rgba(72,187,120,.18);  color: #9ae6b4; border-color: rgba(72,187,120,.4); }
+
+/* Status badge backgrounds use inline styles — apply darker, more readable variants by status class */
+html[data-theme="dark"] .cp-aw-badge { background: #1f2733 !important; color: #cbd5e0 !important; box-shadow: inset 0 0 0 1px #2d3748; }
+html[data-theme="dark"] .cp-award-row[data-status-tone="given"]      .cp-aw-badge,
+html[data-theme="dark"] .cp-award-row.cp-granted .cp-aw-badge { background: rgba(72,187,120,.18) !important; color: #9ae6b4 !important; box-shadow: inset 0 0 0 1px rgba(72,187,120,.35); }
+html[data-theme="dark"] .cp-award-row.cp-skipped .cp-aw-badge { background: rgba(229,62,62,.16) !important; color: #fc8181 !important; box-shadow: inset 0 0 0 1px rgba(229,62,62,.35); }
+
+/* Flag badges (PtL, From-Rec) */
+html[data-theme="dark"] .cp-flag-local { background: rgba(214,158,46,.20); color: #f6e05e; border-color: rgba(214,158,46,.4); }
+html[data-theme="dark"] .cp-flag-rec   { background: rgba(99,179,237,.18); color: #90cdf4; border-color: rgba(99,179,237,.4); }
+
+/* Reorder arrows */
+html[data-theme="dark"] .cp-reorder-btn { background: #1f2733; border-color: #2d3748; color: #718096; }
+html[data-theme="dark"] .cp-reorder-btn:hover { background: #2d3748; color: #cbd5e0; }
+
+/* Note popup is already dark, but ensure consistency on the trigger button */
+html[data-theme="dark"] .cp-note-btn { color: #718096; }
+html[data-theme="dark"] .cp-note-btn:hover { color: #cbd5e0; }
+
+/* Award park abbreviation */
+html[data-theme="dark"] .cp-award-park { color: #718096; }
+
+/* Buttons */
+html[data-theme="dark"] .cp-btn-outline { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-btn-outline:hover { background: #2d3748; }
+html[data-theme="dark"] .cp-btn-skip   { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-btn-skip:hover { background: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .cp-btn-grant  { background: #276749; color: #fff; }
+html[data-theme="dark"] .cp-btn-grant:hover { background: #22543d; }
+html[data-theme="dark"] .cp-btn-danger-sm { color: #fc8181; }
+
+/* Tracking icons — status 0 (gray) needs to recede on dark bg */
+html[data-theme="dark"] .cp-tracking-icon[data-status="0"] { background-color: #2d3748; color: #718096; }
+html[data-theme="dark"] .cp-tracking-icon[data-status="1"] { background-color: #c53030; color: #fff; }
+html[data-theme="dark"] .cp-tracking-icon[data-status="2"] { background-color: #276749; color: #fff; }
+
+/* Empty state */
+html[data-theme="dark"] .cp-award-empty { color: #4a5568; }
+
+/* Modal */
+html[data-theme="dark"] .cp-overlay { background: rgba(0,0,0,.65); }
+html[data-theme="dark"] .cp-modal { background: #161b22; box-shadow: 0 8px 32px rgba(0,0,0,.6); }
+html[data-theme="dark"] .cp-modal-header { border-bottom-color: #2d3748; }
+html[data-theme="dark"] .cp-modal-header h3 { color: #e2e8f0; }
+html[data-theme="dark"] .cp-modal-close { color: #718096; }
+html[data-theme="dark"] .cp-modal-close:hover { color: #cbd5e0; }
+html[data-theme="dark"] .cp-modal-footer { border-top-color: #2d3748; }
+
+/* Form fields inside modals */
+html[data-theme="dark"] .cp-field label { color: #a0aec0; }
+html[data-theme="dark"] .cp-field input,
+html[data-theme="dark"] .cp-field select,
+html[data-theme="dark"] .cp-field textarea { background: #1f2733; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .cp-field input::placeholder,
+html[data-theme="dark"] .cp-field textarea::placeholder { color: #4a5568; }
+html[data-theme="dark"] .cp-field input:focus,
+html[data-theme="dark"] .cp-field select:focus,
+html[data-theme="dark"] .cp-field textarea:focus { border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66,153,225,.2); outline: none; }
+
+/* Recommendation modal */
+html[data-theme="dark"] .cp-rm-search { background: #1f2733; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .cp-rm-search::placeholder { color: #4a5568; }
+html[data-theme="dark"] .cp-rm-search-wrap i { color: #4a5568; }
+html[data-theme="dark"] .cp-rm-meta { color: #a0aec0; }
+html[data-theme="dark"] .cp-rm-meta strong { color: #90cdf4; }
+html[data-theme="dark"] .cp-rm-list { background: #161b22; border-color: #2d3748; }
+html[data-theme="dark"] .cp-rm-row { border-bottom-color: #1f2733; }
+html[data-theme="dark"] .cp-rm-row:hover:not(.already) { background: #1f2733; }
+html[data-theme="dark"] .cp-rm-row.selected { background: rgba(66,153,225,.15); }
+html[data-theme="dark"] .cp-rm-row.selected::before { background: #4299e1; }
+html[data-theme="dark"] .cp-rm-row.already { background: #161b22; opacity: .55; }
+html[data-theme="dark"] .cp-rm-persona { color: #e2e8f0; }
+html[data-theme="dark"] .cp-rm-park    { color: #718096; }
+html[data-theme="dark"] .cp-rm-award   { color: #cbd5e0; }
+html[data-theme="dark"] .cp-rm-reason  { color: #a0aec0; }
+html[data-theme="dark"] .cp-rm-date    { color: #718096; }
+html[data-theme="dark"] .cp-rm-sep     { color: #4a5568; }
+html[data-theme="dark"] .cp-rm-rank    { background: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-rm-in-plan { background: rgba(214,158,46,.18); color: #f6e05e; border-color: rgba(214,158,46,.4); }
+html[data-theme="dark"] .cp-rm-empty   { color: #4a5568; }
+html[data-theme="dark"] .cp-rm-sort-label { color: #a0aec0; }
+html[data-theme="dark"] .cp-rm-sort-btn { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-rm-sort-btn:hover { background: #2d3748; }
+html[data-theme="dark"] .cp-rm-sort-btn.active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .cp-rm-view-btn { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-rm-view-btn:hover { background: #2d3748; }
+html[data-theme="dark"] .cp-rm-view-btn.active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .cp-age-green   { background: rgba(72,187,120,.18); color: #9ae6b4; }
+html[data-theme="dark"] .cp-age-yellow  { background: rgba(214,158,46,.18); color: #f6e05e; }
+html[data-theme="dark"] .cp-age-orange  { background: rgba(237,137,54,.18); color: #fbd38d; }
+html[data-theme="dark"] .cp-age-red     { background: rgba(229,62,62,.16);  color: #fc8181; }
+html[data-theme="dark"] .cp-rm-seconds  { color: #9ae6b4; }
+html[data-theme="dark"] .cp-rm-onother  { background: rgba(159,122,234,.16); border-color: rgba(159,122,234,.4); color: #d6bcfa; }
+html[data-theme="dark"] .cp-rm-qualified { background: rgba(72,187,120,.16); border-color: rgba(72,187,120,.4); color: #9ae6b4; }
+html[data-theme="dark"] .cp-rm-snooze-chip { background: rgba(160,174,192,.12); border-color: rgba(160,174,192,.3); color: #cbd5e0; }
+html[data-theme="dark"] .cp-rm-add-count { color: #a0aec0; }
+
+/* Expand area inner controls */
+html[data-theme="dark"] .cp-expand-label { color: #a0aec0; }
+html[data-theme="dark"] .cp-expand-val   { color: #e2e8f0; }
+html[data-theme="dark"] .cp-notes-area   { background: #1f2733; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .cp-notes-area::placeholder { color: #4a5568; }
+html[data-theme="dark"] .cp-artisan-row { color: #cbd5e0; }
+html[data-theme="dark"] .cp-maker-ac    { background: #1f2733 !important; border-color: #2d3748 !important; color: #e2e8f0 !important; }
+html[data-theme="dark"] .cp-maker-ac::placeholder { color: #4a5568; }
+html[data-theme="dark"] select[id^="cp-status-"] { background: #1f2733 !important; border-color: #2d3748 !important; color: #e2e8f0 !important; }
+
+/* Autocomplete dropdown (inline styles on some instances — need !important) */
+html[data-theme="dark"] .cp-ac-dropdown { background: #1f2733 !important; border-color: #2d3748 !important; box-shadow: 0 4px 12px rgba(0,0,0,.4) !important; }
+html[data-theme="dark"] .cp-ac-item { color: #cbd5e0; }
+html[data-theme="dark"] .cp-ac-item:hover { background: #2d3748 !important; }
+
+/* Error inline */
+html[data-theme="dark"] .cp-error { color: #fc8181; }
+html[data-theme="dark"] .cp-error-box { background: rgba(229,62,62,.12); border-color: rgba(229,62,62,.4); color: #fc8181; }
+html[data-theme="dark"] .cp-h2-icon { color: #a0aec0; }
+html[data-theme="dark"] .cp-count   { color: #718096; }
+html[data-theme="dark"] .cp-btn-danger-inline { background: rgba(229,62,62,.12) !important; border-color: rgba(229,62,62,.4) !important; color: #fc8181 !important; }
+
 </style>
 
 <?php if ($error): ?>
 <div style="padding:24px">
-    <div style="background:#fff5f5;border:1px solid #feb2b2;color:#c53030;padding:14px 18px;border-radius:6px">
+    <div class="cp-error-box">
         <i class="fas fa-exclamation-circle"></i> <?= htmlspecialchars($error) ?>
     </div>
 </div>
@@ -343,10 +817,19 @@ $_total_awards = count($courtAwards ?? []);
 </div>
 <?php endif; ?>
 
-<div class="cp-page"><div class="cp-body">
+<div class="cp-page"><div class="cp-body" id="cp-body">
 
     <!-- Sidebar -->
     <div class="cp-sidebar">
+        <div class="cp-sidebar-rail">
+            <span class="cp-sidebar-rail-label">Tools</span>
+            <button class="cp-sidebar-collapse-btn" id="cp-sidebar-collapse-btn"
+                    onclick="cpToggleSidebar()" type="button"
+                    title="Collapse sidebar" aria-label="Collapse sidebar">
+                <i class="fas fa-chevron-left cp-side-arrow-collapse"></i>
+                <i class="fas fa-chevron-right cp-side-arrow-expand"></i>
+            </button>
+        </div>
         <?php if ($courtSt === 'draft'): ?>
         <div class="cp-sidebar-card">
             <div class="cp-sidebar-card-header"><i class="fas fa-sort"></i> Sort Order</div>
@@ -367,41 +850,41 @@ $_total_awards = count($courtAwards ?? []);
         <div class="cp-sidebar-card">
             <details open>
                 <summary class="cp-sidebar-card-header" style="cursor:pointer;list-style:none;display:flex"><i class="fas fa-info-circle"></i> About This Tool</summary>
-                <div class="cp-sidebar-card-body" style="font-size:12px;line-height:1.55;color:#4a5568">
+                <div class="cp-sidebar-card-body cp-about-body">
 
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#a0aec0;margin-bottom:6px">Workflow</div>
-                    <div style="display:flex;align-items:center;gap:5px;margin-bottom:12px;flex-wrap:wrap">
-                        <span style="background:#edf2f7;color:#718096;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">Draft</span>
-                        <i class="fas fa-arrow-right" style="color:#cbd5e0;font-size:10px"></i>
-                        <span style="background:#ebf8ff;color:#2b6cb0;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">Published</span>
-                        <i class="fas fa-arrow-right" style="color:#cbd5e0;font-size:10px"></i>
-                        <span style="background:#f0fff4;color:#276749;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">Complete</span>
+                    <div class="cp-about-section">Workflow</div>
+                    <div class="cp-about-flow">
+                        <span class="cp-pill cp-pill-draft">Draft</span>
+                        <i class="fas fa-arrow-right cp-about-arrow"></i>
+                        <span class="cp-pill cp-pill-published">Published</span>
+                        <i class="fas fa-arrow-right cp-about-arrow"></i>
+                        <span class="cp-pill cp-pill-complete">Complete</span>
                     </div>
 
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#a0aec0;margin-bottom:6px">Building Your List</div>
-                    <ul style="margin:0 0 12px;padding-left:14px">
-                        <li style="margin-bottom:4px">Add awards from pending <strong>Recommendations</strong> or create an <strong>Ad-hoc</strong> entry for any recipient.</li>
-                        <li style="margin-bottom:4px">Use the <strong>Sort Order</strong> buttons above to quickly arrange awards, then fine-tune with the <i class="fas fa-arrow-up" style="font-size:10px"></i><i class="fas fa-arrow-down" style="font-size:10px"></i> arrows on each row.</li>
+                    <div class="cp-about-section">Building Your List</div>
+                    <ul class="cp-about-list">
+                        <li>Add awards from pending <strong>Recommendations</strong> or create an <strong>Ad-hoc</strong> entry for any recipient.</li>
+                        <li>Use the <strong>Sort Order</strong> buttons above to quickly arrange awards, then fine-tune with the <i class="fas fa-arrow-up cp-about-arrow"></i><i class="fas fa-arrow-down cp-about-arrow"></i> arrows on each row.</li>
                         <li>Click any row to expand it and add <strong>notes</strong>, set <strong>Pass to Local</strong>, or credit <strong>artisans</strong> who made scrolls or tokens.</li>
                     </ul>
 
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#a0aec0;margin-bottom:6px">Running Court</div>
-                    <p style="margin:0 0 12px">Click <strong>Publish</strong> when the list is final. During court, use the <span style="background:#f0fff4;color:#276749;border:1px solid #9ae6b4;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700"><i class="fas fa-check"></i> Grant</span> and <span style="background:#edf2f7;color:#718096;border:1px solid #cbd5e0;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700"><i class="fas fa-forward"></i> Skip</span> buttons on each award to track progress in real time.</p>
+                    <div class="cp-about-section">Running Court</div>
+                    <p class="cp-about-p">Click <strong>Publish</strong> when the list is final. During court, use the <span class="cp-pill cp-pill-grant"><i class="fas fa-check"></i> Grant</span> and <span class="cp-pill cp-pill-skip"><i class="fas fa-forward"></i> Skip</span> buttons on each award to track progress in real time.</p>
 
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#a0aec0;margin-bottom:6px">Scroll &amp; Regalia Tracking</div>
-                    <p style="margin:0 0 8px">Each row has two icons you can click to cycle status:</p>
-                    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
-                        <span class="cp-tracking-icon" data-status="1" style="flex-shrink:0;pointer-events:none;margin-top:1px"><i class="fas fa-print"></i></span>
+                    <div class="cp-about-section">Scroll &amp; Regalia Tracking</div>
+                    <p class="cp-about-p" style="margin-bottom:8px">Each row has two icons you can click to cycle status:</p>
+                    <div class="cp-about-track-row">
+                        <span class="cp-tracking-icon cp-tracking-demo" data-status="1"><i class="fas fa-print"></i></span>
                         <span><strong>Scroll</strong> &mdash; needs to be printed.</span>
                     </div>
-                    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">
-                        <span class="cp-tracking-icon" data-status="1" style="flex-shrink:0;pointer-events:none;margin-top:1px"><i class="fas fa-medal"></i></span>
+                    <div class="cp-about-track-row">
+                        <span class="cp-tracking-icon cp-tracking-demo" data-status="1"><i class="fas fa-medal"></i></span>
                         <span><strong>Regalia</strong> &mdash; needs a physical token.</span>
                     </div>
-                    <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;font-size:11px;color:#718096">
-                        <span style="font-weight:700;color:#a0aec0">● gray</span> not tracked &nbsp;&rarr;&nbsp;
-                        <span style="font-weight:700;color:#e53e3e">● red</span> needs doing &nbsp;&rarr;&nbsp;
-                        <span style="font-weight:700;color:#38a169">● green</span> done
+                    <div class="cp-about-legend">
+                        <span class="cp-legend-gray">● gray</span> not tracked &nbsp;&rarr;&nbsp;
+                        <span class="cp-legend-red">● red</span> needs doing &nbsp;&rarr;&nbsp;
+                        <span class="cp-legend-green">● green</span> done
                     </div>
 
                 </div>
@@ -414,8 +897,8 @@ $_total_awards = count($courtAwards ?? []);
 
     <!-- Award list -->
     <div class="cp-section-header">
-        <h2><i class="fas fa-award" style="color:#4a5568;margin-right:6px"></i>
-            Order of Court <span id="cp-award-count" style="font-size:13px;color:#718096;font-weight:400">(<?= count($courtAwards) ?>)</span>
+        <h2><i class="fas fa-award cp-h2-icon"></i>
+            Order of Court <span id="cp-award-count" class="cp-count">(<?= count($courtAwards) ?>)</span>
         </h2>
         <?php if ($courtSt === 'draft'): ?>
         <div style="display:flex;gap:8px">
@@ -436,14 +919,40 @@ $_total_awards = count($courtAwards ?? []);
         <?php endif; ?>
     </div>
 
+    <!-- Spreadsheet toolbar -->
+    <div class="cp-list-toolbar">
+        <span class="cp-list-toolbar-label"><i class="fas fa-table-cells" style="margin-right:5px"></i>View</span>
+        <div class="cp-density-seg" id="cp-density-seg" role="group" aria-label="Row density">
+            <button type="button" data-density="cozy"        onclick="cpSetDensity('cozy')"        title="Cozy — extra spacing"><i class="fas fa-bars"></i> Cozy</button>
+            <button type="button" data-density="comfortable" onclick="cpSetDensity('comfortable')" title="Comfortable — balanced spacing"><i class="fas fa-grip-lines"></i> Comfortable</button>
+            <button type="button" data-density="compact"     onclick="cpSetDensity('compact')"     title="Compact — dense rows"><i class="fas fa-minus"></i> Compact</button>
+        </div>
+        <span class="cp-list-toolbar-spacer"></span>
+        <span class="cp-list-toolbar-label" id="cp-list-toolbar-count"><?= count($courtAwards) ?> award<?= count($courtAwards) !== 1 ? 's' : '' ?></span>
+    </div>
+
     <div class="cp-award-list<?= in_array($courtSt, ['published','complete']) ? ' cp-list-published' : '' ?>" id="cp-award-list">
+        <!-- Column header -->
+        <div class="cp-list-header cp-row-grid" id="cp-list-header">
+            <div class="cp-hdr-order"></div>
+            <div class="cp-hdr-num">#</div>
+            <div class="cp-hdr-recipient">Recipient</div>
+            <div class="cp-hdr-award">Award</div>
+            <div class="cp-hdr-type">Type</div>
+            <div class="cp-hdr-flags">Flags</div>
+            <div class="cp-hdr-scroll" title="Scroll"><i class="fas fa-print"></i></div>
+            <div class="cp-hdr-regalia" title="Regalia"><i class="fas fa-medal"></i></div>
+            <div class="cp-hdr-status">Status</div>
+            <div class="cp-hdr-chev"></div>
+        </div>
+
         <?php if (empty($courtAwards)): ?>
         <div class="cp-award-empty" id="cp-award-empty">
             <i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>
             No awards planned yet. Add from recommendations or create an ad-hoc entry.
         </div>
         <?php else: ?>
-        <?php foreach ($courtAwards as $aw): ?>
+        <?php $_rowIndex = 0; foreach ($courtAwards as $aw): $_rowIndex++; ?>
         <?php
             $ast  = $aw['Status'];
             $albl = $awardStatusLabel[$ast] ?? $ast;
@@ -451,49 +960,57 @@ $_total_awards = count($courtAwards ?? []);
             $abg  = $awardStatusBg[$ast]    ?? '#edf2f7';
             // Type badge
             if ($aw['IsTitle']) {
-                $typeClass = 'cp-type-title'; $typeIcon = 'fa-crown'; $typeLabel = 'Title';
+                $typeClass = 'cp-type-title';  $typeLabel = 'Title';
             } elseif ($aw['IsLadder']) {
-                $typeClass = 'cp-type-ladder'; $typeIcon = 'fa-layer-group'; $typeLabel = 'Ladder';
+                $typeClass = 'cp-type-ladder'; $typeLabel = 'Ladder';
             } else {
-                $typeClass = 'cp-type-award'; $typeIcon = 'fa-award'; $typeLabel = 'Award';
+                $typeClass = 'cp-type-award';  $typeLabel = 'Award';
             }
         ?>
         <div class="cp-award-row<?= $ast === 'given' ? ' cp-granted' : ($ast === 'cancelled' ? ' cp-skipped' : '') ?> cp-aw-type-<?= $aw['IsTitle'] ? 'title' : ($aw['IsLadder'] ? 'ladder' : 'award') ?>"
              id="cp-aw-<?= (int)$aw['CourtAwardId'] ?>"
              data-court-award-id="<?= (int)$aw['CourtAwardId'] ?>"
              data-sort="<?= (int)$aw['SortOrder'] ?>">
-            <div class="cp-award-row-main" onclick="cpToggleAward(<?= (int)$aw['CourtAwardId'] ?>)">
-                <div class="cp-reorder-btns">
-                    <button class="cp-reorder-btn" title="Move up" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,-1)">&#9650;</button>
-                    <button class="cp-reorder-btn" title="Move down" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,1)">&#9660;</button>
-                </div>
-                <div class="cp-award-info">
-                    <div class="cp-award-line1 cp-award-name">
-                        <?= htmlspecialchars($aw['Persona']) ?>
-                        <?php if (!empty($aw['ParkAbbrev'])): ?><span class="cp-award-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
-                        <?php if (!empty($aw['Notes'])): ?><button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button><?php endif; ?>
-                    </div>
-                    <div class="cp-award-line2">
-                        <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?><?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="cp-award-rank"> &mdash; Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?></span>
-                        <span class="cp-award-flags">
-                            <?php if ($aw['PassToLocal']): ?><span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span><?php endif; ?>
-                            <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" title="From Recommendation"><i class="fas fa-star"></i></span><?php endif; ?>
-                            <span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i></span>
-                            <span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="<?= $aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i></span>
-                        </span>
+            <div class="cp-award-row-main cp-row-grid" onclick="cpToggleAward(<?= (int)$aw['CourtAwardId'] ?>)">
+                <div class="cp-cell cp-cell-order">
+                    <div class="cp-reorder-btns">
+                        <button class="cp-reorder-btn" title="Move up" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,-1)">&#9650;</button>
+                        <button class="cp-reorder-btn" title="Move down" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,1)">&#9660;</button>
                     </div>
                 </div>
-                <div class="cp-award-right">
+                <div class="cp-cell cp-cell-num"><?= $_rowIndex ?></div>
+                <div class="cp-cell cp-cell-recipient cp-award-name">
+                    <span class="cp-recipient-name"><?= htmlspecialchars($aw['Persona']) ?></span>
+                    <?php if (!empty($aw['ParkAbbrev'])): ?><span class="cp-award-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
+                    <?php if (!empty($aw['Notes'])): ?><button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button><?php endif; ?>
+                </div>
+                <div class="cp-cell cp-cell-award">
+                    <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?></span>
+                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="cp-award-rank">Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?>
+                </div>
+                <div class="cp-cell cp-cell-type">
+                    <span class="<?= $typeClass ?>"><?= $typeLabel ?></span>
+                </div>
+                <div class="cp-cell cp-cell-flags cp-award-flags">
+                    <?php if ($aw['PassToLocal']): ?><span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span><?php endif; ?>
+                    <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" title="From Recommendation"><i class="fas fa-star"></i></span><?php endif; ?>
+                </div>
+                <div class="cp-cell cp-cell-scroll">
+                    <span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i></span>
+                </div>
+                <div class="cp-cell cp-cell-regalia">
+                    <span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="<?= $aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i></span>
+                </div>
+                <div class="cp-cell cp-cell-status">
                     <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
                     <?php if ($courtSt === 'published' && !in_array($ast, ['given','cancelled'])): ?>
                     <div class="cp-grant-actions" onclick="event.stopPropagation()">
                         <button class="cp-btn-grant" onclick="cpGrantAward(<?= (int)$aw['CourtAwardId'] ?>)"><i class="fas fa-check"></i> Grant</button>
                         <button class="cp-btn-skip" onclick="cpSkipAward(<?= (int)$aw['CourtAwardId'] ?>)"><i class="fas fa-forward"></i> Skip</button>
                     </div>
-                    <?php else: ?>
-                    <i class="fas fa-chevron-down" style="color:#cbd5e0;font-size:12px;flex-shrink:0"></i>
                     <?php endif; ?>
                 </div>
+                <div class="cp-cell cp-cell-chevron"><i class="fas fa-chevron-down"></i></div>
             </div>
             <div class="cp-award-row-expand" id="cp-aw-expand-<?= (int)$aw['CourtAwardId'] ?>">
                 <div class="cp-expand-grid">
@@ -579,7 +1096,7 @@ $_total_awards = count($courtAwards ?? []);
                     <button class="cp-btn-primary cp-btn-sm" onclick="cpSaveAward(<?= (int)$aw['CourtAwardId'] ?>)">
                         <i class="fas fa-save"></i> Save
                     </button>
-                    <button class="cp-btn-sm" style="background:#fff5f5;border:1px solid #fc8181;color:#c53030"
+                    <button class="cp-btn-sm cp-btn-danger-inline"
                             onclick="cpRemoveAward(<?= (int)$aw['CourtAwardId'] ?>)">
                         <i class="fas fa-trash"></i> Remove
                     </button>
@@ -608,6 +1125,13 @@ $_total_awards = count($courtAwards ?? []);
                 <input class="cp-rm-search" id="cp-rm-filter" type="text" placeholder="Filter by name or award…" oninput="cpRmFilter()" autocomplete="off">
             </div>
             <div class="cp-rm-controls">
+                <span class="cp-rm-sort-label">View:</span>
+                <button class="cp-rm-view-btn active" data-view="open"     onclick="cpRmView('open')"     title="Open recs ready to grant (hides already-qualified and snoozed)">Open</button>
+                <button class="cp-rm-view-btn"        data-view="all"      onclick="cpRmView('all')"      title="Every eligible rec for this kingdom/park">All</button>
+                <button class="cp-rm-view-btn"        data-view="snoozed"  onclick="cpRmView('snoozed')"  title="Recs the monarchy has set aside for this regnum">Snoozed</button>
+                <button class="cp-rm-view-btn"        data-view="already"  onclick="cpRmView('already')"  title="Player already has this award at or above the recommended rank">Already Has</button>
+            </div>
+            <div class="cp-rm-controls">
                 <span class="cp-rm-sort-label">Sort:</span>
                 <button class="cp-rm-sort-btn active" id="cp-rm-s-az"   onclick="cpRmSort('az')"  >A → Z</button>
                 <button class="cp-rm-sort-btn"        id="cp-rm-s-za"   onclick="cpRmSort('za')"  >Z → A</button>
@@ -615,21 +1139,52 @@ $_total_awards = count($courtAwards ?? []);
                 <button class="cp-rm-sort-btn"        id="cp-rm-s-new"  onclick="cpRmSort('new')" >Newest First</button>
             </div>
             <div class="cp-rm-meta" id="cp-rm-meta"><?php
-                $total = count($pendingRecs);
-                $available = count(array_filter($pendingRecs, fn($r) => !$r['AlreadyPlanned']));
-                echo $total . ' recommendation' . ($total !== 1 ? 's' : '') . ' &nbsp;·&nbsp; ' . ($total - $available) . ' already in plan';
+                $total      = count($pendingRecs);
+                $alreadyQ   = count(array_filter($pendingRecs, fn($r) => !empty($r['AlreadyHas'])));
+                $snoozedCt  = count(array_filter($pendingRecs, fn($r) => !empty($r['IsSnoozed'])));
+                $open       = $total - $alreadyQ - $snoozedCt;
+                echo '<strong>' . $open . '</strong> open'
+                   . ' &nbsp;·&nbsp; ' . $alreadyQ . ' already has'
+                   . ' &nbsp;·&nbsp; ' . $snoozedCt . ' snoozed';
             ?></div>
             <div class="cp-rm-list" id="cp-rec-list">
                 <?php
                 $avatarColors = ['#3182ce','#2f855a','#c05621','#6b46c1','#b7791f','#2c7a7b','#c53030','#276749','#553c9a','#2b6cb0'];
                 foreach ($pendingRecs as $rec):
-                    $already = $rec['AlreadyPlanned'];
+                    $alreadyHas    = !empty($rec['AlreadyHas']);
+                    $isSnoozed     = !empty($rec['IsSnoozed']);
+                    $isOnOther     = !empty($rec['IsOnOtherCourt']);
+                    $coveredMaster = !empty($rec['CoveredByMaster']);
+                    // Disable selection only when player already has the award (snoozed/other-court are still selectable).
+                    $disabled      = $alreadyHas;
+                    // Default-hidden if NOT in the "open" bucket (already-qualified or snoozed).
+                    $defaultBucket = $alreadyHas ? 'already' : ($isSnoozed ? 'snoozed' : 'open');
                     $initial = mb_strtoupper(mb_substr($rec['Persona'], 0, 1));
                     $colorIdx = abs(crc32($rec['Persona'])) % count($avatarColors);
-                    $avatarBg = $already ? '#a0aec0' : $avatarColors[$colorIdx];
+                    $avatarBg = $disabled ? '#a0aec0' : $avatarColors[$colorIdx];
                     $reason = $rec['Reason'] ? mb_substr($rec['Reason'], 0, 120) . (mb_strlen($rec['Reason']) > 120 ? '…' : '') : '';
+
+                    // Age badge bucket (matches Kingdom Recs colors)
+                    $d = (int)($rec['AgeDays'] ?? 0);
+                    if      ($d < 1)   { $ageLbl = 'today'; $ageCls = 'cp-age-green'; }
+                    elseif  ($d < 30)  { $ageLbl = $d . 'd';                            $ageCls = 'cp-age-green'; }
+                    elseif  ($d < 90)  { $ageLbl = round($d/30) . 'mo';                 $ageCls = 'cp-age-yellow'; }
+                    elseif  ($d < 180) { $ageLbl = round($d/30) . 'mo';                 $ageCls = 'cp-age-orange'; }
+                    else               { $ageLbl = round($d/365) . 'y+';                $ageCls = 'cp-age-red'; }
+
+                    // Already-qualified inline reason
+                    if ($alreadyHas) {
+                        if ($coveredMaster) {
+                            $qualifiedTip = 'Covered by a Master peerage';
+                        } elseif ((int)($rec['CurrentRank'] ?? 0) > 0) {
+                            $qualifiedTip = 'Held at Rank ' . (int)$rec['CurrentRank']
+                                . (!empty($rec['CurrentRankDate']) ? ' since ' . htmlspecialchars($rec['CurrentRankDate']) : '');
+                        } else {
+                            $qualifiedTip = 'Already granted';
+                        }
+                    }
                 ?>
-                <div class="cp-rm-row<?= $already ? ' already' : '' ?>"
+                <div class="cp-rm-row<?= $disabled ? ' already' : '' ?><?= $isSnoozed ? ' cp-rm-snoozed' : '' ?>"
                      id="cp-rec-<?= (int)$rec['RecommendationsId'] ?>"
                      data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
                      data-mundane-id="<?= (int)$rec['MundaneId'] ?>"
@@ -639,26 +1194,51 @@ $_total_awards = count($courtAwards ?? []);
                      data-award="<?= htmlspecialchars($rec['AwardName'], ENT_QUOTES) ?>"
                      data-date="<?= $rec['DateRecommended'] ? date('Y-m-d', strtotime($rec['DateRecommended'])) : '' ?>"
                      data-search="<?= htmlspecialchars(strtolower($rec['Persona'] . ' ' . $rec['AwardName']), ENT_QUOTES) ?>"
-                     onclick="<?= $already ? '' : 'cpToggleRec(this)' ?>">
-                    <?php if (!$already): ?>
+                     data-bucket="<?= $defaultBucket ?>"
+                     data-already-has="<?= $alreadyHas ? '1' : '0' ?>"
+                     data-snoozed="<?= $isSnoozed ? '1' : '0' ?>"
+                     data-on-other-court="<?= $isOnOther ? '1' : '0' ?>"
+                     onclick="<?= $disabled ? '' : 'cpToggleRec(this)' ?>">
+                    <?php if (!$disabled): ?>
                     <button class="cp-rm-trash" title="Dismiss recommendation" onclick="event.stopPropagation();cpDismissRec(this,<?= (int)$rec['RecommendationsId'] ?>)"><i class="fas fa-trash-alt"></i></button>
                     <?php endif; ?>
                     <div class="cp-rm-avatar" style="background:<?= $avatarBg ?>"><?= htmlspecialchars($initial) ?></div>
                     <div class="cp-rm-main">
-                        <div class="cp-rm-persona"><?= htmlspecialchars($rec['Persona']) ?><?php if (!empty($rec['ParkAbbrev'])): ?> <span style="font-size:11px;font-weight:400;color:#a0aec0;letter-spacing:.2px"><?= htmlspecialchars($rec['ParkAbbrev']) ?></span><?php endif; ?></div>
-                        <div class="cp-rm-award">
-                            <i class="fas fa-award" style="color:#a0aec0;font-size:11px;margin-right:3px"></i><?= htmlspecialchars($rec['AwardName']) ?><?php if ($rec['IsLadder'] && $rec['Rank'] > 0): ?><span class="cp-rm-rank">Rank <?= (int)$rec['Rank'] ?></span><?php endif; ?>
+                        <div class="cp-rm-head">
+                            <span class="cp-rm-persona"><?= htmlspecialchars($rec['Persona']) ?></span>
+                            <?php if (!empty($rec['ParkAbbrev'])): ?><span class="cp-rm-park"><?= htmlspecialchars($rec['ParkAbbrev']) ?></span><?php endif; ?>
+                            <span class="cp-rm-sep">&middot;</span>
+                            <span class="cp-rm-award"><?= htmlspecialchars($rec['AwardName']) ?></span>
+                            <?php if ($rec['IsLadder'] && $rec['Rank'] > 0): ?><span class="cp-rm-rank">Rank <?= (int)$rec['Rank'] ?></span><?php endif; ?>
+                            <?php if ($rec['DateRecommended']): ?>
+                            <span class="cp-rm-sep">&middot;</span>
+                            <span class="cp-rm-date"><?= date('M j, Y', strtotime($rec['DateRecommended'])) ?></span>
+                            <span class="cp-rm-age-badge <?= $ageCls ?>" title="Age of this recommendation"><?= $ageLbl ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($rec['SecondsCount'])): ?>
+                            <span class="cp-rm-sep">&middot;</span>
+                            <span class="cp-rm-seconds" title="<?= (int)$rec['SecondsCount'] ?> supporting <?= (int)$rec['SecondsCount'] === 1 ? 'second' : 'seconds' ?>"><i class="fas fa-thumbs-up"></i><?= (int)$rec['SecondsCount'] ?></span>
+                            <?php endif; ?>
+                            <?php if ($isOnOther): ?>
+                            <span class="cp-rm-sep">&middot;</span>
+                            <span class="cp-rm-onother" title="This recommendation is on another court plan"><i class="fas fa-scroll"></i> On another court</span>
+                            <?php endif; ?>
+                            <?php if ($alreadyHas): ?>
+                            <span class="cp-rm-sep">&middot;</span>
+                            <span class="cp-rm-qualified" title="<?= htmlspecialchars($qualifiedTip) ?>"><i class="fas fa-check-circle"></i> <?= $coveredMaster ? 'Covered by Master' : 'Already has' ?></span>
+                            <?php endif; ?>
+                            <?php if ($isSnoozed): ?>
+                            <span class="cp-rm-sep">&middot;</span>
+                            <span class="cp-rm-snooze-chip" title="Snoozed for the current regnum"><i class="fas fa-bell-slash"></i> Snoozed</span>
+                            <?php endif; ?>
                         </div>
                         <?php if ($reason): ?>
                         <div class="cp-rm-reason"><?= htmlspecialchars($reason) ?></div>
                         <?php endif; ?>
-                        <?php if ($rec['DateRecommended']): ?>
-                        <div class="cp-rm-date"><i class="fas fa-clock" style="margin-right:3px"></i>Rec'd <?= date('M j, Y', strtotime($rec['DateRecommended'])) ?></div>
-                        <?php endif; ?>
                     </div>
                     <div class="cp-rm-right">
-                        <?php if ($already): ?>
-                        <span class="cp-rm-in-plan"><i class="fas fa-check" style="margin-right:3px"></i>In Plan</span>
+                        <?php if ($alreadyHas): ?>
+                        <span class="cp-rm-in-plan"><i class="fas fa-check" style="margin-right:3px"></i>Already Has</span>
                         <?php else: ?>
                         <div class="cp-rm-check"><i class="fas fa-check"></i></div>
                         <?php endif; ?>
@@ -827,6 +1407,76 @@ $_total_awards = count($courtAwards ?? []);
         }
     };
 
+    // ---- Density toggle (Cozy / Comfortable / Compact) ----
+    var CP_DENSITY_KEY     = 'cp.density';
+    var CP_SIDEBAR_KEY     = 'cp.sidebarCollapsed';
+    var CP_VALID_DENSITIES = ['cozy', 'comfortable', 'compact'];
+    function cpReadDensity() {
+        try {
+            var v = localStorage.getItem(CP_DENSITY_KEY);
+            return CP_VALID_DENSITIES.indexOf(v) >= 0 ? v : 'comfortable';
+        } catch (e) { return 'comfortable'; }
+    }
+    window.cpSetDensity = function(d) {
+        if (CP_VALID_DENSITIES.indexOf(d) < 0) d = 'comfortable';
+        var list = gid('cp-award-list');
+        if (!list) return;
+        CP_VALID_DENSITIES.forEach(function(name) { list.classList.remove('cp-density-' + name); });
+        list.classList.add('cp-density-' + d);
+        // Toolbar segmented control state
+        var seg = gid('cp-density-seg');
+        if (seg) {
+            seg.querySelectorAll('button').forEach(function(b) {
+                b.classList.toggle('active', b.dataset.density === d);
+            });
+        }
+        try { localStorage.setItem(CP_DENSITY_KEY, d); } catch (e) {}
+    };
+
+    // ---- Sidebar collapse ----
+    window.cpToggleSidebar = function() {
+        var body = gid('cp-body');
+        if (!body) return;
+        var collapsed = body.classList.toggle('cp-sidebar-collapsed');
+        var btn = gid('cp-sidebar-collapse-btn');
+        if (btn) {
+            btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+            btn.setAttribute('aria-label', btn.title);
+        }
+        try { localStorage.setItem(CP_SIDEBAR_KEY, collapsed ? '1' : '0'); } catch (e) {}
+    };
+    function cpInitSidebar() {
+        var collapsed = false;
+        try { collapsed = localStorage.getItem(CP_SIDEBAR_KEY) === '1'; } catch (e) {}
+        if (collapsed) {
+            var body = gid('cp-body');
+            if (body) body.classList.add('cp-sidebar-collapsed');
+            var btn = gid('cp-sidebar-collapse-btn');
+            if (btn) {
+                btn.title = 'Expand sidebar';
+                btn.setAttribute('aria-label', 'Expand sidebar');
+            }
+        }
+    }
+
+    // Renumber the # column after reorder / sort / add / remove
+    window.cpRenumberRows = function() {
+        var list = gid('cp-award-list');
+        if (!list) return;
+        var n = 0;
+        list.querySelectorAll('.cp-award-row').forEach(function(row) {
+            n++;
+            var cell = row.querySelector('.cp-cell-num');
+            if (cell) cell.textContent = n;
+        });
+        var ttCount = gid('cp-list-toolbar-count');
+        if (ttCount) ttCount.textContent = n + ' award' + (n === 1 ? '' : 's');
+    };
+
+    // Apply density immediately so the page paints with the saved choice
+    cpSetDensity(cpReadDensity());
+    cpInitSidebar();
+
     // ---- Reorder ----
     window.cpMoveAward = function(caid, dir) {
         var list  = gid('cp-award-list');
@@ -837,6 +1487,7 @@ $_total_awards = count($courtAwards ?? []);
         if (dir === -1) rows[swap].before(rows[idx]);
         else            rows[idx].before(rows[swap]);
         cpSaveOrder();
+        cpRenumberRows();
     };
 
     window.cpSortByOrders = function() {
@@ -866,6 +1517,7 @@ $_total_awards = count($courtAwards ?? []);
             }
         });
         cpSaveOrder();
+        cpRenumberRows();
     }
 
     window.cpSortTitlesLast = function() {
@@ -903,6 +1555,7 @@ $_total_awards = count($courtAwards ?? []);
             }
         });
         cpSaveOrder();
+        cpRenumberRows();
     }
 
     // ---- Printing List toggle ----
@@ -1144,12 +1797,17 @@ $_total_awards = count($courtAwards ?? []);
                 var row = gid('cp-aw-' + caid);
                 if (row) row.remove();
                 var remaining = document.querySelectorAll('#cp-award-list .cp-award-row').length;
-                if (remaining === 0) {
+                if (remaining === 0 && !gid('cp-award-empty')) {
                     var list = gid('cp-award-list');
-                    list.innerHTML = '<div class="cp-award-empty" id="cp-award-empty"><i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>No awards planned yet.</div>';
+                    var empty = document.createElement('div');
+                    empty.className = 'cp-award-empty';
+                    empty.id = 'cp-award-empty';
+                    empty.innerHTML = '<i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>No awards planned yet.';
+                    list.appendChild(empty);
                 }
                 var cnt = gid('cp-award-count');
                 if (cnt) cnt.textContent = '(' + remaining + ')';
+                cpRenumberRows();
             } else {
                 alert(d.error || 'Could not remove.');
             }
@@ -1202,23 +1860,61 @@ $_total_awards = count($courtAwards ?? []);
         rows.forEach(function(row) { list.insertBefore(row, empty); });
     };
 
+    var cpRmCurrentView = 'open';
+
+    function cpRmViewMatch(row, view) {
+        var already = row.dataset.alreadyHas === '1';
+        var snoozed = row.dataset.snoozed     === '1';
+        switch (view) {
+            case 'open':    return !already && !snoozed;
+            case 'snoozed': return snoozed;
+            case 'already': return already;
+            case 'all':     return true;
+        }
+        return true;
+    }
+
+    window.cpRmView = function(view) {
+        cpRmCurrentView = view;
+        document.querySelectorAll('.cp-rm-view-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.view === view);
+        });
+        cpRmFilter();
+    };
+
     window.cpRmFilter = function() {
         var q = (gid('cp-rm-filter').value || '').toLowerCase().trim();
         var rows = document.querySelectorAll('#cp-rec-list .cp-rm-row');
         var visible = 0;
         rows.forEach(function(row) {
-            var match = !q || (row.dataset.search || '').indexOf(q) !== -1;
+            var inView = cpRmViewMatch(row, cpRmCurrentView);
+            var match  = inView && (!q || (row.dataset.search || '').indexOf(q) !== -1);
             row.style.display = match ? '' : 'none';
             if (match) visible++;
         });
         var empty = gid('cp-rm-empty');
-        if (empty) empty.style.display = visible === 0 ? '' : 'none';
+        if (empty) {
+            if (visible === 0) {
+                empty.textContent = q ? 'No recommendations match your filter.'
+                                     : (cpRmCurrentView === 'open'    ? 'No open recommendations. Try a different view.'
+                                     :  cpRmCurrentView === 'snoozed' ? 'Nothing snoozed.'
+                                     :  cpRmCurrentView === 'already' ? 'No one already has this award.'
+                                     :  'No recommendations.');
+                empty.style.display = '';
+            } else {
+                empty.style.display = 'none';
+            }
+        }
     };
 
     window.cpOpenRecModal = function() {
         selectedRecs = [];
         document.querySelectorAll('.cp-rm-row:not(.already)').forEach(function(el) { el.classList.remove('selected'); });
         var fi = gid('cp-rm-filter'); if (fi) { fi.value = ''; }
+        cpRmCurrentView = 'open';
+        document.querySelectorAll('.cp-rm-view-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.view === 'open');
+        });
         cpRmSort(cpRmCurrentSort);
         cpRmFilter();
         cpRmUpdateCount();
@@ -1366,24 +2062,33 @@ $_total_awards = count($courtAwards ?? []);
         if (empty) empty.remove();
         var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span>' : '';
         var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" title="From Recommendation"><i class="fas fa-star"></i></span>' : '';
-        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="cp-award-rank"> &mdash; Rank ' + aw.Rank + '</span>' : '';
-        var html = '<div class="cp-award-row" id="cp-aw-' + aw.CourtAwardId + '" data-court-award-id="' + aw.CourtAwardId + '" data-sort="' + aw.SortOrder + '">' +
-            '<div class="cp-award-row-main" onclick="cpToggleAward(' + aw.CourtAwardId + ')">' +
-            '<div class="cp-reorder-btns">' +
+        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="cp-award-rank">Rank ' + aw.Rank + '</span>' : '';
+        var noteBtn  = aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>' : '';
+        var typeClass = aw.IsTitle ? 'cp-type-title' : (aw.IsLadder ? 'cp-type-ladder' : 'cp-type-award');
+        var typeLabel = aw.IsTitle ? 'Title' : (aw.IsLadder ? 'Ladder' : 'Award');
+        var typeRow   = aw.IsTitle ? 'title'  : (aw.IsLadder ? 'ladder' : 'award');
+        var html = '<div class="cp-award-row cp-aw-type-' + typeRow + '" id="cp-aw-' + aw.CourtAwardId + '" data-court-award-id="' + aw.CourtAwardId + '" data-sort="' + aw.SortOrder + '">' +
+            '<div class="cp-award-row-main cp-row-grid" onclick="cpToggleAward(' + aw.CourtAwardId + ')">' +
+            '<div class="cp-cell cp-cell-order"><div class="cp-reorder-btns">' +
             '<button class="cp-reorder-btn" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',-1)">&#9650;</button>' +
             '<button class="cp-reorder-btn" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',1)">&#9660;</button>' +
+            '</div></div>' +
+            '<div class="cp-cell cp-cell-num"></div>' +
+            '<div class="cp-cell cp-cell-recipient cp-award-name">' +
+                '<span class="cp-recipient-name">' + esc(aw.Persona) + '</span>' +
+                (aw.ParkAbbrev ? '<span class="cp-award-park">' + esc(aw.ParkAbbrev) + '</span>' : '') +
+                noteBtn +
             '</div>' +
-            '<div class="cp-award-info">' +
-            '<div class="cp-award-line1 cp-award-name">' + esc(aw.Persona) + (aw.ParkAbbrev ? ' <span class="cp-award-park">' + esc(aw.ParkAbbrev) + '</span>' : '') +
-            (aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>' : '') +
+            '<div class="cp-cell cp-cell-award">' +
+                '<span class="cp-award-name-text">' + esc(aw.AwardName) + '</span>' + rankStr +
             '</div>' +
-            '<div class="cp-award-line2"><span class="cp-award-name-text">' + esc(aw.AwardName) + rankStr + '</span>' +
-            '<span class="cp-award-flags">' + ptlBadge + recBadge +
-            '<span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span>' +
-            '<span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span>' +
-            '</span></div></div>' +
-            '<div class="cp-award-right"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span>' +
-            '<i class="fas fa-chevron-down" style="color:#cbd5e0;font-size:12px;flex-shrink:0"></i></div></div>' +
+            '<div class="cp-cell cp-cell-type"><span class="' + typeClass + '">' + typeLabel + '</span></div>' +
+            '<div class="cp-cell cp-cell-flags cp-award-flags">' + ptlBadge + recBadge + '</div>' +
+            '<div class="cp-cell cp-cell-scroll"><span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span></div>' +
+            '<div class="cp-cell cp-cell-regalia"><span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span></div>' +
+            '<div class="cp-cell cp-cell-status"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span></div>' +
+            '<div class="cp-cell cp-cell-chevron"><i class="fas fa-chevron-down"></i></div>' +
+            '</div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
             '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea></div>' +
@@ -1398,11 +2103,12 @@ $_total_awards = count($courtAwards ?? []);
             '<button class="cp-btn-sm cp-btn-outline" style="margin-top:6px" onclick="cpOpenArtisanModal(' + aw.CourtAwardId + ')"><i class="fas fa-plus"></i> Add Artisan</button></div>' +
             '<div class="cp-expand-actions">' +
             '<button class="cp-btn-primary cp-btn-sm" onclick="cpSaveAward(' + aw.CourtAwardId + ')"><i class="fas fa-save"></i> Save</button>' +
-            '<button class="cp-btn-sm" style="background:#fff5f5;border:1px solid #fc8181;color:#c53030" onclick="cpRemoveAward(' + aw.CourtAwardId + ')"><i class="fas fa-trash"></i> Remove</button>' +
+            '<button class="cp-btn-sm cp-btn-danger-inline" onclick="cpRemoveAward(' + aw.CourtAwardId + ')"><i class="fas fa-trash"></i> Remove</button>' +
             '</div></div></div>';
         gid('cp-award-list').insertAdjacentHTML('beforeend', html);
         var cnt = gid('cp-award-count');
         if (cnt) cnt.textContent = '(' + document.querySelectorAll('#cp-award-list .cp-award-row').length + ')';
+        cpRenumberRows();
     }
 
     // ---- Artisan modal ----

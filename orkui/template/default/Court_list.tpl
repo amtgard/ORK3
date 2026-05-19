@@ -50,6 +50,44 @@ $backUrl = $context === 'park'
 .cp-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid #e2e8f0; }
 .cp-btn-outline { background: #fff; border: 1px solid #cbd5e0; color: #4a5568; padding: 8px 16px; border-radius: 5px; font-size: 13px; cursor: pointer; }
 .cp-error { color: #c53030; font-size: 13px; margin-top: 8px; display: none; }
+.cp-error-box { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 14px 18px; border-radius: 6px; margin-bottom: 16px; }
+.cp-h1-icon { color: #4a5568; margin-right: 8px; }
+
+/* ----- Dark mode overrides ----- */
+html[data-theme="dark"] .cp-error-box { background: rgba(229,62,62,.12); border-color: rgba(229,62,62,.4); color: #fc8181; }
+html[data-theme="dark"] .cp-h1-icon { color: #a0aec0; }
+html[data-theme="dark"] .cp-back { color: #a0aec0; }
+html[data-theme="dark"] .cp-back:hover { color: #e2e8f0; }
+html[data-theme="dark"] .cp-header h1 { color: #e2e8f0; }
+html[data-theme="dark"] .cp-header h1 i { color: #a0aec0 !important; }
+html[data-theme="dark"] .cp-court-card { background: #161b22; border-color: #2d3748; }
+html[data-theme="dark"] .cp-court-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.4); border-color: #4a5568; }
+html[data-theme="dark"] .cp-court-date { color: #a0aec0; }
+html[data-theme="dark"] .cp-court-name { color: #e2e8f0; }
+html[data-theme="dark"] .cp-court-meta { color: #718096; }
+html[data-theme="dark"] .cp-badge-count { background: #1f2733; color: #cbd5e0; }
+html[data-theme="dark"] .cp-btn-link { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-btn-link:hover { background: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .cp-empty { color: #a0aec0; border-color: #2d3748; }
+html[data-theme="dark"] .cp-overlay { background: rgba(0,0,0,.65); }
+html[data-theme="dark"] .cp-modal { background: #161b22; box-shadow: 0 8px 32px rgba(0,0,0,.6); }
+html[data-theme="dark"] .cp-modal-header { border-bottom-color: #2d3748; }
+html[data-theme="dark"] .cp-modal-header h3 { color: #e2e8f0; }
+html[data-theme="dark"] .cp-modal-close { color: #a0aec0; }
+html[data-theme="dark"] .cp-modal-close:hover { color: #e2e8f0; }
+html[data-theme="dark"] .cp-modal-footer { border-top-color: #2d3748; }
+html[data-theme="dark"] .cp-field label { color: #a0aec0; }
+html[data-theme="dark"] .cp-field input,
+html[data-theme="dark"] .cp-field select { background: #1f2733; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .cp-field input::placeholder { color: #4a5568; }
+html[data-theme="dark"] .cp-field input:focus,
+html[data-theme="dark"] .cp-field select:focus { border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66,153,225,.2); outline: none; }
+html[data-theme="dark"] .cp-btn-outline { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-btn-outline:hover { background: #2d3748; }
+html[data-theme="dark"] .cp-error { color: #fc8181; }
+
+/* Status badges (inline style!important: override common pastels) */
+html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 </style>
 
 <div class="cp-page">
@@ -58,13 +96,13 @@ $backUrl = $context === 'park'
     </a>
 
     <?php if ($error): ?>
-        <div style="background:#fff5f5;border:1px solid #feb2b2;color:#c53030;padding:14px 18px;border-radius:6px;margin-bottom:16px">
+        <div class="cp-error-box">
             <i class="fas fa-exclamation-circle"></i> <?= htmlspecialchars($error) ?>
         </div>
     <?php else: ?>
 
     <div class="cp-header">
-        <h1><i class="fas fa-gavel" style="color:#4a5568;margin-right:8px"></i>Court Planner — <?= htmlspecialchars($locationName) ?></h1>
+        <h1><i class="fas fa-gavel cp-h1-icon"></i>Court Planner — <?= htmlspecialchars($locationName) ?></h1>
         <button class="cp-btn-primary" onclick="cpOpenNewCourt()">
             <i class="fas fa-plus"></i> Plan a Court
         </button>
