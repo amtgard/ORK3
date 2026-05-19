@@ -5853,5 +5853,4 @@ $(function() {
 initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
 </script>
 
-<?php endif; ?>
 
