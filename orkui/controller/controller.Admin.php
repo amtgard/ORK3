@@ -2458,25 +2458,6 @@ class Controller_Admin extends Controller {
 				];
 			}
 
-			// Timezone / clock diagnostic — surfaces a TZ mismatch between
-			// PHP (used by the cron's filter via date()) and MySQL (used by
-			// the freshness panel via NOW()). If these disagree, the cron's
-			// stale-park filter will compare differently-formatted datetime
-			// strings and silently exclude stale parks. Web is FPM which may
-			// have a different timezone than the CLI cron.
-			if ($weather !== null) {
-				$DB->Clear();
-				$tzr = $DB->DataSet("SELECT NOW() AS mysql_now, UTC_TIMESTAMP() AS mysql_utc, @@session.time_zone AS mysql_tz");
-				$weather['tz_php']       = date_default_timezone_get();
-				$weather['tz_php_now']   = date('Y-m-d H:i:s');
-				$weather['tz_php_utc']   = gmdate('Y-m-d H:i:s');
-				if ($tzr && $tzr->Size() > 0 && $tzr->Next()) {
-					$weather['tz_mysql']     = $tzr->mysql_tz;
-					$weather['tz_mysql_now'] = $tzr->mysql_now;
-					$weather['tz_mysql_utc'] = $tzr->mysql_utc;
-				}
-			}
-
 			// Memcache health — cheap (single getStats roundtrip). Surfaced
 			// on the live poll so a sudden curr_items drop or cmd_flush bump
 			// is visible without clicking the on-demand panel.
