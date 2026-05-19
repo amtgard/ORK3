@@ -18341,3 +18341,215 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 })();
 
+/* ============================================================================
+   Parknew — Copy From Past Event (pk-cfe-*)
+   Park-scope mirror of the Kingdom block above. Sources are scoped to
+   PkConfig.parkId; the request omits KingdomId so the backend uses pure
+   park scope.
+   ============================================================================ */
+(function() {
+    if (typeof PkConfig === 'undefined' || !PkConfig.parkId) return;
+
+    var SRC_URL = PkConfig.uir + 'EventAjax/copy_source_list';
+    var GO_URL  = PkConfig.uir + 'EventAjax/create_with_copy';
+    var CFE_DEBOUNCE_MS = 200;
+    var DELTA_MS_DEFAULT = 0;
+    var pickerStart = null;
+    var pickerEnd   = null;
+    var debounceTimer = null;
+    var lastQuery = null;
+
+    function $(id) { return document.getElementById(id); }
+    function fireInput(el) {
+        if (!el) return;
+        try { el.dispatchEvent(new Event('input',  { bubbles: true })); } catch(e) {}
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch(e) {}
+    }
+
+    window.pkCfeToggleExpander = function() {
+        var body = $('pk-cfe-body');
+        var btn  = $('pk-cfe-toggle');
+        if (!body || !btn) return;
+        var open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : '';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        if (!open) {
+            setTimeout(function() { var s = $('pk-cfe-search'); if (s) s.focus(); }, 50);
+        }
+    };
+
+    function fmtDate(s) {
+        if (!s) return '';
+        var d = new Date(s.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return s;
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function renderResults(rows) {
+        var box = $('pk-cfe-results');
+        var input = $('pk-cfe-search');
+        if (!box || !input) return;
+        box.innerHTML = '';
+        if (!rows || rows.length === 0) {
+            box.innerHTML = '<div class="kn-ac-empty">No matching past events</div>';
+            if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, box);
+            box.classList.add('kn-ac-open');
+            return;
+        }
+        rows.forEach(function(r) {
+            var row = document.createElement('div');
+            row.className = 'kn-ac-row';
+            var occ = r.occurrenceCount > 1 ? (' · ' + r.occurrenceCount + ' occurrences') : '';
+            row.innerHTML = '<div class="kn-ac-row-title"></div><div class="kn-ac-row-meta"></div>';
+            row.querySelector('.kn-ac-row-title').textContent = r.name;
+            row.querySelector('.kn-ac-row-meta').textContent  = fmtDate(r.lastStart) + occ;
+            row.addEventListener('mousedown', function(e) { e.preventDefault(); pkCfePick(r); });
+            box.appendChild(row);
+        });
+        if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, box);
+        box.classList.add('kn-ac-open');
+    }
+
+    function runSearch(q) {
+        var params = 'ParkId=' + encodeURIComponent(PkConfig.parkId) + '&Query=' + encodeURIComponent(q);
+        fetch(SRC_URL + '?' + params, { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(d) {
+                if (!d || d.status !== 0) { renderResults([]); return; }
+                renderResults(d.results || []);
+            })
+            .catch(function() { renderResults([]); });
+    }
+
+    function onSearchInput() {
+        var input = $('pk-cfe-search');
+        var q = input ? input.value.trim() : '';
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if (q === lastQuery) return;
+        lastQuery = q;
+        debounceTimer = setTimeout(function() { runSearch(q); }, CFE_DEBOUNCE_MS);
+    }
+
+    window.pkCfePick = function(srcRow) {
+        $('pk-cfe-source-id').value    = srcRow.eventId;
+        $('pk-cfe-source-start').value = srcRow.lastStart || '';
+        $('pk-cfe-source-end').value   = srcRow.lastEnd   || '';
+        $('pk-cfe-chip-label').textContent = srcRow.name + ' · ' + fmtDate(srcRow.lastStart);
+        $('pk-cfe-chip').style.display = '';
+        $('pk-cfe-picker-wrap').style.display = 'none';
+        $('pk-cfe-detail').style.display = '';
+        $('pk-cfe-results').classList.remove('kn-ac-open');
+
+        var nameEl = $('pk-event-name');
+        if (nameEl && nameEl.value.trim() === '') {
+            var yr = new Date().getFullYear();
+            nameEl.value = srcRow.name + ' ' + yr;
+            fireInput(nameEl);
+        }
+
+        var sStart = srcRow.lastStart ? new Date(srcRow.lastStart.replace(' ', 'T')) : null;
+        var sEnd   = srcRow.lastEnd   ? new Date(srcRow.lastEnd.replace(' ', 'T'))   : null;
+        DELTA_MS_DEFAULT = (sStart && sEnd && !isNaN(sStart) && !isNaN(sEnd)) ? (sEnd.getTime() - sStart.getTime()) : 0;
+        initPickers();
+    };
+
+    window.pkCfeClear = function() {
+        $('pk-cfe-source-id').value    = '';
+        $('pk-cfe-source-start').value = '';
+        $('pk-cfe-source-end').value   = '';
+        $('pk-cfe-chip').style.display = 'none';
+        $('pk-cfe-picker-wrap').style.display = '';
+        $('pk-cfe-detail').style.display = 'none';
+        var s = $('pk-cfe-search'); if (s) { s.value = ''; lastQuery = null; }
+    };
+
+    function initPickers() {
+        if (typeof flatpickr !== 'function') return;
+        var startEl = $('pk-cfe-start');
+        var endEl   = $('pk-cfe-end');
+        if (!startEl || !endEl) return;
+        if (startEl._flatpickr) startEl._flatpickr.destroy();
+        if (endEl._flatpickr)   endEl._flatpickr.destroy();
+        var opts = {
+            enableTime: true, dateFormat: 'Y-m-d H:i',
+            altInput: true,  altFormat: 'F j, Y  h:i K',
+            minuteIncrement: 5, time_24hr: false, allowInput: false
+        };
+        pickerEnd = flatpickr(endEl, opts);
+        pickerStart = flatpickr(startEl, Object.assign({}, opts, {
+            onChange: function(selDates) {
+                if (!selDates[0]) return;
+                var d = new Date(selDates[0].getTime() + DELTA_MS_DEFAULT);
+                pickerEnd.setDate(d, true);
+            }
+        }));
+    }
+
+    window.pkCfeToggleAll = function(masterCb) {
+        document.querySelectorAll('.pk-cfe-mod').forEach(function(cb) { cb.checked = masterCb.checked; });
+    };
+    window.pkCfeSyncAll = function() {
+        var all = $('pk-cfe-mod-all');
+        if (!all) return;
+        var boxes = Array.from(document.querySelectorAll('.pk-cfe-mod'));
+        var checked = boxes.filter(function(cb) { return cb.checked; }).length;
+        all.checked = (checked === boxes.length);
+        all.indeterminate = (checked > 0 && checked < boxes.length);
+    };
+
+    var _origPkCreateEvent = window.pkCreateEvent;
+    window.pkCreateEvent = function(statusOverride) {
+        var srcEl = $('pk-cfe-source-id');
+        var srcId = srcEl ? parseInt(srcEl.value || '0', 10) : 0;
+        if (!srcId) { if (_origPkCreateEvent) return _origPkCreateEvent(statusOverride); return; }
+
+        var name  = (($('pk-event-name') || {}).value || '').trim();
+        var start = ($('pk-cfe-start') || {}).value || '';
+        var end   = ($('pk-cfe-end')   || {}).value || '';
+        if (!name)  { try { typeof pkEvFeedback === 'function' && pkEvFeedback('Event name is required.'); } catch(e) {} return; }
+        if (!start || !end) { try { typeof pkEvFeedback === 'function' && pkEvFeedback('Start and end times are required.'); } catch(e) {} return; }
+
+        var btn  = $('pk-emod-go-btn');
+        var dbtn = $('pk-emod-draft-btn');
+        if (btn)  btn.disabled  = true;
+        if (dbtn) dbtn.disabled = true;
+
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        var modules = {
+            details:  $('pk-cfe-mod-details').checked,
+            schedule: $('pk-cfe-mod-schedule').checked,
+            staff:    $('pk-cfe-mod-staff').checked,
+            feast:    $('pk-cfe-mod-feast').checked,
+            banner:   $('pk-cfe-mod-banner').checked
+        };
+
+        $.post(GO_URL, {
+            Name: name, ParkId: PkConfig.parkId,
+            SourceEventId: srcId, NewStart: start, NewEnd: end,
+            Modules: JSON.stringify(modules), Status: status
+        }, function(r) {
+            if (r && r.status === 0) {
+                if (r.warnings && r.warnings.length) { try { console.log('Copy completed with warnings:', r.warnings); } catch(e) {} }
+                window.location.href = r.url;
+            } else {
+                try { typeof pkEvFeedback === 'function' && pkEvFeedback((r && r.error) ? r.error : 'Failed to copy event.'); } catch(e) {}
+                if (btn)  btn.disabled  = false;
+                if (dbtn) dbtn.disabled = false;
+            }
+        }, 'json').fail(function() {
+            try { typeof pkEvFeedback === 'function' && pkEvFeedback('Request failed. Please try again.'); } catch(e) {}
+            if (btn)  btn.disabled  = false;
+            if (dbtn) dbtn.disabled = false;
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var s = $('pk-cfe-search');
+        if (s) {
+            s.addEventListener('input', onSearchInput);
+            s.addEventListener('focus', function() { if (lastQuery === null) runSearch(''); });
+            s.addEventListener('blur',  function() { setTimeout(function() { var b = $('pk-cfe-results'); if (b) b.classList.remove('kn-ac-open'); }, 150); });
+        }
+    });
+})();
+
