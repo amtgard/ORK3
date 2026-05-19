@@ -1243,7 +1243,72 @@ var KnBannerConfig = {
 				<input type="hidden" id="kn-event-park-id">
 			</div>
 
-			<!-- Calendar-item-only fields -->
+			<!-- Copy from past event (collapsible, event-mode only) -->
+			<div class="kn-cfe-wrap kn-emod-event-only" id="kn-cfe-wrap" style="margin-top:14px">
+				<button type="button" class="kn-cfe-toggle" id="kn-cfe-toggle" onclick="knCfeToggleExpander()" aria-expanded="false">
+					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
+					Copy from past event <span style="color:#a0aec0;font-weight:400">(optional)</span>
+					<i class="fas fa-chevron-down kn-cfe-chev" id="kn-cfe-chev" style="margin-left:auto"></i>
+				</button>
+				<div class="kn-cfe-body" id="kn-cfe-body" style="display:none">
+					<div class="kn-cfe-field" id="kn-cfe-picker-wrap">
+						<label class="kn-emod-label">Source event <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(kingdom-level)</span></label>
+						<div class="kn-ac-wrap">
+							<input type="text" class="kn-emod-input" id="kn-cfe-search" autocomplete="off" placeholder="Search past events…">
+							<div class="kn-ac-results" id="kn-cfe-results"></div>
+						</div>
+						<input type="hidden" id="kn-cfe-source-id" value="">
+						<input type="hidden" id="kn-cfe-source-start" value="">
+						<input type="hidden" id="kn-cfe-source-end" value="">
+					</div>
+					<div class="kn-cfe-chip" id="kn-cfe-chip" style="display:none">
+						<i class="fas fa-bookmark" style="margin-right:6px;color:#2b6cb0"></i>
+						<span id="kn-cfe-chip-label"></span>
+						<button type="button" class="kn-cfe-chip-clear" onclick="knCfeClear()" aria-label="Clear source">&times;</button>
+					</div>
+					<div class="kn-cfe-detail" id="kn-cfe-detail" style="display:none">
+						<div class="kn-emod-row" style="display:flex;gap:10px;margin-top:12px">
+							<div class="kn-emod-field" style="flex:1">
+								<label class="kn-emod-label">Start <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="kn-emod-input" id="kn-cfe-start" autocomplete="off" placeholder="Select start…">
+							</div>
+							<div class="kn-emod-field" style="flex:1">
+								<label class="kn-emod-label">End <span style="color:#e53e3e">*</span></label>
+								<input type="text" class="kn-emod-input" id="kn-cfe-end" autocomplete="off" placeholder="Select end…">
+							</div>
+						</div>
+						<div class="kn-cfe-modules" style="margin-top:12px">
+							<div class="kn-cfe-mod-title">What to copy</div>
+							<label class="kn-cfe-mod-row kn-cfe-mod-all">
+								<input type="checkbox" id="kn-cfe-mod-all" checked onchange="knCfeToggleAll(this)">
+								<span><strong>Select all</strong></span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-details" checked onchange="knCfeSyncAll()">
+								<span>Event Details <span class="kn-cfe-mod-hint">description, address, fees, links</span></span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-schedule" checked onchange="knCfeSyncAll()">
+								<span>Schedule</span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-staff" checked onchange="knCfeSyncAll()">
+								<span>Staff <span class="kn-cfe-mod-hint">banned/deactivated people are skipped</span></span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-feast" checked onchange="knCfeSyncAll()">
+								<span>Feast</span>
+							</label>
+							<label class="kn-cfe-mod-row">
+								<input type="checkbox" class="kn-cfe-mod" id="kn-cfe-mod-banner" onchange="knCfeSyncAll()">
+								<span>Banner <span class="kn-cfe-mod-hint">image + framing config</span></span>
+							</label>
+						</div>
+					</div>
+				</div>
+			</div>
+
+						<!-- Calendar-item-only fields -->
 			<div class="kn-emod-ci-only" style="display:none">
 				<div class="kn-emod-field" style="margin-top:12px">
 					<label class="kn-emod-label">Host Park <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(optional — leave blank for a kingdom-level item)</span></label>
@@ -2232,6 +2297,49 @@ html[data-theme="dark"] .kn-copy-link:hover { color: #63b3ed; }
 html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
 
 /* ============================================================
+
+/* ---- Copy from past event (kn-cfe-*) ---- */
+.kn-cfe-wrap { border: 1px solid #e2e8f0; border-radius: 6px; background: #f7fafc; overflow: hidden; }
+.kn-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
+.kn-cfe-toggle:hover { background: #edf2f7; }
+.kn-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
+.kn-cfe-toggle[aria-expanded="true"] .kn-cfe-chev { transform: rotate(180deg); }
+.kn-cfe-body { padding: 12px; border-top: 1px solid #e2e8f0; background: #ffffff; }
+.kn-cfe-field { position: relative; }
+.kn-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
+.kn-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
+.kn-cfe-chip-clear:hover { color: #1a365d; }
+.kn-cfe-modules .kn-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.kn-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
+.kn-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
+.kn-cfe-mod-all { border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 4px; }
+.kn-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
+
+#kn-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
+#kn-cfe-results .kn-ac-row:hover, #kn-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
+#kn-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
+#kn-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
+#kn-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
+#kn-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
+
+html[data-theme="dark"] .kn-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-cfe-toggle { color: var(--ork-text); }
+html[data-theme="dark"] .kn-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .kn-cfe-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .kn-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
+html[data-theme="dark"] .kn-cfe-chip-clear { color: #90cdf4; }
+html[data-theme="dark"] .kn-cfe-chip-clear:hover { color: #ebf8ff; }
+html[data-theme="dark"] .kn-cfe-mod-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-cfe-mod-row { color: var(--ork-text); }
+html[data-theme="dark"] .kn-cfe-mod-hint { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-cfe-mod-all { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #kn-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row-title { color: var(--ork-text); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
+html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
+
 </style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
