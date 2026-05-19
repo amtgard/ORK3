@@ -18314,10 +18314,17 @@ window.evSetEventStatus = function(eventId, status, btn) {
     };
 
     // Submit override — replaces the default knCreateEvent path WHEN a source is selected.
+    function knCfeFeedback(msg) {
+        var el = document.getElementById('kn-emod-feedback');
+        if (el) { el.textContent = msg; el.style.display = ''; }
+        try { console.log('[knCfe]', msg); } catch(e) {}
+    }
+
     var _origKnCreateEvent = window.knCreateEvent;
     window.knCreateEvent = function(statusOverride) {
         var srcEl = gid('kn-cfe-source-id');
         var srcId = srcEl ? parseInt(srcEl.value || '0', 10) : 0;
+        try { console.log('[knCfe] create click — srcId:', srcId, 'statusOverride:', statusOverride); } catch(e) {}
         if (!srcId) { if (_origKnCreateEvent) return _origKnCreateEvent(statusOverride); return; }
 
         var name   = (gid('kn-event-name') || {}).value || '';
@@ -18325,8 +18332,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
         var parkId = parseInt((gid('kn-event-park-id') || {}).value || '0', 10);
         var start  = (gid('kn-cfe-start') || {}).value || '';
         var end    = (gid('kn-cfe-end')   || {}).value || '';
-        if (!name)  { try { typeof knEvFeedback === 'function' && knEvFeedback('Event name is required.'); } catch(e) {} return; }
-        if (!start || !end) { try { typeof knEvFeedback === 'function' && knEvFeedback('Start and end times are required.'); } catch(e) {} return; }
+        try { console.log('[knCfe] fields — name:', name, 'parkId:', parkId, 'start:', start, 'end:', end); } catch(e) {}
+        if (!name)  { knCfeFeedback('Event name is required.'); return; }
+        if (!start || !end) { knCfeFeedback('Start and end times are required.'); return; }
 
         var btn  = gid('kn-emod-go-btn');
         var dbtn = gid('kn-emod-draft-btn');
@@ -18353,12 +18361,13 @@ window.evSetEventStatus = function(eventId, status, btn) {
                 }
                 window.location.href = r.url;
             } else {
-                try { typeof knEvFeedback === 'function' && knEvFeedback((r && r.error) ? r.error : 'Failed to copy event.'); } catch(e) {}
+                knCfeFeedback((r && r.error) ? r.error : 'Failed to copy event.');
                 if (btn)  btn.disabled  = false;
                 if (dbtn) dbtn.disabled = false;
             }
-        }, 'json').fail(function() {
-            try { typeof knEvFeedback === 'function' && knEvFeedback('Request failed. Please try again.'); } catch(e) {}
+        }, 'json').fail(function(xhr) {
+            try { console.error('[knCfe] POST failed:', xhr && xhr.status, xhr && xhr.responseText); } catch(e) {}
+            knCfeFeedback('Request failed. Please try again.');
             if (btn)  btn.disabled  = false;
             if (dbtn) dbtn.disabled = false;
         });
@@ -18573,17 +18582,25 @@ window.evSetEventStatus = function(eventId, status, btn) {
         all.indeterminate = (checked > 0 && checked < boxes.length);
     };
 
+    function pkCfeFeedback(msg) {
+        var el = document.getElementById('pk-emod-feedback');
+        if (el) { el.textContent = msg; el.style.display = ''; }
+        try { console.log('[pkCfe]', msg); } catch(e) {}
+    }
+
     var _origPkCreateEvent = window.pkCreateEvent;
     window.pkCreateEvent = function(statusOverride) {
         var srcEl = gid('pk-cfe-source-id');
         var srcId = srcEl ? parseInt(srcEl.value || '0', 10) : 0;
+        try { console.log('[pkCfe] create click — srcId:', srcId, 'statusOverride:', statusOverride); } catch(e) {}
         if (!srcId) { if (_origPkCreateEvent) return _origPkCreateEvent(statusOverride); return; }
 
         var name  = ((gid('pk-event-name') || {}).value || '').trim();
         var start = (gid('pk-cfe-start') || {}).value || '';
         var end   = (gid('pk-cfe-end')   || {}).value || '';
-        if (!name)  { try { typeof pkEvFeedback === 'function' && pkEvFeedback('Event name is required.'); } catch(e) {} return; }
-        if (!start || !end) { try { typeof pkEvFeedback === 'function' && pkEvFeedback('Start and end times are required.'); } catch(e) {} return; }
+        try { console.log('[pkCfe] fields — name:', name, 'start:', start, 'end:', end); } catch(e) {}
+        if (!name)  { pkCfeFeedback('Event name is required.'); return; }
+        if (!start || !end) { pkCfeFeedback('Start and end times are required.'); return; }
 
         var btn  = gid('pk-emod-go-btn');
         var dbtn = gid('pk-emod-draft-btn');
@@ -18608,12 +18625,13 @@ window.evSetEventStatus = function(eventId, status, btn) {
                 if (r.warnings && r.warnings.length) { try { console.log('Copy completed with warnings:', r.warnings); } catch(e) {} }
                 window.location.href = r.url;
             } else {
-                try { typeof pkEvFeedback === 'function' && pkEvFeedback((r && r.error) ? r.error : 'Failed to copy event.'); } catch(e) {}
+                pkCfeFeedback((r && r.error) ? r.error : 'Failed to copy event.');
                 if (btn)  btn.disabled  = false;
                 if (dbtn) dbtn.disabled = false;
             }
-        }, 'json').fail(function() {
-            try { typeof pkEvFeedback === 'function' && pkEvFeedback('Request failed. Please try again.'); } catch(e) {}
+        }, 'json').fail(function(xhr) {
+            try { console.error('[pkCfe] POST failed:', xhr && xhr.status, xhr && xhr.responseText); } catch(e) {}
+            pkCfeFeedback('Request failed. Please try again.');
             if (btn)  btn.disabled  = false;
             if (dbtn) dbtn.disabled = false;
         });
