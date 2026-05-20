@@ -223,25 +223,6 @@
 	margin-top    : 3px;
 }
 
-/* ── Closest-parks distance bucket badges ────────────────── */
-.cp-badge {
-	display      : inline-block;
-	padding      : 2px 9px;
-	border-radius: 11px;
-	font-size    : 11px;
-	font-weight  : 600;
-	white-space  : nowrap;
-}
-.cp-dist-mi { color: var(--rp-text-muted); font-size: 12px; }
-.cp-badge-local { background:#c6f6d5; color:#276749; }
-.cp-badge-day   { background:#bee3f8; color:#2c5282; }
-.cp-badge-road  { background:#feebc8; color:#975a16; }
-.cp-badge-far   { background:#e2e8f0; color:#4a5568; }
-html[data-theme="dark"] .cp-badge-local { background:#22543d; color:#9ae6b4; }
-html[data-theme="dark"] .cp-badge-day   { background:#2a4365; color:#90cdf4; }
-html[data-theme="dark"] .cp-badge-road  { background:#5f370e; color:#fbd38d; }
-html[data-theme="dark"] .cp-badge-far   { background:#2d3748; color:#a0aec0; }
-
 
 /* ── Charts / graphs placeholder ────────────────────────── */
 /* Hidden by default; show by adding .rp-charts-visible      */
