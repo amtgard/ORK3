@@ -2583,6 +2583,7 @@ class Report  extends Ork3 {
 		$sql = "SELECT
 					p.park_id,
 					p.name AS park_name,
+					k.kingdom_id,
 					k.name AS kingdom_name,
 					p.city,
 					p.province,
@@ -2605,6 +2606,7 @@ class Report  extends Ork3 {
 				$response['Parks'][] = array(
 					'ParkId'      => $r->park_id,
 					'ParkName'    => $r->park_name,
+					'KingdomId'   => $r->kingdom_id,
 					'KingdomName' => $r->kingdom_name,
 					'City'        => $r->city,
 					'Province'    => $r->province,

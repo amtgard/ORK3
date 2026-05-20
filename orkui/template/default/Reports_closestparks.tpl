@@ -80,7 +80,7 @@ $_cp_dist = function($mi) use ($MI_TO_KM) {
 				<tr>
 					<td><?=$i + 1?></td>
 					<td><a href="<?=UIR?>Park/profile/<?=(int)$park['ParkId']?>"><?=htmlspecialchars($park['ParkName'])?></a></td>
-					<td><?=htmlspecialchars($park['KingdomName'])?></td>
+					<td><?php if (!empty($park['KingdomId'])): ?><a href="<?=UIR?>Kingdom/profile/<?=(int)$park['KingdomId']?>"><?=htmlspecialchars($park['KingdomName'])?></a><?php else: ?><?=htmlspecialchars($park['KingdomName'])?><?php endif; ?></td>
 					<td><?=htmlspecialchars(trim($park['City'] . ', ' . $park['Province'], ', '))?></td>
 					<td data-order="<?=$park['Miles']?>"><?=$_cp_dist($park['Miles'])?></td>
 				</tr>
