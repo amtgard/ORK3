@@ -232,6 +232,7 @@
 	font-weight  : 600;
 	white-space  : nowrap;
 }
+.cp-dist-mi { color: var(--rp-text-muted); font-size: 12px; }
 .cp-badge-local { background:#c6f6d5; color:#276749; }
 .cp-badge-day   { background:#bee3f8; color:#2c5282; }
 .cp-badge-road  { background:#feebc8; color:#975a16; }
