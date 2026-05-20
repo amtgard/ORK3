@@ -245,9 +245,15 @@ class Controller_EventAjax extends Controller {
 		}
 
 		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
-			exit;
+		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+			global $DB;
+			$DB->Clear();
+			// Cross-validate $detail_id belongs to $event_id via the join on event_calendardetail.
+			$staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff es JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = es.event_calendardetail_id WHERE es.event_calendardetail_id = ' . $detail_id . ' AND cd.event_id = ' . $event_id . ' AND es.mundane_id = ' . $uid . ' AND es.can_attendance = 1 LIMIT 1');
+			if (!($staffRow && $staffRow->Next())) {
+				echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+				exit;
+			}
 		}
 
 		if (!valid_id($_POST['MundaneId'] ?? 0)) {
@@ -404,8 +410,9 @@ class Controller_EventAjax extends Controller {
 			// Get event's park and kingdom to prioritize local players in results
 			$DB->Clear();
 			$evRow = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = {$event_id} LIMIT 1");
-			$evParkId    = ($evRow && $evRow->Next()) ? (int)$evRow->park_id    : 0;
-			$evKingdomId = $evParkId                  ? (int)$evRow->kingdom_id : 0;
+			$haveRow     = ($evRow && $evRow->Next());
+			$evParkId    = $haveRow ? (int)$evRow->park_id    : 0;
+			$evKingdomId = $haveRow ? (int)$evRow->kingdom_id : 0;
 			$DB->Clear();
 			$rs = $DB->DataSet(
 				"SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
@@ -545,12 +552,14 @@ class Controller_EventAjax extends Controller {
 			ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage), can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule), can_feast = VALUES(can_feast)'
 		);
 		$DB->Clear();
-		$idrow = $DB->DataSet('SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $mundane_id . ' ORDER BY event_staff_id DESC LIMIT 1');
-		$staff_id = ($idrow && $idrow->Next()) ? (int)$idrow->event_staff_id : 0;
+		$idrow = $DB->DataSet('SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id WHERE s.event_calendardetail_id = ' . $detail_id . ' AND s.mundane_id = ' . $mundane_id . ' ORDER BY s.event_staff_id DESC LIMIT 1');
+		$fetched   = ($idrow && $idrow->Next());
+		$staff_id  = $fetched ? (int)$idrow->event_staff_id : 0;
+		$persona   = $fetched ? (string)$idrow->persona      : '';
 		echo json_encode(['status' => 0, 'staff' => [
 			'EventStaffId'  => $staff_id,
 			'MundaneId'     => (int)$mundane_id,
-			'Persona'       => trim($_POST['Persona'] ?? ''),
+			'Persona'       => $persona,
 			'RoleName'      => $role_name,
 			'CanManage'     => $can_manage,
 			'CanAttendance' => $can_attendance,
@@ -880,10 +889,15 @@ class Controller_EventAjax extends Controller {
 			global $DB;
 			$DB->Clear();
 			$existRow = $DB->DataSet('SELECT menu, cost, dietary, allergens FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ' . $schedule_id . ' LIMIT 1');
-			$menu      = ($existRow && $existRow->Next()) ? $existRow->menu      : null;
-			$cost      = $existRow ? ($existRow->cost !== null ? (float)$existRow->cost : null) : null;
-			$dietary   = $existRow ? $existRow->dietary   : null;
-			$allergens = $existRow ? $existRow->allergens : null;
+			$_found = ($existRow && $existRow->Next());
+			if (!$_found) {
+				echo json_encode(['status' => 1, 'error' => 'Schedule item not found.']);
+				exit;
+			}
+			$menu      = $existRow->menu;
+			$cost      = $existRow->cost !== null ? (float)$existRow->cost : null;
+			$dietary   = $existRow->dietary;
+			$allergens = $existRow->allergens;
 		}
 
 		global $DB;
@@ -1016,17 +1030,6 @@ class Controller_EventAjax extends Controller {
 		exit;
 	}
 
-	/**
-	 * Bust the SearchService::Event GhettoCache entries that could embed
-	 * event-level fields (HasHeraldry, HasBanner, BannerShowLogo, BannerVignette).
-	 * The cache key is positional on Event()'s arg list; mirror it here for
-	 * the canonical `get_event_info($event_id)` call signature so the next
-	 * page load reads fresh data.
-	 */
-
-	// Per-request cache for mundane eligibility — copy passes reference the same
-	// mundane through many schedule leads + staff rows.
-
 	public function copy_source_list($p = null) {
 		header('Content-Type: application/json');
 		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
@@ -1059,12 +1062,17 @@ class Controller_EventAjax extends Controller {
 
 		global $DB;
 		$DB->Clear();
+		// Past-only: drop events whose occurrences are all in the future, and
+		// for events with mixed history make MAX(last_start) reflect the most
+		// recent *past* occurrence (so the order surfaces "recently held" first).
 		$sql = 'SELECT e.event_id, e.name,
 					MAX(cd.event_start) AS last_start,
 					MAX(cd.event_end)   AS last_end,
 					COUNT(cd.event_calendardetail_id) AS occ_count
 				FROM ' . DB_PREFIX . 'event e
-				JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_id = e.event_id
+				JOIN ' . DB_PREFIX . 'event_calendardetail cd
+				  ON cd.event_id = e.event_id
+				 AND cd.event_start < NOW()
 				WHERE ' . $scope_where . $exclude_where . "
 				  AND e.status = 'published'" . $name_where . '
 				GROUP BY e.event_id
@@ -1294,16 +1302,21 @@ class Controller_EventAjax extends Controller {
 				}
 			}
 
-			// Copy leads — filter banned/deactivated mundanes silently.
-			foreach ($src_sched_ids as $src_sid => $new_sid) {
+			// Copy leads — batch-fetch all source leads in one query, then INSERT per row.
+			if (!empty($src_sched_ids)) {
+				$_srcKeys = implode(',', array_map('intval', array_keys($src_sched_ids)));
 				$DB->Clear();
-				$leadsRs = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $src_sid);
-				if (!$leadsRs) continue;
-				while ($leadsRs->Next()) {
-					$_mid = (int)$leadsRs->mundane_id;
-					if (!$this->_isMundaneEligible($_mid)) continue;
-					$DB->Clear();
-					$DB->Execute('INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (' . $new_sid . ', ' . $_mid . ')');
+				$leadsRs = $DB->DataSet('SELECT event_schedule_id, mundane_id FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id IN (' . $_srcKeys . ')');
+				if ($leadsRs) {
+					while ($leadsRs->Next()) {
+						$_src_sid = (int)$leadsRs->event_schedule_id;
+						$_new_sid = $src_sched_ids[$_src_sid] ?? 0;
+						if ($_new_sid <= 0) continue;
+						$_mid = (int)$leadsRs->mundane_id;
+						if (!$this->_isMundaneEligible($_mid)) continue;
+						$DB->Clear();
+						$DB->Execute('INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (' . $_new_sid . ', ' . $_mid . ')');
+					}
 				}
 			}
 		}
@@ -1329,6 +1342,8 @@ class Controller_EventAjax extends Controller {
 			}
 		}
 
+		$warnings = [];
+
 		if ($mod['banner'] && (int)$src->has_banner === 1) {
 			$src_base = DIR_EVENT_BANNER . sprintf('%05d', $src_evt_id);
 			$new_base = DIR_EVENT_BANNER . sprintf('%05d', $new_event_id);
@@ -1353,9 +1368,6 @@ class Controller_EventAjax extends Controller {
 			}
 		}
 
-
-		$warnings = [];
-
 		$this->_bustEventSearchCache($new_event_id);
 		echo json_encode([
 			'status'   => 0,
@@ -1367,6 +1379,8 @@ class Controller_EventAjax extends Controller {
 		exit;
 	}
 
+	// Per-request cache for mundane eligibility — copy passes reference the same
+	// mundane through many schedule leads + staff rows.
 	private $_mundaneEligibleCache = [];
 
 	private function _isMundaneEligible($mundane_id) {
@@ -1393,6 +1407,13 @@ class Controller_EventAjax extends Controller {
 		return $ok;
 	}
 
+	/**
+	 * Bust the SearchService::Event GhettoCache entries that could embed
+	 * event-level fields (HasHeraldry, HasBanner, BannerShowLogo, BannerVignette).
+	 * The cache key is positional on Event()'s arg list; mirror it here for
+	 * the canonical `get_event_info($event_id)` call signature so the next
+	 * page load reads fresh data.
+	 */
 	private function _bustEventSearchCache($event_id) {
 		// Event(null, null, null, null, null, null, $event_id) — 7 positional args.
 		// SearchService::Event applies substr($keys[0] ?? '', 0, 4) before keying.

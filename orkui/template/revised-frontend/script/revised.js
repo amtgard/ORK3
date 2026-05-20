@@ -8287,8 +8287,8 @@ $(document).ready(function() {
                     var chk = '<i class="fas fa-check" style="color:#276749"></i>';
                     var x   = '<i class="fas fa-times" style="color:#a0aec0"></i>';
                     var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '">' +
-                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + s.Persona + '</a></td>' +
-                        '<td>' + s.RoleName + '</td>' +
+                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + escHtmlSt(s.Persona || '') + '</a></td>' +
+                        '<td>' + escHtmlSt(s.RoleName || '') + '</td>' +
                         '<td>' + (s.CanManage ? chk : x) + '</td>' +
                         '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
                         '<td>' + (s.CanSchedule ? chk : x) + '</td>' +

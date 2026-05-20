@@ -9526,6 +9526,20 @@ html[data-theme="dark"] .ev-draft-banner-text { color: #fde68a; }
 
 /* RSVP dropdown widget (used in lists + map popovers) */
 .kn-rsvp-wrap, .pk-rsvp-wrap { position: relative; display: inline-block; }
+/* Events list: button hugs the right edge of the cell, counts sit to its left.
+   Scoped to #kn-events-table / #pk-events-table so the event-detail popover
+   that also uses .kn-rsvp-wrap keeps its original inline layout. */
+#kn-events-table .kn-rsvp-wrap,
+#pk-events-table .pk-rsvp-wrap {
+	display: inline-flex;
+	flex-direction: row-reverse;
+	align-items: center;
+	gap: 10px;
+}
+#kn-events-table .kn-rsvp-wrap .ev-rsvp-counts,
+#pk-events-table .pk-rsvp-wrap .ev-rsvp-counts {
+	margin: 0; /* flex gap on the wrap handles spacing */
+}
 .ev-rsvp-btn {
 	display: inline-flex; align-items: center; gap: 5px;
 	background: #fff; border: 1px solid #cbd5e0; color: #4a5568;

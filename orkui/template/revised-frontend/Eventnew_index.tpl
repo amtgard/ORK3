@@ -926,7 +926,7 @@ html[data-theme="dark"] .ev-signin-links-revoke {
 			<?php if ($evBadges): ?>
 				<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;justify-content:center">
 					<?php foreach ($evBadges as $_b): ?>
-						<span title="<?= htmlspecialchars($_b['label']) ?>" style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:<?= $_b['severity']==='warning'?'#fee2e2':'#fef3c7' ?>;color:<?= $_b['severity']==='warning'?'#991b1b':'#92400e' ?>;border:1px solid <?= $_b['severity']==='warning'?'#fca5a5':'#fcd34d' ?>"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+						<span data-tip="<?= htmlspecialchars($_b['label']) ?>" style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:<?= $_b['severity']==='warning'?'#fee2e2':'#fef3c7' ?>;color:<?= $_b['severity']==='warning'?'#991b1b':'#92400e' ?>;border:1px solid <?= $_b['severity']==='warning'?'#fca5a5':'#fcd34d' ?>"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
@@ -934,7 +934,7 @@ html[data-theme="dark"] .ev-signin-links-revoke {
 		<div class="ev-stat-label">
 			<?= $evWxMode === 'live' ? 'Today' : 'Forecast' ?>
 			<a href="https://open-meteo.com/" target="_blank" rel="noopener"
-			   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
+			   data-tip="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
 			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>
 		</div>
 	</div>
@@ -2303,7 +2303,7 @@ var EvConfig = {
 					<label>Player</label>
 					<input type="text" id="ev-staff-player-name" placeholder="Search players..." autocomplete="off" style="width:100%">
 					<input type="hidden" id="ev-staff-player-id">
-					<div id="ev-staff-ac" class="ev-ac-results" style="display:none"></div>
+					<div id="ev-staff-ac" class="kn-ac-results" style="display:none"></div>
 				</div>
 			</div>
 			<div class="ev-modal-row" style="margin-top:12px">
@@ -3120,7 +3120,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 					: '');
 			document.getElementById('ev-wx-label').innerHTML = 'Historical' +
 				' <a href="https://open-meteo.com/" target="_blank" rel="noopener"' +
-				' title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"' +
+				' data-tip="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"' +
 				' style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>';
 		})
 		.catch(showUnavailable);
@@ -3668,15 +3668,6 @@ html[data-theme="dark"] .ev-grid-view-btn.ev-grid-view-active {
 		}
 	});
 	document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePopover(); });
-	document.addEventListener('keydown', function(e) {
-		if (e.key !== 'Enter' && e.key !== ' ') return;
-		var blk = e.target && e.target.closest && e.target.closest('.ev-grid-block');
-		if (!blk) return;
-		if (e.key === ' ') e.preventDefault();
-		var sid = parseInt(blk.getAttribute('data-schedule-id'), 10);
-		if (!sid) return;
-		window.evGridBlockClick(sid, { stopPropagation: function(){}, currentTarget: blk });
-	});
 	document.addEventListener('keydown', function(e) {
 		if (e.key !== 'Enter' && e.key !== ' ') return;
 		var blk = e.target && e.target.closest && e.target.closest('.ev-grid-block');

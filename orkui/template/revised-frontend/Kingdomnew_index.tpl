@@ -678,7 +678,7 @@
 								<th data-sorttype="date">Next Date</th>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="text">Park</th>
-								<th colspan="2" style="text-align:center;">RSVP</th>
+								<th colspan="2" style="text-align:right;padding-right:8px;">RSVP</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -697,8 +697,7 @@
 											<?= htmlspecialchars($event['Name']) ?>
 										</td>
 										<td><?= htmlspecialchars($event['ParkName'] ?? '') ?></td>
-										<td style="text-align:center;color:#a0aec0">—</td>
-										<td style="text-align:center;color:#a0aec0">—</td>
+										<td colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>
 									</tr>
 								<?php else: ?>
 									<?php $isDraft = (($event['Status'] ?? 'published') === 'draft'); ?>
@@ -721,7 +720,7 @@
 											<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
 										</td>
 										<td><?= htmlspecialchars($event['ParkName']) ?></td>
-										<td colspan="2" style="text-align:center;padding:6px 8px;">
+										<td colspan="2" style="text-align:right;padding:6px 8px;">
 											<?php if ((int)$event['NextDetailId'] > 0): ?>
 												<span class="kn-rsvp-wrap" data-detail="<?= (int)$event['NextDetailId'] ?>" data-going="<?= (int)($event['RsvpGoing'] ?? 0) ?>" data-interested="<?= (int)($event['RsvpInterested'] ?? 0) ?>" data-mine="<?= htmlspecialchars($event['MyRsvp'] ?? '') ?>"></span>
 											<?php else: ?>

@@ -838,7 +838,7 @@
 							<tr>
 								<th data-sorttype="text">Event</th>
 								<th data-sorttype="date">Next Date</th>
-								<th colspan="2" style="text-align:center;">RSVP</th>
+								<th colspan="2" style="text-align:right;padding-right:8px;">RSVP</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -854,8 +854,7 @@
 									<td class="pk-date-col" data-sortval="<?= htmlspecialchars($event['NextDate']) ?>">
 										<?= $event['NextDate'] ? date('M. j, Y', strtotime($event['NextDate'])) : '' ?>
 									</td>
-									<td class="pk-date-col" style="text-align:center;color:#a0aec0">—</td>
-									<td class="pk-date-col" style="text-align:center;color:#a0aec0">—</td>
+									<td class="pk-date-col" colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>
 								</tr>
 								<?php else: ?>
 								<?php $isDraft = (($event['Status'] ?? 'published') === 'draft'); ?>
@@ -893,7 +892,7 @@
 											<?php endif; ?>
 										<?php endif; ?>
 									</td>
-									<td class="pk-date-col" colspan="2" style="text-align:center;padding:6px 8px;">
+									<td class="pk-date-col" colspan="2" style="text-align:right;padding:6px 8px;">
 										<?php if ((int)$event['NextDetailId'] > 0): ?>
 											<span class="pk-rsvp-wrap" data-detail="<?= (int)$event['NextDetailId'] ?>" data-going="<?= (int)($event['RsvpGoing'] ?? 0) ?>" data-interested="<?= (int)($event['RsvpInterested'] ?? 0) ?>" data-mine="<?= htmlspecialchars($event['MyRsvp'] ?? '') ?>"></span>
 										<?php else: ?>

@@ -164,8 +164,8 @@ class Controller_Event extends Controller {
 			}
 		}
 
-		usort( $upcoming, fn($a, $b) => strtotime($a['EventStart']) - strtotime($b['EventStart']) );
-		usort( $past,     fn($a, $b) => strtotime($b['EventStart']) - strtotime($a['EventStart']) );
+		usort( $upcoming, fn($a, $b) => strcmp($a['EventStart'], $b['EventStart']) );
+		usort( $past,     fn($a, $b) => strcmp($b['EventStart'], $a['EventStart']) );
 
 		// Attach RSVP counts to all occurrences in a single batch query
 		$allCds = array_merge($upcoming, $past);
@@ -279,6 +279,13 @@ class Controller_Event extends Controller {
 		if ( $action === 'deletedetail' && $uid > 0 ) {
 			if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
 				global $DB;
+				// Preflight: confirm $detail_id belongs to $event_id before destructive ops.
+				$DB->Clear();
+				$_ownRow = $DB->DataSet('SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int)$detail_id . ' LIMIT 1');
+				if (!$_ownRow || !$_ownRow->Next() || (int)$_ownRow->event_id !== (int)$event_id) {
+					header('Location: ' . UIR . 'Event/index/' . $event_id);
+					exit;
+				}
 				$DB->Clear();
 				$checkAtt  = $DB->DataSet("SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "attendance WHERE event_calendardetail_id = " . (int)$detail_id . " LIMIT 1");
 				$attCnt    = ($checkAtt && $checkAtt->Size() > 0 && $checkAtt->Next()) ? (int)$checkAtt->cnt : 0;
@@ -309,6 +316,14 @@ class Controller_Event extends Controller {
 		}
 
 		if ( $action === 'rsvp' && $uid > 0 ) {
+			// Preflight: confirm $detail_id belongs to $event_id before writing an RSVP scoped to that pair.
+			global $DB;
+			$DB->Clear();
+			$_rsvpOwnRow = $DB->DataSet('SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int)$detail_id . ' LIMIT 1');
+			if (!$_rsvpOwnRow || !$_rsvpOwnRow->Next() || (int)$_rsvpOwnRow->event_id !== (int)$event_id) {
+				header('Location: ' . UIR . 'Event/index/' . $event_id);
+				return;
+			}
 			$cdCheck = $this->Attendance->get_eventdetail_info($detail_id);
 			$_refDate = $cdCheck['EventEnd'] ?: ($cdCheck['EventStart'] ?? '');
 			if ($_refDate && strtotime(date('Y-m-d', strtotime($_refDate))) < strtotime(date('Y-m-d'))) {
@@ -327,6 +342,14 @@ class Controller_Event extends Controller {
 
 			if ( $action === 'edit' ) {
 				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage ) {
+					// Preflight: confirm $detail_id belongs to $event_id before any raw-SQL writes use it as a WHERE/INSERT target.
+					global $DB;
+					$DB->Clear();
+					$_ownRow = $DB->DataSet('SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int)$detail_id . ' LIMIT 1');
+					if (!$_ownRow || !$_ownRow->Next() || (int)$_ownRow->event_id !== (int)$event_id) {
+						header('Location: ' . UIR . 'Event/index/' . $event_id);
+						exit;
+					}
 					$this->request->save('Eventnew_edit', true);
 					$newName = trim($this->request->Eventnew_edit->EventName ?? '');
 					if ( $newName ) {
@@ -372,28 +395,35 @@ class Controller_Event extends Controller {
 						Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $cdKey);
 						$evKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
 						Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
-						// Sync admission fees
+						// Sync admission fees — wrap DELETE+INSERTs in a transaction so a failed INSERT can't leave the fees table empty.
 						global $DB;
-						$DB->Clear();
-						$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $detail_id);
 						$_feesJson = trim($_POST['Fees'] ?? '');
 						$_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
-						if (is_array($_feesIn)) {
+						$DB->Clear();
+						$DB->Execute('START TRANSACTION');
+						$_feesOk = ($DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $detail_id) !== false);
+						if ($_feesOk && is_array($_feesIn)) {
 							foreach ($_feesIn as $_fi => $_fee) {
 								$_at = trim($_fee['AdmissionType'] ?? '');
 								$_atSafe = str_replace(["'", '\\'], ["''", '\\\\'], $_at);
 								$_cost = round((float)($_fee['Cost'] ?? 0), 2);
 								$DB->Clear();
-								$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $detail_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')');
+								if ($DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $detail_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')') === false) {
+									$_feesOk = false;
+									break;
+								}
 							}
 						}
+						$DB->Execute($_feesOk ? 'COMMIT' : 'ROLLBACK');
 						// Sync external links
+						// Sync external links — wrap DELETE+INSERTs in a transaction so a failed INSERT can't leave the links table empty.
 						$_linksJson = trim($_POST['ExternalLinks'] ?? '');
 						$_linksIn = ($_linksJson !== '') ? json_decode($_linksJson, true) : [];
-						$DB->Clear();
-						$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $detail_id);
 						$_allowedIcons = ['fab fa-facebook','fab fa-discord','fas fa-globe','far fa-clipboard','fas fa-link','fas fa-ticket-alt'];
-						if (is_array($_linksIn)) {
+						$DB->Clear();
+						$DB->Execute('START TRANSACTION');
+						$_linksOk = ($DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $detail_id) !== false);
+						if ($_linksOk && is_array($_linksIn)) {
 							foreach ($_linksIn as $_li => $_link) {
 								$_lt  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Title'] ?? ''));
 								// A4: block javascript:/data: schemes — only http/https/mailto permitted
@@ -408,11 +438,22 @@ class Controller_Event extends Controller {
 								if (!in_array($_icRaw, $_allowedIcons, true)) $_icRaw = 'fas fa-link';
 								$_lic = str_replace(["'", '\\'], ["''", '\\\\'], $_icRaw);
 								$DB->Clear();
-								$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $detail_id . ', \'' . $_lt . '\', \'' . $_lu . '\', \'' . $_lic . '\', ' . $_li . ')');
+								if ($DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $detail_id . ', \'' . $_lt . '\', \'' . $_lu . '\', \'' . $_lic . '\', ' . $_li . ')') === false) {
+									$_linksOk = false;
+									break;
+								}
 							}
 						}
-						header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
-						exit;
+						$DB->Execute($_linksOk ? 'COMMIT' : 'ROLLBACK');
+						if (!$_feesOk || !$_linksOk) {
+							$_failed = [];
+							if (!$_feesOk)  $_failed[] = 'admission fees';
+							if (!$_linksOk) $_failed[] = 'external links';
+							$this->data['Error'] = 'Failed to save ' . implode(' and ', $_failed) . '. Other changes were saved. Please try again.';
+						} else {
+							header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
+							exit;
+						}
 					} elseif ( $r['Status'] != 5 ) {
 						$this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
 					}
@@ -420,8 +461,16 @@ class Controller_Event extends Controller {
 
 			} elseif ( $action === 'reconcile' ) {
 				if ( Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) ) {
+					// Preflight: confirm $detail_id belongs to $event_id before reconcile reassigns attendance rows.
+					global $DB;
+					$DB->Clear();
+					$_ownRow = $DB->DataSet('SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int)$detail_id . ' LIMIT 1');
+					if (!$_ownRow || !$_ownRow->Next() || (int)$_ownRow->event_id !== (int)$event_id) {
+						header('Location: ' . UIR . 'Event/index/' . $event_id);
+						exit;
+					}
 					$today   = date('Y-m-d');
-					$attData = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
+					$attData = $this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
 					$pastAtt = array_filter(
 						$attData['Attendance'] ?? [],
 						fn($a) => !empty($a['Date']) && strtotime($a['Date']) < strtotime($today)
@@ -546,7 +595,9 @@ class Controller_Event extends Controller {
 		} else {
 			$this->data['AtParkName'] = $this->data['AtParkAddress'] = $this->data['AtParkCity'] = $this->data['AtParkProvince'] = $this->data['AtParkPostalCode'] = $this->data['AtParkLocation'] = '';
 		}
-		$this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
+		if ( !isset($this->data['AttendanceReport']) ) {
+			$this->data['AttendanceReport'] = $this->Attendance->get_attendance_for_event($event_id, $detail_id);
+		}
 		$classes                        = $this->Attendance->get_classes();
 		$this->data['Classes']          = $classes['Classes'];
 		// [TOURNAMENTS HIDDEN] $this->data['Tournaments'] = [];
@@ -605,6 +656,7 @@ class Controller_Event extends Controller {
 		$this->data['RsvpList']      = $this->data['CanManageAttendance'] ? $this->Event->get_rsvp_list($detail_id) : [];
 
 		global $DB;
+		$DB->Clear();
 		$cdCountRow = $DB->DataSet('SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $event_id . ' LIMIT 1');
 		$this->data['CalendarDetailCount'] = ($cdCountRow && $cdCountRow->Size() > 0 && $cdCountRow->Next()) ? (int)$cdCountRow->cnt : 1;
 		$DB->Clear();
@@ -786,6 +838,7 @@ class Controller_Event extends Controller {
 		}
 		if ( $at_park_id > 0 ) {
 			global $DB;
+			$DB->Clear();
 			$row = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE park_id = " . $at_park_id . " LIMIT 1");
 			$this->data['AtParkName'] = ($row && $row->Size() > 0 && $row->Next()) ? $row->name : '';
 		}
@@ -827,44 +880,66 @@ class Controller_Event extends Controller {
 				}
 				$bustKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
 				Ork3::$Lib->ghettocache->bust('SearchService.Event', $bustKey);
-				// Sync admission fees for the new occurrence
+				// Sync admission fees for the new occurrence — wrap DELETE+INSERTs in a transaction.
 				$_feesJson = trim($_POST['Fees'] ?? '');
 				$_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
+				$_feesOk = true;
 				if (is_array($_feesIn) && !empty($_feesIn) && $new_id > 0) {
 					global $DB;
 					$DB->Clear();
-					$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $new_id);
-					foreach ($_feesIn as $_fi => $_fee) {
-						$_at = trim($_fee['AdmissionType'] ?? '');
-						$_atSafe = str_replace(["'", '\\'], ["''", '\\\\'], $_at);
-						$_cost = round((float)($_fee['Cost'] ?? 0), 2);
-						$DB->Clear();
-						$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $new_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')');
+					$DB->Execute('START TRANSACTION');
+					$_feesOk = ($DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $new_id) !== false);
+					if ($_feesOk) {
+						foreach ($_feesIn as $_fi => $_fee) {
+							$_at = trim($_fee['AdmissionType'] ?? '');
+							$_atSafe = str_replace(["'", '\\'], ["''", '\\\\'], $_at);
+							$_cost = round((float)($_fee['Cost'] ?? 0), 2);
+							$DB->Clear();
+							if ($DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES (' . $new_id . ', \'' . $_atSafe . '\', ' . $_cost . ', ' . $_fi . ')') === false) {
+								$_feesOk = false;
+								break;
+							}
+						}
 					}
+					$DB->Execute($_feesOk ? 'COMMIT' : 'ROLLBACK');
 				}
-				// Sync external links
+				// Sync external links — wrap DELETE+INSERTs in a transaction.
 				$_linksJson2 = trim($_POST['ExternalLinks'] ?? '');
 				$_linksIn2 = ($_linksJson2 !== '') ? json_decode($_linksJson2, true) : [];
+				$_linksOk = true;
 				if (is_array($_linksIn2) && !empty($_linksIn2) && $new_id > 0) {
-					$DB->Clear();
-					$DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $new_id);
 					$_allowedIcons2 = ['fab fa-facebook','fab fa-discord','fas fa-globe','far fa-clipboard','fas fa-link','fas fa-ticket-alt'];
-					foreach ($_linksIn2 as $_li2 => $_link2) {
-						$_lt2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Title'] ?? ''));
-						// A4: block javascript:/data: schemes — only http/https/mailto permitted
-						$_luRaw2 = trim($_link2['Url'] ?? '');
-						if ($_luRaw2 !== '') {
-							$_scheme2 = strtolower((string)parse_url($_luRaw2, PHP_URL_SCHEME));
-							if (!in_array($_scheme2, ['http', 'https', 'mailto'], true)) $_luRaw2 = '';
+					$DB->Clear();
+					$DB->Execute('START TRANSACTION');
+					$_linksOk = ($DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $new_id) !== false);
+					if ($_linksOk) {
+						foreach ($_linksIn2 as $_li2 => $_link2) {
+							$_lt2  = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link2['Title'] ?? ''));
+							// A4: block javascript:/data: schemes — only http/https/mailto permitted
+							$_luRaw2 = trim($_link2['Url'] ?? '');
+							if ($_luRaw2 !== '') {
+								$_scheme2 = strtolower((string)parse_url($_luRaw2, PHP_URL_SCHEME));
+								if (!in_array($_scheme2, ['http', 'https', 'mailto'], true)) $_luRaw2 = '';
+							}
+							$_lu2  = str_replace(["'", '\\'], ["''", '\\\\'], $_luRaw2);
+							// A14: icon class must be in the allow-list
+							$_icRaw2 = trim($_link2['Icon'] ?? '');
+							if (!in_array($_icRaw2, $_allowedIcons2, true)) $_icRaw2 = 'fas fa-link';
+							$_lic2 = str_replace(["'", '\\'], ["''", '\\\\'], $_icRaw2);
+							$DB->Clear();
+							if ($DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $new_id . ', \'' . $_lt2 . '\', \'' . $_lu2 . '\', \'' . $_lic2 . '\', ' . $_li2 . ')') === false) {
+								$_linksOk = false;
+								break;
+							}
 						}
-						$_lu2  = str_replace(["'", '\\'], ["''", '\\\\'], $_luRaw2);
-						// A14: icon class must be in the allow-list
-						$_icRaw2 = trim($_link2['Icon'] ?? '');
-						if (!in_array($_icRaw2, $_allowedIcons2, true)) $_icRaw2 = 'fas fa-link';
-						$_lic2 = str_replace(["'", '\\'], ["''", '\\\\'], $_icRaw2);
-						$DB->Clear();
-						$DB->Execute('INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES (' . $new_id . ', \'' . $_lt2 . '\', \'' . $_lu2 . '\', \'' . $_lic2 . '\', ' . $_li2 . ')');
 					}
+					$DB->Execute($_linksOk ? 'COMMIT' : 'ROLLBACK');
+				}
+				if (!$_feesOk || !$_linksOk) {
+					$_failed = [];
+					if (!$_feesOk)  $_failed[] = 'admission fees';
+					if (!$_linksOk) $_failed[] = 'external links';
+					$this->data['Error'] = 'New occurrence created, but failed to save ' . implode(' and ', $_failed) . '. Please edit the occurrence to retry.';
 				}
 				header('Location: ' . UIR . "Event/detail/{$event_id}/{$new_id}");
 				return;

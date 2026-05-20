@@ -7,7 +7,23 @@ class Event  extends Ork3 {
 		$this->event = new yapo($this->db, DB_PREFIX . 'event');
 		$this->detail = new yapo($this->db, DB_PREFIX . 'event_calendardetail');
 	}
-	
+
+	// GhettoCache-backed wrapper around Common::Geocode. Saves of the same address
+	// (common during edits) skip the synchronous Google round-trip.
+	private function _geocodeCached($address, $city, $province, $postalCode) {
+		$ckey = Ork3::$Lib->ghettocache->key([
+			'a' => strtolower(trim((string)$address)),
+			'c' => strtolower(trim((string)$city)),
+			'p' => strtolower(trim((string)$province)),
+			'z' => strtolower(trim((string)$postalCode)),
+		]);
+		if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.Geocode', $ckey, 86400)) !== false) {
+			return $cached;
+		}
+		$result = Common::Geocode($address, $city, $province, $postalCode);
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.Geocode', $ckey, $result);
+	}
+
 	public function CreateEvent($request) {
 		logtrace("CreateEvent()", $request);
 		$log = '';
@@ -221,7 +237,7 @@ class Event  extends Ork3 {
 				}
 			}
 
-			$details   = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
+			$details   = $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
 			$geocode   = ($details && isset($details['Geocode'])) ? json_decode($details['Geocode']) : null;
 			$latitude  = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lat : 0.0;
 			$longitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lng : 0.0;
@@ -300,7 +316,7 @@ class Event  extends Ork3 {
 		$rs = $this->db->DataSet($sql);
 		$events = [];
 		if ($rs && $rs->Size() > 0) {
-			do {
+			while ($rs->Next()) {
 				$eid = (int)$rs->event_id;
 				if ($eid) {
 					$events[] = [
@@ -313,7 +329,7 @@ class Event  extends Ork3 {
 						'HasHeraldry'          => (int)$rs->has_heraldry,
 					];
 				}
-			} while ($rs->Next());
+			}
 		}
 		$response = ['Status' => Success(), 'Events' => $events];
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $response);
@@ -389,8 +405,9 @@ class Event  extends Ork3 {
 				return ProcessingError('Event Calendar Detail is missing after it was found.  Race conditions eminent!');
 			}
 		}
+		return NoAuthorization();
 	}
-	
+
   public function PlayAmtgard($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
 		if (!$mundane_id || $mundane_id <= 0) {
@@ -508,7 +525,7 @@ class Event  extends Ork3 {
 			if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
 			
 				$hasAddress = !empty(trim(($request['Address'] ?? '') . ($request['City'] ?? '') . ($request['Province'] ?? '') . ($request['PostalCode'] ?? '')));
-				$details  = $hasAddress ? Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
+				$details  = $hasAddress ? $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
 				$geocode  = ($details && !empty($details['Geocode'])) ? json_decode($details['Geocode']) : null;
 
 				$this->detail->event_id = $request['EventId'];
