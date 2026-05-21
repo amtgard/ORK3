@@ -993,6 +993,10 @@ html[data-theme="dark"] .pn-rec-field label { color: var(--ork-text); }
 	border-radius: 12px;
 	width: 500px;
 	max-width: calc(100vw - 40px);
+	max-height: calc(100vh - 32px);
+	max-height: calc(100dvh - 32px);
+	display: flex;
+	flex-direction: column;
 	box-shadow: 0 25px 60px rgba(0,0,0,0.25);
 	transform: translateY(-16px) scale(0.98);
 	opacity: 0;
@@ -1008,6 +1012,7 @@ html[data-theme="dark"] .pn-rec-field label { color: var(--ork-text); }
 	justify-content: space-between;
 	padding: 18px 20px;
 	border-bottom: 1px solid #e2e8f0;
+	flex-shrink: 0;
 }
 .pn-modal-title {
 	margin: 0;
@@ -1039,6 +1044,8 @@ html[data-theme="dark"] .pn-rec-field label { color: var(--ork-text); }
 .pn-modal-close-btn:hover { background: #f7fafc; color: #4a5568; }
 .pn-modal-body {
 	padding: 20px;
+	overflow-y: auto;
+	flex: 1 1 auto;
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
 }
@@ -1049,6 +1056,7 @@ html[data-theme="dark"] .pn-rec-field label { color: var(--ork-text); }
 	display: flex;
 	justify-content: flex-end;
 	gap: 10px;
+	flex-shrink: 0;
 }
 .pn-btn-primary { background: #2c5282; color: #fff; }
 .pn-btn-primary:hover:not(:disabled) { background: #2a4a7f; }
@@ -1435,6 +1443,11 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pn-rank-pill.pn-rank-held { background: #ebf4ff; border-color: #90cdf4; color: #0891b2; }
 .pn-rank-pill.pn-rank-suggested { border-color: #68d391; }
 .pn-rank-pill.pn-rank-selected { background: #2c5282; border-color: #2c5282; color: #fff; }
+/* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
+@media (max-width: 600px) {
+	.pn-rank-pills-wrap { gap: 5px; }
+	.pn-rank-pill { width: 25px; height: 25px; font-size: 11px; border-width: 1.5px; }
+}
 /* Officer / giver quick chips */
 .pn-officer-chips {
 	display: flex;
@@ -2676,6 +2689,11 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 .kn-rank-pill.kn-rank-held { background:#ebf4ff; border-color:#90cdf4; color:var(--kn-accent-mid, #276749); }
 .kn-rank-pill.kn-rank-suggested { border-color:#68d391; }
 .kn-rank-pill.kn-rank-selected { background:#2c5282; border-color:#2c5282; color:#fff; }
+/* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
+@media (max-width: 600px) {
+	.kn-rank-pills-wrap { gap: 5px; }
+	.kn-rank-pill { width: 25px; height: 25px; font-size: 11px; border-width: 1.5px; }
+}
 .kn-officer-chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
 .kn-officer-chip { padding:4px 10px; background:var(--ork-bg-tertiary); border:1px solid var(--ork-border); border-radius:14px; font-size:12px; color:var(--ork-text); cursor:pointer; }
 .kn-officer-chip.kn-selected { background:#ebf4ff; border-color:#90cdf4; color:var(--kn-accent-mid, #276749); font-weight:600; }
@@ -3742,6 +3760,11 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .pk-rank-pill.pk-rank-held { background:#ebf4ff; border-color:#90cdf4; color:#0891b2; }
 .pk-rank-pill.pk-rank-suggested { border-color:#68d391; }
 .pk-rank-pill.pk-rank-selected { background:#2c5282; border-color:#2c5282; color:#fff; }
+/* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
+@media (max-width: 600px) {
+	.pk-rank-pills-wrap { gap: 5px; }
+	.pk-rank-pill { width: 25px; height: 25px; font-size: 11px; border-width: 1.5px; }
+}
 .pk-officer-chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
 .pk-officer-chip { padding:4px 10px; background:#edf2f7; border:1px solid #e2e8f0; border-radius:14px; font-size:12px; color:#2d3748; cursor:pointer; }
 .pk-officer-chip.pk-selected { background:#ebf4ff; border-color:#90cdf4; color:#0891b2; font-weight:600; }
