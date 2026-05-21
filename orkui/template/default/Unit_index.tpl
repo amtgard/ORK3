@@ -1023,7 +1023,7 @@ document.querySelectorAll('.pn-overlay').forEach(function (overlay) {
 });
 
 /* ── Player search factory ──────────────────────────────── */
-var UN_SEARCH_URL = '<?=HTTP_SERVICE?>Search/SearchService.php';
+var UN_PSEARCH_BASE = '<?=UIR?>KingdomAjax/playersearch/';
 var UN_SCOPE_KID  = <?=(int)($ScopeKingdomId ?? 0)?>;
 var UN_SCOPE_PID  = <?=(int)($ScopeParkId ?? 0)?>;
 
@@ -1032,7 +1032,7 @@ function initPlayerSearch(cfg) {
 	var $input   = document.getElementById(cfg.inputId);
 	var $results = document.getElementById(cfg.resultsId);
 	var $hidden  = document.getElementById(cfg.hiddenId);
-	var debounce, focusIdx = -1;
+	var debounce, focusIdx = -1, searchSeq = 0;
 	var seen = {};
 
 	function closeResults() {
@@ -1055,8 +1055,15 @@ function initPlayerSearch(cfg) {
 		el.className   = 'un-ac-item' + (groupClass ? ' ' + groupClass : '');
 		el.dataset.id  = id;
 		el.dataset.lbl = label;
-		el.innerHTML   = '<span>' + label + '</span>'
-			+ (scope ? '<span class="un-ac-scope">' + scope + '</span>' : '');
+		var nameSpan = document.createElement('span');
+		nameSpan.textContent = label;
+		el.appendChild(nameSpan);
+		if (scope) {
+			var scopeSpan = document.createElement('span');
+			scopeSpan.className   = 'un-ac-scope';
+			scopeSpan.textContent = scope;
+			el.appendChild(scopeSpan);
+		}
 		el.addEventListener('mousedown', function (e) {
 			e.preventDefault();
 			selectPlayer(id, label + (scope ? ' (' + scope + ')' : ''));
@@ -1065,49 +1072,58 @@ function initPlayerSearch(cfg) {
 	}
 
 	function addGroup(label, players) {
-		if (!players.length) return;
+		var unseen = (players || []).filter(function (p) { return !seen[p.MundaneId]; });
+		if (!unseen.length) return;
 		var hdr = document.createElement('div');
 		hdr.className   = 'un-ac-group-label';
 		hdr.textContent = label;
 		$results.appendChild(hdr);
-		players.forEach(function (p) {
-			if (seen[p.MundaneId]) return;
+		unseen.forEach(function (p) {
 			seen[p.MundaneId] = true;
 			$results.appendChild(buildItem(p, ''));
 		});
 	}
 
 	function runSearch(term) {
-		seen = {};
-		$results.innerHTML = '';
-		$hidden.value = '';
-		var base = { Action: 'Search/Player', type: 'all', search: term, limit: 8 };
-		var calls = [];
-		/* Three-tier: park → kingdom → global */
-		if (cfg.parkId)    calls.push($.getJSON(UN_SEARCH_URL, $.extend({}, base, { park_id:    cfg.parkId })));
-		if (cfg.kingdomId) calls.push($.getJSON(UN_SEARCH_URL, $.extend({}, base, { kingdom_id: cfg.kingdomId })));
-		calls.push($.getJSON(UN_SEARCH_URL, base));
-
-		$.when.apply($, calls).done(function () {
-			var args = calls.length === 1 ? [arguments] : Array.prototype.slice.call(arguments);
-			var parkRes    = (cfg.parkId    && args[0]) ? (args[0][0] || []) : [];
-			var kingRes    = (cfg.kingdomId && args[cfg.parkId ? 1 : 0]) ? (args[cfg.parkId ? 1 : 0][0] || []) : [];
-			var allRes     = (args[args.length - 1]  ? args[args.length - 1][0] : null) || [];
-
-			var hasPark    = cfg.parkId    && parkRes.length;
-			var hasKing    = cfg.kingdomId && kingRes.length;
-
-			if (!hasPark && !hasKing && !allRes.length) {
+		/* Canonical playersearch endpoint: LIKE-based filtering, own-kingdom-first
+		   ordering, robust scope handling. Mirrors the Event RSVP modal's tiers. */
+		var kid  = cfg.kingdomId || 0;
+		var pid  = cfg.parkId || 0;
+		var base = UN_PSEARCH_BASE + kid;
+		var q    = '&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+		var groups;
+		// An abbreviation prefix ("nb:ff wolf") makes the server filter by abbreviation
+		// and ignore scope/park_id — show one group so results aren't mislabelled.
+		if (/^[a-z0-9]{2,3}:[a-z0-9*]{0,3}\s+\S/i.test(term)) {
+			groups = [ { label: 'All Players', url: base + '&scope=all' + q } ];
+		} else if (pid > 0 && kid > 0) {
+			groups = [
+				{ label: 'In Park',     url: base + '&scope=own&park_id=' + pid + q },
+				{ label: 'In Kingdom',  url: base + '&scope=own' + q },
+				{ label: 'All Players', url: base + '&scope=exclude' + q }
+			];
+		} else if (kid > 0) {
+			groups = [
+				{ label: 'In Kingdom',  url: base + '&scope=own' + q },
+				{ label: 'All Players', url: base + '&scope=exclude' + q }
+			];
+		} else {
+			groups = [ { label: 'All Players', url: base + '&scope=all' + q } ];
+		}
+		var mySeq = ++searchSeq;
+		Promise.all(groups.map(function (g) {
+			return fetch(g.url).then(function (r) { return r.json(); }).catch(function () { return []; });
+		})).then(function (resArr) {
+			if (mySeq !== searchSeq) return; // a newer keystroke superseded this response
+			seen = {};
+			$results.innerHTML = '';
+			$hidden.value = '';
+			groups.forEach(function (g, i) { addGroup(g.label, resArr[i] || []); });
+			if (!$results.children.length) {
 				var empty = document.createElement('div');
 				empty.className   = 'un-ac-empty';
 				empty.textContent = 'No players found.';
 				$results.appendChild(empty);
-			} else {
-				if (hasPark)  addGroup('In Park',    parkRes);
-				if (hasKing)  addGroup('In Kingdom', kingRes);
-				/* global results not already shown */
-				var rest = allRes.filter(function (p) { return !seen[p.MundaneId]; });
-				if (rest.length) addGroup('All Players', rest);
 			}
 			focusIdx = -1;
 			$results.classList.add('un-ac-open');
