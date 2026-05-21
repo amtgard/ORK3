@@ -1432,17 +1432,74 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 	cursor: pointer;
 	background: #fff;
 	color: #4a5568;
-	transition: all 0.12s;
+	transition: transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s, color 0.12s;
 	user-select: none;
+	position: relative;
+	overflow: hidden;
 }
-/* Gate hover styles on real pointer devices — on iOS the :hover state
-   sticks after a tap, which would visually override .pn-rank-selected. */
+
+/* ============================================================
+   Rank pills — unified state scheme (all surfaces: pn / kn / pk)
+   held    = green  + ✓ watermark behind the number (already earned)
+   forward = blue   + → watermark behind the number (being granted /
+             recommended; every step forward of the chosen rank)
+   selected= pops up (lift + shadow), layered over its held/forward color
+   Identical on every surface — no kingdom/park divergence.
+   ============================================================ */
+/* the number sits above the watermark — big & bold for legibility */
+.pn-rank-num, .kn-rank-num, .pk-rank-num {
+	position: relative; z-index: 1;
+	font-weight: 800; font-size: 1.25em; line-height: 1;
+	text-shadow: 0 1px 2px rgba(0,0,0,0.20);
+}
+/* watermark glyph — large + faint so the number reads clearly through it */
+.pn-rank-held::before, .pn-rank-forward::before,
+.kn-rank-held::before, .kn-rank-forward::before,
+.pk-rank-held::before, .pk-rank-forward::before {
+	position: absolute; inset: 0; z-index: 0;
+	display: flex; align-items: center; justify-content: center;
+	font-family: 'Font Awesome 5 Free'; font-weight: 900;
+	font-size: 2em; line-height: 1; color: #fff; opacity: 0.25;
+	pointer-events: none;
+}
+.pn-rank-held::before, .kn-rank-held::before, .pk-rank-held::before { content: '\f00c'; } /* check — already earned */
+.pn-rank-forward::before, .kn-rank-forward::before, .pk-rank-forward::before { content: '\f061'; } /* arrow-right — skipped/intermediate step */
+/* the chosen rank itself = up arrow ("leveling up to here") */
+.pn-rank-forward.pn-rank-selected::before,
+.kn-rank-forward.kn-rank-selected::before,
+.pk-rank-forward.pk-rank-selected::before { content: '\f062'; } /* arrow-up */
+
+/* held — ranks the player already has (green, soft gradient) */
+.pn-rank-pill.pn-rank-held, .kn-rank-pill.kn-rank-held, .pk-rank-pill.pk-rank-held {
+	background: linear-gradient(135deg, #a7ecbd, #7fd99e);
+	border-color: #48bb78; color: #1c4532;
+}
+/* forward — ranks being granted / recommended (blue, soft gradient) */
+.pn-rank-pill.pn-rank-forward, .kn-rank-pill.kn-rank-forward, .pk-rank-pill.pk-rank-forward {
+	background: linear-gradient(135deg, #9fd6f7, #6cb8ef);
+	border-color: #3182ce; color: #15314f;
+}
+/* selected — pops up over its underlying held/forward color */
+.pn-rank-pill.pn-rank-selected, .kn-rank-pill.kn-rank-selected, .pk-rank-pill.pk-rank-selected {
+	transform: translateY(-3px) scale(1.16);
+	box-shadow: 0 7px 16px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.55);
+	border-width: 2px;
+	z-index: 2;
+}
+/* colored glow ring keyed to the underlying state */
+.pn-rank-forward.pn-rank-selected, .kn-rank-forward.kn-rank-selected, .pk-rank-forward.pk-rank-selected {
+	box-shadow: 0 7px 16px rgba(0,0,0,0.32), 0 0 0 3px rgba(49,130,206,0.45), inset 0 1px 0 rgba(255,255,255,0.55);
+}
+.pn-rank-held.pn-rank-selected, .kn-rank-held.kn-rank-selected, .pk-rank-held.pk-rank-selected {
+	box-shadow: 0 7px 16px rgba(0,0,0,0.32), 0 0 0 3px rgba(56,161,105,0.45), inset 0 1px 0 rgba(255,255,255,0.55);
+}
+/* Gate hover lift on real pointer devices — on iOS :hover sticks after a tap.
+   Exclude the selected pill so its glow ring isn't overwritten on hover. */
 @media (hover: hover) {
-.pn-rank-pill:hover { border-color: #90cdf4; color: #0891b2; background: #ebf4ff; }
+	.pn-rank-pill:hover:not(.pn-rank-selected),
+	.kn-rank-pill:hover:not(.kn-rank-selected),
+	.pk-rank-pill:hover:not(.pk-rank-selected) { box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
 }
-.pn-rank-pill.pn-rank-held { background: #ebf4ff; border-color: #90cdf4; color: #0891b2; }
-.pn-rank-pill.pn-rank-suggested { border-color: #68d391; }
-.pn-rank-pill.pn-rank-selected { background: #2c5282; border-color: #2c5282; color: #fff; }
 /* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
 @media (max-width: 600px) {
 	.pn-rank-pills-wrap { gap: 5px; }
@@ -2682,13 +2739,8 @@ html[data-theme="dark"] .kn-award-type-btn.kn-active { border-color:#63b3ed; bac
 .kn-award-type-btn:hover:not(.kn-active) { border-color:var(--ork-border-dark); background:var(--ork-bg-secondary); }
 @media (max-width: 400px) { .kn-award-type-btn { font-size:11px; } }
 .kn-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
-.kn-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:all 0.12s; user-select:none; }
-@media (hover: hover) {
-.kn-rank-pill:hover { border-color: #90cdf4; color: var(--kn-accent-mid, #276749); background: #ebf4ff; }
-}
-.kn-rank-pill.kn-rank-held { background:#ebf4ff; border-color:#90cdf4; color:var(--kn-accent-mid, #276749); }
-.kn-rank-pill.kn-rank-suggested { border-color:#68d391; }
-.kn-rank-pill.kn-rank-selected { background:#2c5282; border-color:#2c5282; color:#fff; }
+.kn-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s, color 0.12s; user-select:none; position:relative; overflow:hidden; }
+/* held / forward / selected styling is unified in the rank-pill scheme block above */
 /* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
 @media (max-width: 600px) {
 	.kn-rank-pills-wrap { gap: 5px; }
@@ -3756,10 +3808,8 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 .pk-award-type-btn:hover:not(.pk-active) { border-color:#cbd5e0; background:#f7fafc; }
 @media (max-width: 400px) { .pk-award-type-btn { font-size:11px; } }
 .pk-rank-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
-.pk-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:all 0.12s; user-select:none; }
-.pk-rank-pill.pk-rank-held { background:#ebf4ff; border-color:#90cdf4; color:#0891b2; }
-.pk-rank-pill.pk-rank-suggested { border-color:#68d391; }
-.pk-rank-pill.pk-rank-selected { background:#2c5282; border-color:#2c5282; color:#fff; }
+.pk-rank-pill { width:36px; height:36px; border:2px solid #e2e8f0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; cursor:pointer; background:#fff; color:#4a5568; transition:transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s, color 0.12s; user-select:none; position:relative; overflow:hidden; }
+/* held / forward / selected styling is unified in the rank-pill scheme block above */
 /* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
 @media (max-width: 600px) {
 	.pk-rank-pills-wrap { gap: 5px; }
@@ -6496,7 +6546,8 @@ html[data-theme="dark"] .pn-stat-number { color: #90cdf4; }
 html[data-theme="dark"] .kn-stat-number { color: #90cdf4; }
 html[data-theme="dark"] .pk-stat-number { color: #90cdf4; }
 
-/* Rank/role pills */
+/* Rank pills — unified dark scheme (colors only; lift/shadow inherited from
+   the theme-agnostic .X-rank-selected rule above). */
 html[data-theme="dark"] .kn-rank-pill,
 html[data-theme="dark"] .pk-rank-pill,
 html[data-theme="dark"] .pn-rank-pill {
@@ -6504,24 +6555,32 @@ html[data-theme="dark"] .pn-rank-pill {
   color: var(--ork-text);
   border-color: var(--ork-border);
 }
-html[data-theme="dark"] .pk-rank-pill.pk-rank-held,
-html[data-theme="dark"] .pn-rank-pill.pn-rank-held {
-  background: rgba(99,179,237,0.15);
-  border-color: #4299e1;
-  color: #90cdf4;
-}
-html[data-theme="dark"] .pk-rank-pill.pk-rank-selected,
-html[data-theme="dark"] .pn-rank-pill.pn-rank-selected {
-  background: #2b6cb0;
-  border-color: #4299e1;
-  color: #fff;
-}
-html[data-theme="dark"] .pk-rank-pill.pk-rank-suggested,
-html[data-theme="dark"] .pn-rank-pill.pn-rank-suggested {
+/* held — already earned (dark green gradient, near-white number) */
+html[data-theme="dark"] .pn-rank-pill.pn-rank-held,
+html[data-theme="dark"] .kn-rank-pill.kn-rank-held,
+html[data-theme="dark"] .pk-rank-pill.pk-rank-held {
+  background: linear-gradient(135deg, #2f6b4f, #1d4733);
   border-color: #48bb78;
+  color: #eafff3;
 }
-@media (hover: hover) {
-html[data-theme="dark"] .pn-rank-pill:hover { background: rgba(99,179,237,0.12); border-color: #63b3ed; color: #90cdf4; }
+/* forward — being granted / recommended (dark blue gradient, near-white number) */
+html[data-theme="dark"] .pn-rank-pill.pn-rank-forward,
+html[data-theme="dark"] .kn-rank-pill.kn-rank-forward,
+html[data-theme="dark"] .pk-rank-pill.pk-rank-forward {
+  background: linear-gradient(135deg, #345083, #23375a);
+  border-color: #4299e1;
+  color: #eaf4ff;
+}
+/* selected — pops up, colored glow ring keyed to the underlying state */
+html[data-theme="dark"] .pn-rank-forward.pn-rank-selected,
+html[data-theme="dark"] .kn-rank-forward.kn-rank-selected,
+html[data-theme="dark"] .pk-rank-forward.pk-rank-selected {
+  box-shadow: 0 7px 18px rgba(0,0,0,0.6), 0 0 0 3px rgba(66,153,225,0.55), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+html[data-theme="dark"] .pn-rank-held.pn-rank-selected,
+html[data-theme="dark"] .kn-rank-held.kn-rank-selected,
+html[data-theme="dark"] .pk-rank-held.pk-rank-selected {
+  box-shadow: 0 7px 18px rgba(0,0,0,0.6), 0 0 0 3px rgba(72,187,120,0.55), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 
 /* Award type toggle (Awards / Officer Titles) */
@@ -7003,18 +7062,10 @@ html[data-theme="dark"] .pk-year-summary:hover,
 html[data-theme="dark"] .pk-year-summary:hover::before {
   color: hsl(var(--pk-hue, 195), var(--pk-sat, 80%), var(--ork-accent-lightness, 65%));
 }
-html[data-theme="dark"] .kn-officer-chip.kn-selected,
-html[data-theme="dark"] .kn-rank-pill.kn-rank-held {
+html[data-theme="dark"] .kn-officer-chip.kn-selected {
   background: rgba(255,255,255,0.07);
   border-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
   color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
-}
-@media (hover: hover) {
-html[data-theme="dark"] .kn-rank-pill:hover {
-  background: rgba(255,255,255,0.07);
-  border-color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
-  color: hsl(var(--kn-hue), var(--kn-sat), var(--ork-accent-lightness, 65%));
-}
 }
 
 /* ---- Kingdom tab & view button accents ---- */

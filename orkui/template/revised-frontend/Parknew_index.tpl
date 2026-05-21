@@ -1274,7 +1274,7 @@ var PkConfig = {
 
 			<!-- Rank Picker -->
 			<div class="pk-acct-field" id="pk-award-rank-row" style="display:none">
-				<label>Rank <span id="pk-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— click to select; blue = already held, green border = suggested next</span></label>
+				<label>Rank <span id="pk-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.</span></label>
 				<div class="pk-rank-pills-wrap" id="pk-rank-pills"></div>
 				<input type="hidden" id="pk-award-rank-val" value="" />
 			</div>

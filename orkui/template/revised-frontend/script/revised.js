@@ -1,3 +1,33 @@
+/* ============================================================
+   Rank pill painter — shared by every "add award" / "recommend"
+   surface (player / kingdom / park). Given the player's held rank
+   and the chosen rank, paints each pill:
+     r <= held              -> held    (green + ✓ watermark)
+     held < r <= selected   -> forward (blue  + → watermark; each step
+                               forward of the chosen rank)
+     r === selected         -> selected (pops up)
+   `prefix` is the class namespace ('pn' | 'kn' | 'pk'). The number is
+   wrapped in a .<prefix>-rank-num span so the watermark sits behind it.
+   ============================================================ */
+function tnRankPaint(wrap, prefix, held, selected) {
+    if (!wrap) return;
+    held     = parseInt(held, 10)     || 0;
+    selected = parseInt(selected, 10) || 0;
+    wrap.querySelectorAll('.' + prefix + '-rank-pill').forEach(function(pill) {
+        var r = parseInt(pill.dataset.rank, 10);
+        pill.classList.remove(prefix + '-rank-held', prefix + '-rank-forward',
+                              prefix + '-rank-selected', prefix + '-rank-suggested');
+        if (r <= held)          pill.classList.add(prefix + '-rank-held');
+        else if (r <= selected) pill.classList.add(prefix + '-rank-forward');
+        if (r === selected)     pill.classList.add(prefix + '-rank-selected');
+    });
+}
+/* Build the inner markup for a single pill (number wrapped for the watermark). */
+function tnRankPillInner(prefix, r) {
+    return '<span class="' + prefix + '-rank-num">' + r + '</span>';
+}
+if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; }
+
 /* ===========================
    HTML escape helper
    =========================== */
@@ -819,31 +849,29 @@ if (PnConfig.recError) {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = document.getElementById('pn-rec-rank-hint');
         if (hint) hint.textContent = baseAwardId === 0
-            ? '— click to select; green border = suggested next; dark blue = selected'
-            : '— click to select; light blue = already held, green border = suggested; dark blue = selected';
+            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
+            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pnAwardRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('div');
             pill.className = 'pn-rank-pill';
-            if (r <= held)       pill.className += ' pn-rank-held';
-            if (r === suggested) pill.className += ' pn-rank-suggested';
-            pill.textContent  = r;
+            pill.innerHTML  = tnRankPillInner('pn', r);
             pill.dataset.rank = r;
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pn-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'pn', held, suggested);
+        input.value = suggested;
     }
     var pnRecRankPillsEl = document.getElementById('pn-rec-rank-pills');
     if (pnRecRankPillsEl) pnRecRankPillsEl.addEventListener('click', function(e) {
         var p = e.target.closest ? e.target.closest('.pn-rank-pill') : (e.target.classList.contains('pn-rank-pill') ? e.target : null);
         if (!p) return;
         var input = document.getElementById('pn-rec-rank-val');
-        this.querySelectorAll('.pn-rank-pill').forEach(function(x) { x.classList.remove('pn-rank-selected'); });
-        p.classList.add('pn-rank-selected');
         input.value = p.dataset.rank;
+        tnRankPaint(this, 'pn', this.dataset.rankHeld, p.dataset.rank);
         pnRecRefreshWarn();
     });
     var _recAwardEl = document.getElementById('pn-rec-award');
@@ -1915,25 +1943,21 @@ if (PnConfig.recError) {
             var suggested = Math.min(held + 1, maxRank);
             var hint = gid('pn-rank-hint');
             if (hint) hint.textContent = awardId === 0
-                ? '— click to select; green border = suggested next; dark blue = selected'
-                : '— click to select; light blue = already held, green border = suggested; dark blue = selected';
+                ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
+                : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
-                var cls = 'pn-rank-pill';
-                if (i <= held)       cls += ' pn-rank-held';
-                if (i === suggested) cls += ' pn-rank-suggested';
-                html += '<div class="' + cls + '" data-rank="' + i + '">' + i + '</div>';
+                html += '<div class="pn-rank-pill" data-rank="' + i + '">' + tnRankPillInner('pn', i) + '</div>';
             }
             var pills = gid('pn-rank-pills');
+            pills.dataset.rankHeld = held;
             pills.innerHTML = html;
             selectRankPill(suggested, pills);
         }
         function selectRankPill(rank, container) {
             var c = container || gid('pn-rank-pills');
-            c.querySelectorAll('.pn-rank-pill').forEach(function(p) { p.classList.remove('pn-rank-selected'); });
-            var target = c.querySelector('[data-rank="' + rank + '"]');
-            if (target) {
-                target.classList.add('pn-rank-selected');
+            tnRankPaint(c, 'pn', c.dataset.rankHeld, rank);
+            if (c.querySelector('[data-rank="' + rank + '"]')) {
                 gid('pn-award-rank-val').value = rank;
             }
         }
@@ -2954,30 +2978,28 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
         if (hint) hint.textContent = baseAwardId === 0
-            ? '— click to select; green border = suggested next; dark blue = selected'
-            : '— click to select; blue = already held, green border = suggested next';
+            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
+            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
             pill.className = 'kn-rank-pill';
-            if (r <= held)       pill.className += ' kn-rank-held';
-            if (r === suggested) pill.className += ' kn-rank-suggested';
-            pill.textContent = r;
+            pill.innerHTML = tnRankPillInner('kn', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    document.querySelectorAll('#kn-rank-pills .kn-rank-pill').forEach(function(p) { p.classList.remove('kn-rank-selected'); });
-                    el.classList.add('kn-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'kn', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('kn-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'kn', held, suggested);
+        input.value = suggested;
     }
 
     if (gid('kn-award-select')) awInitPicker(gid('kn-award-select'));
@@ -3420,30 +3442,28 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rec-rank-hint');
         if (hint) hint.textContent = baseAwardId === 0
-            ? '— click to select; green border = suggested next; dark blue = selected'
-            : '(optional) — blue = already held, green border = suggested next';
+            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
+            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.className = 'pk-rank-pill';
-            if (r <= held)       pill.className += ' pk-rank-held';
-            if (r === suggested) pill.className += ' pk-rank-suggested';
-            pill.textContent = r;
+            pill.innerHTML = tnRankPillInner('pk', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    wrap.querySelectorAll('.pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
-                    el.classList.add('pk-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'pk', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'pk', held, suggested);
+        input.value = suggested;
     }
 
     if (gid('kn-rec-award-select')) {
@@ -5970,31 +5990,29 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
         if (hint) hint.textContent = baseAwardId === 0
-            ? '— click to select; green border = suggested next; dark blue = selected'
-            : '— click to select; blue = already held, green border = suggested next';
+            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
+            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pkPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
             pill.className = 'pk-rank-pill';
-            if (r <= held)       pill.className += ' pk-rank-held';
-            if (r === suggested) pill.className += ' pk-rank-suggested';
-            pill.textContent = r;
+            pill.innerHTML = tnRankPillInner('pk', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    document.querySelectorAll('#pk-rank-pills .pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
-                    el.classList.add('pk-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'pk', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
         // Auto-select suggested rank
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'pk', held, suggested);
+        input.value = suggested;
     }
 
     if (gid('pk-award-select')) awInitPicker(gid('pk-award-select'));
@@ -6461,30 +6479,28 @@ $(document).ready(function() {
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rec-rank-hint');
         if (hint) hint.textContent = baseAwardId === 0
-            ? '— click to select; green border = suggested next; dark blue = selected'
-            : '(optional) — blue = already held, green border = suggested next';
+            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
+            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held     = pkRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.className = 'pk-rank-pill';
-            if (r <= held)       pill.className += ' pk-rank-held';
-            if (r === suggested) pill.className += ' pk-rank-suggested';
-            pill.textContent = r;
+            pill.innerHTML = tnRankPillInner('pk', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    wrap.querySelectorAll('.pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
-                    el.classList.add('pk-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'pk', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'pk', held, suggested);
+        input.value = suggested;
     }
 
     if (gid('pk-rec-award-select')) {
@@ -8605,18 +8621,19 @@ function setupPronounPicker(cfg) {
         for (var i = 1; i <= maxRank; i++) {
             var pill = document.createElement('button');
             pill.type        = 'button';
-            pill.className   = 'pn-rank-pill' + (i == currentRank ? ' pn-rank-selected' : '');
-            pill.textContent = i;
+            pill.className   = 'pn-rank-pill';
+            pill.innerHTML   = tnRankPillInner('pn', i);
             pill.dataset.rank = i;
             (function(p, rank) {
                 p.addEventListener('click', function() {
-                    wrap.querySelectorAll('.pn-rank-pill').forEach(function(el) { el.classList.remove('pn-rank-selected'); });
-                    p.classList.add('pn-rank-selected');
                     gid('pn-edit-rank-val').value = rank;
+                    tnRankPaint(wrap, 'pn', rank, rank);
                 });
             })(pill, i);
             wrap.appendChild(pill);
         }
+        var _curRank = parseInt(currentRank, 10) || 0;
+        tnRankPaint(wrap, 'pn', _curRank, _curRank);
         gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = currentRank || '');
     }
 
@@ -8906,25 +8923,20 @@ function setupPronounPicker(cfg) {
                 for (var i = 1; i <= maxRank; i++) {
                     var pill = document.createElement('button');
                     pill.type      = 'button';
-                    pill.className = 'pn-rank-pill'
-                        + (i <= heldMax    ? ' pn-rank-held'     : '')
-                        + (i === suggested ? ' pn-rank-suggested' : '');
-                    pill.textContent  = i;
+                    pill.className = 'pn-rank-pill';
+                    pill.innerHTML  = tnRankPillInner('pn', i);
                     pill.dataset.rank = i;
                     (function(p, rank) {
                         p.addEventListener('click', function() {
-                            rcRankPills.querySelectorAll('.pn-rank-pill').forEach(function(el) { el.classList.remove('pn-rank-selected'); });
-                            p.classList.add('pn-rank-selected');
                             rcRankVal.value = rank;
+                            tnRankPaint(rcRankPills, 'pn', heldMax, rank);
                         });
                     })(pill, i);
                     rcRankPills.appendChild(pill);
                 }
-                /* auto-select the suggested rank */
-                if (suggested > 0) {
-                    var sugPill = rcRankPills.querySelector('[data-rank="' + suggested + '"]');
-                    if (sugPill) { sugPill.classList.add('pn-rank-selected'); rcRankVal.value = suggested; }
-                }
+                rcRankPills.dataset.rankHeld = heldMax;
+                tnRankPaint(rcRankPills, 'pn', heldMax, suggested);
+                if (suggested > 0) { rcRankVal.value = suggested; }
             });
         }
 
