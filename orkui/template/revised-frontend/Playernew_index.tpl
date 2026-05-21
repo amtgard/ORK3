@@ -636,6 +636,14 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-color-input-wrap input[type="text"]:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
 .pn-hero-preview{border-radius:8px;padding:16px 20px;color:#fff;margin:12px 0;position:relative;overflow:hidden;min-height:60px}
 .pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
+/* Amtpride: darken the name drop shadow ~20% (0.4 -> 0.6 alpha) so it stays legible over light flag stops */
+.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 1px 3px rgba(0,0,0,0.6)!important}
+/* Amtpride: lift the translucent subline/breadcrumb text so it reads over light flag stops (text-shadow inherits to children) */
+.pn-hero-pride .pn-hero-subline,.pn-hero-pride .pn-breadcrumb{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+.pn-hero-pride .pn-breadcrumb a{color:#fff}
+.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
+.pn-hero-pride .pn-sub-sep,.pn-hero-pride .pn-breadcrumb .pn-sep{color:rgba(255,255,255,0.85);opacity:1}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
 .pn-overlay-btn{padding:8px 20px;border:2px solid #e2e8f0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
 .pn-overlay-btn:hover{border-color:#a0aec0}
@@ -940,7 +948,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero">
+<div class="pn-hero<?= $_pnHeroGradientKey ? ' pn-hero-pride' : '' ?>">
 <?php if ($_pnOverlayIsVignette): ?>
 	<div class="pn-hero-bg pn-hero-bg-vignette-base" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-bg-vignette-sharp" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
@@ -3952,7 +3960,9 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var preview = gid('pn-color-hero-preview');
 		if (!preview) return;
 		var prideKey = gid('pn-hero-gradient') ? gid('pn-hero-gradient').value : '';
-		if (prideKey && _pnPrideGradients[prideKey]) {
+		var prideActive = !!(prideKey && _pnPrideGradients[prideKey]);
+		preview.classList.toggle('pn-hero-pride', prideActive);
+		if (prideActive) {
 			preview.style.background = 'linear-gradient(90deg, ' + _pnPrideGradients[prideKey].colors.join(', ') + ')';
 			return;
 		}
