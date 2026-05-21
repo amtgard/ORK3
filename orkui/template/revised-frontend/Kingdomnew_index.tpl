@@ -992,8 +992,31 @@ var KnConfig = {
 
 			<!-- Custom Award Name -->
 			<div class="kn-acct-field" id="kn-award-custom-row" style="display:none">
-				<label for="kn-award-custom-name">Custom Award Name</label>
+				<label for="kn-award-custom-name" id="kn-award-custom-label">Custom Award Name</label>
 				<input type="text" id="kn-award-custom-name" maxlength="64" placeholder="Enter custom award name..." />
+			</div>
+
+			<!-- Alias dropdown (shown only for "Custom Title") -->
+			<div class="kn-acct-field" id="kn-award-alias-row" style="display:none">
+				<label for="kn-award-alias">Alias of <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<select id="kn-award-alias">
+					<option value="0">— None —</option>
+					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
+					<optgroup label="Peerage Ladder">
+						<?php foreach ($CustomTitleAliasOptions['Peerage'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?> (<?= htmlspecialchars($_opt['Peerage']) ?>)</option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+					<?php if (!empty($CustomTitleAliasOptions['Titles'])): ?>
+					<optgroup label="Other Titles">
+						<?php foreach ($CustomTitleAliasOptions['Titles'] as $_opt): ?>
+						<option value="<?= (int)$_opt['AwardId'] ?>"><?= htmlspecialchars($_opt['Name']) ?></option>
+						<?php endforeach; ?>
+					</optgroup>
+					<?php endif; ?>
+				</select>
+				<div style="font-size:11px;color:#718096;margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<!-- Rank Picker -->
