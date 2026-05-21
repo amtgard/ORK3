@@ -369,35 +369,7 @@ class Controller_Player extends Controller {
 		$_ctid = 0;
 		if ($_ctSentinel && $_ctSentinel->Size() > 0) { $_ctSentinel->Next(); $_ctid = (int)$_ctSentinel->award_id; }
 		$this->data['CustomTitleAwardId'] = $_ctid;
-		$DB->Clear();
-		$_ctAliasSql = "SELECT award_id, name, peerage, is_title
-			FROM " . DB_PREFIX . "award
-			WHERE officer_role = 'none'
-			  AND name <> 'Custom Title'
-			  AND name <> 'Custom Award'
-			  AND (peerage IN ('Page','Lords-Page','Squire','Man-At-Arms','Master','Knight') OR is_title = 1)
-			ORDER BY FIELD(peerage,'Knight','Master','Squire','Man-At-Arms','Lords-Page','Page') DESC, is_title DESC, name ASC";
-		$_ctAliasRes = $DB->DataSet($_ctAliasSql);
-		$_peerageLadder = []; $_otherTitles = [];
-		if ($_ctAliasRes && $_ctAliasRes->Size() > 0) {
-			while ($_ctAliasRes->Next()) {
-				$row = [
-					'AwardId' => (int)$_ctAliasRes->award_id,
-					'Name'    => $_ctAliasRes->name,
-					'Peerage' => $_ctAliasRes->peerage,
-				];
-				if (in_array($_ctAliasRes->peerage, ['Page','Lords-Page','Squire','Man-At-Arms','Master','Knight'], true)) {
-					$_peerageLadder[] = $row;
-				} elseif ((int)$_ctAliasRes->is_title === 1) {
-					$_otherTitles[] = $row;
-				}
-			}
-		}
-		$DB->Clear();
-		$this->data['CustomTitleAliasOptions'] = [
-			'Peerage' => $_peerageLadder,
-			'Titles'  => $_otherTitles,
-		];
+		$this->data['CustomTitleAliasOptions'] = $this->Award->fetch_custom_title_alias_options();
 		$this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
 		$this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
 		$this->data['Details']       = $this->Player->fetch_player_details($id);

@@ -395,6 +395,7 @@ class Controller_Kingdom extends Controller {
 
 		$this->data['AwardOptions']        = $this->Award->fetch_award_option_list($kingdom_id, 'Awards');
 		$this->data['OfficerOptions']      = $this->Award->fetch_award_option_list($kingdom_id, 'Officers');
+		$this->data['CustomTitleAliasOptions'] = $this->Award->fetch_custom_title_alias_options();
 		$preloadOfficers = [];
 		foreach ($this->data['kingdom_officers']['Officers'] ?? [] as $o) {
 			if (in_array($o['OfficerRole'], ['Monarch', 'Regent']) && (int)$o['MundaneId'] > 0)

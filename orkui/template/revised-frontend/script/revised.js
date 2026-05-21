@@ -1791,6 +1791,9 @@ if (PnConfig.recError) {
                 if (child.tagName === 'OPTION') {
                     if (child.value === '') return;
                     aw += child.outerHTML;
+                    // "Custom Title" also belongs under Achievement Titles — surface it at the very
+                    // top of that dropdown (it precedes the title optgroups in document order).
+                    if (child.getAttribute('data-custom-title') === '1') ach += child.outerHTML;
                 } else if (child.tagName === 'OPTGROUP') {
                     var lbl = child.label;
                     if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
@@ -2850,6 +2853,9 @@ $(document).ready(function() {
             if (child.tagName === 'OPTION') {
                 if (child.value === '') return;
                 aw += child.outerHTML;
+                // "Custom Title" also belongs under Achievement Titles — surface it at the very
+                // top of that dropdown (it precedes the title optgroups in document order).
+                if (child.getAttribute('data-custom-title') === '1') ach += child.outerHTML;
             } else if (child.tagName === 'OPTGROUP') {
                 var lbl = child.label;
                 if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
@@ -2977,12 +2983,20 @@ $(document).ready(function() {
     if (gid('kn-award-select')) awInitPicker(gid('kn-award-select'));
     gid('kn-award-select').addEventListener('change', function() {
         var awardId = this.value;
-        var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
-        gid('kn-award-custom-row').style.display = isCustom ? '' : 'none';
+        var opt = this.options[this.selectedIndex];
+        var isCustomAward = opt && (opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award');
+        var isCustomTitle = opt && (opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title');
+        gid('kn-award-custom-row').style.display = (isCustomAward || isCustomTitle) ? '' : 'none';
+        var labelEl = gid('kn-award-custom-label');
+        if (labelEl) labelEl.textContent = isCustomTitle ? 'Custom Title Name' : 'Custom Award Name';
+        var nameInput = gid('kn-award-custom-name');
+        if (nameInput) nameInput.placeholder = isCustomTitle ? 'Enter custom title name...' : 'Enter custom award name...';
+        var aliasRow = gid('kn-award-alias-row');
+        if (aliasRow) aliasRow.style.display = isCustomTitle ? '' : 'none';
+        if (!isCustomTitle) { var aliasSel = gid('kn-award-alias'); if (aliasSel) aliasSel.value = '0'; }
         buildRankPills(awardId);
         var infoEl = gid('kn-award-info-line');
         if (awardId) {
-            var opt = this.querySelector('option[value="' + awardId + '"]');
             infoEl.innerHTML = opt && opt.getAttribute('data-is-ladder') === '1'
                 ? '<span class="kn-badge-ladder"><i class="fas fa-layer-group"></i> Ladder Award</span>'
                 : '';
@@ -3296,6 +3310,8 @@ $(document).ready(function() {
         gid('kn-award-info-line').innerHTML      = '';
         gid('kn-award-custom-name').value        = '';
         gid('kn-award-custom-row').style.display = 'none';
+        if (gid('kn-award-alias')) gid('kn-award-alias').value = '0';
+        if (gid('kn-award-alias-row')) gid('kn-award-alias-row').style.display = 'none';
         checkRequired();
     }
     function knDoSave(onSuccess) {
@@ -3323,6 +3339,9 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
+        var aliasSel = gid('kn-award-alias');
+        var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
+        if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
         var btnNew  = gid('kn-award-save-new');
         var btnSame = gid('kn-award-save-same');
@@ -5843,6 +5862,9 @@ $(document).ready(function() {
             if (child.tagName === 'OPTION') {
                 if (child.value === '') return;
                 aw += child.outerHTML;
+                // "Custom Title" also belongs under Achievement Titles — surface it at the very
+                // top of that dropdown (it precedes the title optgroups in document order).
+                if (child.getAttribute('data-custom-title') === '1') ach += child.outerHTML;
             } else if (child.tagName === 'OPTGROUP') {
                 var lbl = child.label;
                 if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
@@ -5978,12 +6000,20 @@ $(document).ready(function() {
     if (gid('pk-award-select')) awInitPicker(gid('pk-award-select'));
     gid('pk-award-select').addEventListener('change', function() {
         var awardId = this.value;
-        var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
-        gid('pk-award-custom-row').style.display = isCustom ? '' : 'none';
+        var opt = this.options[this.selectedIndex];
+        var isCustomAward = opt && (opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award');
+        var isCustomTitle = opt && (opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title');
+        gid('pk-award-custom-row').style.display = (isCustomAward || isCustomTitle) ? '' : 'none';
+        var labelEl = gid('pk-award-custom-label');
+        if (labelEl) labelEl.textContent = isCustomTitle ? 'Custom Title Name' : 'Custom Award Name';
+        var nameInput = gid('pk-award-custom-name');
+        if (nameInput) nameInput.placeholder = isCustomTitle ? 'Enter custom title name...' : 'Enter custom award name...';
+        var aliasRow = gid('pk-award-alias-row');
+        if (aliasRow) aliasRow.style.display = isCustomTitle ? '' : 'none';
+        if (!isCustomTitle) { var aliasSel = gid('pk-award-alias'); if (aliasSel) aliasSel.value = '0'; }
         buildRankPills(awardId);
         var infoEl = gid('pk-award-info-line');
         if (awardId) {
-            var opt = this.querySelector('option[value="' + awardId + '"]');
             infoEl.innerHTML = opt && opt.getAttribute('data-is-ladder') === '1'
                 ? '<span class="pk-badge-ladder"><i class="fas fa-layer-group"></i> Ladder Award</span>'
                 : '';
@@ -6301,6 +6331,8 @@ $(document).ready(function() {
         gid('pk-award-info-line').innerHTML      = '';
         gid('pk-award-custom-name').value        = '';
         gid('pk-award-custom-row').style.display = 'none';
+        if (gid('pk-award-alias')) gid('pk-award-alias').value = '0';
+        if (gid('pk-award-alias-row')) gid('pk-award-alias-row').style.display = 'none';
         checkRequired();
     }
     function pkDoSave(onSuccess) {
@@ -6328,6 +6360,9 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
+        var aliasSel = gid('pk-award-alias');
+        var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
+        if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
         var btnNew  = gid('pk-award-save-new');
         var btnSame = gid('pk-award-save-same');
