@@ -292,7 +292,7 @@ class SearchService extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
 	}
 	public function magic_search($term, $kingdom_id, $park_id) {
-		preg_match('/([a-z0-9]{2,3}):([a-z0-9]{2,3}|[\*]{1})?\s+(.+)/i', $term, $matches);
+		preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|[\*]{1})?:?\s+(.+)$/i', $term, $matches);
 
 		$k_id = isset($matches[1]) ? Ork3::$Lib->kingdom->GetKingdomByAbbreviation(array('Abbreviation'=>$matches[1])) : null;
 		$p_id = isset($matches[2]) ? Ork3::$Lib->park->GetParkInKingdomByAbbreviation(array('Abbreviation'=>$matches[2]), $k_id) : null;
@@ -378,6 +378,13 @@ class SearchService extends Ork3 {
 		}
 		$opt[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
 		$order = $order ?? 'order by m.active DESC, persona';
+		// Relevance ranking: float exact and prefix persona matches to the top so a short,
+		// common token (e.g. "Silent") surfaces its exact match before the row limit truncates
+		// the alphabetical tail. Every search type's $order begins with "order by m.active DESC,".
+		$_rel = mysql_real_escape_string($search);
+		$order = preg_replace('/^order by m\.active DESC,/i',
+			"order by m.active DESC, (`persona` = '{$_rel}') DESC, (`persona` like '{$_rel}%') DESC,",
+			$order);
 		$sql = "select 
 						`mundane_id`, m.`active`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
 						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
