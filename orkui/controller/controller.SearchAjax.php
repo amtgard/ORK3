@@ -40,6 +40,27 @@ class Controller_SearchAjax extends Controller {
 			$searchQ = trim($m[3]);
 		}
 
+		// Typographic punctuation/whitespace variants the DB collation does NOT treat as equal
+		// to their ASCII forms, so a normal-keyboard search misses names that store them (e.g.
+		// "Wolf’s Run" with U+2019). Accented letters are already matched by utf8mb4_unicode_ci.
+		$punctFolds = [
+			"\u{2019}" => "'", "\u{2018}" => "'",   // ’ ‘ → '
+			"\u{201C}" => '"', "\u{201D}" => '"',   // “ ” → "
+			"\u{2014}" => '-', "\u{2013}" => '-',   // — – → -
+			"\u{00A0}" => ' ',                       // no-break space → space
+			"\u{02DC}" => '~',                       // ˜ → ~
+		];
+		// Normalize the user's typed/pasted query, then provide a SQL expression that folds a
+		// column the same way so both sides of every LIKE compare in normalized ASCII form.
+		$searchQ  = strtr($searchQ, $punctFolds);
+		$sqlLit   = fn($s) => "'" . str_replace("'", "''", $s) . "'";
+		$foldText = function ($col) use ($punctFolds, $sqlLit) {
+			foreach ($punctFolds as $from => $to) {
+				$col = "REPLACE({$col}, " . $sqlLit($from) . ", " . $sqlLit($to) . ")";
+			}
+			return $col;
+		};
+
 		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
 
 		// Per-category budgets; unused slots from each category roll to players
@@ -51,7 +72,7 @@ class Controller_SearchAjax extends Controller {
 		$unitBudget    = $focus === 'unit'    ? 10 : ($focus ? 0 : 3);
 
 		// Parks — prioritize user's kingdom first; narrow by abbreviation prefix if provided
-		$parkWhere = "p.active = 'Active' AND (p.name LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')";
+		$parkWhere = "p.active = 'Active' AND (" . $foldText('p.name') . " LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')";
 		if ($filterPid > 0)           { $parkWhere .= " AND p.park_id = {$filterPid}"; }
 		elseif ($filterKid > 0)       { $parkWhere .= " AND p.kingdom_id = {$filterKid}"; }
 		$parkOrder = valid_id($pid)
@@ -73,10 +94,11 @@ class Controller_SearchAjax extends Controller {
 		// Kingdoms — skip if scoped to a specific kingdom/park by abbreviation prefix
 		$kingdoms = [];
 		if ($filterKid === 0) {
+			$kingdomWhere = $foldText('k.name') . " LIKE '%{$term}%' OR k.abbreviation LIKE '%{$term}%'";
 			$rs = $DB->DataSet("
 				SELECT k.kingdom_id, k.name, k.abbreviation
 				FROM ork_kingdom k
-				WHERE k.name LIKE '%{$term}%' OR k.abbreviation LIKE '%{$term}%'
+				WHERE {$kingdomWhere}
 				ORDER BY k.name
 				LIMIT {$kingdomBudget}");
 			while ($rs->Next()) {
@@ -86,10 +108,11 @@ class Controller_SearchAjax extends Controller {
 		$playerBudget += $kingdomBudget - count($kingdoms);
 
 		// Units
+		$unitWhere = $foldText('name') . " LIKE '%{$term}%'";
 		$rs = $DB->DataSet("
 			SELECT unit_id, name, type
 			FROM ork_unit
-			WHERE name LIKE '%{$term}%'
+			WHERE {$unitWhere}
 			ORDER BY name
 			LIMIT {$unitBudget}");
 		$units = [];
@@ -111,10 +134,10 @@ class Controller_SearchAjax extends Controller {
 		$isOrkAdmin     = $_searchUid > 0 && Ork3::$Lib->authorization->HasAuthority($_searchUid, AUTH_ADMIN, null, null);
 		$DB->Clear();
 		$mundaneClause  = $isOrkAdmin
-			? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
-			: "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
+			? "OR " . $foldText('m.given_name') . " LIKE '%{$term}%' OR " . $foldText('m.surname') . " LIKE '%{$term}%'"
+			: "OR (m.restricted = 0 AND (" . $foldText('m.given_name') . " LIKE '%{$term}%' OR " . $foldText('m.surname') . " LIKE '%{$term}%'))";
 		$playerWhere = "{$suspendedClause} AND {$activeClause} AND LENGTH(m.persona) > 0
-			  AND (m.persona LIKE '%{$term}%'
+			  AND (" . $foldText('m.persona') . " LIKE '%{$term}%'
 			    OR m.username LIKE '%{$term}%'
 			    {$mundaneClause})";
 		if ($filterPid > 0)           { $playerWhere .= " AND m.park_id = {$filterPid}"; }
