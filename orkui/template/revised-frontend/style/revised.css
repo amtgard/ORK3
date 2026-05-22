@@ -1499,11 +1499,25 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 	.pn-rank-pill:hover:not(.pn-rank-selected),
 	.kn-rank-pill:hover:not(.kn-rank-selected),
 	.pk-rank-pill:hover:not(.pk-rank-selected) { box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
+	/* Dark mode: a dark box-shadow on a dark surface is invisible — give a
+	   visible background/border shift instead so hover feedback survives. */
+	html[data-theme="dark"] .pn-rank-pill:hover:not(.pn-rank-selected),
+	html[data-theme="dark"] .kn-rank-pill:hover:not(.kn-rank-selected),
+	html[data-theme="dark"] .pk-rank-pill:hover:not(.pk-rank-selected) {
+		background: var(--ork-bg-tertiary);
+		border-color: var(--ork-text-lighter);
+	}
 }
 /* On phones the 36px pills make the rank grid overly tall — shrink ~30%. */
 @media (max-width: 600px) {
 	.pn-rank-pills-wrap { gap: 5px; }
 	.pn-rank-pill { width: 25px; height: 25px; font-size: 11px; border-width: 1.5px; }
+	/* The desktop selected lift (translateY(-3px) scale(1.16)) is proportionally
+	   too aggressive on the shrunken 25px pills — soften it so the pop stays
+	   inside the row. */
+	.pn-rank-pill.pn-rank-selected,
+	.kn-rank-pill.kn-rank-selected,
+	.pk-rank-pill.pk-rank-selected { transform: translateY(-2px) scale(1.08); }
 }
 /* Officer / giver quick chips */
 .pn-officer-chips {

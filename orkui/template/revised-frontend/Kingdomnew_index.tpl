@@ -998,8 +998,8 @@ var KnConfig = {
 
 			<!-- Alias dropdown (shown only for "Custom Title") -->
 			<div class="kn-acct-field" id="kn-award-alias-row" style="display:none">
-				<label for="kn-award-alias">Alias of <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
-				<select id="kn-award-alias">
+				<label for="kn-award-alias">Alias of <span style="color:var(--ork-text-lighter);font-weight:400;font-size:11px">(optional)</span></label>
+				<select name="AliasAwardId" id="kn-award-alias">
 					<option value="0">— None —</option>
 					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
 					<optgroup label="Peerage Ladder">
@@ -1016,7 +1016,7 @@ var KnConfig = {
 					</optgroup>
 					<?php endif; ?>
 				</select>
-				<div style="font-size:11px;color:#718096;margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
+				<div style="font-size:11px;color:var(--ork-text-muted);margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<!-- Rank Picker -->
@@ -1114,7 +1114,7 @@ var KnConfig = {
 			</div>
 			<div class="pk-acct-field" id="kn-rec-rank-row" style="display:none">
 				<label>Rank <span id="kn-rec-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
-				<div class="pk-rank-pills-wrap" id="kn-rec-rank-pills"></div>
+				<div class="kn-rank-pills-wrap" id="kn-rec-rank-pills"></div>
 				<input type="hidden" id="kn-rec-rank-val" value="" />
 			</div>
 			<div class="pk-acct-field">

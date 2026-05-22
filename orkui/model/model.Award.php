@@ -116,43 +116,6 @@ class Model_Award extends Model {
         }
     }
 
-    /**
-     * Awards a "Custom Title" may be aliased to: peerage-ladder rungs and other titles.
-     * Drives the Add Award modal's "Alias of" dropdown on the player, kingdom, and park
-     * profiles. The list is global (not kingdom-specific), so it is shared across all three.
-     *
-     * @return array ['Peerage' => [...], 'Titles' => [...]] of ['AwardId','Name','Peerage'] rows
-     */
-    function fetch_custom_title_alias_options() {
-        global $DB;
-        $DB->Clear();
-        $sql = "SELECT award_id, name, peerage, is_title
-            FROM " . DB_PREFIX . "award
-            WHERE officer_role = 'none'
-              AND name <> 'Custom Title'
-              AND name <> 'Custom Award'
-              AND (peerage IN ('Page','Lords-Page','Squire','Man-At-Arms','Master','Knight') OR is_title = 1)
-            ORDER BY FIELD(peerage,'Knight','Master','Squire','Man-At-Arms','Lords-Page','Page') DESC, is_title DESC, name ASC";
-        $res = $DB->DataSet($sql);
-        $peerage = []; $titles = [];
-        if ($res && $res->Size() > 0) {
-            while ($res->Next()) {
-                $row = [
-                    'AwardId' => (int)$res->award_id,
-                    'Name'    => $res->name,
-                    'Peerage' => $res->peerage,
-                ];
-                if (in_array($res->peerage, ['Page','Lords-Page','Squire','Man-At-Arms','Master','Knight'], true)) {
-                    $peerage[] = $row;
-                } elseif ((int)$res->is_title === 1) {
-                    $titles[] = $row;
-                }
-            }
-        }
-        $DB->Clear();
-        return ['Peerage' => $peerage, 'Titles' => $titles];
-    }
-
 
 }
 

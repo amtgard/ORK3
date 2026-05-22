@@ -381,7 +381,10 @@ class SearchService extends Ork3 {
 		// Relevance ranking: float exact and prefix persona matches to the top so a short,
 		// common token (e.g. "Silent") surfaces its exact match before the row limit truncates
 		// the alphabetical tail. Every search type's $order begins with "order by m.active DESC,".
-		$_rel = mysql_real_escape_string($search);
+		// Escape for a SQL string literal by doubling single quotes. NOTE: the file-wide
+		// use of mysql_real_escape_string elsewhere is a no-op polyfill (pre-existing,
+		// separate issue) — this one new line does its own proper escaping.
+		$_rel = str_replace("'", "''", (string)$search);
 		$order = preg_replace('/^order by m\.active DESC,/i',
 			"order by m.active DESC, (`persona` = '{$_rel}') DESC, (`persona` like '{$_rel}%') DESC,",
 			$order);
