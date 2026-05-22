@@ -639,13 +639,15 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 /* Amtpride: darken the name drop shadow ~20% (0.4 -> 0.6 alpha) so it stays legible over light flag stops.
    Legibility contract: any future hero surface (kn-/pk-) that gains a pride gradient must replicate this
    intensified text-shadow on its name/subline elements, since light flag stops wash out the default 0.4 shadow. */
-.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 1px 3px rgba(0,0,0,0.6)}
-html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 1px 3px rgba(0,0,0,0.6)!important}
-/* Amtpride: lift the translucent subline/breadcrumb text so it reads over light flag stops (text-shadow inherits to children) */
-.pn-hero-pride .pn-hero-subline,.pn-hero-pride .pn-breadcrumb{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
-.pn-hero-pride .pn-breadcrumb a{color:#fff}
+.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 1px 3px rgba(0,0,0,0.7)}
+html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 1px 3px rgba(0,0,0,0.7)!important}
+/* Amtpride: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
+   The breadcrumb uses self-contained .pn-crumb pills (dark bg) so it needs no pride-specific shadow. */
+.pn-hero-pride .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
 .pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
-.pn-hero-pride .pn-sub-sep,.pn-hero-pride .pn-breadcrumb .pn-sep{color:rgba(255,255,255,0.85);opacity:1}
+.pn-hero-pride .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
+/* Amtpride: faint dark translucent backing box behind the subline so it reads over light flag stops */
+.pn-hero-pride .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.22);padding:2px 9px;border-radius:6px}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
 /* Design-modal preview: heraldry-overlay layers mirror the production hero so the
    Low/Med/High/Vignette buttons preview live. Driven by a preview-scoped opacity var
@@ -771,7 +773,12 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 1px 3px rgba(0,
 .pn-design-panel.pn-pride-active .pn-color-presets,
 .pn-design-panel.pn-pride-active .pn-color-row,
 .pn-design-panel.pn-pride-active #pn-color-presets,
-.pn-design-panel.pn-pride-active #pn-gradient-presets{opacity:0.4;pointer-events:none}
+.pn-design-panel.pn-pride-active #pn-gradient-presets{opacity:0.45}
+/* The custom color row (pickers/hex) stays inert while a flag is active — use a preset or Clear to switch off. */
+.pn-design-panel.pn-pride-active .pn-color-row{pointer-events:none}
+/* Presets remain clickable: clicking one removes the pride flag and applies that color/gradient. Brighten on hover to signal it. */
+.pn-design-panel.pn-pride-active #pn-color-presets:hover,
+.pn-design-panel.pn-pride-active #pn-gradient-presets:hover{opacity:1}
 /* Shared section heading + checkbox toggle label inside Design panels */
 .pn-section-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:12px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
 .pn-section-toggle-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
@@ -1012,9 +1019,8 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<?php endif; ?>
 			<div class="pn-breadcrumb">
 				<?php if (valid_id($this->__session->kingdom_id)): ?>
-					<a href="<?= UIR ?>Kingdom/profile/<?= $this->__session->kingdom_id ?>"><?= htmlspecialchars($this->__session->kingdom_name) ?></a>
-					<span class="pn-sep"><i class="fas fa-chevron-right" style="font-size:10px"></i></span>
-					<a href="<?= UIR ?>Park/profile/<?= $this->__session->park_id ?>"><?= htmlspecialchars($this->__session->park_name) ?></a>
+					<a class="pn-crumb" href="<?= UIR ?>Kingdom/profile/<?= $this->__session->kingdom_id ?>"><i class="fas fa-crown"></i> <?= htmlspecialchars($this->__session->kingdom_name) ?></a>
+					<a class="pn-crumb" href="<?= UIR ?>Park/profile/<?= $this->__session->park_id ?>"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($this->__session->park_name) ?></a>
 				<?php endif; ?>
 			</div>
 			<div class="pn-badges">
@@ -3191,7 +3197,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<div class="pn-amtpride-swatch<?= $_pnPrideActiveKey === $_pgKey ? ' pn-selected' : '' ?>" data-pride="<?= htmlspecialchars($_pgKey) ?>" data-tip="<?= htmlspecialchars($_pg['name']) ?>" style="background:<?= $_pgCss ?>"></div>
 							<?php endforeach; ?>
 						</div>
-						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-amtpride-clear" style="margin-top:10px<?= $_pnPrideActiveKey ? '' : ';display:none' ?>"><i class="fas fa-times"></i> Clear pride flag</button>
+						<button type="button" class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-amtpride-clear" style="margin-top:10px<?= $_pnPrideActiveKey ? '' : ';display:none' ?>"><i class="fas fa-times"></i> Go Back to Previous Color/Gradient</button>
 					</div>
 				</div>
 				<input type="hidden" id="pn-hero-gradient" value="<?= htmlspecialchars($_pnPrideActiveKey) ?>" />
@@ -3200,14 +3206,14 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<div class="pn-color-col">
 						<label class="pn-color-field-label">Primary (Hero Background)</label>
 						<div class="pn-color-input-wrap">
-							<input type="color" id="pn-color-primary" value="<?= htmlspecialchars($Player['ColorPrimary'] ?? '#2c5282') ?>" />
+							<input type="color" id="pn-color-primary" value="<?= htmlspecialchars(!empty($Player['ColorPrimary']) ? $Player['ColorPrimary'] : '#2c5282') ?>" />
 							<input type="text" id="pn-color-primary-hex" value="<?= htmlspecialchars($Player['ColorPrimary'] ?? '#2c5282') ?>" maxlength="7" />
 						</div>
 					</div>
 					<div class="pn-color-col">
 						<label class="pn-color-field-label">Accent (Tabs, Links, Stat Cards)</label>
 						<div class="pn-color-input-wrap">
-							<input type="color" id="pn-color-accent" value="<?= htmlspecialchars($Player['ColorAccent'] ?? '#4299e1') ?>" />
+							<input type="color" id="pn-color-accent" value="<?= htmlspecialchars(!empty($Player['ColorAccent']) ? $Player['ColorAccent'] : '#4299e1') ?>" />
 							<input type="text" id="pn-color-accent-hex" value="<?= htmlspecialchars($Player['ColorAccent'] ?? '#4299e1') ?>" maxlength="7" />
 						</div>
 					</div>
@@ -3217,7 +3223,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<div class="pn-color-col">
 						<label class="pn-color-field-label">Secondary Color</label>
 						<div class="pn-color-input-wrap">
-							<input type="color" id="pn-color-secondary" value="<?= htmlspecialchars($Player['ColorSecondary'] ?? '#2c5282') ?>" />
+							<input type="color" id="pn-color-secondary" value="<?= htmlspecialchars(!empty($Player['ColorSecondary']) ? $Player['ColorSecondary'] : '#2c5282') ?>" />
 							<input type="text" id="pn-color-secondary-hex" value="<?= htmlspecialchars($Player['ColorSecondary'] ?? '') ?>" maxlength="7" placeholder="None" />
 						</div>
 					</div>
@@ -4032,15 +4038,20 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 			prideBadge.style.display = 'none';
 			prideClear.style.display = 'none';
 			if (colorPanel) colorPanel.classList.remove('pn-pride-active');
-			// Deselect regular presets unconditionally — the user cleared the pride
-			// flag, they haven't re-chosen a color preset. Re-lighting a preset off
-			// the current input values would mislead them about saved state.
-			allSwatches.forEach(function(s) { s.classList.remove('pn-selected'); });
+			// Going back to the previous color/gradient: the custom color inputs were
+			// never overwritten while the flag was active, so re-light whichever preset
+			// matches them (if any) to make the restored selection visible.
+			syncPresetSwatch();
 		}
 		updateColorPreview();
 	}
 	function clearPrideFlag() {
 		if (!prideHidden || !prideHidden.value) return;
+		// Reset the hidden field directly first — it is the source of truth the save
+		// reads. applyPrideFlag('') refreshes the badge/dim/preview too, but its guard
+		// can bail before clearing the value if any Amtpride sub-element is missing,
+		// which would otherwise let the stale pride key survive into the save.
+		prideHidden.value = '';
 		applyPrideFlag('');
 	}
 	// Listener wiring is gated on the Amtpride DOM existing. If a future feature

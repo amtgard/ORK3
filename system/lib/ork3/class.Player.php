@@ -1251,13 +1251,16 @@ class Player extends Ork3 {
 					$design->color_accent = $_pick($request['ColorAccent'], 'color_accent');
 					$design->color_secondary = $_pick($request['ColorSecondary'], 'color_secondary');
 					// HeroGradient is an Amtpride preset key validated against the keys of
-					// system/lib/ork3/pride_gradients.php. Anything else is coerced to ''.
+					// system/lib/ork3/pride_gradients.php. Anything else is coerced to '' (NOT
+					// null): yapo's update_base() filters SET fields with isset(), which is false
+					// for null, so assigning null would silently omit the column and leave a stale
+					// pride key in the DB. '' is a valid "no flag" sentinel the template treats as empty.
 					if (array_key_exists('HeroGradient', $request)) {
 						static $_prideKeys = null;
 						if ($_prideKeys === null) { $_prideKeys = array_keys(require __DIR__ . '/pride_gradients.php'); }
-						$design->hero_gradient = (is_string($request['HeroGradient']) && in_array($request['HeroGradient'], $_prideKeys, true)) ? $request['HeroGradient'] : null;
+						$design->hero_gradient = (is_string($request['HeroGradient']) && in_array($request['HeroGradient'], $_prideKeys, true)) ? $request['HeroGradient'] : '';
 					} else {
-						$design->hero_gradient = $_designExisted ? $_cur['hero_gradient'] : null;
+						$design->hero_gradient = $_designExisted ? $_cur['hero_gradient'] : '';
 					}
 					$validOverlays = ['low','med','high','vignette'];
 					$design->hero_overlay = (isset($request['HeroOverlay']) && in_array($request['HeroOverlay'], $validOverlays)) ? $request['HeroOverlay'] : ($_designExisted ? $_cur['hero_overlay'] : 'med');
