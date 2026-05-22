@@ -201,7 +201,7 @@ class Controller_Reports extends Controller {
 
 	public function class_masters($params=null) {
 		$this->data[ 'page_title' ] = "Kingdom Wide Class Masters/Paragons";
-		if (isset($this->request->KingdomId)) {
+		if (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
 			$type = 'Kingdom';
 			$id = $this->request->KingdomId;
 			$this->data[ 'page_title' ] = "Kingdom Class Masters/Paragons";

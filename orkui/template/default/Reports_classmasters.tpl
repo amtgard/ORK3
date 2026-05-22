@@ -251,6 +251,10 @@ $(function() {
 		pageLength: 25,
 		order: <?php
 			$sortOrder = [];
+			// Kingdom column (col 0) is shown unless scoped to one kingdom — sort by it first.
+			if (($report_type ?? null) !== 'Kingdom') {
+				$sortOrder[] = [0, 'asc'];
+			}
 			if (($report_type ?? null) !== 'Park') {
 				$parkCol    = ($report_type ?? null) !== 'Kingdom' ? 1 : 0;
 				$sortOrder[] = [$parkCol, 'asc'];

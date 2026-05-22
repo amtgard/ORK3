@@ -153,7 +153,8 @@ class Report  extends Ork3 {
 		if (valid_id($request['KingdomId'])) {
 			$location_clause = " and m.kingdom_id = $request[KingdomId]";
 		} else {
-			$order = "k.name, ";
+			// Kingdom-wide view: sort kingdom, then park, then persona.
+			$order = "k.name, p.name, m.persona, ";
 		}
 
 		if (valid_id($request['ParkId'])) {
