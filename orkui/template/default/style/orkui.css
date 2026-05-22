@@ -6578,6 +6578,15 @@ button.ui-button::-moz-focus-inner { border: 0; padding: 0; } /* reset extra pad
 
 html, body {
     height: 100%;
+    /* Guard against horizontal overflow from any descendant. Without this, an
+       element wider than the viewport makes the page scroll sideways, and on
+       Android Chrome a position:fixed; width:100% bar (#newmenu) then spans the
+       full scrollable width — pushing its right-side controls (Login / View
+       Profile / theme toggle) off the right edge. iOS clamps fixed elements to
+       the visual viewport so it doesn't show there. Clamping here keeps the
+       fixed nav pinned to the device width on every platform. */
+    overflow-x: hidden;
+    max-width: 100%;
 }
 body {
 	/*
