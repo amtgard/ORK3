@@ -1400,8 +1400,8 @@ var PkConfig = {
 
 			<!-- Alias dropdown (shown only for "Custom Title") -->
 			<div class="pk-acct-field" id="pk-award-alias-row" style="display:none">
-				<label for="pk-award-alias">Alias of <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
-				<select id="pk-award-alias">
+				<label for="pk-award-alias">Alias of <span style="color:var(--ork-text-lighter);font-weight:400;font-size:11px">(optional)</span></label>
+				<select name="AliasAwardId" id="pk-award-alias">
 					<option value="0">— None —</option>
 					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
 					<optgroup label="Peerage Ladder">
@@ -1418,7 +1418,7 @@ var PkConfig = {
 					</optgroup>
 					<?php endif; ?>
 				</select>
-				<div style="font-size:11px;color:#718096;margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
+				<div style="font-size:11px;color:var(--ork-text-muted);margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<!-- Rank Picker -->

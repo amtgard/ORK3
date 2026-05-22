@@ -636,7 +636,9 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-color-input-wrap input[type="text"]:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
 .pn-hero-preview{border-radius:8px;padding:16px 20px;color:#fff;margin:12px 0;position:relative;overflow:hidden;min-height:60px}
 .pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
-/* Amtpride: darken the name drop shadow ~20% (0.4 -> 0.6 alpha) so it stays legible over light flag stops */
+/* Amtpride: darken the name drop shadow ~20% (0.4 -> 0.6 alpha) so it stays legible over light flag stops.
+   Legibility contract: any future hero surface (kn-/pk-) that gains a pride gradient must replicate this
+   intensified text-shadow on its name/subline elements, since light flag stops wash out the default 0.4 shadow. */
 .pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 1px 3px rgba(0,0,0,0.6)}
 html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 1px 3px rgba(0,0,0,0.6)!important}
 /* Amtpride: lift the translucent subline/breadcrumb text so it reads over light flag stops (text-shadow inherits to children) */
@@ -2724,7 +2726,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 
 			<!-- Alias dropdown (shown only for "Custom Title") -->
 			<div class="pn-acct-field" id="pn-award-alias-row" style="display:none">
-				<label for="pn-award-alias">Alias of <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<label for="pn-award-alias">Alias of <span style="color:var(--ork-text-lighter);font-weight:400;font-size:11px">(optional)</span></label>
 				<select name="AliasAwardId" id="pn-award-alias">
 					<option value="0">— None —</option>
 					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
@@ -2742,7 +2744,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					</optgroup>
 					<?php endif; ?>
 				</select>
-				<div style="font-size:11px;color:#718096;margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
+				<div style="font-size:11px;color:var(--ork-text-muted);margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<!-- Rank Picker (only for ladder awards) -->
@@ -2871,7 +2873,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<input type="text" id="pn-edit-custom-name" maxlength="64" />
 			</div>
 			<div class="pn-acct-field" id="pn-edit-alias-row" style="display:none">
-				<label for="pn-edit-alias">Alias of <span style="color:#a0aec0;font-weight:400;font-size:11px">(optional)</span></label>
+				<label for="pn-edit-alias">Alias of <span style="color:var(--ork-text-lighter);font-weight:400;font-size:11px">(optional)</span></label>
 				<select id="pn-edit-alias">
 					<option value="0">— None —</option>
 					<?php if (!empty($CustomTitleAliasOptions['Peerage'])): ?>
@@ -2889,7 +2891,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					</optgroup>
 					<?php endif; ?>
 				</select>
-				<div style="font-size:11px;color:#718096;margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
+				<div style="font-size:11px;color:var(--ork-text-muted);margin-top:4px">Aliasing makes this title count as the selected core award for belt relationships and reports.</div>
 			</div>
 
 			<div class="pn-acct-field" id="pn-edit-rank-row" style="display:none">
@@ -3172,7 +3174,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<div class="pn-color-swatch" data-primary="#744210" data-accent="#ecc94b" data-secondary="#9b2c2c" style="background:linear-gradient(135deg,#744210,#9b2c2c)" title="Autumn"></div>
 				</div>
 				<?php
-					$_pnPrideActiveKey = (!$isSuspended && !empty($Player['HeroGradient']) && isset($_pnPrideGradients[$Player['HeroGradient']])) ? $Player['HeroGradient'] : '';
+					$_pnPrideActiveKey = $_pnHeroGradientKey;
 				?>
 				<div class="pn-amtpride-section<?= $_pnPrideActiveKey ? ' pn-amtpride-open' : '' ?>" id="pn-amtpride-section">
 					<button type="button" class="pn-amtpride-toggle" id="pn-amtpride-toggle" aria-expanded="<?= $_pnPrideActiveKey ? 'true' : 'false' ?>" aria-controls="pn-amtpride-body">
@@ -4013,6 +4015,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	// (which call clearPrideFlag) keep working even if the Amtpride DOM is
 	// missing — clearPrideFlag's own !prideHidden guard short-circuits cleanly.
 	function applyPrideFlag(key) {
+		if (!prideHidden || !prideBadge || !prideClear || !prideSection || !prideToggle) return;
 		prideHidden.value = key || '';
 		prideSwatches.forEach(function(sw) {
 			sw.classList.toggle('pn-selected', sw.dataset.pride === key);

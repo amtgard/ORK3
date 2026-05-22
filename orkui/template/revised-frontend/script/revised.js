@@ -848,9 +848,7 @@ if (PnConfig.recError) {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = document.getElementById('pn-rec-rank-hint');
-        if (hint) hint.textContent = baseAwardId === 0
-            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
-            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pnAwardRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -1942,9 +1940,7 @@ if (PnConfig.recError) {
             var held      = playerRanks[awardId] || 0;
             var suggested = Math.min(held + 1, maxRank);
             var hint = gid('pn-rank-hint');
-            if (hint) hint.textContent = awardId === 0
-                ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
-                : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
+            if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
                 html += '<div class="pn-rank-pill" data-rank="' + i + '">' + tnRankPillInner('pn', i) + '</div>';
@@ -2977,9 +2973,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
-        if (hint) hint.textContent = baseAwardId === 0
-            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
-            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -3441,9 +3435,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rec-rank-hint');
-        if (hint) hint.textContent = baseAwardId === 0
-            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
-            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -3451,18 +3443,18 @@ $(document).ready(function() {
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
-            pill.className = 'pk-rank-pill';
-            pill.innerHTML = tnRankPillInner('pk', r);
+            pill.className = 'kn-rank-pill';
+            pill.innerHTML = tnRankPillInner('kn', r);
             pill.dataset.rank = r;
             pill.addEventListener('click', (function(rank) {
                 return function() {
                     input.value = rank;
-                    tnRankPaint(wrap, 'pk', held, rank);
+                    tnRankPaint(wrap, 'kn', held, rank);
                 };
             })(r));
             wrap.appendChild(pill);
         }
-        tnRankPaint(wrap, 'pk', held, suggested);
+        tnRankPaint(wrap, 'kn', held, suggested);
         input.value = suggested;
     }
 
@@ -5989,9 +5981,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
-        if (hint) hint.textContent = baseAwardId === 0
-            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
-            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pkPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
@@ -6478,9 +6468,7 @@ $(document).ready(function() {
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rec-rank-hint');
-        if (hint) hint.textContent = baseAwardId === 0
-            ? '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.'
-            : '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held     = pkRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);

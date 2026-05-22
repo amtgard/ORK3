@@ -1253,7 +1253,8 @@ class Player extends Ork3 {
 					// HeroGradient is an Amtpride preset key validated against the keys of
 					// system/lib/ork3/pride_gradients.php. Anything else is coerced to ''.
 					if (array_key_exists('HeroGradient', $request)) {
-						$_prideKeys = array_keys(require __DIR__ . '/pride_gradients.php');
+						static $_prideKeys = null;
+						if ($_prideKeys === null) { $_prideKeys = array_keys(require __DIR__ . '/pride_gradients.php'); }
 						$design->hero_gradient = (is_string($request['HeroGradient']) && in_array($request['HeroGradient'], $_prideKeys, true)) ? $request['HeroGradient'] : null;
 					} else {
 						$design->hero_gradient = $_designExisted ? $_cur['hero_gradient'] : null;
