@@ -645,6 +645,15 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 1px 3px rgba(0,
 .pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
 .pn-hero-pride .pn-sub-sep,.pn-hero-pride .pn-breadcrumb .pn-sep{color:rgba(255,255,255,0.85);opacity:1}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
+/* Design-modal preview: heraldry-overlay layers mirror the production hero so the
+   Low/Med/High/Vignette buttons preview live. Driven by a preview-scoped opacity var
+   so the real hero's --pn-overlay-opacity is untouched. */
+.pn-preview-bg{position:absolute;top:-10px;left:-10px;right:-10px;bottom:-10px;background-size:cover;background-position:center}
+.pn-preview-bg-base{filter:blur(6px);opacity:var(--pn-preview-overlay-opacity,0.12)}
+.pn-preview-bg-sharp{filter:blur(1px);opacity:0}
+.pn-preview-vignette .pn-preview-bg-base{-webkit-mask-image:radial-gradient(ellipse at center,rgba(0,0,0,0) 20%,rgba(0,0,0,1) 60%);mask-image:radial-gradient(ellipse at center,rgba(0,0,0,0) 20%,rgba(0,0,0,1) 60%)}
+.pn-preview-vignette .pn-preview-bg-sharp{opacity:0.30;-webkit-mask-image:radial-gradient(ellipse at center,rgba(0,0,0,1) 20%,rgba(0,0,0,0) 60%);mask-image:radial-gradient(ellipse at center,rgba(0,0,0,1) 20%,rgba(0,0,0,0) 60%)}
+.pn-hero-preview-content{position:relative;z-index:1}
 .pn-overlay-btn{padding:8px 20px;border:2px solid #e2e8f0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
 .pn-overlay-btn:hover{border-color:#a0aec0}
 .pn-overlay-btn.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
@@ -3133,8 +3142,12 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				</div>
 				<div class="pn-design-preview-label">Preview</div>
 				<div class="pn-hero-preview" id="pn-color-hero-preview">
-					<div class="pn-hero-preview-name ork-font-sample"><?= htmlspecialchars($Player['Persona']) ?></div>
-					<div class="pn-hero-preview-sub">Your profile will look like this</div>
+					<div class="pn-preview-bg pn-preview-bg-base" style="background-image:url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+					<div class="pn-preview-bg pn-preview-bg-sharp" style="background-image:url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+					<div class="pn-hero-preview-content">
+						<div class="pn-hero-preview-name ork-font-sample"><?= htmlspecialchars($Player['Persona']) ?></div>
+						<div class="pn-hero-preview-sub">Your profile will look like this</div>
+					</div>
 				</div>
 				<div class="pn-design-preview-label" style="margin-top:14px">Presets</div>
 				<div class="pn-color-presets" id="pn-color-presets">
@@ -3923,6 +3936,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		gid('pn-hero-overlay').value = 'med';
 		document.querySelectorAll('.pn-overlay-btn').forEach(function(b) { b.classList.remove('pn-active'); });
 		document.querySelector('.pn-overlay-btn[data-overlay="med"]').classList.add('pn-active');
+		applyOverlayPreview('med');
 		syncPresetSwatch(); updateColorPreview();
 	});
 	// Secondary color / gradient toggle
@@ -3943,6 +3957,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 			document.querySelectorAll('.pn-overlay-btn').forEach(function(b) { b.classList.remove('pn-active'); });
 			btn.classList.add('pn-active');
 			gid('pn-hero-overlay').value = btn.dataset.overlay;
+			applyOverlayPreview(btn.dataset.overlay);
 		});
 	});
 	function syncPresetSwatch() {
@@ -3956,6 +3971,13 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		});
 	}
 	var _pnPrideGradients = <?= json_encode($_pnPrideGradients, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+	function applyOverlayPreview(level) {
+		var preview = gid('pn-color-hero-preview');
+		if (!preview) return;
+		var opac = { low: '0.06', med: '0.12', high: '0.22', vignette: '0.12' }[level] || '0.12';
+		preview.style.setProperty('--pn-preview-overlay-opacity', opac);
+		preview.classList.toggle('pn-preview-vignette', level === 'vignette');
+	}
 	function updateColorPreview() {
 		var preview = gid('pn-color-hero-preview');
 		if (!preview) return;
@@ -3977,6 +3999,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	}
 	updateColorPreview();
 	syncPresetSwatch();
+	applyOverlayPreview(gid('pn-hero-overlay') ? gid('pn-hero-overlay').value : 'med');
 
 	// ---- Amtpride Nameplate ----
 	var prideSection = gid('pn-amtpride-section');
