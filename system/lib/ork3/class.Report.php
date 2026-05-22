@@ -425,13 +425,18 @@ class Report  extends Ork3 {
 
 	public function PlayerAwardRecommendations($request) {
 
-		// Cache key only the SQL filter dimensions — the non-filter params (IncludeKnights,
-		// IncludeMasters, IncludeLadder, LadderMinimum) don't change the response, so keying
-		// on them just bloats the keyspace and breaks bust.
+		// Cache key the SQL filter dimensions PLUS the viewer (RequestedBy): the response
+		// embeds per-viewer fields (ViewerCanSecond, ViewerCanEditReason, and each second's
+		// IsMine), so a viewer-agnostic key would serve one viewer's "can I second this?"
+		// flags to everyone — e.g. a recommender who can't second their own rung would
+		// suppress the +1 for other officers. The non-filter params (IncludeKnights,
+		// IncludeMasters, IncludeLadder, LadderMinimum) don't change the response, so they
+		// stay out of the key.
 		$key = Ork3::$Lib->ghettocache->key([
 			'KingdomId' => (int)($request['KingdomId'] ?? 0),
 			'ParkId'    => (int)($request['ParkId']    ?? 0),
 			'PlayerId'  => (int)($request['PlayerId']  ?? 0),
+			'RequestedBy' => (int)($request['RequestedBy'] ?? 0),
 		]);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
 			return $cache;
