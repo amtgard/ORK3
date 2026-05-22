@@ -638,16 +638,21 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
 /* Amtpride: darken the name drop shadow ~20% (0.4 -> 0.6 alpha) so it stays legible over light flag stops.
    Legibility contract: any future hero surface (kn-/pk-) that gains a pride gradient must replicate this
-   intensified text-shadow on its name/subline elements, since light flag stops wash out the default 0.4 shadow. */
-.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 1px 3px rgba(0,0,0,0.7)}
-html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 1px 3px rgba(0,0,0,0.7)!important}
+   crisp-halo text-shadow on its name element, since light flag stops wash out a soft single shadow.
+   A soft directional shadow only blurs the underside of the glyphs; over a near-white flag stop the
+   top/sides of white text still bleed. A tight multi-directional outline wraps every glyph in a dark
+   edge so the title reads on any stop — light or dark — while keeping the flag fully visible (no overlay). */
+.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
+html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)!important}
 /* Amtpride: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
    The breadcrumb uses self-contained .pn-crumb pills (dark bg) so it needs no pride-specific shadow. */
 .pn-hero-pride .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
 .pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
 .pn-hero-pride .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
-/* Amtpride: faint dark translucent backing box behind the subline so it reads over light flag stops */
-.pn-hero-pride .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.22);padding:2px 9px;border-radius:6px}
+/* Amtpride: dark translucent backing box behind the subline so it reads over light flag stops.
+   0.22 was too faint over a bright-yellow stop (small text needs a real panel, not a halo); 0.45
+   gives the white subline a reliable dark surface on any flag while staying clearly translucent. */
+.pn-hero-pride .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
 /* Design-modal preview: heraldry-overlay layers mirror the production hero so the
    Low/Med/High/Vignette buttons preview live. Driven by a preview-scoped opacity var
