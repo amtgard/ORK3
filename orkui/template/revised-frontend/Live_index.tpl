@@ -20,7 +20,9 @@
 	overflow: hidden;
 }
 .lv-header {
-	grid-column: 1 / 3;
+	grid-column: 1 / -1; /* span all columns regardless of count — `1 / 3` forced a
+	                        phantom 2nd column on the single-column mobile grid, which
+	                        kept the map + aside side-by-side (map squished to a sliver). */
 	display: flex; align-items: center; gap: 24px;
 	padding: 14px 20px;
 	background: var(--ork-card-bg);
