@@ -538,7 +538,8 @@ class Weather extends Ork3 {
 		$er = $this->db->query("SELECT e.event_id, e.park_id, cd.event_start, cd.event_calendardetail_id
 			FROM " . DB_PREFIX . "event e
 			JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
-			WHERE DATE(cd.event_start) >= '$today' AND DATE(cd.event_start) <= '$cutoff'");
+			WHERE DATE(cd.event_start) <= '$cutoff'
+			  AND DATE(COALESCE(cd.event_end, cd.event_start)) >= '$today'");
 		$ev_buf = array();
 		$ev_park_ids = array();
 		if ($er && $er->size() > 0) {
@@ -720,7 +721,8 @@ class Weather extends Ork3 {
 			JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_id = e.event_id
 			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
 			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = e.kingdom_id
-			WHERE DATE(cd.event_start) >= '$today' AND DATE(cd.event_start) <= '$cutoff'
+			WHERE DATE(cd.event_start) <= '$cutoff'
+			  AND DATE(COALESCE(cd.event_end, cd.event_start)) >= '$today'
 			ORDER BY cd.event_start ASC");
 		$out = array();
 		// Two-pass: buffer rows, collect park_ids that need a forecast, do ONE
@@ -753,9 +755,15 @@ class Weather extends Ork3 {
 		$park_weather_rows = !empty($park_ids_needed)
 			? $this->read_rows(array_keys($park_ids_needed))
 			: array();
+		$_todayD = date('Y-m-d');
 		foreach ($buf as $rs) {
 			$rs = (object)$rs;
 				$d = substr($rs->event_start, 0, 10);
+				// In-progress multi-day event: its start day is in the past and has
+				// no forecast row (cache covers today→+14), but it's happening now —
+				// clamp the forecast lookup to today so it still shows weather.
+				$_endD = $rs->event_end ? substr($rs->event_end, 0, 10) : $d;
+				if ($d < $_todayD && $_endD >= $_todayD) $d = $_todayD;
 				// Coord priority for forecast:
 				//   1. event_calendardetail's own coords IF already cached (no HTTP)
 				//   2. host/owning park (cron-warmed, always cheap)
@@ -995,11 +1003,16 @@ class Weather extends Ork3 {
 	public function warm_event_venue_coords($days = 14) {
 		$today  = date('Y-m-d');
 		$cutoff = date('Y-m-d', time() + (int)$days * 86400);
+		// Warm any event that OVERLAPS [today, today+days], not just those that
+		// start in-window. A multi-day event that started in the past but is
+		// still running needs its venue cached too — otherwise its live-mode
+		// forecast (rendered with fetch_if_missing=false) finds nothing.
 		$rs = $this->db->query("SELECT DISTINCT cd.latitude, cd.longitude
 			FROM " . DB_PREFIX . "event_calendardetail cd
 			WHERE cd.latitude IS NOT NULL AND cd.longitude IS NOT NULL
 			  AND cd.latitude != 0 AND cd.longitude != 0
-			  AND DATE(cd.event_start) >= '$today' AND DATE(cd.event_start) <= '$cutoff'");
+			  AND DATE(cd.event_start) <= '$cutoff'
+			  AND DATE(COALESCE(cd.event_end, cd.event_start)) >= '$today'");
 		$warmed = 0;
 		$http_calls = 0;
 		if ($rs && $rs->size() > 0) {
