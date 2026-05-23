@@ -117,8 +117,13 @@
 @keyframes lv-pop { 0% { opacity: 0; transform: scale(0.7); } 10% { opacity: 1; transform: scale(1.05); } 20% { transform: scale(1); } 80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.95) translateY(-8px); } }
 
 @media (max-width: 768px) {
-	.lv-layout { grid-template-columns: 1fr; }
-	.lv-aside { border-left: 0; border-top: 1px solid var(--ork-border); max-height: 50vh; }
+	/* Drop the fixed-viewport app grid on mobile: stack header / map / aside
+	   and let the page scroll naturally (like the Weather page). The desktop
+	   100vh + 1fr map row squeezes the map to a sliver once the ticker fills.
+	   JS fitLayout clears its inline height on mobile so `height:auto` wins. */
+	.lv-layout { grid-template-columns: 1fr; grid-template-rows: auto auto auto; height: auto; overflow: visible; }
+	#lv-map { height: 55vh; }
+	.lv-aside { border-left: 0; border-top: 1px solid var(--ork-border); max-height: none; }
 }
 </style>
 
@@ -299,6 +304,14 @@
 	// re-run on DOMContentLoaded once it exists.
 	const layoutEl = document.querySelector('.lv-layout');
 	function fitLayout() {
+		// Mobile: don't force a fixed viewport height — the CSS media query
+		// stacks the layout and lets the page scroll (map gets a fixed 55vh).
+		// Clear any inline height we set on a prior (wider) layout pass.
+		if (window.innerWidth <= 768) {
+			layoutEl.style.height = '';
+			if (map) setTimeout(() => map.invalidateSize(), 50);
+			return;
+		}
 		const top = layoutEl.getBoundingClientRect().top + window.scrollY;
 		const footerEl = document.querySelector('footer');
 		let footerArea = 0;
