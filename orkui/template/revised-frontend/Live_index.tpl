@@ -51,6 +51,8 @@
 .lv-help-pop dd { margin: 0; align-self: center; color: var(--ork-text); }
 
 #lv-map { background: var(--ork-bg-tertiary); }
+.lv-fit-btn { display: flex; align-items: center; justify-content: center; color: #333; }
+.lv-fit-bar { margin-top: 8px; }
 .lv-aside {
 	background: var(--ork-card-bg); border-left: 1px solid var(--ork-border);
 	display: flex; flex-direction: column; min-height: 0;
@@ -338,6 +340,25 @@
 		fitLayout();
 		applyMapTheme();
 		map.on('zoomend', applyCircles);
+
+		// "Reset view" control — fits all markers. Esc does this on desktop, but
+		// mobile has no keyboard, so expose a tappable button under the zoom bar.
+		const FitControl = L.Control.extend({
+			options: { position: 'topleft' },
+			onAdd: function () {
+				const bar = L.DomUtil.create('div', 'leaflet-bar lv-fit-bar');
+				const a   = L.DomUtil.create('a', 'lv-fit-btn', bar);
+				a.href = '#';
+				a.title = 'Reset map view';
+				a.setAttribute('role', 'button');
+				a.setAttribute('aria-label', 'Reset map view');
+				a.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></svg>';
+				L.DomEvent.disableClickPropagation(a);
+				L.DomEvent.on(a, 'click', function (e) { L.DomEvent.stop(e); fitMap(); });
+				return bar;
+			}
+		});
+		map.addControl(new FitControl());
 
 		// Swap tiles when user toggles the theme via the nav button
 		new MutationObserver(applyMapTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
