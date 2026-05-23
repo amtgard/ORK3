@@ -121,9 +121,12 @@
 	   and let the page scroll naturally (like the Weather page). The desktop
 	   100vh + 1fr map row squeezes the map to a sliver once the ticker fills.
 	   JS fitLayout clears its inline height on mobile so `height:auto` wins. */
-	.lv-layout { grid-template-columns: 1fr; grid-template-rows: auto auto auto; height: auto; overflow: visible; }
-	#lv-map { height: 55vh; }
-	.lv-aside { border-left: 0; border-top: 1px solid var(--ork-border); max-height: none; }
+	/* minmax(0,1fr), not 1fr: grid items default to min-width:auto, so a long
+	   ticker row / park name would force the track wider than the viewport and
+	   spill off the right. minmax(0,1fr) lets the column shrink to fit. */
+	.lv-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; height: auto; overflow: visible; }
+	#lv-map { height: 55vh; min-width: 0; }
+	.lv-aside { border-left: 0; border-top: 1px solid var(--ork-border); max-height: none; min-width: 0; overflow-x: hidden; }
 }
 </style>
 
