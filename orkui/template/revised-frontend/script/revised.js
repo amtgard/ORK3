@@ -7862,6 +7862,15 @@ $(document).ready(function() {
         if (typeof evFeesReset === 'function') evFeesReset(EvConfig.fees || []);
         if (typeof evLinksReset === 'function') evLinksReset(EvConfig.links || []);
         if (typeof evTicketLinkReset === 'function') evTicketLinkReset();
+        // Re-baseline dirty tracking AFTER fees/links/ticket fields are populated.
+        // Those resets write the hidden JSON inputs (and now fire input events), so
+        // the originals must be re-snapshotted here or the form would open dirty.
+        if (_evEditForm) {
+            _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
+                if (el.name) _evEditOriginals[el.name] = el.value;
+            });
+        }
+        if (_evEditSaveBtn) _evEditSaveBtn.disabled = true;
     };
     window.evCloseEditModal = function() {
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
@@ -8323,18 +8332,11 @@ $(document).ready(function() {
                 errEl.style.display = 'block';
             })
             .finally(function() {
-                allSaveBtns.forEach(function(b) { b.disabled = false; });
+                // Staff modal has a single save button and no postAction concept —
+                // the schedule modal's allSaveBtns/postAction logic was copy-pasted
+                // here and would throw ReferenceError, stranding the spinner.
+                saveBtn.disabled = false;
                 saveBtn.innerHTML = orig;
-                if (errEl.style.display === 'block') return; // save failed — don't reset form
-                if (postAction === 'similar') {
-                    gid('ev-sched-mode').value = 'add';
-                    gid('ev-sched-id').value   = '';
-                    gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
-                    if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
-                    var tEl = gid('ev-sched-title'); if (tEl) { tEl.focus(); tEl.select(); }
-                } else if (postAction === 'new') {
-                    if (typeof evOpenScheduleModal === 'function') evOpenScheduleModal();
-                }
             });
         };
 
@@ -8729,6 +8731,10 @@ $(document).ready(function() {
                 if (data.status === 0 && data.schedule) {
                     if (postAction === 'close') evCloseScheduleModal();
                     var s = data.schedule;
+                    // Keep the Feast tab in sync: a "Feast and Food" schedule item must
+                    // surface as a meal card there (and a card must drop if an edit moved
+                    // the item out of that category). Defined in the template's feast IIFE.
+                    if (typeof window.evSyncFeastCard === 'function') window.evSyncFeastCard(s);
                     var startCell = escHtmlSch(evFmtTime(s.StartTime));
                     var endCell   = escHtmlSch(evFmtTime(s.EndTime));
                     var catCfg = EV_CATEGORIES[s.Category] || EV_CATEGORIES['Other'];
@@ -8838,7 +8844,12 @@ $(document).ready(function() {
                 errEl.style.display = 'block';
             })
             .finally(function() {
-                saveBtn.disabled = false;
+                // Re-enable EVERY save button, not just the one that was clicked.
+                // "Save and Create Similar"/"…New" keep the modal open for another
+                // entry, so leaving the other two disabled stranded them — the user
+                // could change fields and the buttons never came back. (line 8317
+                // disables all of them on submit; the finally must mirror that.)
+                allSaveBtns.forEach(function(b) { b.disabled = false; });
                 saveBtn.innerHTML = orig;
             });
         };
@@ -8916,8 +8927,10 @@ $(document).ready(function() {
             .then(function(data) {
                 if (data.status === 0) {
                     var row = gid('ev-schedule-row-' + scheduleId);
-                    if (row) row.remove();
+                    // Capture the day-section BEFORE removing the row — closest() on a
+                    // detached node returns null, so empty sections never got cleaned up.
                     var daySection = row ? row.closest('.ev-sched-day-section') : null;
+                    if (row) row.remove();
                     if (daySection) {
                         var tbody = daySection.querySelector('tbody');
                         if (tbody && tbody.querySelectorAll('tr').length === 0) {
@@ -15189,7 +15202,12 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
 
     function serialize() {
         var el = document.getElementById('ev-fees-json');
-        if (el) el.value = JSON.stringify(evFees);
+        if (el) {
+            el.value = JSON.stringify(evFees);
+            // See ev-links-json serialize(): fire input so the dirty tracker runs
+            // and the Save button unlocks when fees change.
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     }
 
     window.evFeesAdd = function() {
@@ -15353,7 +15371,13 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 
     function serialize() {
         var el = document.getElementById('ev-links-json');
-        if (el) el.value = JSON.stringify(evLinks);
+        if (el) {
+            el.value = JSON.stringify(evLinks);
+            // Hidden field is updated programmatically, so fire an input event to
+            // wake the edit-form dirty tracker — otherwise adding/editing a link
+            // never unlocks the Save button and the links never POST.
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     }
 
     window.evLinksAdd = function() {

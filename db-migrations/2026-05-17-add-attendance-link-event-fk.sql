@@ -36,7 +36,12 @@ DELETE FROM ork_attendance_link
        SELECT event_calendardetail_id FROM ork_event_calendardetail
    );
 
--- 3. Add cascading FKs.
+-- 3. Normalize the FK target engine. ork_event ships as MyISAM on legacy
+--    installs, and MyISAM cannot be referenced by a foreign key (errno 150).
+--    Force InnoDB before adding the constraint. No-op if already InnoDB.
+ALTER TABLE ork_event ENGINE=InnoDB;
+
+-- 4. Add cascading FKs.
 ALTER TABLE ork_attendance_link
     ADD CONSTRAINT fk_alink_event
     FOREIGN KEY (event_id)

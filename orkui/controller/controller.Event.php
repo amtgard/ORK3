@@ -527,7 +527,7 @@ class Controller_Event extends Controller {
 								Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
 								Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $oldKey);
 								Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $newKey);
-								header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '&reconciled=1');
+								header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '?reconciled=1');
 								exit;
 							} else {
 								$this->data['Error'] = 'Reconciliation failed: could not determine the new occurrence ID.';

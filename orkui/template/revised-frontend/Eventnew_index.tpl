@@ -3323,6 +3323,93 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		});
 	};
 
+	// Build/refresh/remove the Feast tab meal card for a schedule item. The Feast
+	// tab is just a server-rendered, category-filtered view of schedule items, so
+	// after an AJAX add/edit we mirror that filter client-side here (mirrors the
+	// PHP meal-card markup in #ev-meal-list). Called from evSubmitSchedule's
+	// success handler in revised.js.
+	window.evSyncFeastCard = function(s) {
+		var list = document.getElementById('ev-meal-list');
+		if (!list || !s) return;
+		var sid = parseInt(s.EventScheduleId, 10);
+		if (!sid) return;
+		var isFeast = (s.Category === 'Feast and Food' || s.SecondaryCategory === 'Feast and Food');
+		var existing = document.getElementById('ev-meal-card-' + sid);
+		var countEl  = document.querySelector('[data-tab="ev-tab-feast"] .ev-tab-count');
+		var emptyEl  = document.getElementById('ev-meal-empty');
+
+		if (!isFeast) {
+			// Edit moved the item out of the feast category — drop any stale card.
+			if (existing) {
+				existing.remove();
+				if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent || '0', 10) - 1);
+				if (!list.querySelector('.ev-meal-card') && emptyEl) emptyEl.style.display = '';
+			}
+			return;
+		}
+
+		var esc = function(v) { var d = document.createElement('div'); d.textContent = (v == null ? '' : String(v)); return d.innerHTML; };
+		var fmtT = function(t) { if (!t) return ''; var d = new Date(String(t).replace(' ', 'T')); return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+		var st = fmtT(s.StartTime), en = fmtT(s.EndTime);
+		var timeStr = st ? (st + (en ? ' – ' + en : '')) : '';
+
+		var costHtml = '';
+		if (s.Cost !== null && s.Cost !== undefined && s.Cost !== '') {
+			var c = parseFloat(s.Cost);
+			if (!isNaN(c)) costHtml = '<span class="ev-meal-cost">' + (c === 0 ? '<span class="ev-meal-free">Free</span>' : '<span style="font-weight:600">$' + c.toFixed(2) + '</span>') + '</span>';
+		}
+
+		var html = '';
+		html += '<div class="ev-meal-card-header">';
+		html += '<span class="ev-meal-title"><i class="fas fa-utensils" style="color:#e65100;margin-right:7px"></i>' + esc(s.Title) + '</span>';
+		html += '<span style="display:flex;align-items:center;gap:10px">' + costHtml;
+		html += '<button class="ev-edit-btn" data-tip="Edit feast item"><i class="fas fa-pencil-alt"></i></button>';
+		html += '<button class="ev-del-link" data-tip="Remove feast item" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1">&times;</button>';
+		html += '</span></div>';
+
+		if (timeStr || s.Location) {
+			html += '<div style="padding:5px 14px 0;font-size:12px;color:#718096">';
+			if (timeStr)    html += '<i class="fas fa-clock" style="margin-right:4px"></i>' + esc(timeStr);
+			if (s.Location) html += (timeStr ? ' &nbsp;&middot;&nbsp; ' : '') + '<i class="fas fa-map-marker-alt" style="margin-right:4px"></i>' + esc(s.Location);
+			html += '</div>';
+		}
+		if (s.Menu && String(s.Menu).trim()) {
+			html += '<div class="ev-meal-menu">' + esc(s.Menu) + '</div>';
+		}
+		var splitTags = function(v) { return String(v || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean); };
+		var dietary   = splitTags(s.Dietary);
+		var allergens = splitTags(s.Allergens);
+		if (dietary.length || allergens.length) {
+			html += '<div class="ev-meal-footer">';
+			dietary.forEach(function(t)   { html += '<span class="ev-meal-tag ev-meal-tag-dietary"><i class="fas fa-leaf"></i>' + esc(t) + '</span>'; });
+			allergens.forEach(function(t) { html += '<span class="ev-meal-tag ev-meal-tag-allergen"><i class="fas fa-exclamation-triangle"></i>' + esc(t) + '</span>'; });
+			html += '</div>';
+		}
+
+		var card = existing;
+		if (!card) {
+			card = document.createElement('div');
+			card.className = 'ev-meal-card';
+			card.id = 'ev-meal-card-' + sid;
+			card.setAttribute('data-schedule-id', sid);
+			list.appendChild(card);
+			if (countEl) countEl.textContent = parseInt(countEl.textContent || '0', 10) + 1;
+		}
+		card.innerHTML = html;
+		// Wire buttons in JS (avoids embedding the meal payload as an escaped attr).
+		var mealPayload = {
+			EventScheduleId: sid, Title: s.Title || '', StartTime: s.StartTime || '', EndTime: s.EndTime || '',
+			Location: s.Location || '', Description: s.Description || '', Category: s.Category || '',
+			SecondaryCategory: s.SecondaryCategory || '', Leads: s.Leads || [], Menu: s.Menu || '',
+			Cost: (s.Cost === undefined ? null : s.Cost), Dietary: s.Dietary || '', Allergens: s.Allergens || ''
+		};
+		var editBtn = card.querySelector('.ev-edit-btn');
+		if (editBtn) editBtn.addEventListener('click', function() { window.evOpenFeastEditModal(mealPayload); });
+		var delBtn = card.querySelector('.ev-del-link');
+		if (delBtn) delBtn.addEventListener('click', function() { window.evRemoveFeastCard(delBtn, sid); });
+		if (emptyEl) emptyEl.style.display = 'none';
+	};
+
 	// Also patch evOpenScheduleModal to reset meal fields on open (add mode)
 	var _origEvOpenScheduleModal = window.evOpenScheduleModal;
 	window.evOpenScheduleModal = function() {
@@ -3454,6 +3541,33 @@ html[data-theme="dark"] .ev-grid-view-btn { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ev-grid-view-btn:hover { color: var(--ork-text); }
 html[data-theme="dark"] .ev-grid-view-btn.ev-grid-view-active {
 	background: #4299e1; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+}
+
+/* Multi-day grid: day-selector pills (built in JS only when >1 day) */
+.ev-grid-day-pills {
+	display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;
+}
+.ev-grid-day-pill {
+	background:#fff; border:1px solid #e2e8f0; border-radius:999px;
+	padding:6px 14px; font-size:12px; font-weight:600; color:#4a5568;
+	cursor:pointer; display:inline-flex; align-items:center; gap:6px;
+	transition: background .15s, color .15s, border-color .15s;
+}
+.ev-grid-day-pill:hover { border-color:#cbd5e0; color:#2d3748; }
+.ev-grid-day-pill.ev-grid-day-pill-active {
+	background:#2d3748; border-color:#2d3748; color:#fff;
+	box-shadow:0 1px 3px rgba(0,0,0,0.15);
+}
+.ev-grid-day-pill-today {
+	width:6px; height:6px; border-radius:50%; background:#e53e3e; display:inline-block;
+}
+.ev-grid-day-pill.ev-grid-day-pill-active .ev-grid-day-pill-today { background:#fff; }
+html[data-theme="dark"] .ev-grid-day-pill {
+	background:var(--ork-bg-secondary); border-color:var(--ork-border); color:var(--ork-text-muted);
+}
+html[data-theme="dark"] .ev-grid-day-pill:hover { color:var(--ork-text); border-color:var(--ork-text-muted); }
+html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
+	background:#4299e1; border-color:#4299e1; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.45);
 }
 
 .ev-grid-day { margin-bottom:24px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
@@ -3603,6 +3717,56 @@ html[data-theme="dark"] .ev-grid-view-btn.ev-grid-view-active {
 	btns.forEach(function(b) {
 		b.addEventListener('click', function() { applyMode(b.getAttribute('data-ev-view'), {persist:true}); });
 	});
+
+	// ---- Day pills (multi-day grids) ----
+	// The grid renders one .ev-grid-day per calendar day, stacked vertically. For a
+	// multi-day event that's an unwieldy scroll, so when there's more than one day we
+	// show a single day at a time and let the user switch via pills along the top.
+	var gridDays = Array.prototype.slice.call(gridEl.querySelectorAll('.ev-grid-day'));
+	var gridTodayKey = (window.EvConfig && EvConfig.evGridTodayKey) || '';
+	var pillBar = null;
+	function selectGridDay(dayKey) {
+		gridDays.forEach(function(day) {
+			day.style.display = (day.getAttribute('data-day-key') === dayKey) ? '' : 'none';
+		});
+		if (pillBar) {
+			pillBar.querySelectorAll('.ev-grid-day-pill').forEach(function(p) {
+				var active = p.getAttribute('data-day-key') === dayKey;
+				p.classList.toggle('ev-grid-day-pill-active', active);
+				p.setAttribute('aria-pressed', active ? 'true' : 'false');
+			});
+		}
+		updateNowLines();
+	}
+	if (gridDays.length > 1) {
+		var defaultDayKey = gridDays[0].getAttribute('data-day-key');
+		pillBar = document.createElement('div');
+		pillBar.className = 'ev-grid-day-pills';
+		gridDays.forEach(function(day) {
+			var dk = day.getAttribute('data-day-key');
+			var dateStr = day.getAttribute('data-date');
+			if (dk === gridTodayKey) defaultDayKey = dk; // prefer today if it's in range
+			var d = new Date(dateStr + 'T00:00:00');
+			var label = isNaN(d.getTime()) ? dateStr
+				: d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+			var pill = document.createElement('button');
+			pill.type = 'button';
+			pill.className = 'ev-grid-day-pill';
+			pill.setAttribute('data-day-key', dk);
+			pill.setAttribute('aria-pressed', 'false');
+			pill.textContent = label;
+			if (dk === gridTodayKey) {
+				var dot = document.createElement('span');
+				dot.className = 'ev-grid-day-pill-today';
+				dot.setAttribute('data-tip', 'Today');
+				pill.appendChild(dot);
+			}
+			pill.addEventListener('click', function() { selectGridDay(dk); });
+			pillBar.appendChild(pill);
+		});
+		gridEl.insertBefore(pillBar, gridEl.firstChild);
+		selectGridDay(defaultDayKey);
+	}
 
 	var initial = 'list';
 	try { initial = localStorage.getItem(STORAGE_KEY) || 'list'; } catch(e) {}
