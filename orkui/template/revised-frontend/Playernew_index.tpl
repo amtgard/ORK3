@@ -3714,7 +3714,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 // fills min(boxW, boxH), then translate the focal point to the box centre.
 (function() {
 	var imgs = document.querySelectorAll('.pn-avatar img[data-focus-size]');
-	function applyFocus(img) {
+	function applyFocus(img, animate) {
 		var fx = parseFloat(img.dataset.focusX);
 		var fy = parseFloat(img.dataset.focusY);
 		var fs = parseFloat(img.dataset.focusSize);
@@ -3730,6 +3730,10 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		var rw = iw * scale, rh = ih * scale;
 		var fxPx = (fx / 100) * rw;
 		var fyPx = (fy / 100) * rh;
+		// Set transition BEFORE the geometry changes so resize/rotation eases
+		// into the new size instead of snapping. Initial load passes no flag,
+		// so the photo is placed instantly (no slide-in flash on page load).
+		img.style.transition = animate ? 'width .18s ease, height .18s ease, left .18s ease, top .18s ease' : 'none';
 		img.style.position = 'absolute';
 		img.style.width  = rw + 'px';
 		img.style.height = rh + 'px';
@@ -3745,6 +3749,17 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	imgs.forEach(function(img) {
 		if (img.complete && img.naturalWidth) applyFocus(img);
 		img.addEventListener('load', function() { applyFocus(img); });
+	});
+	// The geometry is computed from the avatar box's pixel size, which changes
+	// across the responsive breakpoint (60px mobile-portrait vs 110px desktop/
+	// landscape). Without recomputing on resize/rotation, the inline sizing
+	// stays pinned to the old box and the photo renders mis-sized/off-center.
+	var _focusTimer;
+	window.addEventListener('resize', function() {
+		clearTimeout(_focusTimer);
+		_focusTimer = setTimeout(function() {
+			imgs.forEach(function(img) { if (img.complete && img.naturalWidth) applyFocus(img, true); });
+		}, 150);
 	});
 })();
 
