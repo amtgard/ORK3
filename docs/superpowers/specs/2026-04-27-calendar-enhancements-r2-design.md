@@ -6,16 +6,14 @@
 
 ## Goals
 
-Add six independent enhancements to the kingdom/park calendar surface:
+Add four independent enhancements to the kingdom/park calendar surface:
 
 1. Officer-only calendar items (lightweight visibility flag).
 2. RSVP ▾ button on Kingdom + Park Events list rows.
 3. Map view as a third toggle on the Events tab (List / Calendar / Map).
-4. Weather forecast badge on event surfaces (Open-Meteo).
-5. Sunrise/sunset tooltip on the event detail page.
-6. Draft events with a publish flow.
+4. Draft events with a publish flow.
 
-All six ship as one bundled enhancement, mirroring how the Zodiac/Calendar Items work landed in 882d84a.
+All four ship as one bundled enhancement, mirroring how the Zodiac/Calendar Items work landed in 882d84a.
 
 ## Schema
 
@@ -28,19 +26,7 @@ ALTER TABLE ork_calendar_item
 ALTER TABLE ork_event
   ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'published',
   ADD INDEX idx_event_status (status);
-
-CREATE TABLE ork_weather_cache (
-  cache_key     VARCHAR(64) NOT NULL PRIMARY KEY,
-  lat           DOUBLE NOT NULL,
-  lng           DOUBLE NOT NULL,
-  forecast_date DATE NOT NULL,
-  payload       MEDIUMTEXT NOT NULL,
-  fetched_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_weather_fetched (fetched_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
-
-`cache_key = sha1(round(lat,3) || ':' || round(lng,3) || ':' || forecast_date)` — coordinate rounded to ~110m so nearby events share entries.
 
 ## Feature 1 — Officer-only calendar items
 
@@ -95,7 +81,7 @@ Filter applied in:
 
 - Kingdom Events tab list (`Kingdomnew_index.tpl` ~lines 505–520).
 - Park Events tab list (`Parknew_index.tpl`).
-- Same widget reused in map popovers (Feature 5).
+- Same widget reused in map popovers (Feature 4).
 
 **Stateful button:**
 
@@ -142,68 +128,20 @@ Filter applied in:
   "lng": -112.0740,
   "my_rsvp_status": "going|interested|null",
   "going_count": 12,
-  "interested_count": 5,
-  "weather": { "code": 2, "high_f": 78, "low_f": 62 } | null
+  "interested_count": 5
 }
 ```
 
-**Pin rendering:** star-icon pins distinct from park pins (kingdom Map tab keeps its existing park pins). Click → popover containing event name (linked to event detail), date, RSVP ▾ widget (same component as list rows), weather badge if available.
+**Pin rendering:** star-icon pins distinct from park pins (kingdom Map tab keeps its existing park pins). Click → popover containing event name (linked to event detail), date, RSVP ▾ widget (same component as list rows).
 
 **Footer:** if any events in the 90-day window had no resolvable coords, show "N events in this window have no map location" below the map.
 
 **Filter scope:** Round 2 map = events only. Calendar items not on the map (deferred). The existing Calendar-Items filter button on the kingdom Events tab does not apply when Map view is active (it's hidden in Map mode).
 
-## Feature 5 — Weather forecast badge
-
-**API:** Open-Meteo (`https://api.open-meteo.com/v1/forecast`) — free, no key, worldwide, 16-day forecast.
-
-**Helper:** `system/lib/ork3/class.Weather.php::GetForecast($lat, $lng, $date)`:
-
-1. Compute `cache_key`. Look up `ork_weather_cache`; if `fetched_at` is within 2h, decode payload and return.
-2. Else issue HTTPS GET to Open-Meteo with params: `latitude`, `longitude`, `daily=temperature_2m_max,temperature_2m_min,weather_code`, `timezone=auto`, `start_date=$date`, `end_date=$date`, `temperature_unit=fahrenheit`. Timeout 4s.
-3. On success: write/update `ork_weather_cache` row, return parsed `{ code, high_f, low_f }`.
-4. On error or non-200: return `null` (callers hide the badge gracefully).
-
-Server-side fetch only — never from the browser (preserves caching, avoids fingerprinting).
-
-**Display rule:** badge shown only when `forecast_date - now <= 16 days` AND coords resolvable. Multi-day events use the start day.
-
-**Surfaces (Q4=C):**
-
-- Event detail header: `🌤 H 78° L 62°` next to date/time row.
-- Kingdom + Park Events tab list rows: small inline pill on the right of the row.
-- Map popovers: same pill, inside the popover.
-
-**Weather-code mapping:** Open-Meteo WMO codes → emoji + short label, e.g.
-- 0 → ☀ Clear
-- 1–2 → 🌤 Partly cloudy
-- 3 → ☁ Cloudy
-- 45, 48 → 🌫 Foggy
-- 51–67 → 🌧 Rain
-- 71–77 → ❄ Snow
-- 80–82 → 🌧 Showers
-- 95–99 → ⛈ Thunderstorm
-
-## Feature 6 — Sunrise / sunset tooltip
-
-**Surface (Q5=B):** small ☀ icon next to the event date on the event detail page only. Uses the existing `data-tip` CSS-tooltip pattern (no native `title` — per hard rule).
-
-**Tooltip content (multi-line):**
-
-```
-Sunrise 5:42 AM
-Sunset 8:31 PM
-Twilight 6:08 AM – 8:55 PM
-```
-
-**Computation:** new `system/lib/ork3/class.SolarTimes.php` with `SolarTimes::ForDate($lat, $lng, $date, $timezone)` returning `{sunrise, sunset, civil_twilight_start, civil_twilight_end}` as local-time strings. Uses NOAA solar formulas — no external API needed.
-
-**Coords:** event coords first, then fallback to `at_park_id` park coords. Icon and tooltip hidden if neither.
-
 ## Cross-cutting
 
 - **Dark mode:** every new pill / badge / dropdown / banner / tooltip / modal addition must use existing dark-mode tokens proactively. New CSS variables for officer-only tints + draft styling defined for both light and dark themes.
-- **Mobile:** kingdom Events list is already tight on mobile. The stateful single-button RSVP, compact weather pill, and DRAFT pill are designed to fit. Map view on mobile uses the full Events-tab area.
+- **Mobile:** kingdom Events list is already tight on mobile. The stateful single-button RSVP and DRAFT pill are designed to fit. Map view on mobile uses the full Events-tab area.
 - **Memcache flush:** invalidate cached kingdom/park event lists after:
   - Event status change (draft ↔ published).
   - RSVP set/change/withdraw.
@@ -219,23 +157,21 @@ Twilight 6:08 AM – 8:55 PM
 
 - `db-migrations/2026-04-27-calendar-enhancements-r2.sql`
 - `orkui/controller/controller.EventRsvpAjax.php`
-- `system/lib/ork3/class.Weather.php`
-- `system/lib/ork3/class.SolarTimes.php`
 
 **Modified files:**
 
 - `system/lib/ork3/class.CalendarItem.php` — `CanSee()` helper, `is_officer_only` field handling.
-- `system/lib/ork3/class.Event.php` — draft visibility filter, batched MyRsvpStatus, weather-summary helper hook.
+- `system/lib/ork3/class.Event.php` — draft visibility filter, batched MyRsvpStatus.
 - `system/lib/ork3/class.Authorization.php` — only if missing a needed admin-check helper (likely fine as-is).
 - `orkui/controller/controller.Kingdom.php` — events list MyRsvpStatus + draft filter, calendar-items officer-only filter, `$knEventMapLocations`.
 - `orkui/controller/controller.Park.php` — same as Kingdom but scoped.
 - `orkui/controller/controller.CalendarItemAjax.php` — handle new field on create/update; `get` 403 when not visible.
 - `orkui/controller/controller.Event.php` (or `controller.Eventnew.php`) — accept `status` on create/update; gate detail by visibility; expose draft banner state to template.
-- `orkui/template/revised-frontend/Kingdomnew_index.tpl` — Map toggle + map render block, RSVP ▾ on list rows, DRAFT pill, calendar-items officer-only checkbox + shield, weather pill on rows.
+- `orkui/template/revised-frontend/Kingdomnew_index.tpl` — Map toggle + map render block, RSVP ▾ on list rows, DRAFT pill, calendar-items officer-only checkbox + shield.
 - `orkui/template/revised-frontend/Parknew_index.tpl` — same as Kingdomnew but scoped.
-- `orkui/template/revised-frontend/Eventnew_index.tpl` — draft banner, status toggles in edit form, "Save as draft" on create, sunrise ☀ tooltip, weather badge on detail.
-- `orkui/template/revised-frontend/script/revised.js` — calendar-item modal officer-only checkbox, RSVP dropdown component, map view code (lazy Google Maps load), weather/sunrise rendering helpers, draft create/edit toggles.
-- `orkui/template/revised-frontend/style/revised.css` — RSVP button states, DRAFT pill, officer-only tint, weather pill, sunrise icon, map popover, mobile-tightening rules — all dark-mode-aware.
+- `orkui/template/revised-frontend/Eventnew_index.tpl` — draft banner, status toggles in edit form, "Save as draft" on create.
+- `orkui/template/revised-frontend/script/revised.js` — calendar-item modal officer-only checkbox, RSVP dropdown component, map view code (lazy Google Maps load), draft create/edit toggles.
+- `orkui/template/revised-frontend/style/revised.css` — RSVP button states, DRAFT pill, officer-only tint, map popover, mobile-tightening rules — all dark-mode-aware.
 
 ## Testing strategy
 
@@ -245,13 +181,10 @@ Manual walkthrough per feature:
 2. **Draft events:** as creator, editor, ORK admin, regular member — verify draft visibility, banner present on detail for editors, hidden entirely from members. Create-as-draft → edit → publish → confirm members can now see.
 3. **RSVP:** from each surface (kingdom list, park list, map popover) set Going, change to Interested, withdraw. Confirm counts update and persist on reload.
 4. **Map view:** load with mix of (a) events with own coords, (b) events with `at_park_id` only, (c) events with no coords. Verify pin/footer behavior. Confirm RSVP ▾ in popover works.
-5. **Weather:** event 1 day out → badge shows; event 30 days out → no badge; API down (block in /etc/hosts) → no badge, cache fallback. No coords → no badge.
-6. **Sunrise:** northern park (long summer days), equatorial park, no-coords park. Confirm tooltip uses `data-tip` not native.
-7. **Dark mode:** walk every surface above in dark mode.
+5. **Dark mode:** walk every surface above in dark mode.
 
 ## Out of scope
 
 - Calendar items on the Map view (deferred).
-- Weather and sunrise on calendar items (events only).
 - Re-styling existing event-detail RSVP UI to match the new dropdown (separate change).
 - Event-changed notifications (deferred — separate feature on the prior brainstorm list).
