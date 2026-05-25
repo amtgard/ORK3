@@ -155,6 +155,11 @@ class Park extends Ork3
 			$this->parkday->week_of_month = $request[ 'WeekOfMonth' ];
 			$this->parkday->week_day = $request[ 'WeekDay' ];
 			$this->parkday->month_day = $request[ 'MonthDay' ];
+			$this->parkday->start_date = ( !empty( $request[ 'StartDate' ] ) ) ? substr( $request[ 'StartDate' ], 0, 10 ) : '1000-01-01';
+			$this->parkday->week_interval = (int)( $request[ 'WeekInterval' ] ?? 0 );
+			if ( $request[ 'Recurrence' ] === 'every-x-weeks' && !empty( $request[ 'StartDate' ] ) ) {
+				$this->parkday->week_day = date( 'l', strtotime( substr( $request[ 'StartDate' ], 0, 10 ) ) );
+			}
 			$this->parkday->time = $request[ 'Time' ];
 			$this->parkday->purpose = $request[ 'Purpose' ];
 			$this->parkday->description = $request[ 'Description' ];
@@ -252,6 +257,11 @@ class Park extends Ork3
 			$this->parkday->week_of_month = $request[ 'WeekOfMonth' ];
 			$this->parkday->week_day = $request[ 'WeekDay' ];
 			$this->parkday->month_day = $request[ 'MonthDay' ];
+			$this->parkday->start_date = ( !empty( $request[ 'StartDate' ] ) ) ? substr( $request[ 'StartDate' ], 0, 10 ) : '1000-01-01';
+			$this->parkday->week_interval = (int)( $request[ 'WeekInterval' ] ?? 0 );
+			if ( $request[ 'Recurrence' ] === 'every-x-weeks' && !empty( $request[ 'StartDate' ] ) ) {
+				$this->parkday->week_day = date( 'l', strtotime( substr( $request[ 'StartDate' ], 0, 10 ) ) );
+			}
 			$this->parkday->time = $request[ 'Time' ];
 			$this->parkday->purpose = $request[ 'Purpose' ];
 			$this->parkday->description = $request[ 'Description' ];
@@ -595,6 +605,8 @@ class Park extends Ork3
 					'WeekOfMonth'       => $parkday->week_of_month,
 					'WeekDay'           => $parkday->week_day,
 					'MonthDay'          => $parkday->month_day,
+					'StartDate'         => $parkday->start_date,
+					'WeekInterval'      => (int)$parkday->week_interval,
 					'Time'              => $parkday->time,
 					'Purpose'           => $parkday->purpose,
 					'Description'       => $parkday->description,
