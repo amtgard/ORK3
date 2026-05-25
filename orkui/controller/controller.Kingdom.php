@@ -743,7 +743,7 @@ class Controller_Kingdom extends Controller {
 
 		$pdSql = "
 			SELECT pd.parkday_id, pd.park_id, pd.recurrence, pd.week_day,
-			       pd.week_of_month, pd.month_day, pd.time, pd.purpose, p.name AS park_name, p.abbreviation AS park_abbr
+			       pd.week_of_month, pd.month_day, pd.start_date, pd.week_interval, pd.time, pd.purpose, p.name AS park_name, p.abbreviation AS park_abbr
 			FROM ork_parkday pd
 			JOIN ork_park p ON p.park_id = pd.park_id
 			WHERE p.kingdom_id = {$kid}
@@ -761,6 +761,10 @@ class Controller_Kingdom extends Controller {
 					$sfx = ($n % 100 >= 11 && $n % 100 <= 13) ? 'th' : (['th','st','nd','rd','th','th','th','th','th','th'][$n % 10] ?? 'th');
 					$recText = 'Every ' . $n . $sfx . ' ' . $pdResult->week_day;
 					break;
+					case 'every-x-weeks':
+						$wi = (int)$pdResult->week_interval;
+						$recText = ($wi === 2) ? 'Every other ' . $pdResult->week_day : 'Every ' . $wi . ' weeks on ' . $pdResult->week_day . 's';
+						break;
 					case 'monthly':      $recText = 'Monthly, day ' . (int)$pdResult->month_day; break;
 					default:             $recText = ucfirst($pdResult->recurrence);
 				}
