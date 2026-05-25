@@ -189,6 +189,10 @@
 					$_pdD->modify('first day of next month');
 				}
 				break;
+			case 'every-x-weeks':
+				$_pdEnd1 = (clone $_pd_end)->modify('+1 day'); // helper end is exclusive; keep day 90 inclusive
+				$_pdOccs = Park::ExpandEveryXWeeks($_pd['StartDate'] ?? '', (int)($_pd['WeekInterval'] ?? 0), $_pd_today, $_pdEnd1);
+				break;
 			case 'monthly':
 				$_pdMd = (int)$_pd['MonthDay'];
 				$_pdD  = clone $_pd_today; $_pdD->modify('first day of this month'); $_pdD->setTime(0,0,0);
@@ -682,6 +686,12 @@
 							switch ($day['Recurrence']) {
 								case 'weekly':        $recText = 'Every ' . $day['WeekDay']; break;
 								case 'week-of-month': $recText = 'Every ' . pk_ordinal($day['WeekOfMonth']) . ' ' . $day['WeekDay']; break;
+								case 'every-x-weeks':
+									$_wi = (int)($day['WeekInterval'] ?? 0);
+									$recText = ($_wi === 2)
+										? 'Every other ' . $day['WeekDay']
+										: 'Every ' . $_wi . ' weeks on ' . $day['WeekDay'] . 's';
+									break;
 								case 'monthly':       $recText = 'Monthly on the ' . pk_ordinal($day['MonthDay']); break;
 								default:              $recText = $day['Recurrence'];
 							}
@@ -714,6 +724,8 @@
 					data-weekday="<?= htmlspecialchars($day['WeekDay'] ?? '') ?>"
 					data-weekof="<?= (int)($day['WeekOfMonth'] ?? 0) ?>"
 					data-monthday="<?= (int)($day['MonthDay'] ?? 0) ?>"
+					data-startdate="<?= htmlspecialchars($day['StartDate'] ?? '') ?>"
+					data-interval="<?= (int)($day['WeekInterval'] ?? 0) ?>"
 					data-time="<?= htmlspecialchars($day['Time'] ?? '') ?>"
 					data-desc="<?= htmlspecialchars($day['Description'] ?? '', ENT_QUOTES) ?>"
 					data-online="<?= (int)($day['Online'] ?? 0) ?>"
@@ -2428,10 +2440,25 @@ tr:hover .pk-copy-link { opacity: 1; }
 				<label>Recurrence</label>
 				<div class="pk-seg-group">
 					<button type="button" class="pk-seg-btn pk-seg-active" data-group="recurrence" data-val="weekly">Weekly</button>
+					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="every-x-weeks">Every X Weeks</button>
 					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="week-of-month">Week of Month</button>
 					<button type="button" class="pk-seg-btn" data-group="recurrence" data-val="monthly">Monthly</button>
 				</div>
 				<input type="hidden" id="pk-addday-recurrence" value="weekly" />
+			</div>
+
+			<div class="pk-addday-field" id="pk-addday-interval-row" style="display:none">
+				<label for="pk-addday-interval">Interval</label>
+				<select id="pk-addday-interval">
+					<option value="2">Every 2 weeks (biweekly)</option>
+					<option value="3">Every 3 weeks</option>
+					<option value="4">Every 4 weeks</option>
+				</select>
+			</div>
+
+			<div class="pk-addday-field" id="pk-addday-startdate-row" style="display:none">
+				<label for="pk-addday-startdate">Start Date <span style="color:#e53e3e">*</span> <span style="color:#a0aec0;font-weight:400;font-size:11px">(first occurrence — sets the cadence)</span></label>
+				<input type="date" id="pk-addday-startdate" />
 			</div>
 
 			<div class="pk-addday-field" id="pk-addday-weekday-row">
@@ -2766,6 +2793,15 @@ html[data-theme="dark"] #pk-cfe-results .kn-ac-row-title { color: var(--ork-text
 html[data-theme="dark"] #pk-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
 html[data-theme="dark"] #pk-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
 
+
+/* ---- Park Day modal: "Every X Weeks" interval + start-date fields ---- */
+/* The shared .pk-addday-field rule in revised.css covers input[type=text|time]
+   and select, but NOT input[type=date]. Mirror that styling for the date input. */
+#pk-addday-startdate { padding:7px 9px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; width:100%; }
+#pk-addday-startdate:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
+html[data-theme="dark"] #pk-addday-startdate,
+html[data-theme="dark"] #pk-addday-interval { background:var(--ork-input-bg); border-color:var(--ork-input-border); color:var(--ork-text); }
+html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 </style>
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
