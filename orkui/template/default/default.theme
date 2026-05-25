@@ -50,6 +50,10 @@
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
 	
 	<style>
+	/* Offline banner */
+	#ork-offline-banner { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999; background:#92400e; color:#fff; text-align:center; padding:10px 16px; font-size:0.85rem; font-weight:600; box-shadow:0 -2px 8px rgba(0,0,0,0.25); }
+	html[data-theme="dark"] #ork-offline-banner { background:#78350f; }
+
 	/* What's New modal */
 	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
 	.wn-overlay.wn-open { display:flex; }
@@ -111,6 +115,7 @@
 		</style>
 </head>
 	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
+<div id="ork-offline-banner"><i class="fas fa-wifi" style="margin-right:6px;opacity:0.8"></i>You&rsquo;re currently offline &mdash; changes may not save until your connection is restored.</div>
 <?php
 // -----------------------------------------------------------------------
 // SCHEDULED MAINTENANCE NOTICE
@@ -713,6 +718,16 @@ endif;
 </footer>
 
 <script>
+/* Offline banner */
+(function() {
+  var banner = document.getElementById('ork-offline-banner');
+  if (!banner) return;
+  function update() { banner.style.display = navigator.onLine ? 'none' : 'block'; }
+  window.addEventListener('offline', update);
+  window.addEventListener('online',  update);
+  update();
+})();
+
 /* Global dark mode toggle — runs on every page.
    Skips init if revised.js already defined orkInitTheme (revised-frontend pages). */
 (function() {
