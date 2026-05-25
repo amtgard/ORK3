@@ -811,7 +811,7 @@ class Controller_KingdomAjax extends Controller {
 		// Park day recurrences expanded for the requested range
 		$pdSql = "
 			SELECT pd.park_id, pd.recurrence, pd.week_day, pd.week_of_month,
-			       pd.month_day, pd.time, pd.purpose, p.abbreviation AS park_abbr
+			       pd.month_day, pd.start_date, pd.week_interval, pd.time, pd.purpose, p.abbreviation AS park_abbr
 			FROM ork_parkday pd
 			JOIN ork_park p ON p.park_id = pd.park_id
 			WHERE p.kingdom_id = {$kid} AND p.active = 'Active'";
@@ -875,6 +875,11 @@ class Controller_KingdomAjax extends Controller {
 							$events[] = ['title'=>$title,'start'=>$cur->format('Y-m-d').$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
 						}
 						$curMonth->modify('first day of next month');
+					}
+				} elseif ($rec === 'every-x-weeks') {
+					$occs = Park::ExpandEveryXWeeks($pdResult->start_date, (int)$pdResult->week_interval, $rangeStart, $rangeEnd);
+					foreach ($occs as $occ) {
+						$events[] = ['title'=>$title,'start'=>$occ.$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
 					}
 				}
 			}
