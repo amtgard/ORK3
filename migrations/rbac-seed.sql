@@ -41,12 +41,11 @@ INSERT IGNORE INTO `ork_permission` (`key`, `display_name`, `description`, `scop
 ('park.dues.manage', 'Manage Dues', 'Record and manage player dues', 'park', 'financial', 1),
 ('park.reconcile_credits', 'Set Reconciled Credits', 'Set reconciled credit amounts for players', 'park', 'financial', 1);
 
--- Player-Scoped at park level (12)
+-- Player-Scoped at park level (11)
 INSERT IGNORE INTO `ork_permission` (`key`, `display_name`, `description`, `scope_type`, `category`, `is_system`) VALUES
 ('player.create', 'Create Player', 'Create new player accounts', 'park', 'player', 1),
 ('player.edit', 'Edit Other Player Details', 'Edit other players profile details', 'park', 'player', 1),
 ('player.move', 'Move Player Between Parks', 'Transfer players between parks', 'park', 'player', 1),
-('player.merge', 'Merge Players', 'Merge duplicate player records', 'park', 'player', 1),
 ('player.suspend', 'Set Player Suspension', 'Suspend or unsuspend player accounts', 'park', 'player', 1),
 ('player.waiver.manage', 'Manage Waivers & Restrictions', 'Manage player waivers and restrictions', 'park', 'player', 1),
 ('player.qualification.edit', 'Edit Reeve/Corpora Qualifications', 'Edit player reeve and corpora qualification status', 'park', 'player', 1),

@@ -864,9 +864,9 @@ class Player extends Ork3 {
 				(($toMundane['KingdomId'] != $fromMundane['KingdomId'])
 					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT))
 				|| (($toMundane['ParkId'] != $fromMundane['ParkId'] && $toMundane['KingdomId'] == $fromMundane['KingdomId'])
-					&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'player.merge', 'park', $toMundane['ParkId'], AUTH_EDIT))
+					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $toMundane['KingdomId'], AUTH_EDIT))
 				|| (($toMundane['ParkId'] == $fromMundane['ParkId'])
-					&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'player.merge', 'park', $toMundane['ParkId'], AUTH_EDIT))) {
+					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $toMundane['ParkId'], AUTH_EDIT))) {
 
 			$from_player = $this->GetPlayer(array('MundaneId' => $request['FromMundaneId']));
 			$to_player = $this->GetPlayer(array('MundaneId' => $request['ToMundaneId']));

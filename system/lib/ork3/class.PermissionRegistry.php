@@ -165,7 +165,7 @@ class PermissionRegistry extends Ork3
 		],
 
 		// ========================================
-		// Player-Scoped at park level (12)
+		// Player-Scoped at park level (11)
 		// ========================================
 		'player.create' => [
 			'Create Player',
@@ -180,11 +180,6 @@ class PermissionRegistry extends Ork3
 		'player.move' => [
 			'Move Player Between Parks',
 			'Transfer players between parks',
-			'park', 'player'
-		],
-		'player.merge' => [
-			'Merge Players',
-			'Merge duplicate player records',
 			'park', 'player'
 		],
 		'player.suspend' => [
