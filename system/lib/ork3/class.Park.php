@@ -585,7 +585,7 @@ class Park extends Ork3
 				if ( $anchor === false ) return date( "Y-m-d", $from_date );
 				if ( $anchor >= $from_date ) return date( "Y-m-d", $anchor );
 				$daysBehind = floor( ( $from_date - $anchor ) / 86400 );
-				$cycles     = (int)ceil( ( $daysBehind + 1 ) / $step );
+				$cycles     = (int)ceil( $daysBehind / $step );
 				return date( "Y-m-d", strtotime( "+" . ( $cycles * $step ) . " days", $anchor ) );
 		}
 	}
