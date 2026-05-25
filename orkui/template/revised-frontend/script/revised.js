@@ -11870,12 +11870,18 @@ function setupPronounPicker(cfg) {
     function gid(id) { return document.getElementById(id); }
 
     function pkUpdateRecurrenceFields(recurrence) {
-        var weekdayRow  = gid('pk-addday-weekday-row');
-        var weekofRow   = gid('pk-addday-weekof-row');
-        var monthdayRow = gid('pk-addday-monthday-row');
-        if (weekdayRow)  weekdayRow.style.display  = (recurrence === 'weekly' || recurrence === 'week-of-month') ? '' : 'none';
-        if (weekofRow)   weekofRow.style.display   = (recurrence === 'week-of-month') ? '' : 'none';
-        if (monthdayRow) monthdayRow.style.display = (recurrence === 'monthly') ? '' : 'none';
+        var weekdayRow   = gid('pk-addday-weekday-row');
+        var weekofRow    = gid('pk-addday-weekof-row');
+        var monthdayRow  = gid('pk-addday-monthday-row');
+        var intervalRow  = gid('pk-addday-interval-row');
+        var startdateRow = gid('pk-addday-startdate-row');
+        // For every-x-weeks the weekday is derived from the start date, so the
+        // weekday dropdown is hidden in that mode.
+        if (weekdayRow)   weekdayRow.style.display   = (recurrence === 'weekly' || recurrence === 'week-of-month') ? '' : 'none';
+        if (weekofRow)    weekofRow.style.display    = (recurrence === 'week-of-month') ? '' : 'none';
+        if (monthdayRow)  monthdayRow.style.display  = (recurrence === 'monthly') ? '' : 'none';
+        if (intervalRow)  intervalRow.style.display  = (recurrence === 'every-x-weeks') ? '' : 'none';
+        if (startdateRow) startdateRow.style.display = (recurrence === 'every-x-weeks') ? '' : 'none';
     }
 
     function pkToggleAltLoc(show) {
@@ -11902,6 +11908,10 @@ function setupPronounPicker(cfg) {
         if (timeEl) timeEl.value = '';
         var descEl = gid('pk-addday-desc');
         if (descEl) descEl.value = '';
+        var intervalEl = gid('pk-addday-interval');
+        if (intervalEl) intervalEl.value = '2';
+        var startdateEl = gid('pk-addday-startdate');
+        if (startdateEl) startdateEl.value = '';
         overlay.querySelectorAll('.pk-seg-btn[data-group="purpose"]').forEach(function(btn) {
             btn.classList.toggle('pk-seg-active', btn.dataset.val === 'park-day');
         });
@@ -11987,6 +11997,16 @@ function setupPronounPicker(cfg) {
         var monthdayEl = gid('pk-addday-monthday');
         if (monthdayEl) monthdayEl.value = card.dataset.monthday || '1';
 
+        // Interval + start date (every-x-weeks)
+        var intervalEl = gid('pk-addday-interval');
+        if (intervalEl) intervalEl.value = card.dataset.interval && parseInt(card.dataset.interval, 10) >= 2 ? card.dataset.interval : '2';
+        var startdateEl = gid('pk-addday-startdate');
+        if (startdateEl) {
+            var sd = card.dataset.startdate || '';
+            // Guard against the '1000-01-01' NOT-NULL sentinel from non-interval rows.
+            startdateEl.value = (sd && sd.indexOf('1000-01-01') === -1) ? sd.substring(0, 10) : '';
+        }
+
         // Time
         var timeEl = gid('pk-addday-time');
         if (timeEl) timeEl.value = card.dataset.time || '';
@@ -12057,6 +12077,11 @@ function setupPronounPicker(cfg) {
                 var fb         = gid('pk-addday-feedback');
                 if (!recurrence) { if (fb) { fb.textContent = 'Recurrence is required.'; fb.style.display = ''; fb.className = 'pk-addday-err'; } return; }
                 if (!time)       { if (fb) { fb.textContent = 'Time is required.';       fb.style.display = ''; fb.className = 'pk-addday-err'; } return; }
+                var startDate = gid('pk-addday-startdate') ? gid('pk-addday-startdate').value.trim() : '';
+                if (recurrence === 'every-x-weeks' && !startDate) {
+                    if (fb) { fb.textContent = 'A start date is required for the "every X weeks" cadence.'; fb.style.display = ''; fb.className = 'pk-addday-err'; }
+                    return;
+                }
                 saveBtn.disabled = true;
                 var fd = new FormData();
                 fd.append('Recurrence',        recurrence);
@@ -12066,6 +12091,8 @@ function setupPronounPicker(cfg) {
                 fd.append('WeekDay',           gid('pk-addday-weekday')  ? gid('pk-addday-weekday').value  : '');
                 fd.append('WeekOfMonth',       gid('pk-addday-weekof')   ? gid('pk-addday-weekof').value   : 0);
                 fd.append('MonthDay',          gid('pk-addday-monthday') ? gid('pk-addday-monthday').value : 0);
+                fd.append('StartDate',         startDate);
+                fd.append('WeekInterval',      gid('pk-addday-interval') ? gid('pk-addday-interval').value : 0);
                 var locType = pkGetAddDayLocType();
                 fd.append('Online',            locType === 'online' ? '1' : '0');
                 fd.append('AlternateLocation', locType === '1'      ? '1' : '0');
