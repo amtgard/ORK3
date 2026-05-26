@@ -60,6 +60,9 @@
 			uir: '<?=UIR ?>',
 			onSelect: function(p) {
 				document.getElementById('MundaneId').value = p.MundaneId;
+			},
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
 			}
 		});
 	});

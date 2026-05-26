@@ -540,16 +540,12 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 			apBtn.disabled   = false;
 			apInput.focus();
 		};
+		searchOpts.onClear = function () {
+			apHidden.value = '';
+			apBtn.disabled = true;
+		};
 
 		OrkPlayerSearch.attach(apInput, searchOpts);
-
-		// Reset hidden id / button when user clears input
-		apInput.addEventListener('input', function () {
-			if (!this.value.trim()) {
-				apHidden.value = '';
-				apBtn.disabled = true;
-			}
-		});
 	})();
 
 	// ── Add ───────────────────────────────────────────────────────

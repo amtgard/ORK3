@@ -37,6 +37,9 @@
 				} else {
 					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
 				}
+			},
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
 			}
 		});
 	});

@@ -100,12 +100,14 @@
 			kingdomId: 0,
 			includeInactive: true,
 			includeSuspended: true,
-			onSelect: function(p) { document.getElementById('GivenById').value = p.MundaneId; checkRequiredFields(); }
+			onSelect: function(p) { document.getElementById('GivenById').value = p.MundaneId; checkRequiredFields(); },
+			onClear:  function()  { document.getElementById('GivenById').value = '';             checkRequiredFields(); }
 		});
 		OrkPlayerSearch.attach(document.getElementById('GivenTo'), {
 			uir: '<?=UIR ?>',
 			kingdomId: <?=intval($KingdomId) ?>,
-			onSelect: function(p) { document.getElementById('MundaneId').value = p.MundaneId; checkRequiredFields(); }
+			onSelect: function(p) { document.getElementById('MundaneId').value = p.MundaneId; checkRequiredFields(); },
+			onClear:  function()  { document.getElementById('MundaneId').value = '';             checkRequiredFields(); }
 		});
 		checkRequiredFields();
 	});

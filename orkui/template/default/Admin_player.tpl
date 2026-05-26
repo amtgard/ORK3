@@ -506,6 +506,10 @@
 			onSelect: function(p) {
 				document.getElementById('GivenById').value = p.MundaneId;
 				checkRequiredFields();
+			},
+			onClear: function() {
+				document.getElementById('GivenById').value = '';
+				checkRequiredFields();
 			}
 		});
 		checkRequiredFields();

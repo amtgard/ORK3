@@ -32,6 +32,9 @@
 			uir: '<?=UIR ?>',
 			onSelect: function(p) {
 				document.getElementById('MundaneId').value = p.MundaneId;
+			},
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
 			}
 		});
 		
@@ -40,6 +43,9 @@
 			kingdomId: <?=intval($this->__session->kingdom_id) ?>,
 			onSelect: function(p) {
 				document.getElementById('SuspendatorId').value = p.MundaneId;
+			},
+			onClear: function() {
+				document.getElementById('SuspendatorId').value = '';
 			}
 		});
 		

@@ -10,6 +10,9 @@
 				onSelect: function(p) {
 					memberInput.value = p.Persona;
 					document.getElementById('MemberMundaneId').value = p.MundaneId;
+				},
+				onClear: function() {
+					document.getElementById('MemberMundaneId').value = '';
 				}
 			});
 		}
@@ -23,6 +26,9 @@
 				onSelect: function(p) {
 					managerInput.value = p.Persona;
 					document.getElementById('ManagerMundaneId').value = p.MundaneId;
+				},
+				onClear: function() {
+					document.getElementById('ManagerMundaneId').value = '';
 				}
 			});
 		}

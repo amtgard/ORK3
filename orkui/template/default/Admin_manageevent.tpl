@@ -231,6 +231,10 @@
 					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
 				}
 				SetEvents(null, null);
+			},
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
+				SetEvents(null, null);
 			}
 		});
 		$( "#EventName" ).autocomplete({
@@ -270,6 +274,10 @@
 				} else {
 					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
 				}
+				SetEvents(null, null);
+			},
+			onClear: function() {
+				document.getElementById('CreateMundaneId').value = '';
 				SetEvents(null, null);
 			}
 		});

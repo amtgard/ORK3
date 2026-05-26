@@ -725,6 +725,10 @@ $(function() {
 		onSelect: function(p) {
 			document.getElementById('MundaneId').value = p.MundaneId;
 			attCheckSubmit();
+		},
+		onClear: function() {
+			document.getElementById('MundaneId').value = '';
+			attCheckSubmit();
 		}
 	});
 

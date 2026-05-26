@@ -592,6 +592,9 @@ $(function() {
 		kingdomId: <?= (int)$_scopeId ?>,
 		onSelect: function(player) {
 			document.getElementById('es-by-id').value = player ? player.MundaneId : '';
+		},
+		onClear: function() {
+			document.getElementById('es-by-id').value = '';
 		}
 	});
 
@@ -841,6 +844,10 @@ $(function() {
 			onSelect: function(player) {
 				document.getElementById('sp-player-id').value = player ? player.MundaneId : '';
 				updateSubmitBtn();
+			},
+			onClear: function() {
+				document.getElementById('sp-player-id').value = '';
+				updateSubmitBtn();
 			}
 		});
 	}
@@ -860,6 +867,9 @@ $(function() {
 		kingdomId: <?= (int)$_scopeId ?>,
 		onSelect: function(player) {
 			document.getElementById('sp-by-id').value = player ? player.MundaneId : '';
+		},
+		onClear: function() {
+			document.getElementById('sp-by-id').value = '';
 		}
 	});
 

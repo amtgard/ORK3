@@ -66,6 +66,9 @@
 			excludeIds: function() { return [parseInt(document.getElementById('ToMundaneId').value) || 0]; },
 			onSelect: function(p) {
 				document.getElementById('FromMundaneId').value = p.MundaneId;
+			},
+			onClear: function() {
+				document.getElementById('FromMundaneId').value = '';
 			}
 		});
 		OrkPlayerSearch.attach(document.getElementById('ToPlayerName'), {
@@ -74,6 +77,9 @@
 			excludeIds: function() { return [parseInt(document.getElementById('FromMundaneId').value) || 0]; },
 			onSelect: function(p) {
 				document.getElementById('ToMundaneId').value = p.MundaneId;
+			},
+			onClear: function() {
+				document.getElementById('ToMundaneId').value = '';
 			}
 		});
 	});

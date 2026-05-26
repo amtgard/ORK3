@@ -228,12 +228,8 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 				apHidden.value = player.MundaneId;
 				apBtn.disabled = false;
 				apInput.focus();
-			}
-		});
-
-		// Reset hidden id / button when user clears input
-		apInput.addEventListener('input', function () {
-			if (!this.value.trim()) {
+			},
+			onClear: function () {
 				apHidden.value = '';
 				apBtn.disabled = true;
 			}

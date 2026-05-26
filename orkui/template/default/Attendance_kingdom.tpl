@@ -487,7 +487,8 @@ $(function() {
 	OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
 		uir: '<?=UIR ?>',
 		kingdomId: <?=intval($kid) ?>,
-		onSelect: function(p) { document.getElementById('MundaneId').value = p.MundaneId; }
+		onSelect: function(p) { document.getElementById('MundaneId').value = p.MundaneId; },
+		onClear:  function()  { document.getElementById('MundaneId').value = '';           }
 	});
 <?php endif; ?>
 
