@@ -555,26 +555,34 @@ class Common
 
 	public function create_officers( $kingdom_id, $park_id, $principality_id = 0 )
 	{
-		$this->create_officer( $kingdom_id, $park_id, 'Monarch', 'create' );
-		$this->create_officer( $kingdom_id, $park_id, 'Regent', 'create' );
-		$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create' );
-		$this->create_officer( $kingdom_id, $park_id, 'Champion', null );
-		$this->create_officer( $kingdom_id, $park_id, 'GMR', null );
+		$this->create_officer( $kingdom_id, $park_id, 'monarch', 'create' );
+		$this->create_officer( $kingdom_id, $park_id, 'regent', 'create' );
+		$this->create_officer( $kingdom_id, $park_id, 'prime_minister', 'create' );
+		$this->create_officer( $kingdom_id, $park_id, 'champion', null );
+		$this->create_officer( $kingdom_id, $park_id, 'gmr', null );
 		if ( valid_id( $principality_id ) ) {
-			$this->create_officer( $kingdom_id, $park_id, 'Monarch', 'create', 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'Regent', 'create', 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create', 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'Champion', null, 1, $principality_id );
-			$this->create_officer( $kingdom_id, $park_id, 'GMR', null, 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'monarch', 'create', 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'regent', 'create', 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'prime_minister', 'create', 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'champion', null, 1, $principality_id );
+			$this->create_officer( $kingdom_id, $park_id, 'gmr', null, 1, $principality_id );
 		}
 	}
 
 	private function create_officer( $kingdom_id, $park_id, $role, $authorization, $system = 0, $principality_id = 0 )
 	{
+		// Resolve the system seed position_id for this canonical key (BUG-1).
+		global $DB;
+		$DB->Clear();
+		$DB->ck_role = $role;
+		$_posrow = $DB->DataSet( "SELECT position_id FROM " . DB_PREFIX . "officer_position WHERE kingdom_id = 0 AND canonical_key = :ck_role LIMIT 1" );
+		$position_id = ( $_posrow !== false && $_posrow->size() > 0 && $_posrow->Next() ) ? (int)$_posrow->position_id : 0;
+
 		$this->officer->clear();
 		$this->officer->kingdom_id = $kingdom_id;
 		$this->officer->park_id = $park_id;
 		$this->officer->role = $role;
+		$this->officer->position_id = $position_id;
 		$this->officer->system = $system;
 		$this->officer->modified = time();
 		if ( strlen( $authorization ) > 0 ) {
@@ -593,7 +601,7 @@ class Common
 
 		// RBAC dual-write: notify that a new officer slot was created
 		if ( isset( Ork3::$Lib->rbacservice ) ) {
-			Ork3::$Lib->rbacservice->SyncNewOfficerSlot( $kingdom_id, $park_id, $role );
+			Ork3::$Lib->rbacservice->SyncNewOfficerSlot( $kingdom_id, $park_id, $role, $position_id );
 		}
 	}
 
