@@ -31,6 +31,7 @@
 		<meta property="og:image:height" content="1075">
 		<?php endif; ?>
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
+		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/ork-player-search.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/ork-player-search.css')?>" rel="stylesheet" />
 
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,6 +47,7 @@
 		</style>
 		<?php endif; ?>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
+		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/ork-player-search.js?v=<?=filemtime(DIR_TEMPLATE.'default/script/ork-player-search.js')?>"></script>
 		<!-- Google tag (gtag.js) -->
 		<script async src="https://www.googletagmanager.com/gtag/js?id=G-PVQCKENY0M"></script>
 		<script>
