@@ -408,6 +408,9 @@ var RcConfig = {
 				includeSuspended: true,
 				onSelect: function(player) {
 					gbId.value = player.MundaneId;
+				},
+				onClear: function() {
+					gbId.value = '';
 				}
 			});
 		}

@@ -1100,6 +1100,10 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		onSelect: function(p) {
 			document.getElementById('cp-mgp-keep-id').value = p.MundaneId;
 			cpMgpCheck();
+		},
+		onClear: function() {
+			document.getElementById('cp-mgp-keep-id').value = '';
+			cpMgpCheck();
 		}
 	});
 	OrkPlayerSearch.attach(document.getElementById('cp-mgp-remove-name'), {
@@ -1108,6 +1112,10 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		excludeIds: function() { return [ parseInt(document.getElementById('cp-mgp-keep-id').value) || 0 ]; },
 		onSelect: function(p) {
 			document.getElementById('cp-mgp-remove-id').value = p.MundaneId;
+			cpMgpCheck();
+		},
+		onClear: function() {
+			document.getElementById('cp-mgp-remove-id').value = '';
 			cpMgpCheck();
 		}
 	});
