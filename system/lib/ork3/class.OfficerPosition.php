@@ -96,7 +96,8 @@ class OfficerPosition extends Ork3
 		$DB->gp_kid = $kingdom_id;
 		$r = $DB->DataSet(
 			"SELECT p.*,
-				IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias,
+				IF(p.kingdom_id = 0,
+				   IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
 				   IF(p.title_alias != '', p.title_alias, p.title)) AS DisplayTitle
 			FROM " . DB_PREFIX . "officer_position p
 			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
@@ -376,30 +377,65 @@ class OfficerPosition extends Ork3
 	 *                       rbac_role_id, permission_keys, changed_by, editor_id
 	 * @return array
 	 */
-	public function EditPosition( $position_id, $fields )
+	public function EditPosition( $position_id, $fields, $acting_kingdom_id = 0 )
 	{
 		global $DB;
 		$position_id = (int) $position_id;
+		$acting_kingdom_id = (int) $acting_kingdom_id;
 		$position = $this->GetPosition( $position_id );
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
 		}
 		$is_pinned = (int) $position['is_pinned'];
+		$is_system = (int) $position['is_system'];
+		$pos_kingdom_id = (int) $position['kingdom_id'];
+		$canonical_key  = $position['canonical_key'];
 		$changed_by = isset( $fields['changed_by'] ) ? (int) $fields['changed_by'] : 0;
 		$editor_id  = isset( $fields['editor_id'] ) ? (int) $fields['editor_id'] : $changed_by;
 
-		// Reject pinned classification/RBAC edits server-side.
-		if ( $is_pinned ) {
+		// Reject pinned/system classification + RBAC edits server-side. Title alias
+		// (via the alias table for system rows) and sort_order remain allowed.
+		if ( $is_pinned || $is_system ) {
 			if ( isset( $fields['classification'] ) && $fields['classification'] !== $position['classification'] ) {
-				return NoAuthorization( 'Pinned positions cannot be reclassified.' );
+				return NoAuthorization( 'Pinned/system positions cannot be reclassified.' );
 			}
 			if ( ( isset( $fields['rbac_role_id'] ) && (int) $fields['rbac_role_id'] !== (int) $position['rbac_role_id'] )
 				|| isset( $fields['permission_keys'] ) ) {
-				return NoAuthorization( 'Pinned positions cannot have their RBAC binding changed.' );
+				return NoAuthorization( 'Pinned/system positions cannot have their RBAC binding changed.' );
 			}
 		}
 
-		// title / title_alias / sort_order — always.
+		// title_alias routing differs by row type:
+		//   - SYSTEM row (kingdom_id=0): per-kingdom alias lives in the alias table,
+		//     keyed on ($acting_kingdom_id, canonical_key). NEVER mutate the shared row.
+		//   - CUSTOM row (kingdom_id>0): alias lives on the row's own title_alias column.
+		if ( array_key_exists( 'title_alias', $fields ) && $pos_kingdom_id === 0 ) {
+			if ( $acting_kingdom_id <= 0 ) {
+				return InvalidParameter( null, 'A valid kingdom is required to alias a system position.' );
+			}
+			$alias = trim( (string) $fields['title_alias'] );
+			if ( $alias !== '' ) {
+				$DB->Clear();
+				$DB->al_kid = $acting_kingdom_id;
+				$DB->al_key = $canonical_key;
+				$DB->al_alias = $alias;
+				$DB->Execute(
+					"INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, title_alias)
+					 VALUES (:al_kid, :al_key, :al_alias)
+					 ON DUPLICATE KEY UPDATE title_alias = VALUES(title_alias)"
+				);
+			} else {
+				$DB->Clear();
+				$DB->ad_kid = $acting_kingdom_id;
+				$DB->ad_key = $canonical_key;
+				$DB->Execute(
+					"DELETE FROM " . DB_PREFIX . "officer_position_alias
+					 WHERE kingdom_id = :ad_kid AND canonical_key = :ad_key"
+				);
+			}
+		}
+
+		// title / title_alias(custom only) / sort_order — written on the row itself.
 		$sets = [];
 		$DB->Clear();
 		$DB->ep_pid = $position_id;
@@ -407,8 +443,8 @@ class OfficerPosition extends Ork3
 			$DB->ep_title = trim( (string) $fields['title'] );
 			$sets[] = "title = :ep_title";
 		}
-		if ( array_key_exists( 'title_alias', $fields ) ) {
-			// '' clears the alias; never null (yapo/SQL semantics).
+		if ( array_key_exists( 'title_alias', $fields ) && $pos_kingdom_id > 0 ) {
+			// Custom-row alias on its own column. '' clears; never null (yapo/SQL semantics).
 			$DB->ep_alias = (string) $fields['title_alias'];
 			$sets[] = "title_alias = :ep_alias";
 		}

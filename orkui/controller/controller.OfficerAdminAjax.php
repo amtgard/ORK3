@@ -367,7 +367,7 @@ class Controller_OfficerAdminAjax extends Controller {
 			$fields['permission_keys'] = $this->parsePermissionKeys($_POST['PermissionKeys']);
 		}
 
-		$r = $this->OfficerPosition->EditPosition($position_id, $fields);
+		$r = $this->OfficerPosition->EditPosition($position_id, $fields, $kingdom_id);
 		$this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
 	}
 
@@ -387,7 +387,7 @@ class Controller_OfficerAdminAjax extends Controller {
 			'classification' => $classification,
 			'changed_by'     => $uid,
 			'editor_id'      => $uid,
-		]);
+		], $kingdom_id);
 		$this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
 	}
 
