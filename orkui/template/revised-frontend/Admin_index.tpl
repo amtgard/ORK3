@@ -1093,8 +1093,24 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		var remove = document.getElementById('cp-mgp-remove-id').value;
 		document.getElementById('cp-mgp-submit').disabled = !(keep && remove);
 	}
-	cpAc({ inputId:'cp-mgp-keep-name',   hiddenId:'cp-mgp-keep-id',   resultsId:'cp-mgp-keep-results',   fetchFn:function(q,cb){cpSearchPlayersGlobal(q,cb,true);}, onSelect:cpMgpCheck, onClear:cpMgpCheck });
-	cpAc({ inputId:'cp-mgp-remove-name', hiddenId:'cp-mgp-remove-id', resultsId:'cp-mgp-remove-results', fetchFn:function(q,cb){cpSearchPlayersGlobal(q,cb,true);}, onSelect:cpMgpCheck, onClear:cpMgpCheck });
+	OrkPlayerSearch.attach(document.getElementById('cp-mgp-keep-name'), {
+		uir: UIR,
+		includeInactive: true,
+		excludeIds: function() { return [ parseInt(document.getElementById('cp-mgp-remove-id').value) || 0 ]; },
+		onSelect: function(p) {
+			document.getElementById('cp-mgp-keep-id').value = p.MundaneId;
+			cpMgpCheck();
+		}
+	});
+	OrkPlayerSearch.attach(document.getElementById('cp-mgp-remove-name'), {
+		uir: UIR,
+		includeInactive: true,
+		excludeIds: function() { return [ parseInt(document.getElementById('cp-mgp-keep-id').value) || 0 ]; },
+		onSelect: function(p) {
+			document.getElementById('cp-mgp-remove-id').value = p.MundaneId;
+			cpMgpCheck();
+		}
+	});
 	document.getElementById('cp-mgp-submit').addEventListener('click', function() {
 		var keepId   = document.getElementById('cp-mgp-keep-id').value;
 		var removeId = document.getElementById('cp-mgp-remove-id').value;
