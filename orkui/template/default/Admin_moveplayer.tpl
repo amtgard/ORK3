@@ -56,34 +56,10 @@
 				return false;
 			}
 		});
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#SrcParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id.length>0?park_id:null
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value);
-				return false;
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
 			}
 		});
 	});

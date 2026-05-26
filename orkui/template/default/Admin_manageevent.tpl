@@ -215,51 +215,22 @@
 			}
 		});
 <?php endif ?>
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				kingdom_id = $('#KingdomId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: <?= ((isset($this->__session->park_id))?$this->__session->park_id:"park_id.length>0?park_id:null") ?>,
-						kingdom_id: kingdom_id,
-						limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId + "|" + val.PenaltyBox });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value.split("|")[0]);
-				if (ui.item.value.split("|")[1] == "0") {
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+<?php if (isset($this->__session->park_id) && valid_id($this->__session->park_id)): ?>
+			parkId: <?=(int)$this->__session->park_id ?>,
+<?php elseif (isset($this->__session->kingdom_id) && valid_id($this->__session->kingdom_id)): ?>
+			kingdomId: <?=(int)$this->__session->kingdom_id ?>,
+<?php endif ?>
+			includeSuspended: true,
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
+				if (p.Suspended == 0) {
 					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
 				} else {
 					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
 				}
-				SetEvents(null,null);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#PlayerName',null);
-					$('#MundaneId').val(null);
-					SetEvents(null,null);
-				}
-				return false;
+				SetEvents(null, null);
 			}
 		});
 		$( "#EventName" ).autocomplete({
@@ -284,50 +255,22 @@
 				return false;
 			}
 		});
-		$( "#CreatePlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#CreateParkId').val();
-				kingdom_id = $('#CreateKingdomId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: <?=((isset($this->__session->park_id))?$this->__session->park_id:"park_id.length>0?park_id:null") ?>,
-						kingdom_id: kingdom_id,
-						limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId + "|" + val.PenaltyBox });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#CreatePlayerName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#CreatePlayerName', ui);
-				$('#CreateMundaneId').val(ui.item.value.split("|")[0]);
-				if (ui.item.value.split("|")[1] == "0") {
+		OrkPlayerSearch.attach(document.getElementById('CreatePlayerName'), {
+			uir: '<?=UIR ?>',
+<?php if (isset($this->__session->park_id) && valid_id($this->__session->park_id)): ?>
+			parkId: <?=(int)$this->__session->park_id ?>,
+<?php elseif (isset($this->__session->kingdom_id) && valid_id($this->__session->kingdom_id)): ?>
+			kingdomId: <?=(int)$this->__session->kingdom_id ?>,
+<?php endif ?>
+			includeSuspended: true,
+			onSelect: function(p) {
+				document.getElementById('CreateMundaneId').value = p.MundaneId;
+				if (p.Suspended == 0) {
 					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
 				} else {
 					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
 				}
-				SetEvents(null,null);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#CreatePlayerName',null);
-					$('#CreateMundaneId').val(null);
-				}
-				return false;
+				SetEvents(null, null);
 			}
 		});
 		$('#event-creation-form').hide();
