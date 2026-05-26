@@ -1,85 +1,31 @@
 <script type='text/javascript'>
 
 	$(document).ready(function() {
-		$( "#ManageMembers #PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-                        limit: 8
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel($(this), ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel("#ManageMembers #PlayerName", ui);
-				$("#MemberMundaneId").val(ui.item.value);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel("#ManageMembers #PlayerName",null);
-					$("#MemberMundaneId").val(null);
+		// Member-add search: global, unscoped (cross-kingdom + cross-park is intentional)
+		var memberInput = document.querySelector('#ManageMembers #PlayerName');
+		if (memberInput) {
+			OrkPlayerSearch.attach(memberInput, {
+				uir: '<?=UIR ?>',
+				includeInactive: true,
+				onSelect: function(p) {
+					memberInput.value = p.Persona;
+					document.getElementById('MemberMundaneId').value = p.MundaneId;
 				}
-				return false;
-			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
-		});		
-		$( "#ManagerForm #PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-                        limit: 8
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#ManagerForm #PlayerName', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#ManagerForm #PlayerName', ui);
-				$('#ManagerMundaneId').val(ui.item.value);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#ManagerForm #PlayerName',null);
-					$('#ManagerMundaneId').val(null);
+			});
+		}
+
+		// Manager-add search: global, unscoped (cross-kingdom + cross-park is intentional)
+		var managerInput = document.querySelector('#ManagerForm #PlayerName');
+		if (managerInput) {
+			OrkPlayerSearch.attach(managerInput, {
+				uir: '<?=UIR ?>',
+				includeInactive: true,
+				onSelect: function(p) {
+					managerInput.value = p.Persona;
+					document.getElementById('ManagerMundaneId').value = p.MundaneId;
 				}
-				return false;
-			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
-		});
+			});
+		}
 	});
 	
 </script>
