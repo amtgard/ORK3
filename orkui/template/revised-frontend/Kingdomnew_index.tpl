@@ -315,6 +315,11 @@
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
 				<?php endif; ?>
+				<?php if ($can_manage_officer_positions ?? false): ?>
+				<li data-kntab="manageofficers">
+					<i class="fas fa-user-shield"></i><span class="kn-tab-label"> Manage Officers</span>
+				</li>
+				<?php endif; ?>
 			</ul>
 			<div class="kn-active-tab-label" id="kn-active-tab-label">Parks</div>
 
@@ -859,6 +864,40 @@
 			</table>
 		</div>
 
+		<!-- Manage Officers Tab -->
+		<?php if ($can_manage_officer_positions ?? false): ?>
+		<div class="kn-tab-panel" id="kn-tab-manageofficers" style="display:none">
+			<div class="kn-off-toolbar">
+				<button class="kn-btn kn-btn-primary" onclick="knOffOpenCreate()">
+					<i class="fas fa-plus"></i> Create Position
+				</button>
+				<button class="kn-off-retired-toggle" id="kn-off-retired-toggle" onclick="knOffToggleRetired()" style="display:none">
+					<i class="fas fa-archive"></i> Retired Positions (<span id="kn-off-retired-count">0</span>)
+					<i class="fas fa-chevron-down kn-off-retired-caret" id="kn-off-retired-caret"></i>
+				</button>
+			</div>
+			<div id="kn-off-loading" style="text-align:center;padding:24px;color:var(--ork-text-secondary,#a0aec0)">
+				<i class="fas fa-spinner fa-spin"></i> Loading positions...
+			</div>
+			<div id="kn-off-error" class="kn-off-loaderr" style="display:none"></div>
+			<div id="kn-off-content" style="display:none">
+				<div class="kn-off-group" id="kn-off-group-crown">
+					<h4 class="kn-off-group-title"><i class="fas fa-crown" style="color:#d69e2e"></i> Crown Offices</h4>
+					<div class="kn-off-cards" id="kn-off-cards-crown"></div>
+				</div>
+				<div class="kn-off-group" id="kn-off-group-supporting">
+					<h4 class="kn-off-group-title"><i class="fas fa-users"></i> Supporting Offices</h4>
+					<div class="kn-off-cards" id="kn-off-cards-supporting"></div>
+				</div>
+				<div class="kn-off-retired-panel" id="kn-off-retired-panel" style="display:none">
+					<h4 class="kn-off-group-title"><i class="fas fa-archive"></i> Retired Positions</h4>
+					<div class="kn-off-cards" id="kn-off-cards-retired"></div>
+				</div>
+			</div>
+		</div>
+		<?php endif; ?>
+
+
 		<!-- Admin Tab -->
 		<?php if ($CanManageKingdom ?? false): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
@@ -1050,6 +1089,134 @@
 
 <?php endif; ?>
 
+<!-- ============ Manage Officers Modals ============ -->
+<?php if ($can_manage_officer_positions ?? false): ?>
+
+<!-- Create/Edit Position Modal -->
+<div id="kn-off-pos-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="kn-modal-box" style="width:560px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-user-shield" style="margin-right:8px;color:#2b6cb0"></i><span id="kn-off-pos-title">Create Position</span></h3>
+			<button class="kn-modal-close-btn" onclick="knOffClosePos()">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="overflow:visible">
+			<div class="kn-form-error" id="kn-off-pos-error" style="display:none"></div>
+			<input type="hidden" id="kn-off-pos-id" value="" />
+
+			<div class="kn-acct-field">
+				<label>Title <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-off-pos-title-input" placeholder="e.g. Knight Marshal" autocomplete="off" />
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Display Alias <span class="kn-off-muted">(optional &mdash; what members see instead of the official title)</span></label>
+				<input type="text" id="kn-off-pos-alias" placeholder="Leave blank to use the official title" autocomplete="off" />
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Classification</label>
+				<div class="kn-off-seg" id="kn-off-pos-class-seg">
+					<button type="button" class="kn-off-seg-btn kn-off-seg-active" data-class="crown" onclick="knOffSetClass('crown')">Crown</button>
+					<button type="button" class="kn-off-seg-btn" data-class="supporting" onclick="knOffSetClass('supporting')">Supporting</button>
+				</div>
+				<div class="kn-off-pinned-note" id="kn-off-pos-class-lock" style="display:none">
+					<i class="fas fa-lock"></i> Core office &mdash; classification is locked to Crown.
+				</div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Permissions</label>
+				<div class="kn-off-seg" id="kn-off-pos-rbac-seg">
+					<button type="button" class="kn-off-seg-btn kn-off-seg-active" data-rbac="existing" onclick="knOffSetRbacMode('existing')">Use existing role</button>
+					<button type="button" class="kn-off-seg-btn" data-rbac="custom" onclick="knOffSetRbacMode('custom')">Build custom set</button>
+				</div>
+			</div>
+
+			<div class="kn-acct-field" id="kn-off-pos-role-wrap">
+				<label>Role</label>
+				<select id="kn-off-pos-role"><option value="">Loading roles...</option></select>
+				<div class="kn-off-role-desc" id="kn-off-pos-role-desc"></div>
+			</div>
+
+			<div class="kn-acct-field" id="kn-off-pos-perm-wrap" style="display:none">
+				<label>Permissions in custom set</label>
+				<div class="kn-perm-grid" id="kn-off-pos-perm-grid">
+					<div class="kn-off-muted" style="padding:8px">Loading permissions...</div>
+				</div>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn kn-btn-secondary" onclick="knOffClosePos()">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-off-pos-save-btn" onclick="knOffSavePos()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Position
+			</button>
+		</div>
+	</div>
+</div>
+
+<!-- Set Occupant Modal -->
+<div id="kn-off-occ-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-user-plus" style="margin-right:8px;color:#276749"></i>Set Occupant &mdash; <span id="kn-off-occ-title"></span></h3>
+			<button class="kn-modal-close-btn" onclick="knOffCloseOcc()">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="overflow:visible">
+			<div class="kn-form-error" id="kn-off-occ-error" style="display:none"></div>
+			<input type="hidden" id="kn-off-occ-pos-id" value="" />
+
+			<div class="kn-acct-field" style="position:relative">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-off-occ-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="kn-off-occ-player-id" value="" />
+				<div class="kn-ac-results" id="kn-off-occ-player-results" style="position:fixed"></div>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="kn-acct-field" style="flex:1">
+					<label>Term Start <span style="color:#e53e3e">*</span></label>
+					<input type="text" id="kn-off-occ-start" autocomplete="off" />
+				</div>
+				<div class="kn-acct-field" style="flex:1">
+					<label>Term End <span class="kn-off-muted">(optional)</span></label>
+					<input type="text" id="kn-off-occ-end" autocomplete="off" />
+				</div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Note <span class="kn-off-muted">(optional)</span></label>
+				<textarea id="kn-off-occ-note" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn kn-btn-secondary" onclick="knOffCloseOcc()">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-off-occ-save-btn" onclick="knOffSaveOcc()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant
+			</button>
+		</div>
+	</div>
+</div>
+
+<!-- Confirm (Retire / Vacate) Modal -->
+<div id="kn-off-confirm-overlay" style="display:none;position:fixed;inset:0;z-index:8001;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="kn-modal-box" style="width:460px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#dd6b20"></i><span id="kn-off-confirm-title">Confirm</span></h3>
+			<button class="kn-modal-close-btn" onclick="knOffCloseConfirm()">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div class="kn-off-warn-box" id="kn-off-confirm-body"></div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn kn-btn-secondary" onclick="knOffCloseConfirm()">Cancel</button>
+			<button class="kn-btn kn-btn-danger" id="kn-off-confirm-ok" onclick="knOffConfirmGo()">Confirm</button>
+		</div>
+	</div>
+</div>
+
+<?php endif; ?>
+
+
 <!-- =============================================
      JavaScript
      ============================================= -->
@@ -1061,6 +1228,7 @@ var KnConfig = {
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
 	canEdit:          <?= !empty($CanEditKingdom)   ? 'true' : 'false' ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
+	canManageOfficers: <?= !empty($can_manage_officer_positions) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -2168,6 +2336,202 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
 	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
 }
+
+/* ============ Manage Officers Tab ============ */
+.kn-off-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.kn-off-retired-toggle {
+	margin-left:auto; background:none; border:1px solid #e2e8f0; border-radius:6px;
+	padding:7px 12px; font-size:13px; font-weight:600; color:#4a5568; cursor:pointer;
+	display:inline-flex; align-items:center; gap:6px;
+}
+.kn-off-retired-toggle:hover { background:#f7fafc; }
+.kn-off-retired-caret { transition:transform .15s ease; font-size:11px; }
+.kn-off-retired-toggle.kn-off-open .kn-off-retired-caret { transform:rotate(180deg); }
+html[data-theme="dark"] .kn-off-retired-toggle { border-color:var(--ork-border); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-off-retired-toggle:hover { background:var(--ork-bg-tertiary); color:var(--ork-text); }
+
+.kn-off-loaderr { background:#fff5f5; border:1px solid #fed7d7; border-radius:6px; padding:10px 14px; color:#c53030; font-size:13px; }
+html[data-theme="dark"] .kn-off-loaderr { background:rgba(252,129,129,0.12); border-color:#fc8181; color:#fc8181; }
+
+.kn-off-group { margin-bottom:24px; }
+.kn-off-group-title {
+	font-size:14px; font-weight:700; color:#2d3748; margin:0 0 12px 0;
+	display:flex; align-items:center; gap:8px;
+	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+}
+html[data-theme="dark"] .kn-off-group-title { color:var(--ork-text); }
+.kn-off-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+
+.kn-off-card {
+	background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px;
+	display:flex; flex-direction:column; gap:8px; box-shadow:0 1px 3px rgba(0,0,0,0.06);
+}
+html[data-theme="dark"] .kn-off-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
+.kn-off-card.kn-off-card-crown { border-top:3px solid #d69e2e; }
+.kn-off-card.kn-off-retired { opacity:0.72; }
+
+.kn-off-card-head { display:flex; align-items:flex-start; gap:8px; }
+.kn-off-title { font-size:15px; font-weight:700; color:#2d3748; line-height:1.25; flex:1; }
+html[data-theme="dark"] .kn-off-title { color:var(--ork-text); }
+.kn-off-title .kn-off-crown-glyph { color:#d69e2e; margin-right:5px; }
+.kn-off-title .kn-off-official { font-size:12px; font-weight:400; color:#718096; }
+html[data-theme="dark"] .kn-off-title .kn-off-official { color:var(--ork-text-secondary); }
+.kn-off-pinned { color:#a0aec0; font-size:13px; }
+html[data-theme="dark"] .kn-off-pinned { color:var(--ork-text-muted); }
+
+.kn-off-occupant { font-size:13px; color:#2d3748; }
+html[data-theme="dark"] .kn-off-occupant { color:var(--ork-text); }
+.kn-off-occupant a { color:#2b6cb0; text-decoration:none; }
+.kn-off-occupant a:hover { text-decoration:underline; }
+html[data-theme="dark"] .kn-off-occupant a { color:hsl(var(--kn-hue),var(--kn-sat),65%); }
+.kn-off-vacant { font-style:italic; color:#a0aec0; }
+html[data-theme="dark"] .kn-off-vacant { color:var(--ork-text-muted); }
+.kn-off-term { font-size:12px; color:#718096; }
+html[data-theme="dark"] .kn-off-term { color:var(--ork-text-secondary); }
+
+.kn-off-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.kn-off-act-btn {
+	background:#edf2f7; border:1px solid #e2e8f0; border-radius:5px; padding:5px 9px;
+	font-size:12px; font-weight:600; color:#4a5568; cursor:pointer; display:inline-flex; align-items:center; gap:4px;
+}
+.kn-off-act-btn:hover:not(:disabled) { background:#e2e8f0; }
+.kn-off-act-btn:disabled { opacity:0.45; cursor:not-allowed; }
+html[data-theme="dark"] .kn-off-act-btn { background:var(--ork-bg-tertiary); border-color:var(--ork-border); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-off-act-btn:hover:not(:disabled) { background:var(--ork-bg-secondary); color:var(--ork-text); }
+.kn-off-act-danger { color:#c53030; }
+html[data-theme="dark"] .kn-off-act-danger { color:#fc8181; }
+
+/* Reclassify dropdown */
+.kn-off-reclass { position:relative; display:inline-block; }
+.kn-off-reclass-menu {
+	display:none; position:absolute; top:100%; left:0; z-index:50; margin-top:4px;
+	background:#fff; border:1px solid #e2e8f0; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12);
+	min-width:170px; overflow:hidden;
+}
+.kn-off-reclass.kn-off-open .kn-off-reclass-menu { display:block; }
+.kn-off-reclass-menu button {
+	display:block; width:100%; text-align:left; background:none; border:none;
+	padding:8px 12px; font-size:13px; color:#2d3748; cursor:pointer;
+}
+.kn-off-reclass-menu button:hover { background:#f7fafc; }
+html[data-theme="dark"] .kn-off-reclass-menu { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .kn-off-reclass-menu button { color:var(--ork-text); }
+html[data-theme="dark"] .kn-off-reclass-menu button:hover { background:var(--ork-bg-tertiary); }
+
+.kn-off-retired-panel { border-top:1px dashed #e2e8f0; padding-top:18px; }
+html[data-theme="dark"] .kn-off-retired-panel { border-top-color:var(--ork-border); }
+
+.kn-off-muted { color:#a0aec0; font-weight:400; font-size:11px; }
+html[data-theme="dark"] .kn-off-muted { color:var(--ork-text-muted); }
+
+/* Segmented controls */
+.kn-off-seg { display:inline-flex; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden; }
+.kn-off-seg-btn {
+	background:#fff; border:none; padding:7px 14px; font-size:13px; font-weight:600;
+	color:#718096; cursor:pointer; border-right:1px solid #e2e8f0;
+}
+.kn-off-seg-btn:last-child { border-right:none; }
+.kn-off-seg-btn.kn-off-seg-active { background:#2b6cb0; color:#fff; }
+.kn-off-seg-btn:disabled { opacity:0.45; cursor:not-allowed; }
+html[data-theme="dark"] .kn-off-seg { border-color:var(--ork-border); }
+html[data-theme="dark"] .kn-off-seg-btn { background:var(--ork-bg-tertiary); color:var(--ork-text-secondary); border-right-color:var(--ork-border); }
+html[data-theme="dark"] .kn-off-seg-btn.kn-off-seg-active { background:hsl(var(--kn-hue),var(--kn-sat),50%); color:#fff; }
+
+.kn-off-pinned-note { font-size:12px; color:#718096; margin-top:6px; display:flex; align-items:center; gap:6px; }
+html[data-theme="dark"] .kn-off-pinned-note { color:var(--ork-text-secondary); }
+
+.kn-off-role-desc { font-size:12px; color:#718096; margin-top:6px; min-height:1em; }
+html[data-theme="dark"] .kn-off-role-desc { color:var(--ork-text-secondary); }
+
+/* Permission grid */
+.kn-perm-grid { max-height:240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; }
+html[data-theme="dark"] .kn-perm-grid { border-color:var(--ork-border); background:var(--ork-bg-tertiary); }
+.kn-perm-cat { margin-bottom:12px; }
+.kn-perm-cat:last-child { margin-bottom:0; }
+.kn-perm-cat-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
+html[data-theme="dark"] .kn-perm-cat-title { color:var(--ork-text-secondary); }
+.kn-perm-item { display:flex; align-items:center; gap:7px; font-size:13px; color:#2d3748; margin-bottom:4px; cursor:pointer; }
+html[data-theme="dark"] .kn-perm-item { color:var(--ork-text); }
+.kn-perm-item input { margin:0; }
+
+/* Warning box (confirm modal) */
+.kn-off-warn-box { font-size:14px; color:#2d3748; line-height:1.5; }
+html[data-theme="dark"] .kn-off-warn-box { color:var(--ork-text); }
+
+/* Officer-modal scoped containers (reuse OH modal styling) */
+#kn-off-pos-overlay .kn-modal-box, #kn-off-occ-overlay .kn-modal-box, #kn-off-confirm-overlay .kn-modal-box {
+	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+	max-height:90vh; display:flex; flex-direction:column;
+}
+html[data-theme="dark"] #kn-off-pos-overlay .kn-modal-box,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-modal-box,
+html[data-theme="dark"] #kn-off-confirm-overlay .kn-modal-box { background:var(--ork-card-bg); }
+#kn-off-pos-overlay .kn-modal-header, #kn-off-occ-overlay .kn-modal-header, #kn-off-confirm-overlay .kn-modal-header {
+	display:flex; align-items:center; justify-content:space-between;
+	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
+}
+html[data-theme="dark"] #kn-off-pos-overlay .kn-modal-header,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-modal-header,
+html[data-theme="dark"] #kn-off-confirm-overlay .kn-modal-header { border-bottom-color:var(--ork-border); }
+#kn-off-pos-overlay .kn-modal-title, #kn-off-occ-overlay .kn-modal-title, #kn-off-confirm-overlay .kn-modal-title {
+	font-size:16px; font-weight:700; color:#2d3748; margin:0;
+	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+}
+html[data-theme="dark"] #kn-off-pos-overlay .kn-modal-title,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-modal-title,
+html[data-theme="dark"] #kn-off-confirm-overlay .kn-modal-title { color:var(--ork-text); }
+#kn-off-pos-overlay .kn-modal-close-btn, #kn-off-occ-overlay .kn-modal-close-btn, #kn-off-confirm-overlay .kn-modal-close-btn {
+	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
+}
+#kn-off-pos-overlay .kn-modal-close-btn:hover, #kn-off-occ-overlay .kn-modal-close-btn:hover, #kn-off-confirm-overlay .kn-modal-close-btn:hover { color:#4a5568; }
+html[data-theme="dark"] #kn-off-pos-overlay .kn-modal-close-btn,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-modal-close-btn,
+html[data-theme="dark"] #kn-off-confirm-overlay .kn-modal-close-btn { color:var(--ork-text-muted); }
+#kn-off-pos-overlay .kn-modal-body, #kn-off-occ-overlay .kn-modal-body, #kn-off-confirm-overlay .kn-modal-body {
+	padding:20px; overflow-y:auto; flex:1;
+}
+#kn-off-pos-overlay .kn-modal-footer, #kn-off-occ-overlay .kn-modal-footer, #kn-off-confirm-overlay .kn-modal-footer {
+	padding:14px 20px; border-top:1px solid #e2e8f0;
+	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
+}
+html[data-theme="dark"] #kn-off-pos-overlay .kn-modal-footer,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-modal-footer,
+html[data-theme="dark"] #kn-off-confirm-overlay .kn-modal-footer { border-top-color:var(--ork-border); }
+#kn-off-pos-overlay .kn-acct-field, #kn-off-occ-overlay .kn-acct-field { position:relative; margin-bottom:14px; }
+#kn-off-pos-overlay .kn-acct-field label, #kn-off-occ-overlay .kn-acct-field label {
+	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
+}
+html[data-theme="dark"] #kn-off-pos-overlay .kn-acct-field label,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-acct-field label { color:var(--ork-text-secondary); }
+#kn-off-pos-overlay .kn-acct-field input[type=text],
+#kn-off-pos-overlay .kn-acct-field select,
+#kn-off-pos-overlay .kn-acct-field textarea,
+#kn-off-occ-overlay .kn-acct-field input[type=text],
+#kn-off-occ-overlay .kn-acct-field textarea {
+	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
+	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
+}
+html[data-theme="dark"] #kn-off-pos-overlay .kn-acct-field input[type=text],
+html[data-theme="dark"] #kn-off-pos-overlay .kn-acct-field select,
+html[data-theme="dark"] #kn-off-pos-overlay .kn-acct-field textarea,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-acct-field input[type=text],
+html[data-theme="dark"] #kn-off-occ-overlay .kn-acct-field textarea {
+	background:var(--ork-bg-tertiary); border-color:var(--ork-border); color:var(--ork-text);
+}
+#kn-off-pos-overlay .kn-acct-field input:focus,
+#kn-off-pos-overlay .kn-acct-field select:focus,
+#kn-off-pos-overlay .kn-acct-field textarea:focus,
+#kn-off-occ-overlay .kn-acct-field input:focus,
+#kn-off-occ-overlay .kn-acct-field textarea:focus {
+	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
+}
+#kn-off-pos-overlay .kn-form-error, #kn-off-occ-overlay .kn-form-error {
+	background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+html[data-theme="dark"] #kn-off-pos-overlay .kn-form-error,
+html[data-theme="dark"] #kn-off-occ-overlay .kn-form-error { background:rgba(252,129,129,0.12); border-color:#fc8181; color:#fc8181; }
+
 </style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
@@ -3084,6 +3448,496 @@ $(document).on('click', '.kn-tab-nav li[data-kntab="officerhistory"]', function(
     }
 });
 </script>
+
+<!-- ============ Manage Officers JS ============ -->
+<?php if ($can_manage_officer_positions ?? false): ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(function() {
+	// IIFE guard: config flag, NOT getElementById (modal HTML may not be parsed yet)
+	if (!KnConfig || !KnConfig.canManageOfficers) return;
+
+	var OFF_BASE   = KnConfig.uir + 'OfficerAdminAjax/officer/' + KnConfig.kingdomId + '/';
+	var knOffData  = { crown: [], supporting: [], retired: [] };
+	var knOffRoles = null;
+	var knOffPerms = null;
+	var knOffLoaded = false;
+	var knOffEditId = 0;       // 0 = create mode
+	var knOffPinnedClass = false;
+	var knOffClass = 'crown';
+	var knOffRbacMode = 'existing';
+	var knOffStartFp = null, knOffEndFp = null;
+	var knOffConfirmFn = null;
+	var knOffRetiredOpen = false;
+
+	function esc(s) {
+		if (s === null || s === undefined) return '';
+		var d = document.createElement('div'); d.appendChild(document.createTextNode(String(s))); return d.innerHTML;
+	}
+	function fmtDate(s) {
+		if (!s) return '';
+		var d = new Date(s + 'T00:00:00');
+		if (isNaN(d.getTime())) return esc(s);
+		var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+		return m[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+	}
+
+	// ---------- Load + render ----------
+	function knOffLoad() {
+		document.getElementById('kn-off-loading').style.display = '';
+		document.getElementById('kn-off-content').style.display = 'none';
+		document.getElementById('kn-off-error').style.display = 'none';
+		$.getJSON(OFF_BASE + 'list', function(resp) {
+			document.getElementById('kn-off-loading').style.display = 'none';
+			if (!resp || resp.status !== 0) {
+				var e = document.getElementById('kn-off-error');
+				e.textContent = (resp && resp.error) ? resp.error : 'Failed to load positions.';
+				e.style.display = '';
+				return;
+			}
+			knOffData = resp.data || { crown: [], supporting: [], retired: [] };
+			knOffRender();
+			document.getElementById('kn-off-content').style.display = '';
+		}).fail(function() {
+			document.getElementById('kn-off-loading').style.display = 'none';
+			var e = document.getElementById('kn-off-error');
+			e.textContent = 'Network error loading positions.';
+			e.style.display = '';
+		});
+	}
+
+	function occupantLine(pos) {
+		var occs = [];
+		if (pos.Classification === 'crown') {
+			if (pos.Occupant && pos.Occupant.MundaneId) occs = [pos.Occupant];
+		} else {
+			occs = pos.Occupants || [];
+		}
+		if (!occs.length) return '<div class="kn-off-occupant"><span class="kn-off-vacant">(Vacant)</span></div>';
+		var html = '';
+		for (var i = 0; i < occs.length; i++) {
+			var o = occs[i];
+			var term = 'Term: ' + (o.TermStart ? fmtDate(o.TermStart) : '?') + ' → ' + (o.TermEnd ? fmtDate(o.TermEnd) : '(current)');
+			html += '<div class="kn-off-occupant"><a href="' + KnConfig.uir + 'Player/profile/' + o.MundaneId + '">' + esc(o.Persona || 'Unknown') + '</a></div>' +
+			        '<div class="kn-off-term">' + esc(term) + '</div>';
+		}
+		return html;
+	}
+
+	function cardHtml(pos) {
+		var isCrown  = pos.Classification === 'crown';
+		var isPinned = parseInt(pos.IsPinned, 10) === 1;
+		var pid = parseInt(pos.PositionId, 10);
+		var filled = isCrown ? !!(pos.Occupant && pos.Occupant.MundaneId) : !!((pos.Occupants || []).length);
+
+		var titleHtml = '';
+		if (isCrown) titleHtml += '<i class="fas fa-crown kn-off-crown-glyph"></i>';
+		titleHtml += esc(pos.DisplayTitle || pos.Title);
+		// muted official title when alias differs
+		if (pos.TitleAlias && pos.Title && pos.TitleAlias !== pos.Title && (pos.DisplayTitle || '') !== (pos.Title || '')) {
+			titleHtml += ' <span class="kn-off-official">(' + esc(pos.Title) + ')</span>';
+		}
+		var lock = isPinned ? '<span class="kn-off-pinned" data-tip="Core office — classification and retirement are locked"><i class="fas fa-lock"></i></span>' : '';
+
+		// actions
+		var acts = '';
+		acts += '<button class="kn-off-act-btn" onclick="knOffOpenOcc(' + pid + ')"><i class="fas fa-user-plus"></i> Set Occupant</button>';
+		if (filled) {
+			acts += '<button class="kn-off-act-btn" onclick="knOffVacate(' + pid + ')"><i class="fas fa-user-minus"></i> Vacate</button>';
+		}
+		acts += '<button class="kn-off-act-btn" onclick="knOffOpenEdit(' + pid + ')"><i class="fas fa-pencil-alt"></i> Edit</button>';
+
+		// reclassify dropdown
+		if (isPinned) {
+			acts += '<button class="kn-off-act-btn" disabled data-tip="Core office — classification and retirement are locked"><i class="fas fa-exchange-alt"></i> Reclassify</button>';
+		} else {
+			var target = isCrown ? 'supporting' : 'crown';
+			var targetLabel = isCrown ? 'Move to Supporting' : 'Move to Crown';
+			acts += '<span class="kn-off-reclass" id="kn-off-reclass-' + pid + '">' +
+			        '<button class="kn-off-act-btn" onclick="knOffToggleReclass(' + pid + ')"><i class="fas fa-exchange-alt"></i> Reclassify</button>' +
+			        '<div class="kn-off-reclass-menu"><button onclick="knOffReclassify(' + pid + ',\'' + target + '\')">' + targetLabel + '</button></div>' +
+			        '</span>';
+		}
+
+		// retire
+		if (isPinned) {
+			acts += '<button class="kn-off-act-btn kn-off-act-danger" disabled data-tip="Core office — classification and retirement are locked"><i class="fas fa-archive"></i> Retire</button>';
+		} else {
+			acts += '<button class="kn-off-act-btn kn-off-act-danger" onclick="knOffRetire(' + pid + ')"><i class="fas fa-archive"></i> Retire</button>';
+		}
+
+		return '<div class="kn-off-card' + (isCrown ? ' kn-off-card-crown' : '') + '">' +
+			'<div class="kn-off-card-head"><div class="kn-off-title">' + titleHtml + '</div>' + lock + '</div>' +
+			occupantLine(pos) +
+			'<div class="kn-off-actions">' + acts + '</div>' +
+			'</div>';
+	}
+
+	function retiredCardHtml(pos) {
+		var pid = parseInt(pos.PositionId, 10);
+		var titleHtml = (pos.Classification === 'crown' ? '<i class="fas fa-crown kn-off-crown-glyph"></i>' : '') + esc(pos.DisplayTitle || pos.Title);
+		return '<div class="kn-off-card kn-off-retired">' +
+			'<div class="kn-off-card-head"><div class="kn-off-title">' + titleHtml + '</div></div>' +
+			'<div class="kn-off-term">Retired' + (pos.RetiredAt ? ' ' + esc(fmtDate(String(pos.RetiredAt).substr(0,10))) : '') + '</div>' +
+			'<div class="kn-off-actions"><button class="kn-off-act-btn" onclick="knOffReinstate(' + pid + ')"><i class="fas fa-undo"></i> Reinstate</button></div>' +
+			'</div>';
+	}
+
+	function knOffRender() {
+		var crown = knOffData.crown || [], supporting = knOffData.supporting || [], retired = knOffData.retired || [];
+		document.getElementById('kn-off-cards-crown').innerHTML       = crown.length ? crown.map(cardHtml).join('') : '<div class="kn-off-muted" style="padding:8px">No crown offices.</div>';
+		document.getElementById('kn-off-cards-supporting').innerHTML  = supporting.length ? supporting.map(cardHtml).join('') : '<div class="kn-off-muted" style="padding:8px">No supporting offices.</div>';
+
+		var toggle = document.getElementById('kn-off-retired-toggle');
+		if (retired.length) {
+			document.getElementById('kn-off-retired-count').textContent = retired.length;
+			document.getElementById('kn-off-cards-retired').innerHTML = retired.map(retiredCardHtml).join('');
+			toggle.style.display = '';
+		} else {
+			toggle.style.display = 'none';
+			knOffRetiredOpen = false;
+			document.getElementById('kn-off-retired-panel').style.display = 'none';
+			toggle.classList.remove('kn-off-open');
+		}
+	}
+
+	window.knOffToggleRetired = function() {
+		knOffRetiredOpen = !knOffRetiredOpen;
+		document.getElementById('kn-off-retired-panel').style.display = knOffRetiredOpen ? '' : 'none';
+		document.getElementById('kn-off-retired-toggle').classList.toggle('kn-off-open', knOffRetiredOpen);
+	};
+
+	window.knOffToggleReclass = function(pid) {
+		var el = document.getElementById('kn-off-reclass-' + pid);
+		if (!el) return;
+		var open = el.classList.contains('kn-off-open');
+		document.querySelectorAll('.kn-off-reclass.kn-off-open').forEach(function(x){ x.classList.remove('kn-off-open'); });
+		if (!open) el.classList.add('kn-off-open');
+	};
+	document.addEventListener('click', function(e) {
+		if (!e.target.closest || !e.target.closest('.kn-off-reclass')) {
+			document.querySelectorAll('.kn-off-reclass.kn-off-open').forEach(function(x){ x.classList.remove('kn-off-open'); });
+		}
+	});
+
+	// ---------- Mutations ----------
+	function knOffPost(action, data, onOk) {
+		$.post(OFF_BASE + action, data, function(resp) {
+			if (resp && resp.status === 0) { onOk(resp); }
+			else { alert((resp && resp.error) ? resp.error : 'Action failed.'); }
+		}, 'json').fail(function() { alert('Network error.'); });
+	}
+
+	window.knOffReclassify = function(pid, cls) {
+		document.querySelectorAll('.kn-off-reclass.kn-off-open').forEach(function(x){ x.classList.remove('kn-off-open'); });
+		knOffPost('reclassify', { PositionId: pid, Classification: cls }, function() { knOffLoad(); });
+	};
+
+	window.knOffVacate = function(pid) {
+		knOffShowConfirm('Vacate Position', 'This will end the current term and remove the occupant\'s officer permissions for this office. Continue?', 'Vacate', function() {
+			knOffPost('vacate', { PositionId: pid }, function() { knOffCloseConfirm(); knOffLoad(); });
+		});
+	};
+
+	window.knOffRetire = function(pid) {
+		var pos = findPos(pid);
+		var who = '';
+		if (pos) {
+			if (pos.Classification === 'crown' && pos.Occupant && pos.Occupant.MundaneId) who = pos.Occupant.Persona;
+			else if (pos.Occupants && pos.Occupants.length) who = pos.Occupants.map(function(o){ return o.Persona; }).join(', ');
+		}
+		var dt = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
+		var msg = who
+			? 'Retiring <strong>' + esc(dt) + '</strong> will end the current term for <strong>' + esc(who) + '</strong> and remove their officer permissions. Continue?'
+			: 'Retiring <strong>' + esc(dt) + '</strong> will hide it from pickers, the sidebar, the About panel, and reports. Continue?';
+		knOffShowConfirm('Retire Position', msg, 'Retire', function() {
+			knOffPost('retire', { PositionId: pid }, function() { knOffCloseConfirm(); knOffLoad(); });
+		});
+	};
+
+	window.knOffReinstate = function(pid) {
+		knOffPost('reinstate', { PositionId: pid }, function() { knOffLoad(); });
+	};
+
+	function findPos(pid) {
+		var all = (knOffData.crown||[]).concat(knOffData.supporting||[]).concat(knOffData.retired||[]);
+		for (var i = 0; i < all.length; i++) { if (parseInt(all[i].PositionId,10) === parseInt(pid,10)) return all[i]; }
+		return null;
+	}
+
+	// ---------- Confirm modal ----------
+	function knOffShowConfirm(title, bodyHtml, okLabel, fn) {
+		document.getElementById('kn-off-confirm-title').textContent = title;
+		document.getElementById('kn-off-confirm-body').innerHTML = bodyHtml;
+		document.getElementById('kn-off-confirm-ok').textContent = okLabel;
+		knOffConfirmFn = fn;
+		document.getElementById('kn-off-confirm-overlay').style.display = 'flex';
+	}
+	window.knOffCloseConfirm = function() { document.getElementById('kn-off-confirm-overlay').style.display = 'none'; knOffConfirmFn = null; };
+	window.knOffConfirmGo = function() { if (knOffConfirmFn) knOffConfirmFn(); };
+
+	// ---------- Create/Edit Position modal ----------
+	function ensureRoles(cb) {
+		if (knOffRoles) { cb(); return; }
+		$.getJSON(OFF_BASE + 'roles', function(resp) {
+			knOffRoles = (resp && resp.status === 0) ? (resp.data || []) : [];
+			cb();
+		}).fail(function() { knOffRoles = []; cb(); });
+	}
+	function ensurePerms(cb) {
+		if (knOffPerms) { cb(); return; }
+		$.getJSON(OFF_BASE + 'permissions', function(resp) {
+			knOffPerms = (resp && resp.status === 0) ? (resp.data || []) : [];
+			cb();
+		}).fail(function() { knOffPerms = []; cb(); });
+	}
+
+	function renderRoleSelect(selectedId) {
+		var sel = document.getElementById('kn-off-pos-role');
+		var opts = '<option value="">Select a role...</option>';
+		(knOffRoles || []).forEach(function(r) {
+			opts += '<option value="' + parseInt(r.RoleId,10) + '"' + (parseInt(r.RoleId,10) === parseInt(selectedId||0,10) ? ' selected' : '') + '>' + esc(r.DisplayName || r.Name) + '</option>';
+		});
+		sel.innerHTML = opts;
+		knOffUpdateRoleDesc();
+	}
+	window.knOffUpdateRoleDesc = function() {
+		var id = parseInt(document.getElementById('kn-off-pos-role').value || 0, 10);
+		var r = (knOffRoles || []).filter(function(x){ return parseInt(x.RoleId,10) === id; })[0];
+		document.getElementById('kn-off-pos-role-desc').textContent = (r && r.Description) ? r.Description : '';
+	};
+
+	function renderPermGrid(checkedKeys) {
+		checkedKeys = checkedKeys || [];
+		var grid = document.getElementById('kn-off-pos-perm-grid');
+		if (!knOffPerms || !knOffPerms.length) { grid.innerHTML = '<div class="kn-off-muted" style="padding:8px">No permissions available.</div>'; return; }
+		var cats = {};
+		knOffPerms.forEach(function(p) { var c = p.Category || 'Other'; (cats[c] = cats[c] || []).push(p); });
+		var html = '';
+		Object.keys(cats).forEach(function(cat) {
+			html += '<div class="kn-perm-cat"><div class="kn-perm-cat-title">' + esc(cat) + '</div>';
+			cats[cat].forEach(function(p) {
+				var ck = checkedKeys.indexOf(p.Key) !== -1 ? ' checked' : '';
+				html += '<label class="kn-perm-item"><input type="checkbox" class="kn-off-perm-cb" value="' + esc(p.Key) + '"' + ck + '> ' + esc(p.DisplayName || p.Key) + '</label>';
+			});
+			html += '</div>';
+		});
+		grid.innerHTML = html;
+	}
+
+	window.knOffSetClass = function(cls) {
+		if (knOffPinnedClass) return; // locked to crown
+		knOffClass = cls;
+		document.querySelectorAll('#kn-off-pos-class-seg .kn-off-seg-btn').forEach(function(b) {
+			b.classList.toggle('kn-off-seg-active', b.getAttribute('data-class') === cls);
+		});
+	};
+	window.knOffSetRbacMode = function(mode) {
+		knOffRbacMode = mode;
+		document.querySelectorAll('#kn-off-pos-rbac-seg .kn-off-seg-btn').forEach(function(b) {
+			b.classList.toggle('kn-off-seg-active', b.getAttribute('data-rbac') === mode);
+		});
+		document.getElementById('kn-off-pos-role-wrap').style.display = mode === 'existing' ? '' : 'none';
+		document.getElementById('kn-off-pos-perm-wrap').style.display = mode === 'custom' ? '' : 'none';
+		if (mode === 'custom' && knOffPerms === null) ensurePerms(function(){ renderPermGrid([]); });
+	};
+
+	function openPosModal() {
+		document.getElementById('kn-off-pos-error').style.display = 'none';
+		document.getElementById('kn-off-pos-overlay').style.display = 'flex';
+		document.getElementById('kn-off-pos-role').onchange = window.knOffUpdateRoleDesc;
+	}
+
+	window.knOffOpenCreate = function() {
+		knOffEditId = 0;
+		knOffPinnedClass = false;
+		document.getElementById('kn-off-pos-title').textContent = 'Create Position';
+		document.getElementById('kn-off-pos-id').value = '';
+		document.getElementById('kn-off-pos-title-input').value = '';
+		document.getElementById('kn-off-pos-alias').value = '';
+		document.getElementById('kn-off-pos-class-lock').style.display = 'none';
+		document.querySelectorAll('#kn-off-pos-class-seg .kn-off-seg-btn').forEach(function(b){ b.disabled = false; });
+		knOffSetClass('crown');
+		knOffSetRbacMode('existing');
+		ensureRoles(function() { renderRoleSelect(0); });
+		openPosModal();
+	};
+
+	window.knOffOpenEdit = function(pid) {
+		var pos = findPos(pid);
+		if (!pos) return;
+		knOffEditId = pid;
+		knOffPinnedClass = parseInt(pos.IsPinned, 10) === 1;
+		document.getElementById('kn-off-pos-title').textContent = 'Edit Position';
+		document.getElementById('kn-off-pos-id').value = pid;
+		document.getElementById('kn-off-pos-title-input').value = pos.Title || '';
+		document.getElementById('kn-off-pos-alias').value = pos.TitleAlias || '';
+
+		var lockEl = document.getElementById('kn-off-pos-class-lock');
+		lockEl.style.display = knOffPinnedClass ? '' : 'none';
+		document.querySelectorAll('#kn-off-pos-class-seg .kn-off-seg-btn').forEach(function(b){ b.disabled = knOffPinnedClass; });
+		knOffPinnedClass = false; // allow knOffSetClass to set initial value
+		knOffSetClass(pos.Classification === 'crown' ? 'crown' : 'supporting');
+		knOffPinnedClass = parseInt(pos.IsPinned, 10) === 1;
+
+		knOffSetRbacMode('existing');
+		ensureRoles(function() { renderRoleSelect(pos.RbacRoleId || 0); });
+		openPosModal();
+	};
+
+	window.knOffClosePos = function() { document.getElementById('kn-off-pos-overlay').style.display = 'none'; };
+
+	window.knOffSavePos = function() {
+		var errEl = document.getElementById('kn-off-pos-error');
+		var title = document.getElementById('kn-off-pos-title-input').value.trim();
+		var alias = document.getElementById('kn-off-pos-alias').value.trim();
+		if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = ''; return; }
+		errEl.style.display = 'none';
+
+		var data = {
+			Title: title,
+			TitleAlias: alias,                 // '' clears (not null) per yapo rule
+			Classification: knOffClass,
+			RbacMode: knOffRbacMode
+		};
+		if (knOffRbacMode === 'existing') {
+			var rid = parseInt(document.getElementById('kn-off-pos-role').value || 0, 10);
+			if (!rid) { errEl.textContent = 'Please select a role.'; errEl.style.display = ''; return; }
+			data.RoleId = rid;
+		} else {
+			var keys = [];
+			document.querySelectorAll('.kn-off-perm-cb:checked').forEach(function(cb){ keys.push(cb.value); });
+			if (!keys.length) { errEl.textContent = 'Select at least one permission.'; errEl.style.display = ''; return; }
+			data['PermissionKeys[]'] = keys;
+		}
+
+		var btn = document.getElementById('kn-off-pos-save-btn');
+		btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+		var action = knOffEditId ? 'editposition' : 'createposition';
+		if (knOffEditId) data.PositionId = knOffEditId;
+
+		$.post(OFF_BASE + action, data, function(resp) {
+			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Position';
+			if (resp && resp.status === 0) { knOffClosePos(); knOffLoad(); }
+			else { errEl.textContent = (resp && resp.error) ? resp.error : 'Failed to save position.'; errEl.style.display = ''; }
+		}, 'json').fail(function() {
+			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Position';
+			errEl.textContent = 'Network error.'; errEl.style.display = '';
+		});
+	};
+
+	// ---------- Set Occupant modal ----------
+	function initOccFp() {
+		if (typeof flatpickr === 'undefined') return;
+		var opts = { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y' };
+		if (!knOffStartFp) knOffStartFp = flatpickr('#kn-off-occ-start', opts);
+		if (!knOffEndFp)   knOffEndFp   = flatpickr('#kn-off-occ-end', opts);
+	}
+
+	window.knOffOpenOcc = function(pid) {
+		var pos = findPos(pid);
+		document.getElementById('kn-off-occ-error').style.display = 'none';
+		document.getElementById('kn-off-occ-pos-id').value = pid;
+		document.getElementById('kn-off-occ-title').textContent = pos ? (pos.DisplayTitle || pos.Title) : '';
+		document.getElementById('kn-off-occ-player-text').value = '';
+		document.getElementById('kn-off-occ-player-id').value = '';
+		document.getElementById('kn-off-occ-note').value = '';
+		document.getElementById('kn-off-occ-overlay').style.display = 'flex';
+		initOccFp();
+		if (knOffStartFp) knOffStartFp.setDate(new Date(), true);
+		if (knOffEndFp)   knOffEndFp.clear();
+		else { document.getElementById('kn-off-occ-start').value = ''; document.getElementById('kn-off-occ-end').value = ''; }
+	};
+
+	window.knOffCloseOcc = function() {
+		document.getElementById('kn-off-occ-overlay').style.display = 'none';
+		var r = document.getElementById('kn-off-occ-player-results');
+		r.innerHTML = ''; r.classList.remove('kn-ac-open');
+	};
+
+	window.knOffSaveOcc = function() {
+		var errEl = document.getElementById('kn-off-occ-error');
+		var pid = document.getElementById('kn-off-occ-pos-id').value;
+		var mid = document.getElementById('kn-off-occ-player-id').value;
+		var start = document.getElementById('kn-off-occ-start').value;
+		var end   = document.getElementById('kn-off-occ-end').value;
+		var note  = document.getElementById('kn-off-occ-note').value;
+		if (!mid)   { errEl.textContent = 'Please select a player.'; errEl.style.display = ''; return; }
+		if (!start) { errEl.textContent = 'Term start is required.'; errEl.style.display = ''; return; }
+		errEl.style.display = 'none';
+
+		var btn = document.getElementById('kn-off-occ-save-btn');
+		btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+		$.post(OFF_BASE + 'setoccupant', { PositionId: pid, MundaneId: mid, TermStart: start, TermEnd: end, Note: note }, function(resp) {
+			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant';
+			if (resp && resp.status === 0) { knOffCloseOcc(); knOffLoad(); }
+			else { errEl.textContent = (resp && resp.error) ? resp.error : 'Failed to set occupant.'; errEl.style.display = ''; }
+		}, 'json').fail(function() {
+			btn.disabled = false; btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Set Occupant';
+			errEl.textContent = 'Network error.'; errEl.style.display = '';
+		});
+	};
+
+	// ---------- Occupant player autocomplete (kingdom-scoped, kn-ac-results) ----------
+	(function() {
+		var input   = document.getElementById('kn-off-occ-player-text');
+		var hidden  = document.getElementById('kn-off-occ-player-id');
+		var results = document.getElementById('kn-off-occ-player-results');
+		if (!input) return;
+		var debounce;
+		input.addEventListener('input', function() {
+			clearTimeout(debounce);
+			hidden.value = '';
+			var q = input.value.trim();
+			if (q.length < 2) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); return; }
+			debounce = setTimeout(function() {
+				var url = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId + '?q=' + encodeURIComponent(q) + '&scope=all&include_inactive=1';
+				$.getJSON(url, function(data) {
+					results.innerHTML = '';
+					if (!data || data.length === 0) {
+						results.innerHTML = '<div class="kn-ac-item kn-ac-empty">No results</div>';
+						if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+						results.classList.add('kn-ac-open');
+						return;
+					}
+					for (var i = 0; i < data.length; i++) {
+						var d = data[i];
+						var el = document.createElement('div');
+						el.className = 'kn-ac-item';
+						el.setAttribute('data-id', d.MundaneId);
+						el.innerHTML = '<span class="kn-ac-persona">' + esc(d.Persona) + '</span>' +
+						               '<span class="kn-ac-park">' + esc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + '</span>';
+						el.addEventListener('click', (function(dd) {
+							return function() {
+								input.value = dd.Persona;
+								hidden.value = dd.MundaneId;
+								results.innerHTML = '';
+								results.classList.remove('kn-ac-open');
+							};
+						})(d));
+						results.appendChild(el);
+					}
+					if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+					results.classList.add('kn-ac-open');
+				});
+			}, 250);
+		});
+		document.addEventListener('click', function(e) {
+			if (!results.contains(e.target) && e.target !== input) {
+				results.innerHTML = '';
+				results.classList.remove('kn-ac-open');
+			}
+		});
+	})();
+
+	// ---------- Lazy-load on tab open ----------
+	$(document).on('click', '.kn-tab-nav li[data-kntab="manageofficers"]', function() {
+		if (!knOffLoaded) { knOffLoaded = true; knOffLoad(); }
+	});
+})();
+</script>
+<?php endif; ?>
 
 <?php if (!empty($IsLoggedIn)): ?>
 <script>

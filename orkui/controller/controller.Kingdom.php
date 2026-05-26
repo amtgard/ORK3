@@ -660,6 +660,8 @@ class Controller_Kingdom extends Controller {
 			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.details.edit', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
 		$this->data['CanManageKingdom'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.officer.set', 'kingdom', (int)$kingdom_id, AUTH_CREATE);
+		$this->data['can_manage_officer_positions'] = $uid > 0
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
 		$this->data['CanAddPark'] = $uid > 0
 			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
 		$this->data['IsOrkAdmin'] = $uid > 0
