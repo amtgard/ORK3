@@ -4039,10 +4039,11 @@ $(document).ready(function() {
 
     function gid(id) { return document.getElementById(id); }
     function roleSlug(role) { return role.replace(/ /g, '_'); }
+    function normRole(role) { return String(role || '').toLowerCase().replace(/ /g, '_'); }
 
     function buildOfficerMap() {
         var map = {};
-        (KnConfig.officerList || []).forEach(function(o) { map[o.OfficerRole] = o; });
+        (KnConfig.officerList || []).forEach(function(o) { map[normRole(o.OfficerRole)] = o; });
         return map;
     }
 
@@ -4083,7 +4084,7 @@ $(document).ready(function() {
             // Refresh current holder values without rebuilding DOM
             OFFICER_ROLES.forEach(function(role) {
                 var slug    = roleSlug(role);
-                var o       = officerMap[role];
+                var o       = officerMap[normRole(role)];
                 var nameEl  = gid('kn-editoff-name-' + slug);
                 var idEl    = gid('kn-editoff-id-'   + slug);
                 var vacBtn  = gid('kn-editoff-vacate-' + slug);
@@ -4102,7 +4103,7 @@ $(document).ready(function() {
 
         OFFICER_ROLES.forEach(function(role) {
             var slug     = roleSlug(role);
-            var o        = officerMap[role];
+            var o        = officerMap[normRole(role)];
             var occupied = o && o.MundaneId > 0;
 
             var row = document.createElement('div');
@@ -4181,23 +4182,11 @@ $(document).ready(function() {
 
             // Autocomplete (kingdom-scoped search)
             (function(ni, hi, vb) {
-                $(ni).autocomplete({
-                    source: function(req, res) {
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: KnConfig.kingdomId, limit: 12 },
-                            function(data) {
-                                res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
-                            }
-                        );
-                    },
-                    focus:  function(e, ui) { $(ni).val(ui.item.label); return false; },
-                    select: function(e, ui) {
-                        $(ni).val(ui.item.label);
-                        hi.value          = ui.item.value;
-                        vb.style.display  = '';
-                        return false;
-                    },
-                    change: function(e, ui) { if (!ui.item) hi.value = ''; return false; },
-                    delay: 250, minLength: 2,
+                OrkPlayerSearch.attach(ni, {
+                    uir: KnConfig.uir,
+                    kingdomId: KnConfig.kingdomId,
+                    onSelect: function(p) { hi.value = p.MundaneId; vb.style.display = ''; },
+                    onClear:  function() { hi.value = ''; }
                 });
             })(nameInput, hiddenInput, vacateBtn);
         });
