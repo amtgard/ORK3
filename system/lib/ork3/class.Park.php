@@ -384,8 +384,12 @@ class Park extends Ork3
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$is_authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $park_id, AUTH_EDIT);
 
-		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
+		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id, o.position_id,
+					op.canonical_key as canonical_key,
+					IF(op.kingdom_id = 0, IF(al.title_alias IS NOT NULL AND al.title_alias != '', al.title_alias, op.title), IF(op.title_alias != '', op.title_alias, op.title)) as display_title
 					from " . DB_PREFIX . "officer o
+						left join " . DB_PREFIX . "officer_position op on op.position_id = o.position_id
+						left join " . DB_PREFIX . "officer_position_alias al on al.kingdom_id = o.kingdom_id and al.canonical_key = op.canonical_key
 						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
 						left join " . DB_PREFIX . "authorization a on a.authorization_id = o.authorization_id
 							left join " . DB_PREFIX . "park p on a.park_id = p.park_id
@@ -393,7 +397,8 @@ class Park extends Ork3
 							left join " . DB_PREFIX . "event e on a.event_id = e.event_id
 							left join " . DB_PREFIX . "unit u on a.unit_id = u.unit_id
 				where o.park_id = '" . $park_id . "' and o.kingdom_id > 0
-				order by FIELD(o.role, 'Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'), o.role
+				  and (op.retired_at IS NULL or op.position_id IS NULL)
+				order by op.classification, op.sort_order, o.role
 			";
 		$r = $this->db->query( $sql );
 		$response = [ ];
@@ -412,7 +417,9 @@ class Park extends Ork3
 					'KingdomId'       => $r->kingdom_id,
 					'EventId'         => $r->event_id,
 					'UnitId'          => $r->unit_id,
-					'Role'            => $r->role,
+					'Role'            => $r->canonical_key !== null ? $r->canonical_key : $r->role,
+					'CanonicalKey'    => $r->canonical_key !== null ? $r->canonical_key : $r->role,
+					'DisplayTitle'    => $r->display_title !== null ? $r->display_title : $r->role,
 					'ParkName'        => $r->park_name,
 					'KingdomName'     => $r->kingdom_name,
 					'EventName'       => $r->event_name,
@@ -423,7 +430,7 @@ class Park extends Ork3
 					'Surname'         => $fetchprivate?"":$r->surname,
 					'Persona'         => $r->persona,
 					'OfficerId'       => $r->officer_id,
-					'OfficerRole'     => $r->officer_role,
+					'OfficerRole'     => $r->canonical_key !== null ? $r->canonical_key : $r->officer_role,
 				];
 			}
 			$response[ 'Status' ] = Success();
