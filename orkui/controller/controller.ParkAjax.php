@@ -162,9 +162,8 @@ class Controller_ParkAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'playersearch') {
-			$q                = trim($_GET['q']               ?? '');
-			$scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
-			$prioritize       = !empty($_GET['prioritize']);
+			$q                 = trim($_GET['q']                ?? '');
+			$scope             = trim($_GET['scope']            ?? 'own'); // 'own' | 'exclude' | 'all'
 			$include_inactive  = !empty($_GET['include_inactive']);
 			$include_suspended = !empty($_GET['include_suspended']);
 			if (strlen($q) < 2) {
@@ -172,83 +171,39 @@ class Controller_ParkAjax extends Controller {
 				exit;
 			}
 
+			// Resolve this park's kingdom for ring ranking
+			$pid        = (int)$park_id;
+			$pkKingdom  = 0;
 			global $DB;
-			$pid  = (int)$park_id;
-
-			// Parse optional "KD:PK search term" abbreviation prefix
-			$filterKid = 0;
-			$filterPid = 0;
-			$searchQ   = $q;
-			if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
-				$kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
-				$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-				if ($rs && $rs->Next()) $filterKid = (int)$rs->kingdom_id;
-				if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-					$pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
-					$rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-					if ($rs && $rs->Next()) $filterPid = (int)$rs->park_id;
-				}
-				$searchQ = trim($m[3]);
-			}
-			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
-
-			if ($scope === 'own') {
-				$park_clause = "AND m.park_id = {$pid}";
-			} elseif ($scope === 'exclude') {
-				$park_clause = "AND m.park_id != {$pid}";
-			} else {
-				$park_clause = '';
-			}
-
-			$order_clause = $prioritize
-				? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1) THEN 1 ELSE 2 END,"
-				: "";
-
-			// Abbreviation prefix overrides scope filter when specific kingdom/park matched
-			if ($filterPid > 0) {
-				$park_clause = "AND m.park_id = {$filterPid}";
-			} elseif ($filterKid > 0) {
-				$park_clause = "AND m.kingdom_id = {$filterKid}";
-			}
-
-			$sql = "
-				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
-				       k.name AS kingdom_name, p.name AS park_name,
-				       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-				       m.suspended, m.active
-				FROM ork_mundane m
-				LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
-				LEFT JOIN ork_park p ON p.park_id = m.park_id
-				WHERE LENGTH(m.persona) > 0
-				  " . ($include_suspended ? "" : "AND m.suspended = 0") . "
-				  " . ($include_inactive  ? "" : "AND m.active = 1")    . "
-				  {$park_clause}
-				  AND (m.persona LIKE '%{$term}%'
-				    OR m.given_name LIKE '%{$term}%'
-				    OR m.surname LIKE '%{$term}%'
-				    OR m.username LIKE '%{$term}%')
-				ORDER BY m.suspended ASC, m.active DESC, {$order_clause} m.persona
-				LIMIT 15";
 			$DB->Clear();
-			$rs      = $DB->DataSet($sql);
-			$results = [];
-			while ($rs->Next()) {
-				$results[] = [
-					'MundaneId'   => (int)$rs->mundane_id,
-					'Persona'     => $rs->persona,
-					'KingdomId'   => (int)$rs->m_kingdom_id,
-					'ParkId'      => (int)$rs->m_park_id,
-					'KingdomName' => $rs->kingdom_name,
-					'ParkName'    => $rs->park_name,
-					'KAbbr'       => $rs->k_abbr,
-					'PAbbr'       => $rs->p_abbr,
-					'Suspended'   => (int)$rs->suspended,
-					'Active'      => (int)$rs->active,
-				];
+			$pkRow = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1");
+			if ($pkRow && $pkRow->Next()) $pkKingdom = (int)$pkRow->kingdom_id;
+
+			// Map scope → RankedPlayers params
+			$restrictTo      = null;
+			$excludeParkId   = null;
+			if ($scope === 'own') {
+				$restrictTo = 'park';
+			} elseif ($scope === 'exclude') {
+				$excludeParkId = $pid;
 			}
+			// scope=all → no restrict, no exclude; ring still centers on park/kingdom
+
+			$svc     = new SearchService();
+			$results = $svc->RankedPlayers(
+				$q,
+				$pid,
+				$pkKingdom ?: null,
+				$restrictTo,
+				$include_inactive  ?: null,
+				$include_suspended ?: null,
+				15,
+				$this->session->token ?? null,
+				null,
+				$excludeParkId
+			);
 
 			echo json_encode($results);
-
 		} elseif ($action === 'setheraldry') {
 			if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
 				echo json_encode(['status' => 1, 'error' => 'No image file received.']); exit;

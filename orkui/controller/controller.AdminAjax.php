@@ -25,33 +25,20 @@ class Controller_AdminAjax extends Controller {
 		if ($action === 'playersearch') {
 			$q = trim($_GET['q'] ?? '');
 			if (strlen($q) < 2) { echo json_encode([]); exit; }
-			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
-			$DB->Clear();
-			$rs = $DB->DataSet(
-				"SELECT m.mundane_id, m.persona, p.abbreviation AS PAbbr, k.abbreviation AS KAbbr
-				 FROM " . DB_PREFIX . "mundane m
-				 LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-				 LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
-				 WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
-				   AND (m.persona LIKE '%{$term}%'
-				     OR m.given_name LIKE '%{$term}%'
-				     OR m.surname LIKE '%{$term}%'
-				     OR m.username LIKE '%{$term}%')
-				 ORDER BY m.persona LIMIT 20"
-			);
+
+			// Global admin search — no ring centre, active+unsuspended only, preserve existing response shape
+			$svc  = new SearchService();
+			$rows = $svc->RankedPlayers($q, null, null, null, null, null, 20, null);
 			$results = [];
-			if ($rs) {
-				while ($rs->Next()) {
-					$results[] = [
-						'MundaneId' => (int)$rs->mundane_id,
-						'Persona'   => $rs->persona,
-						'PAbbr'     => $rs->PAbbr,
-						'KAbbr'     => $rs->KAbbr,
-					];
-				}
+			foreach ($rows as $r) {
+				$results[] = [
+					'MundaneId' => $r['MundaneId'],
+					'Persona'   => $r['Persona'],
+					'PAbbr'     => $r['PAbbr'],
+					'KAbbr'     => $r['KAbbr'],
+				];
 			}
 			echo json_encode($results);
-
 		} elseif ($action === 'addauth') {
 			$mid = (int)($_POST['MundaneId'] ?? 0);
 			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Invalid player.']); exit; }

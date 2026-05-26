@@ -121,47 +121,28 @@ class Controller_SearchAjax extends Controller {
 		}
 		$playerBudget += $unitBudget - count($units);
 
-		// Players — prioritize user's kingdom, with expanded budget from unused slots above;
-		// narrow by kingdom/park if abbreviation prefix was parsed
-		$activeClause    = $includeInactive ? '1' : 'm.active = 1';
-		$suspendedClause = $includeInactive ? '1' : 'm.suspended = 0';
-		// ORK admins bypass the restricted-name gate so they can find players by mundane info
-		// for support/moderation. Non-admins continue to only see restricted-name matches when
-		// the player has not opted in to restricted privacy.
-		// HasAuthority() runs yapo internally which sets $DB->Data with bound parameters;
-		// clear them after so the next raw $DB->DataSet() doesn't try to bind them.
-		$_searchUid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		$isOrkAdmin     = $_searchUid > 0 && Ork3::$Lib->authorization->HasAuthority($_searchUid, AUTH_ADMIN, null, null);
-		$DB->Clear();
-		$mundaneClause  = $isOrkAdmin
-			? "OR " . $foldText('m.given_name') . " LIKE '%{$term}%' OR " . $foldText('m.surname') . " LIKE '%{$term}%'"
-			: "OR (m.restricted = 0 AND (" . $foldText('m.given_name') . " LIKE '%{$term}%' OR " . $foldText('m.surname') . " LIKE '%{$term}%'))";
-		$playerWhere = "{$suspendedClause} AND {$activeClause} AND LENGTH(m.persona) > 0
-			  AND (" . $foldText('m.persona') . " LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%'
-			    {$mundaneClause})";
-		if ($filterPid > 0)           { $playerWhere .= " AND m.park_id = {$filterPid}"; }
-		elseif ($filterKid > 0)       { $playerWhere .= " AND m.kingdom_id = {$filterKid}"; }
-		$playerOrder = valid_id($pid)
-			? "m.active DESC, CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = {$kid} THEN 1 ELSE 2 END, m.persona"
-			: (valid_id($kid) ? "m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona" : "m.active DESC, m.persona");
-		$rs = $DB->DataSet("
-			SELECT m.mundane_id, m.persona, m.active, k.abbreviation AS k_abbr, p.name AS park_name
-			FROM ork_mundane m
-			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
-			LEFT JOIN ork_park p ON p.park_id = m.park_id
-			WHERE {$playerWhere}
-			ORDER BY {$playerOrder}
-			LIMIT {$playerBudget}");
+		// Players — delegate to SearchService::RankedPlayers for consistent concentric-ring ranking
+		// q is passed as-is; RankedPlayers::resolveAbbrevPrefix handles "KD:PK term" internally
+		$_svc  = new SearchService();
+		$_rows = $_svc->RankedPlayers(
+			$q,
+			($pid > 0 ? $pid : null),
+			($kid > 0 ? $kid : null),
+			null,
+			$includeInactive ?: null,
+			null,
+			$playerBudget,
+			$this->session->token ?? null
+		);
 		$players = [];
-		while ($rs->Next()) {
+		foreach ($_rows as $_r) {
 			$players[] = [
 				'type'   => 'player',
-				'id'     => (int)$rs->mundane_id,
-				'name'   => $rs->persona,
-				'abbr'   => $rs->k_abbr ?? '',
-				'park'   => $rs->park_name ?? '',
-				'active' => (int)$rs->active,
+				'id'     => $_r['MundaneId'],
+				'name'   => $_r['Persona'],
+				'abbr'   => $_r['KAbbr'] ?? '',
+				'park'   => $_r['ParkName'] ?? '',
+				'active' => $_r['Active'],
 			];
 		}
 
@@ -174,14 +155,14 @@ class Controller_SearchAjax extends Controller {
 		if (!isset($this->session->user_id)) { echo json_encode([]); exit; }
 		$svc = new SearchService();
 		$rows = $svc->RankedPlayers(
-			$_GET['q']                    ?? '',
-			(int)($_GET['parkId']         ?? 0),
-			(int)($_GET['kingdomId']      ?? 0),
-			$_GET['restrictTo']           ?? '',
-			!empty($_GET['include_inactive']),
-			!empty($_GET['include_suspended']),
-			(int)($_GET['limit']          ?? 15),
-			$this->session->token         ?? null
+			$_GET['q']                       ?? '',
+			(int)($_GET['parkId']            ?? 0) ?: null,
+			(int)($_GET['kingdomId']         ?? 0) ?: null,
+			$_GET['restrictTo']              ?? '',
+			!empty($_GET['include_inactive'])  ?: null,
+			!empty($_GET['include_suspended']) ?: null,
+			(int)($_GET['limit']             ?? 15) ?: null,
+			$this->session->token            ?? null
 		);
 		echo json_encode($rows);
 		exit;

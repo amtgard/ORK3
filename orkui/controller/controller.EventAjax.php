@@ -210,54 +210,27 @@ class Controller_EventAjax extends Controller {
 			}
 			$q = trim($_GET['q'] ?? '');
 			if (strlen($q) < 2) { echo json_encode([]); exit; }
+
+			// Look up event's park + kingdom to centre the ranking rings
 			global $DB;
-			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $q);
-			// Get event's park and kingdom to prioritize local players in results
 			$DB->Clear();
-			$evRow = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = {$event_id} LIMIT 1");
+			$evRow       = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = {$event_id} LIMIT 1");
 			$evParkId    = ($evRow && $evRow->Next()) ? (int)$evRow->park_id    : 0;
 			$evKingdomId = $evParkId                  ? (int)$evRow->kingdom_id : 0;
-			$DB->Clear();
-			$rs = $DB->DataSet(
-				"SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
-				        k.name AS kingdom_name, p.name AS park_name,
-				        p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-				        m.suspended
-				 FROM " . DB_PREFIX . "mundane m
-				 LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-				 LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
-				 WHERE m.suspended = 0 AND m.active = 1 AND LENGTH(m.persona) > 0
-				   AND (m.persona LIKE '%{$term}%'
-				     OR m.given_name LIKE '%{$term}%'
-				     OR m.surname LIKE '%{$term}%'
-				     OR m.username LIKE '%{$term}%')
-				 ORDER BY
-				   CASE
-				     WHEN m.park_id = {$evParkId} AND {$evParkId} > 0 THEN 0
-				     WHEN m.kingdom_id = {$evKingdomId} AND {$evKingdomId} > 0 THEN 1
-				     ELSE 2
-				   END,
-				   m.persona
-				 LIMIT 15"
-			);
-			$results = [];
-			if ($rs) {
-				while ($rs->Next()) {
-					$results[] = [
-						'MundaneId'   => (int)$rs->mundane_id,
-						'Persona'     => $rs->persona,
-						'KingdomId'   => (int)$rs->m_kingdom_id,
-						'ParkId'      => (int)$rs->m_park_id,
-						'KingdomName' => $rs->kingdom_name,
-						'ParkName'    => $rs->park_name,
-						'KAbbr'       => $rs->k_abbr,
-						'PAbbr'       => $rs->p_abbr,
-						'Suspended'   => (int)$rs->suspended,
-					];
-				}
-			}
-			echo json_encode($results);
 
+			$svc     = new SearchService();
+			$results = $svc->RankedPlayers(
+				$q,
+				$evParkId    ?: null,
+				$evKingdomId ?: null,
+				null,
+				null,
+				null,
+				15,
+				$this->session->token ?? null
+			);
+
+			echo json_encode($results);
 		} elseif ($action === 'addauth') {
 			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;

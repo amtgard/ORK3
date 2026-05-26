@@ -457,15 +457,17 @@ class SearchService extends Ork3 {
 		return [$filterKid, $filterPid, $search];
 	}
 
-	public function RankedPlayers($q, $parkId = null, $kingdomId = null, $restrictTo = null, $includeInactive = null, $includeSuspended = null, $limit = null, $token = null) {
+	public function RankedPlayers($q, $parkId = null, $kingdomId = null, $restrictTo = null, $includeInactive = null, $includeSuspended = null, $limit = null, $token = null, $excludeKingdomId = null, $excludeParkId = null) {
 		$q = trim($q ?? '');
 		if (strlen($q) < 2) return [];
-		$park_id           = (int)($parkId ?? 0);
-		$kingdom_id        = (int)($kingdomId ?? 0);
-		$restrict_to       = in_array(($restrictTo ?? ''), ['park','kingdom'], true) ? $restrictTo : '';
-		$include_inactive  = !empty($includeInactive);
-		$include_suspended = !empty($includeSuspended);
-		$limit             = min(max((int)($limit ?? 15), 1), 100);
+		$park_id            = (int)($parkId          ?? 0);
+		$kingdom_id         = (int)($kingdomId       ?? 0);
+		$exclude_kingdom_id = (int)($excludeKingdomId ?? 0);
+		$exclude_park_id    = (int)($excludeParkId    ?? 0);
+		$restrict_to        = in_array(($restrictTo ?? ''), ['park','kingdom'], true) ? $restrictTo : '';
+		$include_inactive   = !empty($includeInactive);
+		$include_suspended  = !empty($includeSuspended);
+		$limit              = min(max((int)($limit ?? 15), 1), 100);
 		$is_admin = false;
 		if (!empty($token)) {
 			$uid = Ork3::$Lib->authorization->IsAuthorized($token);
@@ -485,14 +487,16 @@ class SearchService extends Ork3 {
 		$where[] = $include_suspended ? "1" : "m.suspended = 0";
 		$where[] = $include_inactive  ? "1" : "m.active = 1";
 		$where[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
-		$mundane = $is_admin
+		$mundane_clause = $is_admin
 			? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
 			: "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
-		$where[] = "(m.persona LIKE '%{$term}%' OR m.username LIKE '%{$term}%' {$mundane})";
+		$where[] = "(m.persona LIKE '%{$term}%' OR m.username LIKE '%{$term}%' {$mundane_clause})";
 		if     ($filterPid > 0)                                { $where[] = "m.park_id = {$filterPid}"; }
 		elseif ($filterKid > 0)                                { $where[] = "m.kingdom_id = {$filterKid}"; }
 		elseif ($restrict_to === 'park'    && $park_id > 0)    { $where[] = "m.park_id = {$park_id}"; }
 		elseif ($restrict_to === 'kingdom' && $kingdom_id > 0) { $where[] = "m.kingdom_id = {$kingdom_id}"; }
+		if ($exclude_kingdom_id > 0) { $where[] = "m.kingdom_id != {$exclude_kingdom_id}"; }
+		if ($exclude_park_id    > 0) { $where[] = "m.park_id    != {$exclude_park_id}"; }
 		$sql = "SELECT m.mundane_id, m.persona, m.active, m.suspended,
 		               k.kingdom_id, k.name AS kingdom_name, k.abbreviation AS k_abbr,
 		               p.park_id, p.name AS park_name, p.abbreviation AS p_abbr,
