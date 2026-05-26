@@ -1,4 +1,4 @@
-.ops-ac-results{ display:none; z-index:10000; max-height:280px; overflow-y:auto;
+.ops-ac-results{ display:none; z-index:2147483000; max-height:280px; overflow-y:auto;
   background:#fff; border:1px solid #cbd5e0; border-radius:6px; box-shadow:0 4px 14px rgba(0,0,0,.18); }
 .ops-ac-results.ops-ac-open{ display:block; }
 .ops-ac-item{ padding:7px 11px; cursor:pointer; font-size:13px; color:#2d3748; }
