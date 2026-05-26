@@ -93,106 +93,19 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
-		var preloadedGivenByOfficers = [
-<?php if (is_array($PreloadOfficers)) foreach ($PreloadOfficers as $officer) : ?>
-			{label: <?=json_encode($officer['Persona'] . ' (' . $officer['Role'] . ')') ?>, value: <?=intval($officer['MundaneId']) ?>},
-<?php endforeach; ?>
-		];
-		$( "#GivenBy" ).autocomplete({
-			minLength: 0,
-			source: function( request, response ) {
-				if (request.term === '') {
-					response(preloadedGivenByOfficers.concat([{label: '...or start typing to search.', value: -1}]));
-					return;
-				}
-				park_id = $('#ParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						// Given By is cross-kingdom: an award can be presented by someone from
-						// any kingdom, so do NOT scope to the page's kingdom. The (KAbbr:PAbbr)
-						// suffix below disambiguates same-named personas across kingdoms.
-						kingdom_id: 0,
-						limit: 12
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				if (ui.item.value === -1) return false;
-				return showLabel('#GivenBy', ui);
-			},
-			delay: 250,
-			select: function (e, ui) {
-				if (ui.item.value === -1) return false;
-				showLabel('#GivenBy', ui);
-				$('#GivenById').val(ui.item.value);
-				checkRequiredFields();
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#GivenBy',null);
-					$('#GivenById').val(null);
-				}
-				checkRequiredFields();
-				return false;
-			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
+		// Given By is GLOBAL/unscoped: an award can be presented by someone from any
+		// kingdom, so kingdomId stays 0. Inactive + suspended personas are eligible givers.
+		OrkPlayerSearch.attach(document.getElementById('GivenBy'), {
+			uir: '<?=UIR ?>',
+			kingdomId: 0,
+			includeInactive: true,
+			includeSuspended: true,
+			onSelect: function(p) { document.getElementById('GivenById').value = p.MundaneId; checkRequiredFields(); }
 		});
-		$( "#GivenTo" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						kingdom_id: <?=$KingdomId ?>,
-						limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#GivenTo', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#GivenTo', ui);
-				$('#MundaneId').val(ui.item.value);
-				checkRequiredFields();
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#GivenTo',null);
-					$('#MundaneId').val(null);
-				}
-				checkRequiredFields();
-				return false;
-			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
+		OrkPlayerSearch.attach(document.getElementById('GivenTo'), {
+			uir: '<?=UIR ?>',
+			kingdomId: <?=intval($KingdomId) ?>,
+			onSelect: function(p) { document.getElementById('MundaneId').value = p.MundaneId; checkRequiredFields(); }
 		});
 		checkRequiredFields();
 	});
