@@ -422,7 +422,7 @@
 			<ul class="pk-officer-list">
 				<?php foreach ($officerList as $o): ?>
 				<li>
-					<span class="pk-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="pk-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="pk-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
 							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>

@@ -1057,7 +1057,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<span id="pn-voting-badge" style="display:none;" class="pn-badge pn-badge-blue"><i class="fas fa-vote-yea"></i> Voting Eligible<span id="pn-voting-badge-sub" class="pn-badge-sub" style="display:none;"></span></span>
 				<?php if (!empty($OfficerRoles)): ?>
 					<?php foreach ($OfficerRoles as $office): ?>
-						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>
+						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['DisplayTitle'] ?? $office['role']) ?></span>
 					<?php endforeach; ?>
 				<?php endif; ?>
 				<?php if (!empty($AdminGrants)): ?>
@@ -1483,7 +1483,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<div class="pna-card-title"><i class="fas fa-crown"></i> Current Offices</div>
 							<?php foreach ($OfficerRoles as $_or): ?>
 							<div class="pna-officer-row">
-								<span class="pna-officer-title"><?= htmlspecialchars($_or['entity_type'] . ' ' . $_or['role']) ?></span>
+								<span class="pna-officer-title"><?= htmlspecialchars($_or['entity_type'] . ' ' . ($_or['DisplayTitle'] ?? $_or['role'])) ?></span>
 								<span class="pna-officer-entity"><?= htmlspecialchars($_or['entity_name'] ?? '') ?></span>
 							</div>
 							<?php endforeach; ?>
