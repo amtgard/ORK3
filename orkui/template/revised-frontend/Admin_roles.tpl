@@ -780,7 +780,7 @@ foreach ($roleAssignments as $a) {
 			if (q.length < minLen) { acClose(); return; }
 			clearTimeout(timer);
 			timer = setTimeout(function() {
-				fetch(ArConfig.uir + 'KingdomAjax/playersearch/' + ArConfig.kid + '?q=' + encodeURIComponent(q))
+				fetch(ArConfig.uir + 'KingdomAjax/playersearch/' + ArConfig.kid + '&q=' + encodeURIComponent(q))
 				.then(function(r) { return r.json(); })
 				.then(function(d) {
 					var items = (d.results || []).map(function(p) {

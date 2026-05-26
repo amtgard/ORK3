@@ -406,6 +406,17 @@ html[data-theme="dark"] #mo-occ-overlay .mo-form-error { background:rgba(252,129
 <!-- ============ Manage Officers — JS module ============ -->
 <script>
 window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir: '<?= UIR ?>' };
+	if (typeof window.tnFixedAcPosition !== 'function') {
+	  window.tnFixedAcPosition = function (input, dropdown) {
+	    if (!input || !dropdown) return;
+	    var r = input.getBoundingClientRect();
+	    dropdown.style.position = 'fixed';
+	    dropdown.style.top = (r.bottom + 2) + 'px';
+	    dropdown.style.left = r.left + 'px';
+	    dropdown.style.width = r.width + 'px';
+	    dropdown.style.zIndex = '10001';
+	  };
+	}
 
 /* Guarded flatpickr loader — don't double-load if already on the page. */
 (function() {
@@ -428,7 +439,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 
 	var UIR        = MoConfig.uir || '';
 	function base() { return UIR + 'OfficerAdminAjax/officer/' + MoConfig.kingdomId + '/'; }
-	function searchUrl(q) { return UIR + 'KingdomAjax/playersearch/' + MoConfig.kingdomId + '?q=' + encodeURIComponent(q) + '&scope=all&include_inactive=1'; }
+	function searchUrl(q) { return UIR + 'KingdomAjax/playersearch/' + MoConfig.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=own&include_inactive=1'; }
 
 	var moData  = { crown: [], supporting: [], retired: [] };
 	var moRoles = null;

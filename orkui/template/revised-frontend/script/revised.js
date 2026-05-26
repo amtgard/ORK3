@@ -1,3 +1,16 @@
+/* Shared: position a fixed kn-ac-results dropdown under its input (modal-safe). */
+if (typeof window.tnFixedAcPosition !== 'function') {
+  window.tnFixedAcPosition = function (input, dropdown) {
+    if (!input || !dropdown) return;
+    var r = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = (r.bottom + 2) + 'px';
+    dropdown.style.left = r.left + 'px';
+    dropdown.style.width = r.width + 'px';
+    dropdown.style.zIndex = '10001';
+  };
+}
+
 /* ============================================================
    Rank pill painter — shared by every "add award" / "recommend"
    surface (player / kingdom / park). Given the player's held rank

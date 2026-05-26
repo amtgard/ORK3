@@ -2878,7 +2878,7 @@ function pkSaveOhEdit() {
         var q = input.value.trim();
         if (q.length < 2) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); return; }
         debounce = setTimeout(function() {
-            var url = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch?q=' + encodeURIComponent(q) + '&scope=all&include_inactive=1';
+            var url = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&q=' + encodeURIComponent(q) + '&scope=all&include_inactive=1';
             $.getJSON(url, function(data) {
                 results.innerHTML = '';
                 if (!data || data.length === 0) {
