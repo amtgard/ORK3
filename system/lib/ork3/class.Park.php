@@ -925,14 +925,18 @@ class Park extends Ork3
 			// Look up the current officer first so we can suppress the audit when
 			// the UI re-submits an unchanged assignment (the Bellhollow form fires
 			// SetOfficer once per role on every save).
+			$_positionId = Ork3::$Lib->officerposition->ResolvePositionId((int)$kingdomId, $request[ 'Role' ]);
+			$_canonicalKey = Ork3::$Lib->officerposition->ResolveCanonicalKey((int)$kingdomId, $request[ 'Role' ]);
+
 			$_priorOfficer = new yapo( $this->db, DB_PREFIX . 'officer' );
 			$_priorOfficer->clear();
 			$_priorOfficer->park_id = (int)$request[ 'ParkId' ];
-			$_priorOfficer->role    = $request[ 'Role' ];
+			if ( $_positionId > 0 ) { $_priorOfficer->position_id = $_positionId; }
+			else { $_priorOfficer->role = $request[ 'Role' ]; }
 			$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
 			$c = new Common();
-			$c->set_officer( $kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ], 0, $mundane_id );
+			$c->set_officer( $kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $_canonicalKey, 0, $mundane_id, $_positionId );
 
 			if ( $_priorMundaneId !== (int)$request[ 'MundaneId' ] ) {
 				$_audit_req = $request;

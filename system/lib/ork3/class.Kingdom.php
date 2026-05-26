@@ -731,16 +731,20 @@ class Kingdom  extends Ork3 {
 			if ($mundane['KingdomId'] == $request['KingdomId']) {
 				// Look up prior holder so the audit can show before/after,
 				// and so we can suppress no-op re-saves of the same assignment.
+				// Resolve the position_id for this Role (accepts canonical key or legacy display string).
+				$_positionId = Ork3::$Lib->officerposition->ResolvePositionId((int)$request['KingdomId'], $request['Role']);
+				$_canonicalKey = Ork3::$Lib->officerposition->ResolveCanonicalKey((int)$request['KingdomId'], $request['Role']);
+
 				$_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
 				$_priorOfficer->clear();
 				$_priorOfficer->kingdom_id = (int)$request['KingdomId'];
 				$_priorOfficer->park_id    = 0;
-				$_priorOfficer->role       = $request['Role'];
+				if ( $_positionId > 0 ) { $_priorOfficer->position_id = $_positionId; }
+				else { $_priorOfficer->role = $request['Role']; }
 				$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
-				$officer = new yapo($this->db, DB_PREFIX . 'officer');
 				$c = new Common();
-				$c->set_officer($request['KingdomId'], 0, $request['MundaneId'], $request['Role'], 0, $mundane_id);
+				$c->set_officer($request['KingdomId'], 0, $request['MundaneId'], $_canonicalKey, 0, $mundane_id, $_positionId);
 
 				if ($_priorMundaneId !== (int)$request['MundaneId']) {
 					$_audit_req = $request;
