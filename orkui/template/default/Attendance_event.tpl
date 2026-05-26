@@ -85,53 +85,18 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				kingdom_id = $('#KingdomId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id,
-						kingdom_id: kingdom_id,
-                        limit: 15
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId + "|" + val.PenaltyBox });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value.split("|")[0]);
-				if (ui.item.value.split("|")[1] == "0") {
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+			parkId: <?=intval($EventDetailInfo['AtParkId'] ?? 0) ?>,
+			kingdomId: <?=intval($EventInfo[0]['KingdomId'] ?? 0) ?>,
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
+				if (!p.Suspended) {
 					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
 				} else {
 					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
 				}
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#PlayerName',null);
-					$('#MundaneId').val(null);
-				}
-				return false;
 			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
 		});
 	});
 </script>

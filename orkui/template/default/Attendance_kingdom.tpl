@@ -484,24 +484,11 @@ $(function() {
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
 	/* ── Player autocomplete ─────────────────────────── */
-	$('#PlayerName').autocomplete({
-		source: function(request, response) {
-			$.getJSON('<?=HTTP_SERVICE?>Search/SearchService.php', {
-				Action: 'Search/Player', type: 'all', search: request.term,
-				kingdom_id: $('#KingdomId').val(), limit: 15
-			}, function(data) {
-				response($.map(data, function(v) { return { label: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox }; }));
-			});
-		},
-		focus:  function(e, ui) { return showLabel('#PlayerName', ui); },
-		delay:  250,
-		select: function(e, ui) {
-			showLabel('#PlayerName', ui);
-			$('#MundaneId').val(ui.item.value.split('|')[0]);
-			return false;
-		},
-		change: function(e, ui) { if (!ui.item) { showLabel('#PlayerName', null); $('#MundaneId').val(null); } return false; }
-	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
+	OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+		uir: '<?=UIR ?>',
+		kingdomId: <?=intval($kid) ?>,
+		onSelect: function(p) { document.getElementById('MundaneId').value = p.MundaneId; }
+	});
 <?php endif; ?>
 
 	/* ── Chart collapse toggle ──────────────────────── */
