@@ -74,6 +74,22 @@ class Model_Unit extends Model {
 		logtrace("del_unit_auth()", $request);
 		return $this->Authorization->RemoveAuthorization($request);
 	}
+
+	function retire_unit($request) {
+		return $this->Unit->RetireUnit($request);
+	}
+
+	function restore_unit($request) {
+		return $this->Unit->RestoreUnit($request);
+	}
+
+	function claim_unit($request) {
+		return $this->Unit->ClaimUnit($request);
+	}
+
+	function transfer_ownership($request) {
+		return $this->Unit->TransferOwnership($request);
+	}
 	
 	function get_unit_list($request) {
 		return $this->Report->UnitSummary($request);

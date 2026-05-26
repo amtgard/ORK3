@@ -171,7 +171,8 @@ class Unit extends Ork3 {
 					'Name' => $this->unit->name,
 					'Description' => $this->unit->description,
 					'Url' => $this->unit->url,
-					'History' => $this->unit->history
+					'History' => $this->unit->history,
+					'Active' => $this->unit->active
 				);
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -183,8 +184,11 @@ class Unit extends Ork3 {
 		if (!valid_id($request['MundaneId'])) {
 			return InvalidParameter();
 		}
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		$mundane = $mundane_id > 0 ? Ork3::$Lib->player->player_info($request['Token']) : null;
+		if ($mundane_id > 0
+				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)
+				    || ($mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)))) {
 			logtrace("AddMember", $request);
 			return $this->add_member_h($request);
 		}
@@ -396,6 +400,154 @@ class Unit extends Ork3 {
 		} else {
 			return InvalidParameter('Unit not found.');
 		}
+	}
+
+	/* ── Retire / Restore / Claim / Transfer ───────────────────────
+	 * Soft-delete support for units (see 2026-05-26-add-unit-active migration).
+	 * Retired units are hidden from unit lists and player search; only a
+	 * kingdom officer (monarchy) can restore them. */
+
+	private function _unit_manager_ids($unit_id) {
+		$auth = new yapo($this->db, DB_PREFIX . 'authorization');
+		$auth->clear();
+		$auth->unit_id = $unit_id;
+		$ids = array();
+		if (valid_id($unit_id) && $auth->find()) {
+			do { $ids[] = (int)$auth->mundane_id; } while ($auth->next());
+		}
+		return array_values(array_unique($ids));
+	}
+
+	private function _active_member_roles($unit_id) {
+		$this->members->clear();
+		$this->members->unit_id = $unit_id;
+		$this->members->active = 'Active';
+		$roles = array();
+		if (valid_id($unit_id) && $this->members->find()) {
+			do { $roles[(int)$this->members->mundane_id] = $this->members->role; } while ($this->members->next());
+		}
+		return $roles;
+	}
+
+	private function _remove_unit_auth_for($mundane_id, $unit_id) {
+		$auths = Ork3::$Lib->authorization->GetAuthorizations(array('MundaneId' => $mundane_id));
+		foreach ($auths['Authorizations'] as $auth) {
+			if ($auth['Type'] == AUTH_UNIT && $auth['Id'] == $unit_id) {
+				Ork3::$Lib->authorization->remove_auth_h(array('AuthorizationId' => $auth['AuthorizationId']));
+			}
+		}
+	}
+
+	// Grant unit-manager authority via the raw helper (callers below have
+	// already done their own permission checks, so we bypass add_authorization's
+	// HasAuthority gate — a claimant has no authority yet by definition). Audited
+	// to the grantee so the change surfaces on their player audit history.
+	private function _grant_unit_manager($grantee_id, $unit_id) {
+		$r = Ork3::$Lib->authorization->add_auth_h(array('MundaneId' => $grantee_id, 'Type' => AUTH_UNIT, 'Id' => $unit_id, 'Role' => AUTH_CREATE));
+		Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization',
+			array('MundaneId' => $grantee_id, 'Type' => AUTH_UNIT, 'Id' => $unit_id, 'Role' => AUTH_CREATE),
+			'Player', $grantee_id, null, array(
+				'authorization_id' => (int)($r['Detail'] ?? 0),
+				'mundane_id'       => $grantee_id,
+				'park_id'          => 0,
+				'kingdom_id'       => 0,
+				'event_id'         => 0,
+				'unit_id'          => $unit_id,
+				'role'             => AUTH_CREATE,
+			));
+		return $r;
+	}
+
+	public function WaffleUnit($request, $waffle) {
+		$this->unit->clear();
+		$this->unit->unit_id = $request['UnitId'];
+		if (!valid_id($request['UnitId']) || !$this->unit->find()) {
+			return InvalidParameter();
+		}
+		$this->unit->active = $waffle;
+		$this->unit->save();
+		return Success();
+	}
+
+	public function RetireUnit($request) {
+		logtrace('RetireUnit', $request);
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if ($mundane_id === 0) return NoAuthorization();
+		$mundane  = Ork3::$Lib->player->player_info($request['Token']);
+		$unit_id  = (int)$request['UnitId'];
+
+		$is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);
+		$is_officer = $mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT);
+		// Sole-member exception: the only remaining active roster member may
+		// retire even without management rights.
+		$members = $this->_active_member_roles($unit_id);
+		$is_sole_member = (count($members) === 1 && isset($members[$mundane_id]));
+
+		if ($is_manager || $is_officer || $is_sole_member) {
+			return $this->WaffleUnit($request, 'Retired');
+		}
+		return NoAuthorization();
+	}
+
+	public function RestoreUnit($request) {
+		logtrace('RestoreUnit', $request);
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if ($mundane_id === 0) return NoAuthorization();
+		$mundane = Ork3::$Lib->player->player_info($request['Token']);
+		// Reactivation is monarchy-only — mirrors the KPM unit-auth bypass scope.
+		if ($mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)) {
+			return $this->WaffleUnit($request, 'Active');
+		}
+		return NoAuthorization();
+	}
+
+	public function ClaimUnit($request) {
+		logtrace('ClaimUnit', $request);
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if ($mundane_id === 0) return NoAuthorization();
+		$unit_id = (int)$request['UnitId'];
+
+		// Only claimable when the unit currently has no managers.
+		if (count($this->_unit_manager_ids($unit_id)) > 0) {
+			return NoAuthorization('This unit already has a manager.');
+		}
+		// Claimant must be an active roster member holding a leadership role
+		// (captain / lord / organizer) — plain members cannot self-claim.
+		$members = $this->_active_member_roles($unit_id);
+		$role = isset($members[$mundane_id]) ? strtolower($members[$mundane_id]) : null;
+		if (!in_array($role, array('captain', 'lord', 'organizer'), true)) {
+			return NoAuthorization('Only a leader of this unit may claim it.');
+		}
+		$this->_grant_unit_manager($mundane_id, $unit_id);
+		return Success();
+	}
+
+	public function TransferOwnership($request) {
+		logtrace('TransferOwnership', $request);
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if ($mundane_id === 0) return NoAuthorization();
+		$mundane   = Ork3::$Lib->player->player_info($request['Token']);
+		$unit_id   = (int)$request['UnitId'];
+		$target_id = (int)$request['MundaneId'];
+		if (!valid_id($target_id)) return InvalidParameter();
+
+		$is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);
+		$is_officer = $mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT);
+		if (!$is_manager && !$is_officer) return NoAuthorization();
+
+		// Grant the target manager rights (skip if they already hold them).
+		if (!in_array($target_id, $this->_unit_manager_ids($unit_id), true)) {
+			$this->_grant_unit_manager($target_id, $unit_id);
+		}
+		// Ensure the new owner is on the active roster (no-op / preserves role if
+		// they already are a member).
+		$this->add_member_h(array('UnitId' => $unit_id, 'MundaneId' => $target_id, 'Role' => 'member', 'Title' => '', 'Active' => 'Active'));
+		// Acting manager steps down. Officers performing the transfer have no unit
+		// auth row, so this is a no-op for them.
+		if ($mundane_id !== $target_id) {
+			$this->_remove_unit_auth_for($mundane_id, $unit_id);
+		}
+		return Success();
 	}
 
 }

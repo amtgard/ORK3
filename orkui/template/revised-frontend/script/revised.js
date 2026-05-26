@@ -46,6 +46,114 @@ function escHtml(str) {
 var AUTOCOMPLETE_DEBOUNCE_MS = 250;
 var AWARD_NOTE_MAX_CHARS     = 400;
 
+/* ===========================================================================
+   Move Player cascade helper
+   Turns a Kingdom <select> + Park <select> pair into a cascading filter:
+   choosing a kingdom loads its parks; selection changes fire onChange so the
+   owning search can re-scope. Used by every Move Player modal (Kingdom, Park,
+   Player, Admin) for both the source-player and destination-park searches.
+   =========================================================================== */
+window.MpCascade = (function () {
+    var kingdomsCache = null, kingdomsPromise = null;
+
+    function loadKingdoms(uir) {
+        if (kingdomsCache) return Promise.resolve(kingdomsCache);
+        if (!kingdomsPromise) {
+            kingdomsPromise = fetch(uir + 'KingdomAjax/getkingdoms')
+                .then(function (r) { return r.json(); })
+                .then(function (d) { kingdomsCache = (d && d.kingdoms) || []; return kingdomsCache; })
+                .catch(function () { kingdomsPromise = null; return []; });
+        }
+        return kingdomsPromise;
+    }
+    function loadParks(uir, kingdomId) {
+        return fetch(uir + 'KingdomAjax/kingdom/' + kingdomId + '/getparks')
+            .then(function (r) { return r.json(); })
+            .then(function (d) { return (d && d.parks) || []; })
+            .catch(function () { return []; });
+    }
+
+    /**
+     * wire(opts) — wires a kingdom/park <select> pair as a cascade.
+     *   opts.uir         base UIR
+     *   opts.kingdomSel  kingdom <select> element
+     *   opts.parkSel     park <select> element
+     *   opts.allLabel    label for the "no filter" kingdom option (default 'All Kingdoms'); null to omit
+     *   opts.parkAllLabel label for the "no filter" park option (default 'All Parks')
+     *   opts.onChange    fn(kingdomId, parkId) on any selection change
+     * returns { get(), reset(), lockTo(kingdomId, name) }
+     */
+    function wire(opts) {
+        var kSel = opts.kingdomSel, pSel = opts.parkSel, uir = opts.uir;
+        var allLabel     = (opts.allLabel === undefined) ? 'All Kingdoms' : opts.allLabel;
+        var parkAllLabel = opts.parkAllLabel || 'All Parks';
+
+        function fire() {
+            if (opts.onChange) opts.onChange(parseInt(kSel.value, 10) || 0, parseInt(pSel.value, 10) || 0);
+        }
+        function resetPark(show) {
+            pSel.innerHTML = '<option value="">' + escHtml(parkAllLabel) + '</option>';
+            pSel.style.display = show ? '' : 'none';
+        }
+        function fillParks(kingdomId) {
+            return loadParks(uir, kingdomId).then(function (parks) {
+                resetPark(true);
+                parks.forEach(function (pk) {
+                    var o = document.createElement('option');
+                    o.value = pk.ParkId; o.textContent = pk.Name;
+                    pSel.appendChild(o);
+                });
+            });
+        }
+        function populate() {
+            return loadKingdoms(uir).then(function (kingdoms) {
+                kSel.innerHTML = (allLabel !== null ? '<option value="">' + escHtml(allLabel) + '</option>' : '');
+                kingdoms.forEach(function (k) {
+                    var o = document.createElement('option');
+                    o.value = k.KingdomId; o.textContent = k.KingdomName;
+                    kSel.appendChild(o);
+                });
+            });
+        }
+
+        kSel.addEventListener('change', function () {
+            var kid = parseInt(this.value, 10) || 0;
+            if (kid) fillParks(kid).then(fire);
+            else { resetPark(false); fire(); }
+        });
+        pSel.addEventListener('change', fire);
+
+        resetPark(false);
+        populate();
+
+        return {
+            get: function () { return { kingdomId: parseInt(kSel.value, 10) || 0, parkId: parseInt(pSel.value, 10) || 0 }; },
+            reset: function () {
+                kSel.disabled = false;
+                populate().then(function () { kSel.value = ''; resetPark(false); fire(); });
+            },
+            /* Lock the kingdom to a single value (disabled select) but keep the
+               park dropdown usable — used for "within"/"out" where the player
+               must come from the current kingdom. */
+            lockTo: function (kingdomId, name) {
+                function render(nm) {
+                    kSel.innerHTML = '<option value="' + kingdomId + '">' + escHtml(nm || 'This Kingdom') + '</option>';
+                    kSel.value = String(kingdomId);
+                    kSel.disabled = true;
+                    fillParks(kingdomId).then(fire);
+                }
+                if (name) { render(name); return; }
+                loadKingdoms(uir).then(function (ks) {
+                    var f = ks.filter(function (k) { return String(k.KingdomId) === String(kingdomId); })[0];
+                    render(f ? f.KingdomName : null);
+                });
+            }
+        };
+    }
+
+    return { loadKingdoms: loadKingdoms, loadParks: loadParks, wire: wire };
+})();
+
 /* ===========================
    Award descriptions (keyed by base AwardId)
    =========================== */
@@ -8748,7 +8856,9 @@ function setupPronounPicker(cfg) {
                     // SearchService already returns inactive and suspended players; sort
                     // them last and badge them so users can knowingly attribute historical
                     // awards to a now-banned officer during reconciliation.
-                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + PnConfig.kingdomId + '&limit=15';
+                    // Award giver is intentionally global (cross-kingdom): a noble from another kingdom
+                    // can grant an award, so do not scope the giver search by kingdom.
+                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15';
                     fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                         if (!data || !data.length) {
                             editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
@@ -10274,6 +10384,7 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
     var PARK_URL  = PnConfig.httpService + 'Search/SearchService.php';
     var MOVE_URL  = PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/moveplayer';
     var pnmpMode  = 'within';
+    var pnDestCascade = null;
     var mpParkTimer;
 
     function gid(id) { return document.getElementById(id); }
@@ -10307,6 +10418,12 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
         if (parkResults) parkResults.classList.remove('pn-ac-open');
         var btn = gid('pn-move-submit');
         if (btn) btn.disabled = true;
+        // Destination cascade: locked to the player's kingdom for 'within',
+        // free to pick any kingdom for 'out'.
+        if (pnDestCascade) {
+            if (mode === 'within') pnDestCascade.lockTo(PnConfig.kingdomId);
+            else pnDestCascade.reset();
+        }
     }
 
     function closeMovePlayer() {
@@ -10339,6 +10456,22 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
             if (btn) btn.addEventListener('click', function() { setMode(m); });
         });
 
+        // Destination cascade (Kingdom -> Park)
+        if (gid('pn-mp-dfilter-kingdom')) {
+            pnDestCascade = MpCascade.wire({
+                uir: PnConfig.uir,
+                kingdomSel: gid('pn-mp-dfilter-kingdom'),
+                parkSel: gid('pn-mp-dfilter-park'),
+                allLabel: 'Select Kingdom',
+                parkAllLabel: 'Select Park',
+                onChange: function(kingdomId, parkId) {
+                    var btn = gid('pn-move-submit');
+                    gid('pn-moveplayer-park-id').value = parkId ? parkId : '';
+                    if (btn) btn.disabled = !parkId;
+                }
+            });
+        }
+
         // Close handlers
         $(document).on('click', '#pn-moveplayer-close-btn, #pn-move-cancel', function() { closeMovePlayer(); });
         $(document).on('click', '#pn-moveplayer-overlay', function(e) {
@@ -10369,7 +10502,10 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
                 clearTimeout(mpParkTimer);
                 mpParkTimer = setTimeout(function() {
                     var params = { Action: 'Search/Park', name: term, limit: 12 };
-                    if (pnmpMode === 'within') {
+                    var dsel = pnDestCascade ? pnDestCascade.get() : { kingdomId: 0, parkId: 0 };
+                    if (dsel.kingdomId) {
+                        params.kingdom_id = dsel.kingdomId;
+                    } else if (pnmpMode === 'within') {
                         params.kingdom_id = PnConfig.kingdomId;
                     } else {
                         params.exclude_kingdom_id = PnConfig.kingdomId;
@@ -10691,10 +10827,12 @@ window.pnCloseUnitCreateModal = function() {
 
     var MOVE_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/moveplayer';
     var PSEARCH_URL = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId;
+    var PSEARCH_BASE = KnConfig.uir + 'KingdomAjax/playersearch/';
     var PARK_URL    = KnConfig.httpService + 'Search/SearchService.php';
 
     // Modes: 'in' | 'within' | 'out'
     var knmpMode = 'in';
+    var knmpPlayerCascade = null, knmpDestCascade = null;
 
     function gid(id) { return document.getElementById(id); }
 
@@ -10725,33 +10863,39 @@ window.pnCloseUnitCreateModal = function() {
             if (btn) btn.classList.toggle('kn-mp-active', m === mode);
         });
         var playerInput = gid('kn-moveplayer-player-name');
-        var parkInput   = gid('kn-moveplayer-park-name');
         var playerLabel = gid('kn-moveplayer-player-label');
         var parkLabel   = gid('kn-moveplayer-park-label');
         if (mode === 'in') {
             playerInput.placeholder = 'Search by name, or KD:PK name\u2026';
-            parkInput.placeholder   = 'Search parks in this kingdom\u2026';
             if (playerLabel) playerLabel.innerHTML = 'Player (outside kingdom) <span style="color:#e53e3e">*</span>';
             if (parkLabel)   parkLabel.innerHTML   = 'Destination Park (in kingdom) <span style="color:#e53e3e">*</span>';
         } else if (mode === 'within') {
             playerInput.placeholder = 'Search kingdom members\u2026';
-            parkInput.placeholder   = 'Search parks in this kingdom\u2026';
             if (playerLabel) playerLabel.innerHTML = 'Player <span style="color:#e53e3e">*</span>';
             if (parkLabel)   parkLabel.innerHTML   = 'New Home Park <span style="color:#e53e3e">*</span>';
         } else {
             playerInput.placeholder = 'Search kingdom members\u2026';
-            parkInput.placeholder   = 'Search parks outside this kingdom\u2026';
             if (playerLabel) playerLabel.innerHTML = 'Player <span style="color:#e53e3e">*</span>';
             if (parkLabel)   parkLabel.innerHTML   = 'Destination Park (outside kingdom) <span style="color:#e53e3e">*</span>';
         }
         // Reset fields
         playerInput.value = '';
-        parkInput.value   = '';
         gid('kn-moveplayer-player-id').value = '';
         gid('kn-moveplayer-park-id').value   = '';
         gid('kn-moveplayer-player-results').classList.remove('kn-ac-open');
-        gid('kn-moveplayer-park-results').classList.remove('kn-ac-open');
         gid('kn-moveplayer-feedback').style.display = 'none';
+        // Source-player cascade: free for 'in' (search other kingdoms), locked to
+        // the current kingdom for 'within'/'out' (park dropdown stays usable).
+        if (knmpPlayerCascade) {
+            if (mode === 'in') knmpPlayerCascade.reset();
+            else knmpPlayerCascade.lockTo(KnConfig.kingdomId, KnConfig.kingdomName);
+        }
+        // Destination cascade: free for 'out' (pick target kingdom), locked to the
+        // current kingdom otherwise (destination park is in-kingdom).
+        if (knmpDestCascade) {
+            if (mode === 'out') knmpDestCascade.reset();
+            else knmpDestCascade.lockTo(KnConfig.kingdomId, KnConfig.kingdomName);
+        }
         knmpCheckSubmit();
     }
 
@@ -10784,28 +10928,60 @@ window.pnCloseUnitCreateModal = function() {
             if (btn) btn.addEventListener('click', function() { setMode(m); });
         });
 
-        // Player autocomplete
+        // Cascade filters (Kingdom -> Park) for source player and destination park
+        knmpPlayerCascade = MpCascade.wire({
+            uir: KnConfig.uir,
+            kingdomSel: gid('kn-mp-pfilter-kingdom'),
+            parkSel: gid('kn-mp-pfilter-park'),
+            onChange: function() { knmpDoPlayerSearch(); }
+        });
+        knmpDestCascade = MpCascade.wire({
+            uir: KnConfig.uir,
+            kingdomSel: gid('kn-mp-dfilter-kingdom'),
+            parkSel: gid('kn-mp-dfilter-park'),
+            allLabel: 'Select Kingdom',
+            parkAllLabel: 'Select Park',
+            onChange: function(kingdomId, parkId) {
+                gid('kn-moveplayer-park-id').value = parkId ? parkId : '';
+                knmpCheckSubmit();
+            }
+        });
+
+        // Player autocomplete (scoped by mode + cascade filter)
+        function knmpPlayerUrl(term) {
+            var sel = knmpPlayerCascade ? knmpPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
+            var kid, scope;
+            if (knmpMode === 'in') {
+                if (sel.kingdomId) { kid = sel.kingdomId; scope = 'own'; }   // a specific other kingdom
+                else { kid = KnConfig.kingdomId; scope = 'exclude'; }        // all kingdoms except this one
+            } else {
+                kid = KnConfig.kingdomId; scope = 'own';                     // within/out: locked to this kingdom
+            }
+            return PSEARCH_BASE + kid + '&scope=' + scope + '&include_inactive=1'
+                + (sel.parkId ? '&park_id=' + sel.parkId : '')
+                + '&q=' + encodeURIComponent(term);
+        }
+        function knmpDoPlayerSearch() {
+            var term = gid('kn-moveplayer-player-name').value.trim();
+            var el = gid('kn-moveplayer-player-results');
+            if (term.length < 2) { el.classList.remove('kn-ac-open'); return; }
+            fetch(knmpPlayerUrl(term))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    el.innerHTML = (data && data.length)
+                        ? data.map(function(p) {
+                            var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
+                            return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+                                + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + inactive + '</div>';
+                        }).join('')
+                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                    el.classList.add('kn-ac-open');
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }
         gid('kn-moveplayer-player-name').addEventListener('input', function() {
             gid('kn-moveplayer-player-id').value = '';
             clearTimeout(mpPlayerTimer);
-            var term = this.value.trim();
-            if (term.length < 2) { gid('kn-moveplayer-player-results').classList.remove('kn-ac-open'); return; }
-            mpPlayerTimer = setTimeout(function() {
-                var scope = (knmpMode === 'in') ? 'exclude' : 'own';
-                fetch(PSEARCH_URL + '&scope=' + scope + '&include_inactive=1&q=' + encodeURIComponent(term))
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        var el = gid('kn-moveplayer-player-results');
-                        el.innerHTML = (data && data.length)
-                            ? data.map(function(p) {
-                                var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
-                                return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                    + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + inactive + '</div>';
-                            }).join('')
-                            : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                        el.classList.add('kn-ac-open');
-                    }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
+            mpPlayerTimer = setTimeout(knmpDoPlayerSearch, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('kn-moveplayer-player-results').addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
@@ -10820,44 +10996,7 @@ window.pnCloseUnitCreateModal = function() {
         });
         setupAcKeyNav(gid('kn-moveplayer-player-name'), gid('kn-moveplayer-player-results'), '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
 
-        // Park autocomplete
-        gid('kn-moveplayer-park-name').addEventListener('input', function() {
-            gid('kn-moveplayer-park-id').value = '';
-            clearTimeout(mpParkTimer);
-            var term = this.value.trim();
-            if (term.length < 2) { gid('kn-moveplayer-park-results').classList.remove('kn-ac-open'); return; }
-            mpParkTimer = setTimeout(function() {
-                var params = { Action: 'Search/Park', name: term, limit: 10 };
-                if (knmpMode === 'in' || knmpMode === 'within') {
-                    params.kingdom_id = KnConfig.kingdomId;
-                } else {
-                    params.exclude_kingdom_id = KnConfig.kingdomId;
-                }
-                $.getJSON(PARK_URL, params, function(data) {
-                    var el = gid('kn-moveplayer-park-results');
-                    el.innerHTML = (data && data.length)
-                        ? data.map(function(pk) {
-                            var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(pk.KingdomName) + ')</span>' : '';
-                            return '<div class="kn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
-                                + escHtml(pk.Name) + sub + '</div>';
-                        }).join('')
-                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
-                    el.classList.add('kn-ac-open');
-                });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
-        });
-        gid('kn-moveplayer-park-results').addEventListener('click', function(e) {
-            var item = e.target.closest('.kn-ac-item[data-id]');
-            if (!item) return;
-            gid('kn-moveplayer-park-name').value = decodeURIComponent(item.dataset.name);
-            gid('kn-moveplayer-park-id').value   = item.dataset.id;
-            this.classList.remove('kn-ac-open');
-            knmpCheckSubmit();
-        });
-        gid('kn-moveplayer-park-name').addEventListener('input', function() {
-            if (!this.value.trim()) { gid('kn-moveplayer-park-id').value = ''; knmpCheckSubmit(); }
-        });
-        setupAcKeyNav(gid('kn-moveplayer-park-name'), gid('kn-moveplayer-park-results'), '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
+        // Destination park is chosen via the Kingdom -> Park cascade (knmpDestCascade) — no free-text park search.
 
         gid('kn-moveplayer-submit').addEventListener('click', function() {
             var mundaneId = gid('kn-moveplayer-player-id').value;
@@ -11200,7 +11339,9 @@ window.pnCloseUnitCreateModal = function() {
     var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
     var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&q=';
     var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&q=';
+    var KPSEARCH_BASE   = PkConfig.uir + 'KingdomAjax/playersearch/';
 
+    var pkPlayerCascade = null, pkDestCascade = null;
     var mpPlayerId = 0, mpParkId = 0;
     var mpPlayerTimer = null, mpParkTimer = null;
     var mpMode = 'in'; // 'in' = Transfer Into Your Park, 'out' = Transfer to New Park
@@ -11248,12 +11389,16 @@ window.pnCloseUnitCreateModal = function() {
         var fb = gid('pk-moveplayer-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
 
+        var pfilterWrap = gid('pk-mp-pfilter-wrap');
         if (mode === 'in') {
             if (btnIn)  btnIn.classList.add('pk-mp-active');
             if (btnOut) btnOut.classList.remove('pk-mp-active');
             if (parkSection) parkSection.style.display = 'none';
             if (playerInput) playerInput.placeholder = 'Search by name, or KD:PK name\u2026';
             mpParkId = PkConfig.parkId;
+            // Source player can come from anywhere: show the free cascade filter.
+            if (pfilterWrap) pfilterWrap.style.display = '';
+            if (pkPlayerCascade) pkPlayerCascade.reset();
         } else {
             if (btnOut) btnOut.classList.add('pk-mp-active');
             if (btnIn)  btnIn.classList.remove('pk-mp-active');
@@ -11264,6 +11409,10 @@ window.pnCloseUnitCreateModal = function() {
             gid('pk-moveplayer-park-id').value = '';
             closeDropdown('pk-moveplayer-park-results');
             mpParkId = 0;
+            // Player is a member of this park: cascade not useful, hide it.
+            if (pfilterWrap) pfilterWrap.style.display = 'none';
+            // Destination is a new park anywhere: free cascade to pick it.
+            if (pkDestCascade) pkDestCascade.reset();
         }
         pkmpCheckSubmit();
     }
@@ -11275,11 +11424,53 @@ window.pnCloseUnitCreateModal = function() {
         overlay.classList.add('pk-open');
     };
 
+    // Build the player-search URL from mode + cascade filter. For 'in', a chosen
+    // source kingdom routes through KingdomAjax (kingdom-scoped); with no kingdom
+    // it falls back to 'everyone not already in this park'. 'out' = this park's members.
+    function pkmpPlayerUrl(term) {
+        if (mpMode === 'in') {
+            var sel = pkPlayerCascade ? pkPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
+            if (sel.kingdomId) {
+                return KPSEARCH_BASE + sel.kingdomId + '&scope=own&include_inactive=1'
+                    + (sel.parkId ? '&park_id=' + sel.parkId : '') + '&q=' + encodeURIComponent(term);
+            }
+            return PSEARCH_EXCLUDE + encodeURIComponent(term);
+        }
+        return PSEARCH_OWN + encodeURIComponent(term);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         var btnIn  = gid('pk-mp-btn-in');
         var btnOut = gid('pk-mp-btn-out');
         if (btnIn)  btnIn.addEventListener('click',  function() { setMode('in');  });
         if (btnOut) btnOut.addEventListener('click', function() { setMode('out'); });
+
+        // Cascade filters (Kingdom -> Park)
+        if (gid('pk-mp-pfilter-kingdom')) {
+            pkPlayerCascade = MpCascade.wire({
+                uir: PkConfig.uir,
+                kingdomSel: gid('pk-mp-pfilter-kingdom'),
+                parkSel: gid('pk-mp-pfilter-park'),
+                onChange: function() {
+                    var inp = gid('pk-moveplayer-player-name');
+                    if (inp && inp.value.trim().length >= 2) inp.dispatchEvent(new Event('input'));
+                }
+            });
+        }
+        if (gid('pk-mp-dfilter-kingdom')) {
+            pkDestCascade = MpCascade.wire({
+                uir: PkConfig.uir,
+                kingdomSel: gid('pk-mp-dfilter-kingdom'),
+                parkSel: gid('pk-mp-dfilter-park'),
+                allLabel: 'Select Kingdom',
+                parkAllLabel: 'Select Park',
+                onChange: function(kingdomId, parkId) {
+                    mpParkId = parkId ? parkId : 0;
+                    gid('pk-moveplayer-park-id').value = parkId ? parkId : '';
+                    pkmpCheckSubmit();
+                }
+            });
+        }
 
         // Player autocomplete
         var playerInput = gid('pk-moveplayer-player-name');
@@ -11291,9 +11482,9 @@ window.pnCloseUnitCreateModal = function() {
                 pkmpCheckSubmit();
                 var term = this.value.trim();
                 if (term.length < 2) { closeDropdown('pk-moveplayer-player-results'); return; }
-                var searchUrl = (mpMode === 'in') ? PSEARCH_EXCLUDE : PSEARCH_OWN;
+                var searchUrl = pkmpPlayerUrl(term);
                 mpPlayerTimer = setTimeout(function() {
-                    fetch(searchUrl + encodeURIComponent(term))
+                    fetch(searchUrl)
                         .then(function(r) { return r.json(); })
                         .then(function(results) {
                             var res = gid('pk-moveplayer-player-results');
@@ -11347,7 +11538,10 @@ window.pnCloseUnitCreateModal = function() {
                 var term = this.value.trim();
                 if (term.length < 2) { closeDropdown('pk-moveplayer-park-results'); return; }
                 mpParkTimer = setTimeout(function() {
-                    $.getJSON(PkConfig.httpService + 'Search/SearchService.php', { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
+                    var pkParams = { Action: 'Search/Park', name: term, limit: 8 };
+                    var dsel = pkDestCascade ? pkDestCascade.get() : { kingdomId: 0, parkId: 0 };
+                    if (dsel.kingdomId) pkParams.kingdom_id = dsel.kingdomId;
+                    $.getJSON(PkConfig.httpService + 'Search/SearchService.php', pkParams, function(data) {
                         var res = gid('pk-moveplayer-park-results');
                         if (!res) return;
                         res.innerHTML = '';
@@ -11399,7 +11593,6 @@ window.pnCloseUnitCreateModal = function() {
                         gid('pk-moveplayer-player-id').value = '';
                         if (mpMode === 'out') {
                             mpParkId = 0;
-                            gid('pk-moveplayer-park-name').value = '';
                             gid('pk-moveplayer-park-id').value = '';
                         }
                         pkmpCheckSubmit();

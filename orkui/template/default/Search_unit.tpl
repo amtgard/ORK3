@@ -50,6 +50,19 @@ if ($_su_park_id)    $_su_ajax_params .= '&ParkId='    . $_su_park_id;
 .su-search-btn:hover { background: #2f855a; }
 .su-loading { text-align: center; padding: 32px; color: var(--rp-text-muted); font-size: 14px; }
 
+/* Retired (Inactive) Units section */
+.su-retired-header { font-size: 15px; font-weight: 700; color: var(--rp-text, #2d3748); display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+.su-retired-header i { color: #c05621; }
+.su-retired-count { font-size: 13px; font-weight: 600; color: var(--rp-text-muted, #718096); }
+.su-retired-note { font-size: 12px; color: var(--rp-text-muted, #718096); margin: 0 0 12px; max-width: 70ch; }
+.su-retired-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 6px; vertical-align: middle; background: #feebc8; color: #9c4221; }
+.su-thumb-retired { opacity: 0.55; filter: grayscale(0.5); }
+#su-retired-table { width: 100%; border-collapse: collapse; }
+#su-retired-table th, #su-retired-table td { padding: 8px 10px; border-bottom: 1px solid var(--rp-border); font-size: 13px; text-align: left; vertical-align: middle; }
+#su-retired-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rp-text-muted, #718096); }
+#su-retired-table td:first-child, #su-retired-table th:first-child { width: 50px; padding-right: 4px; }
+html[data-theme="dark"] .su-retired-badge { background: rgba(192,86,33,0.25); color: #f6ad55; }
+
 /* Mobile */
 .rp-table-area { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 @media (max-width: 600px) {
@@ -207,6 +220,16 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			<tbody></tbody>
 		</table>
 
+		<!-- Retired (Inactive) Units — separate section -->
+		<div id="su-retired-section" style="display:none;margin-top:28px;">
+			<div class="su-retired-header"><i class="fas fa-box-archive"></i> Retired (Inactive) Units <span class="su-retired-count" id="su-retired-count"></span></div>
+			<p class="su-retired-note">These companies &amp; households have been retired and are hidden from the main results. A member of monarchy can reactivate one from its profile.</p>
+			<table id="su-retired-table">
+				<thead><tr><th></th><th>Name</th><th>Total</th><th class="su-col-leaders">Leaders</th><th class="su-col-web" style="text-align:center">Web</th></tr></thead>
+				<tbody></tbody>
+			</table>
+		</div>
+
 	</div>
 </div>
 
@@ -260,6 +283,26 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		});
 	}
 
+	function retiredRow(u) {
+		var thumb = HERALDRY_BASE + (u.HasHeraldry ? (String(u.UnitId).padStart(5, '0') + '.jpg') : '00000.jpg');
+		var img = '<img class="su-thumb su-thumb-retired" src="' + thumb + '" onerror="this.onerror=null;this.src=\'' + HERALDRY_BASE + '00000.jpg\'" alt="">';
+		var name = '<a class="su-name-link" href="' + UIR_VAL + 'Unit/index/' + u.UnitId + '">' + $('<span>').text(u.Name).html() + '</a>'
+			+ '<span class="su-type-badge ' + badgeClass(u.Type) + '">' + (u.Type || '') + '</span>'
+			+ '<span class="su-retired-badge">Retired</span>';
+		return '<tr><td>' + img + '</td><td>' + name + '</td><td>' + (u.TotalMemberCount || 0) + '</td>'
+			+ '<td class="su-col-leaders">' + $('<span>').text(u.LeaderNames || '').html() + '</td>'
+			+ '<td class="su-col-web" style="text-align:center">' + webCell(u.Url || '') + '</td></tr>';
+	}
+
+	function renderRetired(units) {
+		var $sec = $('#su-retired-section');
+		if (!units.length) { $sec.hide(); $('#su-retired-table tbody').empty(); return; }
+		units.sort(function (a, b) { return (a.Name || '').localeCompare(b.Name || ''); });
+		$('#su-retired-table tbody').html(units.map(retiredRow).join(''));
+		$('#su-retired-count').text('(' + units.length + ')');
+		$sec.show();
+	}
+
 	function updateStats(units) {
 		var oneYear = oneYearAgo.toISOString().slice(0, 10);
 		var active = 0, companies = 0, households = 0;
@@ -281,17 +324,25 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	function loadData(q) {
 		$('#su-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
 		$('#su-table').hide();
+		$('#su-retired-section').hide();
 		var url = AJAX_BASE + '&q=' + encodeURIComponent(q || '') + AJAX_PARAMS;
 		$.getJSON(url, function (units) {
 			$('#su-loading').hide();
-			if (!units || !units.length) {
+			units = units || [];
+			// Retired units render in their own section; the main table shows the rest.
+			var retired = units.filter(function (u) { return u.Active === 'Retired'; });
+			var live    = units.filter(function (u) { return u.Active !== 'Retired'; });
+			renderRetired(retired);
+			if (!live.length) {
 				$('#su-table').hide();
-				$('#su-loading').text('No units found.').show();
 				updateStats([]);
+				if (!retired.length) {
+					$('#su-loading').text('No units found.').show();
+				}
 				return;
 			}
-			updateStats(units);
-			var rows = buildRows(units);
+			updateStats(live);
+			var rows = buildRows(live);
 			if (table) {
 				table.clear().rows.add(rows).draw();
 			} else {
@@ -358,6 +409,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		if (table) { table.destroy(); table = null; }
 		$('#su-table').hide();
 		$('#su-stats-row').hide();
+		$('#su-retired-section').hide();
 		$('#su-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>Type a name to search companies &amp; households.').show();
 		$('#su-search-input').val('');
 		$('#su-search-clear').hide();
