@@ -438,6 +438,93 @@ class SearchService extends Ork3 {
 			return array();
 		}
 	}
+
+	private function resolveAbbrevPrefix($q) {
+		$filterKid = 0; $filterPid = 0; $search = $q;
+		if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
+			$kAbbr = mysql_real_escape_string($m[1]);
+			$this->db->clear();
+			$rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+			if ($rs !== false && $rs->size() > 0) { $rs->Next(); $filterKid = (int)$rs->kingdom_id; }
+			if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+				$pAbbr = mysql_real_escape_string($m[2]);
+				$this->db->clear();
+				$rs = $this->db->query("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+				if ($rs !== false && $rs->size() > 0) { $rs->Next(); $filterPid = (int)$rs->park_id; }
+			}
+			$search = trim($m[3]);
+		}
+		return [$filterKid, $filterPid, $search];
+	}
+
+	public function RankedPlayers($q, $parkId = null, $kingdomId = null, $restrictTo = null, $includeInactive = null, $includeSuspended = null, $limit = null, $token = null) {
+		$q = trim($q ?? '');
+		if (strlen($q) < 2) return [];
+		$park_id           = (int)($parkId ?? 0);
+		$kingdom_id        = (int)($kingdomId ?? 0);
+		$restrict_to       = in_array(($restrictTo ?? ''), ['park','kingdom'], true) ? $restrictTo : '';
+		$include_inactive  = !empty($includeInactive);
+		$include_suspended = !empty($includeSuspended);
+		$limit             = min(max((int)($limit ?? 15), 1), 100);
+		$is_admin = false;
+		if (!empty($token)) {
+			$uid = Ork3::$Lib->authorization->IsAuthorized($token);
+			if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)) $is_admin = true;
+		}
+		$this->db->clear();
+		list($filterKid, $filterPid, $search) = $this->resolveAbbrevPrefix($q);
+		$term = mysql_real_escape_string($search);
+		if ($park_id > 0 && $kingdom_id <= 0) {
+			$rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
+			if ($rs !== false && $rs->size() > 0) { $rs->Next(); $kingdom_id = (int)$rs->kingdom_id; }
+		}
+		if ($park_id > 0)        { $ring = "CASE WHEN m.park_id = {$park_id} THEN 0 WHEN m.kingdom_id = {$kingdom_id} THEN 1 ELSE 2 END"; }
+		elseif ($kingdom_id > 0) { $ring = "CASE WHEN m.kingdom_id = {$kingdom_id} THEN 0 ELSE 1 END"; }
+		else                     { $ring = "0"; }
+		$where = ["LENGTH(m.persona) > 0"];
+		$where[] = $include_suspended ? "1" : "m.suspended = 0";
+		$where[] = $include_inactive  ? "1" : "m.active = 1";
+		$where[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
+		$mundane = $is_admin
+			? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
+			: "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
+		$where[] = "(m.persona LIKE '%{$term}%' OR m.username LIKE '%{$term}%' {$mundane})";
+		if     ($filterPid > 0)                                { $where[] = "m.park_id = {$filterPid}"; }
+		elseif ($filterKid > 0)                                { $where[] = "m.kingdom_id = {$filterKid}"; }
+		elseif ($restrict_to === 'park'    && $park_id > 0)    { $where[] = "m.park_id = {$park_id}"; }
+		elseif ($restrict_to === 'kingdom' && $kingdom_id > 0) { $where[] = "m.kingdom_id = {$kingdom_id}"; }
+		$sql = "SELECT m.mundane_id, m.persona, m.active, m.suspended,
+		               k.kingdom_id, k.name AS kingdom_name, k.abbreviation AS k_abbr,
+		               p.park_id, p.name AS park_name, p.abbreviation AS p_abbr,
+		               ({$ring}) AS ring
+		        FROM " . DB_PREFIX . "mundane m
+		        LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+		        LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+		        WHERE " . implode(' AND ', $where) . "
+		        ORDER BY m.suspended ASC, m.active DESC, ring ASC, m.persona ASC
+		        LIMIT {$limit}";
+		$this->db->clear();
+		$rs = $this->db->query($sql);
+		$out = [];
+		if ($rs !== false && $rs->size() > 0) {
+			while ($rs->Next()) {
+				$out[] = [
+					'MundaneId'   => (int)$rs->mundane_id,
+					'Persona'     => $rs->persona,
+					'KingdomId'   => (int)$rs->kingdom_id,
+					'ParkId'      => (int)$rs->park_id,
+					'KAbbr'       => $rs->k_abbr,
+					'PAbbr'       => $rs->p_abbr,
+					'KingdomName' => $rs->kingdom_name,
+					'ParkName'    => $rs->park_name,
+					'Active'      => (int)$rs->active,
+					'Suspended'   => (int)$rs->suspended,
+					'Ring'        => (int)$rs->ring,
+				];
+			}
+		}
+		return $out;
+	}
 }
 
 ?>
