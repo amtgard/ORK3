@@ -582,12 +582,14 @@ class Common
 			$DB->h_kid = $kid;
 			$DB->h_pid = $pid;
 			$DB->h_role = $role;
+			$DB->h_posid = $posid;
 			$DB->Execute(
 				"UPDATE " . DB_PREFIX . "officer_history
 				 SET end_date = :h_today
 				 WHERE kingdom_id = :h_kid
 				   AND park_id = :h_pid
 				   AND role = :h_role
+				   AND ( :h_posid = 0 OR position_id = :h_posid )
 				   AND end_date IS NULL"
 			);
 		}

@@ -82,24 +82,25 @@ class OfficerPosition extends Ork3
 	 * @param int $position_id
 	 * @return array|false
 	 */
-	public function GetPosition( $position_id )
+	public function GetPosition( $position_id, $kingdom_id = 0 )
 	{
 		global $DB;
 		$position_id = (int) $position_id;
+		$kingdom_id = (int) $kingdom_id;
 		if ( $position_id <= 0 ) {
 			return false;
 		}
 
 		$DB->Clear();
 		$DB->pid = $position_id;
+		$DB->gp_kid = $kingdom_id;
 		$r = $DB->DataSet(
 			"SELECT p.*,
-				IF(p.kingdom_id = 0,
-				   IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
+				IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias,
 				   IF(p.title_alias != '', p.title_alias, p.title)) AS DisplayTitle
 			FROM " . DB_PREFIX . "officer_position p
 			LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-			  ON a.kingdom_id = p.kingdom_id AND a.canonical_key = p.canonical_key
+			  ON a.kingdom_id = :gp_kid AND a.canonical_key = p.canonical_key
 			WHERE p.position_id = :pid LIMIT 1"
 		);
 		if ( $r === false || $r->size() == 0 || !$r->Next() ) {
@@ -356,7 +357,12 @@ class OfficerPosition extends Ork3
 			 VALUES (:c_kid, :c_key, :c_title, '', :c_cls, 0, 0, :c_rid, 0, :c_so, NULL, :c_cb, NOW())"
 		);
 
-		$position_id = $this->ResolvePositionId( $kingdom_id, $slug );
+		// Prefer the driver's last-insert-id accessor over a SELECT-after-INSERT.
+		$position_id = (int) $DB->GetLastInsertId();
+		if ( $position_id <= 0 ) {
+			// Fallback: UNIQUE(kingdom_id, canonical_key) makes this lookup safe.
+			$position_id = $this->ResolvePositionId( $kingdom_id, $slug );
+		}
 		return Success( $position_id );
 	}
 
@@ -670,7 +676,7 @@ class OfficerPosition extends Ork3
 		$mundane_id = (int) $mundane_id;
 		$changed_by = (int) $changed_by;
 
-		$position = $this->GetPosition( $position_id );
+		$position = $this->GetPosition( $position_id, $kingdom_id );
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
 		}
@@ -687,7 +693,7 @@ class OfficerPosition extends Ork3
 			// Supporting: no lock, no global check, multiple rows allowed. Each
 			// assignment is a fresh ork_officer row (set_officer is single-slot and
 			// cannot represent multi-occupant supporting positions).
-			$this->InsertOfficerRow( $kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by );
+			$this->InsertOfficerRow( $kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $term_start, $term_end, $position['DisplayTitle'] );
 			return Success();
 		}
 
@@ -773,7 +779,7 @@ class OfficerPosition extends Ork3
 		$position_id = (int) $position_id;
 		$changed_by = (int) $changed_by;
 
-		$position = $this->GetPosition( $position_id );
+		$position = $this->GetPosition( $position_id, $kingdom_id );
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
 		}
@@ -861,7 +867,7 @@ class OfficerPosition extends Ork3
 	 * Insert a fresh ork_officer row for a multi-occupant (supporting) position,
 	 * record history, and sync the RBAC role. Skips a duplicate active occupant.
 	 */
-	private function InsertOfficerRow( $kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by )
+	private function InsertOfficerRow( $kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $term_start = '', $term_end = '', $display_label = '' )
 	{
 		global $DB;
 		$kingdom_id = (int) $kingdom_id;
@@ -896,7 +902,29 @@ class OfficerPosition extends Ork3
 			 VALUES (:ins_kid, :ins_pid, :ins_mid, :ins_role, 0, 0, :ins_pos, NOW())"
 		);
 
-		// History snapshot + RBAC grant via the shared service.
+		// Open an ork_officer_history term for this supporting appointment so the
+		// grant is audit-visible (matches Common::record_officer_history columns;
+		// record_officer_history is private, so write the open term directly here).
+		$start = ( trim( (string) $term_start ) !== '' ) ? (string) $term_start : date( 'Y-m-d' );
+		$end   = ( trim( (string) $term_end ) !== '' ) ? (string) $term_end : null;
+		$label = ( trim( (string) $display_label ) !== '' ) ? (string) $display_label : $canonical_key;
+		$DB->Clear();
+		$DB->ih_kid = $kingdom_id;
+		$DB->ih_pid = $park_id;
+		$DB->ih_mid = $mundane_id;
+		$DB->ih_role = $canonical_key;
+		$DB->ih_pos = $position_id;
+		$DB->ih_label = $label;
+		$DB->ih_start = $start;
+		$DB->ih_end = $end;
+		$DB->ih_cb = ( $changed_by > 0 ? $changed_by : null );
+		$DB->Execute(
+			"INSERT INTO " . DB_PREFIX . "officer_history
+			 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
+			 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, :ih_end, :ih_cb, NOW())"
+		);
+
+		// RBAC grant via the shared service.
 		if ( isset( Ork3::$Lib->rbacservice ) ) {
 			try {
 				Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId( 0, $mundane_id, $position_id, $kingdom_id, $park_id, $changed_by );
