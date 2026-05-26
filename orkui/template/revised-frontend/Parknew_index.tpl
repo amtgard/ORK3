@@ -17,8 +17,9 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		$_ck = $o['CanonicalKey'] ?? $o['OfficerRole'] ?? '';
+		if ($_ck === 'monarch') $monarch = $o;
+		if ($_ck === 'regent')  $regent  = $o;
 	}
 
 	// Parse park main location for map links
