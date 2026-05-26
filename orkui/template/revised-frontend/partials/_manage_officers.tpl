@@ -79,6 +79,15 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 				</div>
 			</div>
 
+			<div class="mo-field" id="mo-pos-hidevac-wrap">
+				<label class="mo-check-label"><input type="checkbox" id="mo-pos-hidevac" /> Hide this office when vacant <span class="mo-muted">(non-Crown only &mdash; empty office is hidden from public displays)</span></label>
+			</div>
+
+			<div class="mo-field">
+				<label>Reports To <span class="mo-muted">(optional &mdash; this office reports to / is a deputy of)</span></label>
+				<select id="mo-pos-parent"><option value="">&mdash; None (top-level) &mdash;</option></select>
+			</div>
+
 			<div class="mo-field">
 				<label>Permissions</label>
 				<div class="mo-seg" id="mo-pos-rbac-seg">
@@ -256,6 +265,29 @@ html[data-theme="dark"] .mo-retired-panel { border-top-color:var(--ork-border); 
 
 .mo-muted { color:#a0aec0; font-weight:400; font-size:11px; }
 html[data-theme="dark"] .mo-muted { color:var(--ork-text-muted); }
+
+/* Checkbox label (modal) */
+.mo-check-label { display:flex !important; align-items:flex-start; gap:8px; font-weight:600; color:#4a5568; cursor:pointer; }
+.mo-check-label input[type=checkbox] { margin:2px 0 0 0; flex-shrink:0; }
+html[data-theme="dark"] .mo-check-label { color:var(--ork-text-secondary); }
+
+/* Nested / indented officer cards */
+.mo-node { display:flex; flex-direction:column; gap:14px; }
+.mo-children { display:flex; flex-direction:column; gap:14px; margin-left:22px; padding-left:14px; border-left:2px solid #e2e8f0; margin-top:14px; }
+html[data-theme="dark"] .mo-children { border-left-color:var(--ork-border); }
+.mo-reports-to { font-size:11px; color:#718096; display:flex; align-items:center; gap:5px; margin-top:-2px; }
+.mo-reports-to i { font-size:10px; color:#a0aec0; }
+html[data-theme="dark"] .mo-reports-to { color:var(--ork-text-secondary); }
+html[data-theme="dark"] .mo-reports-to i { color:var(--ork-text-muted); }
+
+/* Hidden-when-vacant chip */
+.mo-chip-hidden {
+	align-self:flex-start; display:inline-flex; align-items:center; gap:5px;
+	font-size:11px; font-weight:600; color:#718096; background:#edf2f7;
+	border:1px solid #e2e8f0; border-radius:10px; padding:2px 8px;
+}
+.mo-chip-hidden i { font-size:10px; }
+html[data-theme="dark"] .mo-chip-hidden { color:var(--ork-text-secondary); background:var(--ork-bg-tertiary); border-color:var(--ork-border); }
 
 /* Segmented controls */
 .mo-seg { display:inline-flex; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden; }
@@ -504,9 +536,27 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			acts += '<button class="mo-act-btn mo-act-danger" onclick="moRetire(' + pid + ')"><i class="fas fa-archive"></i> Retire</button>';
 		}
 
+		// Reports-to caption (when this card has a parent that exists somewhere)
+		var reportsTo = '';
+		var parentId = parseInt(pos.ParentPositionId || 0, 10);
+		if (parentId) {
+			var parent = findPos(parentId);
+			if (parent) {
+				reportsTo = '<div class="mo-reports-to"><i class="fas fa-level-up-alt fa-rotate-90"></i> Reports to ' + esc(parent.DisplayTitle || parent.Title) + '</div>';
+			}
+		}
+
+		// Hidden-when-vacant chip: supporting + flagged + currently vacant
+		var hiddenChip = '';
+		if (!isCrown && parseInt(pos.HideWhenVacant || 0, 10) === 1 && !filled) {
+			hiddenChip = '<span class="mo-chip-hidden" data-tip="This office is hidden from public displays while vacant"><i class="fas fa-eye-slash"></i> Hidden when vacant</span>';
+		}
+
 		return '<div class="mo-card' + (isCrown ? ' mo-card-crown' : '') + '">' +
 			'<div class="mo-card-head"><div class="mo-title">' + titleHtml + '</div>' + lock + '</div>' +
+			reportsTo +
 			occupantLine(pos) +
+			hiddenChip +
 			'<div class="mo-actions">' + acts + '</div>' +
 			'</div>';
 	}
@@ -521,10 +571,48 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			'</div>';
 	}
 
+	// Build a parent->children tree WITHIN a single group, then render nested.
+	// A position whose ParentPositionId is null/0, or whose parent is NOT in this
+	// same group's visible set, renders as top-level (never dropped). Recursive.
+	function sortBySort(a, b) {
+		return (parseInt(a.SortOrder || 0, 10)) - (parseInt(b.SortOrder || 0, 10));
+	}
+	function renderGroupTree(list) {
+		if (!list || !list.length) return '';
+		var byId = {};
+		list.forEach(function(p) { byId[parseInt(p.PositionId, 10)] = p; });
+		var childrenOf = {};   // parentId -> [pos]
+		var roots = [];
+		list.forEach(function(p) {
+			var par = parseInt(p.ParentPositionId || 0, 10);
+			if (par && byId[par]) { (childrenOf[par] = childrenOf[par] || []).push(p); }
+			else { roots.push(p); }    // top-level, or parent in another group / missing
+		});
+		roots.sort(sortBySort);
+		var seen = {};
+		function nodeHtml(pos, depth) {
+			var pid = parseInt(pos.PositionId, 10);
+			if (seen[pid]) return '';   // cycle guard
+			seen[pid] = true;
+			var html = '<div class="mo-node">' + cardHtml(pos);
+			var kids = (childrenOf[pid] || []).slice().sort(sortBySort);
+			if (kids.length && depth < 12) {
+				html += '<div class="mo-children">';
+				kids.forEach(function(k) { html += nodeHtml(k, depth + 1); });
+				html += '</div>';
+			}
+			html += '</div>';
+			return html;
+		}
+		var out = '';
+		roots.forEach(function(r) { out += nodeHtml(r, 0); });
+		return out;
+	}
+
 	function moRender() {
 		var crown = moData.crown || [], supporting = moData.supporting || [], retired = moData.retired || [];
-		document.getElementById('mo-cards-crown').innerHTML       = crown.length ? crown.map(cardHtml).join('') : '<div class="mo-muted" style="padding:8px">No crown offices.</div>';
-		document.getElementById('mo-cards-supporting').innerHTML  = supporting.length ? supporting.map(cardHtml).join('') : '<div class="mo-muted" style="padding:8px">No supporting offices.</div>';
+		document.getElementById('mo-cards-crown').innerHTML       = crown.length ? renderGroupTree(crown) : '<div class="mo-muted" style="padding:8px">No crown offices.</div>';
+		document.getElementById('mo-cards-supporting').innerHTML  = supporting.length ? renderGroupTree(supporting) : '<div class="mo-muted" style="padding:8px">No supporting offices.</div>';
 
 		var toggle = document.getElementById('mo-retired-toggle');
 		if (retired.length) {
@@ -645,6 +733,24 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		document.getElementById('mo-pos-role-desc').textContent = (r && r.Description) ? r.Description : '';
 	};
 
+	// Populate "Reports To" from the currently-loaded positions (crown + supporting),
+	// excluding the position being edited (no self-parenting). selectedId pre-selects.
+	function renderParentSelect(selectedId, excludeId) {
+		var sel = document.getElementById('mo-pos-parent');
+		if (!sel) return;
+		var all = (moData.crown || []).concat(moData.supporting || []);
+		var opts = '<option value="">\u2014 None (top-level) \u2014</option>';
+		all.slice().sort(function(a, b) {
+			return (parseInt(a.SortOrder || 0, 10)) - (parseInt(b.SortOrder || 0, 10));
+		}).forEach(function(pos) {
+			var pid = parseInt(pos.PositionId, 10);
+			if (excludeId && pid === parseInt(excludeId, 10)) return; // can't report to itself
+			var label = pos.DisplayTitle || pos.Title || ('#' + pid);
+			opts += '<option value="' + pid + '"' + (pid === parseInt(selectedId || 0, 10) ? ' selected' : '') + '>' + esc(label) + '</option>';
+		});
+		sel.innerHTML = opts;
+	}
+
 	function renderPermGrid(checkedKeys) {
 		checkedKeys = checkedKeys || [];
 		var grid = document.getElementById('mo-pos-perm-grid');
@@ -669,6 +775,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		document.querySelectorAll('#mo-pos-class-seg .mo-seg-btn').forEach(function(b) {
 			b.classList.toggle('mo-seg-active', b.getAttribute('data-class') === cls);
 		});
+		// Hide-when-vacant is supporting-only: hide + force-uncheck when Crown.
+		var hvWrap = document.getElementById('mo-pos-hidevac-wrap');
+		var hvCb   = document.getElementById('mo-pos-hidevac');
+		if (hvWrap && hvCb) {
+			if (cls === 'crown') { hvCb.checked = false; hvWrap.style.display = 'none'; }
+			else { hvWrap.style.display = ''; }
+		}
 	};
 	window.moSetRbacMode = function(mode) {
 		moRbacMode = mode;
@@ -695,6 +808,8 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		document.getElementById('mo-pos-alias').value = '';
 		document.getElementById('mo-pos-class-lock').style.display = 'none';
 		document.querySelectorAll('#mo-pos-class-seg .mo-seg-btn').forEach(function(b){ b.disabled = false; });
+		document.getElementById('mo-pos-hidevac').checked = false;
+		renderParentSelect(0, 0);
 		moSetClass('crown');
 		moSetRbacMode('existing');
 		ensureRoles(function() { renderRoleSelect(0); });
@@ -718,6 +833,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		moSetClass(pos.Classification === 'crown' ? 'crown' : 'supporting');
 		moPinnedClass = parseInt(pos.IsPinned, 10) === 1;
 
+		// Reports To: pre-select current parent, exclude self.
+		renderParentSelect(parseInt(pos.ParentPositionId || 0, 10), pid);
+		// Hide-when-vacant: reflect current value (moSetClass above already
+		// forced it off + hidden if Crown).
+		var hvCb = document.getElementById('mo-pos-hidevac');
+		if (hvCb) hvCb.checked = (pos.Classification !== 'crown' && parseInt(pos.HideWhenVacant || 0, 10) === 1);
+
 		moSetRbacMode('existing');
 		ensureRoles(function() { renderRoleSelect(pos.RbacRoleId || 0); });
 		openPosModal();
@@ -732,11 +854,16 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = ''; return; }
 		errEl.style.display = 'none';
 
+		var parentId = parseInt((document.getElementById('mo-pos-parent') || {}).value || 0, 10) || 0;
+		var hideVac  = (moClass === 'crown') ? 0 : (document.getElementById('mo-pos-hidevac').checked ? 1 : 0);
+
 		var data = {
 			Title: title,
 			TitleAlias: alias,                 // '' clears (not null) per yapo rule
 			Classification: moClass,
-			RbacMode: moRbacMode
+			RbacMode: moRbacMode,
+			ParentPositionId: parentId,        // 0 = none / top-level
+			HideWhenVacant: hideVac            // crown forced to 0
 		};
 		if (moRbacMode === 'existing') {
 			var rid = parseInt(document.getElementById('mo-pos-role').value || 0, 10);
