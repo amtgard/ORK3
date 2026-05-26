@@ -9197,10 +9197,11 @@ function setupPronounPicker(cfg) {
 
     function gid(id) { return document.getElementById(id); }
     function roleSlug(role) { return role.replace(/ /g, '_'); }
+    function normRole(role) { return String(role || '').toLowerCase().replace(/ /g, '_'); }
 
     function buildOfficerMap() {
         var map = {};
-        (PkConfig.officerList || []).forEach(function(o) { map[o.OfficerRole] = o; });
+        (PkConfig.officerList || []).forEach(function(o) { map[normRole(o.OfficerRole)] = o; });
         return map;
     }
 
@@ -9238,7 +9239,7 @@ function setupPronounPicker(cfg) {
         if (rowsBuilt) {
             OFFICER_ROLES.forEach(function(role) {
                 var slug   = roleSlug(role);
-                var o      = officerMap[role];
+                var o      = officerMap[normRole(role)];
                 var nameEl = gid('pk-editoff-name-' + slug);
                 var idEl   = gid('pk-editoff-id-'   + slug);
                 var vacBtn = gid('pk-editoff-vacate-' + slug);
@@ -9257,7 +9258,7 @@ function setupPronounPicker(cfg) {
 
         OFFICER_ROLES.forEach(function(role) {
             var slug     = roleSlug(role);
-            var o        = officerMap[role];
+            var o        = officerMap[normRole(role)];
             var occupied = o && o.MundaneId > 0;
 
             var row = document.createElement('div');
@@ -9331,21 +9332,12 @@ function setupPronounPicker(cfg) {
             container.appendChild(row);
 
             (function(ni, hi, vb) {
-                $(ni).autocomplete({
-                    source: function(req, res) {
-                        // Search all players in the kingdom — do NOT filter by park_id.
-                        // Park officers don't have to already be at this park (the
-                        // Edit Officers flow is the way they get assigned here in
-                        // the first place), and on a freshly-created park with zero
-                        // members, the park-scoped search returns empty for everyone.
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, limit: 12 }, function(data) {
-                            res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
-                        });
-                    },
-                    focus:  function(e, ui) { $(ni).val(ui.item.label); return false; },
-                    select: function(e, ui) { $(ni).val(ui.item.label); hi.value = ui.item.value; vb.style.display = ''; return false; },
-                    change: function(e, ui) { if (!ui.item) hi.value = ''; return false; },
-                    delay: 250, minLength: 2,
+                // Kingdom-wide search (park officers need not already be at this park).
+                OrkPlayerSearch.attach(ni, {
+                    uir: PkConfig.uir,
+                    kingdomId: PkConfig.kingdomId,
+                    onSelect: function(p) { hi.value = p.MundaneId; vb.style.display = ''; },
+                    onClear:  function() { hi.value = ''; }
                 });
             })(nameInput, hiddenInput, vacateBtn);
         });
