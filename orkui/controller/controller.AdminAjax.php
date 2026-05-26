@@ -28,7 +28,7 @@ class Controller_AdminAjax extends Controller {
 
 			// Global admin search — no ring centre, active+unsuspended only, preserve existing response shape
 			$svc  = new SearchService();
-			$rows = $svc->RankedPlayers($q, null, null, null, null, null, 20, null);
+			$rows = $svc->RankedPlayers($q, null, null, null, null, null, 20, $this->session->token ?? null);
 			$results = [];
 			foreach ($rows as $r) {
 				$results[] = [

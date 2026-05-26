@@ -13,3 +13,4 @@ html[data-theme="dark"] .ops-ac-item:hover,
 html[data-theme="dark"] .ops-ac-item.ops-ac-active{ background:#3b4960; }
 html[data-theme="dark"] .ops-ac-loc{ color:#718096; }
 html[data-theme="dark"] .ops-ac-empty{ color:#718096; }
+html[data-theme="dark"] .ops-ac-badge{ color:#fc8181; }

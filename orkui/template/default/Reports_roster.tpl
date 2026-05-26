@@ -834,7 +834,7 @@ $(function() {
 	// Player search — re-attach with parkId whenever the park dropdown changes
 	function spAttachPlayerSearch() {
 		var parkId = parseInt(document.getElementById('sp-park').value, 10) || 0;
-		OrkPlayerSearch.attach(document.getElementById('sp-player-text'), {
+		OrkPlayerSearch.reattach(document.getElementById('sp-player-text'), {
 			uir: '<?=UIR ?>',
 			kingdomId: <?= (int)$_scopeId ?>,
 			parkId: parkId || undefined,

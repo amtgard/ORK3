@@ -127,7 +127,9 @@ $server->Register(
 				array( 'includeInactive','request',true,'int',true ),
 				array( 'includeSuspended','request',true,'int',true ),
 				array( 'limit','request',true,'int',true ),
-				array( 'token','request',true,'string',true )
+				array( 'token','request',true,'string',true ),
+			array( 'excludeKingdomId','request',true,'int',true ),
+			array( 'excludeParkId','request',true,'int',true )
 			)
 		)
 	);
