@@ -684,9 +684,10 @@ class OfficerPosition extends Ork3
 		$classification = $position['classification'];
 
 		if ( $classification !== 'crown' ) {
-			// Supporting: no lock, no global check, multiple rows allowed.
-			$c = new Common();
-			$c->set_officer( $kingdom_id, $park_id, $mundane_id, $canonical_key, 0, $changed_by, $position_id );
+			// Supporting: no lock, no global check, multiple rows allowed. Each
+			// assignment is a fresh ork_officer row (set_officer is single-slot and
+			// cannot represent multi-occupant supporting positions).
+			$this->InsertOfficerRow( $kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by );
 			return Success();
 		}
 
@@ -735,10 +736,11 @@ class OfficerPosition extends Ork3
 					. '. A person may hold only one Crown office.' );
 			}
 
-			// Single-occupant-per-scope: vacate any existing live occupant of this
-			// exact position+scope (set_officer find() keyed on position_id replaces
-			// the occupant in place, but if a DIFFERENT person currently holds it we
-			// let set_officer overwrite the single crown row).
+			// Single-occupant-per-scope: set_officer find() keyed on position_id
+			// replaces the occupant of the single crown row in place. For custom
+			// crown positions no seeded slot exists yet, so ensure one is present
+			// (vacant placeholder) before delegating, so find() succeeds.
+			$this->EnsureCrownSlot( $kingdom_id, $park_id, $position_id, $canonical_key );
 			$c = new Common();
 			$c->set_officer( $kingdom_id, $park_id, $mundane_id, $canonical_key, 0, $changed_by, $position_id );
 
@@ -778,24 +780,130 @@ class OfficerPosition extends Ork3
 		$canonical_key = $position['canonical_key'];
 		$classification = $position['classification'];
 
-		// Close the term + revoke role (mundane_id = 0 means vacate).
-		$c = new Common();
-		$c->set_officer( $kingdom_id, $park_id, 0, $canonical_key, 0, $changed_by, $position_id );
-
 		if ( $classification === 'supporting' ) {
-			// Supporting positions delete the now-vacant row rather than keeping
-			// a placeholder.
+			// Supporting positions can have multiple occupants; close history +
+			// revoke each occupant's role, then delete the rows (no placeholder).
 			$DB->Clear();
-			$DB->v_kid = $kingdom_id;
-			$DB->v_pid = $park_id;
-			$DB->v_pos = $position_id;
+			$DB->vs_kid = $kingdom_id;
+			$DB->vs_pid = $park_id;
+			$DB->vs_pos = $position_id;
+			$occ = $DB->DataSet(
+				"SELECT mundane_id FROM " . DB_PREFIX . "officer
+				 WHERE kingdom_id = :vs_kid AND park_id = :vs_pid AND position_id = :vs_pos AND mundane_id > 0"
+			);
+			$occupants = [];
+			if ( $occ !== false && $occ->size() > 0 ) {
+				while ( $occ->Next() ) { $occupants[] = (int) $occ->mundane_id; }
+			}
+			foreach ( $occupants as $mid ) {
+				if ( isset( Ork3::$Lib->rbacservice ) ) {
+					try {
+						Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId( $mid, 0, $position_id, $kingdom_id, $park_id, $changed_by );
+					} catch ( Exception $e ) {
+						logtrace( 'RBAC vacate supporting failed', $e->getMessage() );
+					}
+				}
+			}
+			$DB->Clear();
+			$DB->vd_kid = $kingdom_id;
+			$DB->vd_pid = $park_id;
+			$DB->vd_pos = $position_id;
 			$DB->Execute(
 				"DELETE FROM " . DB_PREFIX . "officer
-				 WHERE kingdom_id = :v_kid AND park_id = :v_pid AND position_id = :v_pos AND mundane_id = 0"
+				 WHERE kingdom_id = :vd_kid AND park_id = :vd_pid AND position_id = :vd_pos"
 			);
+			return Success();
 		}
 
+		// Crown: close the term + revoke role (mundane_id = 0 means vacate),
+		// leaving a vacant placeholder row.
+		$c = new Common();
+		$c->set_officer( $kingdom_id, $park_id, 0, $canonical_key, 0, $changed_by, $position_id );
 		return Success();
+	}
+
+	// ================================================================
+	// LOW-LEVEL OFFICER ROW WRITES (occupancy support)
+	// ================================================================
+
+	/**
+	 * Ensure a single ork_officer slot exists for a crown position+scope so the
+	 * single-slot Common::set_officer find() succeeds. Inserts a vacant
+	 * (mundane_id=0) placeholder only when no row exists for this position+scope.
+	 */
+	private function EnsureCrownSlot( $kingdom_id, $park_id, $position_id, $canonical_key )
+	{
+		global $DB;
+		$DB->Clear();
+		$DB->ec_kid = (int) $kingdom_id;
+		$DB->ec_pid = (int) $park_id;
+		$DB->ec_pos = (int) $position_id;
+		$ex = $DB->DataSet(
+			"SELECT officer_id FROM " . DB_PREFIX . "officer
+			 WHERE kingdom_id = :ec_kid AND park_id = :ec_pid AND position_id = :ec_pos LIMIT 1"
+		);
+		if ( $ex !== false && $ex->size() > 0 ) {
+			return;
+		}
+		$DB->Clear();
+		$DB->ic_kid = (int) $kingdom_id;
+		$DB->ic_pid = (int) $park_id;
+		$DB->ic_pos = (int) $position_id;
+		$DB->ic_role = $canonical_key;
+		$DB->Execute(
+			"INSERT INTO " . DB_PREFIX . "officer
+			 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+			 VALUES (:ic_kid, :ic_pid, 0, :ic_role, 0, 0, :ic_pos, NOW())"
+		);
+	}
+
+	/**
+	 * Insert a fresh ork_officer row for a multi-occupant (supporting) position,
+	 * record history, and sync the RBAC role. Skips a duplicate active occupant.
+	 */
+	private function InsertOfficerRow( $kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by )
+	{
+		global $DB;
+		$kingdom_id = (int) $kingdom_id;
+		$park_id = (int) $park_id;
+		$position_id = (int) $position_id;
+		$mundane_id = (int) $mundane_id;
+		$changed_by = (int) $changed_by;
+
+		// Idempotency: do not add the same person twice to the same supporting slot.
+		$DB->Clear();
+		$DB->io_kid = $kingdom_id;
+		$DB->io_pid = $park_id;
+		$DB->io_pos = $position_id;
+		$DB->io_mid = $mundane_id;
+		$dup = $DB->DataSet(
+			"SELECT officer_id FROM " . DB_PREFIX . "officer
+			 WHERE kingdom_id = :io_kid AND park_id = :io_pid AND position_id = :io_pos AND mundane_id = :io_mid LIMIT 1"
+		);
+		if ( $dup !== false && $dup->size() > 0 ) {
+			return;
+		}
+
+		$DB->Clear();
+		$DB->ins_kid = $kingdom_id;
+		$DB->ins_pid = $park_id;
+		$DB->ins_mid = $mundane_id;
+		$DB->ins_role = $canonical_key;
+		$DB->ins_pos = $position_id;
+		$DB->Execute(
+			"INSERT INTO " . DB_PREFIX . "officer
+			 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+			 VALUES (:ins_kid, :ins_pid, :ins_mid, :ins_role, 0, 0, :ins_pos, NOW())"
+		);
+
+		// History snapshot + RBAC grant via the shared service.
+		if ( isset( Ork3::$Lib->rbacservice ) ) {
+			try {
+				Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId( 0, $mundane_id, $position_id, $kingdom_id, $park_id, $changed_by );
+			} catch ( Exception $e ) {
+				logtrace( 'RBAC supporting grant failed', $e->getMessage() );
+			}
+		}
 	}
 }
 
