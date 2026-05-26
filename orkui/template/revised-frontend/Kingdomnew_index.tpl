@@ -28,8 +28,8 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		if (strtolower($o['OfficerRole']) === 'monarch') $monarch = $o;
+		if (strtolower($o['OfficerRole']) === 'regent')  $regent  = $o;
 	}
 
 	// Players loaded via AJAX (players_json) — not available at render time
