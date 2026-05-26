@@ -877,6 +877,21 @@ class Controller_KingdomAjax extends Controller {
 		exit;
 	}
 
+	/* Active kingdoms (sorted by name) for the Move Player cascade dropdowns,
+	   shared by the Kingdom/Park/Player/Admin Move Player modals. */
+	public function getkingdoms($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode([]); exit; }
+		$r = Ork3::$Lib->kingdom->GetKingdoms(array());
+		$kingdoms = [];
+		foreach ($r['Kingdoms'] ?? [] as $k) {
+			$kingdoms[] = ['KingdomId' => (int)$k['KingdomId'], 'KingdomName' => $k['KingdomName'], 'Abbreviation' => $k['Abbreviation']];
+		}
+		usort($kingdoms, function($a, $b) { return strcasecmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? ''); });
+		echo json_encode(['status' => 0, 'kingdoms' => $kingdoms]);
+		exit;
+	}
+
 	public function suspendplayer($p = null) {
 		header('Content-Type: application/json');
 		if (!isset($this->session->user_id)) {

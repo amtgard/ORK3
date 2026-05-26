@@ -349,6 +349,9 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cp-field-ac { position: relative; }
 .cp-field-ac .kn-ac-results { position: absolute; left: 0; right: 0; z-index: 9999; }
+.cp-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.cp-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+html[data-theme="dark"] .cp-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
 /* Feedback */
 .cp-feedback { padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; margin-bottom: 14px; display: none; }
 .cp-feedback-ok  { background: #c6f6d5; color: #276749; border: 1px solid #9ae6b4; }
@@ -462,15 +465,21 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 			<div class="cp-feedback" id="cp-mp-feedback"></div>
 			<div class="cp-field cp-field-ac">
 				<label>Player <span style="color:#e53e3e">*</span></label>
+				<div class="cp-mp-cascade">
+					<select class="cp-mp-cascade-sel" id="cp-mp-pfilter-kingdom" aria-label="Filter players by kingdom"><option value="">All Kingdoms</option></select>
+					<select class="cp-mp-cascade-sel" id="cp-mp-pfilter-park" aria-label="Filter players by park" style="display:none"><option value="">All Parks</option></select>
+				</div>
 				<input type="text" id="cp-mp-player-name" autocomplete="off" placeholder="Search all players…">
 				<input type="hidden" id="cp-mp-player-id">
 				<div class="kn-ac-results" id="cp-mp-player-results"></div>
 			</div>
 			<div class="cp-field cp-field-ac" style="margin-top:12px">
 				<label>New Home Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="cp-mp-park-name" autocomplete="off" placeholder="Search all parks…">
+				<div class="cp-mp-cascade">
+					<select class="cp-mp-cascade-sel" id="cp-mp-dfilter-kingdom" aria-label="Destination kingdom"><option value="">Select Kingdom</option></select>
+					<select class="cp-mp-cascade-sel" id="cp-mp-dfilter-park" aria-label="Destination park" style="display:none"><option value="">Select Park</option></select>
+				</div>
 				<input type="hidden" id="cp-mp-park-id">
-				<div class="kn-ac-results" id="cp-mp-park-results"></div>
 			</div>
 		</div>
 		<div class="cp-modal-footer">
@@ -943,6 +952,36 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 			}));
 		}).catch(function(){cb([]);});
 	}
+	// Move Player cascade: kingdom-scoped player search (consistent with the
+	// other Move Player modals). revised.js/MpCascade is not loaded on the admin
+	// page, so this is a small self-contained version using the shared endpoints.
+	function cpSearchPlayersInKingdom(q, kingdomId, parkId, cb) {
+		var url = UIR + 'KingdomAjax/playersearch/' + kingdomId + '&scope=own&include_inactive=1'
+			+ (parkId ? '&park_id=' + parkId : '') + '&q=' + encodeURIComponent(q);
+		fetch(url).then(function(r){return r.json();}).then(function(d) {
+			cb((d || []).map(function(p) {
+				var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
+				return { id: p.MundaneId, label: p.Persona,
+					html: cpEsc(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(p.KAbbr||'') + ' · ' + cpEsc(p.ParkName||'') + ')</span>' + inactive };
+			}));
+		}).catch(function(){cb([]);});
+	}
+	var cpKingdomsCache = null;
+	function cpLoadKingdoms(cb) {
+		if (cpKingdomsCache) { cb(cpKingdomsCache); return; }
+		fetch(UIR + 'KingdomAjax/getkingdoms').then(function(r){return r.json();}).then(function(d){ cpKingdomsCache = (d && d.kingdoms) || []; cb(cpKingdomsCache); }).catch(function(){cb([]);});
+	}
+	function cpWireCascade(kSelId, pSelId, onChange, parkLabel) {
+		var kSel = document.getElementById(kSelId), pSel = document.getElementById(pSelId);
+		if (!kSel || !pSel) return { get: function(){ return { kingdomId:0, parkId:0 }; } };
+		function resetPark(show) { pSel.innerHTML = '<option value="">' + (parkLabel || 'All Parks') + '</option>'; pSel.style.display = show ? '' : 'none'; }
+		function fillParks(kid) { fetch(UIR + 'KingdomAjax/kingdom/' + kid + '/getparks').then(function(r){return r.json();}).then(function(d){ resetPark(true); (d.parks||[]).forEach(function(pk){ var o=document.createElement('option'); o.value=pk.ParkId; o.textContent=pk.Name; pSel.appendChild(o); }); }).catch(function(){}); }
+		cpLoadKingdoms(function(ks){ ks.forEach(function(k){ var o=document.createElement('option'); o.value=k.KingdomId; o.textContent=k.KingdomName; kSel.appendChild(o); }); });
+		resetPark(false);
+		kSel.addEventListener('change', function(){ var kid=parseInt(this.value,10)||0; if(kid) fillParks(kid); else resetPark(false); onChange(); });
+		pSel.addEventListener('change', onChange);
+		return { get: function(){ return { kingdomId: parseInt(kSel.value,10)||0, parkId: parseInt(pSel.value,10)||0 }; } };
+	}
 
 	/* --------------------------------------------------
 	   POST helper
@@ -1008,10 +1047,24 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		var pkid = document.getElementById('cp-mp-park-id').value;
 		document.getElementById('cp-mp-submit').disabled = !(pid && pkid);
 	}
+	var cpMpPlayerCascade = null, cpMpDestCascade = null;
 	cpAc({ inputId:'cp-mp-player-name', hiddenId:'cp-mp-player-id', resultsId:'cp-mp-player-results',
-		fetchFn: function(q, cb) { cpSearchPlayersGlobal(q, cb, true); }, onSelect: cpMpCheck, onClear: cpMpCheck });
-	cpAc({ inputId:'cp-mp-park-name', hiddenId:'cp-mp-park-id', resultsId:'cp-mp-park-results',
-		fetchFn: cpSearchParks, onSelect: cpMpCheck, onClear: cpMpCheck });
+		fetchFn: function(q, cb) {
+			var sel = cpMpPlayerCascade ? cpMpPlayerCascade.get() : { kingdomId:0, parkId:0 };
+			if (sel.kingdomId) cpSearchPlayersInKingdom(q, sel.kingdomId, sel.parkId, cb);
+			else cpSearchPlayersGlobal(q, cb, true);
+		}, onSelect: cpMpCheck, onClear: cpMpCheck });
+	// Destination park is chosen via the Kingdom -> Park cascade below — no free-text park search.
+	// Cascade filters (Kingdom -> Park) for the player and destination searches
+	cpMpPlayerCascade = cpWireCascade('cp-mp-pfilter-kingdom', 'cp-mp-pfilter-park', function() {
+		var inp = document.getElementById('cp-mp-player-name');
+		if (inp && inp.value.trim().length >= 2) inp.dispatchEvent(new Event('input'));
+	});
+	cpMpDestCascade = cpWireCascade('cp-mp-dfilter-kingdom', 'cp-mp-dfilter-park', function() {
+		var sel = cpMpDestCascade.get();
+		document.getElementById('cp-mp-park-id').value = sel.parkId ? sel.parkId : '';
+		cpMpCheck();
+	}, 'Select Park');
 	document.getElementById('cp-mp-submit').addEventListener('click', function() {
 		var playerId = document.getElementById('cp-mp-player-id').value;
 		var parkId   = document.getElementById('cp-mp-park-id').value;
@@ -1024,7 +1077,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 					'<a href="' + UIR + 'Park/profile/' + parkId + '">View new home park</a> · ' +
 					'<a href="' + UIR + 'Player/profile/' + playerId + '">View player</a>', true);
 				// reset
-				['cp-mp-player-name','cp-mp-park-name'].forEach(function(id){document.getElementById(id).value='';});
+				document.getElementById('cp-mp-player-name').value='';
 				['cp-mp-player-id','cp-mp-park-id'].forEach(function(id){document.getElementById(id).value='';});
 				btn.disabled = true;
 			});

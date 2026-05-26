@@ -20,6 +20,10 @@ $_scope_pid  = (int)($ScopeParkId    ?? 0);
 .ul-badge-company   { background: #e0e7ff; color: #3730a3; }
 .ul-badge-household { background: #d1fae5; color: #065f46; }
 .ul-badge-event     { background: #fef3c7; color: #92400e; }
+.ul-badge-inactive  { background: #fee2e2; color: #991b1b; }
+html[data-theme="dark"] .ul-badge-inactive { background: #450a0a; color: #fca5a5; }
+.ul-badge-retired  { background: #e5e7eb; color: #4b5563; }
+html[data-theme="dark"] .ul-badge-retired { background: #374151; color: #d1d5db; }
 .ul-name-link { font-weight: 600; color: var(--rp-accent); text-decoration: none; }
 .ul-name-link:hover { color: var(--rp-accent-mid); text-decoration: underline; }
 #ul-table td:first-child, #ul-table th:first-child { width: 50px; padding-right: 4px; }
@@ -52,6 +56,11 @@ $_scope_pid  = (int)($ScopeParkId    ?? 0);
 	padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #854d0e;
 }
 .ul-limit-warn i { color: #ca8a04; margin-top: 2px; flex-shrink: 0; }
+.ul-default-note { background: #ebf8ff; border-color: #bee3f8; color: #2c5282; }
+.ul-default-note i { color: #3182ce; }
+html[data-theme="dark"] .ul-limit-warn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ul-default-note { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ul-default-note i { color: var(--ork-link, #63b3ed); }
 
 .ul-loading { text-align: center; padding: 32px; color: var(--rp-text-muted); font-size: 14px; }
 
@@ -196,6 +205,11 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			<i class="fas fa-exclamation-triangle"></i>
 			<span>Your search has been limited to 250 results. Update your search criteria and click Search again to refine further.</span>
 		</div>
+		<!-- Default top-by-size note -->
+		<div class="ul-limit-warn ul-default-note" id="ul-default-note" style="display:none">
+			<i class="fas fa-info-circle"></i>
+			<span>Showing the largest companies and households by member size. Search by name above to find other units.</span>
+		</div>
 
 		<!-- Type + activity filter pills -->
 		<div class="rp-filter-pills" style="margin-bottom:14px;">
@@ -203,13 +217,13 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			<button class="rp-filter-pill" data-type="Company">Companies</button>
 			<button class="rp-filter-pill" data-type="Household">Households</button>
 			<button class="rp-filter-pill" id="ul-pill-inactive" data-inactive="0" style="margin-left:8px;">
-				<i class="fas fa-eye-slash" style="font-size:10px;"></i> Include Inactive
+				<i class="fas fa-eye-slash" style="font-size:10px;"></i> Include Inactive/Retired
 			</button>
 		</div>
 
 		<div id="ul-loading" class="ul-loading">
-			<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>
-			Type a name to search units.
+			<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>
+			Loading units…
 		</div>
 
 		<table id="ul-table" class="dataTable" style="width:100%;display:none">
@@ -245,6 +259,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	var HERALDRY     = <?= json_encode(HTTP_UNIT_HERALDRY) ?>;
 	var UIR_BASE     = <?= json_encode(UIR) ?>;
 	var AJAX_BASE    = <?= json_encode(UIR . 'Search/unitsearch') ?>;
+	var ACTIVITY_BASE = <?= json_encode(UIR . 'Search/unitactivity') ?>;
 	var LIMIT        = 250;
 
 	// Column indices (type + activity cols are always hidden at indices 2,3)
@@ -253,6 +268,8 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	var ACTIVITY_COL = 3;
 	var SCOPE_COL    = HAS_SCOPE ? 4 : -1;
 	var WEB_COL      = HAS_SCOPE ? 8 : 7;
+	var SIZE_COL     = HAS_SCOPE ? SCOPE_COL : 5;  // member-size column for the default sort
+	var defaultMode  = false;                       // true when showing the no-search top-by-size list
 
 	var includeInactive  = false;
 	var activeTypeFilter = '';
@@ -261,6 +278,11 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 
 	var oneYearAgo = new Date();
 	oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+	var INACTIVE_BADGE = ' <span class="ul-type-badge ul-badge-inactive">Inactive</span>';
+	// A unit is inactive when no member has signed in within the last 12 months.
+	function isInactive(u) { return !u.LastActivityDate || new Date(u.LastActivityDate) < oneYearAgo; }
+	var RETIRED_BADGE = ' <span class="ul-type-badge ul-badge-retired">Retired</span>';
+	function isRetired(u) { return String(u.Active) === 'Retired'; }
 
 	function badgeClass(type) {
 		if (type === 'Company')  return 'ul-badge-company';
@@ -281,20 +303,24 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		var nameHtml = '<a class="ul-name-link" href="' + UIR_BASE + 'Unit/index/' + uid + '">'
 			+ $('<span>').text(u.Name || '(Unnamed)').html() + '</a>'
 			+ '<span class="ul-type-badge ' + badgeClass(u.Type) + '">' + (u.Type || '') + '</span>';
+		// In typed-search mode activity is known now; default mode badges after the lazy load.
+		if (isRetired(u)) nameHtml += RETIRED_BADGE;
+		else if (!defaultMode && isInactive(u)) nameHtml += INACTIVE_BADGE;
 
 		var row = [
 			imgHtml,
 			nameHtml,
 			u.Type || '',
-			u.LastActivityDate || '',
+			defaultMode ? '' : (u.LastActivityDate || ''),
 		];
 
 		if (HAS_SCOPE) {
 			row.push(parseInt(u.MemberCount) || 0);
 		}
 
+		// Activity columns aren't computed for the fast default list — show a dash.
 		row.push(
-			parseInt(u.ActiveMemberCount) || 0,
+			defaultMode ? ('<span class="ul-active-cell" data-uid="' + uid + '"><i class="fas fa-spinner fa-spin" style="opacity:.5"></i></span>') : (parseInt(u.ActiveMemberCount) || 0),
 			parseInt(u.TotalMemberCount)  || 0,
 			$('<span>').text(u.LeaderNames || '').html(),
 			webCell(u.Url || '')
@@ -320,14 +346,46 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		$('#ul-stats-row').show();
 	}
 
+	// Lazy-populate the Active column for the default list once it's on screen.
+	// Works on the DataTables data (all rows), not just the rendered page, so
+	// pagination keeps the resolved counts + Inactive badges.
+	var ACTIVE_DATA_COL = HAS_SCOPE ? 5 : 4;  // index in the row data array
+	function applyActiveCounts(map) {
+		table.rows().every(function () {
+			var d = this.data();
+			var m = String(d[ACTIVE_DATA_COL]).match(/data-uid="(\d+)"/);
+			if (!m) return;                       // already resolved / not a spinner
+			var count = map[m[1]] != null ? map[m[1]] : 0;
+			d[ACTIVE_DATA_COL] = count;
+			if (count === 0 && String(d[1]).indexOf('ul-badge-inactive') === -1
+					&& String(d[1]).indexOf('ul-badge-retired') === -1) {
+				d[1] = d[1] + INACTIVE_BADGE;     // mark the unit inactive (retired already badged)
+			}
+			this.data(d);
+		});
+		table.draw(false);
+	}
+	function loadActiveCounts(units) {
+		var ids = units.map(function (u) { return parseInt(u.UnitId) || 0; }).filter(Boolean);
+		if (!ids.length || !table) return;
+		$.getJSON(ACTIVITY_BASE + '&ids=' + ids.join(','), function (map) {
+			applyActiveCounts(map || {});
+		}).fail(function () {
+			applyActiveCounts({});   // resolve spinners to 0 (and badge them inactive)
+		});
+	}
+
 	function loadData(q) {
+		defaultMode = !q;
 		$('#ul-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
 		$('#ul-table').hide();
 		$('#ul-limit-warn').hide();
+		$('#ul-default-note').hide();
 
 		var url = AJAX_BASE + '&q=' + encodeURIComponent(q || '');
 		if (KID) url += '&KingdomId=' + KID;
 		if (PID) url += '&ParkId='    + PID;
+		if (includeInactive) url += '&include=1';
 
 		$.getJSON(url, function (units) {
 			$('#ul-loading').hide();
@@ -343,7 +401,12 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 				$('#ul-limit-warn').css('display', 'flex');
 			}
 
-			updateStats(units);
+			if (defaultMode) {
+				$('#ul-stats-row').hide();
+				$('#ul-default-note').css('display', 'flex');
+			} else {
+				updateStats(units);
+			}
 			var rows = units.map(buildRow);
 
 			if (table) {
@@ -351,7 +414,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			} else {
 				$.fn.dataTable.ext.search.push(function (settings, data) {
 					if (settings.nTable.id !== 'ul-table') return true;
-					if (includeInactive) return true;
+					if (defaultMode || includeInactive) return true;
 					var lastActivity = data[ACTIVITY_COL];
 					if (!lastActivity) return false;
 					return new Date(lastActivity) >= oneYearAgo;
@@ -374,10 +437,10 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			}
 
 			$('#ul-table').show();
+			table.order(defaultMode ? [[SIZE_COL, 'desc']] : [[1, 'asc']]);
+			table.column(TYPE_COL).search(activeTypeFilter ? '^' + activeTypeFilter + '$' : '', true, false).draw();
 
-			if (activeTypeFilter) {
-				table.column(TYPE_COL).search('^' + activeTypeFilter + '$', true, false).draw();
-			}
+			if (defaultMode) loadActiveCounts(units);
 		}).fail(function () {
 			$('#ul-loading').text('Search failed. Please try again.').show();
 		});
@@ -392,14 +455,10 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	}
 
 	function clearSearch() {
-		if (table) { table.destroy(); table = null; }
-		$('#ul-table').hide();
-		$('#ul-stats-row').hide();
-		$('#ul-limit-warn').hide();
-		$('#ul-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>Type a name to search units.').show();
 		$('#ul-search-input').val('');
 		$('#ul-search-clear').hide();
 		currentQuery = '';
+		loadData('');   // back to the default top-by-size list
 	}
 
 	$('#ul-search-input').on('input', function () {
@@ -429,8 +488,13 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		includeInactive = !includeInactive;
 		$(this).toggleClass('active', includeInactive);
 		$(this).find('i').toggleClass('fa-eye-slash', !includeInactive).toggleClass('fa-eye', includeInactive);
-		if (table) table.draw();
+		// Re-fetch: retired units are a server-side filter (include=1), and the
+		// activity filter (inactive) is applied client-side on redraw.
+		loadData(currentQuery);
 	});
+
+	// Load the default top-by-size list on open (no minimum-character gate).
+	loadData('');
 }());
 </script>
 

@@ -823,6 +823,8 @@ class Report  extends Ork3 {
 		if (valid_id($request['IncludeHouseHolds'])) $households = " or u.type = 'Household' ";
 		if (valid_id($request['IncludeEvents'])) $events = " or u.type = 'Event' ";
 		if (valid_id($request['ActiveOnly'])) $active_only = " and um.active = 'Active' ";
+		// Hide retired units from listings unless explicitly requested.
+		$unit_active = valid_id($request['IncludeRetired']) ? '' : " and u.active = 'Active' ";
 		if (valid_id($request['KingdomId'])) $activity_scope = " and a.kingdom_id = '$request[KingdomId]'";
 		elseif (valid_id($request['ParkId'])) $activity_scope = " and a.park_id = '$request[ParkId]'";
 
@@ -866,7 +868,46 @@ class Report  extends Ork3 {
 			$leader_names_expr        = "(select group_concat(m5.persona order by m5.persona separator ', ') from " . DB_PREFIX . "unit_mundane um5 join " . DB_PREFIX . "mundane m5 on m5.mundane_id = um5.mundane_id where um5.unit_id = u.unit_id and um5.role in ('captain','lord') and um5.active = 'Active')";
 		}
 
-		$sql = "select u.*, m.*, u.has_heraldry, count(um.mundane_id) as member_count,
+		$top_by_size = !empty($request['TopBySize']);
+		if ($top_by_size) {
+			// Fast default list (no name filter): cheaply pick the top-N units by
+			// roster size for the scope, then attach only the inexpensive detail
+			// columns. The attendance subqueries (last_activity_date /
+			// active_member_count) are deliberately omitted here — they are what made
+			// the unscoped default take ~15s — so this path returns in ~180ms.
+			// Activity detail is computed only on the typed-search path below.
+			$inner_scope_join  = '';
+			$inner_scope_where = '';
+			if (valid_id($request['KingdomId'])) {
+				$inner_scope_join  = "join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id";
+				$inner_scope_where = " and m.kingdom_id = '" . (int)$request['KingdomId'] . "'";
+			} elseif (valid_id($request['ParkId'])) {
+				$inner_scope_join  = "join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id";
+				$inner_scope_where = " and m.park_id = '" . (int)$request['ParkId'] . "'";
+			}
+			$top_n = (isset($request['Limit']) && is_numeric($request['Limit'])) ? (int)$request['Limit'] : 100;
+			// Retired units are excluded unless explicitly requested.
+			$inner_unit_active = valid_id($request['IncludeRetired']) ? '' : " and u.active = 'Active'";
+			$sql = "select u.unit_id, u.type, u.name, u.has_heraldry, u.url, u.active as unit_active, top.sz as member_count,
+						$total_member_count_expr as total_member_count,
+						null as last_activity_date,
+						null as active_member_count,
+						$leader_names_expr as leader_names,
+						null as unit_mundane_id, '' as persona
+					from (
+						select u.unit_id, count(um.mundane_id) sz
+							from " . DB_PREFIX . "unit u
+								join " . DB_PREFIX . "unit_mundane um on um.unit_id = u.unit_id
+								$inner_scope_join
+							where (0 $companies $households $events) $inner_scope_where $inner_unit_active
+							group by u.unit_id
+							order by sz desc
+							limit $top_n
+					) top
+					join " . DB_PREFIX . "unit u on u.unit_id = top.unit_id
+					order by top.sz desc";
+		} else {
+			$sql = "select u.*, m.*, u.has_heraldry, u.active as unit_active, count(um.mundane_id) as member_count,
 					$total_member_count_expr as total_member_count,
 					$last_activity_date_expr as last_activity_date,
 					$active_member_count_expr as active_member_count,
@@ -876,9 +917,10 @@ class Report  extends Ork3 {
 						$um_join
 							left join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id
 						left join " . DB_PREFIX . "event e on e.unit_id = u.unit_id
-					where 1 and (1 $kingdom $park $event_id $active_only_where $name_where) and (0 $companies $households $events)
+					where 1 and (1 $kingdom $park $event_id $active_only_where $name_where $unit_active) and (0 $companies $households $events)
 					group by u.unit_id
 				order by $order_by $limit_clause";
+		}
 		$r = $this->db->query($sql);
 		logtrace("Unit Summary", array($request, $sql));
 		$response = array( 'Status' => Success(), 'Units' => array());
@@ -899,6 +941,7 @@ class Report  extends Ork3 {
 					'LeaderNames'        => $r->leader_names ?? '',
 					'Url'                => $r->url ?? '',
 					'UnitMundaneId'      => $r->unit_mundane_id,
+					'Active'             => $r->unit_active,
 				);
 			}
 		}

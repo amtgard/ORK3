@@ -17,6 +17,7 @@ class SearchService extends Ork3 {
    		$limit = min($limit, 50);
 		$unit = new yapo($this->db, DB_PREFIX . 'unit');
 		$unit->clear();
+		$unit->active = 'Active';
 		$unit->like('name', "%$name%");
 		if ($unit->find()) {
 			$r = array();

@@ -174,6 +174,31 @@ class Controller_Unit extends Controller {
 						$r = $this->Unit->convert_to_company($unit_id_int);
 					}
 					break;
+				case 'retire_unit':
+					$r = $this->Unit->retire_unit(array(
+						'Token'  => $this->session->token,
+						'UnitId' => $unit_id_int,
+					));
+					break;
+				case 'restore_unit':
+					$r = $this->Unit->restore_unit(array(
+						'Token'  => $this->session->token,
+						'UnitId' => $unit_id_int,
+					));
+					break;
+				case 'claim_unit':
+					$r = $this->Unit->claim_unit(array(
+						'Token'  => $this->session->token,
+						'UnitId' => $unit_id_int,
+					));
+					break;
+				case 'transfer_ownership':
+					$r = $this->Unit->transfer_ownership(array(
+						'Token'     => $this->session->token,
+						'UnitId'    => $unit_id_int,
+						'MundaneId' => (int)$this->request->MundaneId,
+					));
+					break;
 			}
 			if (isset($r)) {
 				if ($r['Status'] == 0) {
@@ -198,6 +223,92 @@ class Controller_Unit extends Controller {
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$_canEdit = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
 		$this->data['CanEdit'] = $_canEdit;
+
+		// ── Retire / Claim / Transfer state ───────────────────────────────
+		// Whether this unit is currently active (vs. retired/soft-deleted).
+		$_unit_active = (($this->data['Unit']['Details']['Unit']['Active'] ?? 'Active') !== 'Retired');
+		$this->data['UnitActive'] = $_unit_active;
+
+		// Manager set = authorization rows scoped to this unit.
+		$_auth_rows   = $this->data['Unit']['Authorizations']['Authorizations'] ?? array();
+		$_manager_ids = array();
+		foreach ($_auth_rows as $_ar) { $_manager_ids[] = (int)$_ar['MundaneId']; }
+		$_manager_ids = array_values(array_unique($_manager_ids));
+		$this->data['ManagerCount'] = count($_manager_ids);
+
+		// Current user's place in the active roster.
+		$_roster   = $this->data['Unit']['Members']['Roster'] ?? array();
+		$_my_role  = null;
+		$_is_member = false;
+		foreach ($_roster as $_rm) {
+			if ($_uid > 0 && (int)$_rm['MundaneId'] === $_uid) {
+				$_is_member = true;
+				$_my_role   = strtolower($_rm['UnitRole'] ?? '');
+			}
+		}
+		$this->data['IsRosterMember'] = $_is_member;
+		$this->data['IsManager']      = $_uid > 0 && in_array($_uid, $_manager_ids, true);
+		$this->data['IsSoleMember']   = $_uid > 0 && count($_roster) === 1 && $_is_member;
+		// Self-claim: no managers exist and the user holds a leadership roster role.
+		$this->data['CanClaim']       = $_uid > 0 && count($_manager_ids) === 0
+			&& in_array($_my_role, array('captain', 'lord', 'organizer'), true);
+
+		// Kingdom-officer (monarchy) authority, evaluated against the user's OWN
+		// home kingdom — matching the KPM bypass in Authorization::add_authorization
+		// so the UI only offers what the service layer will actually permit.
+		$_can_officer = false;
+		if ($_uid > 0) {
+			$_pinfo        = Ork3::$Lib->player->player_info($this->session->token);
+			$_home_kingdom = isset($_pinfo['KingdomId']) ? (int)$_pinfo['KingdomId'] : 0;
+			if ($_home_kingdom > 0) {
+				$_can_officer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT);
+			}
+		}
+		$this->data['CanOfficerManage'] = $_can_officer;
+
+		// The Add-Manager modal is available to unit editors, and to officers only
+		// when the unit is currently unmanaged (their entry point to assign one).
+		$_show_addmgr = $_canEdit || ($_can_officer && count($_manager_ids) === 0);
+		$this->data['ShowAddManager'] = $_show_addmgr;
+
+		// Transfer targets: active members other than the actor, managers first.
+		$_targets = array();
+		foreach ($_roster as $_rm) {
+			$_mid = (int)$_rm['MundaneId'];
+			if ($_mid === $_uid) continue;
+			$_targets[] = array(
+				'MundaneId' => $_mid,
+				'Persona'   => trimlen($_rm['Persona']) > 0 ? $_rm['Persona'] : '(No Persona)',
+				'IsManager' => in_array($_mid, $_manager_ids, true),
+			);
+		}
+		usort($_targets, function($a, $b) {
+			if ($a['IsManager'] !== $b['IsManager']) return $a['IsManager'] ? -1 : 1;
+			return strcasecmp($a['Persona'], $b['Persona']);
+		});
+		$this->data['TransferTargets'] = $_targets;
+
+		// Active, non-manager members — the head-of-list shortcut in Add Manager.
+		$_nonmgr = array();
+		foreach ($_roster as $_rm) {
+			$_mid = (int)$_rm['MundaneId'];
+			if (in_array($_mid, $_manager_ids, true)) continue;
+			$_nonmgr[] = array(
+				'MundaneId' => $_mid,
+				'Persona'   => trimlen($_rm['Persona']) > 0 ? $_rm['Persona'] : '(No Persona)',
+			);
+		}
+		$this->data['NonManagerMembers'] = $_nonmgr;
+
+		// Active kingdoms for the "filter players by" cascade in the add-member/
+		// manager search. Sorted by name for the dropdown.
+		$this->data['FilterKingdoms'] = array();
+		if ($_show_addmgr) {
+			$_kd = Ork3::$Lib->kingdom->GetKingdoms(array());
+			$_kingdoms = array_values($_kd['Kingdoms'] ?? array());
+			usort($_kingdoms, function($a, $b) { return strcasecmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? ''); });
+			$this->data['FilterKingdoms'] = $_kingdoms;
+		}
 		if ($_canEdit) {
 			$this->data['menu']['admin'] = array( 'url' => UIR."Admin/unit/$unit_id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
 		}

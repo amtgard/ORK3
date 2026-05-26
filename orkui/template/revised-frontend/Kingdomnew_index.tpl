@@ -628,6 +628,7 @@
 							<li><a href="<?= UIR ?>Reports/reeve/Kingdom&id=<?= $kingdom_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
+							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -646,8 +647,7 @@
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>">Class Masters/Paragons</a></li>
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
-							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
-							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
+											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
 							<?php endif; ?>
 						</ul>
@@ -1792,12 +1792,17 @@ var KnConfig = {
 
 <!-- Move Player Modal -->
 <style>
-.kn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.kn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .kn-mp-toggle-btn {
-	flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600;
-	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s; white-space:nowrap;
+	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:6px; font-size:12px; font-weight:600;
+	cursor:pointer; background:#fff; color:#4a5568; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap;
 }
-.kn-mp-toggle-btn.kn-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.kn-mp-toggle-btn:hover { border-color:#a0aec0; }
+.kn-mp-toggle-btn.kn-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+/* Cascade filter dropdowns (Move Player) */
+.kn-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.kn-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.kn-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 #kn-moveplayer-overlay .kn-modal-body { overflow:visible; }
 #kn-moveplayer-overlay .kn-acct-field { position:relative; }
 #kn-moveplayer-overlay .kn-ac-results { position:absolute; left:0; right:0; z-index:9999; }
@@ -1876,9 +1881,11 @@ html[data-theme="dark"] .kn-acct-field input[type="date"],
 html[data-theme="dark"] .kn-acct-field input[type="number"],
 html[data-theme="dark"] .kn-acct-field select,
 html[data-theme="dark"] .kn-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-html[data-theme="dark"] .kn-mp-toggle { background: var(--ork-bg-secondary); }
-html[data-theme="dark"] .kn-mp-toggle-btn { color: var(--ork-text-muted); }
-html[data-theme="dark"] .kn-mp-toggle-btn.kn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] .kn-mp-toggle-btn { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .kn-mp-toggle-btn:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-mp-toggle-btn.kn-mp-active { background: var(--ork-link); color: #fff; border-color: var(--ork-link); }
+html[data-theme="dark"] .kn-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .kn-mp-cascade-sel:disabled { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
 html[data-theme="dark"] #theme_container .kn-reports-grid a { color: var(--ork-link); }
 html[data-theme="dark"] #theme_container .kn-reports-grid a:hover { color: var(--ork-link-bright); }
 html[data-theme="dark"] .kn-map-sidebar-card { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); }
@@ -1913,15 +1920,21 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 			</div>
 			<div class="kn-acct-field">
 				<label id="kn-moveplayer-player-label">Player <span style="color:#e53e3e">*</span></label>
+				<div class="kn-mp-cascade">
+					<select class="kn-mp-cascade-sel" id="kn-mp-pfilter-kingdom" aria-label="Filter players by kingdom"></select>
+					<select class="kn-mp-cascade-sel" id="kn-mp-pfilter-park" aria-label="Filter players by park" style="display:none"></select>
+				</div>
 				<input type="text" id="kn-moveplayer-player-name" autocomplete="off" placeholder="Search players outside this kingdom&hellip;">
 				<input type="hidden" id="kn-moveplayer-player-id">
 				<div class="kn-ac-results" id="kn-moveplayer-player-results"></div>
 			</div>
 			<div class="kn-acct-field" style="margin-top:10px">
 				<label id="kn-moveplayer-park-label">New Home Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="kn-moveplayer-park-name" autocomplete="off" placeholder="Search parks in this kingdom&hellip;">
+				<div class="kn-mp-cascade">
+					<select class="kn-mp-cascade-sel" id="kn-mp-dfilter-kingdom" aria-label="Destination kingdom"></select>
+					<select class="kn-mp-cascade-sel" id="kn-mp-dfilter-park" aria-label="Destination park" style="display:none"></select>
+				</div>
 				<input type="hidden" id="kn-moveplayer-park-id">
-				<div class="kn-ac-results" id="kn-moveplayer-park-results"></div>
 			</div>
 		</div>
 		<div class="kn-modal-footer">

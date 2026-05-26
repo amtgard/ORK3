@@ -1096,6 +1096,7 @@
 							<li><a href="<?= UIR ?>Reports/reeve&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Reeve Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/corpora&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Park&id=<?= $park_id ?>">Player Status Reconciliation</a></li>
+							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<?php endif; ?>
 						</ul>
@@ -1126,8 +1127,7 @@
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Player Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Class Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Ladder Award Grid</a></li>
-							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
-							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
+											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -1981,12 +1981,16 @@ var PkConfig = {
 
 <!-- Move Player Modal -->
 <style>
-.pk-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
+.pk-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .pk-mp-toggle-btn {
-	flex:1; padding:6px 10px; border:none; border-radius:4px; font-size:12px; font-weight:600;
-	cursor:pointer; background:transparent; color:#718096; transition:background 0.15s,color 0.15s;
+	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:6px; font-size:12px; font-weight:600;
+	cursor:pointer; background:#fff; color:#4a5568; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap;
 }
-.pk-mp-toggle-btn.pk-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.pk-mp-toggle-btn:hover { border-color:#a0aec0; }
+.pk-mp-toggle-btn.pk-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+.pk-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.pk-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.pk-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 
 /* ===================================================================
    DARK MODE OVERRIDES — Parknew profile
@@ -2024,9 +2028,11 @@ html[data-theme="dark"] .pk-acct-field input[type="date"],
 html[data-theme="dark"] .pk-acct-field input[type="number"],
 html[data-theme="dark"] .pk-acct-field select,
 html[data-theme="dark"] .pk-acct-field textarea { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
-html[data-theme="dark"] .pk-mp-toggle { background: var(--ork-bg-secondary); }
-html[data-theme="dark"] .pk-mp-toggle-btn { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pk-mp-toggle-btn.pk-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] .pk-mp-toggle-btn { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pk-mp-toggle-btn:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pk-mp-toggle-btn.pk-mp-active { background: var(--ork-link); color: #fff; border-color: var(--ork-link); }
+html[data-theme="dark"] .pk-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .pk-mp-cascade-sel:disabled { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-officer-item { border-color: var(--ork-border); }
 html[data-theme="dark"] .pk-officer-label { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-officer-name { color: var(--ork-text); }
@@ -2073,15 +2079,21 @@ html[data-theme="dark"] .pk-wx-warning { background:#450a0a; color:#fca5a5; bord
 			</div>
 			<div class="pk-acct-field">
 				<label id="pk-moveplayer-player-label">Player <span style="color:#e53e3e">*</span></label>
+				<div class="pk-mp-cascade" id="pk-mp-pfilter-wrap">
+					<select class="pk-mp-cascade-sel" id="pk-mp-pfilter-kingdom" aria-label="Filter players by kingdom"></select>
+					<select class="pk-mp-cascade-sel" id="pk-mp-pfilter-park" aria-label="Filter players by park" style="display:none"></select>
+				</div>
 				<input type="text" id="pk-moveplayer-player-name" autocomplete="off" placeholder="Search by name, or KD:PK name…">
 				<input type="hidden" id="pk-moveplayer-player-id">
 				<div class="pk-ac-results" id="pk-moveplayer-player-results"></div>
 			</div>
 			<div class="pk-acct-field" id="pk-moveplayer-park-section" style="margin-top:10px;display:none">
 				<label>New Home Park <span style="color:#e53e3e">*</span></label>
-				<input type="text" id="pk-moveplayer-park-name" autocomplete="off" placeholder="Search parks…">
+				<div class="pk-mp-cascade">
+					<select class="pk-mp-cascade-sel" id="pk-mp-dfilter-kingdom" aria-label="Destination kingdom"></select>
+					<select class="pk-mp-cascade-sel" id="pk-mp-dfilter-park" aria-label="Destination park" style="display:none"></select>
+				</div>
 				<input type="hidden" id="pk-moveplayer-park-id">
-				<div class="pk-ac-results" id="pk-moveplayer-park-results"></div>
 			</div>
 		</div>
 		<div class="pk-modal-footer">

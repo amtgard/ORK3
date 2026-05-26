@@ -456,9 +456,11 @@ html[data-theme="dark"] .pn-suspended-detail { background: #742a2a; color: #feb2
 html[data-theme="dark"] .pn-revoke-all-warning { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .pn-move-warning { background: #744210; border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .pn-mp-player-locked { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-mp-toggle { background: var(--ork-bg-secondary); }
-html[data-theme="dark"] .pn-mp-toggle-btn { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-card-bg); color: var(--ork-link); }
+html[data-theme="dark"] .pn-mp-toggle-btn { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-mp-toggle-btn:hover { border-color: var(--ork-text-muted); }
+html[data-theme="dark"] .pn-mp-toggle-btn.pn-mp-active { background: var(--ork-link); color: #fff; border-color: var(--ork-link); }
+html[data-theme="dark"] .pn-mp-cascade-sel { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .pn-mp-cascade-sel:disabled { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
 html[data-theme="dark"] .btn-danger-confirm { background: #fc8181; color: #1a202c; }
 html[data-theme="dark"] .pn-char-count { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pn-revoke-award-name { color: var(--ork-text); }
@@ -4924,9 +4926,13 @@ pnRenderSparkline();
 <!-- Move Player Modal -->
 <?php if ($canEditAdmin): ?>
 <style>
-.pn-mp-toggle { display:flex; background:#edf2f7; border-radius:6px; padding:3px; gap:3px; margin-bottom:14px; }
-.pn-mp-toggle-btn { flex:1; padding:6px 8px; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; background:transparent; color:#718096; white-space:nowrap; }
-.pn-mp-toggle-btn.pn-mp-active { background:#fff; color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.pn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.pn-mp-toggle-btn { flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:#4a5568; white-space:nowrap; }
+.pn-mp-toggle-btn:hover { border-color:#a0aec0; }
+.pn-mp-toggle-btn.pn-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+.pn-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.pn-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
+.pn-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 #pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
 #pn-moveplayer-overlay .pn-acct-field { position:relative; }
 .pn-mp-player-locked { background:#f7fafc; border:1px solid #e2e8f0; border-radius:4px; padding:8px 12px; color:#4a5568; font-size:0.95rem; }
@@ -4952,9 +4958,11 @@ pnRenderSparkline();
 			</div>
 			<div class="pn-acct-field">
 				<label id="pn-moveplayer-park-label">New Home Park <span class="required-indicator">*</span></label>
-				<input type="text" id="pn-moveplayer-park-name" placeholder="Search for a park…" autocomplete="off" />
+				<div class="pn-mp-cascade">
+					<select class="pn-mp-cascade-sel" id="pn-mp-dfilter-kingdom" aria-label="Destination kingdom"></select>
+					<select class="pn-mp-cascade-sel" id="pn-mp-dfilter-park" aria-label="Destination park" style="display:none"></select>
+				</div>
 				<input type="hidden" id="pn-moveplayer-park-id" value="" />
-				<div class="pn-ac-results" id="pn-moveplayer-park-results"></div>
 			</div>
 			<div class="pn-move-warning">
 				<i class="fas fa-exclamation-triangle"></i>

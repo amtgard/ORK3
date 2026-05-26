@@ -27,9 +27,33 @@ foreach ($_members as $_m) {
 $_can_edit   = !empty($CanEdit);
 $_err        = $SaveError ?? '';
 $_base_url   = UIR . "Unit/index/$_unit_id";
+// Pre-built <option> list for the "filter players by" kingdom dropdown
+// (shared by the add-member and add-manager search modals).
+$_kingdom_options = '<option value="">All Kingdoms</option>';
+foreach (($FilterKingdoms ?? array()) as $_fk) {
+	$_kingdom_options .= '<option value="' . (int)$_fk['KingdomId'] . '">' . htmlspecialchars($_fk['KingdomName']) . '</option>';
+}
 
 $_type_icon  = $_type === 'Company' ? 'fa-shield-alt' : ($_type === 'Household' ? 'fa-home' : 'fa-users');
 $_hero_color = $_type === 'Company' ? '#1a3654' : ($_type === 'Household' ? '#2d1b54' : '#1a365d');
+
+/* ── Retire / Claim / Transfer state (computed in controller) ── */
+$_type_l        = strtolower($_type);
+$_logged_in     = !empty($LoggedIn);
+$_can_officer   = !empty($CanOfficerManage);
+$_mgr_count     = (int)($ManagerCount ?? 0);
+$_is_manager    = !empty($IsManager);
+$_is_sole       = !empty($IsSoleMember);
+$_can_claim     = !empty($CanClaim);
+$_is_retired    = empty($UnitActive);
+$_show_addmgr   = !empty($ShowAddManager);
+$_transfer_targets = $TransferTargets ?? [];
+$_can_transfer  = count($_transfer_targets) > 0;
+$_nonmgr_members   = $NonManagerMembers ?? [];
+// Retire card: managers/officers always, plus the sole-member exception.
+$_show_retire   = !$_is_retired && ($_can_edit || $_can_officer || $_is_sole);
+// Claim/unmanaged card: any logged-in viewer when the unit has no managers.
+$_show_claim    = !$_is_retired && $_logged_in && $_mgr_count === 0;
 ?>
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>revised-frontend/style/revised.css?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/style/revised.css')?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -243,6 +267,9 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 	color: var(--ork-text-lighter);
 	margin-top: 3px;
 }
+/* "Filter players by" cascade (kingdom → park) in the add-member/manager modals */
+.un-filter-field select { width: 100%; }
+.un-filter-park { margin-top: 6px; }
 
 /* ── Player search autocomplete (shared across modals) ───── */
 
@@ -389,6 +416,23 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 	<!-- Sidebar -->
 	<aside class="pn-sidebar">
 
+<?php if ($_is_retired): ?>
+		<div class="pn-card un-retired-card">
+			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-box-archive"></i> Retired</span></h4>
+			<p class="un-card-text">This <?=htmlspecialchars($_type_l)?> has been retired and is hidden from listings and search.</p>
+<?php if ($_can_officer): ?>
+			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
+				<input type="hidden" name="Action" value="restore_unit">
+				<button type="submit" class="pn-btn pn-btn-primary" style="width:100%;">
+					<i class="fas fa-rotate-left"></i> Reactivate This <?=htmlspecialchars($_type)?>
+				</button>
+			</form>
+<?php else: ?>
+			<p class="un-card-text" style="font-style:italic;">A member of monarchy for your park or kingdom can reactivate it.</p>
+<?php endif; ?>
+		</div>
+<?php endif; ?>
+
 <?php if (trimlen($_desc) > 0 || $_can_edit): ?>
 		<div class="pn-card">
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
@@ -463,6 +507,47 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 		</div>
 <?php endif; ?>
 
+
+<!-- ── Claim / Add-Manager Card (unmanaged units) ───────── -->
+<?php if ($_show_claim): ?>
+		<div class="pn-card un-claim-card">
+<?php if ($_can_claim): ?>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-hand-sparkles"></i> Claim This <?=htmlspecialchars($_type)?></span></h4>
+			<p class="un-card-text">This <?=htmlspecialchars($_type_l)?> has no manager. As a leader of <?=htmlspecialchars($_name)?>, you can take over managing it.</p>
+			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
+				<input type="hidden" name="Action" value="claim_unit">
+				<button type="submit" class="pn-btn pn-btn-primary" style="width:100%;">
+					<i class="fas fa-user-shield"></i> Claim <?=htmlspecialchars($_name)?>
+				</button>
+			</form>
+<?php else: ?>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-user-slash"></i> Unmanaged <?=htmlspecialchars($_type)?></span></h4>
+<?php if (!$_can_officer): ?>
+			<p class="un-card-text">It looks like no players currently have permission to manage this <?=htmlspecialchars($_type_l)?>. If you feel you should be given access to do so, please contact a member of monarchy for your park or kingdom and ask them to transfer the unit to you.</p>
+<?php endif; ?>
+<?php endif; ?>
+<?php if ($_can_officer): ?>
+			<div class="un-card-section">
+				<div class="un-card-subhead"><i class="fas fa-user-plus"></i> Add A Manager</div>
+				<p class="un-card-text">This unit has no managing players. You can add one by clicking the button below. Please be certain the player requesting to claim this unit has a legitimate reason for doing so.</p>
+				<button type="button" class="pn-btn pn-btn-secondary" style="width:100%;" onclick="unOpenModal('un-modal-add-manager')">
+					<i class="fas fa-user-plus"></i> Add A Manager
+				</button>
+			</div>
+<?php endif; ?>
+		</div>
+<?php endif; ?>
+
+<!-- ── Retire Card ──────────────────────────────────────── -->
+<?php if ($_show_retire): ?>
+		<div class="pn-card un-retire-card">
+			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-box-archive"></i> Retire <?=htmlspecialchars($_type)?></span></h4>
+			<p class="un-card-text">If <?=htmlspecialchars($_name)?> is no longer active or has disbanded, you can retire it here.</p>
+			<button type="button" class="pn-btn pn-btn-ghost" style="width:100%;color:#c05621;border-color:#c05621;" onclick="unOpenModal('un-modal-retire')">
+				<i class="fas fa-box-archive"></i> Retire This Unit
+			</button>
+		</div>
+<?php endif; ?>
 	</aside>
 
 	<!-- Main: roster -->
@@ -729,15 +814,21 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 		<form method="post" action="<?=htmlspecialchars($_base_url)?>">
 			<input type="hidden" name="Action" value="add_member">
 			<div class="pn-modal-body">
+				<div class="pn-acct-field un-filter-field">
+					<label>Filter players by</label>
+					<select class="un-filter-kingdom" id="un-am-filter-kingdom"><?=$_kingdom_options?></select>
+					<select class="un-filter-park" id="un-am-filter-park" style="display:none;"><option value="">All Parks</option></select>
+				</div>
 				<div class="pn-acct-field">
 					<label>Player</label>
 					<div class="pn-award-search-bar un-player-search" id="un-am-wrap">
 						<input type="text" class="pn-award-search-input" id="un-am-input"
-							placeholder="Search players…"
+							placeholder="Search any player — all kingdoms…"
 							autocomplete="off">
 						<div class="un-ac-results" id="un-am-results"></div>
 					</div>
 					<input type="hidden" name="MundaneId" id="un-am-mundane-id">
+					<div class="un-field-hint">Searches all players across every kingdom and park. Use the filter above to narrow to a kingdom or park (or type a <code>GP: name</code> / <code>BS:IK name</code> prefix).</div>
 				</div>
 				<div class="pn-acct-field">
 					<label>Role</label>
@@ -800,6 +891,9 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 	</div>
 </div>
 
+<?php endif; /* end $_can_edit modals */ ?>
+
+<?php if ($_show_addmgr): ?>
 <!-- ── Add Manager Modal ──────────────────────────────── -->
 <div class="pn-overlay" id="un-modal-add-manager">
 	<div class="pn-modal-box">
@@ -810,15 +904,34 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 		<form method="post" action="<?=htmlspecialchars($_base_url)?>">
 			<input type="hidden" name="Action" value="addauth">
 			<div class="pn-modal-body">
+<?php if (count($_nonmgr_members) > 0): ?>
+				<div class="pn-acct-field">
+					<label>Existing member <span style="font-weight:400;color:var(--ork-text-lighter);">(quick pick)</span></label>
+					<select id="un-mg-member-pick">
+						<option value="">— Choose a current member —</option>
+<?php foreach ($_nonmgr_members as $_nm): ?>
+						<option value="<?=(int)$_nm['MundaneId']?>"><?=htmlspecialchars($_nm['Persona'])?></option>
+<?php endforeach; ?>
+					</select>
+					<div class="un-field-hint">Promote a current member to manager, or search for any player below.</div>
+				</div>
+				<div class="un-mg-or-divider">or search any player</div>
+<?php endif; ?>
+				<div class="pn-acct-field un-filter-field">
+					<label>Filter players by</label>
+					<select class="un-filter-kingdom" id="un-mg-filter-kingdom"><?=$_kingdom_options?></select>
+					<select class="un-filter-park" id="un-mg-filter-park" style="display:none;"><option value="">All Parks</option></select>
+				</div>
 				<div class="pn-acct-field">
 					<label>Player</label>
 					<div class="pn-award-search-bar un-player-search" id="un-mg-wrap">
 						<input type="text" class="pn-award-search-input" id="un-mg-input"
-							placeholder="Search players…"
+							placeholder="Search any player — all kingdoms…"
 							autocomplete="off">
 						<div class="un-ac-results" id="un-mg-results"></div>
 					</div>
 					<input type="hidden" name="MundaneId" id="un-mg-mundane-id">
+					<div class="un-field-hint">Searches all players across every kingdom and park. Use the filter above to narrow to a kingdom or park (or type a <code>GP: name</code> / <code>BS:IK name</code> prefix).</div>
 					<div class="un-field-hint">Managers can edit unit details and manage members.</div>
 				</div>
 			</div>
@@ -833,6 +946,71 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 	</div>
 </div>
 
+<?php endif; /* end $_show_addmgr */ ?>
+
+<?php if ($_show_retire): ?>
+<!-- ── Retire Modal ─────────────────────────────────────── -->
+<div class="pn-overlay" id="un-modal-retire">
+	<div class="pn-modal-box" style="max-width:460px">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-box-archive" style="margin-right:8px;color:#c05621"></i>Retire <?=htmlspecialchars($_name)?></h3>
+			<button class="pn-modal-close-btn" onclick="unCloseModal('un-modal-retire')">&times;</button>
+		</div>
+<?php if ($_can_transfer): ?>
+		<div class="pn-modal-body">
+			<p style="margin:0 0 14px;color:var(--ork-text);font-size:14px;">
+				Are you sure you want to retire <strong><?=htmlspecialchars($_name)?></strong>? You can alternatively transfer ownership to another member.
+			</p>
+			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
+				<input type="hidden" name="Action" value="transfer_ownership">
+				<div class="pn-acct-field">
+					<label>Transfer ownership to</label>
+					<select name="MundaneId" id="un-transfer-target" required>
+						<option value="">— Select a member —</option>
+<?php
+$_mgr_open = false; $_mem_open = false;
+foreach ($_transfer_targets as $_tt):
+	if ($_tt['IsManager'] && !$_mgr_open) { echo '<optgroup label="Managers">'; $_mgr_open = true; }
+	if (!$_tt['IsManager'] && !$_mem_open) { if ($_mgr_open) echo '</optgroup>'; echo '<optgroup label="Members">'; $_mem_open = true; }
+?>
+						<option value="<?=(int)$_tt['MundaneId']?>"><?=htmlspecialchars($_tt['Persona'])?></option>
+<?php endforeach; if ($_mgr_open || $_mem_open) echo '</optgroup>'; ?>
+					</select>
+					<div class="un-field-hint">The selected member becomes a manager and you step down as owner. The <?=htmlspecialchars($_type_l)?> stays active.</div>
+				</div>
+				<button type="submit" class="pn-btn pn-btn-primary" style="width:100%;">
+					<i class="fas fa-people-arrows"></i> Transfer Ownership
+				</button>
+			</form>
+			<div class="un-mg-or-divider">or retire the <?=htmlspecialchars($_type_l)?></div>
+			<div class="un-retire-note">
+				Retiring hides this <?=htmlspecialchars($_type_l)?> from listings and search. You will need a member of monarchy to reactivate it.
+			</div>
+			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
+				<input type="hidden" name="Action" value="retire_unit">
+				<button type="submit" class="pn-btn pn-btn-ghost" style="width:100%;color:#c05621;border-color:#c05621;">
+					<i class="fas fa-box-archive"></i> Retire This <?=htmlspecialchars($_type)?>
+				</button>
+			</form>
+		</div>
+<?php else: ?>
+		<div class="pn-modal-body">
+			<p style="margin:0 0 14px;color:var(--ork-text);font-size:14px;">
+				Confirm you wish to retire <strong><?=htmlspecialchars($_name)?></strong> here. Please note, you will need a member of monarchy to reactivate a retired <?=htmlspecialchars($_type_l)?>.
+			</p>
+			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
+				<input type="hidden" name="Action" value="retire_unit">
+				<div class="pn-modal-footer" style="padding:0;border:0;">
+					<button type="button" class="pn-btn pn-btn-secondary" onclick="unCloseModal('un-modal-retire')">Cancel</button>
+					<button type="submit" class="pn-btn pn-btn-primary" style="background:#c05621;border-color:#c05621;">
+						<i class="fas fa-box-archive"></i> Retire This <?=htmlspecialchars($_type)?>
+					</button>
+				</div>
+			</form>
+		</div>
+<?php endif; ?>
+	</div>
+</div>
 <?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
@@ -863,6 +1041,37 @@ $(function () {
 		});
 	}
 });
+
+<?php if ($_can_edit || $_show_addmgr || $_show_retire): ?>
+// ── Shared modal helpers ──────────────────────────────────
+function unOpenModal(id) {
+	var el = document.getElementById(id);
+	if (el) el.classList.add('pn-open');
+}
+function unCloseModal(id) {
+	var el = document.getElementById(id);
+	if (el) el.classList.remove('pn-open');
+}
+/* Close modals on backdrop click */
+document.querySelectorAll('.pn-overlay').forEach(function (overlay) {
+	overlay.addEventListener('click', function (e) {
+		if (e.target === overlay) overlay.classList.remove('pn-open');
+	});
+});
+/* Escape closes whichever modal is open (elements vary by role, so guard) */
+document.addEventListener('keydown', function(e) {
+	if (e.key !== 'Escape') return;
+	var mdHelp  = document.getElementById('un-md-help-overlay');
+	var details = document.getElementById('un-modal-details');
+	if (mdHelp && mdHelp.classList.contains('kn-open')) {
+		mdHelp.classList.remove('kn-open');
+	} else if (details && details.classList.contains('pn-open')) {
+		unCloseDetailsModal();
+	} else {
+		['un-modal-add-member', 'un-modal-edit-member', 'un-modal-add-manager', 'un-modal-retire'].forEach(unCloseModal);
+	}
+}, true);
+<?php endif; ?>
 
 <?php if ($_can_edit): ?>
 // ── Heraldry modal ────────────────────────────────────────
@@ -915,13 +1124,6 @@ function unDoRemoveHeraldry() {
 		.then(function(r) { if (r.ok) window.location.reload(); });
 }
 
-function unOpenModal(id) {
-	document.getElementById(id).classList.add('pn-open');
-}
-function unCloseModal(id) {
-	document.getElementById(id).classList.remove('pn-open');
-}
-
 // ── Details modal dirty tracking ──
 var _unDetailsForm = document.getElementById('un-modal-details') && document.querySelector('#un-modal-details form');
 var _unDetailsOriginals = {};
@@ -967,20 +1169,6 @@ function unCloseDetailsModal() {
 	}
 	unCloseModal('un-modal-details');
 }
-document.addEventListener('keydown', function(e) {
-	if (e.key === 'Escape') {
-		if (document.getElementById('un-md-help-overlay').classList.contains('kn-open')) {
-			document.getElementById('un-md-help-overlay').classList.remove('kn-open');
-		} else if (document.getElementById('un-modal-details').classList.contains('pn-open')) {
-			unCloseDetailsModal();
-		} else {
-			['un-modal-add-member', 'un-modal-edit-member', 'un-modal-add-manager'].forEach(function(id) {
-				unCloseModal(id);
-			});
-		}
-	}
-}, true);
-
 function unConvertType(targetType) {
 	var btn = document.getElementById('un-convert-btn');
 	btn.disabled = true;
@@ -1015,25 +1203,25 @@ function unOpenEditMember(unitMundaneId, role, title) {
 	unOpenModal('un-modal-edit-member');
 }
 
-/* Close modals on backdrop click */
-document.querySelectorAll('.pn-overlay').forEach(function (overlay) {
-	overlay.addEventListener('click', function (e) {
-		if (e.target === overlay) overlay.classList.remove('pn-open');
-	});
-});
+<?php endif; /* end $_can_edit JS */ ?>
 
+<?php if ($_can_edit || $_show_addmgr): ?>
 /* ── Player search factory ──────────────────────────────── */
 var UN_PSEARCH_BASE = '<?=UIR?>KingdomAjax/playersearch/';
 var UN_SCOPE_KID  = <?=(int)($ScopeKingdomId ?? 0)?>;
 var UN_SCOPE_PID  = <?=(int)($ScopeParkId ?? 0)?>;
+var UN_UIR        = '<?=UIR?>';
 
 function initPlayerSearch(cfg) {
-	/* cfg: { inputId, resultsId, hiddenId, parkId, kingdomId } */
+	/* cfg: { inputId, resultsId, hiddenId, parkId, kingdomId, kingdomSelId, parkSelId } */
 	var $input   = document.getElementById(cfg.inputId);
 	var $results = document.getElementById(cfg.resultsId);
 	var $hidden  = document.getElementById(cfg.hiddenId);
 	var debounce, focusIdx = -1, searchSeq = 0;
 	var seen = {};
+	/* "Filter players by" selection (0 = All). When a kingdom is chosen the
+	   search is scoped to it (and optionally a park) instead of going global. */
+	var filterKingdom = 0, filterPark = 0;
 
 	function closeResults() {
 		$results.classList.remove('un-ac-open');
@@ -1082,6 +1270,13 @@ function initPlayerSearch(cfg) {
 			seen[p.MundaneId] = true;
 			$results.appendChild(buildItem(p, ''));
 		});
+	}
+
+	function showEmpty() {
+		var empty = document.createElement('div');
+		empty.className   = 'un-ac-empty';
+		empty.textContent = 'No players found.';
+		$results.appendChild(empty);
 	}
 
 	function runSearch(term) {
@@ -1161,28 +1356,86 @@ function initPlayerSearch(cfg) {
 		}
 	});
 
+	function rerun() {
+		var term = $input.value.trim();
+		if (term.length >= 2) runSearch(term); else closeResults();
+	}
+
+	if ($kSel) {
+		$kSel.addEventListener('change', function () {
+			filterKingdom = parseInt(this.value, 10) || 0;
+			filterPark = 0;
+			if ($pSel) {
+				$pSel.innerHTML = '<option value="">All Parks</option>';
+				if (filterKingdom) {
+					$pSel.style.display = '';
+					fetch(UN_UIR + 'KingdomAjax/kingdom/' + filterKingdom + '/getparks')
+						.then(function (r) { return r.json(); })
+						.then(function (d) {
+							(d.parks || []).forEach(function (pk) {
+								var o = document.createElement('option');
+								o.value = pk.ParkId; o.textContent = pk.Name;
+								$pSel.appendChild(o);
+							});
+						})
+						.catch(function () { /* leave park filter as All Parks on error */ });
+				} else {
+					$pSel.style.display = 'none';
+				}
+			}
+			rerun();
+		});
+	}
+	if ($pSel) {
+		$pSel.addEventListener('change', function () {
+			filterPark = parseInt(this.value, 10) || 0;
+			rerun();
+		});
+	}
+
 	$input.addEventListener('blur', function () {
 		setTimeout(closeResults, 150);
 	});
 }
 
-/* Initialise both search widgets */
-initPlayerSearch({ inputId: 'un-am-input', resultsId: 'un-am-results', hiddenId: 'un-am-mundane-id', parkId: UN_SCOPE_PID, kingdomId: UN_SCOPE_KID });
-initPlayerSearch({ inputId: 'un-mg-input', resultsId: 'un-mg-results', hiddenId: 'un-mg-mundane-id', parkId: UN_SCOPE_PID, kingdomId: UN_SCOPE_KID });
-
-/* Clear search fields when modals close */
+/* Initialise search widgets per available modal */
+<?php if ($_can_edit): ?>
+initPlayerSearch({ inputId: 'un-am-input', resultsId: 'un-am-results', hiddenId: 'un-am-mundane-id', parkId: UN_SCOPE_PID, kingdomId: UN_SCOPE_KID, kingdomSelId: 'un-am-filter-kingdom', parkSelId: 'un-am-filter-park' });
 document.getElementById('un-modal-add-member').addEventListener('transitionend', function () {
 	if (!this.classList.contains('pn-open')) {
 		document.getElementById('un-am-input').value = '';
 		document.getElementById('un-am-mundane-id').value = '';
 	}
 });
+<?php endif; ?>
+<?php if ($_show_addmgr): ?>
+initPlayerSearch({ inputId: 'un-mg-input', resultsId: 'un-mg-results', hiddenId: 'un-mg-mundane-id', parkId: UN_SCOPE_PID, kingdomId: UN_SCOPE_KID, kingdomSelId: 'un-mg-filter-kingdom', parkSelId: 'un-mg-filter-park' });
 document.getElementById('un-modal-add-manager').addEventListener('transitionend', function () {
 	if (!this.classList.contains('pn-open')) {
 		document.getElementById('un-mg-input').value = '';
 		document.getElementById('un-mg-mundane-id').value = '';
+		var pick = document.getElementById('un-mg-member-pick');
+		if (pick) { pick.value = ''; document.getElementById('un-mg-input').disabled = false; }
 	}
 });
+/* Quick-pick: choosing an existing member fills the hidden id and locks search */
+var _unMgPick = document.getElementById('un-mg-member-pick');
+if (_unMgPick) {
+	_unMgPick.addEventListener('change', function () {
+		var input  = document.getElementById('un-mg-input');
+		var hidden = document.getElementById('un-mg-mundane-id');
+		if (this.value) {
+			hidden.value = this.value;
+			input.value  = this.options[this.selectedIndex].text;
+			input.disabled = true;
+		} else {
+			hidden.value = '';
+			input.value  = '';
+			input.disabled = false;
+		}
+	});
+}
+<?php endif; ?>
 <?php endif; ?>
 </script>
 <style>
@@ -1199,5 +1452,69 @@ html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_
 }
 html[data-theme="dark"] #un-roster-table_wrapper .dataTables_paginate .paginate_button.disabled {
   opacity: 0.4 !important;
+}
+</style>
+<style>
+/* ── Retire / Claim / Restore card elements ─────────────────────── */
+.un-card-text {
+  font-size: 13px;
+  color: var(--ork-text-secondary);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.un-card-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ork-border, #e2e8f0);
+}
+.un-card-subhead {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ork-text-muted);
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.un-mg-or-divider {
+  text-align: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--ork-text-lighter);
+  margin: 16px 0;
+  position: relative;
+}
+.un-mg-or-divider::before,
+.un-mg-or-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 34%;
+  height: 1px;
+  background: var(--ork-border, #e2e8f0);
+}
+.un-mg-or-divider::before { left: 0; }
+.un-mg-or-divider::after  { right: 0; }
+.un-retire-note {
+  font-size: 12px;
+  color: var(--ork-text-secondary);
+  background: var(--ork-alert-warning-bg, #fffaf0);
+  border: 1px solid var(--ork-alert-warning-border, #f6e05e);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+.un-retired-card { border-left: 3px solid #c05621; }
+html[data-theme="dark"] .un-retire-note {
+  background: rgba(192, 86, 33, 0.12);
+  border-color: rgba(192, 86, 33, 0.45);
+  color: var(--ork-text-secondary);
 }
 </style>

@@ -50,17 +50,67 @@ class Controller_Search extends Controller {
 		$kingdom_id = valid_id($_GET['KingdomId'] ?? 0) ? (int)$_GET['KingdomId'] : null;
 		$park_id    = valid_id($_GET['ParkId']    ?? 0) ? (int)$_GET['ParkId']    : null;
 		$is_default = strlen($name) === 0;
-		$result = $this->Unit->get_unit_list([
-			'Name'              => $name,
-			'KingdomId'         => $kingdom_id,
-			'ParkId'            => $park_id,
-			'IncludeCompanies'  => 1,
-			'IncludeHouseHolds' => 1,
-			'IncludeEvents'     => 1,
-			'Limit'             => 250,
-			'OrderBy'           => $is_default ? 'active_member_count DESC' : 'u.name',
-		]);
+		// Retired/deactivated units are hidden unless the "Include Inactive/Retired"
+		// toggle is on (sent as &include=1).
+		$include_retired = !empty($_GET['include']) ? 1 : 0;
+		if ($is_default) {
+			// No search term → ready list of the top 100 units by roster size for the
+			// scope. Two-phase + no attendance subqueries → ~180ms, so this can load
+			// on page open without a minimum-character gate. Activity columns are
+			// computed only once the user searches by name (below).
+			$result = $this->Unit->get_unit_list([
+				'KingdomId'         => $kingdom_id,
+				'ParkId'            => $park_id,
+				'IncludeCompanies'  => 1,
+				'IncludeHouseHolds' => 1,
+				'IncludeEvents'     => 1,
+				'IncludeRetired'    => $include_retired,
+				'TopBySize'         => 1,
+				'Limit'             => 100,
+			]);
+		} else {
+			$result = $this->Unit->get_unit_list([
+				'Name'              => $name,
+				'KingdomId'         => $kingdom_id,
+				'ParkId'            => $park_id,
+				'IncludeCompanies'  => 1,
+				'IncludeHouseHolds' => 1,
+				'IncludeEvents'     => 1,
+				'IncludeRetired'    => $include_retired,
+				'Limit'             => 250,
+				'OrderBy'           => 'u.name',
+			]);
+		}
 		echo json_encode($result['Units'] ?? []);
+		exit;
+	}
+
+	// Lazy companion to the default unit list: given the unit_ids it just rendered,
+	// return { unit_id: active_member_count } (members with a sign-in in the last 12
+	// months). Bounded to the shown units (<=250) so it stays ~1s, and the front-end
+	// fires it after the list is already interactive.
+	public function unitactivity() {
+		header('Content-Type: application/json');
+		$ids = array_values(array_unique(array_filter(array_map('intval', explode(',', $_GET['ids'] ?? '')))));
+		if (empty($ids)) { echo json_encode(new stdClass()); exit; }
+		$ids = array_slice($ids, 0, 250);
+		$cache_key = Ork3::$Lib->ghettocache->key($ids);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.unitactivity', $cache_key, 300)) !== false) {
+			echo json_encode($cache, JSON_FORCE_OBJECT); exit;
+		}
+		global $DB;
+		$in = implode(',', $ids);
+		$sql = "select um.unit_id, count(distinct um.mundane_id) as active_count
+				from " . DB_PREFIX . "unit_mundane um
+					join " . DB_PREFIX . "attendance a on a.mundane_id = um.mundane_id and a.date >= date_sub(curdate(), interval 1 year)
+				where um.unit_id in ($in)
+				group by um.unit_id";
+		$DB->Clear();
+		$rs = $DB->DataSet($sql);
+		$out = array();
+		while ($rs->Next()) { $out[(int)$rs->unit_id] = (int)$rs->active_count; }
+		Ork3::$Lib->ghettocache->cache(__CLASS__ . '.unitactivity', $cache_key, $out);
+		echo json_encode($out, JSON_FORCE_OBJECT);
 		exit;
 	}
 	
