@@ -35,33 +35,11 @@
 			}
 		});
 		
-		$( "#Suspendator" ).autocomplete({
-			source: function( request, response ) {
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						kingdom_id: <?=$this->__session->kingdom_id ?>
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#Suspendator', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#Suspendator', ui);
-				$('#SuspendatorId').val(ui.item.value);
-				return false;
+		OrkPlayerSearch.attach(document.getElementById('Suspendator'), {
+			uir: '<?=UIR ?>',
+			kingdomId: <?=intval($this->__session->kingdom_id) ?>,
+			onSelect: function(p) {
+				document.getElementById('SuspendatorId').value = p.MundaneId;
 			}
 		});
 		
