@@ -4,6 +4,13 @@
 		<script>
 		(function(){var t=localStorage.getItem('ork_theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(t==='light'){document.documentElement.setAttribute('data-theme','light');}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.setAttribute('data-theme','dark');}})();
 		</script>
+		<!-- Google Tag Manager -->
+		<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+		new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+		j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+		'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+		})(window,document,'script','dataLayer','GTM-5HZHGSLT');</script>
+		<!-- End Google Tag Manager -->
 		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
 		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
@@ -115,6 +122,10 @@
 		</style>
 </head>
 	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
+		<!-- Google Tag Manager (noscript) -->
+		<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5HZHGSLT"
+		height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+		<!-- End Google Tag Manager (noscript) -->
 <div id="ork-offline-banner"><i class="fas fa-wifi" style="margin-right:6px;opacity:0.8"></i>You&rsquo;re currently offline &mdash; changes may not save until your connection is restored.</div>
 <?php
 // -----------------------------------------------------------------------
