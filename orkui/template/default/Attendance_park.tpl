@@ -696,8 +696,8 @@ $(function() {
 		},
 		focus:  function(e, ui) { return showLabel('#KingdomName', ui); },
 		delay:  250,
-		select: function(e, ui) { showLabel('#KingdomName', ui); $('#KingdomId').val(ui.item.value); return false; },
-		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); } return false; },
+		select: function(e, ui) { showLabel('#KingdomName', ui); $('#KingdomId').val(ui.item.value); attRescopePlayer(); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); attRescopePlayer(); } return false; },
 		minLength: 0
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
@@ -713,15 +713,15 @@ $(function() {
 		},
 		focus:  function(e, ui) { return showLabel('#ParkName', ui); },
 		delay:  250,
-		select: function(e, ui) { showLabel('#ParkName', ui); $('#ParkId').val(ui.item.value); return false; },
-		change: function(e, ui) { if (!ui.item) { showLabel('#ParkName', null); $('#ParkId').val(null); } return false; }
+		select: function(e, ui) { showLabel('#ParkName', ui); $('#ParkId').val(ui.item.value); attRescopePlayer(); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#ParkName', null); $('#ParkId').val(null); attRescopePlayer(); } return false; }
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
 	/* ── Player autocomplete (park + kingdom + global ranked server-side) */
 	OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
 		uir: '<?=UIR ?>',
-		parkId: <?=intval($pid) ?>,
-		kingdomId: <?=intval($kid) ?>,
+		parkId:    parseInt($('#ParkId').val())    || <?=intval($pid) ?>,
+		kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?>,
 		onSelect: function(p) {
 			document.getElementById('MundaneId').value = p.MundaneId;
 			attCheckSubmit();
@@ -731,6 +731,7 @@ $(function() {
 			attCheckSubmit();
 		}
 	});
+	function attRescopePlayer(){ OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt($('#ParkId').val()) || <?=intval($pid) ?>, kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?> }); }
 
 	var ATT_CLASSES = <?=json_encode(array_values($Classes['Classes'] ?? []))?>;
 
