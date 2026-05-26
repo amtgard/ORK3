@@ -98,17 +98,7 @@
 .ap-empty { padding:28px; text-align:center; color:var(--rp-text-hint); font-size:13px; }
 .ap-empty i { font-size:20px; display:block; margin-bottom:8px; opacity:.4; }
 
-.kn-ac-results { position:absolute; top:100%; left:0; right:0; z-index:9999; margin-top:4px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
-.kn-ac-results.kn-ac-open { display:block; }
-.kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; outline:none; }
-.kn-ac-item:last-child { border-bottom:none; }
-.kn-ac-item:hover, .kn-ac-item:focus, .kn-ac-item.kn-ac-focused { background:#ebf4ff; color:#2c7a7b; outline:none; }
 
-html[data-theme="dark"] .kn-ac-results { background:var(--ork-card-bg); border-color:var(--ork-border); box-shadow:0 4px 12px rgba(0,0,0,0.4); }
-html[data-theme="dark"] .kn-ac-item { color:var(--ork-text); border-bottom-color:var(--ork-border); }
-html[data-theme="dark"] .kn-ac-item:hover,
-html[data-theme="dark"] .kn-ac-item:focus,
-html[data-theme="dark"] .kn-ac-item.kn-ac-focused { background:var(--ork-bg-tertiary); color:var(--ork-link-bright); outline:none; }
 
 html[data-theme="dark"] .ap-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
 html[data-theme="dark"] .ap-field input,
@@ -161,7 +151,7 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 					<div style="position:relative">
 						<input type="text" id="ap-player-input" placeholder="Search by persona or username&hellip;" autocomplete="off">
 						<input type="hidden" id="ap-player-id">
-						<div class="kn-ac-results" id="ap-player-results"></div>
+						
 					</div>
 				</div>
 				<div class="ap-field" style="flex:1;min-width:140px">
@@ -526,107 +516,41 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 (function ($) {
 	var AJAX_BASE = <?= json_encode($ajaxBase) ?>;
 
-	// ── Autocomplete ──────────────────────────────────────────────
+	// ── Autocomplete via OrkPlayerSearch ────────────────────────
 	var AP_PERM_TYPE = <?= json_encode($type) ?>;
 	var AP_PERM_ID   = <?= (int)$entityId ?>;
-	var AP_UIR       = <?= json_encode(UIR) ?>;
 
-	function apEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+	(function () {
+		var apInput  = document.getElementById('ap-player-input');
+		var apHidden = document.getElementById('ap-player-id');
+		var apBtn    = document.getElementById('ap-add-btn');
 
-	// ── Custom autocomplete dropdown ───────────────────────────────
-	var apResults = document.getElementById('ap-player-results');
-	var apInput   = document.getElementById('ap-player-input');
-	var apTimer   = null;
-	var apSeq     = 0; // increments on each search to discard stale responses
-
-	function apClose() { apResults.classList.remove('kn-ac-open'); apResults.innerHTML = ''; }
-
-	function apSelect(item) {
-		apInput.value = decodeURIComponent(item.dataset.name);
-		document.getElementById('ap-player-id').value  = item.dataset.id;
-		document.getElementById('ap-add-btn').disabled = false;
-		apClose();
-		apInput.focus();
-	}
-
-	function apOpen(items) {
-		if (!items.length) { apClose(); return; }
-		apResults.innerHTML = items.map(function (p) {
-			return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId
-				+ '" data-name="' + encodeURIComponent(p.Persona) + '">'
-				+ apEsc(p.Persona)
-				+ ' <span style="color:#a0aec0;font-size:11px">(' + apEsc((p.KAbbr||'') + ':' + (p.PAbbr||'')) + ')</span></div>';
-		}).join('');
-		apResults.classList.add('kn-ac-open');
-	}
-
-	apInput.addEventListener('input', function () {
-		var term = this.value.trim();
-		document.getElementById('ap-player-id').value = '';
-		document.getElementById('ap-add-btn').disabled = true;
-		clearTimeout(apTimer);
-		if (term.length < 2) { apClose(); return; }
-		var seq = ++apSeq;
-		apTimer = setTimeout(function () {
-			var urlA, urlB;
-			if (AP_PERM_TYPE === 'Kingdom') {
-				urlA = AP_UIR + 'KingdomAjax/playersearch/' + AP_PERM_ID + '&scope=own&q='     + encodeURIComponent(term);
-				urlB = AP_UIR + 'KingdomAjax/playersearch/' + AP_PERM_ID + '&scope=exclude&q=' + encodeURIComponent(term);
-			} else {
-				urlA = AJAX_BASE + 'playersearch&scope=own&q='     + encodeURIComponent(term);
-				urlB = AJAX_BASE + 'playersearch&scope=exclude&q=' + encodeURIComponent(term);
-			}
-			$.when($.getJSON(urlA), $.getJSON(urlB)).then(function (rA, rB) {
-				if (seq !== apSeq) return; // input changed while request was in flight
-				var seen = {}, items = [];
-				(rA[0] || []).forEach(function (p) { if (!seen[p.MundaneId]) { seen[p.MundaneId] = true; items.push(p); } });
-				(rB[0] || []).forEach(function (p) { if (!seen[p.MundaneId]) { seen[p.MundaneId] = true; items.push(p); } });
-				apOpen(items.slice(0, 15));
-			}).fail(function () { if (seq === apSeq) apClose(); });
-		}, 220);
-	});
-
-	// Keyboard navigation from the input field
-	apInput.addEventListener('keydown', function (e) {
-		if (!apResults.classList.contains('kn-ac-open')) return;
-		if (e.key === 'ArrowDown') {
-			e.preventDefault();
-			var first = apResults.querySelector('.kn-ac-item');
-			if (first) first.focus();
-		} else if (e.key === 'Escape') {
-			apClose();
+		var searchOpts = { uir: <?= json_encode(UIR) ?> };
+		if (AP_PERM_TYPE === 'Kingdom') {
+			searchOpts.kingdomId  = AP_PERM_ID;
+			searchOpts.restrictTo = 'kingdom';
+		} else if (AP_PERM_TYPE === 'Park') {
+			searchOpts.parkId     = AP_PERM_ID;
+			searchOpts.restrictTo = 'park';
 		}
-	});
+		// Event type: no scoping — global search (event grants are scoped by event id, not player location)
 
-	// Keyboard navigation within the dropdown
-	apResults.addEventListener('keydown', function (e) {
-		var focused = document.activeElement;
-		if (e.key === 'ArrowDown') {
-			e.preventDefault();
-			var next = focused.nextElementSibling;
-			if (next) next.focus(); else apResults.querySelector('.kn-ac-item').focus();
-		} else if (e.key === 'ArrowUp') {
-			e.preventDefault();
-			var prev = focused.previousElementSibling;
-			if (prev) prev.focus(); else apInput.focus();
-		} else if (e.key === 'Enter') {
-			e.preventDefault();
-			if (focused && focused.dataset.id) apSelect(focused);
-		} else if (e.key === 'Escape') {
-			apClose();
+		searchOpts.onSelect = function (player) {
+			apHidden.value   = player.MundaneId;
+			apBtn.disabled   = false;
 			apInput.focus();
-		}
-	});
+		};
 
-	apResults.addEventListener('click', function (e) {
-		var item = e.target.closest('.kn-ac-item[data-id]');
-		if (!item) return;
-		apSelect(item);
-	});
+		OrkPlayerSearch.attach(apInput, searchOpts);
 
-	document.addEventListener('click', function (e) {
-		if (!e.target.closest('#ap-player-input, #ap-player-results')) apClose();
-	});
+		// Reset hidden id / button when user clears input
+		apInput.addEventListener('input', function () {
+			if (!this.value.trim()) {
+				apHidden.value = '';
+				apBtn.disabled = true;
+			}
+		});
+	})();
 
 	// ── Add ───────────────────────────────────────────────────────
 	function showFb(msg, ok) {
