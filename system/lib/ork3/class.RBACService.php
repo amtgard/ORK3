@@ -307,10 +307,16 @@ class RBACService extends Ork3
 			return InvalidParameter( null, 'Role not found.' );
 		}
 
-		// Self-appointment guard for officer roles
-		if ( $role->is_system && $granter_id == $target_id ) {
-			$officer_roles = [ 'monarch', 'regent', 'prime_minister', 'champion', 'gmr' ];
-			if ( in_array( $role->name, $officer_roles ) ) {
+		// Self-appointment guard for officer roles (BUG-2): block self-grant of ANY
+		// role bound to a non-retired officer position (system OR kingdom-custom).
+		if ( $granter_id == $target_id ) {
+			$officer_bound = $this->RoleIsOfficerBound( $role_id );
+			// Belt-and-suspenders fallback if the registry query failed.
+			if ( !$officer_bound ) {
+				$officer_roles = [ 'monarch', 'regent', 'prime_minister', 'champion', 'gmr' ];
+				$officer_bound = ( $role->is_system && in_array( $role->name, $officer_roles ) );
+			}
+			if ( $officer_bound ) {
 				return NoAuthorization( 'Cannot assign officer roles to yourself.' );
 			}
 		}
@@ -740,6 +746,77 @@ class RBACService extends Ork3
 	}
 
 	/**
+	 * BUG-2 helper: is this role_id bound as the rbac_role_id of any non-retired
+	 * officer position (system or kingdom-custom)?
+	 *
+	 * @param int $role_id
+	 * @return bool
+	 */
+	public function RoleIsOfficerBound( $role_id )
+	{
+		global $DB;
+		$DB->Clear();
+		$DB->rb_role_id = (int) $role_id;
+		$r = $DB->DataSet( "SELECT 1 AS bound FROM " . DB_PREFIX . "officer_position WHERE rbac_role_id = :rb_role_id AND retired_at IS NULL LIMIT 1" );
+		return ( $r !== false && $r->size() > 0 );
+	}
+
+	/**
+	 * Sync officer RBAC role using the position registry (no string map).
+	 * Reads ork_officer_position.rbac_role_id directly, revokes from outgoing,
+	 * grants to incoming. On vacate (new=0) only revokes.
+	 *
+	 * @param int $old_officer_mundane_id
+	 * @param int $new_officer_mundane_id
+	 * @param int $position_id
+	 * @param int $kingdom_id
+	 * @param int $park_id
+	 * @param int $changed_by
+	 */
+	public function SyncOfficerRoleByPositionId( $old_officer_mundane_id, $new_officer_mundane_id, $position_id, $kingdom_id, $park_id, $changed_by )
+	{
+		global $DB;
+		$old_officer_mundane_id = (int) $old_officer_mundane_id;
+		$new_officer_mundane_id = (int) $new_officer_mundane_id;
+		$position_id = (int) $position_id;
+		$kingdom_id  = (int) $kingdom_id;
+		$park_id     = (int) $park_id;
+		$changed_by  = (int) $changed_by;
+
+		if ( $position_id <= 0 ) { return; }
+
+		$DB->Clear();
+		$DB->pid = $position_id;
+		$pr = $DB->DataSet( "SELECT rbac_role_id FROM " . DB_PREFIX . "officer_position WHERE position_id = :pid LIMIT 1" );
+		if ( $pr === false || $pr->size() == 0 || !$pr->Next() ) { return; }
+		$rbac_role_id = (int) $pr->rbac_role_id;
+		if ( $rbac_role_id <= 0 ) { return; }
+
+		if ( $old_officer_mundane_id > 0 ) {
+			$DB->Clear();
+			$DB->Execute(
+				"DELETE FROM " . DB_PREFIX . "user_role
+				 WHERE mundane_id = " . $old_officer_mundane_id . "
+				   AND role_id = " . $rbac_role_id . "
+				   AND kingdom_id = " . $kingdom_id . "
+				   AND park_id = " . $park_id
+			);
+			$this->IncrementGenerationCounter( $old_officer_mundane_id );
+		}
+
+		if ( $new_officer_mundane_id > 0 ) {
+			$granted_by_sql = ( $changed_by > 0 ) ? $changed_by : 'NULL';
+			$DB->Clear();
+			$DB->Execute(
+				"INSERT IGNORE INTO " . DB_PREFIX . "user_role
+				 (mundane_id, role_id, kingdom_id, park_id, event_id, unit_id, granted_by, expires_at)
+				 VALUES (" . $new_officer_mundane_id . ", " . $rbac_role_id . ", " . $kingdom_id . ", " . $park_id . ", 0, 0, " . $granted_by_sql . ", NULL)"
+			);
+			$this->IncrementGenerationCounter( $new_officer_mundane_id );
+		}
+	}
+
+	/**
 	 * Create RBAC role assignments for newly created officer slots.
 	 * Called from Common::create_officer() — since new officers start with mundane_id=0,
 	 * this is a no-op but exists for completeness and future use.
@@ -748,7 +825,7 @@ class RBACService extends Ork3
 	 * @param int    $park_id     Park ID (0 for kingdom-level)
 	 * @param string $role        Officer role display name
 	 */
-	public function SyncNewOfficerSlot( $kingdom_id, $park_id, $role )
+	public function SyncNewOfficerSlot( $kingdom_id, $park_id, $role, $position_id = 0 )
 	{
 		// New officer slots are created with mundane_id = 0, so there's nothing
 		// to write to ork_user_role. When an actual officer is appointed via
