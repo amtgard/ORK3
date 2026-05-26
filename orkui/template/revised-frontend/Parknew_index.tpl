@@ -1627,7 +1627,7 @@ var PkConfig = {
 	classes:         <?= json_encode(array_values($Classes         ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	recentAttendees: <?= json_encode(array_values($RecentAttendees ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:     <?= json_encode(!empty($CanAdminPark) ? array_map(function($o) {
-		return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
+		return ['OfficerRole' => $o['OfficerRole'], 'CanonicalKey' => $o['CanonicalKey'] ?? $o['OfficerRole'], 'DisplayTitle' => $o['DisplayTitle'] ?? $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
 	}, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkDetails: {
 		url:         <?= json_encode($parkInfo['Url']         ?? '') ?>,
