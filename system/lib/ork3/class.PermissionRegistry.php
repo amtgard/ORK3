@@ -59,6 +59,11 @@ class PermissionRegistry extends Ork3
 			'Appoint kingdom-level officers',
 			'kingdom', 'officer'
 		],
+		'kingdom.officer.position.manage' => [
+			'Manage Kingdom Officer Positions',
+			'Create, edit, classify, retire, and reinstate kingdom officer positions',
+			'kingdom', 'officer'
+		],
 		'kingdom.officer.vacate' => [
 			'Vacate Kingdom Officer',
 			'Remove kingdom-level officers from office',
@@ -111,6 +116,11 @@ class PermissionRegistry extends Ork3
 		'park.officer.set' => [
 			'Set Park Officer',
 			'Appoint park-level officers',
+			'park', 'officer'
+		],
+		'park.officer.position.manage' => [
+			'Manage Park Officer Positions',
+			'Create, edit, classify, retire, and reinstate park officer positions',
 			'park', 'officer'
 		],
 		'park.officer.vacate' => [
