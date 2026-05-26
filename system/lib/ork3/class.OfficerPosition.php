@@ -111,7 +111,7 @@ class OfficerPosition extends Ork3
 
 		// Permission summary for the bound role.
 		$row['Permissions'] = [];
-		$rbac_role_id = (int) $row['rbac_role_id'];
+		$rbac_role_id = (int) $row['RbacRoleId'];
 		if ( $rbac_role_id > 0 ) {
 			$DB->Clear();
 			$DB->rid = $rbac_role_id;
@@ -132,41 +132,33 @@ class OfficerPosition extends Ork3
 	}
 
 	/**
-	 * Normalize a DataSet registry row into an associative array, exposing
-	 * the canonical key and resolved DisplayTitle in the contracted shape.
+	 * Normalize a DataSet registry row into an associative array in the
+	 * contracted PascalCase shape (PositionId, CanonicalKey, DisplayTitle, ...).
+	 *
+	 * PascalCase-only: every consumer of GetPositions/GetPosition/GetOfficersForDisplay
+	 * output (controller.OfficerAdminAjax, _manage_officers.tpl via the JSON envelope,
+	 * and the write methods in this class) reads the PascalCase keys. Kingdom/Park
+	 * only call ResolvePositionId/ResolveCanonicalKey (scalar returns, not RowToArray),
+	 * so no external snake_case consumer exists.
 	 */
 	private function RowToArray( $r )
 	{
 		return [
 			'PositionId'    => (int) $r->position_id,
-			'position_id'   => (int) $r->position_id,
 			'KingdomId'     => (int) $r->kingdom_id,
-			'kingdom_id'    => (int) $r->kingdom_id,
 			'CanonicalKey'  => $r->canonical_key,
-			'canonical_key' => $r->canonical_key,
 			'Title'         => $r->title,
-			'title'         => $r->title,
 			'TitleAlias'    => $r->title_alias,
-			'title_alias'   => $r->title_alias,
 			'DisplayTitle'  => $r->DisplayTitle,
 			'Classification'=> $r->classification,
-			'classification'=> $r->classification,
 			'IsPinned'      => (int) $r->is_pinned,
-			'is_pinned'     => (int) $r->is_pinned,
 			'IsSystem'      => (int) $r->is_system,
-			'is_system'     => (int) $r->is_system,
 			'RbacRoleId'    => (int) $r->rbac_role_id,
-			'rbac_role_id'  => (int) $r->rbac_role_id,
 			'HasAuthRole'   => (int) $r->has_auth_role,
-			'has_auth_role' => (int) $r->has_auth_role,
 			'SortOrder'     => (int) $r->sort_order,
-			'sort_order'    => (int) $r->sort_order,
 			'ParentPositionId'   => ( $r->parent_position_id === null || $r->parent_position_id === '' ) ? null : (int) $r->parent_position_id,
-			'parent_position_id' => ( $r->parent_position_id === null || $r->parent_position_id === '' ) ? null : (int) $r->parent_position_id,
 			'HideWhenVacant'     => (int) $r->hide_when_vacant,
-			'hide_when_vacant'   => (int) $r->hide_when_vacant,
 			'RetiredAt'     => $r->retired_at,
-			'retired_at'    => $r->retired_at,
 		];
 	}
 
@@ -316,6 +308,7 @@ class OfficerPosition extends Ork3
 
 		// Resolve the RBAC role binding.
 		$rbac_role_id = 0;
+		$created_custom_role_id = 0; // C1: set when CreateRole runs in custom mode
 		if ( is_array( $rbac_choice ) && isset( $rbac_choice['mode'] ) && $rbac_choice['mode'] === 'custom' ) {
 			$permission_keys = isset( $rbac_choice['permission_keys'] ) ? $rbac_choice['permission_keys'] : [];
 			if ( !isset( Ork3::$Lib->rbacservice ) ) {
@@ -328,10 +321,16 @@ class OfficerPosition extends Ork3
 				return $res;
 			}
 			$rbac_role_id = (int) $res['Detail'];
+			// C1: remember that THIS call created the role, so we can roll it back if
+			// the position INSERT below fails (avoid orphaning a custom role).
+			$created_custom_role_id = $rbac_role_id;
 		} else if ( is_array( $rbac_choice ) && isset( $rbac_choice['mode'] ) && $rbac_choice['mode'] === 'existing' ) {
 			$rbac_role_id = isset( $rbac_choice['role_id'] ) ? (int) $rbac_choice['role_id'] : 0;
 		}
-		if ( $rbac_role_id <= 0 ) {
+		// 'none' mode: rbac_role_id stays 0 (the holder gets no extra access). A 0
+		// binding is valid only for explicit 'none'; otherwise a binding is required.
+		$rbac_mode = ( is_array( $rbac_choice ) && isset( $rbac_choice['mode'] ) ) ? $rbac_choice['mode'] : '';
+		if ( $rbac_mode !== 'none' && $rbac_role_id <= 0 ) {
 			return InvalidParameter( null, 'A valid RBAC role binding is required.' );
 		}
 
@@ -384,6 +383,22 @@ class OfficerPosition extends Ork3
 			// Fallback: UNIQUE(kingdom_id, canonical_key) makes this lookup safe.
 			$position_id = $this->ResolvePositionId( $kingdom_id, $slug );
 		}
+
+		// C1: the INSERT failed (no usable position_id). If THIS call created a
+		// custom role, roll it back so it is not orphaned, and never return Success(0).
+		if ( $position_id <= 0 ) {
+			if ( $created_custom_role_id > 0 ) {
+				$DB->Clear();
+				$DB->orphan_rid = $created_custom_role_id;
+				$DB->orphan_kid = $kingdom_id;
+				$DB->Execute(
+					"DELETE FROM " . DB_PREFIX . "role
+					 WHERE role_id = :orphan_rid AND kingdom_id = :orphan_kid AND is_system = 0"
+				);
+			}
+			return ProcessingError( 'The position could not be created. Please try again.' );
+		}
+
 		return Success( $position_id );
 	}
 
@@ -406,20 +421,26 @@ class OfficerPosition extends Ork3
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
 		}
-		$is_pinned = (int) $position['is_pinned'];
-		$is_system = (int) $position['is_system'];
-		$pos_kingdom_id = (int) $position['kingdom_id'];
-		$canonical_key  = $position['canonical_key'];
+		$is_pinned = (int) $position['IsPinned'];
+		$is_system = (int) $position['IsSystem'];
+		$pos_kingdom_id = (int) $position['KingdomId'];
+		$canonical_key  = $position['CanonicalKey'];
 		$changed_by = isset( $fields['changed_by'] ) ? (int) $fields['changed_by'] : 0;
 		$editor_id  = isset( $fields['editor_id'] ) ? (int) $fields['editor_id'] : $changed_by;
+
+		// S1: kingdom-ownership guard. Allow shared system rows (kingdom_id=0) and
+		// the acting kingdom's own rows; reject a different kingdom's custom row.
+		if ( $pos_kingdom_id !== 0 && $acting_kingdom_id > 0 && $pos_kingdom_id !== $acting_kingdom_id ) {
+			return NoAuthorization( 'Position does not belong to this kingdom.' );
+		}
 
 		// Reject pinned/system classification + RBAC edits server-side. Title alias
 		// (via the alias table for system rows) and sort_order remain allowed.
 		if ( $is_pinned || $is_system ) {
-			if ( isset( $fields['classification'] ) && $fields['classification'] !== $position['classification'] ) {
+			if ( isset( $fields['classification'] ) && $fields['classification'] !== $position['Classification'] ) {
 				return NoAuthorization( 'Pinned/system positions cannot be reclassified.' );
 			}
-			if ( ( isset( $fields['rbac_role_id'] ) && (int) $fields['rbac_role_id'] !== (int) $position['rbac_role_id'] )
+			if ( ( isset( $fields['rbac_role_id'] ) && (int) $fields['rbac_role_id'] !== (int) $position['RbacRoleId'] )
 				|| isset( $fields['permission_keys'] ) ) {
 				return NoAuthorization( 'Pinned/system positions cannot have their RBAC binding changed.' );
 			}
@@ -472,6 +493,38 @@ class OfficerPosition extends Ork3
 			}
 		}
 
+		// S2: resolve + validate an existing-role rebind BEFORE binding the UPDATE
+		// params. The role-lookup DataSet runs its own $DB->Clear(), which would wipe
+		// the UPDATE bindings if interleaved (stale-PDO-binding guard). Only applies
+		// to non-pinned positions changing to a different role.
+		$rebind_to_role_id = 0;
+		if ( !$is_pinned && isset( $fields['rbac_role_id'] ) && (int) $fields['rbac_role_id'] > 0
+			&& (int) $fields['rbac_role_id'] !== (int) $position['RbacRoleId'] ) {
+			$candidate = (int) $fields['rbac_role_id'];
+			$DB->Clear();
+			$DB->vr_rid = $candidate;
+			$vr = $DB->DataSet(
+				"SELECT kingdom_id FROM " . DB_PREFIX . "role WHERE role_id = :vr_rid LIMIT 1"
+			);
+			if ( $vr === false || $vr->size() == 0 || !$vr->Next() ) {
+				return InvalidParameter( null, 'The selected role does not exist.' );
+			}
+			// The chosen role must be a system role (kingdom_id=0) or owned by the
+			// acting kingdom — never a foreign kingdom's custom role (which would let
+			// this position inherit that kingdom's permissions).
+			$role_kingdom_id = (int) $vr->kingdom_id;
+			if ( $role_kingdom_id !== 0 && $acting_kingdom_id > 0 && $role_kingdom_id !== $acting_kingdom_id ) {
+				return NoAuthorization( 'Role does not belong to this kingdom.' );
+			}
+			$rebind_to_role_id = $candidate;
+		}
+
+		// Rebinding to None (rbac_role_id explicitly 0): the holder gets no extra
+		// access. Only for non-pinned positions whose current binding is non-zero.
+		// No DB lookup needed (0 is always valid), so no stale-binding concern.
+		$rebind_to_none = ( !$is_pinned && isset( $fields['rbac_role_id'] ) && (int) $fields['rbac_role_id'] === 0
+			&& (int) $position['RbacRoleId'] !== 0 );
+
 		// title / title_alias(custom only) / sort_order — written on the row itself.
 		$sets = [];
 		$DB->Clear();
@@ -502,13 +555,13 @@ class OfficerPosition extends Ork3
 			// otherwise the current stored classification.
 			$eff_cls = ( !$is_pinned && array_key_exists( 'classification', $fields )
 				&& ( $fields['classification'] === 'crown' || $fields['classification'] === 'supporting' ) )
-				? $fields['classification'] : $position['classification'];
+				? $fields['classification'] : $position['Classification'];
 			$hide = ( $eff_cls === 'crown' || $is_pinned || $is_system ) ? 0 : ( ( (int) $fields['hide_when_vacant'] ) ? 1 : 0 );
 			$DB->ep_hwv = $hide;
 			$sets[] = "hide_when_vacant = :ep_hwv";
 		}
 
-		$old_rbac_role_id = (int) $position['rbac_role_id'];
+		$old_rbac_role_id = (int) $position['RbacRoleId'];
 		$new_rbac_role_id = $old_rbac_role_id;
 
 		if ( !$is_pinned ) {
@@ -524,12 +577,17 @@ class OfficerPosition extends Ork3
 				Ork3::$Lib->rbacservice->EditRole( $editor_id, $old_rbac_role_id, $fields['permission_keys'] );
 			}
 
-			// Rebinding to a different existing role.
-			if ( isset( $fields['rbac_role_id'] ) && (int) $fields['rbac_role_id'] > 0
-				&& (int) $fields['rbac_role_id'] !== $old_rbac_role_id ) {
-				$new_rbac_role_id = (int) $fields['rbac_role_id'];
+			// Rebinding to a different existing role (validated up-front into
+			// $rebind_to_role_id before the UPDATE bindings were set).
+			if ( $rebind_to_role_id > 0 ) {
+				$new_rbac_role_id = $rebind_to_role_id;
 				$DB->ep_rid = $new_rbac_role_id;
 				$sets[] = "rbac_role_id = :ep_rid";
+			} else if ( $rebind_to_none ) {
+				// None: store 0 so the holder gets no extra access. Reconciliation
+				// below revokes the old role from all live occupants.
+				$new_rbac_role_id = 0;
+				$sets[] = "rbac_role_id = 0";
 			}
 		}
 
@@ -585,7 +643,7 @@ class OfficerPosition extends Ork3
 			return InvalidParameter( null, 'A position can only report to a system position or one in the same kingdom.' );
 		}
 
-		if ( $position_id > 0 && $this->WouldCreateCycle( $position_id, $proposed_parent_id ) ) {
+		if ( $position_id > 0 && $this->WouldCreateCycle( $position_id, $proposed_parent_id, $pos_kingdom_id ) ) {
 			return InvalidParameter( null, 'A position cannot report to its own descendant.' );
 		}
 
@@ -595,29 +653,48 @@ class OfficerPosition extends Ork3
 	/**
 	 * Walk the parent chain upward from $proposed_parent_id. If we ever reach
 	 * $position_id, assigning that parent would form a cycle.
+	 *
+	 * P1: load the kingdom's parent map (shared system rows + this kingdom's rows)
+	 * in ONE query, then walk the chain in PHP with a visited-set guard, instead of
+	 * issuing one query per ancestor hop.
 	 */
-	private function WouldCreateCycle( $position_id, $proposed_parent_id )
+	private function WouldCreateCycle( $position_id, $proposed_parent_id, $pos_kingdom_id = 0 )
 	{
 		global $DB;
 		$position_id = (int) $position_id;
+		$pos_kingdom_id = (int) $pos_kingdom_id;
+
+		// Build position_id => parent_position_id for the visible scope in one query.
+		$DB->Clear();
+		$DB->wc_kid = $pos_kingdom_id;
+		$r = $DB->DataSet(
+			"SELECT position_id, parent_position_id FROM " . DB_PREFIX . "officer_position
+			 WHERE kingdom_id = 0 OR kingdom_id = :wc_kid"
+		);
+		$parent_of = [];
+		if ( $r !== false && $r->size() > 0 ) {
+			while ( $r->Next() ) {
+				$next = $r->parent_position_id;
+				$parent_of[ (int) $r->position_id ] = ( $next === null || $next === '' ) ? 0 : (int) $next;
+			}
+		}
+
 		$cursor = (int) $proposed_parent_id;
-		$guard = 0;
-		while ( $cursor > 0 && $guard < 1000 ) {
+		$visited = [];
+		while ( $cursor > 0 ) {
 			if ( $cursor === $position_id ) {
 				return true;
 			}
-			$DB->Clear();
-			$DB->wc_pid = $cursor;
-			$r = $DB->DataSet(
-				"SELECT parent_position_id FROM " . DB_PREFIX . "officer_position
-				 WHERE position_id = :wc_pid LIMIT 1"
-			);
-			if ( $r === false || $r->size() == 0 || !$r->Next() ) {
+			if ( isset( $visited[ $cursor ] ) ) {
+				// Pre-existing cycle in the data, or an id outside the loaded scope:
+				// stop walking. Not a NEW cycle through $position_id.
 				return false;
 			}
-			$next = $r->parent_position_id;
-			$cursor = ( $next === null || $next === '' ) ? 0 : (int) $next;
-			$guard++;
+			$visited[ $cursor ] = true;
+			if ( !isset( $parent_of[ $cursor ] ) ) {
+				return false;
+			}
+			$cursor = $parent_of[ $cursor ];
 		}
 		return false;
 	}
@@ -649,28 +726,44 @@ class OfficerPosition extends Ork3
 				'park_id'    => (int) $occ->park_id,
 			];
 		}
-		foreach ( $rows as $row ) {
-			if ( $old_rbac_role_id > 0 ) {
-				$DB->Clear();
-				$DB->Execute(
-					"DELETE FROM " . DB_PREFIX . "user_role
-					 WHERE mundane_id = " . $row['mundane_id'] . "
-					   AND role_id = " . $old_rbac_role_id . "
-					   AND kingdom_id = " . $row['kingdom_id'] . "
-					   AND park_id = " . $row['park_id']
-				);
+
+		$old_rbac_role_id = (int) $old_rbac_role_id;
+		$new_rbac_role_id = (int) $new_rbac_role_id;
+
+		// P2: one batched DELETE for the old role across all occupants, scoped by the
+		// occupants' (mundane_id, kingdom_id, park_id) tuples. Integer-cast every id.
+		if ( $old_rbac_role_id > 0 ) {
+			$tuples = [];
+			foreach ( $rows as $row ) {
+				$tuples[] = "(" . (int) $row['mundane_id'] . ", " . (int) $row['kingdom_id'] . ", " . (int) $row['park_id'] . ")";
 			}
-			if ( $new_rbac_role_id > 0 ) {
-				$granted_by_sql = ( $changed_by > 0 ) ? $changed_by : 'NULL';
-				$DB->Clear();
-				$DB->Execute(
-					"INSERT IGNORE INTO " . DB_PREFIX . "user_role
-					 (mundane_id, role_id, kingdom_id, park_id, event_id, unit_id, granted_by, expires_at)
-					 VALUES (" . $row['mundane_id'] . ", " . $new_rbac_role_id . ", " . $row['kingdom_id'] . ", " . $row['park_id'] . ", 0, 0, " . $granted_by_sql . ", NULL)"
-				);
+			$DB->Clear();
+			$DB->Execute(
+				"DELETE FROM " . DB_PREFIX . "user_role
+				 WHERE role_id = " . $old_rbac_role_id . "
+				   AND (mundane_id, kingdom_id, park_id) IN (" . implode( ', ', $tuples ) . ")"
+			);
+		}
+
+		// P2: one batched multi-row INSERT IGNORE for the new role grant.
+		if ( $new_rbac_role_id > 0 ) {
+			$granted_by_sql = ( $changed_by > 0 ) ? $changed_by : 'NULL';
+			$values = [];
+			foreach ( $rows as $row ) {
+				$values[] = "(" . (int) $row['mundane_id'] . ", " . $new_rbac_role_id . ", " . (int) $row['kingdom_id'] . ", " . (int) $row['park_id'] . ", 0, 0, " . $granted_by_sql . ", NULL)";
 			}
-			if ( isset( Ork3::$Lib->rbacservice ) ) {
-				Ork3::$Lib->rbacservice->InvalidateUserCache( $row['mundane_id'] );
+			$DB->Clear();
+			$DB->Execute(
+				"INSERT IGNORE INTO " . DB_PREFIX . "user_role
+				 (mundane_id, role_id, kingdom_id, park_id, event_id, unit_id, granted_by, expires_at)
+				 VALUES " . implode( ', ', $values )
+			);
+		}
+
+		// Per-occupant cache invalidation stays a loop (Memcache, not DB).
+		if ( isset( Ork3::$Lib->rbacservice ) ) {
+			foreach ( $rows as $row ) {
+				Ork3::$Lib->rbacservice->InvalidateUserCache( (int) $row['mundane_id'] );
 			}
 		}
 	}
@@ -684,17 +777,23 @@ class OfficerPosition extends Ork3
 	 * @param int $changed_by
 	 * @return array
 	 */
-	public function RetirePosition( $position_id, $changed_by )
+	public function RetirePosition( $position_id, $changed_by, $acting_kingdom_id = 0 )
 	{
 		global $DB;
 		$position_id = (int) $position_id;
 		$changed_by = (int) $changed_by;
+		$acting_kingdom_id = (int) $acting_kingdom_id;
 
 		$position = $this->GetPosition( $position_id );
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
 		}
-		if ( (int) $position['is_pinned'] || (int) $position['is_system'] ) {
+		// S1: kingdom-ownership guard (system kingdom_id=0 rows are shared; the
+		// is_pinned/is_system check below blocks retiring shared system rows anyway).
+		if ( (int) $position['KingdomId'] !== 0 && $acting_kingdom_id > 0 && (int) $position['KingdomId'] !== $acting_kingdom_id ) {
+			return NoAuthorization( 'Position does not belong to this kingdom.' );
+		}
+		if ( (int) $position['IsPinned'] || (int) $position['IsSystem'] ) {
 			return NoAuthorization( 'System/pinned positions cannot be retired.' );
 		}
 
@@ -736,13 +835,18 @@ class OfficerPosition extends Ork3
 	 * @param int $position_id
 	 * @return array
 	 */
-	public function ReinstatePosition( $position_id )
+	public function ReinstatePosition( $position_id, $acting_kingdom_id = 0 )
 	{
 		global $DB;
 		$position_id = (int) $position_id;
+		$acting_kingdom_id = (int) $acting_kingdom_id;
 		$position = $this->GetPosition( $position_id );
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
+		}
+		// S1: kingdom-ownership guard (system kingdom_id=0 rows are shared).
+		if ( (int) $position['KingdomId'] !== 0 && $acting_kingdom_id > 0 && (int) $position['KingdomId'] !== $acting_kingdom_id ) {
+			return NoAuthorization( 'Position does not belong to this kingdom.' );
 		}
 
 		$DB->Clear();
@@ -848,14 +952,19 @@ class OfficerPosition extends Ork3
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
 		}
-		if ( $position['retired_at'] !== null ) {
+		// S1: kingdom-ownership guard (system kingdom_id=0 rows are shared; each
+		// kingdom legitimately fills its own occupant). Reject a foreign kingdom row.
+		if ( (int) $position['KingdomId'] !== 0 && $kingdom_id > 0 && (int) $position['KingdomId'] !== $kingdom_id ) {
+			return NoAuthorization( 'Position does not belong to this kingdom.' );
+		}
+		if ( $position['RetiredAt'] !== null ) {
 			return InvalidParameter( null, 'Cannot assign an occupant to a retired position.' );
 		}
 		if ( $mundane_id <= 0 ) {
 			return InvalidParameter( null, 'A valid member is required.' );
 		}
-		$canonical_key = $position['canonical_key'];
-		$classification = $position['classification'];
+		$canonical_key = $position['CanonicalKey'];
+		$classification = $position['Classification'];
 
 		if ( $classification !== 'crown' ) {
 			// Supporting: no lock, no global check, multiple rows allowed. Each
@@ -916,7 +1025,7 @@ class OfficerPosition extends Ork3
 			// (vacant placeholder) before delegating, so find() succeeds.
 			$this->EnsureCrownSlot( $kingdom_id, $park_id, $position_id, $canonical_key );
 			$c = new Common();
-			$c->set_officer( $kingdom_id, $park_id, $mundane_id, $canonical_key, 0, $changed_by, $position_id );
+			$c->set_officer( $kingdom_id, $park_id, $mundane_id, $canonical_key, 0, $changed_by, $position_id, $position['DisplayTitle'] );
 
 			return Success();
 		} finally {
@@ -951,8 +1060,12 @@ class OfficerPosition extends Ork3
 		if ( $position === false ) {
 			return InvalidParameter( null, 'Position not found.' );
 		}
-		$canonical_key = $position['canonical_key'];
-		$classification = $position['classification'];
+		// S1: kingdom-ownership guard (system kingdom_id=0 rows are shared).
+		if ( (int) $position['KingdomId'] !== 0 && $kingdom_id > 0 && (int) $position['KingdomId'] !== $kingdom_id ) {
+			return NoAuthorization( 'Position does not belong to this kingdom.' );
+		}
+		$canonical_key = $position['CanonicalKey'];
+		$classification = $position['Classification'];
 
 		if ( $classification === 'supporting' ) {
 			// Supporting positions can have multiple occupants; close history +
@@ -1074,7 +1187,7 @@ class OfficerPosition extends Ork3
 		// grant is audit-visible (matches Common::record_officer_history columns;
 		// record_officer_history is private, so write the open term directly here).
 		$start = ( trim( (string) $term_start ) !== '' ) ? (string) $term_start : date( 'Y-m-d' );
-		$end   = ( trim( (string) $term_end ) !== '' ) ? (string) $term_end : null;
+		$has_end = ( trim( (string) $term_end ) !== '' );
 		$label = ( trim( (string) $display_label ) !== '' ) ? (string) $display_label : $canonical_key;
 		$DB->Clear();
 		$DB->ih_kid = $kingdom_id;
@@ -1084,12 +1197,20 @@ class OfficerPosition extends Ork3
 		$DB->ih_pos = $position_id;
 		$DB->ih_label = $label;
 		$DB->ih_start = $start;
-		$DB->ih_end = $end;
 		$DB->ih_cb = ( $changed_by > 0 ? $changed_by : null );
+		// C2: end_date is written as a SQL literal so an open term truly stores NULL.
+		// Binding a PHP null can be skipped by the DB layer (yapo/null-skip rule),
+		// leaving a stale value; mirror the parent_position_id = NULL literal pattern.
+		if ( $has_end ) {
+			$DB->ih_end = (string) $term_end;
+			$end_sql = ':ih_end';
+		} else {
+			$end_sql = 'NULL';
+		}
 		$DB->Execute(
 			"INSERT INTO " . DB_PREFIX . "officer_history
 			 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
-			 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, :ih_end, :ih_cb, NOW())"
+			 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, " . $end_sql . ", :ih_cb, NOW())"
 		);
 
 		// RBAC grant via the shared service.

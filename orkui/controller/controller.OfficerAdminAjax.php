@@ -72,8 +72,8 @@ class Controller_OfficerAdminAjax extends Controller {
 			case 'createposition': $this->actionCreatePosition($kingdom_id, $uid);      break;
 			case 'editposition': $this->actionEditPosition($kingdom_id, $uid);          break;
 			case 'reclassify':   $this->actionReclassify($kingdom_id, $uid);            break;
-			case 'retire':       $this->actionRetire($uid);                             break;
-			case 'reinstate':    $this->actionReinstate();                              break;
+			case 'retire':       $this->actionRetire($kingdom_id, $uid);                 break;
+			case 'reinstate':    $this->actionReinstate($kingdom_id);                    break;
 			case 'roles':        $this->actionRoles($kingdom_id);                       break;
 			case 'permissions':  $this->actionPermissions();                           break;
 		}
@@ -143,6 +143,9 @@ class Controller_OfficerAdminAjax extends Controller {
 		if ($mode === 'existing') {
 			return ['mode' => 'existing', 'role_id' => (int)($_POST['RoleId'] ?? 0)];
 		}
+		if ($mode === 'none') {
+			return ['mode' => 'none'];
+		}
 		return null;
 	}
 
@@ -177,8 +180,11 @@ class Controller_OfficerAdminAjax extends Controller {
 	// ============================================================
 
 	private function actionList($kingdom_id, $park_id) {
-		// Crown/supporting from the occupancy-resolved display; one POS object per
-		// registry position (crown single occupant, supporting array of occupants).
+		// P4: two intentionally-separate sources. GetPositions is the full registry
+		// (drives vacant positions + the retired bucket — rows with no occupancy at
+		// all), while GetOfficersForDisplay is scope occupancy (who currently holds
+		// each slot). They cannot be safely collapsed into one query without dropping
+		// vacant/retired registry rows, so they stay distinct.
 		$display = $this->OfficerPosition->GetOfficersForDisplay($kingdom_id, $park_id, false);
 		$positions = $this->OfficerPosition->GetPositions($kingdom_id, true, null);
 
@@ -217,12 +223,12 @@ class Controller_OfficerAdminAjax extends Controller {
 			$pid = (int)$pos['PositionId'];
 			$base = $this->posBase($pos);
 
-			if ($pos['retired_at'] !== null && $pos['retired_at'] !== '') {
+			if ($pos['RetiredAt'] !== null && $pos['RetiredAt'] !== '') {
 				$retired[] = $base;
 				continue;
 			}
 
-			if ($pos['classification'] === 'supporting') {
+			if ($pos['Classification'] === 'supporting') {
 				$occ = [];
 				foreach (($supportingOcc[$pid] ?? []) as $row) {
 					$occ[] = $this->occupant($row);
@@ -337,8 +343,15 @@ class Controller_OfficerAdminAjax extends Controller {
 		$hide_when_vacant = (int)($_POST['HideWhenVacant'] ?? 0) ? 1 : 0;
 
 		$r = $this->OfficerPosition->CreatePosition($kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $uid, $parent_position_id, $hide_when_vacant);
+		// C1: a "success" carrying a non-positive PositionId means the INSERT failed
+		// (the service rolls back any orphaned custom role); surface it as an error.
 		if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
-			$this->emitServiceResult($r, ['data' => ['PositionId' => (int)($r['Detail'] ?? 0)]]);
+			$new_pid = (int)($r['Detail'] ?? 0);
+			if ($new_pid <= 0) {
+				echo json_encode(['status' => 1, 'error' => 'The position could not be created. Please try again.']);
+				return;
+			}
+			$this->emitServiceResult($r, ['data' => ['PositionId' => $new_pid]]);
 		} else {
 			$this->emitServiceResult($r);
 		}
@@ -381,6 +394,8 @@ class Controller_OfficerAdminAjax extends Controller {
 			$fields['rbac_role_id'] = (int)$_POST['RoleId'];
 		} elseif ($mode === 'custom' && isset($_POST['PermissionKeys'])) {
 			$fields['permission_keys'] = $this->parsePermissionKeys($_POST['PermissionKeys']);
+		} elseif ($mode === 'none') {
+			$fields['rbac_role_id'] = 0;
 		}
 
 		$r = $this->OfficerPosition->EditPosition($position_id, $fields, $kingdom_id);
@@ -407,14 +422,14 @@ class Controller_OfficerAdminAjax extends Controller {
 		$this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
 	}
 
-	private function actionRetire($uid) {
+	private function actionRetire($kingdom_id, $uid) {
 		$position_id = (int)($_POST['PositionId'] ?? 0);
 		if (!valid_id($position_id)) {
 			echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
 			return;
 		}
 
-		$r = $this->OfficerPosition->RetirePosition($position_id, $uid);
+		$r = $this->OfficerPosition->RetirePosition($position_id, $uid, $kingdom_id);
 		// On success the service returns the list of vacated occupants in Detail so
 		// the UI can confirm what was cleared.
 		if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
@@ -425,14 +440,14 @@ class Controller_OfficerAdminAjax extends Controller {
 		}
 	}
 
-	private function actionReinstate() {
+	private function actionReinstate($kingdom_id) {
 		$position_id = (int)($_POST['PositionId'] ?? 0);
 		if (!valid_id($position_id)) {
 			echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
 			return;
 		}
 
-		$r = $this->OfficerPosition->ReinstatePosition($position_id);
+		$r = $this->OfficerPosition->ReinstatePosition($position_id, $kingdom_id);
 		$this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
 	}
 

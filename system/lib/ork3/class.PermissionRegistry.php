@@ -410,6 +410,7 @@ class PermissionRegistry extends Ork3
 	 * @param string $officer_role  E.g. 'Monarch', 'Prime Minister', 'Champion'
 	 * @return string|null  RBAC role name (e.g. 'monarch', 'prime_minister') or null if not mapped
 	 */
+	/** @deprecated Legacy fallback for position_id=0 officer rows; positions now bind via ork_officer_position.rbac_role_id. */
 	public static function OfficerRoleToRbacRole( $officer_role )
 	{
 		return isset( self::$officerRoleMap[$officer_role] ) ? self::$officerRoleMap[$officer_role] : null;
@@ -420,6 +421,7 @@ class PermissionRegistry extends Ork3
 	 *
 	 * @return array
 	 */
+	/** @deprecated See OfficerRoleToRbacRole(). Do NOT register new officer roles here — they live in ork_officer_position. */
 	public static function GetOfficerRoleMap()
 	{
 		return self::$officerRoleMap;

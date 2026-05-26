@@ -93,7 +93,12 @@ $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 				<div class="mo-seg" id="mo-pos-rbac-seg">
 					<button type="button" class="mo-seg-btn mo-seg-active" data-rbac="existing" onclick="moSetRbacMode('existing')">Use existing role</button>
 					<button type="button" class="mo-seg-btn" data-rbac="custom" onclick="moSetRbacMode('custom')">Build custom set</button>
+					<button type="button" class="mo-seg-btn" data-rbac="none" onclick="moSetRbacMode('none')">None &mdash; no extra access</button>
 				</div>
+			</div>
+
+			<div class="mo-field" id="mo-pos-none-wrap" style="display:none">
+				<div class="mo-muted" style="padding:4px 0">This office gets no special permissions &mdash; it is recorded and displayed only.</div>
 			</div>
 
 			<div class="mo-field" id="mo-pos-role-wrap">
@@ -790,6 +795,8 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		});
 		document.getElementById('mo-pos-role-wrap').style.display = mode === 'existing' ? '' : 'none';
 		document.getElementById('mo-pos-perm-wrap').style.display = mode === 'custom' ? '' : 'none';
+		var noneWrap = document.getElementById('mo-pos-none-wrap');
+		if (noneWrap) noneWrap.style.display = mode === 'none' ? '' : 'none';
 		if (mode === 'custom' && moPerms === null) ensurePerms(function(){ renderPermGrid([]); });
 	};
 
@@ -840,8 +847,15 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 		var hvCb = document.getElementById('mo-pos-hidevac');
 		if (hvCb) hvCb.checked = (pos.Classification !== 'crown' && parseInt(pos.HideWhenVacant || 0, 10) === 1);
 
-		moSetRbacMode('existing');
-		ensureRoles(function() { renderRoleSelect(pos.RbacRoleId || 0); });
+		// Pre-select None when the position has no role binding (rbac_role_id=0),
+		// except for pinned/system positions (they keep their locked system role).
+		var posRid = parseInt(pos.RbacRoleId || 0, 10);
+		if (!moPinnedClass && posRid === 0) {
+			moSetRbacMode('none');
+		} else {
+			moSetRbacMode('existing');
+		}
+		ensureRoles(function() { renderRoleSelect(posRid); });
 		openPosModal();
 	};
 
@@ -869,11 +883,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 			var rid = parseInt(document.getElementById('mo-pos-role').value || 0, 10);
 			if (!rid) { errEl.textContent = 'Please select a role.'; errEl.style.display = ''; return; }
 			data.RoleId = rid;
+		} else if (moRbacMode === 'none') {
+			// None: no RoleId / PermissionKeys; server stores rbac_role_id=0.
 		} else {
 			var keys = [];
 			document.querySelectorAll('.mo-perm-cb:checked').forEach(function(cb){ keys.push(cb.value); });
 			if (!keys.length) { errEl.textContent = 'Select at least one permission.'; errEl.style.display = ''; return; }
-			data['PermissionKeys[]'] = keys;
+			data['PermissionKeys'] = keys; // array -> PHP $_POST['PermissionKeys']
 		}
 
 		var btn = document.getElementById('mo-pos-save-btn');

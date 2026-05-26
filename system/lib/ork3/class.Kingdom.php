@@ -674,24 +674,47 @@ class Kingdom  extends Ork3 {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$is_authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer.set', 'kingdom', $kingdom_id, AUTH_EDIT);
 
+		// Kingdom-level officers: scope to this kingdom with no park, and resolve
+		// title aliases against this kingdom's own alias rows.
+		$aliasKingdomExpr = "'" . $kingdom_id . "'";
+		$whereClause = "o.kingdom_id = '" . $kingdom_id . "' and o.park_id = 0";
+		return Kingdom::buildOfficerRows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
+	}
+
+	/**
+	 * Shared officer query + result assembly for Kingdom::GetOfficers and
+	 * Park::GetOfficers. The SELECT list, joins, retired/hide-when-vacant
+	 * filters, ORDER BY, privacy gate, and returned key set are identical for
+	 * both callers; they differ only in (a) the officer_position_alias
+	 * kingdom-match expression and (b) the WHERE clause scoping rows to a
+	 * kingdom or a park.
+	 *
+	 * @param object $db               DB handle ($this->db).
+	 * @param string $aliasKingdomExpr SQL expr for al.kingdom_id match
+	 *                                 (e.g. "'5'" for a kingdom, "o.kingdom_id" for a park).
+	 * @param string $whereClause      Scoping WHERE predicate (without leading "where").
+	 * @param int    $mundane_id       Requesting mundane id (privacy gate).
+	 * @param bool   $is_authorized    Whether the requester may see private name fields.
+	 */
+	public static function buildOfficerRows($db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized) {
 		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id, o.position_id,
 					op.canonical_key as canonical_key, op.parent_position_id as parent_position_id, op.hide_when_vacant as hide_when_vacant, op.classification as classification,
 					IF(op.kingdom_id = 0, IF(al.title_alias IS NOT NULL AND al.title_alias != '', al.title_alias, op.title), IF(op.title_alias != '', op.title_alias, op.title)) as display_title
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "officer_position op on op.position_id = o.position_id
-						left join " . DB_PREFIX . "officer_position_alias al on al.kingdom_id = '" . $kingdom_id . "' and al.canonical_key = op.canonical_key
+						left join " . DB_PREFIX . "officer_position_alias al on al.kingdom_id = " . $aliasKingdomExpr . " and al.canonical_key = op.canonical_key
 						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
 						left join " . DB_PREFIX . "authorization a on a.authorization_id = o.authorization_id
 							left join ".DB_PREFIX."park p on a.park_id = p.park_id
 							left join ".DB_PREFIX."kingdom k on a.kingdom_id = k.kingdom_id
 							left join ".DB_PREFIX."event e on a.event_id = e.event_id
 							left join ".DB_PREFIX."unit u on a.unit_id = u.unit_id
-				where o.kingdom_id = '" . $kingdom_id . "' and o.park_id = 0
+				where " . $whereClause . "
 				  and (op.retired_at IS NULL or op.position_id IS NULL)
 				  and NOT (op.hide_when_vacant = 1 and op.classification != 'crown' and (o.mundane_id IS NULL or o.mundane_id = 0))
 				order by op.classification, op.sort_order, o.role
 			";
-		$r = $this->db->query($sql);
+		$r = $db->query($sql);
 		$response = array();
 		$response['Officers'] = array();
 		if ($r !== false && $r->size() > 0) {

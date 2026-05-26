@@ -472,7 +472,7 @@ class Common
             where ka.award_id in ";
   }
   
-	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0, $position_id = 0 )
+	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0, $position_id = 0, $display_label = '' )
 	{
 		global $DB;
 		// Resolve whether this position bypasses the ork_authorization path.
@@ -521,9 +521,26 @@ class Common
 				}
 			}
 
+			// C3: observability — a real change was requested ($new differs from $old)
+			// but $officer_changed never flipped (e.g. has_auth_role crown position whose
+			// ork_authorization row is missing, so find() failed). Leave a diagnosable
+			// breadcrumb rather than silently returning as if nothing was wrong.
+			if ( !$officer_changed && (int)$new_officer_id !== (int)$old_mundane_id ) {
+				logtrace( 'set_officer: officer NOT changed (missing authorization row?)', [
+					'kingdom_id'   => (int)$kingdom_id,
+					'park_id'      => (int)$park_id,
+					'position_id'  => (int)$position_id,
+					'role'         => $role,
+					'old_mundane'  => (int)$old_mundane_id,
+					'new_mundane'  => (int)$new_officer_id,
+					'bypass_auth'  => $bypass_auth ? 1 : 0,
+					'authorization_id' => (int)$this->officer->authorization_id,
+				] );
+			}
+
 			// Record officer history only if the officer was actually changed
 			if ( $officer_changed && (int)$old_mundane_id !== (int)$new_officer_id ) {
-				$this->record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by, $position_id );
+				$this->record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by, $position_id, $display_label );
 
 				// RBAC dual-write: prefer position-id sync, fall back to legacy string path.
 				if ( isset( Ork3::$Lib->rbacservice ) ) {
@@ -545,7 +562,7 @@ class Common
 	 * Record officer change in the ork_officer_history table.
 	 * Closes the previous officer's open record and opens a new one (unless vacating).
 	 */
-	private function record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_mundane_id, $role, $changed_by = 0, $position_id = 0 )
+	private function record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_mundane_id, $role, $changed_by = 0, $position_id = 0, $display_label = '' )
 	{
 		global $DB;
 		$kid  = (int)$kingdom_id;
@@ -556,22 +573,31 @@ class Common
 
 		// Resolve the snapshot DisplayTitle for this position at write time (requirement 7).
 		// IF(alias != '', alias, title) — never COALESCE.
-		$display_label = $role;
-		if ( $posid > 0 ) {
-			$DB->Clear();
-			$DB->dl_pid = $posid;
-			$DB->dl_kid = $kid;
-			$dl = $DB->DataSet(
-				"SELECT IF(p.kingdom_id = 0,
-				             IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
-				             IF(p.title_alias != '', p.title_alias, p.title)) AS display_title
-				 FROM " . DB_PREFIX . "officer_position p
-				 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-				   ON a.kingdom_id = :dl_kid AND a.canonical_key = p.canonical_key
-				 WHERE p.position_id = :dl_pid LIMIT 1"
-			);
-			if ( $dl !== false && $dl->size() > 0 && $dl->Next() ) {
-				$display_label = (string)$dl->display_title;
+		// P3: callers that already resolved the DisplayTitle (e.g. SetOfficerByPosition
+		// via GetPosition) pass it in $display_label, letting us SKIP the inner SELECT.
+		// Backward compatible: when '' is passed (default, as legacy callers do), fall
+		// back to $role and re-run the snapshot SELECT exactly as before.
+		$passed_label = trim( (string) $display_label );
+		if ( $passed_label !== '' ) {
+			$display_label = $passed_label;
+		} else {
+			$display_label = $role;
+			if ( $posid > 0 ) {
+				$DB->Clear();
+				$DB->dl_pid = $posid;
+				$DB->dl_kid = $kid;
+				$dl = $DB->DataSet(
+					"SELECT IF(p.kingdom_id = 0,
+					             IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
+					             IF(p.title_alias != '', p.title_alias, p.title)) AS display_title
+					 FROM " . DB_PREFIX . "officer_position p
+					 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+					   ON a.kingdom_id = :dl_kid AND a.canonical_key = p.canonical_key
+					 WHERE p.position_id = :dl_pid LIMIT 1"
+				);
+				if ( $dl !== false && $dl->size() > 0 && $dl->Next() ) {
+					$display_label = (string)$dl->display_title;
+				}
 			}
 		}
 

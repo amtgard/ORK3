@@ -324,8 +324,10 @@ class RBACService extends Ork3
 		// role bound to a non-retired officer position (system OR kingdom-custom).
 		if ( $granter_id == $target_id ) {
 			$officer_bound = $this->RoleIsOfficerBound( $role_id );
-			// Belt-and-suspenders fallback if the registry query failed.
-			if ( !$officer_bound ) {
+			// Only fall back to the hardcoded Core-Five check when the registry query
+			// errored (null). A definitive false is trusted as-is, so a custom kingdom
+			// role merely named like an officer is not wrongly blocked.
+			if ( $officer_bound === null ) {
 				$officer_roles = [ 'monarch', 'regent', 'prime_minister', 'champion', 'gmr' ];
 				$officer_bound = ( $role->is_system && in_array( $role->name, $officer_roles ) );
 			}
@@ -445,16 +447,119 @@ class RBACService extends Ork3
 			WHERE rp.role_id = " . (int) $role_id;
 		$result = $DB->DataSet( $sql );
 
+		$target_keys = [];
 		if ( $result !== false && $result->size() > 0 ) {
 			while ( $result->Next() ) {
-				$perm_key = $result->key;
-				if ( !$this->HasPermission( $granter_id, $perm_key, $scope_type, $scope_id ) ) {
-					$missing[] = $perm_key;
-				}
+				$target_keys[] = $result->key;
+			}
+		}
+		if ( count( $target_keys ) == 0 ) {
+			return $missing;
+		}
+
+		// Performance: instead of one HasPermission() (each ~1-2 DB hits) per target
+		// key, fetch the set of permission keys the granter effectively holds at this
+		// scope in a single query. We resolve the same scope chain HasPermission uses
+		// (direct at scope, plus the park->kingdom / event->park->kingdom / unit->kingdom
+		// cascade) so any key in this set is one HasPermission() would also grant.
+		$granter_keys = $this->GranterPermissionKeysAtScope( $granter_id, $scope_type, $scope_id );
+
+		foreach ( $target_keys as $perm_key ) {
+			if ( isset( $granter_keys[ $perm_key ] ) ) {
+				continue;
+			}
+			// Not in the aggregate set — fall back to the authoritative per-key check
+			// to preserve exact semantics (admin bypass, ban, any cascade nuance).
+			if ( !$this->HasPermission( $granter_id, $perm_key, $scope_type, $scope_id ) ) {
+				$missing[] = $perm_key;
 			}
 		}
 
 		return $missing;
+	}
+
+	/**
+	 * Collect the set of permission keys a user effectively holds across the given
+	 * scope and every scope it cascades to (mirroring CheckPermissionCascade:
+	 * park->kingdom, event->park->kingdom, unit->kingdom), in a single query.
+	 *
+	 * @return array  Map of permission_key => true for fast isset() lookup.
+	 */
+	private function GranterPermissionKeysAtScope( $mundane_id, $scope_type, $scope_id )
+	{
+		global $DB;
+
+		$mundane_id = (int) $mundane_id;
+		$scope_id = (int) $scope_id;
+
+		// Build the list of (column, id) scope pairs to match against ur, replicating
+		// the cascade resolution. Each pair contributes an OR condition.
+		$pairs = [];
+		$direct_col = $this->ScopeTypeToColumn( $scope_type );
+		if ( $direct_col !== null ) {
+			$pairs[] = [ $direct_col, $scope_id ];
+		}
+
+		switch ( $scope_type ) {
+			case 'park':
+				$park = new yapo( $this->db, DB_PREFIX . 'park' );
+				$park->clear();
+				$park->park_id = $scope_id;
+				if ( $park->find() && valid_id( $park->kingdom_id ) ) {
+					$pairs[] = [ 'kingdom_id', (int) $park->kingdom_id ];
+				}
+				break;
+
+			case 'event':
+				$event = new yapo( $this->db, DB_PREFIX . 'event' );
+				$event->clear();
+				$event->event_id = $scope_id;
+				if ( $event->find() ) {
+					if ( valid_id( $event->park_id ) ) {
+						$pairs[] = [ 'park_id', (int) $event->park_id ];
+					}
+					if ( valid_id( $event->kingdom_id ) ) {
+						$pairs[] = [ 'kingdom_id', (int) $event->kingdom_id ];
+					}
+				}
+				break;
+
+			case 'unit':
+				$DB->Clear();
+				$sql = "SELECT p.kingdom_id FROM " . DB_PREFIX . "unit u JOIN " . DB_PREFIX . "park p ON p.park_id = u.park_id WHERE u.unit_id = " . $scope_id;
+				$ur = $DB->DataSet( $sql );
+				if ( $ur !== false && $ur->size() > 0 && $ur->Next() && valid_id( $ur->kingdom_id ) ) {
+					$pairs[] = [ 'kingdom_id', (int) $ur->kingdom_id ];
+				}
+				break;
+		}
+
+		if ( count( $pairs ) == 0 ) {
+			return [];
+		}
+
+		$scope_clauses = [];
+		foreach ( $pairs as $pair ) {
+			$scope_clauses[] = "ur." . $pair[0] . " = " . (int) $pair[1];
+		}
+
+		$DB->Clear();
+		$sql = "SELECT DISTINCT p.`key`
+			FROM " . DB_PREFIX . "user_role ur
+			JOIN " . DB_PREFIX . "role_permission rp ON rp.role_id = ur.role_id
+			JOIN " . DB_PREFIX . "permission p ON p.permission_id = rp.permission_id
+			WHERE ur.mundane_id = " . $mundane_id . "
+			  AND ( " . implode( ' OR ', $scope_clauses ) . " )
+			  AND (ur.expires_at IS NULL OR ur.expires_at > NOW())";
+		$result = $DB->DataSet( $sql );
+
+		$keys = [];
+		if ( $result !== false && $result->size() > 0 ) {
+			while ( $result->Next() ) {
+				if ( PermissionRegistry::Exists( $result->key ) ) { $keys[ $result->key ] = true; }
+			}
+		}
+		return $keys;
 	}
 
 	// ================================================================
@@ -518,15 +623,19 @@ class RBACService extends Ork3
 			VALUES (:role_name, :display_name, :role_desc, :scope_type, 0, " . $kingdom_id . ", " . $creator_id . ")";
 		$DB->Execute( $sql );
 
-		// Get the new role_id
-		$DB->Clear();
-		$DB->role_name = trim( $name );
-		$sql = "SELECT role_id FROM " . DB_PREFIX . "role WHERE `name` = :role_name AND kingdom_id = " . $kingdom_id;
-		$result = $DB->DataSet( $sql );
-		if ( $result === false || $result->size() == 0 || !$result->Next() ) {
-			return ProcessingError( 'Failed to create role.' );
+		// Prefer the driver's last-insert-id accessor over a race-prone SELECT-after-INSERT.
+		$new_role_id = (int) $DB->GetLastInsertId();
+		if ( $new_role_id <= 0 ) {
+			// Fallback: recover by name + kingdom (custom role names are unique per kingdom).
+			$DB->Clear();
+			$DB->role_name = trim( $name );
+			$sql = "SELECT role_id FROM " . DB_PREFIX . "role WHERE `name` = :role_name AND kingdom_id = " . $kingdom_id;
+			$result = $DB->DataSet( $sql );
+			if ( $result === false || $result->size() == 0 || !$result->Next() ) {
+				return ProcessingError( 'Failed to create role.' );
+			}
+			$new_role_id = (int) $result->role_id;
 		}
-		$new_role_id = $result->role_id;
 
 		// Map permissions to the role
 		foreach ( $permission_keys as $key ) {
@@ -607,18 +716,36 @@ class RBACService extends Ork3
 		}
 		$role->save();
 
-		// Replace permissions: delete all current, then insert new
+		// Replace permissions: delete all current, then batch-insert the new set.
 		$DB->Clear();
 		$DB->Execute( "DELETE FROM " . DB_PREFIX . "role_permission WHERE role_id = " . $role_id );
 
-		foreach ( $permission_keys as $key ) {
+		if ( count( $permission_keys ) > 0 ) {
+			// Resolve all permission_ids in one query (unknown keys are simply absent,
+			// preserving the prior "ignore unknown keys" semantics). Bind each key as a
+			// named parameter, matching the bound-param style used elsewhere.
 			$DB->Clear();
-			$DB->perm_key = $key;
-			$sql = "INSERT IGNORE INTO " . DB_PREFIX . "role_permission (role_id, permission_id)
-				SELECT " . $role_id . ", permission_id
-				FROM " . DB_PREFIX . "permission
-				WHERE `key` = :perm_key";
-			$DB->Execute( $sql );
+			$placeholders = [];
+			$i = 0;
+			foreach ( $permission_keys as $key ) {
+				$ph = 'pk' . $i;
+				$DB->$ph = $key;
+				$placeholders[] = ':' . $ph;
+				$i++;
+			}
+			$pr = $DB->DataSet( "SELECT permission_id FROM " . DB_PREFIX . "permission WHERE `key` IN (" . implode( ',', $placeholders ) . ")" );
+
+			$value_rows = [];
+			if ( $pr !== false && $pr->size() > 0 ) {
+				while ( $pr->Next() ) {
+					$value_rows[] = "(" . $role_id . ", " . (int) $pr->permission_id . ")";
+				}
+			}
+
+			if ( count( $value_rows ) > 0 ) {
+				$DB->Clear();
+				$DB->Execute( "INSERT IGNORE INTO " . DB_PREFIX . "role_permission (role_id, permission_id) VALUES " . implode( ',', $value_rows ) );
+			}
 		}
 
 		// Invalidate cache for all users with this role
@@ -701,6 +828,11 @@ class RBACService extends Ork3
 	 * @param string $role            Officer role display name ('Monarch', 'Regent', etc.)
 	 * @param int    $changed_by      Who made the change (0 = system)
 	 */
+	/**
+	 * @deprecated Legacy string-map sync. Used ONLY as a fallback for un-migrated
+	 * ork_officer rows with position_id = 0. New code path is SyncOfficerRoleByPositionId().
+	 * TODO: remove once all ork_officer rows have position_id > 0.
+	 */
 	public function SyncOfficerRole( $kingdom_id, $park_id, $old_officer_id, $new_officer_id, $role, $changed_by = 0 )
 	{
 		global $DB;
@@ -763,7 +895,7 @@ class RBACService extends Ork3
 	 * officer position (system or kingdom-custom)?
 	 *
 	 * @param int $role_id
-	 * @return bool
+	 * @return bool|null  true/false on a definitive answer, null if the query failed
 	 */
 	public function RoleIsOfficerBound( $role_id )
 	{
@@ -771,7 +903,12 @@ class RBACService extends Ork3
 		$DB->Clear();
 		$DB->rb_role_id = (int) $role_id;
 		$r = $DB->DataSet( "SELECT 1 AS bound FROM " . DB_PREFIX . "officer_position WHERE rbac_role_id = :rb_role_id AND retired_at IS NULL LIMIT 1" );
-		return ( $r !== false && $r->size() > 0 );
+		// Return null on query failure so callers can distinguish a DB error from a
+		// definitive "not officer-bound" answer (BUG-2 self-appointment guard).
+		if ( $r === false ) {
+			return null;
+		}
+		return ( $r->size() > 0 );
 	}
 
 	/**
