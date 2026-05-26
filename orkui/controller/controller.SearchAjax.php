@@ -155,14 +155,16 @@ class Controller_SearchAjax extends Controller {
 		if (!isset($this->session->user_id)) { echo json_encode([]); exit; }
 		$svc = new SearchService();
 		$rows = $svc->RankedPlayers(
-			$_GET['q']                       ?? '',
-			(int)($_GET['parkId']            ?? 0) ?: null,
-			(int)($_GET['kingdomId']         ?? 0) ?: null,
-			$_GET['restrictTo']              ?? '',
-			!empty($_GET['include_inactive'])  ?: null,
-			!empty($_GET['include_suspended']) ?: null,
-			(int)($_GET['limit']             ?? 15) ?: null,
-			$this->session->token            ?? null
+			$_GET['q']                          ?? '',
+			(int)($_GET['parkId']               ?? 0) ?: null,
+			(int)($_GET['kingdomId']            ?? 0) ?: null,
+			$_GET['restrictTo']                 ?? '',
+			!empty($_GET['include_inactive'])     ?: null,
+			!empty($_GET['include_suspended'])    ?: null,
+			(int)($_GET['limit']                ?? 15) ?: null,
+			$this->session->token               ?? null,
+			(int)($_GET['excludeKingdomId']     ?? 0) ?: null,
+			(int)($_GET['excludeParkId']        ?? 0) ?: null
 		);
 		echo json_encode($rows);
 		exit;

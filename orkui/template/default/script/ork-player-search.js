@@ -65,9 +65,11 @@ window.OrkPlayerSearch = (function () {
       var url = uir + 'SearchAjax/players'
         + '&parkId='    + (opts.parkId    || 0)
         + '&kingdomId=' + (opts.kingdomId || 0)
-        + (opts.restrictTo ? '&restrictTo=' + encodeURIComponent(opts.restrictTo) : '')
+        + (opts.restrictTo       ? '&restrictTo='       + encodeURIComponent(opts.restrictTo) : '')
         + (opts.includeInactive  ? '&include_inactive=1'  : '')
         + (opts.includeSuspended ? '&include_suspended=1' : '')
+        + (opts.excludeKingdomId ? '&excludeKingdomId=' + encodeURIComponent(opts.excludeKingdomId) : '')
+        + (opts.excludeParkId    ? '&excludeParkId='    + encodeURIComponent(opts.excludeParkId)    : '')
         + '&limit=' + (opts.limit || 15)
         + '&q=' + encodeURIComponent(term);
       fetch(url).then(function(r){ return r.json(); }).then(render)

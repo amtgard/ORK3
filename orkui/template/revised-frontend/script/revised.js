@@ -6906,14 +6906,6 @@ $(document).ready(function() {
     // ---- Autocompletes ----
     $(document).ready(function() {
         if (typeof EvConfig === 'undefined') return;
-        function showLabel(sel, ui) {
-            if (ui) $(sel).val(ui.item.label);
-            return false;
-        }
-
-        function evAttAbbr(v) {
-            return (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
-        }
 
         function evUpdateAddBtn() {
             var pid  = document.getElementById('ev-MundaneId');
@@ -6932,137 +6924,36 @@ $(document).ready(function() {
         var evCredits = document.getElementById('ev-Credits');
         if (evCredits) evCredits.addEventListener('input', evUpdateAddBtn);
 
-        function evAttendedIds() {
-            var ids = {};
+        function evAttendedIdArray() {
+            var ids = [];
             document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]').forEach(function(tr) {
-                ids[parseInt(tr.dataset.mundaneId, 10)] = true;
+                var mid = parseInt(tr.dataset.mundaneId, 10);
+                if (mid) ids.push(mid);
             });
             return ids;
         }
 
-        // Scoped player-search autocomplete (park members > kingdom members > everyone else)
-        var evPnInput   = document.getElementById('ev-PlayerName');
-        var evPnHidden  = document.getElementById('ev-MundaneId');
-        var evPnResults = document.getElementById('ev-PlayerName-results');
-        var evPnTimer   = null;
-        var evPnSeq     = 0;
+        // Scoped player-search autocomplete via OrkPlayerSearch
+        // Ranks: park members > kingdom members > everyone else (via parkId+kingdomId)
+        // Excludes already-attended players dynamically via excludeIds fn
+        var evPnInput  = document.getElementById('ev-PlayerName');
+        var evPnHidden = document.getElementById('ev-MundaneId');
 
-        function evPnRenderItem(p, attended, seen) {
-            if (attended[p.MundaneId] || seen[p.MundaneId]) return '';
-            seen[p.MundaneId] = true;
-            var abbr = (p.KAbbr || '') + ':' + (p.PAbbr || '');
-            var tags = '';
-            if (p.Suspended) tags += ' <span style="color:#c53030;font-size:10px;font-weight:600;margin-left:4px">(Banned)</span>';
-            if (p.Active === 0) tags += ' <span style="color:#c53030;font-size:10px;font-weight:600;margin-left:4px">(Inactive)</span>';
-            return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona || '') + '">'
-                + escHtml(p.Persona || '') + ' <span style="color:#a0aec0;font-size:11px">— ' + escHtml(abbr) + '</span>' + tags + '</div>';
-        }
-
-        function evPnRenderSection(label, items, attended, seen) {
-            var itemHtml = '';
-            (items || []).forEach(function(p) { itemHtml += evPnRenderItem(p, attended, seen); });
-            if (!itemHtml) return '';
-            return '<div class="ev-ac-section">' + escHtml(label) + '</div>' + itemHtml;
-        }
-
-        function evPnBuildGroups(term) {
-            var kid = parseInt(EvConfig.kingdomId, 10) || 0;
-            var pid = parseInt(EvConfig.parkId, 10) || 0;
-            var base = EvConfig.uir + 'KingdomAjax/playersearch/' + kid;
-            var q = '&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
-            // When an abbreviation prefix (e.g. "kcg: miller") is present, the server
-            // ignores scope/park_id and filters by abbreviation instead — use a single
-            // group so results aren't falsely labelled as "Park Members".
-            if (/^[a-z0-9]{2,3}:[a-z0-9*]{0,3}\s+\S/i.test(term)) {
-                return [ { label: 'Players', url: base + '&scope=all' + q } ];
-            }
-            if (pid > 0 && kid > 0) {
-                return [
-                    { label: 'Park Members',     url: base + '&scope=own&park_id=' + pid + q },
-                    { label: 'Kingdom Members',  url: base + '&scope=own' + q },
-                    { label: 'Everyone Else',    url: base + '&scope=exclude' + q }
-                ];
-            }
-            if (kid > 0) {
-                return [
-                    { label: 'Kingdom Members',  url: base + '&scope=own' + q },
-                    { label: 'Everyone Else',    url: base + '&scope=exclude' + q }
-                ];
-            }
-            return [ { label: 'All Players', url: base + '&scope=all' + q } ];
-        }
-
-        function evPnPosition() {
-            if (!evPnInput || !evPnResults) return;
-            var r = evPnInput.getBoundingClientRect();
-            evPnResults.style.top  = (r.bottom + 2) + 'px';
-            evPnResults.style.left = r.left + 'px';
-        }
-
-        function evPnOpen() {
-            evPnPosition();
-            evPnResults.classList.add('kn-ac-open');
-        }
-
-        function evPnSearch(term) {
-            var groups = evPnBuildGroups(term);
-            if (!groups.length) return;
-            var seq = ++evPnSeq;
-            Promise.all(groups.map(function(g) {
-                return fetch(g.url).then(function(r) { return r.json(); }).catch(function() { return []; });
-            })).then(function(resultsArr) {
-                if (seq !== evPnSeq) return;
-                var attended = evAttendedIds();
-                var seen = {};
-                var html = '';
-                groups.forEach(function(g, i) {
-                    html += evPnRenderSection(g.label, resultsArr[i], attended, seen);
-                });
-                if (!html) html = '<div class="ev-ac-empty">No players found</div>';
-                evPnResults.innerHTML = html;
-                evPnOpen();
+        if (evPnInput && evPnHidden) {
+            OrkPlayerSearch.attach(evPnInput, {
+                parkId:           parseInt(EvConfig.parkId, 10)    || 0,
+                kingdomId:        parseInt(EvConfig.kingdomId, 10)  || 0,
+                includeInactive:  true,
+                includeSuspended: true,
+                uir:              EvConfig.uir,
+                excludeIds: function() { return evAttendedIdArray(); },
+                onSelect: function(player) {
+                    evPnHidden.value = player.MundaneId;
+                    evUpdateAddBtn();
+                }
             });
-        }
-
-        if (evPnInput && evPnResults) {
             evPnInput.addEventListener('input', function() {
-                evPnHidden.value = '';
-                evUpdateAddBtn();
-                var term = this.value.trim();
-                if (term.length < 2) {
-                    clearTimeout(evPnTimer);
-                    ++evPnSeq;
-                    evPnResults.classList.remove('kn-ac-open');
-                    return;
-                }
-                clearTimeout(evPnTimer);
-                evPnTimer = setTimeout(function() { evPnSearch(term); }, AUTOCOMPLETE_DEBOUNCE_MS);
-            });
-
-            evPnResults.addEventListener('click', function(e) {
-                var item = e.target.closest('.kn-ac-item[data-id]');
-                if (!item) return;
-                evPnInput.value  = decodeURIComponent(item.dataset.name);
-                evPnHidden.value = item.dataset.id;
-                evPnResults.classList.remove('kn-ac-open');
-                evUpdateAddBtn();
-            });
-
-            document.addEventListener('click', function(e) {
-                if (e.target !== evPnInput && !evPnResults.contains(e.target)) {
-                    evPnResults.classList.remove('kn-ac-open');
-                }
-            });
-
-            if (typeof acKeyNav === 'function') {
-                acKeyNav(evPnInput, evPnResults, 'kn-ac-open', '.kn-ac-item');
-            }
-
-            window.addEventListener('scroll', function() {
-                if (evPnResults.classList.contains('kn-ac-open')) evPnPosition();
-            }, true);
-            window.addEventListener('resize', function() {
-                if (evPnResults.classList.contains('kn-ac-open')) evPnPosition();
+                if (!this.value.trim()) { evPnHidden.value = ''; evUpdateAddBtn(); }
             });
         }
     });
@@ -11079,8 +10970,7 @@ window.pnCloseUnitCreateModal = function() {
 (function() {
     if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
 
-    var MERGE_URL  = KnConfig.uir + 'PlayerAjax/merge';
-    var SEARCH_URL = KnConfig.httpService + 'Search/SearchService.php';
+    var MERGE_URL = KnConfig.uir + 'PlayerAjax/merge';
 
     function gid(id) { return document.getElementById(id); }
 
@@ -11119,8 +11009,6 @@ window.pnCloseUnitCreateModal = function() {
         gid('kn-merge-keep-id').value     = '';
         gid('kn-merge-remove-name').value = '';
         gid('kn-merge-remove-id').value   = '';
-        gid('kn-merge-keep-results').classList.remove('kn-ac-open');
-        gid('kn-merge-remove-results').classList.remove('kn-ac-open');
         gid('kn-merge-summary').style.display = 'none';
         gid('kn-mergeplayer-submit').disabled = true;
         gid('kn-mergeplayer-feedback').style.display = 'none';
@@ -11128,59 +11016,6 @@ window.pnCloseUnitCreateModal = function() {
         document.body.style.overflow = 'hidden';
         setTimeout(function() { gid('kn-merge-keep-name').focus(); }, 50);
     };
-
-    function makePlayerSearch(inputId, hiddenId, resultsId, otherId) {
-        var input   = gid(inputId);
-        var results = gid(resultsId);
-        if (!input || !results) return;
-        var timer;
-        input.addEventListener('input', function() {
-            gid(hiddenId).value = '';
-            updateSummary();
-            var term = this.value.trim();
-            if (term.length < 2) { results.classList.remove('kn-ac-open'); return; }
-            clearTimeout(timer);
-            timer = setTimeout(function() {
-                var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, kingdom_id: KnConfig.kingdomId });
-                var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 });
-                $.when(scopedReq, globalReq).done(function(sr, gr) {
-                    var local  = sr[0] || [];
-                    var global = gr[0] || [];
-                    var seen = {};
-                    local.forEach(function(pl) { seen[pl.MundaneId] = true; });
-                    var combined = local.concat(global.filter(function(pl) { return !seen[pl.MundaneId]; }));
-                    var otherId_val = gid(otherId) ? gid(otherId).value : '';
-                    results.innerHTML = combined.length
-                        ? combined.map(function(pl) {
-                            // Trust the player's actual KingdomId — the server's
-                            // magic_search lets a "GP: monkey" prefix override the
-                            // request's kingdom_id filter, so request-list membership
-                            // would mislabel out-of-kingdom hits as local.
-                            var isLocal = String(pl.KingdomId) === String(KnConfig.kingdomId);
-                            var sub = isLocal
-                                ? ' <span style="color:#68d391;font-size:11px">&#x2713; Kingdom</span>'
-                                : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
-                            var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
-                            return '<div class="kn-ac-item' + (same ? ' kn-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
-                                + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
-                                + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                + '>' + escHtml(pl.Persona) + sub + '</div>';
-                        }).join('')
-                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                    results.classList.add('kn-ac-open');
-                });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
-        });
-        results.addEventListener('click', function(e) {
-            var item = e.target.closest('.kn-ac-item[data-id]');
-            if (!item) return;
-            gid(inputId).value  = decodeURIComponent(item.dataset.name);
-            gid(hiddenId).value = item.dataset.id;
-            this.classList.remove('kn-ac-open');
-            updateSummary();
-        });
-    }
 
     $(document).ready(function() {
         if (!gid('kn-mergeplayer-overlay')) return;
@@ -11203,26 +11038,53 @@ window.pnCloseUnitCreateModal = function() {
                 closeModal();
         });
 
-        makePlayerSearch('kn-merge-keep-name',   'kn-merge-keep-id',   'kn-merge-keep-results',   'kn-merge-remove-id');
-        makePlayerSearch('kn-merge-remove-name', 'kn-merge-remove-id', 'kn-merge-remove-results', 'kn-merge-keep-id');
-        acKeyNav(gid('kn-merge-keep-name'),   gid('kn-merge-keep-results'),   'kn-ac-open', '.kn-ac-item[data-id]');
-        acKeyNav(gid('kn-merge-remove-name'), gid('kn-merge-remove-results'), 'kn-ac-open', '.kn-ac-item[data-id]');
+        // Merge player search — OrkPlayerSearch with cross-field excludeIds
+        var keepInput   = gid('kn-merge-keep-name');
+        var keepIdEl    = gid('kn-merge-keep-id');
+        var removeInput = gid('kn-merge-remove-name');
+        var removeIdEl  = gid('kn-merge-remove-id');
+
+        OrkPlayerSearch.attach(keepInput, {
+            kingdomId:  KnConfig.kingdomId,
+            uir:        KnConfig.uir,
+            excludeIds: function() { return [parseInt(removeIdEl.value) || 0]; },
+            onSelect:   function(player) {
+                keepIdEl.value = player.MundaneId;
+                updateSummary();
+            }
+        });
+        keepInput.addEventListener('input', function() {
+            if (!this.value.trim()) { keepIdEl.value = ''; updateSummary(); }
+        });
+
+        OrkPlayerSearch.attach(removeInput, {
+            kingdomId:  KnConfig.kingdomId,
+            uir:        KnConfig.uir,
+            excludeIds: function() { return [parseInt(keepIdEl.value) || 0]; },
+            onSelect:   function(player) {
+                removeIdEl.value = player.MundaneId;
+                updateSummary();
+            }
+        });
+        removeInput.addEventListener('input', function() {
+            if (!this.value.trim()) { removeIdEl.value = ''; updateSummary(); }
+        });
 
         gid('kn-mergeplayer-submit').addEventListener('click', function() {
             var btn        = gid('kn-mergeplayer-submit');
-            var keepId     = gid('kn-merge-keep-id').value;
-            var removeId   = gid('kn-merge-remove-id').value;
-            var keepName   = gid('kn-merge-keep-name').value.trim();
-            var removeName = gid('kn-merge-remove-name').value.trim();
+            var keepId     = keepIdEl.value;
+            var removeId   = removeIdEl.value;
+            var keepName   = keepInput.value.trim();
+            var removeName = removeInput.value.trim();
             if (!keepId || !removeId) { showFb('Select both players.', false); return; }
             knConfirm(
-                'Merge “' + removeName + '” INTO “' + keepName + '”?\n\n”' + removeName + '” will be permanently deleted and all data transferred to “' + keepName + '”.\n\nThis CANNOT be undone.',
+                'Merge "' + removeName + '" INTO "' + keepName + '"?\n\n"' + removeName + '" will be permanently deleted and all data transferred to "' + keepName + '".\n\nThis CANNOT be undone.',
                 function() {
                     btn.disabled = true;
                     $.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
                         btn.disabled = false;
                         if (r && r.status === 0) {
-                            showFb('”' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
+                            showFb('"' + removeName + '" has been merged into "' + keepName + '" and deleted.', true);
                             setTimeout(function() { closeModal(); location.reload(); }, 2200);
                         } else {
                             showFb((r && r.error) ? r.error : 'Merge failed.', false);
@@ -11674,7 +11536,6 @@ window.pnCloseUnitCreateModal = function() {
         });
     });
 })();
-
 /* [TOURNAMENTS HIDDEN] KN add tournament modal */
 
 /* [TOURNAMENTS HIDDEN] PK add tournament modal */
@@ -11684,8 +11545,7 @@ window.pnCloseUnitCreateModal = function() {
 (function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
-    var MERGE_URL  = PkConfig.uir + 'PlayerAjax/merge';
-    var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
+    var MERGE_URL = PkConfig.uir + 'PlayerAjax/merge';
 
     function gid(id) { return document.getElementById(id); }
 
@@ -11724,8 +11584,6 @@ window.pnCloseUnitCreateModal = function() {
         gid('pk-merge-keep-id').value     = '';
         gid('pk-merge-remove-name').value = '';
         gid('pk-merge-remove-id').value   = '';
-        gid('pk-merge-keep-results').classList.remove('pk-ac-open');
-        gid('pk-merge-remove-results').classList.remove('pk-ac-open');
         gid('pk-merge-summary').style.display = 'none';
         gid('pk-mergeplayer-submit').disabled = true;
         gid('pk-mergeplayer-feedback').style.display = 'none';
@@ -11733,56 +11591,6 @@ window.pnCloseUnitCreateModal = function() {
         document.body.style.overflow = 'hidden';
         setTimeout(function() { gid('pk-merge-keep-name').focus(); }, 50);
     };
-
-    function makePlayerSearch(inputId, hiddenId, resultsId, otherId) {
-        var input   = gid(inputId);
-        var results = gid(resultsId);
-        if (!input || !results) return;
-        var timer;
-        input.addEventListener('input', function() {
-            gid(hiddenId).value = '';
-            updateSummary();
-            var term = this.value.trim();
-            if (term.length < 2) { results.classList.remove('pk-ac-open'); return; }
-            clearTimeout(timer);
-            timer = setTimeout(function() {
-                // Park-level merge requires both players to be at THIS park
-                // (server-side MergePlayer rejects cross-park merges with
-                // park-scope auth). Pass park_id to the server AND filter
-                // client-side as defense-in-depth: a "kk:" prefix in the search
-                // term invokes SearchService::magic_search which can redirect
-                // the kingdom and clear the park filter, so out-of-park hits
-                // can sneak through. The client filter guarantees same-park
-                // regardless of how the server interpreted the term.
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId },
-                    function(data) {
-                        var local = (data || []).filter(function(pl) {
-                            return String(pl.ParkId) === String(PkConfig.parkId);
-                        });
-                        var otherId_val = gid(otherId) ? gid(otherId).value : '';
-                        results.innerHTML = local.length
-                            ? local.map(function(pl) {
-                                var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
-                                return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
-                                    + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
-                                    + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
-                                    + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                    + '>' + escHtml(pl.Persona) + '</div>';
-                            }).join('')
-                            : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players at this park match</div>';
-                        results.classList.add('pk-ac-open');
-                    });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
-        });
-        results.addEventListener('click', function(e) {
-            var item = e.target.closest('.pk-ac-item[data-id]');
-            if (!item) return;
-            gid(inputId).value  = decodeURIComponent(item.dataset.name);
-            gid(hiddenId).value = item.dataset.id;
-            this.classList.remove('pk-ac-open');
-            updateSummary();
-        });
-    }
 
     $(document).ready(function() {
         if (!gid('pk-mergeplayer-overlay')) return;
@@ -11805,26 +11613,58 @@ window.pnCloseUnitCreateModal = function() {
                 closeModal();
         });
 
-        makePlayerSearch('pk-merge-keep-name',   'pk-merge-keep-id',   'pk-merge-keep-results',   'pk-merge-remove-id');
-        makePlayerSearch('pk-merge-remove-name', 'pk-merge-remove-id', 'pk-merge-remove-results', 'pk-merge-keep-id');
-        acKeyNav(gid('pk-merge-keep-name'),   gid('pk-merge-keep-results'),   'pk-ac-open', '.pk-ac-item[data-id]');
-        acKeyNav(gid('pk-merge-remove-name'), gid('pk-merge-remove-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
+        // Park-level merge — both players must be in THIS park (server enforces; restrictTo:'park' here too)
+        // Cross-field excludeIds prevents selecting the same player in both fields.
+        var keepInput   = gid('pk-merge-keep-name');
+        var keepIdEl    = gid('pk-merge-keep-id');
+        var removeInput = gid('pk-merge-remove-name');
+        var removeIdEl  = gid('pk-merge-remove-id');
+
+        OrkPlayerSearch.attach(keepInput, {
+            parkId:     PkConfig.parkId,
+            kingdomId:  PkConfig.kingdomId,
+            restrictTo: 'park',
+            uir:        PkConfig.uir,
+            excludeIds: function() { return [parseInt(removeIdEl.value) || 0]; },
+            onSelect:   function(player) {
+                keepIdEl.value = player.MundaneId;
+                updateSummary();
+            }
+        });
+        keepInput.addEventListener('input', function() {
+            if (!this.value.trim()) { keepIdEl.value = ''; updateSummary(); }
+        });
+
+        OrkPlayerSearch.attach(removeInput, {
+            parkId:     PkConfig.parkId,
+            kingdomId:  PkConfig.kingdomId,
+            restrictTo: 'park',
+            uir:        PkConfig.uir,
+            excludeIds: function() { return [parseInt(keepIdEl.value) || 0]; },
+            onSelect:   function(player) {
+                removeIdEl.value = player.MundaneId;
+                updateSummary();
+            }
+        });
+        removeInput.addEventListener('input', function() {
+            if (!this.value.trim()) { removeIdEl.value = ''; updateSummary(); }
+        });
 
         gid('pk-mergeplayer-submit').addEventListener('click', function() {
-            var keepId     = gid('pk-merge-keep-id').value;
-            var removeId   = gid('pk-merge-remove-id').value;
-            var keepName   = gid('pk-merge-keep-name').value.trim();
-            var removeName = gid('pk-merge-remove-name').value.trim();
+            var keepId     = keepIdEl.value;
+            var removeId   = removeIdEl.value;
+            var keepName   = keepInput.value.trim();
+            var removeName = removeInput.value.trim();
             if (!keepId || !removeId) { showFb('Select both players.', false); return; }
             var btn = this;
             knConfirm(
-                'Merge “' + removeName + '” INTO “' + keepName + '”?\n\n”' + removeName + '” will be permanently deleted and all data transferred to “' + keepName + '”.\n\nThis CANNOT be undone.',
+                'Merge "' + removeName + '" INTO "' + keepName + '"?\n\n"' + removeName + '" will be permanently deleted and all data transferred to "' + keepName + '".\n\nThis CANNOT be undone.',
                 function() {
                     btn.disabled = true;
                     $.post(MERGE_URL, { FromMundaneId: removeId, ToMundaneId: keepId }, function(r) {
                         btn.disabled = false;
                         if (r && r.status === 0) {
-                            showFb('”' + removeName + '” has been merged into “' + keepName + '” and deleted.', true);
+                            showFb('"' + removeName + '" has been merged into "' + keepName + '" and deleted.', true);
                             setTimeout(function() { closeModal(); location.reload(); }, 2200);
                         } else {
                             showFb((r && r.error) ? r.error : 'Merge failed.', false);
@@ -11839,7 +11679,6 @@ window.pnCloseUnitCreateModal = function() {
         });
     });
 })();
-
 
 // ---- Player Attendance Edit/Delete (Playernew) ----
 (function() {
