@@ -472,18 +472,40 @@ class Common
             where ka.award_id in ";
   }
   
-	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0 )
+	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0, $changed_by = 0, $position_id = 0 )
 	{
+		global $DB;
+		// Resolve whether this position bypasses the ork_authorization path.
+		// Prefer the registry has_auth_role flag; fall back to the legacy string check.
+		$bypass_auth = ( 'Champion' == $role || 'GMR' == $role );
+		if ( (int)$position_id > 0 ) {
+			$DB->Clear();
+			$DB->pid = (int)$position_id;
+			$_har = $DB->DataSet( "SELECT has_auth_role FROM " . DB_PREFIX . "officer_position WHERE position_id = :pid LIMIT 1" );
+			if ( $_har !== false && $_har->size() > 0 && $_har->Next() ) {
+				$bypass_auth = ( (int)$_har->has_auth_role === 0 );
+			}
+		}
+
 		$this->officer->clear();
 		if (isset($kingdom_id)) $this->officer->kingdom_id = $kingdom_id;
 		$this->officer->park_id = $park_id;
-		$this->officer->role = $role;
+		if ( (int)$position_id > 0 ) {
+			$this->officer->position_id = (int)$position_id;
+		} else {
+			$this->officer->role = $role;
+		}
 		$this->officer->system = $system;
 		if ( $this->officer->find() ) {
 			$old_mundane_id = $this->officer->mundane_id;
 			$officer_changed = false;
+			// Keep both the position_id and the canonical-key role cache in sync (dual-write).
+			if ( (int)$position_id > 0 ) {
+				$this->officer->position_id = (int)$position_id;
+				$this->officer->role = $role;
+			}
 
-			if ( 'Champion' == $role || 'GMR' == $role) {
+			if ( $bypass_auth ) {
 				$this->officer->mundane_id = $new_officer_id;
 				$this->officer->save();
 				$officer_changed = true;
@@ -501,14 +523,18 @@ class Common
 
 			// Record officer history only if the officer was actually changed
 			if ( $officer_changed && (int)$old_mundane_id !== (int)$new_officer_id ) {
-				$this->record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by );
+				$this->record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by, $position_id );
 
-				// RBAC dual-write: sync officer role to ork_user_role
+				// RBAC dual-write: prefer position-id sync, fall back to legacy string path.
 				if ( isset( Ork3::$Lib->rbacservice ) ) {
 					try {
-						Ork3::$Lib->rbacservice->SyncOfficerRole( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by );
+						if ( (int)$position_id > 0 ) {
+							Ork3::$Lib->rbacservice->SyncOfficerRoleByPositionId( $old_mundane_id, $new_officer_id, $position_id, $kingdom_id, $park_id, $changed_by );
+						} else {
+							Ork3::$Lib->rbacservice->SyncOfficerRole( $kingdom_id, $park_id, $old_mundane_id, $new_officer_id, $role, $changed_by );
+						}
 					} catch ( Exception $e ) {
-						logtrace( 'RBAC SyncOfficerRole failed', $e->getMessage() );
+						logtrace( 'RBAC sync officer failed', $e->getMessage() );
 					}
 				}
 			}
@@ -519,24 +545,49 @@ class Common
 	 * Record officer change in the ork_officer_history table.
 	 * Closes the previous officer's open record and opens a new one (unless vacating).
 	 */
-	private function record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_mundane_id, $role, $changed_by = 0 )
+	private function record_officer_history( $kingdom_id, $park_id, $old_mundane_id, $new_mundane_id, $role, $changed_by = 0, $position_id = 0 )
 	{
 		global $DB;
 		$kid  = (int)$kingdom_id;
 		$pid  = (int)$park_id;
-		$role_esc = mysql_real_escape_string( $role );
+		$posid = (int)$position_id;
 		$cb   = (int)$changed_by;
 		$today = date( 'Y-m-d' );
+
+		// Resolve the snapshot DisplayTitle for this position at write time (requirement 7).
+		// IF(alias != '', alias, title) — never COALESCE.
+		$display_label = $role;
+		if ( $posid > 0 ) {
+			$DB->Clear();
+			$DB->dl_pid = $posid;
+			$DB->dl_kid = $kid;
+			$dl = $DB->DataSet(
+				"SELECT IF(p.kingdom_id = 0,
+				             IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
+				             IF(p.title_alias != '', p.title_alias, p.title)) AS display_title
+				 FROM " . DB_PREFIX . "officer_position p
+				 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+				   ON a.kingdom_id = :dl_kid AND a.canonical_key = p.canonical_key
+				 WHERE p.position_id = :dl_pid LIMIT 1"
+			);
+			if ( $dl !== false && $dl->size() > 0 && $dl->Next() ) {
+				$display_label = (string)$dl->display_title;
+			}
+		}
 
 		// Close any open history record for this role (where end_date IS NULL)
 		if ( (int)$old_mundane_id > 0 ) {
 			$DB->Clear();
+			$DB->h_today = $today;
+			$DB->h_kid = $kid;
+			$DB->h_pid = $pid;
+			$DB->h_role = $role;
 			$DB->Execute(
 				"UPDATE " . DB_PREFIX . "officer_history
-				 SET end_date = '" . $today . "'
-				 WHERE kingdom_id = " . $kid . "
-				   AND park_id = " . $pid . "
-				   AND role = '" . $role_esc . "'
+				 SET end_date = :h_today
+				 WHERE kingdom_id = :h_kid
+				   AND park_id = :h_pid
+				   AND role = :h_role
 				   AND end_date IS NULL"
 			);
 		}
@@ -545,10 +596,18 @@ class Common
 		if ( (int)$new_mundane_id > 0 ) {
 			$mid = (int)$new_mundane_id;
 			$DB->Clear();
+			$DB->i_kid = $kid;
+			$DB->i_pid = $pid;
+			$DB->i_mid = $mid;
+			$DB->i_role = $role;
+			$DB->i_posid = $posid;
+			$DB->i_label = $display_label;
+			$DB->i_today = $today;
+			$DB->i_cb = ($cb > 0 ? $cb : null);
 			$DB->Execute(
 				"INSERT INTO " . DB_PREFIX . "officer_history
-				 (kingdom_id, park_id, mundane_id, role, start_date, end_date, changed_by, created_at)
-				 VALUES (" . $kid . ", " . $pid . ", " . $mid . ", '" . $role_esc . "', '" . $today . "', NULL, " . ($cb > 0 ? $cb : 'NULL') . ", NOW())"
+				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
+				 VALUES (:i_kid, :i_pid, :i_mid, :i_role, :i_posid, :i_label, :i_today, NULL, :i_cb, NOW())"
 			);
 		}
 	}
