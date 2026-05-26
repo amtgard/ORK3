@@ -60,66 +60,20 @@
 				return false;
 			}
 		});
-		$( "#FromPlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#FromParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id.length>0?park_id:null,
-						limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-    						suggestions.push({label: ((val.Persona!=null||val.Persona.length>0)?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")", value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#FromPlayerName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#FromPlayerName', ui);
-				$('#FromMundaneId').val(ui.item.value);
-				return false;
+		OrkPlayerSearch.attach(document.getElementById('FromPlayerName'), {
+			uir: '<?=UIR ?>',
+			includeInactive: true,
+			excludeIds: function() { return [parseInt(document.getElementById('ToMundaneId').value) || 0]; },
+			onSelect: function(p) {
+				document.getElementById('FromMundaneId').value = p.MundaneId;
 			}
 		});
-		$( "#ToPlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ToParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id.length>0?park_id:null,
-						limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-    						suggestions.push({label: ((val.Persona!=null||val.Persona.length>0)?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")", value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#ToPlayerName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#ToPlayerName', ui);
-				$('#ToMundaneId').val(ui.item.value);
-				return false;
+		OrkPlayerSearch.attach(document.getElementById('ToPlayerName'), {
+			uir: '<?=UIR ?>',
+			includeInactive: true,
+			excludeIds: function() { return [parseInt(document.getElementById('FromMundaneId').value) || 0]; },
+			onSelect: function(p) {
+				document.getElementById('ToMundaneId').value = p.MundaneId;
 			}
 		});
 	});
