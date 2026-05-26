@@ -261,6 +261,19 @@ class RBACService extends Ork3
 	}
 
 	/**
+	 * Public cache-invalidation hook for position-registry reconciliation
+	 * (OfficerPosition::ReconcileRoleBinding writes ork_user_role rows directly
+	 * and must bust the affected user's permission cache). Thin wrapper over the
+	 * private generation-counter bump.
+	 *
+	 * @param int $mundane_id
+	 */
+	public function InvalidateUserCache( $mundane_id )
+	{
+		$this->IncrementGenerationCounter( (int) $mundane_id );
+	}
+
+	/**
 	 * Build a cache key for a permission check.
 	 */
 	private function BuildCacheKey( $gen, $mundane_id, $permission_key, $scope_type, $scope_id )
