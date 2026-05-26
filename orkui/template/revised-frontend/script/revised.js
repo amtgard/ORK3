@@ -2093,6 +2093,11 @@ if (PnConfig.recError) {
                 gid('pn-award-givenby-id').value = player.MundaneId;
                 document.querySelectorAll('#pn-award-officer-chips .pn-officer-chip').forEach(function(c) { c.classList.remove('pn-selected'); });
                 checkRequired();
+            },
+            onClear: function() {
+                gid('pn-award-givenby-id').value = '';
+                document.querySelectorAll('#pn-award-officer-chips .pn-officer-chip').forEach(function(c) { c.classList.remove('pn-selected'); });
+                checkRequired();
             }
         });
 
@@ -3189,6 +3194,10 @@ $(document).ready(function() {
                     var curAward = gid('kn-award-select').value;
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        },
+        onClear: function() {
+            gid('kn-award-player-id').value = '';
+            checkRequired();
         }
     });
 
@@ -3212,6 +3221,11 @@ $(document).ready(function() {
         includeSuspended: true,
         onSelect: function(player) {
             gid('kn-award-givenby-id').value = player.MundaneId;
+            document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(c) { c.classList.remove('kn-selected'); });
+            checkRequired();
+        },
+        onClear: function() {
+            gid('kn-award-givenby-id').value = '';
             document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(c) { c.classList.remove('kn-selected'); });
             checkRequired();
         }
@@ -3595,6 +3609,10 @@ $(document).ready(function() {
                     var cur = gid('kn-rec-award-select').value;
                     if (cur) buildRecRankPills(cur);
                 }).catch(function() {});
+            checkRequired();
+        },
+        onClear: function() {
+            gid('kn-rec-player-id').value = '';
             checkRequired();
         }
     });
@@ -6300,6 +6318,10 @@ $(document).ready(function() {
                     var curAward = gid('pk-award-select').value;
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        },
+        onClear: function() {
+            gid('pk-award-player-id').value = '';
+            checkRequired();
         }
     });
 
@@ -6324,6 +6346,11 @@ $(document).ready(function() {
         includeSuspended: true,
         onSelect: function(player) {
             gid('pk-award-givenby-id').value = player.MundaneId;
+            document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(c) { c.classList.remove('pk-selected'); });
+            checkRequired();
+        },
+        onClear: function() {
+            gid('pk-award-givenby-id').value = '';
             document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(c) { c.classList.remove('pk-selected'); });
             checkRequired();
         }
@@ -6731,6 +6758,10 @@ $(document).ready(function() {
                     if (cur) buildRecRankPills(cur);
                 }).catch(function() {});
             checkRequired();
+        },
+        onClear: function() {
+            gid('pk-rec-player-id').value = '';
+            checkRequired();
         }
     });
 
@@ -6949,6 +6980,10 @@ $(document).ready(function() {
                 excludeIds: function() { return evAttendedIdArray(); },
                 onSelect: function(player) {
                     evPnHidden.value = player.MundaneId;
+                    evUpdateAddBtn();
+                },
+                onClear: function() {
+                    evPnHidden.value = '';
                     evUpdateAddBtn();
                 }
             });
@@ -8828,6 +8863,9 @@ function setupPronounPicker(cfg) {
                 onSelect: function(player) {
                     editGbId.value = player.MundaneId;
                     console.log('[EditAward] Given By selected — id:', player.MundaneId, 'name:', player.Persona);
+                },
+                onClear: function() {
+                    editGbId.value = '';
                 }
             });
         }
@@ -10875,6 +10913,10 @@ window.pnCloseUnitCreateModal = function() {
             onChange: function(kingdomId, parkId) {
                 gid('kn-moveplayer-park-id').value = parkId ? parkId : '';
                 knmpCheckSubmit();
+            },
+            onClear: function() {
+                gid('kn-moveplayer-player-id').value = '';
+                knmpCheckSubmit();
             }
         });
 
@@ -11051,6 +11093,10 @@ window.pnCloseUnitCreateModal = function() {
             onSelect:   function(player) {
                 keepIdEl.value = player.MundaneId;
                 updateSummary();
+            },
+            onClear: function() {
+                keepIdEl.value = '';
+                updateSummary();
             }
         });
         keepInput.addEventListener('input', function() {
@@ -11063,6 +11109,10 @@ window.pnCloseUnitCreateModal = function() {
             excludeIds: function() { return [parseInt(keepIdEl.value) || 0]; },
             onSelect:   function(player) {
                 removeIdEl.value = player.MundaneId;
+                updateSummary();
+            },
+            onClear: function() {
+                removeIdEl.value = '';
                 updateSummary();
             }
         });
@@ -11371,6 +11421,10 @@ window.pnCloseUnitCreateModal = function() {
                     mpParkId = parkId ? parkId : 0;
                     gid('pk-moveplayer-park-id').value = parkId ? parkId : '';
                     pkmpCheckSubmit();
+                },
+                onClear: function() {
+                    gid('pk-moveplayer-player-id').value = '';
+                    pkmpCheckSubmit();
                 }
             });
         }
@@ -11629,6 +11683,10 @@ window.pnCloseUnitCreateModal = function() {
             onSelect:   function(player) {
                 keepIdEl.value = player.MundaneId;
                 updateSummary();
+            },
+            onClear: function() {
+                keepIdEl.value = '';
+                updateSummary();
             }
         });
         keepInput.addEventListener('input', function() {
@@ -11643,6 +11701,10 @@ window.pnCloseUnitCreateModal = function() {
             excludeIds: function() { return [parseInt(keepIdEl.value) || 0]; },
             onSelect:   function(player) {
                 removeIdEl.value = player.MundaneId;
+                updateSummary();
+            },
+            onClear: function() {
+                removeIdEl.value = '';
                 updateSummary();
             }
         });
