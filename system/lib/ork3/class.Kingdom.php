@@ -675,7 +675,7 @@ class Kingdom  extends Ork3 {
 		$is_authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'kingdom.officer.set', 'kingdom', $kingdom_id, AUTH_EDIT);
 
 		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id, o.position_id,
-					op.canonical_key as canonical_key,
+					op.canonical_key as canonical_key, op.parent_position_id as parent_position_id, op.hide_when_vacant as hide_when_vacant, op.classification as classification,
 					IF(op.kingdom_id = 0, IF(al.title_alias IS NOT NULL AND al.title_alias != '', al.title_alias, op.title), IF(op.title_alias != '', op.title_alias, op.title)) as display_title
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "officer_position op on op.position_id = o.position_id
@@ -688,6 +688,7 @@ class Kingdom  extends Ork3 {
 							left join ".DB_PREFIX."unit u on a.unit_id = u.unit_id
 				where o.kingdom_id = '" . $kingdom_id . "' and o.park_id = 0
 				  and (op.retired_at IS NULL or op.position_id IS NULL)
+				  and NOT (op.hide_when_vacant = 1 and op.classification != 'crown' and (o.mundane_id IS NULL or o.mundane_id = 0))
 				order by op.classification, op.sort_order, o.role
 			";
 		$r = $this->db->query($sql);
@@ -709,6 +710,8 @@ class Kingdom  extends Ork3 {
 							'UnitId' => $r->unit_id,
 							'Role' => $r->canonical_key !== null ? $r->canonical_key : $r->role,
 							'CanonicalKey' => $r->canonical_key !== null ? $r->canonical_key : $r->role,
+							'ParentPositionId' => ($r->parent_position_id === null || $r->parent_position_id === '') ? null : (int)$r->parent_position_id,
+							'HideWhenVacant' => (int)$r->hide_when_vacant,
 							'DisplayTitle' => $r->display_title !== null ? $r->display_title : $r->role,
 							'ParkName' => $r->park_name,
 							'KingdomName' => $r->kingdom_name,

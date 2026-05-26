@@ -256,6 +256,8 @@ class Controller_OfficerAdminAjax extends Controller {
 			'IsSystem'      => (int)$pos['IsSystem'],
 			'RbacRoleId'    => (int)$pos['RbacRoleId'],
 			'SortOrder'     => (int)$pos['SortOrder'],
+			'ParentPositionId' => isset($pos['ParentPositionId']) && $pos['ParentPositionId'] !== null ? (int)$pos['ParentPositionId'] : null,
+			'HideWhenVacant'   => (int)($pos['HideWhenVacant'] ?? 0),
 			'RetiredAt'     => $this->humanDate($pos['RetiredAt'] ?? ''),
 		];
 	}
@@ -329,7 +331,12 @@ class Controller_OfficerAdminAjax extends Controller {
 			$canonical_key = $this->slugify($title);
 		}
 
-		$r = $this->OfficerPosition->CreatePosition($kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $uid);
+		// "Reports To" nesting + hide-when-vacant. 0/'' = no parent (top-level).
+		$parent_raw = $_POST['ParentPositionId'] ?? '';
+		$parent_position_id = ($parent_raw === '' || (int)$parent_raw === 0) ? null : (int)$parent_raw;
+		$hide_when_vacant = (int)($_POST['HideWhenVacant'] ?? 0) ? 1 : 0;
+
+		$r = $this->OfficerPosition->CreatePosition($kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $uid, $parent_position_id, $hide_when_vacant);
 		if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
 			$this->emitServiceResult($r, ['data' => ['PositionId' => (int)($r['Detail'] ?? 0)]]);
 		} else {
@@ -358,6 +365,15 @@ class Controller_OfficerAdminAjax extends Controller {
 		}
 		if (isset($_POST['SortOrder']) && $_POST['SortOrder'] !== '') {
 			$fields['sort_order'] = (int)$_POST['SortOrder'];
+		}
+		// "Reports To" nesting + hide-when-vacant. Only applied when the POST key
+		// is present, so partial edits don't clobber the stored value.
+		if (isset($_POST['ParentPositionId'])) {
+			$pp = trim((string)$_POST['ParentPositionId']);
+			$fields['parent_position_id'] = ($pp === '' || (int)$pp === 0) ? null : (int)$pp;
+		}
+		if (isset($_POST['HideWhenVacant'])) {
+			$fields['hide_when_vacant'] = (int)$_POST['HideWhenVacant'] ? 1 : 0;
 		}
 		// RBAC rebinding: existing role => rbac_role_id; custom => permission_keys.
 		$mode = strtolower(trim($_POST['RbacMode'] ?? ''));

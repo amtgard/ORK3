@@ -161,6 +161,10 @@ class OfficerPosition extends Ork3
 			'has_auth_role' => (int) $r->has_auth_role,
 			'SortOrder'     => (int) $r->sort_order,
 			'sort_order'    => (int) $r->sort_order,
+			'ParentPositionId'   => ( $r->parent_position_id === null || $r->parent_position_id === '' ) ? null : (int) $r->parent_position_id,
+			'parent_position_id' => ( $r->parent_position_id === null || $r->parent_position_id === '' ) ? null : (int) $r->parent_position_id,
+			'HideWhenVacant'     => (int) $r->hide_when_vacant,
+			'hide_when_vacant'   => (int) $r->hide_when_vacant,
 			'RetiredAt'     => $r->retired_at,
 			'retired_at'    => $r->retired_at,
 		];
@@ -275,7 +279,7 @@ class OfficerPosition extends Ork3
 	 * @param int    $creator_id
 	 * @return array  Success(position_id) | error
 	 */
-	public function CreatePosition( $kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $creator_id = 0 )
+	public function CreatePosition( $kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $creator_id = 0, $parent_position_id = null, $hide_when_vacant = 0 )
 	{
 		global $DB;
 		$kingdom_id = (int) $kingdom_id;
@@ -331,6 +335,19 @@ class OfficerPosition extends Ork3
 			return InvalidParameter( null, 'A valid RBAC role binding is required.' );
 		}
 
+		// hide_when_vacant applies to NON-Crown only; force 0 for crown.
+		$hide_when_vacant = ( $classification === 'crown' ) ? 0 : ( ( (int) $hide_when_vacant ) ? 1 : 0 );
+
+		// parent_position_id ("Reports To"). 0/''/null = top-level (NULL stored).
+		$parent_position_id = ( $parent_position_id === null || $parent_position_id === '' || (int) $parent_position_id === 0 )
+			? null : (int) $parent_position_id;
+		if ( $parent_position_id !== null ) {
+			$perr = $this->ValidateParent( 0, $kingdom_id, $parent_position_id );
+			if ( $perr !== true ) {
+				return $perr;
+			}
+		}
+
 		// sort_order = max in group + 10.
 		$DB->Clear();
 		$DB->so_kid = $kingdom_id;
@@ -352,10 +369,13 @@ class OfficerPosition extends Ork3
 		$DB->c_rid = $rbac_role_id;
 		$DB->c_so = $sort_order;
 		$DB->c_cb = $creator_id;
+		$DB->c_hwv = $hide_when_vacant;
+		// parent_position_id is NULL-or-int; bind as a literal so NULL is stored as NULL.
+		$parent_sql = ( $parent_position_id === null ) ? 'NULL' : (int) $parent_position_id;
 		$DB->Execute(
 			"INSERT INTO " . DB_PREFIX . "officer_position
-			 (kingdom_id, canonical_key, title, title_alias, classification, is_pinned, is_system, rbac_role_id, has_auth_role, sort_order, retired_at, created_by, created_at)
-			 VALUES (:c_kid, :c_key, :c_title, '', :c_cls, 0, 0, :c_rid, 0, :c_so, NULL, :c_cb, NOW())"
+			 (kingdom_id, canonical_key, title, title_alias, classification, is_pinned, is_system, rbac_role_id, has_auth_role, sort_order, parent_position_id, hide_when_vacant, retired_at, created_by, created_at)
+			 VALUES (:c_kid, :c_key, :c_title, '', :c_cls, 0, 0, :c_rid, 0, :c_so, " . $parent_sql . ", :c_hwv, NULL, :c_cb, NOW())"
 		);
 
 		// Prefer the driver's last-insert-id accessor over a SELECT-after-INSERT.
@@ -435,6 +455,23 @@ class OfficerPosition extends Ork3
 			}
 		}
 
+		// Resolve + validate parent BEFORE binding UPDATE params: ValidateParent
+		// runs its own DataSets ($DB->Clear()), which would wipe the UPDATE bindings
+		// set below if interleaved (stale-PDO-binding guard).
+		$apply_parent = false;
+		$new_parent = null;
+		if ( array_key_exists( 'parent_position_id', $fields ) ) {
+			$apply_parent = true;
+			$raw = $fields['parent_position_id'];
+			$new_parent = ( $raw === null || $raw === '' || (int) $raw === 0 ) ? null : (int) $raw;
+			if ( $new_parent !== null ) {
+				$perr = $this->ValidateParent( $position_id, $pos_kingdom_id, $new_parent );
+				if ( $perr !== true ) {
+					return $perr;
+				}
+			}
+		}
+
 		// title / title_alias(custom only) / sort_order — written on the row itself.
 		$sets = [];
 		$DB->Clear();
@@ -451,6 +488,24 @@ class OfficerPosition extends Ork3
 		if ( array_key_exists( 'sort_order', $fields ) ) {
 			$DB->ep_so = (int) $fields['sort_order'];
 			$sets[] = "sort_order = :ep_so";
+		}
+
+		// parent_position_id was validated above (before the UPDATE bindings). It is
+		// written as a SQL literal (sanitized int / NULL), so no binding is needed.
+		if ( $apply_parent ) {
+			$sets[] = ( $new_parent === null ) ? "parent_position_id = NULL" : "parent_position_id = " . (int) $new_parent;
+		}
+
+		// hide_when_vacant: applies to NON-Crown only. Force 0 for crown/pinned/system.
+		if ( array_key_exists( 'hide_when_vacant', $fields ) ) {
+			// Use the incoming classification if it is being changed in this same edit,
+			// otherwise the current stored classification.
+			$eff_cls = ( !$is_pinned && array_key_exists( 'classification', $fields )
+				&& ( $fields['classification'] === 'crown' || $fields['classification'] === 'supporting' ) )
+				? $fields['classification'] : $position['classification'];
+			$hide = ( $eff_cls === 'crown' || $is_pinned || $is_system ) ? 0 : ( ( (int) $fields['hide_when_vacant'] ) ? 1 : 0 );
+			$DB->ep_hwv = $hide;
+			$sets[] = "hide_when_vacant = :ep_hwv";
 		}
 
 		$old_rbac_role_id = (int) $position['rbac_role_id'];
@@ -491,6 +546,80 @@ class OfficerPosition extends Ork3
 		}
 
 		return Success( $position_id );
+	}
+
+	/**
+	 * Validate a proposed parent ("Reports To") for a position.
+	 *   - Parent must exist.
+	 *   - Parent's kingdom_id must be 0 (system) OR == the position's kingdom.
+	 *   - Parent must not equal the position itself (self-parent).
+	 *   - Parent chain must not loop back through this position (cycle).
+	 *
+	 * $position_id is 0 on CreatePosition (no row yet) — only the scope check and
+	 * cycle walk (which is a no-op for an id that does not yet exist) apply.
+	 *
+	 * @return true on success, or an error response array.
+	 */
+	private function ValidateParent( $position_id, $pos_kingdom_id, $proposed_parent_id )
+	{
+		global $DB;
+		$position_id = (int) $position_id;
+		$pos_kingdom_id = (int) $pos_kingdom_id;
+		$proposed_parent_id = (int) $proposed_parent_id;
+
+		if ( $position_id > 0 && $proposed_parent_id === $position_id ) {
+			return InvalidParameter( null, 'A position cannot report to itself.' );
+		}
+
+		$DB->Clear();
+		$DB->vp_pid = $proposed_parent_id;
+		$r = $DB->DataSet(
+			"SELECT position_id, kingdom_id FROM " . DB_PREFIX . "officer_position
+			 WHERE position_id = :vp_pid LIMIT 1"
+		);
+		if ( $r === false || $r->size() == 0 || !$r->Next() ) {
+			return InvalidParameter( null, 'The selected parent position does not exist.' );
+		}
+		$parent_kingdom_id = (int) $r->kingdom_id;
+		if ( $parent_kingdom_id !== 0 && $parent_kingdom_id !== $pos_kingdom_id ) {
+			return InvalidParameter( null, 'A position can only report to a system position or one in the same kingdom.' );
+		}
+
+		if ( $position_id > 0 && $this->WouldCreateCycle( $position_id, $proposed_parent_id ) ) {
+			return InvalidParameter( null, 'A position cannot report to its own descendant.' );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Walk the parent chain upward from $proposed_parent_id. If we ever reach
+	 * $position_id, assigning that parent would form a cycle.
+	 */
+	private function WouldCreateCycle( $position_id, $proposed_parent_id )
+	{
+		global $DB;
+		$position_id = (int) $position_id;
+		$cursor = (int) $proposed_parent_id;
+		$guard = 0;
+		while ( $cursor > 0 && $guard < 1000 ) {
+			if ( $cursor === $position_id ) {
+				return true;
+			}
+			$DB->Clear();
+			$DB->wc_pid = $cursor;
+			$r = $DB->DataSet(
+				"SELECT parent_position_id FROM " . DB_PREFIX . "officer_position
+				 WHERE position_id = :wc_pid LIMIT 1"
+			);
+			if ( $r === false || $r->size() == 0 || !$r->Next() ) {
+				return false;
+			}
+			$next = $r->parent_position_id;
+			$cursor = ( $next === null || $next === '' ) ? 0 : (int) $next;
+			$guard++;
+		}
+		return false;
 	}
 
 	/**
@@ -646,6 +775,7 @@ class OfficerPosition extends Ork3
 
 		$sql = "SELECT o.officer_id, o.mundane_id, o.position_id, o.role,
 				p.canonical_key, p.classification, p.sort_order,
+				p.parent_position_id, p.hide_when_vacant,
 				IF(p.kingdom_id = 0,
 				   IF(a.title_alias IS NOT NULL AND a.title_alias != '', a.title_alias, p.title),
 				   IF(p.title_alias != '', p.title_alias, p.title)) AS DisplayTitle,
@@ -676,6 +806,8 @@ class OfficerPosition extends Ork3
 					'PositionId'   => (int) $r->position_id,
 					'CanonicalKey' => $r->canonical_key,
 					'DisplayTitle' => $r->DisplayTitle,
+					'ParentPositionId' => ( $r->parent_position_id === null || $r->parent_position_id === '' ) ? null : (int) $r->parent_position_id,
+					'HideWhenVacant'   => (int) $r->hide_when_vacant,
 					'MundaneId'    => (int) $r->mundane_id,
 					'Persona'      => $r->persona,
 					'GivenName'    => $r->given_name,

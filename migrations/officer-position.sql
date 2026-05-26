@@ -21,12 +21,15 @@ CREATE TABLE IF NOT EXISTS `ork_officer_position` (
   `rbac_role_id`  int(11)      NOT NULL,
   `has_auth_role` tinyint(1)   NOT NULL DEFAULT 0,
   `sort_order`    int(11)      NOT NULL DEFAULT 100,
+  `parent_position_id` int(11) NULL DEFAULT NULL,
+  `hide_when_vacant`   tinyint(1) NOT NULL DEFAULT 0,
   `retired_at`    datetime     NULL DEFAULT NULL,
   `created_by`    int(11)      NOT NULL DEFAULT 0,
   `created_at`    datetime     NOT NULL,
   PRIMARY KEY (`position_id`),
   UNIQUE KEY `uq_kingdom_key` (`kingdom_id`, `canonical_key`),
-  KEY `idx_grouped_read` (`kingdom_id`, `classification`, `retired_at`, `sort_order`)
+  KEY `idx_grouped_read` (`kingdom_id`, `classification`, `retired_at`, `sort_order`),
+  KEY `idx_parent_position` (`parent_position_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3b. New table: per-kingdom alias of shared system (Core-Five) rows
