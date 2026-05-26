@@ -996,8 +996,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, canManage: true, uir:
 						var el = document.createElement('div');
 						el.className = 'kn-ac-item';
 						el.setAttribute('data-id', d.MundaneId);
-						el.innerHTML = '<span class="kn-ac-persona">' + esc(d.Persona) + '</span>' +
-						               '<span class="kn-ac-park">' + esc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + '</span>';
+						el.innerHTML = esc(d.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + esc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + ')</span>';
 						el.addEventListener('click', (function(dd) {
 							return function() {
 								input.value = dd.Persona;

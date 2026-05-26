@@ -3054,8 +3054,7 @@ function knSaveOhEdit() {
                     var el = document.createElement('div');
                     el.className = 'kn-ac-item';
                     el.setAttribute('data-id', d.MundaneId);
-                    el.innerHTML = '<span class="kn-ac-persona">' + knHtmlEsc(d.Persona) + '</span>' +
-                                   '<span class="kn-ac-park">' + knHtmlEsc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + '</span>';
+                    el.innerHTML = knHtmlEsc(d.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + knHtmlEsc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + ')</span>';
                     el.addEventListener('click', (function(dd) {
                         return function() {
                             input.value = dd.Persona;
