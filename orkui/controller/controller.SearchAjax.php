@@ -168,4 +168,22 @@ class Controller_SearchAjax extends Controller {
 		echo json_encode(['players' => $players, 'parks' => $parks, 'kingdoms' => $kingdoms, 'units' => $units]);
 		exit;
 	}
+
+	public function players($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode([]); exit; }
+		$svc = new SearchService();
+		$rows = $svc->RankedPlayers(
+			$_GET['q']                    ?? '',
+			(int)($_GET['parkId']         ?? 0),
+			(int)($_GET['kingdomId']      ?? 0),
+			$_GET['restrictTo']           ?? '',
+			!empty($_GET['include_inactive']),
+			!empty($_GET['include_suspended']),
+			(int)($_GET['limit']          ?? 15),
+			$this->session->token         ?? null
+		);
+		echo json_encode($rows);
+		exit;
+	}
 }
