@@ -17,6 +17,7 @@ INSERT IGNORE INTO `ork_permission` (`key`, `display_name`, `description`, `scop
 ('kingdom.award.edit', 'Edit Kingdom Award', 'Edit existing kingdom award definitions', 'kingdom', 'award', 1),
 ('kingdom.award.remove', 'Remove Kingdom Award', 'Remove kingdom award definitions', 'kingdom', 'award', 1),
 ('kingdom.officer.set', 'Set Kingdom Officer', 'Appoint kingdom-level officers', 'kingdom', 'officer', 1),
+('kingdom.officer.position.manage', 'Manage Kingdom Officer Positions', 'Create, edit, classify, retire, and reinstate kingdom officer positions', 'kingdom', 'officer', 1),
 ('kingdom.officer.vacate', 'Vacate Kingdom Officer', 'Remove kingdom-level officers from office', 'kingdom', 'officer', 1),
 ('kingdom.officer_history.manage', 'Manage Officer History', 'Create, edit, and delete officer history records', 'kingdom', 'officer', 1),
 ('kingdom.heraldry.manage', 'Manage Kingdom Heraldry', 'Upload and remove kingdom heraldry', 'kingdom', 'heraldry', 1),
@@ -30,6 +31,7 @@ INSERT IGNORE INTO `ork_permission` (`key`, `display_name`, `description`, `scop
 INSERT IGNORE INTO `ork_permission` (`key`, `display_name`, `description`, `scope_type`, `category`, `is_system`) VALUES
 ('park.details.edit', 'Edit Park Details', 'Edit park name, description, and basic details', 'park', 'config', 1),
 ('park.officer.set', 'Set Park Officer', 'Appoint park-level officers', 'park', 'officer', 1),
+('park.officer.position.manage', 'Manage Park Officer Positions', 'Create, edit, classify, retire, and reinstate park officer positions', 'park', 'officer', 1),
 ('park.officer.vacate', 'Vacate Park Officer', 'Remove park-level officers from office', 'park', 'officer', 1),
 ('park.officer_history.manage', 'Manage Park Officer History', 'Create, edit, and delete park officer history records', 'park', 'officer', 1),
 ('park.heraldry.manage', 'Manage Park Heraldry', 'Upload and remove park heraldry', 'park', 'heraldry', 1),
@@ -189,3 +191,11 @@ WHERE r.name = 'heraldry_manager' AND r.kingdom_id = 0
     'kingdom.heraldry.manage', 'park.heraldry.manage', 'player.heraldry.manage',
     'event.heraldry.manage', 'unit.heraldry.manage'
   );
+
+-- Officer Admin Expansion: grant park.officer.position.manage to park-admin officer roles
+INSERT IGNORE INTO `ork_role_permission` (`role_id`, `permission_id`)
+SELECT r.role_id, p.permission_id
+FROM `ork_role` r
+CROSS JOIN `ork_permission` p
+WHERE r.name IN ('monarch','regent','prime_minister') AND r.kingdom_id = 0
+  AND p.`key` = 'park.officer.position.manage';
