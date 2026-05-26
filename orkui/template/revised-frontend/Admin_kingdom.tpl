@@ -32,6 +32,10 @@ function _ka_trend($cur, $prev, $fmt = 'number') {
 // Parks count
 $parkSummaryList = is_array($park_summary['KingdomParkAveragesSummary'] ?? null) ? $park_summary['KingdomParkAveragesSummary'] : [];
 $activeParkCount = $ActiveParkCount ?? count($parkSummaryList);
+
+// Manage Officers host modal + card gate (partial: revised-frontend/partials/_manage_officers.tpl)
+$mo_kingdom_id = (int)($kingdom_id ?? $kid ?? 0);
+$mo_can_manage = !empty($can_manage_officer_positions);
 $activePlayers   = $ActivePlayers ?? 0;
 $totalAttendance = $TotalAttendance ?? 0;
 ?>
@@ -163,6 +167,7 @@ $totalAttendance = $TotalAttendance ?? 0;
 .ka-action-icon-purple { background: #faf5ff; color: #6b46c1; }
 .ka-action-icon-red    { background: #fff5f5; color: #c53030; }
 .ka-action-icon-gray   { background: #f7fafc; color: #4a5568; }
+.ka-action-icon-gold   { background: #fffbeb; color: #b7791f; }
 .ka-action-label { font-size: 13px; font-weight: 600; color: #2d3748; line-height: 1.3; width: 100%; text-align: left; }
 .ka-action-desc { font-size: 11px; color: #718096; margin-top: 3px; line-height: 1.4; width: 100%; text-align: left; }
 
@@ -375,6 +380,152 @@ $totalAttendance = $TotalAttendance ?? 0;
 }
 .ka-confirm-overlay.ka-open { display: flex; }
 .ka-confirm-box { width: 400px; }
+
+/* =============================================
+   DARK MODE OVERRIDES (ka-*)
+   ============================================= */
+/* Trend stat cards */
+html[data-theme="dark"] .ka-ts-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-ts-icon { background: var(--ork-badge-blue-bg); color: #90cdf4; }
+html[data-theme="dark"] .ka-ts-val { color: var(--ork-text); }
+html[data-theme="dark"] .ka-ts-lbl { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ts-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-ts-up   { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+html[data-theme="dark"] .ka-ts-down { background: var(--ork-badge-red-bg);   color: var(--ork-badge-red-text); }
+html[data-theme="dark"] .ka-ts-flat { background: var(--ork-bg-tertiary);    color: var(--ork-text-muted); }
+
+/* Section titles */
+html[data-theme="dark"] .ka-section-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-section-title::after { background: var(--ork-border); }
+html[data-theme="dark"] .ka-report-section-lbl { color: var(--ork-text-muted); }
+
+/* Action cards */
+html[data-theme="dark"] .ka-action-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-card:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; box-shadow: 0 2px 8px rgba(66,153,225,0.25); color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-label { color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-desc { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-icon-blue   { background: var(--ork-badge-blue-bg);   color: #90cdf4; }
+html[data-theme="dark"] .ka-action-icon-green  { background: var(--ork-badge-green-bg);  color: #9ae6b4; }
+html[data-theme="dark"] .ka-action-icon-orange { background: var(--ork-badge-orange-bg); color: #fbd38d; }
+html[data-theme="dark"] .ka-action-icon-purple { background: var(--ork-badge-purple-bg); color: #d6bcfa; }
+html[data-theme="dark"] .ka-action-icon-red    { background: var(--ork-badge-red-bg);    color: #feb2b2; }
+html[data-theme="dark"] .ka-action-icon-gray   { background: var(--ork-bg-tertiary);     color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-icon-gold   { background: var(--ork-badge-gold-bg);   color: #f6e05e; }
+
+/* Sidebar cards */
+html[data-theme="dark"] .ka-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+html[data-theme="dark"] .ka-card-header { background: var(--ork-bg-tertiary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-card-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-report-list li { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-report-list a { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-report-list a:hover { background: var(--ork-bg-tertiary); color: #90cdf4; }
+html[data-theme="dark"] .ka-report-list a i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-report-list-desc { color: var(--ork-text-muted); }
+
+/* Modal box / overlay */
+html[data-theme="dark"] .ka-modal-box { background: var(--ork-bg-secondary); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .ka-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-modal-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-modal-close:hover { color: var(--ork-text); }
+html[data-theme="dark"] .ka-modal-footer { background: var(--ork-bg-tertiary); border-top-color: var(--ork-border); }
+
+/* Form fields */
+html[data-theme="dark"] .ka-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-field input[type=text], html[data-theme="dark"] .ka-field input[type=url],
+html[data-theme="dark"] .ka-field input[type=email], html[data-theme="dark"] .ka-field input[type=password],
+html[data-theme="dark"] .ka-field input[type=number], html[data-theme="dark"] .ka-field select,
+html[data-theme="dark"] .ka-field textarea {
+	background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .ka-field input::placeholder, html[data-theme="dark"] .ka-field textarea::placeholder { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-hint { color: var(--ork-text-muted); }
+
+/* Feedback */
+html[data-theme="dark"] .ka-feedback-ok  { background: var(--ork-alert-success-bg); color: var(--ork-alert-success-text); border-color: var(--ork-alert-success-border); }
+html[data-theme="dark"] .ka-feedback-err { background: var(--ork-alert-error-bg);   color: var(--ork-alert-error-text);   border-color: var(--ork-alert-error-border); }
+
+/* Admin tables */
+html[data-theme="dark"] .ka-admin-table th { color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-admin-table td { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-admin-table input[type=text], html[data-theme="dark"] .ka-admin-table input[type=number],
+html[data-theme="dark"] .ka-admin-table select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-award-group-hdr td { background: var(--ork-bg-tertiary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-award-group-hdr td:hover { background: var(--ork-bg); }
+html[data-theme="dark"] .ka-award-group-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-award-group-count { color: var(--ork-text-muted); }
+
+/* Toggle */
+html[data-theme="dark"] .ka-toggle-track { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ka-toggle-track::after { background: #e2e8f0; }
+
+/* Ops rows / buttons */
+html[data-theme="dark"] .ka-ops-row { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-ops-info strong { color: var(--ork-text); }
+html[data-theme="dark"] .ka-ops-info p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ops-btn { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ops-btn:hover { background: var(--ork-bg); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-ops-btn-danger { background: var(--ork-badge-red-bg); border-color: var(--ork-alert-error-border); color: #feb2b2; }
+html[data-theme="dark"] .ka-ops-btn-danger:hover { background: #742a2a; border-color: #feb2b2; }
+
+/* Warning box */
+html[data-theme="dark"] .ka-warning { background: var(--ork-alert-warning-bg); border-color: var(--ork-alert-warning-border); color: var(--ork-alert-warning-text); }
+
+/* Radio group */
+html[data-theme="dark"] .ka-radio-group label { color: var(--ork-text); }
+
+/* Alias dropdown */
+html[data-theme="dark"] .ka-alias-trigger { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-alias-trigger:hover { border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-alias-dropdown { background: var(--ork-bg-secondary); border-color: var(--ork-border); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .ka-alias-search { background: var(--ork-input-bg); color: var(--ork-text); border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-alias-item { color: var(--ork-text); }
+html[data-theme="dark"] .ka-alias-item:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ka-alias-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-alias-hint { color: var(--ork-text-muted); }
+
+/* Save button stays accented (fine in dark); add/dashed buttons */
+html[data-theme="dark"] .ka-add-btn { color: var(--ork-text-secondary); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-add-btn:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; color: #90cdf4; }
+html[data-theme="dark"] .ka-add-award-wrap { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-add-award-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-form-hint { color: var(--ork-text-secondary); }
+
+/* =============================================
+   MANAGE OFFICERS HOST MODAL (.ka-mo-*)
+   ============================================= */
+.ka-mo-overlay {
+	display: none; position: fixed; inset: 0; z-index: 8000;
+	background: rgba(0,0,0,0.5); align-items: flex-start; justify-content: center;
+	padding: 32px 16px; overflow-y: auto;
+}
+.ka-mo-overlay.ka-open { display: flex; }
+.ka-mo-box {
+	background: #fff; border-radius: 10px; width: 1000px; max-width: 100%;
+	max-height: calc(100vh - 64px); display: flex; flex-direction: column;
+	box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden; margin: auto;
+}
+.ka-mo-header {
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+	display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.ka-mo-title {
+	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
+	display: flex; align-items: center; gap: 8px;
+	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.ka-mo-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.ka-mo-close:hover { color: #2d3748; }
+.ka-mo-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+@media (max-width: 600px) {
+	.ka-mo-overlay { padding: 0; }
+	.ka-mo-box { width: 100% !important; max-width: 100%; max-height: 100vh; border-radius: 0; }
+}
+html[data-theme="dark"] .ka-mo-box { background: var(--ork-bg-secondary); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .ka-mo-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-mo-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-mo-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
 </style>
 
 <!-- =============================================
@@ -485,6 +636,13 @@ $totalAttendance = $TotalAttendance ?? 0;
 						<div class="ka-action-label">Heraldry</div>
 						<div class="ka-action-desc">Upload or change kingdom heraldry</div>
 					</button>
+<?php if ($mo_can_manage): ?>
+					<button class="ka-action-card" onclick="kaOpenManageOfficers()">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-user-shield"></i></div>
+						<div class="ka-action-label">Manage Officers</div>
+						<div class="ka-action-desc">Crown &amp; supporting offices, terms, aliases, and access</div>
+					</button>
+<?php endif; ?>
 				</div>
 			</div>
 
@@ -1193,6 +1351,45 @@ $totalAttendance = $TotalAttendance ?? 0;
 		</div>
 	</div>
 </div>
+
+<?php if ($mo_can_manage): ?>
+<!-- ---- Manage Officers Host Modal (z-index 8000; partial sub-modals render at >=9000) ---- -->
+<div class="ka-mo-overlay" id="ka-mo-overlay">
+	<div class="ka-mo-box">
+		<div class="ka-mo-header">
+			<h3 class="ka-mo-title"><i class="fas fa-user-shield" style="color:#b7791f"></i> Manage Officers</h3>
+			<button class="ka-mo-close" type="button" onclick="kaCloseManageOfficers()" aria-label="Close">&times;</button>
+		</div>
+		<div class="ka-mo-body">
+<?php include __DIR__ . '/partials/_manage_officers.tpl'; ?>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var overlay = document.getElementById('ka-mo-overlay');
+	function openMo() {
+		if (!overlay) return;
+		overlay.classList.add('ka-open');
+		document.body.style.overflow = 'hidden';
+		if (typeof window.moRefresh === 'function') { try { window.moRefresh(); } catch (e) {} }
+	}
+	function closeMo() {
+		if (!overlay) return;
+		overlay.classList.remove('ka-open');
+		document.body.style.overflow = '';
+	}
+	window.kaOpenManageOfficers = openMo;
+	window.kaCloseManageOfficers = closeMo;
+	if (overlay) {
+		overlay.addEventListener('click', function(e) { if (e.target === overlay) closeMo(); });
+	}
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && overlay && overlay.classList.contains('ka-open')) closeMo();
+	});
+})();
+</script>
+<?php endif; ?>
 
 <!-- =============================================
      JAVASCRIPT

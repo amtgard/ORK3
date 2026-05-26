@@ -2063,6 +2063,7 @@ class Controller_Admin extends Controller {
 		$this->data['CanManageKingdom'] = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.officer.set', 'kingdom', (int)$id, AUTH_CREATE);
 		$this->data['CanAddPark']       = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, (int)$id, AUTH_CREATE);
 		$this->data['IsOrkAdmin']       = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$this->data['can_manage_officer_positions'] = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
 
 		$knConfigs  = Common::get_configs($id, CFG_KINGDOM);
 		$this->data['AwardRecsPublic'] = isset($knConfigs['AwardRecsPublic'])
