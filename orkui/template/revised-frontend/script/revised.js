@@ -2084,42 +2084,16 @@ if (PnConfig.recError) {
         });
 
         // ---- Given By: search autocomplete ----
-        var givenByTimer;
-        gid('pn-award-givenby-text').addEventListener('input', function() {
-            clearTimeout(givenByTimer);
-            gid('pn-award-givenby-id').value = '';
-            document.querySelectorAll('#pn-award-officer-chips .pn-officer-chip').forEach(function(c) { c.classList.remove('pn-selected'); });
-            checkRequired();
-            var term = this.value.trim();
-            if (term.length < 2) { gid('pn-award-givenby-results').classList.remove('pn-ac-open'); return; }
-            givenByTimer = setTimeout(function() {
-                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
-                fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                    var results = gid('pn-award-givenby-results');
-                    if (!data || !data.length) {
-                        results.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
-                    } else {
-                        results.innerHTML = data.map(function(p) {
-                            return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                + escHtml(p.Persona)
-                                + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
-                                + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                                + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
-                                + '</div>';
-                        }).join('');
-                    }
-                    results.classList.add('pn-ac-open');
-                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
-        });
-        gid('pn-award-givenby-results').addEventListener('click', function(e) {
-            var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
-            if (!item) return;
-            gid('pn-award-givenby-text').value = decodeURIComponent(item.dataset.name);
-            gid('pn-award-givenby-id').value   = item.dataset.id;
-            this.classList.remove('pn-ac-open');
-            document.querySelectorAll('#pn-award-officer-chips .pn-officer-chip').forEach(function(c) { c.classList.remove('pn-selected'); });
-            checkRequired();
+        OrkPlayerSearch.attach(gid('pn-award-givenby-text'), {
+            uir: PnConfig.uir,
+            kingdomId: PnConfig.kingdomId,
+            includeInactive: true,
+            includeSuspended: true,
+            onSelect: function(player) {
+                gid('pn-award-givenby-id').value = player.MundaneId;
+                document.querySelectorAll('#pn-award-officer-chips .pn-officer-chip').forEach(function(c) { c.classList.remove('pn-selected'); });
+                checkRequired();
+            }
         });
 
         // ---- Given At: location autocomplete ----
@@ -2162,8 +2136,7 @@ if (PnConfig.recError) {
             this.classList.remove('pn-ac-open');
         });
 
-        // Keyboard navigation for givenBy and givenAt autocompletes
-        acKeyNav(gid('pn-award-givenby-text'), gid('pn-award-givenby-results'), 'pn-ac-open', '.pn-ac-item');
+        // Keyboard navigation for givenAt autocomplete (givenBy handled by OrkPlayerSearch)
         acKeyNav(gid('pn-award-givenat-text'), gid('pn-award-givenat-results'), 'pn-ac-open', '.pn-ac-item');
 
         // Close dropdowns when clicking elsewhere inside the overlay
@@ -3201,43 +3174,22 @@ $(document).ready(function() {
     });
 
     // Player search autocomplete (kingdom members prioritized)
-    gid('kn-award-player-text').addEventListener('input', function() {
-        gid('kn-award-player-id').value = '';
-        checkRequired();
-        var term = this.value.trim();
-        if (term.length < 2) { gid('kn-award-player-results').classList.remove('kn-ac-open'); return; }
-        clearTimeout(playerTimer);
-        playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&q=' + encodeURIComponent(term);
-            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                var el = gid('kn-award-player-results');
-                el.innerHTML = (data && data.length)
-                    ? data.map(function(p) {
-                        return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
-                    }).join('')
-                    : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                el.classList.add('kn-ac-open');
-            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-        }, AUTOCOMPLETE_DEBOUNCE_MS);
-    });
-    gid('kn-award-player-results').addEventListener('click', function(e) {
-        var item = e.target.closest('.kn-ac-item[data-id]');
-        if (!item) return;
-        gid('kn-award-player-text').value = decodeURIComponent(item.dataset.name);
-        gid('kn-award-player-id').value   = item.dataset.id;
-        this.classList.remove('kn-ac-open');
-        checkRequired();
-        knPlayerRanks = {};
-        var pid = item.dataset.id;
-        fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
-            .then(function(r) { return r.json(); })
-            .then(function(ranks) {
-                knPlayerRanks = ranks || {};
-                var curAward = gid('kn-award-select').value;
-                if (curAward) buildRankPills(curAward);
-            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+    OrkPlayerSearch.attach(gid('kn-award-player-text'), {
+        uir: UIR_JS,
+        kingdomId: KINGDOM_ID,
+        includeInactive: true,
+        onSelect: function(player) {
+            gid('kn-award-player-id').value = player.MundaneId;
+            checkRequired();
+            knPlayerRanks = {};
+            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    knPlayerRanks = ranks || {};
+                    var curAward = gid('kn-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }
     });
 
     // Given By — officer chips + search
@@ -3253,36 +3205,16 @@ $(document).ready(function() {
         });
     });
 
-    gid('kn-award-givenby-text').addEventListener('input', function() {
-        gid('kn-award-givenby-id').value = '';
-        document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(c) { c.classList.remove('kn-selected'); });
-        checkRequired();
-        var term = this.value.trim();
-        if (term.length < 2) { gid('kn-award-givenby-results').classList.remove('kn-ac-open'); return; }
-        clearTimeout(givenByTimer);
-        givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
-            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                var el = gid('kn-award-givenby-results');
-                el.innerHTML = (data && data.length)
-                    ? data.map(function(p) {
-                        return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
-                    }).join('')
-                    : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
-                el.classList.add('kn-ac-open');
-            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-        }, AUTOCOMPLETE_DEBOUNCE_MS);
-    });
-    gid('kn-award-givenby-results').addEventListener('click', function(e) {
-        var item = e.target.closest('.kn-ac-item[data-id]');
-        if (!item) return;
-        gid('kn-award-givenby-text').value = decodeURIComponent(item.dataset.name);
-        gid('kn-award-givenby-id').value   = item.dataset.id;
-        this.classList.remove('kn-ac-open');
-        checkRequired();
+    OrkPlayerSearch.attach(gid('kn-award-givenby-text'), {
+        uir: UIR_JS,
+        kingdomId: KINGDOM_ID,
+        includeInactive: true,
+        includeSuspended: true,
+        onSelect: function(player) {
+            gid('kn-award-givenby-id').value = player.MundaneId;
+            document.querySelectorAll('#kn-award-officer-chips .kn-officer-chip').forEach(function(c) { c.classList.remove('kn-selected'); });
+            checkRequired();
+        }
     });
 
     // Given At — location search
@@ -3318,9 +3250,7 @@ $(document).ready(function() {
         this.classList.remove('kn-ac-open');
     });
 
-    // Keyboard navigation for givenBy and givenAt autocompletes
-    acKeyNav(gid('kn-award-player-text'),  gid('kn-award-player-results'),  'kn-ac-open', '.kn-ac-item');
-    acKeyNav(gid('kn-award-givenby-text'), gid('kn-award-givenby-results'), 'kn-ac-open', '.kn-ac-item');
+    // Keyboard navigation for givenAt autocomplete (player and givenBy handled by OrkPlayerSearch)
     acKeyNav(gid('kn-award-givenat-text'), gid('kn-award-givenat-results'), 'kn-ac-open', '.kn-ac-item');
 
     // Note char counter
@@ -3651,44 +3581,23 @@ $(document).ready(function() {
         });
     }
 
-    gid('kn-rec-player-text').addEventListener('input', function() {
-        gid('kn-rec-player-id').value = '';
-        checkRequired();
-        var term = this.value.trim();
-        clearTimeout(playerTimer);
-        if (term.length < 2) { gid('kn-rec-player-results').classList.remove('pk-ac-open'); return; }
-        playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&q=' + encodeURIComponent(term);
-            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                var el = gid('kn-rec-player-results');
-                el.innerHTML = (data && data.length)
-                    ? data.map(function(p) {
-                        return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
-                    }).join('')
-                    : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                el.classList.add('pk-ac-open');
-            }).catch(function() {});
-        }, 300);
+    OrkPlayerSearch.attach(gid('kn-rec-player-text'), {
+        uir: UIR_JS,
+        kingdomId: KINGDOM_ID,
+        includeInactive: true,
+        onSelect: function(player) {
+            gid('kn-rec-player-id').value = player.MundaneId;
+            knRecRanks = {};
+            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    knRecRanks = ranks || {};
+                    var cur = gid('kn-rec-award-select').value;
+                    if (cur) buildRecRankPills(cur);
+                }).catch(function() {});
+            checkRequired();
+        }
     });
-    gid('kn-rec-player-results').addEventListener('click', function(e) {
-        var item = e.target.closest('.pk-ac-item[data-id]');
-        if (!item) return;
-        gid('kn-rec-player-text').value = decodeURIComponent(item.dataset.name);
-        gid('kn-rec-player-id').value   = item.dataset.id;
-        this.classList.remove('pk-ac-open');
-        knRecRanks = {};
-        fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
-            .then(function(r) { return r.json(); })
-            .then(function(ranks) {
-                knRecRanks = ranks || {};
-                var cur = gid('kn-rec-award-select').value;
-                if (cur) buildRecRankPills(cur);
-            }).catch(function() {});
-        checkRequired();
-    });
-    acKeyNav(gid('kn-rec-player-text'), gid('kn-rec-player-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
 
     gid('kn-rec-reason').addEventListener('input', function() {
         var rem = 400 - this.value.length;
@@ -6374,46 +6283,24 @@ $(document).ready(function() {
         checkRequired();
     });
 
-    // Player search autocomplete (park members only)
-    gid('pk-award-player-text').addEventListener('input', function() {
-        gid('pk-award-player-id').value = '';
-        checkRequired();
-        var term = this.value.trim();
-        if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
-        clearTimeout(playerTimer);
-        playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
-            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                var el = gid('pk-award-player-results');
-                el.innerHTML = (data && data.length)
-                    ? data.map(function(p) {
-                        return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
-                    }).join('')
-                    : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                pkFixedAcPosition(gid('pk-award-player-text'), el);
-                el.classList.add('pk-ac-open');
-            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-        }, AUTOCOMPLETE_DEBOUNCE_MS);
-    });
-    gid('pk-award-player-results').addEventListener('click', function(e) {
-        var item = e.target.closest('.pk-ac-item[data-id]');
-        if (!item) return;
-        gid('pk-award-player-text').value = decodeURIComponent(item.dataset.name);
-        gid('pk-award-player-id').value   = item.dataset.id;
-        this.classList.remove('pk-ac-open');
-        checkRequired();
-        // Fetch this player's held ladder award ranks, then rebuild pills if an award is selected
-        pkPlayerRanks = {};
-        var pid = item.dataset.id;
-        fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
-            .then(function(r) { return r.json(); })
-            .then(function(ranks) {
-                pkPlayerRanks = ranks || {};
-                var curAward = gid('pk-award-select').value;
-                if (curAward) buildRankPills(curAward);
-            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+    // Player search autocomplete (park members prioritized)
+    OrkPlayerSearch.attach(gid('pk-award-player-text'), {
+        uir: UIR_JS,
+        parkId: PkConfig.parkId,
+        kingdomId: PkConfig.kingdomId,
+        includeInactive: true,
+        onSelect: function(player) {
+            gid('pk-award-player-id').value = player.MundaneId;
+            checkRequired();
+            pkPlayerRanks = {};
+            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    pkPlayerRanks = ranks || {};
+                    var curAward = gid('pk-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }
     });
 
     // Given By — officer chips + search
@@ -6429,37 +6316,17 @@ $(document).ready(function() {
         });
     });
 
-    gid('pk-award-givenby-text').addEventListener('input', function() {
-        gid('pk-award-givenby-id').value = '';
-        document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(c) { c.classList.remove('pk-selected'); });
-        checkRequired();
-        var term = this.value.trim();
-        if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
-        clearTimeout(givenByTimer);
-        givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
-            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                var el = gid('pk-award-givenby-results');
-                el.innerHTML = (data && data.length)
-                    ? data.map(function(p) {
-                        return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
-                    }).join('')
-                    : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
-                pkFixedAcPosition(gid('pk-award-givenby-text'), el);
-                el.classList.add('pk-ac-open');
-            }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-        }, AUTOCOMPLETE_DEBOUNCE_MS);
-    });
-    gid('pk-award-givenby-results').addEventListener('click', function(e) {
-        var item = e.target.closest('.pk-ac-item[data-id]');
-        if (!item) return;
-        gid('pk-award-givenby-text').value = decodeURIComponent(item.dataset.name);
-        gid('pk-award-givenby-id').value   = item.dataset.id;
-        this.classList.remove('pk-ac-open');
-        checkRequired();
+    OrkPlayerSearch.attach(gid('pk-award-givenby-text'), {
+        uir: UIR_JS,
+        parkId: PkConfig.parkId,
+        kingdomId: PkConfig.kingdomId,
+        includeInactive: true,
+        includeSuspended: true,
+        onSelect: function(player) {
+            gid('pk-award-givenby-id').value = player.MundaneId;
+            document.querySelectorAll('#pk-award-officer-chips .pk-officer-chip').forEach(function(c) { c.classList.remove('pk-selected'); });
+            checkRequired();
+        }
     });
 
     // Given At — location search
@@ -6496,9 +6363,7 @@ $(document).ready(function() {
         this.classList.remove('pk-ac-open');
     });
 
-    // Keyboard navigation for player, givenBy, and givenAt autocompletes
-    acKeyNav(gid('pk-award-player-text'),  gid('pk-award-player-results'),  'pk-ac-open', '.pk-ac-item');
-    acKeyNav(gid('pk-award-givenby-text'), gid('pk-award-givenby-results'), 'pk-ac-open', '.pk-ac-item');
+    // Keyboard navigation for givenAt autocomplete (player and givenBy handled by OrkPlayerSearch)
     acKeyNav(gid('pk-award-givenat-text'), gid('pk-award-givenat-results'), 'pk-ac-open', '.pk-ac-item');
 
     // Note char counter
@@ -6850,44 +6715,24 @@ $(document).ready(function() {
     }
 
     // Player search
-    gid('pk-rec-player-text').addEventListener('input', function() {
-        gid('pk-rec-player-id').value = '';
-        checkRequired();
-        var term = this.value.trim();
-        clearTimeout(playerTimer);
-        if (term.length < 2) { gid('pk-rec-player-results').classList.remove('pk-ac-open'); return; }
-        playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + PkConfig.kingdomId + '&include_inactive=1&q=' + encodeURIComponent(term);
-            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                var el = gid('pk-rec-player-results');
-                el.innerHTML = (data && data.length)
-                    ? data.map(function(p) {
-                        return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                            + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
-                    }).join('')
-                    : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                el.classList.add('pk-ac-open');
-            }).catch(function() {});
-        }, 300);
+    OrkPlayerSearch.attach(gid('pk-rec-player-text'), {
+        uir: UIR_JS,
+        parkId: PkConfig.parkId,
+        kingdomId: PkConfig.kingdomId,
+        includeInactive: true,
+        onSelect: function(player) {
+            gid('pk-rec-player-id').value = player.MundaneId;
+            pkRecRanks = {};
+            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(ranks) {
+                    pkRecRanks = ranks || {};
+                    var cur = gid('pk-rec-award-select').value;
+                    if (cur) buildRecRankPills(cur);
+                }).catch(function() {});
+            checkRequired();
+        }
     });
-    gid('pk-rec-player-results').addEventListener('click', function(e) {
-        var item = e.target.closest('.pk-ac-item[data-id]');
-        if (!item) return;
-        gid('pk-rec-player-text').value = decodeURIComponent(item.dataset.name);
-        gid('pk-rec-player-id').value   = item.dataset.id;
-        this.classList.remove('pk-ac-open');
-        pkRecRanks = {};
-        fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
-            .then(function(r) { return r.json(); })
-            .then(function(ranks) {
-                pkRecRanks = ranks || {};
-                var cur = gid('pk-rec-award-select').value;
-                if (cur) buildRecRankPills(cur);
-            }).catch(function() {});
-        checkRequired();
-    });
-    acKeyNav(gid('pk-rec-player-text'), gid('pk-rec-player-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
 
     gid('pk-rec-reason').addEventListener('input', function() {
         var rem = 400 - this.value.length;
@@ -9078,64 +8923,22 @@ function setupPronounPicker(cfg) {
         var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
 
         // Given By autocomplete (edit modal)
-        var editGbText    = gid('pn-edit-givenby-text');
-        var editGbId      = gid('pn-edit-givenby-id');
-        var editGbResults = gid('pn-edit-givenby-results');
-        if (editGbText && editGbId && editGbResults) {
-            var editGbTimer;
-            editGbText.addEventListener('input', function() {
-                clearTimeout(editGbTimer);
-                editGbId.value = '';
-                console.log('[EditAward] Given By text changed — id cleared, text now:', this.value);
-                var term = this.value.trim();
-                if (term.length < 2) { editGbResults.classList.remove('pn-ac-open'); return; }
-                editGbTimer = setTimeout(function() {
-                    // SearchService already returns inactive and suspended players; sort
-                    // them last and badge them so users can knowingly attribute historical
-                    // awards to a now-banned officer during reconciliation.
-                    // Award giver is intentionally global (cross-kingdom): a noble from another kingdom
-                    // can grant an award, so do not scope the giver search by kingdom.
-                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15';
-                    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                        if (!data || !data.length) {
-                            editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
-                        } else {
-                            function rank(p) {
-                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
-                                var inactive = parseInt(p.Active, 10) === 0;
-                                if (banned)   return 2;
-                                if (inactive) return 1;
-                                return 0;
-                            }
-                            data.sort(function(a, b) {
-                                var ra = rank(a), rb = rank(b);
-                                if (ra !== rb) return ra - rb;
-                                return (a.Persona || '').localeCompare(b.Persona || '');
-                            });
-                            editGbResults.innerHTML = data.map(function(p) {
-                                var inactive = parseInt(p.Active, 10) === 0;
-                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
-                                return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                    + escHtml(p.Persona)
-                                    + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
-                                    + (inactive ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                                    + (banned   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
-                                    + '</div>';
-                            }).join('');
-                        }
-                        editGbResults.classList.add('pn-ac-open');
-                    }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-                }, AUTOCOMPLETE_DEBOUNCE_MS);
+        var editGbText = gid('pn-edit-givenby-text');
+        var editGbId   = gid('pn-edit-givenby-id');
+        if (editGbText && editGbId) {
+            // Award giver is intentionally GLOBAL (cross-kingdom): a noble from another
+            // kingdom can grant an award, so kingdomId stays 0. Inactive + suspended
+            // personas are eligible so historical awards can be attributed during reconciliation.
+            OrkPlayerSearch.attach(editGbText, {
+                uir: PnConfig.uir,
+                kingdomId: 0,
+                includeInactive: true,
+                includeSuspended: true,
+                onSelect: function(player) {
+                    editGbId.value = player.MundaneId;
+                    console.log('[EditAward] Given By selected — id:', player.MundaneId, 'name:', player.Persona);
+                }
             });
-            editGbResults.addEventListener('click', function(e) {
-                var item = e.target.closest ? e.target.closest('.pn-ac-item') : (e.target.classList.contains('pn-ac-item') ? e.target : null);
-                if (!item) return;
-                editGbText.value = decodeURIComponent(item.dataset.name);
-                editGbId.value   = item.dataset.id;
-                console.log('[EditAward] Given By selected — id:', editGbId.value, 'name:', editGbText.value);
-                editGbResults.classList.remove('pn-ac-open');
-            });
-            acKeyNav(editGbText, editGbResults, 'pn-ac-open', '.pn-ac-item');
         }
 
         // Given At autocomplete (edit modal)
