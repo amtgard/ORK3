@@ -425,21 +425,17 @@ class Report  extends Ork3 {
 
 	public function PlayerAwardRecommendations($request) {
 
-		// Cache key the SQL filter dimensions PLUS the viewer (RequestedBy): the response
-		// embeds per-viewer fields (ViewerCanSecond, ViewerCanEditReason, and each second's
-		// IsMine), so a viewer-agnostic key would serve one viewer's "can I second this?"
-		// flags to everyone — e.g. a recommender who can't second their own rung would
-		// suppress the +1 for other officers. The non-filter params (IncludeKnights,
-		// IncludeMasters, IncludeLadder, LadderMinimum) don't change the response, so they
-		// stay out of the key.
+		// Cache keyed to the player being viewed — shared across all viewers.
+		// Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
+		// computed after the cache hit so one bust clears the data for everyone.
+		$viewer_id = (int)($request['RequestedBy'] ?? 0);
 		$key = Ork3::$Lib->ghettocache->key([
 			'KingdomId' => (int)($request['KingdomId'] ?? 0),
 			'ParkId'    => (int)($request['ParkId']    ?? 0),
 			'PlayerId'  => (int)($request['PlayerId']  ?? 0),
-			'RequestedBy' => (int)($request['RequestedBy'] ?? 0),
 		]);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
-			return $cache;
+			return $this->applyViewerFlags($cache, $viewer_id);
 
 		if (valid_id($request['KingdomId'])) {
 			$location_clause = " AND m.kingdom_id = $request[KingdomId]";
@@ -493,7 +489,6 @@ class Report  extends Ork3 {
 			order by m.persona, a.name, recs.rank, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
-		$viewer_id = isset($request['RequestedBy']) ? (int)$request['RequestedBy'] : 0;
 		if ($r !== false && $r->size() > 0) {
 			// First pass: collect raw rows + rec_ids/meta (for seconds wiring below)
 			// plus the set of (mundane_id, ladder_award_id) we'll need Master-peerage lookups for.
@@ -611,64 +606,14 @@ class Report  extends Ork3 {
 				);
 			}
 
-			// Batch-fetch all active seconds for these recommendations.
-			$seconds_by_rec = Ork3::$Lib->player->GetSecondsForRecommendations($rec_ids, $viewer_id);
+			// Batch-fetch all active seconds (IsMine = false; applyViewerFlags sets it per-viewer).
+			$seconds_by_rec = Ork3::$Lib->player->GetSecondsForRecommendations($rec_ids, 0);
 
-			// Pre-compute the viewer's own active primary recs over (mundane_id, kingdomaward_id, rank)
-			// so ViewerCanSecond can be evaluated without N extra queries.
-			$viewer_own_keys = array();
-			if ($viewer_id > 0 && count($rec_ids) > 0) {
-				$rid_list = implode(',', array_map('intval', $rec_ids));
-				$this->db->Clear();
-				$ownSql = "SELECT DISTINCT CONCAT(r2.mundane_id, '|', r2.kingdomaward_id, '|', COALESCE(r2.rank, 0)) AS k
-					FROM " . DB_PREFIX . "recommendations r2
-					WHERE r2.recommended_by_id = $viewer_id
-					  AND (r2.deleted_at IS NULL)
-					  AND (r2.mundane_id, r2.kingdomaward_id, COALESCE(r2.rank, 0)) IN (
-						  SELECT r3.mundane_id, r3.kingdomaward_id, COALESCE(r3.rank, 0)
-						  FROM " . DB_PREFIX . "recommendations r3
-						  WHERE r3.recommendations_id IN ($rid_list)
-					  )";
-				$or = $this->db->query($ownSql);
-				if ($or !== false && $or->size() > 0) {
-					while ($or->next()) {
-						$viewer_own_keys[$or->k] = true;
-					}
-				}
-			}
-
-			// Pre-compute which recs the viewer has already seconded (active).
-			$viewer_seconded = array();
-			if ($viewer_id > 0 && count($rec_ids) > 0) {
-				$rid_list = implode(',', array_map('intval', $rec_ids));
-				$this->db->Clear();
-				$sSql = "SELECT recommendations_id FROM " . DB_PREFIX . "recommendation_seconds
-					WHERE supporter_mundane_id = $viewer_id
-					  AND deleted_at IS NULL
-					  AND recommendations_id IN ($rid_list)";
-				$sr = $this->db->query($sSql);
-				if ($sr !== false && $sr->size() > 0) {
-					while ($sr->next()) {
-						$viewer_seconded[(int)$sr->recommendations_id] = true;
-					}
-				}
-			}
-
-			// Attach seconds + viewer flags to each rec.
+			// Attach seconds; viewer flags are left false and filled in by applyViewerFlags.
 			foreach ($response['AwardRecommendations'] as &$rec) {
 				$rid = (int)$rec['RecommendationsId'];
-				$rec['Seconds'] = isset($seconds_by_rec[$rid]) ? $seconds_by_rec[$rid] : array();
+				$rec['Seconds']      = isset($seconds_by_rec[$rid]) ? $seconds_by_rec[$rid] : array();
 				$rec['SecondsCount'] = count($rec['Seconds']);
-				$meta = $rec_meta_by_id[$rid];
-				$rec['ViewerCanEditReason'] = ($viewer_id > 0 && $viewer_id === $meta['recommended_by_id']);
-				$ownKey = $meta['mundane_id'] . '|' . $meta['kingdomaward_id'] . '|' . $meta['rank'];
-				$rec['ViewerCanSecond'] = (
-					$viewer_id > 0
-					&& $viewer_id !== $meta['mundane_id']
-					&& $viewer_id !== $meta['recommended_by_id']
-					&& empty($viewer_own_keys[$ownKey])
-					&& empty($viewer_seconded[$rid])
-				);
 			}
 			unset($rec);
 
@@ -676,7 +621,63 @@ class Report  extends Ork3 {
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
-		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+		$cached = Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+		return $this->applyViewerFlags($cached, $viewer_id);
+	}
+
+	// Compute viewer-specific flags on top of a cached (viewer-agnostic) recommendations
+	// response. IsMine and ViewerCanEditReason need no DB queries. ViewerCanSecond needs
+	// two lightweight IN-list lookups.
+	private function applyViewerFlags(array $response, int $viewer_id): array {
+		if ($viewer_id <= 0 || empty($response['AwardRecommendations'])) return $response;
+
+		$rec_ids  = array_map(function($r) { return (int)$r['RecommendationsId']; }, $response['AwardRecommendations']);
+		$rid_list = implode(',', $rec_ids);
+
+		// Viewer's own active primary recs on the same (mundane, award, rank) slots.
+		$viewer_own_keys = array();
+		$this->db->Clear();
+		$or = $this->db->query(
+			"SELECT DISTINCT CONCAT(r2.mundane_id,'|',r2.kingdomaward_id,'|',COALESCE(r2.rank,0)) AS k
+			 FROM " . DB_PREFIX . "recommendations r2
+			 WHERE r2.recommended_by_id = $viewer_id AND r2.deleted_at IS NULL
+			   AND (r2.mundane_id, r2.kingdomaward_id, COALESCE(r2.rank,0)) IN (
+				   SELECT r3.mundane_id, r3.kingdomaward_id, COALESCE(r3.rank,0)
+				   FROM " . DB_PREFIX . "recommendations r3
+				   WHERE r3.recommendations_id IN ($rid_list)
+			   )");
+		if ($or !== false && $or->size() > 0) {
+			while ($or->next()) $viewer_own_keys[$or->k] = true;
+		}
+
+		// Recs the viewer has already seconded.
+		$viewer_seconded = array();
+		$this->db->Clear();
+		$sr = $this->db->query(
+			"SELECT recommendations_id FROM " . DB_PREFIX . "recommendation_seconds
+			 WHERE supporter_mundane_id = $viewer_id AND deleted_at IS NULL
+			   AND recommendations_id IN ($rid_list)");
+		if ($sr !== false && $sr->size() > 0) {
+			while ($sr->next()) $viewer_seconded[(int)$sr->recommendations_id] = true;
+		}
+
+		foreach ($response['AwardRecommendations'] as &$rec) {
+			$rid    = (int)$rec['RecommendationsId'];
+			$ownKey = $rec['MundaneId'] . '|' . $rec['KingdomAwardId'] . '|' . (int)($rec['Rank'] ?? 0);
+			$rec['ViewerCanEditReason'] = ($viewer_id === (int)$rec['RecommendedById']);
+			$rec['ViewerCanSecond'] = (
+				$viewer_id !== (int)$rec['MundaneId']
+				&& $viewer_id !== (int)$rec['RecommendedById']
+				&& empty($viewer_own_keys[$ownKey])
+				&& empty($viewer_seconded[$rid])
+			);
+			foreach ($rec['Seconds'] as &$second) {
+				$second['IsMine'] = ((int)$second['SupporterMundaneId'] === $viewer_id);
+			}
+			unset($second);
+		}
+		unset($rec);
+		return $response;
 	}
 
 	public function DeletedAwardRecommendations($request) {
