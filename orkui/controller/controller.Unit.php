@@ -216,14 +216,6 @@ class Controller_Unit extends Controller {
 			header('Location: ' . UIR . 'Unit/unitlist');
 			exit;
 		}
-		// Parse scope (kingdom/park) from the unit list session ref for player search scoping
-		$_ref = $this->session->unit_list_ref ?? '';
-		$_scope_kingdom_id = null;
-		$_scope_park_id    = null;
-		if (preg_match('/KingdomId=(\d+)/', $_ref, $_m)) $_scope_kingdom_id = (int)$_m[1];
-		if (preg_match('/ParkId=(\d+)/',    $_ref, $_m)) $_scope_park_id    = (int)$_m[1];
-		$this->data['ScopeKingdomId'] = $_scope_kingdom_id;
-		$this->data['ScopeParkId']    = $_scope_park_id;
 		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$_canEdit = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
 		$this->data['CanEdit'] = $_canEdit;
@@ -261,15 +253,21 @@ class Controller_Unit extends Controller {
 		// home kingdom — matching the KPM bypass in Authorization::add_authorization
 		// so the UI only offers what the service layer will actually permit.
 		$_can_officer = false;
+		$_scope_kingdom_id = null;
+		$_scope_park_id    = null;
 		if ($_uid > 0) {
 			$_pinfo        = Ork3::$Lib->player->player_info($this->session->token);
 			$_home_kingdom = isset($_pinfo['KingdomId']) ? (int)$_pinfo['KingdomId'] : 0;
+			$_home_park    = isset($_pinfo['ParkId'])    ? (int)$_pinfo['ParkId']    : 0;
 			if ($_home_kingdom > 0) {
-				$_home_park    = isset($_pinfo['ParkId']) ? (int)$_pinfo['ParkId'] : 0;
-			$_can_officer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT)
-				|| ($_home_park > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $_home_park, AUTH_EDIT));
+				$_scope_kingdom_id = $_home_kingdom;
+				$_scope_park_id    = $_home_park > 0 ? $_home_park : null;
+				$_can_officer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT)
+					|| ($_home_park > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $_home_park, AUTH_EDIT));
 			}
 		}
+		$this->data['ScopeKingdomId']   = $_scope_kingdom_id;
+		$this->data['ScopeParkId']      = $_scope_park_id;
 		$this->data['CanOfficerManage'] = $_can_officer;
 
 		// The Add-Manager modal is available to unit editors, and to officers only

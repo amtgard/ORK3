@@ -1047,6 +1047,19 @@ $(function () {
 function unOpenModal(id) {
 	var el = document.getElementById(id);
 	if (el) el.classList.add('pn-open');
+	var searchMap = {
+		'un-modal-add-member':  { input: 'un-am-input', results: 'un-am-results', hidden: 'un-am-mundane-id' },
+		'un-modal-add-manager': { input: 'un-mg-input', results: 'un-mg-results', hidden: 'un-mg-mundane-id' }
+	};
+	var s = searchMap[id];
+	if (s) {
+		var $i = document.getElementById(s.input),
+		    $r = document.getElementById(s.results),
+		    $h = document.getElementById(s.hidden);
+		if ($i) $i.value = '';
+		if ($h) $h.value = '';
+		if ($r) { $r.innerHTML = ''; $r.classList.remove('un-ac-open'); }
+	}
 }
 function unCloseModal(id) {
 	var el = document.getElementById(id);
@@ -1211,17 +1224,21 @@ var UN_PSEARCH_BASE = '<?=UIR?>KingdomAjax/playersearch/';
 var UN_SCOPE_KID  = <?=(int)($ScopeKingdomId ?? 0)?>;
 var UN_SCOPE_PID  = <?=(int)($ScopeParkId ?? 0)?>;
 var UN_UIR        = '<?=UIR?>';
+var UN_MEMBER_IDS = <?=json_encode(array_values(array_map(function($m){ return (int)$m['MundaneId']; }, $_members)))?>;
+var UN_MEMBER_SET = {}; UN_MEMBER_IDS.forEach(function(id){ UN_MEMBER_SET[id] = true; });
 
 function initPlayerSearch(cfg) {
 	/* cfg: { inputId, resultsId, hiddenId, parkId, kingdomId, kingdomSelId, parkSelId } */
 	var $input   = document.getElementById(cfg.inputId);
 	var $results = document.getElementById(cfg.resultsId);
 	var $hidden  = document.getElementById(cfg.hiddenId);
+	var $kSel    = cfg.kingdomSelId ? document.getElementById(cfg.kingdomSelId) : null;
+	var $pSel    = cfg.parkSelId    ? document.getElementById(cfg.parkSelId)    : null;
 	var debounce, focusIdx = -1, searchSeq = 0;
 	var seen = {};
 	/* "Filter players by" selection (0 = All). When a kingdom is chosen the
 	   search is scoped to it (and optionally a park) instead of going global. */
-	var filterKingdom = 0, filterPark = 0;
+	var filterKingdom = null, filterPark = null;
 
 	function closeResults() {
 		$results.classList.remove('un-ac-open');
@@ -1272,45 +1289,30 @@ function initPlayerSearch(cfg) {
 		});
 	}
 
-	function showEmpty() {
-		var empty = document.createElement('div');
-		empty.className   = 'un-ac-empty';
-		empty.textContent = 'No players found.';
-		$results.appendChild(empty);
-	}
-
 	function runSearch(term) {
-		/* Canonical playersearch endpoint: LIKE-based filtering, own-kingdom-first
-		   ordering, robust scope handling. Mirrors the Event RSVP modal's tiers. */
-		var kid  = cfg.kingdomId || 0;
-		var pid  = cfg.parkId || 0;
+		var kid  = filterKingdom > 0 ? filterKingdom : (cfg.kingdomId || 0);
+		var pid  = filterPark > 0 ? filterPark : 0;
 		var base = UN_PSEARCH_BASE + kid;
 		var q    = '&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+		// Show home park tier when browsing all kingdoms or the user's own kingdom.
+		var useHomePark = cfg.parkId && (filterKingdom === 0 || filterKingdom === cfg.kingdomId);
 		var groups;
-		// An abbreviation prefix ("nb:ff wolf") makes the server filter by abbreviation
-		// and ignore scope/park_id — show one group so results aren't mislabelled.
-		if (/^[a-z0-9]{2,3}:[a-z0-9*]{0,3}\s+\S/i.test(term)) {
-			groups = [ { label: 'All Players', url: base + '&scope=all' + q } ];
-		} else if (pid > 0 && kid > 0) {
-			groups = [
-				{ label: 'In Park',     url: base + '&scope=own&park_id=' + pid + q },
-				{ label: 'In Kingdom',  url: base + '&scope=own' + q },
-				{ label: 'All Players', url: base + '&scope=exclude' + q }
-			];
-		} else if (kid > 0) {
-			groups = [
-				{ label: 'In Kingdom',  url: base + '&scope=own' + q },
-				{ label: 'All Players', url: base + '&scope=exclude' + q }
-			];
+		if (kid === 0 || /^[a-z0-9]{2,3}:[a-z0-9*]{0,3}\s+\S/i.test(term)) {
+			groups = [ { label: 'All Players', url: UN_PSEARCH_BASE + '0&scope=all' + q } ];
+		} else if (pid > 0) {
+			groups = [ { label: 'In Park', url: base + '&scope=own&park_id=' + pid + q } ];
 		} else {
-			groups = [ { label: 'All Players', url: base + '&scope=all' + q } ];
+			groups = [];
+			if (useHomePark) groups.push({ label: 'In Park', url: base + '&scope=own&park_id=' + cfg.parkId + q });
+			groups.push({ label: 'In Kingdom', url: base + '&scope=own' + q });
+			if (filterKingdom === 0) groups.push({ label: 'All Players', url: base + '&scope=exclude' + q });
 		}
 		var mySeq = ++searchSeq;
 		Promise.all(groups.map(function (g) {
 			return fetch(g.url).then(function (r) { return r.json(); }).catch(function () { return []; });
 		})).then(function (resArr) {
 			if (mySeq !== searchSeq) return; // a newer keystroke superseded this response
-			seen = {};
+			seen = Object.assign({}, UN_MEMBER_SET);
 			$results.innerHTML = '';
 			$hidden.value = '';
 			groups.forEach(function (g, i) { addGroup(g.label, resArr[i] || []); });
@@ -1362,6 +1364,7 @@ function initPlayerSearch(cfg) {
 	}
 
 	if ($kSel) {
+		filterKingdom = parseInt($kSel.value, 10) || 0;
 		$kSel.addEventListener('change', function () {
 			filterKingdom = parseInt(this.value, 10) || 0;
 			filterPark = 0;
