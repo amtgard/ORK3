@@ -1855,11 +1855,9 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
 							}
 						}
-						// Dedup key combines rank AND date so historical rows that were never
-						// reconciled past rank=1 (legitimate distinct earnings on different dates)
-						// each count, while true duplicate rows (same rank, same date from old
-						// imports) still collapse.
-						$rankKey = $rank . '|' . ($a['Date'] ?? '');
+						// Dedup key is rank only — two awards at the same rank from different
+						// parks or dates are still the same rank, not two separate levels.
+						$rankKey = $rank;
 						if (!isset($pnLadderProgress[$aid])) {
 							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank,
 								'RankSet' => $rank > 0 ? [$rankKey => true] : [], 'UnrankedCount' => $rank === 0 ? 1 : 0, 'HasMaster' => $hasMaster];
